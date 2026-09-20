@@ -1,0 +1,375 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
+             xmlns:views="using:MyTaskApp.Desktop.Views"
+             xmlns:chrome="using:Avalonia.Controls.Chrome"
+             x:Class="MyTaskApp.Desktop.Views.TodayView"
+             x:DataType="vm:TodayViewModel"
+             x:Name="Root">
+
+  <UserControl.Styles>
+
+    <!-- Cabeçalho de seção: menor que o texto da tarefa, de propósito. A lista
+         é o assunto; a seção é só onde ela começa. -->
+    <Style Selector="TextBlock.sectionHeader">
+      <Setter Property="FontSize" Value="9.5" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="LetterSpacing" Value="0.8" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+      <Setter Property="Margin" Value="9,12,0,5" />
+    </Style>
+
+    <Style Selector="TextBlock.taskTitle">
+      <Setter Property="FontSize" Value="12.5" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <BrushTransition Property="Foreground" Duration="0:0:0.15" />
+        </Transitions>
+      </Setter>
+    </Style>
+
+    <!-- Concluída: some do primeiro plano sem sumir da lista. -->
+    <Style Selector="TextBlock.taskTitle.done">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+      <Setter Property="TextDecorations" Value="Strikethrough" />
+    </Style>
+
+    <Style Selector="TextBlock.time">
+      <Setter Property="FontFamily" Value="Consolas, Menlo, monospace" />
+      <Setter Property="FontSize" Value="10.5" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="TextBlock.time.late">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetDangerBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.waiting">
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetCautionBrush}" />
+      <Setter Property="Opacity" Value="0.8" />
+    </Style>
+
+    <Style Selector="TextBlock.waiting.urgent">
+      <Setter Property="Opacity" Value="1" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <!-- A linha inteira acende no hover: é o alvo do clique, não o checkbox. -->
+    <Style Selector="Border.row">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetPillRadius}" />
+      <Setter Property="Padding" Value="6,4" />
+      <Setter Property="Margin" Value="3,0" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <BrushTransition Property="Background" Duration="0:0:0.12" />
+        </Transitions>
+      </Setter>
+    </Style>
+
+    <Style Selector="Border.row:pointerover">
+      <Setter Property="Background" Value="{DynamicResource WidgetSurfaceBrush}" />
+    </Style>
+
+    <!-- Prioridade: 3px na lateral. Quem precisa ver, vê; quem não precisa,
+         não perde a lista para um cartão colorido. -->
+    <Style Selector="Border.priority">
+      <Setter Property="Width" Value="3" />
+      <Setter Property="Height" Value="14" />
+      <Setter Property="CornerRadius" Value="2" />
+      <Setter Property="Margin" Value="0,0,7,0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="Border.priority.high">
+      <Setter Property="Background" Value="{DynamicResource WidgetCautionBrush}" />
+    </Style>
+
+    <Style Selector="Border.priority.urgent">
+      <Setter Property="Background" Value="{DynamicResource WidgetDangerBrush}" />
+    </Style>
+
+    <!-- Checkbox pequeno: sem rótulo, sem padding de conteúdo. -->
+    <Style Selector="CheckBox.task">
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Margin" Value="0,0,8,0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- Discreto até o mouse passar: a linha não pode virar barra de botões. -->
+    <Style Selector="Button.reminder">
+      <Setter Property="FontFamily" Value="{StaticResource WidgetIconFont}" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Padding" Value="6,2" />
+      <Setter Property="Opacity" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextMidBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <DoubleTransition Property="Opacity" Duration="0:0:0.12" />
+        </Transitions>
+      </Setter>
+    </Style>
+
+    <Style Selector="Border.row:pointerover Button.reminder">
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+
+    <!-- Com lembrete ligado o botão fica levemente visível mesmo sem hover. -->
+    <Style Selector="Button.reminder.on">
+      <Setter Property="Opacity" Value="0.55" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetAccentBrush}" />
+    </Style>
+
+    <Style Selector="Border.captureCard">
+      <Setter Property="Background" Value="{DynamicResource WidgetSurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetStrokeSoftBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetCardRadius}" />
+      <Setter Property="Padding" Value="8,6" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <BrushTransition Property="BorderBrush" Duration="0:0:0.15" />
+        </Transitions>
+      </Setter>
+    </Style>
+
+    <Style Selector="Border.captureCard:focus-within">
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetAccentLineBrush}" />
+    </Style>
+
+    <!--
+      Modo compacto: a captura sai de cena. Continua no ar (e no foco dos
+      testes), só não ocupa mais a altura que a lista quer.
+
+      O tipo no seletor é o concreto, e não UserControl: seletor de tipo no
+      Avalonia casa exato, então "UserControl" não alcança quem dele deriva.
+    -->
+    <Style Selector="views|TodayView.compact Border#CaptureCard">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+
+    <Style Selector="views|TodayView.compact TextBlock#CaptureHint">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+
+    <!--
+      Modo discreto. Vem depois dos estilos base de propósito: no Avalonia não
+      há especificidade de CSS, quem casa por último ganha — e estas regras
+      precisam sobrescrever Border.row e Border.row:pointerover.
+
+      Cada linha ganha a própria pílula em vez de um fundo para o painel todo:
+      entre as linhas fica a área de trabalho limpa, e sobre uma janela clara o
+      texto branco sumiria sem nada atrás dele.
+    -->
+    <Style Selector="views|TodayView.ghost Border.row">
+      <Setter Property="Background" Value="#59000000" />
+      <Setter Property="Margin" Value="3,2" />
+    </Style>
+
+    <Style Selector="views|TodayView.ghost Border.row:pointerover">
+      <Setter Property="Background" Value="#8C000000" />
+    </Style>
+
+    <!-- "Somente os itens": cabeçalho de seção e dica de teclado saem de cena. -->
+    <Style Selector="views|TodayView.ghost TextBlock.sectionHeader">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+
+    <Style Selector="views|TodayView.ghost TextBlock#CaptureHint">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+
+    <!-- A captura só ocupa espaço depois que o "+" a pede. -->
+    <Style Selector="views|TodayView.ghost Border#CaptureCard">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+
+    <Style Selector="views|TodayView.ghost.captureOpen Border#CaptureCard">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+
+  </UserControl.Styles>
+
+  <DockPanel Margin="0,0,0,8">
+
+    <!--
+      ElementRole="User" aqui e nas linhas: no modo discreto o painel inteiro é
+      área de arrasto, e sem isto digitar ou marcar uma tarefa viraria um
+      empurrão na janela.
+    -->
+    <Border x:Name="CaptureCard"
+            DockPanel.Dock="Top"
+            Classes="captureCard"
+            chrome:WindowDecorationProperties.ElementRole="User"
+            Margin="12,2,12,0">
+      <Grid ColumnDefinitions="*,Auto">
+
+        <TextBox x:Name="CaptureBox"
+                 Grid.Column="0"
+                 AcceptsReturn="True"
+                 TextWrapping="Wrap"
+                 FontSize="12.5"
+                 MinHeight="24"
+                 MaxHeight="120"
+                 Padding="0"
+                 BorderThickness="0"
+                 VerticalAlignment="Center"
+                 Background="Transparent"
+                 PlaceholderText="Uma tarefa por linha…"
+                 Text="{Binding CaptureText}" />
+
+        <Button Grid.Column="1"
+                Margin="8,0,0,0"
+                Padding="9,3"
+                FontSize="11"
+                Classes="accent"
+                VerticalAlignment="Bottom"
+                Content="Adicionar"
+                Command="{Binding CaptureCommand}" />
+
+      </Grid>
+    </Border>
+
+    <TextBlock x:Name="CaptureHint"
+               DockPanel.Dock="Top"
+               Margin="14,5,0,0"
+               FontSize="10"
+               Foreground="{DynamicResource WidgetTextLowBrush}"
+               Text="Enter adiciona · Shift+Enter quebra linha" />
+
+    <Border DockPanel.Dock="Top"
+            Margin="12,8,12,0"
+            Padding="10,7"
+            CornerRadius="{StaticResource WidgetPillRadius}"
+            Background="{DynamicResource WidgetDangerSoftBrush}"
+            IsVisible="{Binding ErrorMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <TextBlock Text="{Binding ErrorMessage}"
+                 FontSize="11"
+                 Foreground="{DynamicResource WidgetDangerBrush}"
+                 TextWrapping="Wrap" />
+    </Border>
+
+    <TextBlock DockPanel.Dock="Top"
+               Margin="0,28,0,0"
+               FontSize="11.5"
+               HorizontalAlignment="Center"
+               Foreground="{DynamicResource WidgetTextLowBrush}"
+               Text="Nada para hoje. Aproveite."
+               IsVisible="{Binding IsEmpty}" />
+
+    <ScrollViewer Margin="6,4,6,0" HorizontalScrollBarVisibility="Disabled">
+      <ItemsControl ItemsSource="{Binding Sections}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:TodaySectionViewModel">
+            <StackPanel>
+
+              <TextBlock Classes="sectionHeader" Text="{Binding Header}" />
+
+              <ItemsControl ItemsSource="{Binding Items}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:TaskRowViewModel">
+                    <Border Classes="row"
+                            chrome:WindowDecorationProperties.ElementRole="User">
+                      <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto">
+
+                        <Border Grid.Column="0"
+                                Classes="priority"
+                                Classes.high="{Binding IsHighPriority}"
+                                Classes.urgent="{Binding IsUrgent}" />
+
+                        <CheckBox Grid.Column="1"
+                                  Classes="task"
+                                  IsChecked="{Binding IsCompleted, Mode=OneWay}"
+                                  Command="{Binding #Root.((vm:TodayViewModel)DataContext).ToggleCommand}"
+                                  CommandParameter="{Binding}" />
+
+                        <StackPanel Grid.Column="2" Spacing="1" VerticalAlignment="Center">
+                          <TextBlock Text="{Binding Title}"
+                                     Classes="taskTitle"
+                                     Classes.done="{Binding IsCompleted}" />
+
+                          <StackPanel Orientation="Horizontal"
+                                      Spacing="4"
+                                      IsVisible="{Binding IsAwaitingAttention}">
+                            <TextBlock Text="⚠"
+                                       Classes="waiting"
+                                       Classes.urgent="{Binding IsUrgentlyAwaiting}" />
+                            <TextBlock Text="{Binding AttentionLabel}"
+                                       Classes="waiting"
+                                       Classes.urgent="{Binding IsUrgentlyAwaiting}"
+                                       TextTrimming="CharacterEllipsis" />
+                          </StackPanel>
+                        </StackPanel>
+
+                        <Button Grid.Column="3"
+                                Classes="reminder"
+                                Classes.on="{Binding HasReminder}"
+                                Content="&#xEA8F;"
+                                ToolTip.Tip="Ajustar o lembrete desta tarefa">
+                          <Button.Flyout>
+                            <Flyout Placement="BottomEdgeAlignedRight">
+                              <StackPanel Width="330" Margin="4" Spacing="12">
+
+                                <TextBlock Text="{Binding Title}"
+                                           FontWeight="SemiBold"
+                                           TextTrimming="CharacterEllipsis" />
+
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                  <Button Content="Padrão"
+                                          FontSize="11"
+                                          Command="{Binding Editor.UsePresetCommand}"
+                                          CommandParameter="default" />
+                                  <Button Content="Urgente"
+                                          FontSize="11"
+                                          Command="{Binding Editor.UsePresetCommand}"
+                                          CommandParameter="urgent" />
+                                  <Button Content="Não lembrar"
+                                          FontSize="11"
+                                          Command="{Binding Editor.UsePresetCommand}"
+                                          CommandParameter="none" />
+                                </StackPanel>
+
+                                <views:ReminderEditorView DataContext="{Binding Editor}" />
+
+                                <Button HorizontalAlignment="Right"
+                                        Classes="accent"
+                                        Content="Salvar"
+                                        Command="{Binding #Root.((vm:TodayViewModel)DataContext).SaveRowReminderCommand}"
+                                        CommandParameter="{Binding}" />
+
+                              </StackPanel>
+                            </Flyout>
+                          </Button.Flyout>
+                        </Button>
+
+                        <TextBlock Grid.Column="4"
+                                   Margin="8,0,2,0"
+                                   Text="{Binding TimeLabel}"
+                                   Classes="time"
+                                   Classes.late="{Binding IsLate}" />
+
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+
+            </StackPanel>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
+
+  </DockPanel>
+
+</UserControl>

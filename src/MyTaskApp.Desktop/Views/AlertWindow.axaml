@@ -1,0 +1,109 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
+        x:Class="MyTaskApp.Desktop.Views.AlertWindow"
+        x:DataType="vm:ReminderAlertViewModel"
+        x:Name="Root"
+        Title="Checklist pendente"
+        Width="336"
+        SizeToContent="Height"
+        CanResize="False"
+        ShowInTaskbar="False"
+        ShowActivated="False"
+        WindowDecorations="None"
+        Background="Transparent"
+        TransparencyLevelHint="Transparent">
+
+  <Window.Styles>
+    <Style Selector="Border.card">
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetShellRadius}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Padding" Value="14,12" />
+      <Setter Property="Margin" Value="8" />
+      <Setter Property="Background" Value="{DynamicResource WidgetSurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetStrokeBrush}" />
+      <Setter Property="BoxShadow" Value="0 8 24 -6 #7A000000" />
+    </Style>
+
+    <!-- Degrau 4 em diante: o mesmo aviso, impossível de ignorar de relance. -->
+    <Style Selector="Border.card.prominent">
+      <Setter Property="BorderThickness" Value="2" />
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetCautionBrush}" />
+      <Setter Property="Background" Value="{DynamicResource WidgetCautionSoftBrush}" />
+    </Style>
+
+    <Style Selector="Button.snooze">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Padding" Value="9,4" />
+      <Setter Property="Margin" Value="0,0,5,0" />
+    </Style>
+  </Window.Styles>
+
+  <Border Classes="card" Classes.prominent="{Binding IsProminent}">
+    <StackPanel Spacing="9">
+
+      <StackPanel Orientation="Horizontal" Spacing="7">
+        <TextBlock Text="⚠"
+                   FontSize="13"
+                   VerticalAlignment="Center"
+                   Foreground="{DynamicResource WidgetCautionBrush}" />
+        <TextBlock Text="Checklist pendente"
+                   FontSize="10"
+                   FontWeight="SemiBold"
+                   LetterSpacing="0.6"
+                   Foreground="{DynamicResource WidgetTextLowBrush}"
+                   VerticalAlignment="Center" />
+        <TextBlock Text="{Binding TimeLabel}"
+                   FontFamily="Consolas, Menlo, monospace"
+                   FontSize="10"
+                   Foreground="{DynamicResource WidgetTextLowBrush}"
+                   VerticalAlignment="Center" />
+      </StackPanel>
+
+      <TextBlock Text="{Binding Title}"
+                 FontSize="14"
+                 FontWeight="SemiBold"
+                 Foreground="{DynamicResource WidgetTextHighBrush}"
+                 TextWrapping="Wrap" />
+
+      <TextBlock Text="{Binding WaitingLabel}"
+                 FontSize="11"
+                 Foreground="{DynamicResource WidgetTextMidBrush}"
+                 TextWrapping="Wrap" />
+
+      <Border Padding="9,6"
+              CornerRadius="{StaticResource WidgetPillRadius}"
+              Background="{DynamicResource WidgetDangerSoftBrush}"
+              IsVisible="{Binding ErrorMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
+        <TextBlock Text="{Binding ErrorMessage}"
+                   FontSize="11"
+                   Foreground="{DynamicResource WidgetDangerBrush}"
+                   TextWrapping="Wrap" />
+      </Border>
+
+      <StackPanel Orientation="Horizontal" Spacing="7">
+        <Button Content="Abrir"
+                Classes="accent"
+                Command="{Binding OpenCommand}" />
+        <Button Content="Marcar como visto"
+                Command="{Binding MarkSeenCommand}" />
+      </StackPanel>
+
+      <StackPanel Spacing="4">
+        <TextBlock Text="Adiar"
+                   FontSize="10"
+                   Foreground="{DynamicResource WidgetTextLowBrush}" />
+        <WrapPanel>
+          <Button Classes="snooze" Content="10 min"
+                  Command="{Binding SnoozeCommand}" CommandParameter="10" />
+          <Button Classes="snooze" Content="30 min"
+                  Command="{Binding SnoozeCommand}" CommandParameter="30" />
+          <Button Classes="snooze" Content="1 hora"
+                  Command="{Binding SnoozeCommand}" CommandParameter="60" />
+        </WrapPanel>
+      </StackPanel>
+
+    </StackPanel>
+  </Border>
+
+</Window>

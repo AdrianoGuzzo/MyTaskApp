@@ -1,0 +1,141 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!--
+    Paleta escura do widget. Carvão, não preto: #000 puro num painel pequeno e
+    sempre visível vira um buraco na área de trabalho, e a borda arredondada
+    some contra monitores escuros. Tudo aqui é token — nenhuma tela repete hex.
+  -->
+
+  <!-- Superfícies -->
+  <Color x:Key="WidgetCanvasColor">#17181C</Color>
+  <Color x:Key="WidgetSurfaceColor">#1E2025</Color>
+  <Color x:Key="WidgetSurfaceHoverColor">#262930</Color>
+  <Color x:Key="WidgetStrokeColor">#2E313A</Color>
+  <Color x:Key="WidgetStrokeSoftColor">#24262D</Color>
+
+  <!-- Texto: três níveis, e só três. -->
+  <Color x:Key="WidgetTextHighColor">#E9EAEE</Color>
+  <Color x:Key="WidgetTextMidColor">#9AA0AC</Color>
+  <Color x:Key="WidgetTextLowColor">#6B7180</Color>
+
+  <!-- Destaque: usado com parcimônia (ação principal, progresso, concluído). -->
+  <Color x:Key="WidgetAccentColor">#6366F1</Color>
+  <Color x:Key="WidgetAccentHoverColor">#7C7FF3</Color>
+  <Color x:Key="WidgetAccentPressedColor">#575ADA</Color>
+  <Color x:Key="WidgetAccentSoftColor">#22233A</Color>
+  <!-- Contorno de foco: indigo apagado. No acento cheio, um campo vazio e
+       focado no start vira a coisa mais chamativa do painel. -->
+  <Color x:Key="WidgetAccentLineColor">#3E4180</Color>
+
+  <!-- Sinalização -->
+  <Color x:Key="WidgetDangerColor">#F87171</Color>
+  <Color x:Key="WidgetDangerSoftColor">#2A1B1E</Color>
+  <Color x:Key="WidgetCautionColor">#FBBF24</Color>
+  <Color x:Key="WidgetCautionSoftColor">#2A2318</Color>
+
+  <SolidColorBrush x:Key="WidgetCanvasBrush" Color="{StaticResource WidgetCanvasColor}" />
+  <SolidColorBrush x:Key="WidgetSurfaceBrush" Color="{StaticResource WidgetSurfaceColor}" />
+  <SolidColorBrush x:Key="WidgetSurfaceHoverBrush" Color="{StaticResource WidgetSurfaceHoverColor}" />
+  <SolidColorBrush x:Key="WidgetStrokeBrush" Color="{StaticResource WidgetStrokeColor}" />
+  <SolidColorBrush x:Key="WidgetStrokeSoftBrush" Color="{StaticResource WidgetStrokeSoftColor}" />
+  <SolidColorBrush x:Key="WidgetTextHighBrush" Color="{StaticResource WidgetTextHighColor}" />
+  <SolidColorBrush x:Key="WidgetTextMidBrush" Color="{StaticResource WidgetTextMidColor}" />
+  <SolidColorBrush x:Key="WidgetTextLowBrush" Color="{StaticResource WidgetTextLowColor}" />
+  <SolidColorBrush x:Key="WidgetAccentBrush" Color="{StaticResource WidgetAccentColor}" />
+  <SolidColorBrush x:Key="WidgetAccentHoverBrush" Color="{StaticResource WidgetAccentHoverColor}" />
+  <SolidColorBrush x:Key="WidgetAccentPressedBrush" Color="{StaticResource WidgetAccentPressedColor}" />
+  <SolidColorBrush x:Key="WidgetAccentSoftBrush" Color="{StaticResource WidgetAccentSoftColor}" />
+  <SolidColorBrush x:Key="WidgetAccentLineBrush" Color="{StaticResource WidgetAccentLineColor}" />
+  <SolidColorBrush x:Key="WidgetDangerBrush" Color="{StaticResource WidgetDangerColor}" />
+  <SolidColorBrush x:Key="WidgetDangerSoftBrush" Color="{StaticResource WidgetDangerSoftColor}" />
+  <SolidColorBrush x:Key="WidgetCautionBrush" Color="{StaticResource WidgetCautionColor}" />
+  <SolidColorBrush x:Key="WidgetCautionSoftBrush" Color="{StaticResource WidgetCautionSoftColor}" />
+  <SolidColorBrush x:Key="WidgetTransparentBrush" Color="Transparent" />
+
+  <!-- Geometria: um raio só para o painel, outro para o que vive dentro dele. -->
+  <!--
+    Icones monocromaticos do Windows: herdam Foreground, ao contrario de emoji,
+    que vem com cor propria e briga com a paleta. O app ja e WinExe (P/Invoke
+    em user32), entao a fonte e uma dependencia que ele ja tinha.
+  -->
+  <FontFamily x:Key="WidgetIconFont">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
+
+  <CornerRadius x:Key="WidgetShellRadius">12</CornerRadius>
+  <CornerRadius x:Key="WidgetCardRadius">8</CornerRadius>
+  <CornerRadius x:Key="WidgetPillRadius">6</CornerRadius>
+
+  <!--
+    As telas existentes já pedem estas chaves do Fluent. Reapontá-las aqui é o
+    que mantém AlertWindow e a tela de lembretes coerentes com o widget sem
+    precisar editar cada Setter espalhado por elas.
+  -->
+  <SolidColorBrush x:Key="SystemFillColorCautionBrush" Color="{StaticResource WidgetCautionColor}" />
+  <SolidColorBrush x:Key="SystemFillColorCautionBackgroundBrush" Color="{StaticResource WidgetCautionSoftColor}" />
+  <SolidColorBrush x:Key="SystemFillColorCriticalBackgroundBrush" Color="{StaticResource WidgetDangerSoftColor}" />
+  <SolidColorBrush x:Key="ControlStrokeColorDefaultBrush" Color="{StaticResource WidgetStrokeColor}" />
+  <SolidColorBrush x:Key="SolidBackgroundFillColorSecondaryBrush" Color="{StaticResource WidgetSurfaceColor}" />
+
+  <!--
+    O Fluent deriva botão de acento, checkbox marcado e barra de progresso
+    destas chaves. Reapontá-las é mais barato e menos frágil do que reescrever
+    o template de cada controle.
+  -->
+  <Color x:Key="SystemAccentColor">#6366F1</Color>
+  <Color x:Key="SystemAccentColorLight1">#7C7FF3</Color>
+  <Color x:Key="SystemAccentColorLight2">#9698F6</Color>
+  <Color x:Key="SystemAccentColorLight3">#B0B2F8</Color>
+  <Color x:Key="SystemAccentColorDark1">#575ADA</Color>
+  <Color x:Key="SystemAccentColorDark2">#4B4EC2</Color>
+  <Color x:Key="SystemAccentColorDark3">#3F42AA</Color>
+
+  <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="{StaticResource WidgetAccentColor}" />
+  <SolidColorBrush x:Key="AccentFillColorSecondaryBrush" Color="{StaticResource WidgetAccentHoverColor}" />
+  <SolidColorBrush x:Key="AccentFillColorTertiaryBrush" Color="{StaticResource WidgetAccentPressedColor}" />
+  <SolidColorBrush x:Key="TextOnAccentFillColorPrimaryBrush" Color="#FFFFFF" />
+  <SolidColorBrush x:Key="TextOnAccentFillColorSecondaryBrush" Color="#F2F2FF" />
+
+  <!-- Janelas auxiliares (lembretes) seguem a mesma tela de fundo do widget. -->
+  <SolidColorBrush x:Key="SolidBackgroundFillColorBaseBrush" Color="{StaticResource WidgetCanvasColor}" />
+  <SolidColorBrush x:Key="SolidBackgroundFillColorTertiaryBrush" Color="{StaticResource WidgetSurfaceHoverColor}" />
+
+  <!--
+    Pele escura dos controles padrão. Reapontar estas chaves veste botão, campo
+    de texto e checkbox de uma vez; reescrever ControlTheme faria o mesmo com
+    trezentas linhas a mais e um template para manter a cada atualização.
+  -->
+  <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="{StaticResource WidgetTextHighColor}" />
+  <SolidColorBrush x:Key="TextFillColorSecondaryBrush" Color="{StaticResource WidgetTextMidColor}" />
+  <SolidColorBrush x:Key="TextFillColorTertiaryBrush" Color="{StaticResource WidgetTextLowColor}" />
+
+  <SolidColorBrush x:Key="ControlFillColorDefaultBrush" Color="#24262D" />
+  <SolidColorBrush x:Key="ControlFillColorSecondaryBrush" Color="#2A2D35" />
+  <SolidColorBrush x:Key="ControlFillColorTertiaryBrush" Color="#202229" />
+  <SolidColorBrush x:Key="ControlStrokeColorSecondaryBrush" Color="{StaticResource WidgetStrokeColor}" />
+
+  <!-- Checkbox desmarcado: círculo vazado, sem caixa cinza pesada. -->
+  <SolidColorBrush x:Key="ControlAltFillColorSecondaryBrush" Color="Transparent" />
+  <SolidColorBrush x:Key="ControlAltFillColorTertiaryBrush" Color="#262930" />
+  <SolidColorBrush x:Key="ControlAltFillColorQuarternaryBrush" Color="#2E313A" />
+
+  <!-- Campo de texto sem moldura: a borda vem do cartão que o envolve. -->
+  <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
+  <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
+  <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
+  <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="{StaticResource WidgetTextLowColor}" />
+  <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="{StaticResource WidgetTextLowColor}" />
+  <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="{StaticResource WidgetTextMidColor}" />
+
+  <!--
+    O Fluent desenha o proprio realce de foco no TextBox. Dentro do cartao de
+    captura isso vira borda dupla: a do cartao e mais um retangulo de acento
+    colado por dentro. Quem sinaliza o foco aqui e o cartao.
+  -->
+  <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
+  <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
+  <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
+  <SolidColorBrush x:Key="TextControlBorderBrushDisabled" Color="Transparent" />
+  <Thickness x:Key="TextControlBorderThemeThickness">0</Thickness>
+  <Thickness x:Key="TextControlBorderThemeThicknessFocused">0</Thickness>
+
+</ResourceDictionary>

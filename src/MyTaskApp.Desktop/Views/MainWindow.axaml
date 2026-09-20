@@ -1,0 +1,245 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
+        xmlns:views="using:MyTaskApp.Desktop.Views"
+        xmlns:chrome="using:Avalonia.Controls.Chrome"
+        x:Class="MyTaskApp.Desktop.Views.MainWindow"
+        x:DataType="vm:TodayViewModel"
+        x:Name="Shell"
+        Title="MyTaskApp"
+        Width="360"
+        Height="560"
+        MinWidth="288"
+        MinHeight="66"
+        WindowDecorations="None"
+        ExtendClientAreaToDecorationsHint="True"
+        Background="Transparent"
+        TransparencyLevelHint="Transparent"
+        Topmost="{Binding #Shell.Chrome.IsTopmost}">
+
+  <!--
+    Sem decoração do sistema: a barra de título nativa sozinha já custava 32px
+    e entregava a cara de "aplicação", não de widget. Em troca, o painel assume
+    arrastar e redimensionar — e no Avalonia 12 isso é declarativo, via
+    ElementRole, então quem move a janela continua sendo o sistema.
+
+    O Topmost acima é só isso: o pino fixa o painel sobre as outras janelas e
+    não congela posição nem tamanho (ADR-017).
+  -->
+
+  <Panel>
+
+    <Border Classes="widgetShell"
+            Classes.ghost="{Binding #Shell.Chrome.IsGhostActive}"
+            Margin="10">
+
+      <DockPanel>
+
+        <Border DockPanel.Dock="Top"
+                Classes="titleBar"
+                IsVisible="{Binding #Shell.Chrome.IsHeaderVisible}"
+                chrome:WindowDecorationProperties.ElementRole="TitleBar"
+                PointerPressed="OnTitleBarPointerPressed">
+
+          <StackPanel Spacing="8">
+
+            <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto">
+
+              <!-- A marca: o único bloco de cor de destaque sempre visível. -->
+              <Border Grid.Column="0"
+                      Width="16"
+                      Height="16"
+                      Margin="0,0,8,0"
+                      CornerRadius="5"
+                      VerticalAlignment="Center"
+                      Background="{DynamicResource WidgetAccentBrush}">
+                <TextBlock Text="&#x2713;"
+                           FontSize="10"
+                           FontWeight="Bold"
+                           Foreground="White"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center" />
+              </Border>
+
+              <TextBlock Grid.Column="1"
+                         Classes="brand"
+                         Text="Checklist"
+                         IsVisible="{Binding #Shell.Chrome.IsPanelVisible}" />
+
+              <!-- Recolhido, o nome dá lugar ao número: é a única informação que sobra. -->
+              <TextBlock Grid.Column="1"
+                         Classes="brand"
+                         Text="{Binding PendingLabel}"
+                         TextTrimming="CharacterEllipsis"
+                         IsVisible="{Binding #Shell.Chrome.IsCollapsed}" />
+
+              <!-- No modo compacto o progresso sobe para o cabeçalho. -->
+              <TextBlock Grid.Column="2"
+                         Classes="metric"
+                         Margin="8,0,0,0"
+                         Text="{Binding CountLabel}"
+                         IsVisible="{Binding #Shell.Chrome.IsCompact}" />
+
+              <Button Grid.Column="3"
+                      Classes="chrome"
+                      Classes.on="{Binding #Shell.Chrome.IsTopmost}"
+                      Content="{Binding #Shell.Chrome.TopmostGlyph}"
+                      chrome:WindowDecorationProperties.ElementRole="User"
+                      ToolTip.Tip="{Binding #Shell.Chrome.TopmostTip}"
+                      Command="{Binding #Shell.Chrome.ToggleTopmostCommand}" />
+
+              <Button Grid.Column="4"
+                      Classes="chrome"
+                      Content="{Binding #Shell.Chrome.CollapseGlyph}"
+                      chrome:WindowDecorationProperties.ElementRole="User"
+                      ToolTip.Tip="{Binding #Shell.Chrome.CollapseTip}"
+                      Command="{Binding #Shell.Chrome.ToggleCollapsedCommand}" />
+
+              <Button Grid.Column="5"
+                      Classes="chrome"
+                      Content="&#xE712;"
+                      chrome:WindowDecorationProperties.ElementRole="User"
+                      ToolTip.Tip="Mais opções">
+                <Button.Flyout>
+                  <MenuFlyout Placement="BottomEdgeAlignedRight">
+                    <MenuItem Header="Painel completo"
+                              ToggleType="Radio"
+                              IsChecked="{Binding #Shell.Chrome.IsExpanded, Mode=OneWay}"
+                              Command="{Binding #Shell.Chrome.UseModeCommand}"
+                              CommandParameter="expanded" />
+                    <MenuItem Header="Modo compacto"
+                              ToggleType="Radio"
+                              IsChecked="{Binding #Shell.Chrome.IsCompact, Mode=OneWay}"
+                              Command="{Binding #Shell.Chrome.UseModeCommand}"
+                              CommandParameter="compact" />
+                    <MenuItem Header="Recolher"
+                              ToggleType="Radio"
+                              IsChecked="{Binding #Shell.Chrome.IsCollapsed, Mode=OneWay}"
+                              Command="{Binding #Shell.Chrome.UseModeCommand}"
+                              CommandParameter="collapsed" />
+                    <Separator />
+                    <MenuItem Header="Sempre no topo"
+                              ToggleType="CheckBox"
+                              IsChecked="{Binding #Shell.Chrome.IsTopmost, Mode=OneWay}"
+                              Command="{Binding #Shell.Chrome.ToggleTopmostCommand}" />
+                    <MenuItem Header="Modo discreto"
+                              ToggleType="CheckBox"
+                              IsChecked="{Binding #Shell.Chrome.IsGhost, Mode=OneWay}"
+                              Command="{Binding #Shell.Chrome.ToggleGhostCommand}" />
+                    <MenuItem Header="Abrir recolhido da próxima vez"
+                              ToggleType="CheckBox"
+                              IsChecked="{Binding #Shell.Chrome.StartHidden, Mode=TwoWay}" />
+                    <Separator />
+                    <MenuItem Header="Ocultar na bandeja"
+                              Command="{Binding #Shell.Chrome.HideCommand}" />
+                    <MenuItem Header="Configuração de lembretes…"
+                              Command="{Binding OpenSettingsCommand}" />
+                  </MenuFlyout>
+                </Button.Flyout>
+              </Button>
+
+            </Grid>
+
+            <!--
+              A data continua sendo o rótulo que o quadro produz. Aqui ela é
+              informação periférica: 10px, cinza baixo, acima do progresso.
+            -->
+            <Grid ColumnDefinitions="*,Auto"
+                  IsVisible="{Binding #Shell.Chrome.IsExpanded}">
+              <TextBlock Grid.Column="0"
+                         Classes="dateLine"
+                         Text="{Binding Title}"
+                         VerticalAlignment="Center" />
+              <TextBlock Grid.Column="1"
+                         Classes="metric"
+                         Text="{Binding ProgressLabel}" />
+            </Grid>
+
+            <ProgressBar Classes="slim"
+                         Minimum="0"
+                         Maximum="100"
+                         Value="{Binding ProgressValue}"
+                         IsVisible="{Binding HasProgress}" />
+
+          </StackPanel>
+        </Border>
+
+        <views:TodayView IsVisible="{Binding #Shell.Chrome.IsPanelVisible}"
+                         Classes.compact="{Binding #Shell.Chrome.IsCompact}"
+                         Classes.ghost="{Binding #Shell.Chrome.IsGhostActive}"
+                         Classes.captureOpen="{Binding #Shell.Chrome.IsCaptureOpen}" />
+
+      </DockPanel>
+    </Border>
+
+    <!--
+      Os dois controles do modo discreto. Fora do DockPanel de propósito: eles
+      flutuam sobre a lista, no canto, porque sem cabeçalho não sobrou lugar
+      onde pousar. Saem da área de arrasto com ElementRole="User", senão o
+      clique viraria um empurrão na janela.
+
+      O alfinete ao lado do "+" é a porta de volta: sem ele, desfazer o modo
+      discreto só pela bandeja — um caminho que ninguém encontra sozinho.
+    -->
+    <StackPanel Orientation="Horizontal"
+                Spacing="6"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Bottom"
+                Margin="0,0,18,16"
+                IsVisible="{Binding #Shell.Chrome.IsGhostActive}">
+
+      <Button Classes="ghostChrome"
+              Classes.on="{Binding #Shell.Chrome.IsTopmost}"
+              Content="{Binding #Shell.Chrome.TopmostGlyph}"
+              chrome:WindowDecorationProperties.ElementRole="User"
+              ToolTip.Tip="{Binding #Shell.Chrome.GhostPinTip}"
+              Command="{Binding #Shell.Chrome.ToggleTopmostCommand}" />
+
+      <Button Classes="ghostChrome ghostAdd"
+              Content="{Binding #Shell.Chrome.CaptureGlyph}"
+              chrome:WindowDecorationProperties.ElementRole="User"
+              ToolTip.Tip="{Binding #Shell.Chrome.CaptureTip}"
+              Command="{Binding #Shell.Chrome.ToggleCaptureCommand}" />
+
+    </StackPanel>
+
+    <!--
+      Alças de redimensionamento sobre o anel da sombra, onde não há conteúdo
+      para roubar clique. Os papéis fazem o sistema redimensionar; o
+      PointerPressed é a rede de segurança se a plataforma ignorar o papel.
+    -->
+    <Grid Margin="2"
+          RowDefinitions="8,*,8"
+          ColumnDefinitions="8,*,8"
+          IsVisible="{Binding #Shell.Chrome.IsPanelVisible}">
+
+      <Border Grid.Row="0" Grid.Column="0" Background="Transparent" Cursor="TopLeftCorner"
+              Tag="NorthWest" chrome:WindowDecorationProperties.ElementRole="ResizeNW"
+              PointerPressed="OnResizePointerPressed" />
+      <Border Grid.Row="0" Grid.Column="1" Background="Transparent" Cursor="SizeNorthSouth"
+              Tag="North" chrome:WindowDecorationProperties.ElementRole="ResizeN"
+              PointerPressed="OnResizePointerPressed" />
+      <Border Grid.Row="0" Grid.Column="2" Background="Transparent" Cursor="TopRightCorner"
+              Tag="NorthEast" chrome:WindowDecorationProperties.ElementRole="ResizeNE"
+              PointerPressed="OnResizePointerPressed" />
+      <Border Grid.Row="1" Grid.Column="0" Background="Transparent" Cursor="SizeWestEast"
+              Tag="West" chrome:WindowDecorationProperties.ElementRole="ResizeW"
+              PointerPressed="OnResizePointerPressed" />
+      <Border Grid.Row="1" Grid.Column="2" Background="Transparent" Cursor="SizeWestEast"
+              Tag="East" chrome:WindowDecorationProperties.ElementRole="ResizeE"
+              PointerPressed="OnResizePointerPressed" />
+      <Border Grid.Row="2" Grid.Column="0" Background="Transparent" Cursor="BottomLeftCorner"
+              Tag="SouthWest" chrome:WindowDecorationProperties.ElementRole="ResizeSW"
+              PointerPressed="OnResizePointerPressed" />
+      <Border Grid.Row="2" Grid.Column="1" Background="Transparent" Cursor="SizeNorthSouth"
+              Tag="South" chrome:WindowDecorationProperties.ElementRole="ResizeS"
+              PointerPressed="OnResizePointerPressed" />
+      <Border Grid.Row="2" Grid.Column="2" Background="Transparent" Cursor="BottomRightCorner"
+              Tag="SouthEast" chrome:WindowDecorationProperties.ElementRole="ResizeSE"
+              PointerPressed="OnResizePointerPressed" />
+
+    </Grid>
+
+  </Panel>
+
+</Window>

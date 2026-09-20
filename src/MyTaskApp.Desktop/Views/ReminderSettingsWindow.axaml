@@ -1,0 +1,67 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
+        xmlns:views="using:MyTaskApp.Desktop.Views"
+        x:Class="MyTaskApp.Desktop.Views.ReminderSettingsWindow"
+        x:DataType="vm:ReminderSettingsViewModel"
+        Title="Lembretes"
+        Width="480"
+        SizeToContent="Height"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner">
+
+  <StackPanel Margin="28,24" Spacing="16">
+
+    <StackPanel Spacing="4">
+      <TextBlock Text="Configuração padrão" FontSize="18" FontWeight="SemiBold" />
+      <TextBlock FontSize="12"
+                 Opacity="0.6"
+                 TextWrapping="Wrap"
+                 Text="Vale para os checklists que você criar a partir de agora. Cada checklist pode ter o seu próprio ajuste." />
+    </StackPanel>
+
+    <Border Padding="12,9"
+            CornerRadius="6"
+            Background="{DynamicResource SystemFillColorCautionBackgroundBrush}"
+            IsVisible="{Binding IsPaused}">
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock Grid.Column="0"
+                   VerticalAlignment="Center"
+                   TextWrapping="Wrap"
+                   Text="{Binding PausedLabel}" />
+        <Button Grid.Column="1"
+                Margin="12,0,0,0"
+                Content="Retomar"
+                Command="{Binding ResumeCommand}" />
+      </Grid>
+    </Border>
+
+    <views:ReminderEditorView DataContext="{Binding Editor}" />
+
+    <Border Padding="12,9"
+            CornerRadius="6"
+            Background="{DynamicResource SystemFillColorCriticalBackgroundBrush}"
+            IsVisible="{Binding ErrorMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <TextBlock Text="{Binding ErrorMessage}" TextWrapping="Wrap" />
+    </Border>
+
+    <TextBlock FontSize="12"
+               Opacity="0.6"
+               TextWrapping="Wrap"
+               Text="{Binding StatusMessage}"
+               IsVisible="{Binding StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <Button Grid.Column="0"
+              Content="Restaurar padrão"
+              Command="{Binding RestoreDefaultsCommand}" />
+      <Button Grid.Column="2"
+              Classes="accent"
+              Content="Salvar"
+              IsEnabled="{Binding !IsBusy}"
+              Command="{Binding SaveCommand}" />
+    </Grid>
+
+  </StackPanel>
+
+</Window>

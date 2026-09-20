@@ -1,0 +1,25 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="MyTaskApp.Desktop.App"
+             RequestedThemeVariant="Dark">
+
+  <!--
+    Escuro por decisão, não por herança. Antes era "Default", então o app
+    seguia o Windows e virava uma chapa preta de 900x700 na área de trabalho.
+    Agora a variante é fixa e a paleta é nossa: carvão, não preto.
+  -->
+
+  <Application.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceInclude Source="avares://MyTaskApp/Styles/Tokens.axaml" />
+      </ResourceDictionary.MergedDictionaries>
+    </ResourceDictionary>
+  </Application.Resources>
+
+  <Application.Styles>
+    <FluentTheme />
+    <StyleInclude Source="avares://MyTaskApp/Styles/Widget.axaml" />
+  </Application.Styles>
+
+</Application>

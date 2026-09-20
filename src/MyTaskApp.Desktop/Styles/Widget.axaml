@@ -1,0 +1,186 @@
+﻿<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:chrome="using:Avalonia.Controls.Chrome">
+
+  <!--
+    Estilos da moldura do widget. O que é específico da lista de tarefas fica
+    em TodayView; aqui mora só o que a janela e as telas auxiliares dividem.
+  -->
+
+  <Style Selector="ScrollViewer">
+    <!-- Barra de rolagem some quando ninguém está usando: menos ruído no painel. -->
+    <Setter Property="AllowAutoHide" Value="True" />
+  </Style>
+
+  <Style Selector="Button">
+    <Setter Property="CornerRadius" Value="{StaticResource WidgetPillRadius}" />
+    <Setter Property="Padding" Value="10,5" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <!-- Casca: o painel inteiro. A borda é o que separa do fundo da área de trabalho. -->
+  <Style Selector="Border.widgetShell">
+    <Setter Property="Background" Value="{DynamicResource WidgetCanvasBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource WidgetStrokeBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{StaticResource WidgetShellRadius}" />
+
+    <!-- No estilo, e não no elemento: valor inline ganha de setter, e o modo
+         discreto precisa poder apagar a sombra. -->
+    <Setter Property="BoxShadow" Value="0 8 28 -6 #7A000000" />
+  </Style>
+
+  <!--
+    Modo discreto: a moldura inteira some e sobra o que o usuário quer ver.
+    Sem cabeçalho não há barra de arrasto, então o painel assume o papel de
+    TitleBar — as linhas e o "+" saem dele com ElementRole="User". É por isso
+    que o fundo é Transparent e não nulo: fundo nulo não recebe ponteiro, e
+    arrastar por área vazia deixaria de funcionar.
+  -->
+  <Style Selector="Border.widgetShell.ghost">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="BoxShadow" Value="none" />
+    <Setter Property="chrome:WindowDecorationProperties.ElementRole" Value="TitleBar" />
+  </Style>
+
+  <!-- Barra de arrasto. Transparente de propósito: ela é área, não elemento. -->
+  <Style Selector="Border.titleBar">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Padding" Value="12,10,8,8" />
+  </Style>
+
+  <Style Selector="TextBlock.brand">
+    <Setter Property="FontSize" Value="12.5" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="TextBlock.dateLine">
+    <Setter Property="FontSize" Value="10" />
+    <Setter Property="LetterSpacing" Value="0.7" />
+    <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.metric">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="Foreground" Value="{DynamicResource WidgetTextMidBrush}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <!-- Botões de canto (fixar, recolher, menu): 24px, discretos até o hover. -->
+  <Style Selector="Button.chrome">
+    <Setter Property="Width" Value="24" />
+    <Setter Property="Height" Value="24" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="FontFamily" Value="{StaticResource WidgetIconFont}" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="{StaticResource WidgetPillRadius}" />
+    <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.12" />
+        <BrushTransition Property="Foreground" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="Button.chrome /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="{StaticResource WidgetPillRadius}" />
+  </Style>
+
+  <Style Selector="Button.chrome:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource WidgetSurfaceHoverBrush}" />
+  </Style>
+
+  <Style Selector="Button.chrome:pointerover">
+    <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+  </Style>
+
+  <Style Selector="Button.chrome:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource WidgetSurfaceBrush}" />
+  </Style>
+
+  <!-- Estado ligado (por exemplo "sempre no topo"): só a cor muda, sem moldura. -->
+  <Style Selector="Button.chrome.on">
+    <Setter Property="Foreground" Value="{DynamicResource WidgetAccentBrush}" />
+  </Style>
+
+  <!--
+    Os controles que sobrevivem ao modo discreto: o alfinete (a porta de volta)
+    e o "+". Flutuam num canto porque não há mais cabeçalho onde pousar, e
+    carregam fundo próprio — sobre a área de trabalho um botão transparente
+    seria invisível.
+  -->
+  <Style Selector="Button.ghostChrome">
+    <Setter Property="Width" Value="28" />
+    <Setter Property="Height" Value="28" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="FontFamily" Value="{StaticResource WidgetIconFont}" />
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="14" />
+    <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Opacity" Value="0.55" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Opacity" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="Button.ghostChrome /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#A6000000" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="14" />
+  </Style>
+
+  <!-- Discreto até o mouse chegar perto: em repouso ele não disputa atenção. -->
+  <Style Selector="Button.ghostChrome:pointerover">
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+
+  <Style Selector="Button.ghostChrome:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#D9000000" />
+  </Style>
+
+  <!-- Fixado: mesma cor de destaque do alfinete no cabeçalho, e menos apagado
+       que os outros, porque é ele que desfaz o modo. -->
+  <Style Selector="Button.ghostChrome.on">
+    <Setter Property="Foreground" Value="{DynamicResource WidgetAccentBrush}" />
+    <Setter Property="Opacity" Value="0.85" />
+  </Style>
+
+  <!-- Barra de progresso fina: informação periférica, não um elemento de tela. -->
+  <Style Selector="ProgressBar.slim">
+    <Setter Property="Height" Value="3" />
+    <Setter Property="MinHeight" Value="3" />
+    <Setter Property="CornerRadius" Value="2" />
+    <Setter Property="Foreground" Value="{DynamicResource WidgetAccentBrush}" />
+    <Setter Property="Background" Value="{DynamicResource WidgetStrokeSoftBrush}" />
+  </Style>
+
+  <Style Selector="ProgressBar.slim /template/ Border#PART_Indicator">
+    <Setter Property="CornerRadius" Value="2" />
+  </Style>
+
+  <Style Selector="ProgressBar.slim /template/ Border#ProgressBarRoot">
+    <Setter Property="CornerRadius" Value="2" />
+  </Style>
+
+</Styles>

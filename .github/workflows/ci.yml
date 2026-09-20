@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # A versão sai de global.json — a mesma pinada para quem desenvolve.
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restaurar
+        run: dotnet restore MyTaskApp.slnx
+
+      # TreatWarningsAsErrors=true: um aviso novo reprova aqui, não na máquina
+      # de quem for gerar a release.
+      - name: Compilar
+        run: dotnet build MyTaskApp.slnx -c Release --no-restore
+
+      - name: Testar
+        run: dotnet test MyTaskApp.slnx -c Release --no-build --logger "trx;LogFileName=results.trx"
+
+      - name: Publicar resultados
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: "**/TestResults/*.trx"
+          if-no-files-found: ignore
+
+  # O publish self-contained é o que o instalador empacota. Quebrar aqui
+  # significa release quebrada, e é barato descobrir antes da tag.
+  publish-smoke:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+            binary: artifacts/publish/win-x64/MyTaskApp.exe
+          - os: ubuntu-latest
+            rid: linux-x64
+            binary: artifacts/publish/linux-x64/MyTaskApp
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Publicar ${{ matrix.rid }}
+        run: >
+          dotnet publish src/MyTaskApp.Desktop/MyTaskApp.Desktop.csproj
+          -c Release -r ${{ matrix.rid }}
+          --self-contained true
+          -p:PublishTrimmed=false
+          -o artifacts/publish/${{ matrix.rid }}
+
+      # appsettings.json é carregado com optional:false: sem ele o app morre na
+      # primeira linha do Main, já instalado na máquina de alguém.
+      - name: Conferir o que o instalador vai empacotar
+        shell: bash
+        run: |
+          test -f "${{ matrix.binary }}" || { echo "binário ausente"; exit 1; }
+          test -f "artifacts/publish/${{ matrix.rid }}/appsettings.json" \
+            || { echo "appsettings.json ausente — o app não iniciaria"; exit 1; }

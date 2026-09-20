@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Name=MyTaskApp
+GenericName=Gerenciador de tarefas
+Comment=Suas tarefas, sempre a vista
+Exec=@EXEC@
+Icon=mytaskapp
+Terminal=false
+Categories=Utility;Office;ProjectManagement;
+Keywords=tarefas;task;todo;lembretes;
+StartupNotify=true
+StartupWMClass=MyTaskApp
+X-GNOME-SingleWindow=true
+Version=1.0
+X-AppVersion=@VERSION@

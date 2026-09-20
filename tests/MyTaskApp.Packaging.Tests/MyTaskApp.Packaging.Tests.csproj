@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <!-- O contrato entre o codigo e o instalador e uma constante compartilhada:
+         o teste compara o AppMutex do .iss com SingleInstance.MutexName. -->
+    <ProjectReference Include="..\..\src\MyTaskApp.Desktop\MyTaskApp.Desktop.csproj" />
+  </ItemGroup>
+
+</Project>

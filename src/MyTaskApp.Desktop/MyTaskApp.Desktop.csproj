@@ -1,0 +1,54 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Icone do .exe: e o que o Explorer, a barra de tarefas e o atalho mostram. -->
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <!-- Nome do arquivo publicado: o atalho do instalador aponta para ele. -->
+    <AssemblyName>MyTaskApp</AssemblyName>
+    <RootNamespace>MyTaskApp.Desktop</RootNamespace>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <!-- [LibraryImport] gera codigo unsafe (WindowsSoundPlayer). -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MyTaskApp.Application\MyTaskApp.Application.csproj" />
+    <ProjectReference Include="..\MyTaskApp.Infrastructure\MyTaskApp.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+    <PackageReference Include="Avalonia.Fonts.Inter" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" />
+    <PackageReference Include="Serilog" />
+    <PackageReference Include="Serilog.Extensions.Logging" />
+    <PackageReference Include="Serilog.Settings.Configuration" />
+    <PackageReference Include="Serilog.Sinks.Console" />
+    <PackageReference Include="Serilog.Sinks.File" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets/**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- O armazenamento do estado do widget e interno; o teste chega por aqui. -->
+    <InternalsVisibleTo Include="MyTaskApp.Desktop.Tests" />
+    <!-- SingleInstance.MutexName e contrato com o instalador (ADR-019). -->
+    <InternalsVisibleTo Include="MyTaskApp.Packaging.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

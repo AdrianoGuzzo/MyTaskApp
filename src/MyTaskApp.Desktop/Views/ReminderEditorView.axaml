@@ -1,0 +1,102 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
+             x:Class="MyTaskApp.Desktop.Views.ReminderEditorView"
+             x:DataType="vm:ReminderEditorViewModel">
+
+  <UserControl.Styles>
+    <Style Selector="TextBlock.label">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Opacity" Value="0.55" />
+      <Setter Property="Margin" Value="0,0,0,4" />
+    </Style>
+    <Style Selector="StackPanel.field">
+      <Setter Property="Margin" Value="24,10,0,0" />
+    </Style>
+  </UserControl.Styles>
+
+  <StackPanel Spacing="2">
+
+    <CheckBox Content="Lembrar-me deste checklist" IsChecked="{Binding IsEnabled}" />
+
+    <StackPanel Classes="field" Spacing="10" IsEnabled="{Binding IsEnabled}">
+
+      <StackPanel Spacing="4">
+        <TextBlock Classes="label" Text="Quando lembrar" />
+        <RadioButton GroupName="Anchor"
+                     Content="Depois de criar"
+                     IsChecked="{Binding RemindAfterCreation}" />
+        <RadioButton GroupName="Anchor"
+                     Content="Antes do horário agendado"
+                     IsEnabled="{Binding CanRemindAtScheduledTime}"
+                     IsChecked="{Binding !RemindAfterCreation}" />
+        <TextBlock FontSize="11"
+                   Opacity="0.5"
+                   TextWrapping="Wrap"
+                   Text="Defina um horário para poder lembrar antes dele."
+                   IsVisible="{Binding !CanRemindAtScheduledTime}" />
+      </StackPanel>
+
+      <StackPanel Spacing="4">
+        <TextBlock Classes="label" Text="Lembrar depois de" />
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <ComboBox MinWidth="150"
+                    ItemsSource="{Binding OffsetChoices}"
+                    SelectedItem="{Binding Offset}" />
+          <NumericUpDown Width="130"
+                         Minimum="1"
+                         Maximum="43200"
+                         Increment="5"
+                         FormatString="0"
+                         Value="{Binding CustomOffsetMinutes}"
+                         IsVisible="{Binding OffsetIsCustom}" />
+          <TextBlock Text="minutos"
+                     VerticalAlignment="Center"
+                     Opacity="0.55"
+                     IsVisible="{Binding OffsetIsCustom}" />
+        </StackPanel>
+      </StackPanel>
+
+      <CheckBox Content="Se eu ignorar, continuar lembrando"
+                IsChecked="{Binding RepeatUntilAcknowledged}" />
+
+      <StackPanel Spacing="4"
+                  Margin="24,0,0,0"
+                  IsEnabled="{Binding RepeatUntilAcknowledged}">
+        <TextBlock Classes="label" Text="Repetir a cada" />
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <ComboBox MinWidth="150"
+                    ItemsSource="{Binding RepeatChoices}"
+                    SelectedItem="{Binding RepeatEvery}" />
+          <NumericUpDown Width="130"
+                         Minimum="1"
+                         Maximum="1440"
+                         Increment="5"
+                         FormatString="0"
+                         Value="{Binding CustomRepeatMinutes}"
+                         IsVisible="{Binding RepeatIsCustom}" />
+          <TextBlock Text="minutos"
+                     VerticalAlignment="Center"
+                     Opacity="0.55"
+                     IsVisible="{Binding RepeatIsCustom}" />
+        </StackPanel>
+      </StackPanel>
+
+      <StackPanel Spacing="4">
+        <TextBlock Classes="label" Text="Alertar através de" />
+        <CheckBox Content="Notificação" IsChecked="{Binding Notify}" />
+        <CheckBox Content="Som" IsChecked="{Binding PlaySound}" />
+        <CheckBox Content="Trazer o checklist para a frente da tela"
+                  IsChecked="{Binding BringToFront}" />
+        <TextBlock FontSize="11"
+                   Opacity="0.5"
+                   TextWrapping="Wrap"
+                   Margin="0,4,0,0"
+                   Text="O aviso começa discreto e vai ficando mais insistente: som a partir da 3ª tentativa, e a janela vem para a frente a partir da 5ª." />
+      </StackPanel>
+
+    </StackPanel>
+
+  </StackPanel>
+
+</UserControl>
