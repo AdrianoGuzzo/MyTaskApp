@@ -61,6 +61,35 @@ public class WidgetPinTests
     }
 
     /// <summary>
+    /// Um quadro com as duas metades: o que falta e o que já foi feito. O
+    /// <c>ShowAsync</c> acima só conhece pendências.
+    /// </summary>
+    private static async Task<MainWindow> ShowAsync(
+        IReadOnlyList<TodayTask> pending,
+        IReadOnlyList<TodayTask> completed)
+    {
+        var viewModel = new TodayViewModel(
+            new FakeUseCaseRunner { Result = new TodayBoard(Date, [], [], pending, [], completed) },
+            TimeProvider.System,
+            NullLogger<TodayViewModel>.Instance);
+
+        await viewModel.LoadAsync(CancellationToken.None);
+
+        var window = new MainWindow { DataContext = viewModel };
+        window.Show();
+        Settle(window);
+
+        return window;
+    }
+
+    private static IReadOnlyList<string> VisibleTexts(Visual window) =>
+        window.GetVisualDescendants()
+            .OfType<TextBlock>()
+            .Where(block => block.IsEffectivelyVisible && !string.IsNullOrWhiteSpace(block.Text))
+            .Select(block => block.Text!)
+            .ToList();
+
+    /// <summary>
     /// Os três passos são necessários. Redimensionar no headless é postado no
     /// dispatcher; rodar a fila invalida o layout que acabou de ser calculado; e
     /// o <c>InputHitTest</c> responde pela árvore de composição, que só alcança
@@ -408,6 +437,80 @@ public class WidgetPinTests
 
         store.Saved.Width.Should().Be(380);
         store.Saved.Height.Should().Be(600);
+    }
+
+    [AvaloniaFact]
+    public async Task Pinned_TheCompletedLeaveTheList()
+    {
+        // Fixado o painel vira canto de tela, e ali altura é o recurso escasso:
+        // o que já foi feito sai da lista para o que falta caber.
+        var window = await ShowAsync([Row("Deploy")], [Row("Revisar PR")]);
+
+        VisibleTexts(window).Should().Contain("Revisar PR");
+
+        window.Chrome.ToggleTopmost();
+        Settle(window);
+
+        var texts = VisibleTexts(window);
+
+        texts.Should().NotContain("Revisar PR");
+        texts.Should().Contain("Deploy");
+    }
+
+    [AvaloniaFact]
+    public async Task Unpinned_TheCompletedComeBack()
+    {
+        // Esconder é do modo, não do dado: soltar o pino devolve a seção
+        // inteira, sem nova consulta.
+        var window = await ShowAsync([Row("Deploy")], [Row("Revisar PR")]);
+
+        window.Chrome.ToggleTopmost();
+        window.Chrome.ToggleTopmost();
+        Settle(window);
+
+        VisibleTexts(window).Should().Contain("Revisar PR");
+    }
+
+    [AvaloniaFact]
+    public async Task PinnedFromDisk_OpensAlreadyShowingOnlyWhatIsPending()
+    {
+        // O pino restaurado não passa por clique nenhum: quem avisa a lista é a
+        // mesma ponte, senão o painel abriria fixado e cheio de concluídas até
+        // o primeiro toque no alfinete.
+        var viewModel = new TodayViewModel(
+            new FakeUseCaseRunner
+            {
+                Result = new TodayBoard(Date, [], [], [Row("Deploy")], [], [Row("Revisar PR")]),
+            },
+            TimeProvider.System,
+            NullLogger<TodayViewModel>.Instance);
+
+        await viewModel.LoadAsync(CancellationToken.None);
+
+        // A ordem do composition root: o quadro entra antes de o disco ser lido.
+        var window = new MainWindow { DataContext = viewModel };
+
+        window.Attach(new RecordingStore(
+            WidgetState.Default with { X = 500, Y = 300, Topmost = true }));
+
+        window.Show();
+        Settle(window);
+
+        window.Topmost.Should().BeTrue();
+        VisibleTexts(window).Should().NotContain("Revisar PR").And.Contain("Deploy");
+    }
+
+    [AvaloniaFact]
+    public async Task PinnedWithEverythingDone_SaysSoInsteadOfGoingBlank()
+    {
+        // Sem as concluídas, um dia terminado deixaria o painel em branco — e
+        // no modo discreto não sobra nem cabeçalho para explicar o vazio.
+        var window = await ShowAsync([], [Row("Revisar PR")]);
+
+        window.Chrome.ToggleTopmost();
+        Settle(window);
+
+        VisibleTexts(window).Should().Contain("Tudo concluído. Aproveite.");
     }
 
     /// <summary>Lembra o que foi gravado, sem tocar no disco.</summary>

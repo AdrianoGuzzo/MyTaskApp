@@ -264,7 +264,7 @@
                FontSize="11.5"
                HorizontalAlignment="Center"
                Foreground="{DynamicResource WidgetTextLowBrush}"
-               Text="Nada para hoje. Aproveite."
+               Text="{Binding EmptyMessage}"
                IsVisible="{Binding IsEmpty}" />
 
     <ScrollViewer Margin="6,4,6,0" HorizontalScrollBarVisibility="Disabled">

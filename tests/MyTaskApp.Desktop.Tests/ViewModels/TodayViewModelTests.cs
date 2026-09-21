@@ -231,5 +231,116 @@ public class TodayViewModelTests
 
         viewModel.Sections.Should().BeEmpty();
         viewModel.IsEmpty.Should().BeTrue();
+        viewModel.EmptyMessage.Should().Be("Nada para hoje. Aproveite.");
+    }
+
+    [Fact]
+    public async Task HidingTheCompleted_LeavesOnlyWhatIsStillPending()
+    {
+        _runner.Result = Board(
+            today: [Row("Deploy", new TimeOnly(15, 30))],
+            completed: [Row("Revisar PR")]);
+
+        var viewModel = ViewModel();
+        await viewModel.LoadAsync(Ct);
+
+        viewModel.HideCompleted = true;
+
+        viewModel.Sections.Select(section => section.Header).Should().Equal("HOJE");
+    }
+
+    [Fact]
+    public async Task ShowingThemAgain_BringsTheSectionBack()
+    {
+        _runner.Result = Board(today: [Row("Deploy")], completed: [Row("Revisar PR")]);
+
+        var viewModel = ViewModel();
+        await viewModel.LoadAsync(Ct);
+
+        viewModel.HideCompleted = true;
+        viewModel.HideCompleted = false;
+
+        viewModel.Sections.Select(section => section.Header).Should().Equal("HOJE", "CONCLUÍDAS");
+    }
+
+    [Fact]
+    public async Task HidingTheCompleted_DoesNotGoBackToTheDatabase()
+    {
+        // O quadro na tela já tem tudo o que a lista precisa. Recarregar aqui
+        // custaria uma consulta e apagaria a mensagem de erro que estivesse à
+        // vista — pelo simples gesto de fixar o painel.
+        _runner.Result = Board(today: [Row("Deploy")], completed: [Row("Revisar PR")]);
+
+        var viewModel = ViewModel();
+        await viewModel.LoadAsync(Ct);
+
+        var queries = _runner.Invoked.Count;
+
+        viewModel.HideCompleted = true;
+
+        _runner.Invoked.Should().HaveCount(queries);
+    }
+
+    [Fact]
+    public async Task HidingTheCompleted_KeepsTheNumbersCountingEverything()
+    {
+        // Esconder não é desfazer: o progresso do dia continua contando o que
+        // foi feito, e é dele que vivem o cabeçalho e o balão da bandeja.
+        _runner.Result = Board(today: [Row("Deploy")], completed: [Row("Revisar PR")]);
+
+        var viewModel = ViewModel();
+        await viewModel.LoadAsync(Ct);
+
+        viewModel.HideCompleted = true;
+
+        viewModel.TotalCount.Should().Be(2);
+        viewModel.CompletedCount.Should().Be(1);
+        viewModel.PendingCount.Should().Be(1);
+        viewModel.ProgressLabel.Should().Be("1 de 2 concluídas");
+    }
+
+    [Fact]
+    public async Task HidingTheCompleted_SurvivesTheNextLoad()
+    {
+        // O quadro se refresca sozinho a cada minuto: se a preferência não
+        // sobrevivesse à recarga, as concluídas voltariam sem ninguém pedir.
+        _runner.Result = Board(today: [Row("Deploy")], completed: [Row("Revisar PR")]);
+
+        var viewModel = ViewModel();
+        await viewModel.LoadAsync(Ct);
+
+        viewModel.HideCompleted = true;
+
+        await viewModel.LoadAsync(Ct);
+
+        viewModel.Sections.Select(section => section.Header).Should().Equal("HOJE");
+    }
+
+    [Fact]
+    public async Task DayFinishedWithTheCompletedHidden_SaysSoInsteadOfGoingBlank()
+    {
+        // Terminar o dia esvazia a lista, e painel em branco parece defeito.
+        // A mensagem também não pode ser a do dia vazio: houve trabalho.
+        _runner.Result = Board(completed: [Row("Revisar PR")]);
+
+        var viewModel = ViewModel();
+        await viewModel.LoadAsync(Ct);
+
+        viewModel.HideCompleted = true;
+
+        viewModel.IsEmpty.Should().BeTrue();
+        viewModel.EmptyMessage.Should().Be("Tudo concluído. Aproveite.");
+    }
+
+    [Fact]
+    public void HidingTheCompleted_BeforeTheFirstLoad_HasNothingToRemount()
+    {
+        // O composition root liga o DataContext antes da primeira carga, e é
+        // ali que a preferência chega: sem quadro nenhum, não há o que montar.
+        var viewModel = ViewModel();
+
+        viewModel.HideCompleted = true;
+
+        viewModel.Sections.Should().BeEmpty();
     }
 }

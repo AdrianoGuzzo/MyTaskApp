@@ -48,6 +48,11 @@ public partial class MainWindow : Window
         Chrome.PropertyChanged += OnChromePropertyChanged;
         Chrome.HideRequested += HideAndRemember;
 
+        // O quadro chega depois do construtor — o composition root e os testes
+        // atribuem o DataContext no inicializador —, então o estado do pino
+        // viaja de novo quando ele chega.
+        DataContextChanged += (_, _) => ShowPendingOnly();
+
         PositionChanged += (_, _) => ScheduleSave();
         SizeChanged += (_, _) => ScheduleSave();
     }
@@ -155,6 +160,11 @@ public partial class MainWindow : Window
             ApplyMode();
         }
 
+        if (e.PropertyName == nameof(WidgetChromeViewModel.IsTopmost))
+        {
+            ShowPendingOnly();
+        }
+
         if (e.PropertyName == nameof(WidgetChromeViewModel.IsCaptureOpen)
             && Chrome.IsCaptureOpen)
         {
@@ -168,6 +178,20 @@ public partial class MainWindow : Window
 
     private void FocusCapture() =>
         this.GetVisualDescendants().OfType<TodayView>().FirstOrDefault()?.FocusCapture();
+
+    /// <summary>
+    /// Fixado, o painel fica num canto sobre as outras janelas e cada linha
+    /// custa altura: as concluídas saem da lista e sobram as pendentes. Quem
+    /// decide é a moldura — é o pino que muda —, mas quem monta a lista é o
+    /// quadro de hoje, então a decisão viaja para lá.
+    /// </summary>
+    private void ShowPendingOnly()
+    {
+        if (DataContext is TodayViewModel board)
+        {
+            board.HideCompleted = Chrome.IsTopmost;
+        }
+    }
 
     /// <summary>
     /// Cada modo tem seu tamanho. O tamanho do modo cheio é o que o usuário

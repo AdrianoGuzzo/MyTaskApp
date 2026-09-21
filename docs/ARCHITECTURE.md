@@ -569,6 +569,28 @@ menu e na bandeja devolve a moldura sem soltar o pino. Isto revisa o "somente" d
 item 8 da especificação; o que o item pedia de fato — a janela continuar móvel —
 segue valendo e testado.
 
+**Fixado, a lista mostra só o que falta.** O pino também tira a seção
+`CONCLUÍDAS` do quadro (`TodayViewModel.HideCompleted`). O motivo é o mesmo do
+modo discreto: fixado, o painel fica num canto sobre as outras janelas, e ali
+altura é o recurso escasso — uma tarefa riscada empurra para fora da vista uma
+que ainda espera. Três limites, e cada um tem teste:
+
+- **Esconder não é desfazer.** `TotalCount`, `CompletedCount`, `ProgressLabel` e
+  o balão da bandeja continuam contando tudo; só a lista encolhe. Marcar e
+  desmarcar segue funcionando pelo checkbox das linhas que restaram.
+- **Não custa consulta.** O quadro carregado fica em `_board`, e trocar o modo
+  remonta as seções a partir dele. Recarregar seria pior que lento: apagaria a
+  mensagem de erro que estivesse à vista, pelo simples gesto de fixar o painel.
+- **Dia terminado não vira painel em branco.** Sem as concluídas, um dia todo
+  feito esvazia a lista — e no modo discreto não sobra nem cabeçalho para
+  explicar o vazio. Daí `EmptyMessage`: "Tudo concluído. Aproveite." quando
+  houve trabalho, "Nada para hoje. Aproveite." quando não houve.
+
+Quem decide é a moldura, mas quem monta a lista é o quadro de hoje, então a
+`MainWindow` carrega a decisão de um para o outro (`ShowPendingOnly`) — no
+`IsTopmost` e também no `DataContextChanged`, porque o pino restaurado do disco
+chega sem passar por clique nenhum.
+
 **Modo discreto é a ausência da moldura, não um quarto modo.** `IsGhost` é
 preferência (mora no `widget.json`), e não um valor de `WidgetMode`: ele se
 combina com Completo e Compacto em vez de competir com eles. No modo discreto o
