@@ -19,8 +19,8 @@ public class TodayViewRenderingTests
 {
     private static readonly DateOnly Date = new(2026, 9, 17);
 
-    private static TodayTask Row(string title, TimeOnly? time = null) =>
-        new(Guid.CreateVersion7(), Guid.CreateVersion7(), title, TaskPriority.Normal, Date, time, false);
+    private static TodayTask Row(string title, TimeOnly? time = null, TimeSpan? waiting = null) =>
+        new(Guid.CreateVersion7(), Guid.CreateVersion7(), title, TaskPriority.Normal, Date, time, false, waiting);
 
     private static async Task<MainWindow> ShowAsync(TodayBoard board)
     {
@@ -83,6 +83,41 @@ public class TodayViewRenderingTests
         var window = await ShowAsync(new TodayBoard(Date, [], [], [], [], []));
 
         VisibleTexts(window).Should().Contain("Nada para hoje. Aproveite.");
+    }
+
+    [AvaloniaFact]
+    public async Task LongTitle_KeepsTheWholeTextInTheToolTip()
+    {
+        // Na coluna estreita o título sai cortado com "…". O balão é o único
+        // caminho de volta ao texto inteiro — se o Tip sumir, some com ele.
+        const string title =
+            "Revisar o documento de arquitetura e conferir com a plataforma se a " +
+            "migração do banco cabe na janela de manutenção do próximo sábado";
+
+        var window = await ShowAsync(new TodayBoard(
+            Date, [], [], [Row(title)], [], []));
+
+        var titleBlock = window.GetVisualDescendants()
+            .OfType<TextBlock>()
+            .Single(block => block.Classes.Contains("taskTitle"));
+
+        ToolTip.GetTip(titleBlock).Should().Be(title);
+    }
+
+    [AvaloniaFact]
+    public async Task AttentionLabel_AlsoCarriesTheWholeTextInTheToolTip()
+    {
+        var waiting = TimeSpan.FromMinutes(40);
+        var expected = TaskRowViewModel.DescribeWait(waiting);
+
+        var window = await ShowAsync(new TodayBoard(
+            Date, [], [], [Row("Deploy", new TimeOnly(15, 30), waiting)], [], []));
+
+        var label = window.GetVisualDescendants()
+            .OfType<TextBlock>()
+            .Single(block => block.Text == expected);
+
+        ToolTip.GetTip(label).Should().Be(expected);
     }
 
     [AvaloniaFact]
