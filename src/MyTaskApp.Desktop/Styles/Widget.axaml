@@ -12,6 +12,19 @@
     <Setter Property="AllowAutoHide" Value="True" />
   </Style>
 
+  <!--
+    Um título vai até 200 caracteres (TaskItem.MaxTitleLength). Numa linha só,
+    o balão estouraria a largura máxima do tema e o texto voltaria a ser
+    cortado — trocaria um corte por outro. TextWrapping é anexada e herdada,
+    então desce até o TextBlock que o ContentPresenter cria para a string.
+
+    Aqui, e não em TodayView: o balão vive num PopupRoot, fora da árvore visual
+    do UserControl, onde um seletor local não o alcança.
+  -->
+  <Style Selector="ToolTip">
+    <Setter Property="TextBlock.TextWrapping" Value="Wrap" />
+  </Style>
+
   <Style Selector="Button">
     <Setter Property="CornerRadius" Value="{StaticResource WidgetPillRadius}" />
     <Setter Property="Padding" Value="10,5" />

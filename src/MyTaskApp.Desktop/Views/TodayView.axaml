@@ -24,6 +24,20 @@
       <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
       <Setter Property="VerticalAlignment" Value="Center" />
       <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+
+      <!--
+        A outra metade do corte acima: o "…" poupa largura, o balão devolve o
+        texto. Só literais aqui — um {Binding} em Setter resolveria contra o
+        x:DataType do arquivo (TodayViewModel, que também tem Title) e mostraria
+        a data no lugar da tarefa. A amarração fica no elemento.
+
+        BetweenShowDelay negativo faz cada linha esperar o ShowDelay inteiro:
+        com o padrão, correr o mouse pela lista abriria um balão por linha.
+      -->
+      <Setter Property="ToolTip.Placement" Value="Bottom" />
+      <Setter Property="ToolTip.ShowDelay" Value="500" />
+      <Setter Property="ToolTip.BetweenShowDelay" Value="-1" />
+
       <Setter Property="Transitions">
         <Transitions>
           <BrushTransition Property="Foreground" Duration="0:0:0.15" />
@@ -349,9 +363,16 @@
                                   CommandParameter="{Binding}" />
 
                         <StackPanel Grid.Column="2" Spacing="1" VerticalAlignment="Center">
+                          <!--
+                            O balão devolve o que o "…" levou. Fundo transparente
+                            porque o ponteiro só acerta o que foi desenhado: sem
+                            ele, o balão dependeria de mirar nos glifos.
+                          -->
                           <TextBlock Text="{Binding Title}"
                                      Classes="taskTitle"
-                                     Classes.done="{Binding IsCompleted}" />
+                                     Classes.done="{Binding IsCompleted}"
+                                     Background="Transparent"
+                                     ToolTip.Tip="{Binding Title}" />
 
                           <StackPanel Orientation="Horizontal"
                                       Spacing="4"
@@ -362,7 +383,9 @@
                             <TextBlock Text="{Binding AttentionLabel}"
                                        Classes="waiting"
                                        Classes.urgent="{Binding IsUrgentlyAwaiting}"
-                                       TextTrimming="CharacterEllipsis" />
+                                       TextTrimming="CharacterEllipsis"
+                                       Background="Transparent"
+                                       ToolTip.Tip="{Binding AttentionLabel}" />
                           </StackPanel>
                         </StackPanel>
 
