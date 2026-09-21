@@ -126,6 +126,14 @@ public sealed class TaskOccurrence
     }
 
     /// <summary>
+    /// Cala o lembrete sem mexer no status da ocorrência. É o que a raiz faz ao
+    /// arquivar ou mandar para a lixeira: o checklist saiu da lista principal, e
+    /// continuar cobrando atenção por ele seria o app insistindo por algo que o
+    /// usuário acabou de mandar guardar. Rearmar é decisão de quem restaura.
+    /// </summary>
+    internal void DisarmReminder() => Reminder.Disarm();
+
+    /// <summary>
     /// O aviso saiu. <b>Não</b> encerra o lembrete: quem encerra é
     /// <see cref="AcknowledgeReminder"/>.
     /// </summary>

@@ -11,6 +11,13 @@ internal sealed class FakeUseCaseRunner : IUseCaseRunner
 {
     public object? Result { get; set; }
 
+    /// <summary>
+    /// Resultado por caso de uso, para quando um comando pede mais de um. Sem
+    /// isto, "mover para a lixeira" — que lê o prazo antes de perguntar — não
+    /// teria como devolver uma política e um quadro na mesma sequência.
+    /// </summary>
+    public Dictionary<Type, object> ResultsByHandler { get; } = [];
+
     public List<Type> Invoked { get; } = [];
 
     /// <summary>Falha aplicada à próxima chamada e então descartada.</summary>
@@ -28,6 +35,12 @@ internal sealed class FakeUseCaseRunner : IUseCaseRunner
         if (TakeFailure() is { } failure)
         {
             return Task.FromException<TResult>(failure);
+        }
+
+        if (ResultsByHandler.TryGetValue(typeof(THandler), out var specific)
+            && specific is TResult configured)
+        {
+            return Task.FromResult(configured);
         }
 
         return Result is TResult result

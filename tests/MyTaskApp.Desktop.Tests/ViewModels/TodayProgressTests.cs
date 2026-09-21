@@ -20,6 +20,7 @@ public class TodayProgressTests
     {
         var viewModel = new TodayViewModel(
             new FakeUseCaseRunner { Result = board },
+            new FakeConfirmationDialog(),
             TimeProvider.System,
             NullLogger<TodayViewModel>.Instance);
 
@@ -89,6 +90,7 @@ public class TodayProgressTests
             {
                 Result = new TodayBoard(Date, [], [], [Row("a"), Row("b")], [], [Row("c")]),
             },
+            new FakeConfirmationDialog(),
             TimeProvider.System,
             NullLogger<TodayViewModel>.Instance);
 

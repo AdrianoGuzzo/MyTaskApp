@@ -56,9 +56,24 @@ internal static class AppServices
             // Posicao e tamanho do painel: arquivo proprio, sem migracao.
             .AddSingleton<IWidgetStateStore, WidgetStateStore>()
 
+            // Quem o app consegue identificar como autor das operacoes (§5, §8).
+            // Registrado aqui, antes de AddApplication, porque o nome da conta
+            // do sistema e conhecimento do host, nao da camada de aplicacao.
+            .AddSingleton<ICurrentUser, CurrentWindowsUser>()
+
+            // Perguntar antes de agir (§4, §7). Singleton sem estado: descobre
+            // a janela dona a cada pergunta.
+            .AddSingleton<IConfirmationDialog, ConfirmationDialog>()
+
             // Singletons: a janela de ajustes e a bandeja sao uma so por app.
             .AddSingleton<ReminderSettingsViewModel>()
             .AddSingleton<ReminderSettingsWindow>()
+
+            // Arquivados, lixeira e retencao (§3, §5, §11). Tambem uma so:
+            // reabrir a janela precisa mostrar o estado atual, nao uma segunda
+            // copia com dados velhos.
+            .AddSingleton<DataManagementViewModel>()
+            .AddSingleton<DataManagementWindow>()
             .AddApplication(configuration)
             .AddInfrastructure(configuration)
             .BuildServiceProvider(validateScopes: true);

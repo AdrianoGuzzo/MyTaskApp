@@ -26,7 +26,10 @@ public class TodayCaptureRenderingTests
     {
         var runner = new FakeUseCaseRunner { Result = EmptyBoard };
         var viewModel = new TodayViewModel(
-            runner, TimeProvider.System, NullLogger<TodayViewModel>.Instance);
+            runner,
+            new FakeConfirmationDialog(),
+            TimeProvider.System,
+            NullLogger<TodayViewModel>.Instance);
 
         var window = new MainWindow { DataContext = viewModel };
         window.Show();

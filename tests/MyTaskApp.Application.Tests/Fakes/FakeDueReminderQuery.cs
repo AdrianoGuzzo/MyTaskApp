@@ -1,4 +1,5 @@
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Domain.Tasks;
 
@@ -72,7 +73,12 @@ internal sealed class CountingUseCaseRunner : IUseCaseRunner
             throw Failure;
         }
 
-        return DispatchDueRemindersResult.Nothing is TResult result ? result : default!;
+        // Serve aos dois agendadores: o de lembretes e o do ciclo de vida.
+        return DispatchDueRemindersResult.Nothing is TResult dispatched
+            ? dispatched
+            : LifecycleMaintenanceResult.Nothing is TResult swept
+                ? swept
+                : default!;
     }
 
     public async Task RunAsync<THandler>(

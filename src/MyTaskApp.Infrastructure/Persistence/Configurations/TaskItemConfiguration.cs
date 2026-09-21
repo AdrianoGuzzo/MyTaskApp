@@ -25,6 +25,43 @@ internal sealed class TaskItemConfiguration : IEntityTypeConfiguration<TaskItem>
             .HasConversion(UtcInstantConverter.Instance)
             .IsRequired();
 
+        // ---------------------------------------------------------------
+        // Ciclo de vida (§9). Três instantes e um nome; o estado em si é
+        // derivado deles em TaskItem.Lifecycle e não tem coluna própria —
+        // guardar o enum seria uma segunda fonte da verdade a divergir.
+        // ---------------------------------------------------------------
+        builder.Property(task => task.ArchivedAt)
+            .HasConversion(UtcInstantConverter.Instance);
+
+        builder.Property(task => task.DeletedAt)
+            .HasConversion(UtcInstantConverter.Instance);
+
+        builder.Property(task => task.ConcludedAt)
+            .HasConversion(UtcInstantConverter.Instance);
+
+        builder.Property(task => task.DeletedBy).HasMaxLength(TaskItem.MaxTitleLength);
+
+        // Índice quente da varredura de arquivamento: só concluídos que ainda
+        // estão na lista principal. Parcial porque, em regime, a maioria das
+        // linhas não é candidata a nada.
+        builder.HasIndex(task => task.ConcludedAt)
+            .HasDatabaseName("IX_Tasks_ReadyToArchive")
+            .HasFilter(
+                "\"ConcludedAt\" IS NOT NULL "
+                + "AND \"ArchivedAt\" IS NULL "
+                + "AND \"DeletedAt\" IS NULL");
+
+        // Índice da lixeira: serve tanto à listagem quanto à varredura de
+        // exclusão definitiva.
+        builder.HasIndex(task => task.DeletedAt)
+            .HasDatabaseName("IX_Tasks_Trashed")
+            .HasFilter("\"DeletedAt\" IS NOT NULL");
+
+        // Índice da área de arquivados.
+        builder.HasIndex(task => task.ArchivedAt)
+            .HasDatabaseName("IX_Tasks_Archived")
+            .HasFilter("\"ArchivedAt\" IS NOT NULL AND \"DeletedAt\" IS NULL");
+
         // A política de lembrete da série. Owned: seis colunas na mesma tabela,
         // sem join e sem uma entidade que ninguém consulta sozinha.
         builder.OwnsOne(task => task.Reminder, reminder =>

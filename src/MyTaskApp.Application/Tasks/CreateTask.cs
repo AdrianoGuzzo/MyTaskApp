@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Reminders;
+using MyTaskApp.Domain.Auditing;
 using MyTaskApp.Domain.Reminders;
 using MyTaskApp.Domain.Tasks;
 
@@ -25,6 +26,8 @@ public sealed class CreateTaskHandler(
     ITaskItemRepository tasks,
     IUnitOfWork unitOfWork,
     IReminderSettingsStore settings,
+    ITaskAuditLog audit,
+    ICurrentUser currentUser,
     IUserClock clock,
     TimeProvider timeProvider,
     ILogger<CreateTaskHandler> logger)
@@ -54,6 +57,16 @@ public sealed class CreateTaskHandler(
         ReminderArming.Arm(task, occurrence, clock, createdAt);
 
         await tasks.AddAsync(task, cancellationToken);
+
+        await audit.RecordAsync(
+            TaskAuditEntry.ByUser(
+                task.Id,
+                task.Title,
+                TaskAuditOperation.Created,
+                createdAt,
+                currentUser.Name),
+            cancellationToken);
+
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation(

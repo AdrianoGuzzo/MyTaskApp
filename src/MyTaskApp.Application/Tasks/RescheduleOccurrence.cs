@@ -25,9 +25,7 @@ public sealed class RescheduleOccurrenceHandler(
         var schedule = new TaskSchedule(command.ScheduledDate, command.ScheduledTime);
         var task = await tasks.GetByOccurrenceIdAsync(command.OccurrenceId, cancellationToken);
 
-        var occurrence = task.GetOccurrence(command.OccurrenceId);
-
-        occurrence.Reschedule(schedule);
+        var occurrence = task.RescheduleOccurrence(command.OccurrenceId, schedule);
 
         // Reagendar desarmou o instante velho; rearmar e o que mantem o
         // lembrete alinhado com a data nova.

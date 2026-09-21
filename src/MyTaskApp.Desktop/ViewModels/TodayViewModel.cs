@@ -5,10 +5,13 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Application.Tasks;
+using MyTaskApp.Desktop.Views;
 using MyTaskApp.Domain;
+using MyTaskApp.Domain.Lifecycle;
 
 namespace MyTaskApp.Desktop.ViewModels;
 
@@ -18,6 +21,7 @@ namespace MyTaskApp.Desktop.ViewModels;
 /// </summary>
 public sealed partial class TodayViewModel(
     IUseCaseRunner runner,
+    IConfirmationDialog confirmation,
     TimeProvider timeProvider,
     ILogger<TodayViewModel> logger) : ObservableObject, IDisposable
 {
@@ -50,6 +54,14 @@ public sealed partial class TodayViewModel(
 
     [ObservableProperty]
     private string? _errorMessage;
+
+    /// <summary>
+    /// A confirmacao de que deu certo (§12). Some sozinha: qualquer operacao
+    /// seguinte a limpa, e o refresh de 60 s garante que ela nao fique na tela
+    /// depois que o usuario ja seguiu adiante.
+    /// </summary>
+    [ObservableProperty]
+    private string? _statusMessage;
 
     [ObservableProperty]
     private bool _isEmpty;
@@ -206,6 +218,85 @@ public sealed partial class TodayViewModel(
     [RelayCommand]
     public void OpenSettings() => SettingsRequested?.Invoke();
 
+    /// <summary>Pede a janela de Arquivados/Lixeira/Retencao (§3, §5, §11).</summary>
+    public event Action? DataManagementRequested;
+
+    [RelayCommand]
+    public void OpenDataManagement() => DataManagementRequested?.Invoke();
+
+    /// <summary>
+    /// Arquiva o checklist da linha (§1). Sem caixa de confirmacao de
+    /// proposito: arquivar nao perde nada e e desfeito em dois cliques na area
+    /// de arquivados — perguntar aqui so treinaria o usuario a confirmar sem ler,
+    /// o que encareceria a pergunta que realmente importa, a da exclusao.
+    /// </summary>
+    [RelayCommand]
+    public async Task ArchiveAsync(TaskRowViewModel row, CancellationToken cancellationToken)
+    {
+        var archived = await TryAsync(
+            () => runner.RunAsync<ArchiveChecklistHandler>(
+                (handler, token) => handler.HandleAsync(new ArchiveChecklist(row.TaskId), token),
+                cancellationToken),
+            "Não foi possível arquivar este checklist.");
+
+        if (!archived)
+        {
+            return;
+        }
+
+        // A mensagem vem depois da recarga: LoadAsync passa pelo mesmo TryAsync,
+        // que limpa o status ao comecar.
+        await LoadAsync(cancellationToken);
+        StatusMessage = "Checklist arquivado com sucesso.";
+    }
+
+    /// <summary>
+    /// Manda para a lixeira (§4). O prazo exibido na confirmacao e lido do banco
+    /// na hora: uma mensagem com "30 dias" fixo mentiria para quem mudou a
+    /// configuracao.
+    /// </summary>
+    [RelayCommand]
+    public async Task MoveToTrashAsync(TaskRowViewModel row, CancellationToken cancellationToken)
+    {
+        DataRetentionPolicy? retention = null;
+
+        var read = await TryAsync(
+            async () => retention = await runner
+                .RunAsync<GetDataRetentionSettingsHandler, DataRetentionPolicy>(
+                    (handler, token) => handler.HandleAsync(
+                        new GetDataRetentionSettings(), token),
+                    cancellationToken),
+            "Não foi possível verificar o prazo da lixeira.");
+
+        if (!read)
+        {
+            return;
+        }
+
+        var confirmed = await confirmation.AskAsync(
+            DataManagementViewModel.TrashPrompt(row.Title, retention!.TrashRetentionDays));
+
+        if (!confirmed)
+        {
+            return;
+        }
+
+        var moved = await TryAsync(
+            () => runner.RunAsync<MoveChecklistToTrashHandler>(
+                (handler, token) => handler.HandleAsync(
+                    new MoveChecklistToTrash(row.TaskId), token),
+                cancellationToken),
+            "Não foi possível mover este checklist para a lixeira.");
+
+        if (!moved)
+        {
+            return;
+        }
+
+        await LoadAsync(cancellationToken);
+        StatusMessage = "Checklist movido para a lixeira.";
+    }
+
     /// <summary>Começa a refrescar o quadro sozinho. Chamado pelo composition root.</summary>
     public void StartAutoRefresh()
     {
@@ -335,6 +426,7 @@ public sealed partial class TodayViewModel(
     {
         IsBusy = true;
         ErrorMessage = null;
+        StatusMessage = null;
 
         try
         {

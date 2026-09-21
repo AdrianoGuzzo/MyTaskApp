@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using MyTaskApp.Application;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Application.Tasks;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Reminders;
@@ -23,6 +24,11 @@ public class ApplicationRegistrationTests
             .AddSingleton<ITodayQuery>(new StubTodayQuery())
             .AddSingleton<IReminderSettingsStore>(new FakeReminderSettingsStore())
             .AddSingleton<IDueReminderQuery>(new StubDueReminderQuery())
+            .AddSingleton<ITaskAuditLog>(new FakeTaskAuditLog())
+            .AddSingleton<ICurrentUser>(new FakeCurrentUser())
+            .AddSingleton<IDataRetentionSettingsStore>(new FakeDataRetentionSettingsStore())
+            .AddSingleton<IChecklistArchiveQuery>(new FakeChecklistArchiveQuery())
+            .AddSingleton<ILifecycleSweepQuery>(new FakeLifecycleSweepQuery())
             .AddSingleton<IAlertPresenter>(new StubAlertPresenter())
             .AddSingleton<ISoundPlayer>(new StubSoundPlayer())
             // Normalmente vem do composition root do Desktop (ADR-012).
@@ -39,7 +45,17 @@ public class ApplicationRegistrationTests
     [InlineData(typeof(CancelOccurrenceHandler))]
     [InlineData(typeof(UpdateTaskHandler))]
     [InlineData(typeof(RescheduleOccurrenceHandler))]
-    [InlineData(typeof(DeleteTaskHandler))]
+    [InlineData(typeof(ArchiveChecklistHandler))]
+    [InlineData(typeof(RestoreChecklistHandler))]
+    [InlineData(typeof(MoveChecklistToTrashHandler))]
+    [InlineData(typeof(RestoreChecklistFromTrashHandler))]
+    [InlineData(typeof(PurgeChecklistHandler))]
+    [InlineData(typeof(GetChecklistArchiveHandler))]
+    [InlineData(typeof(GetChecklistAuditHandler))]
+    [InlineData(typeof(GetDataRetentionSettingsHandler))]
+    [InlineData(typeof(UpdateDataRetentionSettingsHandler))]
+    [InlineData(typeof(RunLifecycleMaintenanceHandler))]
+    [InlineData(typeof(LifecycleMaintenanceScheduler))]
     [InlineData(typeof(GetTodayBoardHandler))]
     [InlineData(typeof(GetReminderDefaultsHandler))]
     [InlineData(typeof(UpdateReminderDefaultsHandler))]

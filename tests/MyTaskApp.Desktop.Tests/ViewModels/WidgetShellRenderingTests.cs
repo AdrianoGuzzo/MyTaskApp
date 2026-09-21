@@ -31,6 +31,7 @@ public class WidgetShellRenderingTests
     {
         var viewModel = new TodayViewModel(
             new FakeUseCaseRunner { Result = board },
+            new FakeConfirmationDialog(),
             TimeProvider.System,
             NullLogger<TodayViewModel>.Instance);
 

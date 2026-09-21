@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.VisualTree;
 using MyTaskApp.Desktop.ViewModels;
 
 namespace MyTaskApp.Desktop.Views;
@@ -32,6 +33,24 @@ public sealed partial class TodayView : UserControl
     /// depois do clique que a abriu.
     /// </summary>
     public void FocusCapture() => CaptureBox.Focus();
+
+    /// <summary>
+    /// O botão "⋯" abre o <c>ContextFlyout</c> da própria linha, em vez de ter
+    /// um menu só dele. Assim clique direito e botão são literalmente o mesmo
+    /// menu — duas cópias em XAML acabariam divergindo no primeiro item novo.
+    /// </summary>
+    private void OnRowMenuClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Control control)
+        {
+            return;
+        }
+
+        if (control.FindAncestorOfType<Border>() is { ContextFlyout: { } flyout } row)
+        {
+            flyout.ShowAt(row);
+        }
+    }
 
     private void OnCaptureKeyDown(object? sender, KeyEventArgs e)
     {

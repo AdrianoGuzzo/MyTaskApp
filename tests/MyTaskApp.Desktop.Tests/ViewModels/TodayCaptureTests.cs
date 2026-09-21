@@ -20,8 +20,10 @@ public class TodayCaptureTests
         Result = new TodayBoard(new DateOnly(2026, 9, 17), [], [], [], [], []),
     };
 
+    private readonly FakeConfirmationDialog _confirmation = new();
+
     private TodayViewModel ViewModel() =>
-        new(_runner, TimeProvider.System, NullLogger<TodayViewModel>.Instance);
+        new(_runner, _confirmation, TimeProvider.System, NullLogger<TodayViewModel>.Instance);
 
     [Fact]
     public async Task Capturing_AsksTheQuickCaptureUseCase()

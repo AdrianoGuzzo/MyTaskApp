@@ -19,6 +19,15 @@ internal sealed class TodayQuery(MyTaskAppDbContext context) : ITodayQuery
 
         var occurrences = await context.Occurrences
             .AsNoTracking()
+            // Arquivado e na lixeira saem da listagem principal (§1, §4). O
+            // filtro e explicito, e nao um query filter global: as areas de
+            // arquivados e lixeira precisam justamente do que ele exclui, e um
+            // filtro global obrigaria IgnoreQueryFilters() espalhado — inclusive
+            // no caminho de restaurar, que passaria a nao encontrar o registro.
+            .Where(occurrence => context.Tasks.Any(task =>
+                task.Id == occurrence.TaskItemId
+                && task.ArchivedAt == null
+                && task.DeletedAt == null))
             .Where(occurrence =>
                 (occurrence.Status == TaskItemStatus.Pending
                     && occurrence.ScheduledDate != null
