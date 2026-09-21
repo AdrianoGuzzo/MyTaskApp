@@ -349,9 +349,19 @@
                                   CommandParameter="{Binding}" />
 
                         <StackPanel Grid.Column="2" Spacing="1" VerticalAlignment="Center">
+                          <!--
+                            Um clique no texto copia o título (ver OnTitleTapped).
+                            Background transparente, e nunca nulo: fundo nulo não
+                            recebe ponteiro, e o gesto falharia em silêncio.
+                            Tapped, e não PointerPressed: arrastar o painel por
+                            cima de uma linha não pode virar uma cópia.
+                          -->
                           <TextBlock Text="{Binding Title}"
                                      Classes="taskTitle"
-                                     Classes.done="{Binding IsCompleted}" />
+                                     Classes.done="{Binding IsCompleted}"
+                                     Background="Transparent"
+                                     Cursor="Hand"
+                                     Tapped="OnTitleTapped" />
 
                           <StackPanel Orientation="Horizontal"
                                       Spacing="4"
