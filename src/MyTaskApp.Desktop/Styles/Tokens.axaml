@@ -95,6 +95,15 @@
   <SolidColorBrush x:Key="TextOnAccentFillColorPrimaryBrush" Color="#FFFFFF" />
   <SolidColorBrush x:Key="TextOnAccentFillColorSecondaryBrush" Color="#F2F2FF" />
 
+  <!--
+    Balões. Agora que o título cortado só se lê pelo balão, ele deixou de ser
+    enfeite de botão: sem reapontar estas chaves sairia o cinza cru do Fluent,
+    do lado de uma lista de carvão.
+  -->
+  <SolidColorBrush x:Key="ToolTipBackground" Color="{StaticResource WidgetSurfaceColor}" />
+  <SolidColorBrush x:Key="ToolTipForeground" Color="{StaticResource WidgetTextHighColor}" />
+  <SolidColorBrush x:Key="ToolTipBorderBrush" Color="{StaticResource WidgetStrokeColor}" />
+
   <!-- Janelas auxiliares (lembretes) seguem a mesma tela de fundo do widget. -->
   <SolidColorBrush x:Key="SolidBackgroundFillColorBaseBrush" Color="{StaticResource WidgetCanvasColor}" />
   <SolidColorBrush x:Key="SolidBackgroundFillColorTertiaryBrush" Color="{StaticResource WidgetSurfaceHoverColor}" />
