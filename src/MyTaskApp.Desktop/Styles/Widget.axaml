@@ -23,6 +23,23 @@
     </Setter>
   </Style>
 
+  <!--
+    Ação destrutiva. Só a confirmação forte do §7 a usa, e é de propósito que
+    ela não se pareça com a ação primária: o botão que apaga para sempre não
+    pode ter a mesma cara do botão que só arquiva.
+  -->
+  <Style Selector="Button.danger /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource WidgetDangerSoftBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource WidgetDangerBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Foreground" Value="{DynamicResource WidgetDangerBrush}" />
+  </Style>
+
+  <Style Selector="Button.danger:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource WidgetDangerBrush}" />
+    <Setter Property="Foreground" Value="#17181C" />
+  </Style>
+
   <!-- Casca: o painel inteiro. A borda é o que separa do fundo da área de trabalho. -->
   <Style Selector="Border.widgetShell">
     <Setter Property="Background" Value="{DynamicResource WidgetCanvasBrush}" />

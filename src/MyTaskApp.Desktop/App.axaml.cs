@@ -4,6 +4,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using Microsoft.Extensions.DependencyInjection;
+using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Desktop.Composition;
 using MyTaskApp.Desktop.Reminders;
@@ -50,6 +51,7 @@ public sealed partial class App : Avalonia.Application
 
                 SetUpTray(Services, desktop, window);
                 StartReminders(Services, window, todayViewModel);
+                SetUpDataManagement(Services, window, todayViewModel);
                 ListenForSecondLaunch(Services, window);
                 StartHiddenIfAsked(window);
             }
@@ -151,6 +153,30 @@ public sealed partial class App : Avalonia.Application
     }
 
     /// <summary>
+    /// Liga a janela de Arquivados/Lixeira e a varredura do ciclo de vida
+    /// (§3, §5, §6).
+    /// </summary>
+    private static void SetUpDataManagement(
+        IServiceProvider services,
+        MainWindow window,
+        TodayViewModel todayViewModel)
+    {
+        todayViewModel.DataManagementRequested += () => ShowDataManagement(services, window);
+
+        // Restaurar da lixeira devolve um checklist à lista principal; sem isto
+        // o painel só mostraria a volta dele no refresh de 60 s, e o usuário
+        // ficaria olhando para uma tela que ainda não sabe o que ele acabou de
+        // fazer.
+        services.GetRequiredService<DataManagementViewModel>().ChecklistsChanged +=
+            () => Dispatcher.UIThread.Post(
+                () => _ = todayViewModel.LoadAsync(CancellationToken.None));
+
+        // Primeiro tique imediato, como o dos lembretes: é ele que põe em dia o
+        // que venceu enquanto o app esteve fechado.
+        services.GetRequiredService<LifecycleMaintenanceScheduler>().Start();
+    }
+
+    /// <summary>
     /// Clicar no atalho com o app já aberto traz o painel de volta em vez de
     /// não fazer nada (ADR-019). Importa justamente porque o app vive na
     /// bandeja: o usuário fecha a janela, acha que encerrou, e clica de novo.
@@ -204,6 +230,14 @@ public sealed partial class App : Avalonia.Application
         window.Activate();
     }
 
+    private static void ShowDataManagement(IServiceProvider services, Window owner)
+    {
+        var window = services.GetRequiredService<DataManagementWindow>();
+
+        window.Show(owner);
+        window.Activate();
+    }
+
     private static void OnUiThread(Action action) => Dispatcher.UIThread.Post(action);
 
     private void Exit(IClassicDesktopStyleApplicationLifetime desktop)
@@ -218,6 +252,10 @@ public sealed partial class App : Avalonia.Application
         _window?.PersistNow();
 
         services.GetRequiredService<ReminderScheduler>().Dispose();
+
+        // Também aqui: um tique de manutenção em voo precisa terminar antes de
+        // o banco ser solto, senão um lote pela metade seria interrompido.
+        services.GetRequiredService<LifecycleMaintenanceScheduler>().Dispose();
 
         _tray?.Dispose();
         _tray = null;

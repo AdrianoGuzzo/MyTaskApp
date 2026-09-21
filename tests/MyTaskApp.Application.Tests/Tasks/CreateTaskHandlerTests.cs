@@ -22,6 +22,8 @@ public class CreateTaskHandlerTests
             _repository,
             _repository,
             _settings,
+            new FakeTaskAuditLog(),
+            new FakeCurrentUser(),
             TestClock.Over(_clock),
             _clock,
             NullLogger<CreateTaskHandler>.Instance);

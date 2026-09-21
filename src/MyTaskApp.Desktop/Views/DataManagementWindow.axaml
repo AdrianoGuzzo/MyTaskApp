@@ -1,0 +1,491 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
+        x:Class="MyTaskApp.Desktop.Views.DataManagementWindow"
+        x:DataType="vm:DataManagementViewModel"
+        x:Name="Root"
+        Title="Gerenciamento de dados"
+        Width="620"
+        Height="620"
+        MinWidth="520"
+        MinHeight="420"
+        WindowStartupLocation="CenterOwner">
+
+  <!--
+    Fora do painel de propósito (§12). Arquivar, esvaziar lixeira e mexer em
+    prazo de retenção são coisas que se faz de vez em quando; trazê-las para a
+    janela de 360px transformaria a lista de hoje numa barra de ferramentas.
+  -->
+
+  <Window.Resources>
+
+    <!--
+      Os detalhes de um checklist (§3) e a sua trilha de auditoria (§8). Um
+      template só, usado pelas duas áreas: arquivado e excluído mostram as
+      mesmas informações, e duplicar isto garantiria que uma das cópias
+      envelhecesse.
+    -->
+    <DataTemplate x:Key="ChecklistDetails" x:DataType="vm:ChecklistCardViewModel">
+      <Border Margin="0,4,0,0"
+              Padding="10,8"
+              CornerRadius="6"
+              Background="{DynamicResource WidgetCanvasBrush}">
+        <StackPanel Spacing="8">
+
+          <TextBlock Text="{Binding Description}"
+                     FontSize="12"
+                     TextWrapping="Wrap"
+                     IsVisible="{Binding HasDescription}" />
+
+          <StackPanel Spacing="2">
+            <TextBlock Classes="meta" Text="{Binding CreatedLabel}" />
+            <TextBlock Classes="meta" Text="{Binding ConcludedLabel}" />
+            <TextBlock Classes="meta" Text="{Binding ItemsLabel}" />
+          </StackPanel>
+
+          <StackPanel Spacing="4">
+
+            <TextBlock Text="HISTÓRICO"
+                       FontSize="9.5"
+                       FontWeight="SemiBold"
+                       LetterSpacing="0.8"
+                       Foreground="{DynamicResource WidgetTextLowBrush}" />
+
+            <TextBlock Classes="meta"
+                       Text="Nenhuma operação registrada para este checklist."
+                       IsVisible="{Binding HasNoAudit}" />
+
+            <ItemsControl ItemsSource="{Binding Audit}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:ChecklistAuditLineViewModel">
+                  <StackPanel Margin="0,0,0,3" Spacing="1">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <TextBlock Text="{Binding When}"
+                                 FontFamily="Consolas, Menlo, monospace"
+                                 FontSize="10.5"
+                                 Foreground="{DynamicResource WidgetTextLowBrush}" />
+                      <TextBlock Text="{Binding Operation}"
+                                 FontSize="11.5"
+                                 FontWeight="SemiBold" />
+                      <TextBlock Text="{Binding By}"
+                                 FontSize="11"
+                                 Foreground="{DynamicResource WidgetTextLowBrush}" />
+                    </StackPanel>
+                    <TextBlock Text="{Binding Details}"
+                               Classes="meta"
+                               Margin="0,0,0,0"
+                               IsVisible="{Binding HasDetails}" />
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+          </StackPanel>
+
+        </StackPanel>
+      </Border>
+    </DataTemplate>
+
+  </Window.Resources>
+
+  <Window.Styles>
+
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="{DynamicResource WidgetSurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetStrokeSoftBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetCardRadius}" />
+      <Setter Property="Padding" Value="12,10" />
+      <Setter Property="Margin" Value="0,0,0,8" />
+    </Style>
+
+    <!-- A etiqueta de estado: é ela que deixa claro que o item não está mais
+         na lista principal (§3). -->
+    <Style Selector="Border.stateTag">
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetPillRadius}" />
+      <Setter Property="Padding" Value="6,1" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Background" Value="{DynamicResource WidgetAccentSoftBrush}" />
+    </Style>
+
+    <Style Selector="Border.stateTag.trash">
+      <Setter Property="Background" Value="{DynamicResource WidgetDangerSoftBrush}" />
+    </Style>
+
+    <Style Selector="Border.stateTag TextBlock">
+      <Setter Property="FontSize" Value="9" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="LetterSpacing" Value="0.6" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextMidBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.meta">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style Selector="TextBlock.countdown">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextMidBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.countdown.soon">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetDangerBrush}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <Style Selector="TextBlock.sectionTitle">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.empty">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Opacity" Value="0.6" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="Margin" Value="0,36,0,0" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="TextAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Button.rowAction">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Padding" Value="8,3" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+  </Window.Styles>
+
+  <DockPanel Margin="16,14">
+
+    <!-- Mensagens: erro e confirmação dividem o mesmo lugar na tela, para o
+         usuário sempre olhar para o mesmo ponto depois de agir (§12). -->
+    <Border DockPanel.Dock="Bottom"
+            Margin="0,10,0,0"
+            Padding="10,7"
+            CornerRadius="6"
+            Background="{DynamicResource SystemFillColorCriticalBackgroundBrush}"
+            IsVisible="{Binding ErrorMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <TextBlock Text="{Binding ErrorMessage}"
+                 FontSize="12"
+                 Foreground="{DynamicResource WidgetDangerBrush}"
+                 TextWrapping="Wrap" />
+    </Border>
+
+    <Border DockPanel.Dock="Bottom"
+            Margin="0,10,0,0"
+            Padding="10,7"
+            CornerRadius="6"
+            Background="{DynamicResource WidgetAccentSoftBrush}"
+            IsVisible="{Binding StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <TextBlock Text="{Binding StatusMessage}"
+                 FontSize="12"
+                 TextWrapping="Wrap" />
+    </Border>
+
+    <TabControl>
+
+      <!-- ============================ ARQUIVADOS ============================ -->
+      <TabItem Header="Arquivados">
+        <DockPanel Margin="0,8,0,0">
+
+          <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,10">
+            <TextBox Grid.Column="0"
+                     x:Name="ArchivedSearchBox"
+                     FontSize="12"
+                     PlaceholderText="Pesquisar nos arquivados…"
+                     Text="{Binding ArchivedSearch}" />
+            <ComboBox Grid.Column="1"
+                      x:Name="ArchivedPeriodBox"
+                      Width="150"
+                      Margin="8,0,0,0"
+                      ToolTip.Tip="Filtrar por quando foi arquivado"
+                      ItemsSource="{Binding PeriodOptions}"
+                      SelectedIndex="{Binding ArchivedPeriodIndex}" />
+            <Button Grid.Column="2"
+                    Margin="8,0,0,0"
+                    Content="Aplicar"
+                    Command="{Binding RefreshArchivedCommand}" />
+          </Grid>
+
+          <TextBlock Classes="empty"
+                     IsVisible="{Binding !HasArchived}"
+                     Text="Nenhum checklist arquivado. Os que você arquivar aparecem aqui, com todo o histórico preservado." />
+
+          <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+            <ItemsControl ItemsSource="{Binding Archived}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:ChecklistCardViewModel">
+                  <Border Classes="card">
+                    <StackPanel Spacing="6">
+
+                      <Grid ColumnDefinitions="*,Auto">
+
+                        <StackPanel Grid.Column="0" Spacing="3" Margin="0,0,10,0">
+
+                          <StackPanel Orientation="Horizontal" Spacing="7">
+                            <Border Classes="stateTag">
+                              <TextBlock Text="{Binding StateLabel}" />
+                            </Border>
+                            <TextBlock Text="{Binding Title}"
+                                       FontSize="13"
+                                       FontWeight="SemiBold"
+                                       VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis" />
+                          </StackPanel>
+
+                          <TextBlock Classes="meta" Text="{Binding WhenLabel}" />
+                          <TextBlock Classes="meta" Text="{Binding ConcludedLabel}" />
+
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+
+                          <Button Classes="rowAction"
+                                  Content="Detalhes"
+                                  Command="{Binding #Root.((vm:DataManagementViewModel)DataContext).ToggleDetailsCommand}"
+                                  CommandParameter="{Binding}" />
+
+                          <Button Classes="rowAction accent"
+                                  Content="Restaurar"
+                                  ToolTip.Tip="Devolver à lista principal"
+                                  Command="{Binding #Root.((vm:DataManagementViewModel)DataContext).RestoreCommand}"
+                                  CommandParameter="{Binding}" />
+
+                          <Button Classes="rowAction"
+                                  Content="⋯"
+                                  ToolTip.Tip="Mais ações">
+                            <Button.Flyout>
+                              <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                <MenuItem Header="Mover para a lixeira…"
+                                          Command="{Binding #Root.((vm:DataManagementViewModel)DataContext).MoveToTrashCommand}"
+                                          CommandParameter="{Binding}" />
+                                <Separator />
+                                <MenuItem Header="Excluir definitivamente…"
+                                          Command="{Binding #Root.((vm:DataManagementViewModel)DataContext).PurgeCommand}"
+                                          CommandParameter="{Binding}" />
+                              </MenuFlyout>
+                            </Button.Flyout>
+                          </Button>
+
+                        </StackPanel>
+
+                      </Grid>
+
+                      <ContentControl Content="{Binding}"
+                                      IsVisible="{Binding IsExpanded}"
+                                      ContentTemplate="{StaticResource ChecklistDetails}" />
+
+                    </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+
+        </DockPanel>
+      </TabItem>
+
+      <!-- ============================== LIXEIRA ============================== -->
+      <TabItem Header="Lixeira">
+        <DockPanel Margin="0,8,0,0">
+
+          <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,10">
+            <TextBox Grid.Column="0"
+                     x:Name="TrashSearchBox"
+                     FontSize="12"
+                     PlaceholderText="Pesquisar na lixeira…"
+                     Text="{Binding TrashSearch}" />
+            <ComboBox Grid.Column="1"
+                      x:Name="TrashPeriodBox"
+                      Width="150"
+                      Margin="8,0,0,0"
+                      ToolTip.Tip="Filtrar por quando foi excluído"
+                      ItemsSource="{Binding PeriodOptions}"
+                      SelectedIndex="{Binding TrashPeriodIndex}" />
+            <Button Grid.Column="2"
+                    Margin="8,0,0,0"
+                    Content="Aplicar"
+                    Command="{Binding RefreshTrashCommand}" />
+          </Grid>
+
+          <TextBlock Classes="empty"
+                     IsVisible="{Binding !HasTrashed}"
+                     Text="A lixeira está vazia. O que você excluir fica aqui pelo prazo configurado e pode ser restaurado nesse período." />
+
+          <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+            <ItemsControl ItemsSource="{Binding Trashed}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:ChecklistCardViewModel">
+                  <Border Classes="card">
+                    <StackPanel Spacing="6">
+
+                      <Grid ColumnDefinitions="*,Auto">
+
+                        <StackPanel Grid.Column="0" Spacing="3" Margin="0,0,10,0">
+
+                          <StackPanel Orientation="Horizontal" Spacing="7">
+                            <Border Classes="stateTag trash">
+                              <TextBlock Text="{Binding StateLabel}" />
+                            </Border>
+                            <TextBlock Text="{Binding Title}"
+                                       FontSize="13"
+                                       FontWeight="SemiBold"
+                                       VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis" />
+                          </StackPanel>
+
+                          <StackPanel Orientation="Horizontal" Spacing="5">
+                            <TextBlock Classes="meta" Text="{Binding WhenLabel}" />
+                            <TextBlock Classes="meta"
+                                       Text="{Binding DeletedByLabel}"
+                                       IsVisible="{Binding HasDeletedBy}" />
+                          </StackPanel>
+
+                          <TextBlock Classes="countdown"
+                                     Classes.soon="{Binding IsExpiringSoon}"
+                                     Text="{Binding DaysLeftLabel}"
+                                     IsVisible="{Binding HasDaysLeft}" />
+
+                          <TextBlock Classes="meta"
+                                     Text="Estava arquivado — restaurar o devolve aos arquivados."
+                                     IsVisible="{Binding WasArchivedBeforeTrash}" />
+
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+
+                          <Button Classes="rowAction"
+                                  Content="Detalhes"
+                                  Command="{Binding #Root.((vm:DataManagementViewModel)DataContext).ToggleDetailsCommand}"
+                                  CommandParameter="{Binding}" />
+
+                          <Button Classes="rowAction accent"
+                                  Content="Restaurar"
+                                  Command="{Binding #Root.((vm:DataManagementViewModel)DataContext).RestoreFromTrashCommand}"
+                                  CommandParameter="{Binding}" />
+
+                          <!-- Sem atalho de um clique: a ação que não tem volta
+                               fica atrás do menu e ainda pede confirmação (§7). -->
+                          <Button Classes="rowAction"
+                                  Content="⋯"
+                                  ToolTip.Tip="Mais ações">
+                            <Button.Flyout>
+                              <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                <MenuItem Header="Excluir definitivamente…"
+                                          Command="{Binding #Root.((vm:DataManagementViewModel)DataContext).PurgeCommand}"
+                                          CommandParameter="{Binding}" />
+                              </MenuFlyout>
+                            </Button.Flyout>
+                          </Button>
+
+                        </StackPanel>
+
+                      </Grid>
+
+                      <ContentControl Content="{Binding}"
+                                      IsVisible="{Binding IsExpanded}"
+                                      ContentTemplate="{StaticResource ChecklistDetails}" />
+
+                    </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+
+        </DockPanel>
+      </TabItem>
+
+      <!-- =========================== CONFIGURAÇÕES =========================== -->
+      <TabItem Header="Configurações">
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+          <StackPanel Margin="2,12,2,0" Spacing="18">
+
+            <StackPanel Spacing="8">
+
+              <TextBlock Classes="sectionTitle" Text="Arquivamento automático" />
+
+              <CheckBox Content="Arquivar checklists concluídos automaticamente"
+                        IsChecked="{Binding AutoArchiveEnabled}" />
+
+              <StackPanel Orientation="Horizontal"
+                          Spacing="8"
+                          Margin="26,0,0,0"
+                          IsEnabled="{Binding AutoArchiveEnabled}">
+                <TextBlock Text="Após:" VerticalAlignment="Center" FontSize="12" />
+                <ComboBox Width="150"
+                          ItemsSource="{Binding ArchiveAfter.Options}"
+                          SelectedIndex="{Binding ArchiveAfter.SelectedIndex}" />
+                <NumericUpDown Width="110"
+                               FormatString="0"
+                               Minimum="{Binding ArchiveAfter.Minimum}"
+                               Maximum="{Binding ArchiveAfter.Maximum}"
+                               Value="{Binding ArchiveAfter.CustomDays}"
+                               IsVisible="{Binding ArchiveAfter.IsCustom}" />
+                <TextBlock Text="dias"
+                           VerticalAlignment="Center"
+                           FontSize="12"
+                           IsVisible="{Binding ArchiveAfter.IsCustom}" />
+              </StackPanel>
+
+              <TextBlock Classes="meta"
+                         Margin="26,0,0,0"
+                         Text="O prazo conta a partir da data de conclusão do checklist, não da criação. Arquivar não exclui: o histórico continua inteiro e pode ser restaurado a qualquer momento." />
+
+            </StackPanel>
+
+            <StackPanel Spacing="8">
+
+              <TextBlock Classes="sectionTitle" Text="Lixeira" />
+
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="Manter itens excluídos por:"
+                           VerticalAlignment="Center"
+                           FontSize="12" />
+                <ComboBox Width="150"
+                          ItemsSource="{Binding TrashRetention.Options}"
+                          SelectedIndex="{Binding TrashRetention.SelectedIndex}" />
+                <NumericUpDown Width="110"
+                               FormatString="0"
+                               Minimum="{Binding TrashRetention.Minimum}"
+                               Maximum="{Binding TrashRetention.Maximum}"
+                               Value="{Binding TrashRetention.CustomDays}"
+                               IsVisible="{Binding TrashRetention.IsCustom}" />
+                <TextBlock Text="dias"
+                           VerticalAlignment="Center"
+                           FontSize="12"
+                           IsVisible="{Binding TrashRetention.IsCustom}" />
+              </StackPanel>
+
+              <TextBlock Classes="meta"
+                         Text="Depois desse período, os checklists da lixeira são excluídos definitivamente pelo sistema, sem possibilidade de restauração." />
+
+            </StackPanel>
+
+            <TextBlock Classes="meta"
+                       Text="{Binding SettingsStatus}"
+                       IsVisible="{Binding SettingsStatus, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <Button Grid.Column="0"
+                      Content="Restaurar padrão"
+                      Command="{Binding RestoreDefaultSettingsCommand}" />
+              <Button Grid.Column="2"
+                      Classes="accent"
+                      Content="Salvar"
+                      IsEnabled="{Binding !IsBusy}"
+                      Command="{Binding SaveSettingsCommand}" />
+            </Grid>
+
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+    </TabControl>
+
+  </DockPanel>
+
+</Window>

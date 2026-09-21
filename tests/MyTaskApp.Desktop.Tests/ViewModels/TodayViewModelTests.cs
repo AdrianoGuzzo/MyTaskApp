@@ -14,8 +14,10 @@ public class TodayViewModelTests
 
     private readonly FakeUseCaseRunner _runner = new();
 
+    private readonly FakeConfirmationDialog _confirmation = new();
+
     private TodayViewModel ViewModel() =>
-        new(_runner, TimeProvider.System, NullLogger<TodayViewModel>.Instance);
+        new(_runner, _confirmation, TimeProvider.System, NullLogger<TodayViewModel>.Instance);
 
     private static TodayTask Row(string title, TimeOnly? time = null, bool isLate = false) =>
         new(Guid.CreateVersion7(), Guid.CreateVersion7(), title, TaskPriority.Normal, Date, time, isLate);

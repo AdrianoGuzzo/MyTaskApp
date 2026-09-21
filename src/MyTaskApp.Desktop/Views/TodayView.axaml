@@ -124,6 +124,30 @@
       <Setter Property="Opacity" Value="1" />
     </Style>
 
+    <!--
+      Menu da linha. Mesma discrição do botão de lembrete: a lista não pode
+      virar uma barra de botões (§12), mas arquivar e excluir também não podem
+      existir só no clique direito, que ninguém descobre sozinho.
+    -->
+    <Style Selector="Button.rowMenu">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Padding" Value="5,0,5,4" />
+      <Setter Property="Opacity" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextMidBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <DoubleTransition Property="Opacity" Duration="0:0:0.12" />
+        </Transitions>
+      </Setter>
+    </Style>
+
+    <Style Selector="Border.row:pointerover Button.rowMenu">
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+
     <!-- Com lembrete ligado o botão fica levemente visível mesmo sem hover. -->
     <Style Selector="Button.reminder.on">
       <Setter Property="Opacity" Value="0.55" />
@@ -259,6 +283,18 @@
                  TextWrapping="Wrap" />
     </Border>
 
+    <Border DockPanel.Dock="Top"
+            Margin="12,8,12,0"
+            Padding="10,7"
+            CornerRadius="{StaticResource WidgetPillRadius}"
+            Background="{DynamicResource WidgetAccentSoftBrush}"
+            IsVisible="{Binding StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <TextBlock Text="{Binding StatusMessage}"
+                 FontSize="11"
+                 Foreground="{DynamicResource WidgetTextHighBrush}"
+                 TextWrapping="Wrap" />
+    </Border>
+
     <TextBlock DockPanel.Dock="Top"
                Margin="0,28,0,0"
                FontSize="11.5"
@@ -280,7 +316,26 @@
                   <DataTemplate x:DataType="vm:TaskRowViewModel">
                     <Border Classes="row"
                             chrome:WindowDecorationProperties.ElementRole="User">
-                      <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto">
+
+                      <!--
+                        As ações secundárias moram aqui, e em um lugar só: o
+                        botão "⋯" abre este mesmo menu (ver TodayView.axaml.cs),
+                        para que clique direito e botão nunca ofereçam coisas
+                        diferentes.
+                      -->
+                      <Border.ContextFlyout>
+                        <MenuFlyout Placement="BottomEdgeAlignedRight">
+                          <MenuItem Header="Arquivar"
+                                    Command="{Binding #Root.((vm:TodayViewModel)DataContext).ArchiveCommand}"
+                                    CommandParameter="{Binding}" />
+                          <Separator />
+                          <MenuItem Header="Mover para a lixeira…"
+                                    Command="{Binding #Root.((vm:TodayViewModel)DataContext).MoveToTrashCommand}"
+                                    CommandParameter="{Binding}" />
+                        </MenuFlyout>
+                      </Border.ContextFlyout>
+
+                      <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto">
 
                         <Border Grid.Column="0"
                                 Classes="priority"
@@ -352,7 +407,13 @@
                           </Button.Flyout>
                         </Button>
 
-                        <TextBlock Grid.Column="4"
+                        <Button Grid.Column="4"
+                                Classes="rowMenu"
+                                Content="⋯"
+                                ToolTip.Tip="Arquivar ou excluir este checklist"
+                                Click="OnRowMenuClick" />
+
+                        <TextBlock Grid.Column="5"
                                    Margin="8,0,2,0"
                                    Text="{Binding TimeLabel}"
                                    Classes="time"

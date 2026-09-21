@@ -3,6 +3,7 @@ using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Domain;
+using MyTaskApp.Domain.Auditing;
 using MyTaskApp.Domain.Tasks;
 
 namespace MyTaskApp.Application.Tasks;
@@ -23,6 +24,8 @@ public sealed class QuickCaptureHandler(
     ITaskItemRepository tasks,
     IUnitOfWork unitOfWork,
     IReminderSettingsStore settings,
+    ITaskAuditLog audit,
+    ICurrentUser currentUser,
     IUserClock clock,
     TimeProvider timeProvider,
     ILogger<QuickCaptureHandler> logger)
@@ -66,6 +69,15 @@ public sealed class QuickCaptureHandler(
         {
             ReminderArming.Arm(task, task.Occurrences.Single(), clock, createdAt);
             await tasks.AddAsync(task, cancellationToken);
+
+            await audit.RecordAsync(
+                TaskAuditEntry.ByUser(
+                    task.Id,
+                    task.Title,
+                    TaskAuditOperation.Created,
+                    createdAt,
+                    currentUser.Name),
+                cancellationToken);
         }
 
         // Um único SaveChanges: ou o checklist entra inteiro, ou não entra nada.

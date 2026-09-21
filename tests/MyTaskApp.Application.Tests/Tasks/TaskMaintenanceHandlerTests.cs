@@ -136,35 +136,3 @@ public class RescheduleOccurrenceHandlerTests
         await handle.Should().ThrowAsync<DomainException>().WithMessage("*sem data*");
     }
 }
-
-public class DeleteTaskHandlerTests
-{
-    private static readonly DateTimeOffset Now = new(2026, 9, 17, 17, 30, 0, TimeSpan.Zero);
-    private static CancellationToken Ct => TestContext.Current.CancellationToken;
-
-    private readonly FakeTaskItemRepository _repository = new();
-
-    private DeleteTaskHandler Handler() =>
-        new(_repository, _repository, NullLogger<DeleteTaskHandler>.Instance);
-
-    [Fact]
-    public async Task Handle_RemovesTheTask()
-    {
-        var task = TaskItem.Create("Tarefa errada", Now);
-        _repository.Seed(task);
-
-        await Handler().HandleAsync(new DeleteTask(task.Id), Ct);
-
-        _repository.Tasks.Should().BeEmpty();
-        _repository.SaveCount.Should().Be(1);
-    }
-
-    [Fact]
-    public async Task Handle_WithUnknownTask_ReportsItAsABusinessFailure()
-    {
-        var handle = async () => await Handler().HandleAsync(new DeleteTask(Guid.CreateVersion7()), Ct);
-
-        await handle.Should().ThrowAsync<DomainException>().WithMessage("*não encontrada*");
-        _repository.SaveCount.Should().Be(0);
-    }
-}

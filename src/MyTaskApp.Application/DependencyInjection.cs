@@ -2,7 +2,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
+using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Configuration;
+using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Application.Tasks;
@@ -28,6 +30,10 @@ public static class DependencyInjection
         // Relógio real como padrão; testes substituem por FakeTimeProvider.
         services.TryAddSingleton(TimeProvider.System);
 
+        // Sem identificação por padrão. O Desktop registra a conta do sistema
+        // antes desta chamada e ganha — TryAdd mantém quem chegou primeiro.
+        services.TryAddSingleton<ICurrentUser, UnknownUser>();
+
         // Singleton: resolver o fuso uma vez basta e evita repetir o fallback.
         services.TryAddSingleton<IUserClock, UserClock>();
 
@@ -40,7 +46,19 @@ public static class DependencyInjection
         services.AddScoped<CancelOccurrenceHandler>();
         services.AddScoped<UpdateTaskHandler>();
         services.AddScoped<RescheduleOccurrenceHandler>();
-        services.AddScoped<DeleteTaskHandler>();
+
+        // Ciclo de vida do checklist: arquivar, lixeira, exclusao definitiva e
+        // auditoria (§1 a §8).
+        services.AddScoped<ArchiveChecklistHandler>();
+        services.AddScoped<RestoreChecklistHandler>();
+        services.AddScoped<MoveChecklistToTrashHandler>();
+        services.AddScoped<RestoreChecklistFromTrashHandler>();
+        services.AddScoped<PurgeChecklistHandler>();
+        services.AddScoped<GetChecklistArchiveHandler>();
+        services.AddScoped<GetChecklistAuditHandler>();
+        services.AddScoped<GetDataRetentionSettingsHandler>();
+        services.AddScoped<UpdateDataRetentionSettingsHandler>();
+        services.AddScoped<RunLifecycleMaintenanceHandler>();
 
         services.AddScoped<GetReminderDefaultsHandler>();
         services.AddScoped<UpdateReminderDefaultsHandler>();
@@ -54,6 +72,10 @@ public static class DependencyInjection
         // Singleton: e um laco so, e ele nao pode capturar escopo nenhum
         // (validateScopes: true reprovaria). So recebe IUseCaseRunner.
         services.TryAddSingleton<ReminderScheduler>();
+
+        // Mesmo desenho, cadencia de horas: arquiva o que venceu e esvazia a
+        // lixeira vencida. Tambem so recebe IUseCaseRunner, pelo mesmo motivo.
+        services.TryAddSingleton<LifecycleMaintenanceScheduler>();
 
         return services;
     }

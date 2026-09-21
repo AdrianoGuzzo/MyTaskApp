@@ -17,7 +17,13 @@ public class CompleteOccurrenceHandlerTests
     private readonly FakeTimeProvider _clock = new(Now);
 
     private CompleteOccurrenceHandler Handler() =>
-        new(_repository, _repository, _clock, NullLogger<CompleteOccurrenceHandler>.Instance);
+        new(
+            _repository,
+            _repository,
+            new FakeTaskAuditLog(),
+            new FakeCurrentUser(),
+            _clock,
+            NullLogger<CompleteOccurrenceHandler>.Instance);
 
     private TaskOccurrence SeedPendingOccurrence()
     {
@@ -118,6 +124,8 @@ public class ReopenAndCancelOccurrenceHandlerTests
         var handler = new ReopenOccurrenceHandler(
             _repository,
             _repository,
+            new FakeTaskAuditLog(),
+            new FakeCurrentUser(),
             TestClock.Over(timeProvider),
             timeProvider,
             NullLogger<ReopenOccurrenceHandler>.Instance);
@@ -134,7 +142,12 @@ public class ReopenAndCancelOccurrenceHandlerTests
     {
         var occurrence = SeedPendingOccurrence();
         var handler = new CancelOccurrenceHandler(
-            _repository, _repository, NullLogger<CancelOccurrenceHandler>.Instance);
+            _repository,
+            _repository,
+            new FakeTaskAuditLog(),
+            new FakeCurrentUser(),
+            new FakeTimeProvider(Now),
+            NullLogger<CancelOccurrenceHandler>.Instance);
 
         await handler.HandleAsync(new CancelOccurrence(occurrence.Id), Ct);
 
@@ -146,7 +159,12 @@ public class ReopenAndCancelOccurrenceHandlerTests
     public async Task Cancel_WithUnknownOccurrence_ReportsItAsABusinessFailure()
     {
         var handler = new CancelOccurrenceHandler(
-            _repository, _repository, NullLogger<CancelOccurrenceHandler>.Instance);
+            _repository,
+            _repository,
+            new FakeTaskAuditLog(),
+            new FakeCurrentUser(),
+            new FakeTimeProvider(Now),
+            NullLogger<CancelOccurrenceHandler>.Instance);
 
         var handle = async () => await handler.HandleAsync(new CancelOccurrence(Guid.CreateVersion7()), Ct);
 
