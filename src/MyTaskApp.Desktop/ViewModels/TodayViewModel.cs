@@ -29,7 +29,18 @@ public sealed partial class TodayViewModel(
     /// </summary>
     private static readonly TimeSpan RefreshEvery = TimeSpan.FromSeconds(60);
 
+    private const string NothingForToday = "Nada para hoje. Aproveite.";
+
+    private const string EverythingDone = "Tudo concluído. Aproveite.";
+
     private ITimer? _refresh;
+
+    /// <summary>
+    /// O último quadro carregado. Esconder as concluídas remonta a lista sem
+    /// que nada tenha mudado no banco — sem isto, trocar de modo custaria uma
+    /// consulta.
+    /// </summary>
+    private TodayBoard? _board;
 
     [ObservableProperty]
     private string _title = string.Empty;
@@ -42,6 +53,22 @@ public sealed partial class TodayViewModel(
 
     [ObservableProperty]
     private bool _isEmpty;
+
+    /// <summary>
+    /// Dia vazio e dia terminado não são a mesma coisa — e com as concluídas
+    /// fora da lista o segundo passa a aparecer bem mais.
+    /// </summary>
+    [ObservableProperty]
+    private string _emptyMessage = NothingForToday;
+
+    /// <summary>
+    /// Tira a seção das concluídas da lista. Quem liga é a moldura — fixado, o
+    /// painel é um canto de tela e cada linha custa altura, então o que já foi
+    /// feito não pode empurrar o que falta para fora da vista. Os números do
+    /// cabeçalho continuam contando tudo: esconder não é desfazer.
+    /// </summary>
+    [ObservableProperty]
+    private bool _hideCompleted;
 
     /// <summary>Texto da captura rápida: uma tarefa por linha.</summary>
     [ObservableProperty]
@@ -218,18 +245,45 @@ public sealed partial class TodayViewModel(
 
     private void Show(TodayBoard board)
     {
+        _board = board;
+
         Title = $"HOJE — {board.Date.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)}";
 
         ShowProgress(board);
+        ShowSections(board);
+    }
 
+    /// <summary>
+    /// Separado de <see cref="Show"/> porque o interruptor das concluídas
+    /// remonta só a lista: o quadro na tela continua o mesmo, e recarregar
+    /// apagaria a mensagem de erro que estivesse à vista.
+    /// </summary>
+    private void ShowSections(TodayBoard board)
+    {
         Sections.Clear();
         AddSection("ATRASADAS", board.Overdue, isCompleted: false);
         AddSection("AGORA", board.Now, isCompleted: false);
         AddSection("HOJE", board.Today, isCompleted: false);
         AddSection("SEM HORÁRIO", board.Unscheduled, isCompleted: false);
-        AddSection("CONCLUÍDAS", board.Completed, isCompleted: true);
+
+        if (!HideCompleted)
+        {
+            AddSection("CONCLUÍDAS", board.Completed, isCompleted: true);
+        }
 
         IsEmpty = Sections.Count == 0;
+
+        // Sem as concluídas, terminar o dia esvazia a lista — e painel em
+        // branco parece defeito, não dever cumprido.
+        EmptyMessage = board.Completed.Count > 0 ? EverythingDone : NothingForToday;
+    }
+
+    partial void OnHideCompletedChanged(bool value)
+    {
+        if (_board is { } board)
+        {
+            ShowSections(board);
+        }
     }
 
     /// <summary>
