@@ -16,8 +16,10 @@ public class TodayViewModelTests
 
     private readonly FakeConfirmationDialog _confirmation = new();
 
+    private readonly FakeClipboardWriter _clipboard = new();
+
     private TodayViewModel ViewModel() =>
-        new(_runner, _confirmation, TimeProvider.System, NullLogger<TodayViewModel>.Instance);
+        new(_runner, _confirmation, _clipboard, TimeProvider.System, NullLogger<TodayViewModel>.Instance);
 
     private static TodayTask Row(string title, TimeOnly? time = null, bool isLate = false) =>
         new(Guid.CreateVersion7(), Guid.CreateVersion7(), title, TaskPriority.Normal, Date, time, isLate);

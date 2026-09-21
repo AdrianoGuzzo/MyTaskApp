@@ -65,6 +65,10 @@ internal static class AppServices
             // a janela dona a cada pergunta.
             .AddSingleton<IConfirmationDialog, ConfirmationDialog>()
 
+            // Copiar o texto de uma linha (§12). Singleton sem estado, como o
+            // dialogo: descobre a janela a cada escrita.
+            .AddSingleton<IClipboardWriter, ClipboardWriter>()
+
             // Singletons: a janela de ajustes e a bandeja sao uma so por app.
             .AddSingleton<ReminderSettingsViewModel>()
             .AddSingleton<ReminderSettingsWindow>()
