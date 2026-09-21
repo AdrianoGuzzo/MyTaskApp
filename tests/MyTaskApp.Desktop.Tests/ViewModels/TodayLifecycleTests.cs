@@ -25,8 +25,10 @@ public class TodayLifecycleTests
 
     private readonly FakeConfirmationDialog _confirmation = new();
 
+    private readonly FakeClipboardWriter _clipboard = new();
+
     private TodayViewModel ViewModel() =>
-        new(_runner, _confirmation, TimeProvider.System, NullLogger<TodayViewModel>.Instance);
+        new(_runner, _confirmation, _clipboard, TimeProvider.System, NullLogger<TodayViewModel>.Instance);
 
     private static TaskRowViewModel Row(string title = "Fechar o mês") =>
         new(

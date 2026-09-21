@@ -35,6 +35,34 @@ public sealed partial class TodayView : UserControl
     public void FocusCapture() => CaptureBox.Focus();
 
     /// <summary>
+    /// Um clique no texto da linha copia o título. O gesto não é binding
+    /// nenhum, então nada reclamaria em build se este caminho quebrasse — é o
+    /// que o teste headless do gesto guarda.
+    /// </summary>
+    private void OnTitleTapped(object? sender, TappedEventArgs e)
+    {
+        if (sender is not Control { DataContext: TaskRowViewModel row })
+        {
+            return;
+        }
+
+        if (DataContext is not TodayViewModel viewModel)
+        {
+            return;
+        }
+
+        // Marca como tratado para o clique não seguir subindo até a linha: hoje
+        // a Border não faz nada com ele, e no dia em que fizer, copiar e essa
+        // outra ação não podem disparar juntas.
+        e.Handled = true;
+
+        if (viewModel.CopyTitleCommand.CanExecute(row))
+        {
+            viewModel.CopyTitleCommand.Execute(row);
+        }
+    }
+
+    /// <summary>
     /// O botão "⋯" abre o <c>ContextFlyout</c> da própria linha, em vez de ter
     /// um menu só dele. Assim clique direito e botão são literalmente o mesmo
     /// menu — duas cópias em XAML acabariam divergindo no primeiro item novo.

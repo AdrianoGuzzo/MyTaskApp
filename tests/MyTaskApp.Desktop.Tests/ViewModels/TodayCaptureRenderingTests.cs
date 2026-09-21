@@ -28,6 +28,7 @@ public class TodayCaptureRenderingTests
         var viewModel = new TodayViewModel(
             runner,
             new FakeConfirmationDialog(),
+            new FakeClipboardWriter(),
             TimeProvider.System,
             NullLogger<TodayViewModel>.Instance);
 

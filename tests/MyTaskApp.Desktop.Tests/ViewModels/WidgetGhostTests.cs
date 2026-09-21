@@ -35,6 +35,7 @@ public class WidgetGhostTests
         var viewModel = new TodayViewModel(
             new FakeUseCaseRunner { Result = new TodayBoard(Date, [], [], [.. pending], [], []) },
             new FakeConfirmationDialog(),
+            new FakeClipboardWriter(),
             TimeProvider.System,
             NullLogger<TodayViewModel>.Instance);
 
