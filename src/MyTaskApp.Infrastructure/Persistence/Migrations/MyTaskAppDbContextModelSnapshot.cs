@@ -17,14 +17,67 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
 
+            modelBuilder.Entity("MyTaskApp.Domain.Auditing.TaskAuditEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Actor")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ActorName")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Details")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("OccurredAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Operation")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("TaskId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TaskTitle")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OccurredAt");
+
+                    b.HasIndex("TaskId", "OccurredAt");
+
+                    b.ToTable("TaskAuditEntries", (string)null);
+                });
+
             modelBuilder.Entity("MyTaskApp.Domain.Tasks.TaskItem", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<long?>("ArchivedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ConcludedAt")
+                        .HasColumnType("INTEGER");
+
                     b.Property<long>("CreatedAt")
                         .HasColumnType("INTEGER");
+
+                    b.Property<long?>("DeletedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Description")
                         .HasMaxLength(4000)
@@ -39,6 +92,18 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ArchivedAt")
+                        .HasDatabaseName("IX_Tasks_Archived")
+                        .HasFilter("\"ArchivedAt\" IS NOT NULL AND \"DeletedAt\" IS NULL");
+
+                    b.HasIndex("ConcludedAt")
+                        .HasDatabaseName("IX_Tasks_ReadyToArchive")
+                        .HasFilter("\"ConcludedAt\" IS NOT NULL AND \"ArchivedAt\" IS NULL AND \"DeletedAt\" IS NULL");
+
+                    b.HasIndex("DeletedAt")
+                        .HasDatabaseName("IX_Tasks_Trashed")
+                        .HasFilter("\"DeletedAt\" IS NOT NULL");
 
                     b.ToTable("Tasks", (string)null);
                 });
@@ -74,6 +139,28 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("TaskOccurrences", (string)null);
+                });
+
+            modelBuilder.Entity("MyTaskApp.Infrastructure.Persistence.DataRetentionSettingsRow", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("AutoArchiveAfterDays")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("AutoArchiveEnabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("TrashRetentionDays")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("DataRetentionSettings", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_DataRetentionSettings_SingleRow", "Id = 1");
+                        });
                 });
 
             modelBuilder.Entity("MyTaskApp.Infrastructure.Persistence.ReminderSettingsRow", b =>

@@ -36,6 +36,8 @@ public class QuickCaptureHandlerTests
             _repository,
             _repository,
             _settings,
+            new FakeTaskAuditLog(),
+            new FakeCurrentUser(),
             clock,
             timeProvider,
             NullLogger<QuickCaptureHandler>.Instance);

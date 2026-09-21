@@ -146,6 +146,8 @@ public class ReminderDefaultsAtCreationTests
             _repository,
             _repository,
             _settings,
+            new FakeTaskAuditLog(),
+            new FakeCurrentUser(),
             TestClock.Over(_time),
             _time,
             NullLogger<CreateTaskHandler>.Instance);
@@ -155,6 +157,8 @@ public class ReminderDefaultsAtCreationTests
             _repository,
             _repository,
             _settings,
+            new FakeTaskAuditLog(),
+            new FakeCurrentUser(),
             TestClock.Over(_time),
             _time,
             NullLogger<QuickCaptureHandler>.Instance);
