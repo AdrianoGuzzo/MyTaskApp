@@ -1,0 +1,62 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="MyTaskApp.Desktop.Views.ConfirmWindow"
+        x:Name="Dialog"
+        Width="430"
+        SizeToContent="Height"
+        CanResize="False"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner">
+
+  <StackPanel Margin="24,20" Spacing="14">
+
+    <TextBlock x:Name="HeadlineText"
+               FontSize="16"
+               FontWeight="SemiBold"
+               TextWrapping="Wrap" />
+
+    <TextBlock x:Name="MessageText"
+               FontSize="12.5"
+               Opacity="0.85"
+               TextWrapping="Wrap" />
+
+    <!--
+      Aviso de irreversibilidade: só aparece na confirmação forte (§7). Uma
+      faixa, e não mais uma linha de texto, porque o que distingue esta caixa da
+      anterior precisa ser visível antes de ser lido.
+    -->
+    <Border x:Name="DangerNotice"
+            Padding="10,8"
+            CornerRadius="6"
+            IsVisible="False"
+            Background="{DynamicResource SystemFillColorCriticalBackgroundBrush}">
+      <TextBlock Text="Esta ação não pode ser desfeita."
+                 FontWeight="SemiBold"
+                 FontSize="12"
+                 TextWrapping="Wrap" />
+    </Border>
+
+    <StackPanel Orientation="Horizontal"
+                Spacing="8"
+                HorizontalAlignment="Right">
+
+      <!--
+        Cancelar vem primeiro e nasce com o foco. Numa caixa que pode apagar
+        dados para sempre, o Enter reflexo tem de cair no botão que não faz nada.
+      -->
+      <Button x:Name="CancelButton"
+              MinWidth="96"
+              Content="Cancelar"
+              IsCancel="True"
+              Click="OnCancel" />
+
+      <Button x:Name="ConfirmButton"
+              MinWidth="96"
+              Classes="accent"
+              Click="OnConfirm" />
+
+    </StackPanel>
+
+  </StackPanel>
+
+</Window>

@@ -134,6 +134,8 @@
                               Command="{Binding #Shell.Chrome.HideCommand}" />
                     <MenuItem Header="Configuração de lembretes…"
                               Command="{Binding OpenSettingsCommand}" />
+                    <MenuItem Header="Gerenciamento de dados…"
+                              Command="{Binding OpenDataManagementCommand}" />
                   </MenuFlyout>
                 </Button.Flyout>
               </Button>

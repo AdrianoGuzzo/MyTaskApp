@@ -19,6 +19,14 @@ internal sealed class DueReminderQuery(MyTaskAppDbContext context) : IDueReminde
         // Cai no índice parcial: só ocorrências armadas e ainda sem resposta.
         var due = await context.Occurrences
             .AsNoTracking()
+            // Cinto e suspensório: arquivar e excluir já desarmam os lembretes
+            // no agregado, mas um checklist guardado não pode voltar a tocar
+            // nem por uma linha que tenha escapado — por migração, por edição
+            // manual do banco, por um caminho futuro que esqueça de desarmar.
+            .Where(occurrence => context.Tasks.Any(task =>
+                task.Id == occurrence.TaskItemId
+                && task.ArchivedAt == null
+                && task.DeletedAt == null))
             .Where(occurrence =>
                 occurrence.Status == TaskItemStatus.Pending
                 && occurrence.Reminder.NextFireAtUtc != null
