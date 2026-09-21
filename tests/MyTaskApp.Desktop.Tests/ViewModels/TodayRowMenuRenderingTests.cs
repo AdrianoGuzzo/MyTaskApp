@@ -30,6 +30,7 @@ public class TodayRowMenuRenderingTests
         var viewModel = new TodayViewModel(
             new FakeUseCaseRunner { Result = board },
             new FakeConfirmationDialog(),
+            new FakeClipboardWriter(),
             TimeProvider.System,
             NullLogger<TodayViewModel>.Instance);
 

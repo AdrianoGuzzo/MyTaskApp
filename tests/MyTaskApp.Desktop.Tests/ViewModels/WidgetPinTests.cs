@@ -47,6 +47,7 @@ public class WidgetPinTests
         var viewModel = new TodayViewModel(
             runner,
             new FakeConfirmationDialog(),
+            new FakeClipboardWriter(),
             TimeProvider.System,
             NullLogger<TodayViewModel>.Instance);
 
@@ -74,6 +75,7 @@ public class WidgetPinTests
         var viewModel = new TodayViewModel(
             new FakeUseCaseRunner { Result = new TodayBoard(Date, [], [], pending, [], completed) },
             new FakeConfirmationDialog(),
+            new FakeClipboardWriter(),
             TimeProvider.System,
             NullLogger<TodayViewModel>.Instance);
 
@@ -487,6 +489,7 @@ public class WidgetPinTests
                 Result = new TodayBoard(Date, [], [], [Row("Deploy")], [], [Row("Revisar PR")]),
             },
             new FakeConfirmationDialog(),
+            new FakeClipboardWriter(),
             TimeProvider.System,
             NullLogger<TodayViewModel>.Instance);
 

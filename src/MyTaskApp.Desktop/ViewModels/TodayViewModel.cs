@@ -9,6 +9,7 @@ using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Application.Tasks;
+using MyTaskApp.Desktop.Composition;
 using MyTaskApp.Desktop.Views;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.Lifecycle;
@@ -22,6 +23,7 @@ namespace MyTaskApp.Desktop.ViewModels;
 public sealed partial class TodayViewModel(
     IUseCaseRunner runner,
     IConfirmationDialog confirmation,
+    IClipboardWriter clipboard,
     TimeProvider timeProvider,
     ILogger<TodayViewModel> logger) : ObservableObject, IDisposable
 {
@@ -36,6 +38,9 @@ public sealed partial class TodayViewModel(
     private const string NothingForToday = "Nada para hoje. Aproveite.";
 
     private const string EverythingDone = "Tudo concluído. Aproveite.";
+
+    /// <summary>A confirmação do clique que copia o título de uma linha.</summary>
+    private const string CopiedMessage = "Texto copiado.";
 
     private ITimer? _refresh;
 
@@ -223,6 +228,25 @@ public sealed partial class TodayViewModel(
 
     [RelayCommand]
     public void OpenDataManagement() => DataManagementRequested?.Invoke();
+
+    /// <summary>
+    /// Copia o título da linha para a área de transferência. Não recarrega o
+    /// quadro depois: copiar não muda nada no banco.
+    /// </summary>
+    [RelayCommand]
+    public async Task CopyTitleAsync(TaskRowViewModel row)
+    {
+        var copied = await TryAsync(
+            () => clipboard.WriteAsync(row.Title),
+            "Não foi possível copiar o texto.");
+
+        if (!copied)
+        {
+            return;
+        }
+
+        StatusMessage = CopiedMessage;
+    }
 
     /// <summary>
     /// Arquiva o checklist da linha (§1). Sem caixa de confirmacao de

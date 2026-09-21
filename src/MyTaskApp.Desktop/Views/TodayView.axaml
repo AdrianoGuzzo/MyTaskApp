@@ -364,15 +364,21 @@
 
                         <StackPanel Grid.Column="2" Spacing="1" VerticalAlignment="Center">
                           <!--
-                            O balão devolve o que o "…" levou. Fundo transparente
-                            porque o ponteiro só acerta o que foi desenhado: sem
-                            ele, o balão dependeria de mirar nos glifos.
+                            Um clique no texto copia o título (ver OnTitleTapped),
+                            e o balão devolve o que o "…" levou.
+                            Background transparente, e nunca nulo: fundo nulo não
+                            recebe ponteiro, e tanto o gesto quanto o balão
+                            dependeriam de mirar nos glifos.
+                            Tapped, e não PointerPressed: arrastar o painel por
+                            cima de uma linha não pode virar uma cópia.
                           -->
                           <TextBlock Text="{Binding Title}"
                                      Classes="taskTitle"
                                      Classes.done="{Binding IsCompleted}"
                                      Background="Transparent"
-                                     ToolTip.Tip="{Binding Title}" />
+                                     Cursor="Hand"
+                                     ToolTip.Tip="{Binding Title}"
+                                     Tapped="OnTitleTapped" />
 
                           <StackPanel Orientation="Horizontal"
                                       Spacing="4"

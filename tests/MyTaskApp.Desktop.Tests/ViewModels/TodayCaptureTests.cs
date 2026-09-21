@@ -22,8 +22,10 @@ public class TodayCaptureTests
 
     private readonly FakeConfirmationDialog _confirmation = new();
 
+    private readonly FakeClipboardWriter _clipboard = new();
+
     private TodayViewModel ViewModel() =>
-        new(_runner, _confirmation, TimeProvider.System, NullLogger<TodayViewModel>.Instance);
+        new(_runner, _confirmation, _clipboard, TimeProvider.System, NullLogger<TodayViewModel>.Instance);
 
     [Fact]
     public async Task Capturing_AsksTheQuickCaptureUseCase()
