@@ -57,6 +57,7 @@ public class ApplicationRegistrationTests
     [InlineData(typeof(RunLifecycleMaintenanceHandler))]
     [InlineData(typeof(LifecycleMaintenanceScheduler))]
     [InlineData(typeof(GetTodayBoardHandler))]
+    [InlineData(typeof(ReorderOccurrencesHandler))]
     [InlineData(typeof(GetReminderDefaultsHandler))]
     [InlineData(typeof(UpdateReminderDefaultsHandler))]
     [InlineData(typeof(SetTaskReminderHandler))]

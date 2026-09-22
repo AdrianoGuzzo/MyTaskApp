@@ -1,5 +1,7 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using MyTaskApp.Infrastructure.Persistence;
 
 namespace MyTaskApp.Infrastructure.Tests.Persistence;
@@ -25,6 +27,23 @@ internal sealed class TempSqliteDatabase : IAsyncDisposable
     {
         await using var context = CreateContext();
         await context.Database.MigrateAsync(cancellationToken);
+        return this;
+    }
+
+    /// <summary>
+    /// Migra só até a versão informada, para poder popular o banco <b>como ele
+    /// era</b> e então aplicar a migration seguinte. É a única forma de testar o
+    /// que uma migration faz — ou deixa de fazer — com dados que já existiam.
+    /// </summary>
+    public async Task<TempSqliteDatabase> MigrateToAsync(
+        string targetMigration,
+        CancellationToken cancellationToken)
+    {
+        await using var context = CreateContext();
+
+        await context.GetService<IMigrator>()
+            .MigrateAsync(targetMigration, cancellationToken);
+
         return this;
     }
 

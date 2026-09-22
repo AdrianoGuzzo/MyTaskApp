@@ -7,6 +7,177 @@
              x:DataType="vm:TodayViewModel"
              x:Name="Root">
 
+  <UserControl.Resources>
+
+    <!--
+      A linha, uma vez só. Dois desenhos a usam: a lista e o item levantado
+      durante o arrasto (o ContentControl lá embaixo). Mesma razão pela qual o
+      "⋯" abre o ContextFlyout da própria linha em vez de ter um menu só dele —
+      duas cópias em XAML divergiriam no primeiro campo novo.
+    -->
+    <DataTemplate x:Key="TaskRow" x:DataType="vm:TaskRowViewModel">
+      <Border Classes="row"
+              Classes.fixedOrder="{Binding IsCompleted}"
+              chrome:WindowDecorationProperties.ElementRole="User">
+
+        <!--
+          As ações secundárias moram aqui, e em um lugar só: o
+          botão "⋯" abre este mesmo menu (ver TodayView.axaml.cs),
+          para que clique direito e botão nunca ofereçam coisas
+          diferentes.
+        -->
+        <Border.ContextFlyout>
+          <MenuFlyout Placement="BottomEdgeAlignedRight">
+            <MenuItem Header="Arquivar"
+                      Command="{Binding #Root.((vm:TodayViewModel)DataContext).ArchiveCommand}"
+                      CommandParameter="{Binding}" />
+            <Separator />
+            <MenuItem Header="Mover para a lixeira…"
+                      Command="{Binding #Root.((vm:TodayViewModel)DataContext).MoveToTrashCommand}"
+                      CommandParameter="{Binding}" />
+          </MenuFlyout>
+        </Border.ContextFlyout>
+
+        <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto">
+
+          <!--
+            A alça. Border e não Button de propósito: botão por linha herdaria
+            foco e estado :pressed que atrapalham o gesto, e há testes headless
+            que contam botões por janela. ElementRole="User" declarado aqui, e
+            não herdado da linha, é o que impede o arrasto de virar empurrão na
+            janela no modo discreto (ADR-017, armadilha 4).
+          -->
+          <Border Grid.Column="0"
+                  Classes="dragHandle"
+                  chrome:WindowDecorationProperties.ElementRole="User"
+                  ToolTip.Tip="Arraste para mudar a ordem"
+                  PointerPressed="OnHandlePointerPressed">
+            <!--
+              Os seis pontos, desenhados. Não é fonte: o `⠿` Braille não está
+              na Inter nem na fonte de ícones do Windows, e o gripper de lá
+              (E76F) sai como dois tracinhos que se leem como "=". Isto não
+              contraria o ADR-017 — o que aquela decisão proíbe é emoji, que vem
+              com cor própria; uma forma vetorial herda o pincel como qualquer
+              glifo monocromático.
+            -->
+            <UniformGrid Columns="2"
+                         Rows="3"
+                         Width="8"
+                         Height="12"
+                         VerticalAlignment="Center"
+                         HorizontalAlignment="Center">
+              <Ellipse Classes="grip" />
+              <Ellipse Classes="grip" />
+              <Ellipse Classes="grip" />
+              <Ellipse Classes="grip" />
+              <Ellipse Classes="grip" />
+              <Ellipse Classes="grip" />
+            </UniformGrid>
+          </Border>
+
+          <Border Grid.Column="1"
+                  Classes="priority"
+                  Classes.high="{Binding IsHighPriority}"
+                  Classes.urgent="{Binding IsUrgent}" />
+
+          <CheckBox Grid.Column="2"
+                    Classes="task"
+                    IsChecked="{Binding IsCompleted, Mode=OneWay}"
+                    Command="{Binding #Root.((vm:TodayViewModel)DataContext).ToggleCommand}"
+                    CommandParameter="{Binding}" />
+
+          <StackPanel Grid.Column="3" Spacing="1" VerticalAlignment="Center">
+            <!--
+              Um clique no texto copia o título (ver OnTitleTapped),
+              e o balão devolve o que o "…" levou.
+              Background transparente, e nunca nulo: fundo nulo não
+              recebe ponteiro, e tanto o gesto quanto o balão
+              dependeriam de mirar nos glifos.
+              Tapped, e não PointerPressed: arrastar o painel por
+              cima de uma linha não pode virar uma cópia.
+            -->
+            <TextBlock Text="{Binding Title}"
+                       Classes="taskTitle"
+                       Classes.done="{Binding IsCompleted}"
+                       Background="Transparent"
+                       Cursor="Hand"
+                       ToolTip.Tip="{Binding Title}"
+                       Tapped="OnTitleTapped" />
+
+            <StackPanel Orientation="Horizontal"
+                        Spacing="4"
+                        IsVisible="{Binding IsAwaitingAttention}">
+              <TextBlock Text="⚠"
+                         Classes="waiting"
+                         Classes.urgent="{Binding IsUrgentlyAwaiting}" />
+              <TextBlock Text="{Binding AttentionLabel}"
+                         Classes="waiting"
+                         Classes.urgent="{Binding IsUrgentlyAwaiting}"
+                         TextTrimming="CharacterEllipsis"
+                         Background="Transparent"
+                         ToolTip.Tip="{Binding AttentionLabel}" />
+            </StackPanel>
+          </StackPanel>
+
+          <Button Grid.Column="4"
+                  Classes="reminder"
+                  Classes.on="{Binding HasReminder}"
+                  Content="&#xEA8F;"
+                  ToolTip.Tip="Ajustar o lembrete desta tarefa">
+            <Button.Flyout>
+              <Flyout Placement="BottomEdgeAlignedRight">
+                <StackPanel Width="330" Margin="4" Spacing="12">
+
+                  <TextBlock Text="{Binding Title}"
+                             FontWeight="SemiBold"
+                             TextTrimming="CharacterEllipsis" />
+
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Button Content="Padrão"
+                            FontSize="11"
+                            Command="{Binding Editor.UsePresetCommand}"
+                            CommandParameter="default" />
+                    <Button Content="Urgente"
+                            FontSize="11"
+                            Command="{Binding Editor.UsePresetCommand}"
+                            CommandParameter="urgent" />
+                    <Button Content="Não lembrar"
+                            FontSize="11"
+                            Command="{Binding Editor.UsePresetCommand}"
+                            CommandParameter="none" />
+                  </StackPanel>
+
+                  <views:ReminderEditorView DataContext="{Binding Editor}" />
+
+                  <Button HorizontalAlignment="Right"
+                          Classes="accent"
+                          Content="Salvar"
+                          Command="{Binding #Root.((vm:TodayViewModel)DataContext).SaveRowReminderCommand}"
+                          CommandParameter="{Binding}" />
+
+                </StackPanel>
+              </Flyout>
+            </Button.Flyout>
+          </Button>
+
+          <Button Grid.Column="5"
+                  Classes="rowMenu"
+                  Content="⋯"
+                  ToolTip.Tip="Arquivar ou excluir este checklist"
+                  Click="OnRowMenuClick" />
+
+          <TextBlock Grid.Column="6"
+                     Margin="8,0,2,0"
+                     Text="{Binding TimeLabel}"
+                     Classes="time"
+                     Classes.late="{Binding IsLate}" />
+
+        </Grid>
+      </Border>
+    </DataTemplate>
+
+  </UserControl.Resources>
+
   <UserControl.Styles>
 
     <!-- Cabeçalho de seção: menor que o texto da tarefa, de propósito. A lista
@@ -90,6 +261,44 @@
       <Setter Property="Background" Value="{DynamicResource WidgetSurfaceBrush}" />
     </Style>
 
+    <!--
+      A alça do arrasto. Discreta como o "⋯" e o sino: a lista não pode virar
+      uma barra de botões (§12), mas reordenar também não pode ser um gesto que
+      ninguém descobre.
+    -->
+    <Style Selector="Border.dragHandle">
+      <Setter Property="Width" Value="14" />
+      <Setter Property="Margin" Value="0,0,2,0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Cursor" Value="SizeNorthSouth" />
+      <Setter Property="VerticalAlignment" Value="Stretch" />
+      <Setter Property="Opacity" Value="0" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <DoubleTransition Property="Opacity" Duration="0:0:0.12" />
+        </Transitions>
+      </Setter>
+    </Style>
+
+    <Style Selector="Ellipse.grip">
+      <Setter Property="Width" Value="2.5" />
+      <Setter Property="Height" Value="2.5" />
+      <Setter Property="Margin" Value="0.75" />
+      <Setter Property="Fill" Value="{DynamicResource WidgetTextLowBrush}" />
+    </Style>
+
+    <Style Selector="Border.row:pointerover Border.dragHandle">
+      <Setter Property="Opacity" Value="0.85" />
+    </Style>
+
+    <!--
+      CONCLUÍDAS não reordena: lá a ordem é a da conclusão (ADR-022). A alça
+      some nessas linhas — alça que não faz nada é pior do que alça nenhuma.
+    -->
+    <Style Selector="Border.row.fixedOrder Border.dragHandle">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+
     <!-- Prioridade: 3px na lateral. Quem precisa ver, vê; quem não precisa,
          não perde a lista para um cartão colorido. -->
     <Style Selector="Border.priority">
@@ -168,6 +377,58 @@
       <Setter Property="Foreground" Value="{DynamicResource WidgetAccentBrush}" />
     </Style>
 
+    <!--
+      O item levantado. Ele é a mesma linha, desenhada de novo numa camada
+      acima da lista: ganha corpo (fundo opaco e sombra) porque precisa parecer
+      ter descolado do painel, e não ser um reflexo dele.
+
+      Transitions nulo na linha de dentro: o BrushTransition de Border.row
+      faria o fundo do item levantado escorregar por 120ms toda vez que ele
+      aparecesse.
+    -->
+    <Style Selector="ContentControl#DragGhost Border.row">
+      <Setter Property="Background" Value="{DynamicResource WidgetSurfaceHoverBrush}" />
+      <Setter Property="BoxShadow" Value="{StaticResource WidgetLiftShadow}" />
+      <Setter Property="Transitions" Value="{x:Null}" />
+    </Style>
+
+    <!-- A alça fica visível no item levantado: é por ela que ele está preso. -->
+    <Style Selector="ContentControl#DragGhost Border.dragHandle">
+      <Setter Property="Opacity" Value="0.8" />
+    </Style>
+
+    <Style Selector="ContentControl#DragGhost">
+      <Setter Property="Opacity" Value="0.92" />
+    </Style>
+
+    <!--
+      Só no pouso. Durante o acompanhamento do cursor a transição fica
+      desligada, senão o item andaria 180ms atrás da mão.
+    -->
+    <Style Selector="ContentControl#DragGhost.landing">
+      <Setter Property="Transitions">
+        <Transitions>
+          <TransformOperationsTransition Property="RenderTransform"
+                                         Duration="0:0:0.18"
+                                         Easing="CubicEaseOut" />
+        </Transitions>
+      </Setter>
+    </Style>
+
+    <!--
+      A linha que cede o lugar desliza em vez de saltar. Um passo por quadro
+      significa que exatamente um vizinho se move de cada vez.
+    -->
+    <Style Selector="ContentPresenter.sliding">
+      <Setter Property="Transitions">
+        <Transitions>
+          <TransformOperationsTransition Property="RenderTransform"
+                                         Duration="0:0:0.15"
+                                         Easing="CubicEaseOut" />
+        </Transitions>
+      </Setter>
+    </Style>
+
     <Style Selector="Border.captureCard">
       <Setter Property="Background" Value="{DynamicResource WidgetSurfaceBrush}" />
       <Setter Property="BorderBrush" Value="{DynamicResource WidgetStrokeSoftBrush}" />
@@ -238,228 +499,125 @@
 
   </UserControl.Styles>
 
-  <DockPanel Margin="0,0,0,8">
+  <Panel>
+
+    <DockPanel Margin="0,0,0,8">
+
+      <!--
+        ElementRole="User" aqui e nas linhas: no modo discreto o painel inteiro é
+        área de arrasto, e sem isto digitar ou marcar uma tarefa viraria um
+        empurrão na janela.
+      -->
+      <Border x:Name="CaptureCard"
+              DockPanel.Dock="Top"
+              Classes="captureCard"
+              chrome:WindowDecorationProperties.ElementRole="User"
+              Margin="12,2,12,0">
+        <Grid ColumnDefinitions="*,Auto">
+
+          <TextBox x:Name="CaptureBox"
+                   Grid.Column="0"
+                   AcceptsReturn="True"
+                   TextWrapping="Wrap"
+                   FontSize="12.5"
+                   MinHeight="24"
+                   MaxHeight="120"
+                   Padding="0"
+                   BorderThickness="0"
+                   VerticalAlignment="Center"
+                   Background="Transparent"
+                   PlaceholderText="Uma tarefa por linha…"
+                   Text="{Binding CaptureText}" />
+
+          <Button Grid.Column="1"
+                  Margin="8,0,0,0"
+                  Padding="9,3"
+                  FontSize="11"
+                  Classes="accent"
+                  VerticalAlignment="Bottom"
+                  Content="Adicionar"
+                  Command="{Binding CaptureCommand}" />
+
+        </Grid>
+      </Border>
+
+      <TextBlock x:Name="CaptureHint"
+                 DockPanel.Dock="Top"
+                 Margin="14,5,0,0"
+                 FontSize="10"
+                 Foreground="{DynamicResource WidgetTextLowBrush}"
+                 Text="Enter adiciona · Shift+Enter quebra linha" />
+
+      <Border DockPanel.Dock="Top"
+              Margin="12,8,12,0"
+              Padding="10,7"
+              CornerRadius="{StaticResource WidgetPillRadius}"
+              Background="{DynamicResource WidgetDangerSoftBrush}"
+              IsVisible="{Binding ErrorMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
+        <TextBlock Text="{Binding ErrorMessage}"
+                   FontSize="11"
+                   Foreground="{DynamicResource WidgetDangerBrush}"
+                   TextWrapping="Wrap" />
+      </Border>
+
+      <Border DockPanel.Dock="Top"
+              Margin="12,8,12,0"
+              Padding="10,7"
+              CornerRadius="{StaticResource WidgetPillRadius}"
+              Background="{DynamicResource WidgetAccentSoftBrush}"
+              IsVisible="{Binding StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
+        <TextBlock Text="{Binding StatusMessage}"
+                   FontSize="11"
+                   Foreground="{DynamicResource WidgetTextHighBrush}"
+                   TextWrapping="Wrap" />
+      </Border>
+
+      <TextBlock DockPanel.Dock="Top"
+                 Margin="0,28,0,0"
+                 FontSize="11.5"
+                 HorizontalAlignment="Center"
+                 Foreground="{DynamicResource WidgetTextLowBrush}"
+                 Text="{Binding EmptyMessage}"
+                 IsVisible="{Binding IsEmpty}" />
+
+      <ScrollViewer x:Name="Scroller" Margin="6,4,6,0" HorizontalScrollBarVisibility="Disabled">
+        <ItemsControl ItemsSource="{Binding Sections}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:TodaySectionViewModel">
+              <StackPanel>
+
+                <TextBlock Classes="sectionHeader" Text="{Binding Header}" />
+
+                <ItemsControl ItemsSource="{Binding Items}"
+                              ItemTemplate="{StaticResource TaskRow}" />
+
+              </StackPanel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+
+    </DockPanel>
 
     <!--
-      ElementRole="User" aqui e nas linhas: no modo discreto o painel inteiro é
-      área de arrasto, e sem isto digitar ou marcar uma tarefa viraria um
-      empurrão na janela.
+      A camada do item levantado. Dentro do TodayView, e não no OverlayLayer da
+      janela, por três razões: as coordenadas do item, as das linhas medidas e
+      as de e.GetPosition(this) viram um espaço só; o item continua dentro do
+      canto arredondado do painel em vez de pairar sobre a moldura; e no modo
+      discreto o OverlayLayer ficaria por cima das alças de redimensionamento.
     -->
-    <Border x:Name="CaptureCard"
-            DockPanel.Dock="Top"
-            Classes="captureCard"
-            chrome:WindowDecorationProperties.ElementRole="User"
-            Margin="12,2,12,0">
-      <Grid ColumnDefinitions="*,Auto">
+    <Canvas x:Name="DragLayer" IsHitTestVisible="False">
+      <!--
+        IsHitTestVisible também aqui, e não só na camada: o item levantado está
+        sob o cursor o tempo todo: se ele recebesse ponteiro, engoliria o
+        movimento que o está arrastando.
+      -->
+      <ContentControl x:Name="DragGhost"
+                      IsVisible="False"
+                      IsHitTestVisible="False"
+                      ContentTemplate="{StaticResource TaskRow}" />
+    </Canvas>
 
-        <TextBox x:Name="CaptureBox"
-                 Grid.Column="0"
-                 AcceptsReturn="True"
-                 TextWrapping="Wrap"
-                 FontSize="12.5"
-                 MinHeight="24"
-                 MaxHeight="120"
-                 Padding="0"
-                 BorderThickness="0"
-                 VerticalAlignment="Center"
-                 Background="Transparent"
-                 PlaceholderText="Uma tarefa por linha…"
-                 Text="{Binding CaptureText}" />
-
-        <Button Grid.Column="1"
-                Margin="8,0,0,0"
-                Padding="9,3"
-                FontSize="11"
-                Classes="accent"
-                VerticalAlignment="Bottom"
-                Content="Adicionar"
-                Command="{Binding CaptureCommand}" />
-
-      </Grid>
-    </Border>
-
-    <TextBlock x:Name="CaptureHint"
-               DockPanel.Dock="Top"
-               Margin="14,5,0,0"
-               FontSize="10"
-               Foreground="{DynamicResource WidgetTextLowBrush}"
-               Text="Enter adiciona · Shift+Enter quebra linha" />
-
-    <Border DockPanel.Dock="Top"
-            Margin="12,8,12,0"
-            Padding="10,7"
-            CornerRadius="{StaticResource WidgetPillRadius}"
-            Background="{DynamicResource WidgetDangerSoftBrush}"
-            IsVisible="{Binding ErrorMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
-      <TextBlock Text="{Binding ErrorMessage}"
-                 FontSize="11"
-                 Foreground="{DynamicResource WidgetDangerBrush}"
-                 TextWrapping="Wrap" />
-    </Border>
-
-    <Border DockPanel.Dock="Top"
-            Margin="12,8,12,0"
-            Padding="10,7"
-            CornerRadius="{StaticResource WidgetPillRadius}"
-            Background="{DynamicResource WidgetAccentSoftBrush}"
-            IsVisible="{Binding StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
-      <TextBlock Text="{Binding StatusMessage}"
-                 FontSize="11"
-                 Foreground="{DynamicResource WidgetTextHighBrush}"
-                 TextWrapping="Wrap" />
-    </Border>
-
-    <TextBlock DockPanel.Dock="Top"
-               Margin="0,28,0,0"
-               FontSize="11.5"
-               HorizontalAlignment="Center"
-               Foreground="{DynamicResource WidgetTextLowBrush}"
-               Text="{Binding EmptyMessage}"
-               IsVisible="{Binding IsEmpty}" />
-
-    <ScrollViewer Margin="6,4,6,0" HorizontalScrollBarVisibility="Disabled">
-      <ItemsControl ItemsSource="{Binding Sections}">
-        <ItemsControl.ItemTemplate>
-          <DataTemplate x:DataType="vm:TodaySectionViewModel">
-            <StackPanel>
-
-              <TextBlock Classes="sectionHeader" Text="{Binding Header}" />
-
-              <ItemsControl ItemsSource="{Binding Items}">
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate x:DataType="vm:TaskRowViewModel">
-                    <Border Classes="row"
-                            chrome:WindowDecorationProperties.ElementRole="User">
-
-                      <!--
-                        As ações secundárias moram aqui, e em um lugar só: o
-                        botão "⋯" abre este mesmo menu (ver TodayView.axaml.cs),
-                        para que clique direito e botão nunca ofereçam coisas
-                        diferentes.
-                      -->
-                      <Border.ContextFlyout>
-                        <MenuFlyout Placement="BottomEdgeAlignedRight">
-                          <MenuItem Header="Arquivar"
-                                    Command="{Binding #Root.((vm:TodayViewModel)DataContext).ArchiveCommand}"
-                                    CommandParameter="{Binding}" />
-                          <Separator />
-                          <MenuItem Header="Mover para a lixeira…"
-                                    Command="{Binding #Root.((vm:TodayViewModel)DataContext).MoveToTrashCommand}"
-                                    CommandParameter="{Binding}" />
-                        </MenuFlyout>
-                      </Border.ContextFlyout>
-
-                      <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto">
-
-                        <Border Grid.Column="0"
-                                Classes="priority"
-                                Classes.high="{Binding IsHighPriority}"
-                                Classes.urgent="{Binding IsUrgent}" />
-
-                        <CheckBox Grid.Column="1"
-                                  Classes="task"
-                                  IsChecked="{Binding IsCompleted, Mode=OneWay}"
-                                  Command="{Binding #Root.((vm:TodayViewModel)DataContext).ToggleCommand}"
-                                  CommandParameter="{Binding}" />
-
-                        <StackPanel Grid.Column="2" Spacing="1" VerticalAlignment="Center">
-                          <!--
-                            Um clique no texto copia o título (ver OnTitleTapped),
-                            e o balão devolve o que o "…" levou.
-                            Background transparente, e nunca nulo: fundo nulo não
-                            recebe ponteiro, e tanto o gesto quanto o balão
-                            dependeriam de mirar nos glifos.
-                            Tapped, e não PointerPressed: arrastar o painel por
-                            cima de uma linha não pode virar uma cópia.
-                          -->
-                          <TextBlock Text="{Binding Title}"
-                                     Classes="taskTitle"
-                                     Classes.done="{Binding IsCompleted}"
-                                     Background="Transparent"
-                                     Cursor="Hand"
-                                     ToolTip.Tip="{Binding Title}"
-                                     Tapped="OnTitleTapped" />
-
-                          <StackPanel Orientation="Horizontal"
-                                      Spacing="4"
-                                      IsVisible="{Binding IsAwaitingAttention}">
-                            <TextBlock Text="⚠"
-                                       Classes="waiting"
-                                       Classes.urgent="{Binding IsUrgentlyAwaiting}" />
-                            <TextBlock Text="{Binding AttentionLabel}"
-                                       Classes="waiting"
-                                       Classes.urgent="{Binding IsUrgentlyAwaiting}"
-                                       TextTrimming="CharacterEllipsis"
-                                       Background="Transparent"
-                                       ToolTip.Tip="{Binding AttentionLabel}" />
-                          </StackPanel>
-                        </StackPanel>
-
-                        <Button Grid.Column="3"
-                                Classes="reminder"
-                                Classes.on="{Binding HasReminder}"
-                                Content="&#xEA8F;"
-                                ToolTip.Tip="Ajustar o lembrete desta tarefa">
-                          <Button.Flyout>
-                            <Flyout Placement="BottomEdgeAlignedRight">
-                              <StackPanel Width="330" Margin="4" Spacing="12">
-
-                                <TextBlock Text="{Binding Title}"
-                                           FontWeight="SemiBold"
-                                           TextTrimming="CharacterEllipsis" />
-
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                  <Button Content="Padrão"
-                                          FontSize="11"
-                                          Command="{Binding Editor.UsePresetCommand}"
-                                          CommandParameter="default" />
-                                  <Button Content="Urgente"
-                                          FontSize="11"
-                                          Command="{Binding Editor.UsePresetCommand}"
-                                          CommandParameter="urgent" />
-                                  <Button Content="Não lembrar"
-                                          FontSize="11"
-                                          Command="{Binding Editor.UsePresetCommand}"
-                                          CommandParameter="none" />
-                                </StackPanel>
-
-                                <views:ReminderEditorView DataContext="{Binding Editor}" />
-
-                                <Button HorizontalAlignment="Right"
-                                        Classes="accent"
-                                        Content="Salvar"
-                                        Command="{Binding #Root.((vm:TodayViewModel)DataContext).SaveRowReminderCommand}"
-                                        CommandParameter="{Binding}" />
-
-                              </StackPanel>
-                            </Flyout>
-                          </Button.Flyout>
-                        </Button>
-
-                        <Button Grid.Column="4"
-                                Classes="rowMenu"
-                                Content="⋯"
-                                ToolTip.Tip="Arquivar ou excluir este checklist"
-                                Click="OnRowMenuClick" />
-
-                        <TextBlock Grid.Column="5"
-                                   Margin="8,0,2,0"
-                                   Text="{Binding TimeLabel}"
-                                   Classes="time"
-                                   Classes.late="{Binding IsLate}" />
-
-                      </Grid>
-                    </Border>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
-
-            </StackPanel>
-          </DataTemplate>
-        </ItemsControl.ItemTemplate>
-      </ItemsControl>
-    </ScrollViewer>
-
-  </DockPanel>
+  </Panel>
 
 </UserControl>

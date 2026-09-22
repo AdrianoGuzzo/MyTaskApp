@@ -117,6 +117,9 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                     b.Property<long?>("CompletedAt")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int?>("Position")
+                        .HasColumnType("INTEGER");
+
                     b.Property<DateOnly?>("ScheduledDate")
                         .HasColumnType("TEXT");
 

@@ -38,6 +38,7 @@ public static class DependencyInjection
         services.TryAddSingleton<IUserClock, UserClock>();
 
         services.AddScoped<GetTodayBoardHandler>();
+        services.AddScoped<ReorderOccurrencesHandler>();
 
         services.AddScoped<CreateTaskHandler>();
         services.AddScoped<QuickCaptureHandler>();
