@@ -300,6 +300,50 @@ public sealed class TaskItem
         return occurrence;
     }
 
+    /// <summary>
+    /// Põe a ocorrência na n-ésima casa da seção em que ela aparece (ADR-022).
+    /// </summary>
+    /// <remarks>
+    /// Entra pela raiz como as irmãs, e não direto na ocorrência, porque é a
+    /// raiz que sabe se o checklist ainda está na lista principal — reordenar
+    /// algo que o usuário arquivou seria mexer no que ele mandou guardar.
+    /// <para>
+    /// Não chama <c>RefreshConclusion</c>: posição não é estado de execução, e
+    /// acrescentar a chamada "por simetria" com as irmãs faria um arrasto
+    /// recalcular a data de conclusão do checklist.
+    /// </para>
+    /// </remarks>
+    public TaskOccurrence PlaceOccurrence(Guid occurrenceId, int position)
+    {
+        var occurrence = GetOccurrence(occurrenceId);
+
+        RefuseWhenOutOfTheMainList("reordenar");
+
+        occurrence.PlaceAt(position);
+
+        return occurrence;
+    }
+
+    /// <summary>
+    /// Confere que a ocorrência aceita ser reordenada, sem alterar nada.
+    /// </summary>
+    /// <remarks>
+    /// Mesma forma de <see cref="EnsurePermanentDeletionIsAllowed"/>, e pela
+    /// mesma razão de sempre: a regra mora no agregado. Reordenar é escrita em
+    /// vários agregados de uma vez, então quem coordena confere todos antes de
+    /// mexer em qualquer um — do contrário uma recusa no meio da seção deixaria
+    /// metade da lista renumerada em memória, e um <c>SaveChanges</c> posterior
+    /// persistiria essa meia-alteração.
+    /// </remarks>
+    public void EnsureOccurrenceCanBePlaced(Guid occurrenceId)
+    {
+        var occurrence = GetOccurrence(occurrenceId);
+
+        RefuseWhenOutOfTheMainList("reordenar");
+
+        occurrence.EnsureCanBePlaced();
+    }
+
     public TaskOccurrence RescheduleOccurrence(Guid occurrenceId, TaskSchedule schedule)
     {
         var occurrence = GetOccurrence(occurrenceId);

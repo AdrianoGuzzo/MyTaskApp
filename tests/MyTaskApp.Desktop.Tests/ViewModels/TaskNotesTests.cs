@@ -406,6 +406,14 @@ public class TaskNotesTests
             CancellationToken cancellationToken = default) =>
             Task.FromResult<TaskItem?>(task);
 
+        public Task<IReadOnlyList<TaskItem>> FindByOccurrenceIdsAsync(
+            IReadOnlyCollection<Guid> occurrenceIds,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<TaskItem>>(
+                task.Occurrences.Any(occurrence => occurrenceIds.Contains(occurrence.Id))
+                    ? [task]
+                    : []);
+
         public void Remove(TaskItem item)
         {
         }
