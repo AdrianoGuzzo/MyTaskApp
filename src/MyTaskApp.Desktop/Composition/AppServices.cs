@@ -78,6 +78,12 @@ internal static class AppServices
             // copia com dados velhos.
             .AddSingleton<DataManagementViewModel>()
             .AddSingleton<DataManagementWindow>()
+
+            // A anotacao de um item (§12). Transient, e nao singleton como as
+            // duas acima: sao duas telas diferentes para dois checklists
+            // diferentes, e o truque do "X que esconde" so faz sentido para
+            // quem tem uma instancia so.
+            .AddTransient<TaskNotesViewModel>()
             .AddApplication(configuration)
             .AddInfrastructure(configuration)
             .BuildServiceProvider(validateScopes: true);

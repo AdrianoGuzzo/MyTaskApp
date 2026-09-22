@@ -998,3 +998,83 @@ não pendurar o encerramento do app. Sem isso, o segundo "Gerenciamento de
 dados…" do menu lançaria, e só na máquina de quem usa. `ReminderSettingsWindow`
 tem hoje a mesma forma sem a mesma proteção: ela some pelo botão Salvar, que
 chama `Hide`, mas o "X" a fecha de verdade.
+
+## ADR-022 — Anotação do item: Markdown próprio, porque o editor pronto é pago
+
+**Decisão:** cada item do checklist ganha um texto livre com formatação, aberto
+por um **ícone na linha** com clique simples. O texto é **Markdown**, escrito
+numa `TextBox` com barra de formatação e lido, depois que a tarefa é concluída,
+por um renderizador próprio (`MarkdownView`) que monta `Inline`s do core do
+Avalonia. Ele mora em `TaskItem.Description`, que já existia.
+
+**Por que não o `RichTextEditor`:** o pedido dizia "usar o RichTextEditor". O
+`Avalonia.Controls.RichTextEditor` e o `Avalonia.Controls.Markdown` são oficiais
+e resolveriam a feature inteira, mas os dois exigem **licença Avalonia Pro
+paga** — e o app não tem nenhuma dependência paga hoje. O Avalonia 12 não traz
+nenhum editor de texto formatado gratuito: o core tem `TextBox` e `TextBlock`, e
+só. O custo aceito são os dois arquivos de `Notes/`; o que se ganha é que a
+anotação continua sendo **texto puro no banco**, legível por qualquer coisa que
+abra o SQLite, em vez de RTF ou de uma árvore serializada presa a um pacote.
+
+**Por que campo nenhum foi criado.** `TaskItem.Description` já existia no
+domínio (4000 caracteres), no schema e no `UpdateTaskHandler` — faltava só a
+tela; nenhuma migration. Um campo novo custaria duas colunas com o mesmo
+significado e duas respostas para "onde fica o texto deste checklist". Como
+`UpdateTask` é edição **atômica** de título, descrição e prioridade, a tela
+guarda os outros dois na carga e os devolve inalterados: o erro tentador seria
+mandar título vazio e apagar o nome da tarefa pelo gesto de anotar algo nela.
+
+**Ícone, e não duplo clique** — o pedido original era duplo clique. Não dá: o
+`Tapped` do título já copia o texto (§12), e no Avalonia o primeiro clique de um
+duplo clique dispara o `Tapped` **antes** do `DoubleTapped`. O gesto duplo
+copiaria e abriria de uma vez, com o balão "Texto copiado." aparecendo por cima.
+As saídas eram adiar a cópia pelo intervalo de duplo clique do sistema — meio
+segundo de atraso num gesto que hoje é instantâneo — ou tirar a cópia do clique
+simples, desfazendo uma feature recente. O ícone não disputa com nada.
+
+**O ícone é o indicador.** Ele segue a discrição do sino (`Opacity=0`, aparece no
+`:pointerover` da linha), mas com anotação escrita fica aceso em
+`WidgetAccentBrush` mesmo sem o mouse. Sem isso, descobrir onde há texto custaria
+abrir item por item. O glifo muda com o estado — lápis em aberto, documento
+concluída —, que é a única pista, antes do clique, de que a janela vai abrir só
+para ler.
+
+**Concluída vira leitura, e a barra some.** É a regra do pedido: terminada a
+tarefa, a anotação é registro. A barra de formatação **desaparece** em vez de
+ficar desabilitada — botão apagado ainda convida ao clique. Reabrir a tarefa
+devolve a edição, porque quem desmarcou voltou a trabalhar nela. O leitor usa
+`SelectableTextBlock`, e não `TextBlock`: sem a caixa de texto, o usuário
+perderia junto a capacidade de copiar um pedaço da própria anotação.
+
+**A janela é por item, e não singleton.** Duas anotações diferentes podem estar
+abertas ao mesmo tempo, então o truque do "X que esconde" do ADR-020 não se
+aplica — ele existe para quem tem uma instância só. Quem impede duas janelas do
+*mesmo* item é o `App`, que guarda as abertas num dicionário por `TaskId`: duas
+telas do mesmo texto teriam duas versões dele, e a última a salvar apagaria a
+outra.
+
+**Quatro armadilhas, três delas descobertas por teste:**
+
+1. **Botão focável rouba a seleção.** Clicar num botão da barra tira o foco da
+   `TextBox`, e com ele a seleção — o clique em **B** formatava o vazio onde o
+   cursor caía. `Focusable="False"` em `Button.tool` é o que faz a barra
+   funcionar.
+2. **`*` dentro de `**` é metade de outro marcador.** Conferir os caracteres
+   colados na seleção faz o botão de itálico *desfazer* o negrito. O que vale é
+   o tamanho do bando de asteriscos, pela convenção do próprio Markdown: um é
+   itálico, dois são negrito, três são os dois. Daí `***` ser um marcador de
+   verdade no parser — é o que a barra escreve quando alguém clica em **B** e
+   depois em **I**.
+3. **Marcador mais longo primeiro.** Com `*` tentado antes de `**`, todo negrito
+   vira um itálico vazio seguido de lixo. Marcador sem par volta a ser literal:
+   quem digitou "2 * 3 = 6" não pediu formatação nenhuma.
+4. **`IsVisible` não é herdado.** Um botão dentro de um pai escondido continua
+   se declarando visível; o teste da barra que some tem de olhar
+   `IsEffectivelyVisible`.
+
+**Limites aceitos:** o teto de 4000 caracteres vale para o Markdown **com** os
+marcadores, e a tela bloqueia o botão antes de o domínio recusar. A janela de
+gerenciamento de dados mostra `Description` como texto cru, então lá a anotação
+aparece com os asteriscos à mostra. E o parser não resolve ênfase aninhada que
+encosta no marcador de fora (`**muito *mesmo***`): o par de dentro sai literal.
+Nenhum dos três aparece pelo caminho que a barra de formatação escreve.

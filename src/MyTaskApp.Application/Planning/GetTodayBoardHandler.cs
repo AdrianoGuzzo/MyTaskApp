@@ -104,6 +104,7 @@ public sealed class GetTodayBoardHandler(
                 : ReminderEscalation.LevelFor(
                     row.ReminderAttempt,
                     row.TaskReminder?.Channels ?? AlertChannels.All).Step,
-            row.TaskReminder);
+            row.TaskReminder,
+            row.Description);
     }
 }
