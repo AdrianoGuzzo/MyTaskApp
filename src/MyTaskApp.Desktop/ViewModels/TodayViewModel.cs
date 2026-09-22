@@ -255,6 +255,16 @@ public sealed partial class TodayViewModel(
     public void OpenDataManagement() => DataManagementRequested?.Invoke();
 
     /// <summary>
+    /// Pede a tela de anotações desta linha (§12). Leva a linha inteira, e não
+    /// só o identificador: o texto já veio no quadro, então a janela abre com o
+    /// conteúdo na mão em vez de piscar vazia enquanto consulta o banco.
+    /// </summary>
+    public event Action<TaskRowViewModel>? NotesRequested;
+
+    [RelayCommand]
+    public void OpenNotes(TaskRowViewModel row) => NotesRequested?.Invoke(row);
+
+    /// <summary>
     /// Copia o título da linha para a área de transferência. Não recarrega o
     /// quadro depois: copiar não muda nada no banco.
     /// </summary>
