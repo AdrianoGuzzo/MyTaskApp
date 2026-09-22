@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using MyTaskApp.Desktop.Composition;
 using MyTaskApp.Desktop.Widget;
 
 namespace MyTaskApp.Desktop.ViewModels;
@@ -50,6 +51,22 @@ public sealed partial class WidgetChromeViewModel : ObservableObject
     /// <summary>Se o app deve subir direto para a bandeja na próxima vez.</summary>
     [ObservableProperty]
     private bool _startHidden;
+
+    /// <summary>
+    /// Espelho do registro, não preferência da moldura: <b>não</b> entra no
+    /// <c>widget.json</c>. A verdade sobre iniciar com o Windows mora na chave
+    /// <c>Run</c> (ADR-023), e uma segunda cópia é como uma delas acaba
+    /// diferente.
+    /// </summary>
+    [ObservableProperty]
+    private bool _startsWithWindows;
+
+    /// <summary>
+    /// Até o composition root ligar o registro de verdade, a moldura funciona
+    /// igual — só não sabe iniciar com o Windows. É o que os testes headless e
+    /// o designer precisam.
+    /// </summary>
+    private IStartupRegistration _startup = UnsupportedStartupRegistration.Instance;
 
     public bool IsExpanded => Mode == WidgetMode.Expanded;
 
@@ -102,6 +119,12 @@ public sealed partial class WidgetChromeViewModel : ObservableObject
     public string CaptureGlyph => IsCaptureOpen ? "" : "";
 
     public string CaptureTip => IsCaptureOpen ? "Fechar a captura" : "Adicionar tarefa";
+
+    /// <summary>
+    /// Fora do Windows o item some do menu, em vez de ficar lá como uma caixa
+    /// que nunca marca.
+    /// </summary>
+    public bool CanStartWithWindows => _startup.IsSupported;
 
     /// <summary>
     /// Esconder é da janela, não daqui. O ViewModel só avisa — mesmo desenho do
@@ -158,6 +181,41 @@ public sealed partial class WidgetChromeViewModel : ObservableObject
 
     [RelayCommand]
     public void Hide() => HideRequested?.Invoke();
+
+    /// <summary>
+    /// Liga a moldura ao registro do Windows. Só o composition root chama —
+    /// mesmo desenho do <c>Attach</c> da janela: sem isto tudo funciona igual,
+    /// só não há início automático (ADR-023).
+    /// </summary>
+    public void UseStartup(IStartupRegistration startup)
+    {
+        _startup = startup;
+
+        OnPropertyChanged(nameof(CanStartWithWindows));
+        StartsWithWindows = startup.IsEnabled;
+    }
+
+    /// <summary>
+    /// Comando, e não <c>Mode=TwoWay</c> como o "abrir recolhido": a escrita no
+    /// registro pode falhar, e aí o visto precisa contar o que aconteceu de
+    /// verdade — não o que foi clicado.
+    /// </summary>
+    [RelayCommand]
+    public void ToggleStartWithWindows()
+    {
+        if (StartsWithWindows)
+        {
+            _startup.Disable();
+        }
+        else
+        {
+            _startup.Enable();
+        }
+
+        // Relê em vez de assumir. É o que faz uma escrita barrada por política
+        // devolver a caixa ao estado anterior, em silêncio.
+        StartsWithWindows = _startup.IsEnabled;
+    }
 
     /// <summary>Aplica o que foi lido do disco, sem tocar em geometria.</summary>
     public void Restore(WidgetState state)

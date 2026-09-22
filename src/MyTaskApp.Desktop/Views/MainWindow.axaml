@@ -129,6 +129,11 @@
                     <MenuItem Header="Abrir recolhido da próxima vez"
                               ToggleType="CheckBox"
                               IsChecked="{Binding #Shell.Chrome.StartHidden, Mode=TwoWay}" />
+                    <MenuItem Header="Iniciar com o Windows"
+                              ToggleType="CheckBox"
+                              IsVisible="{Binding #Shell.Chrome.CanStartWithWindows}"
+                              IsChecked="{Binding #Shell.Chrome.StartsWithWindows, Mode=OneWay}"
+                              Command="{Binding #Shell.Chrome.ToggleStartWithWindowsCommand}" />
                     <Separator />
                     <MenuItem Header="Ocultar na bandeja"
                               Command="{Binding #Shell.Chrome.HideCommand}" />
