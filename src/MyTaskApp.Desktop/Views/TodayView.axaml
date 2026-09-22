@@ -38,7 +38,7 @@
           </MenuFlyout>
         </Border.ContextFlyout>
 
-        <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto">
+        <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto,Auto">
 
           <!--
             A alça. Border e não Button de propósito: botão por linha herdaria
@@ -120,6 +120,14 @@
           </StackPanel>
 
           <Button Grid.Column="4"
+                  Classes="notes"
+                  Classes.on="{Binding HasNotes}"
+                  Content="{Binding NotesGlyph}"
+                  ToolTip.Tip="{Binding NotesLabel}"
+                  Command="{Binding #Root.((vm:TodayViewModel)DataContext).OpenNotesCommand}"
+                  CommandParameter="{Binding}" />
+
+          <Button Grid.Column="5"
                   Classes="reminder"
                   Classes.on="{Binding HasReminder}"
                   Content="&#xEA8F;"
@@ -160,13 +168,13 @@
             </Button.Flyout>
           </Button>
 
-          <Button Grid.Column="5"
+          <Button Grid.Column="6"
                   Classes="rowMenu"
                   Content="⋯"
                   ToolTip.Tip="Arquivar ou excluir este checklist"
                   Click="OnRowMenuClick" />
 
-          <TextBlock Grid.Column="6"
+          <TextBlock Grid.Column="7"
                      Margin="8,0,2,0"
                      Text="{Binding TimeLabel}"
                      Classes="time"
@@ -345,6 +353,40 @@
 
     <Style Selector="Border.row:pointerover Button.reminder">
       <Setter Property="Opacity" Value="1" />
+    </Style>
+
+    <!--
+      Anotações da linha (§12). Mesma discrição do sino, com uma diferença que
+      paga sozinha: com texto escrito o botão fica aceso mesmo sem hover, e vira
+      o único jeito de saber, sem abrir item por item, onde há mais informação.
+
+      Clique simples, e não duplo: o Tapped do título já copia o texto, e no
+      Avalonia o primeiro clique de um duplo clique dispara o Tapped antes do
+      DoubleTapped — o gesto duplo copiaria e abriria de uma vez só.
+    -->
+    <Style Selector="Button.notes">
+      <Setter Property="FontFamily" Value="{StaticResource WidgetIconFont}" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Padding" Value="6,2" />
+      <Setter Property="Opacity" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextMidBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <DoubleTransition Property="Opacity" Duration="0:0:0.12" />
+        </Transitions>
+      </Setter>
+    </Style>
+
+    <Style Selector="Border.row:pointerover Button.notes">
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+
+    <Style Selector="Button.notes.on">
+      <Setter Property="Opacity" Value="0.55" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetAccentBrush}" />
     </Style>
 
     <!--

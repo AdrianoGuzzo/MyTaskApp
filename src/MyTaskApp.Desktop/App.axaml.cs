@@ -23,6 +23,14 @@ public sealed partial class App : Avalonia.Application
     /// </summary>
     internal static IServiceProvider? Services { get; set; }
 
+    /// <summary>
+    /// As anotações abertas, por checklist. Existe para o segundo clique no
+    /// mesmo ícone trazer a janela de volta em vez de abrir uma cópia — duas
+    /// telas do mesmo texto teriam duas versões dele, e a última a salvar
+    /// apagaria a outra.
+    /// </summary>
+    private readonly Dictionary<Guid, TaskNotesWindow> _notes = [];
+
     private TrayIconHost? _tray;
     private MainWindow? _window;
     private bool _exiting;
@@ -52,6 +60,7 @@ public sealed partial class App : Avalonia.Application
                 SetUpTray(Services, desktop, window);
                 StartReminders(Services, window, todayViewModel);
                 SetUpDataManagement(Services, window, todayViewModel);
+                SetUpNotes(Services, window, todayViewModel);
                 ListenForSecondLaunch(Services, window);
 
                 // A moldura só sabe iniciar com o Windows depois de conhecer o
@@ -179,6 +188,55 @@ public sealed partial class App : Avalonia.Application
         // Primeiro tique imediato, como o dos lembretes: é ele que põe em dia o
         // que venceu enquanto o app esteve fechado.
         services.GetRequiredService<LifecycleMaintenanceScheduler>().Start();
+    }
+
+    /// <summary>
+    /// Liga o ícone de anotações da linha (§12) à janela que as edita.
+    /// </summary>
+    private void SetUpNotes(
+        IServiceProvider services,
+        MainWindow window,
+        TodayViewModel todayViewModel)
+    {
+        todayViewModel.NotesRequested += row => ShowNotes(services, window, todayViewModel, row);
+    }
+
+    /// <summary>
+    /// Abre — ou traz de volta — a anotação de um checklist. O ViewModel é
+    /// resolvido por item, e não reaproveitado: ele carrega o texto de uma
+    /// linha só, e reusá-lo obrigaria a lembrar de limpar tudo a cada abertura.
+    /// </summary>
+    private void ShowNotes(
+        IServiceProvider services,
+        Window owner,
+        TodayViewModel todayViewModel,
+        TaskRowViewModel row)
+    {
+        if (_notes.TryGetValue(row.TaskId, out var opened))
+        {
+            opened.Show();
+            opened.Activate();
+            return;
+        }
+
+        var viewModel = services.GetRequiredService<TaskNotesViewModel>();
+
+        viewModel.Load(row);
+
+        // Salvar muda o que a lista desenha: o ícone da linha acende, e no dia
+        // em que o texto for apagado ele precisa apagar junto.
+        viewModel.Saved += () => Dispatcher.UIThread.Post(
+            () => _ = todayViewModel.LoadAsync(CancellationToken.None));
+
+        var notes = new TaskNotesWindow(
+            viewModel,
+            services.GetRequiredService<IConfirmationDialog>());
+
+        _notes[row.TaskId] = notes;
+        notes.Closed += (_, _) => _notes.Remove(row.TaskId);
+
+        notes.Show(owner);
+        notes.Activate();
     }
 
     /// <summary>

@@ -20,6 +20,14 @@ internal sealed class FakeUseCaseRunner : IUseCaseRunner
 
     public List<Type> Invoked { get; } = [];
 
+    /// <summary>
+    /// Handlers de verdade, por tipo. Com um registrado aqui, a operação é
+    /// realmente executada — é o que permite conferir o <i>comando</i> que o
+    /// ViewModel montou, e não só qual caso de uso ele pediu. Vazio (o padrão),
+    /// nada é executado e o fake se comporta como sempre.
+    /// </summary>
+    public Dictionary<Type, object> Handlers { get; } = [];
+
     /// <summary>Falha aplicada à próxima chamada e então descartada.</summary>
     public Exception? NextFailure { get; set; }
 
@@ -55,7 +63,14 @@ internal sealed class FakeUseCaseRunner : IUseCaseRunner
     {
         Invoked.Add(typeof(THandler));
 
-        return TakeFailure() is { } failure ? Task.FromException(failure) : Task.CompletedTask;
+        if (TakeFailure() is { } failure)
+        {
+            return Task.FromException(failure);
+        }
+
+        return Handlers.TryGetValue(typeof(THandler), out var handler)
+            ? operation((THandler)handler, cancellationToken)
+            : Task.CompletedTask;
     }
 
     private Exception? TakeFailure()

@@ -17,6 +17,7 @@ public sealed class TaskRowViewModel
         IsLate = task.IsLate;
         Priority = task.Priority;
         IsCompleted = isCompleted;
+        Notes = task.Notes;
         Reminder = task.Reminder ?? ReminderPolicy.None;
         HasScheduledTime = task.ScheduledTime is not null;
 
@@ -71,6 +72,26 @@ public sealed class TaskRowViewModel
     public bool IsCompleted { get; }
 
     public bool HasScheduledTime { get; }
+
+    /// <summary>A anotação livre desta tarefa, em Markdown; nula quando não há.</summary>
+    public string? Notes { get; }
+
+    /// <summary>
+    /// Acende o ícone de anotação mesmo sem o mouse na linha. É o indicador de
+    /// "este item tem mais coisa escrita" — sem ele, descobrir onde há anotação
+    /// custaria abrir item por item.
+    /// </summary>
+    public bool HasNotes => !string.IsNullOrWhiteSpace(Notes);
+
+    /// <summary>
+    /// Lápis enquanto dá para escrever, documento depois de concluída. O glifo
+    /// é a única pista, antes do clique, de que a janela vai abrir só para ler.
+    /// </summary>
+    public string NotesGlyph => IsCompleted ? "" : "";
+
+    public string NotesLabel => IsCompleted
+        ? "Ver as anotações desta tarefa"
+        : "Anotações desta tarefa";
 
     public ReminderPolicy Reminder { get; }
 
