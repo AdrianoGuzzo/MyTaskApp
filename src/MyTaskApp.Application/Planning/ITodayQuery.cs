@@ -17,7 +17,9 @@ public sealed record TodayOccurrenceRow(
     // existente a mudar no mesmo commit.
     DateTimeOffset? ReminderWaitingSinceUtc = null,
     int ReminderAttempt = 0,
-    ReminderPolicy? TaskReminder = null);
+    ReminderPolicy? TaskReminder = null,
+    /// <summary>A anotação livre do checklist (§12), em Markdown.</summary>
+    string? Description = null);
 
 public interface ITodayQuery
 {

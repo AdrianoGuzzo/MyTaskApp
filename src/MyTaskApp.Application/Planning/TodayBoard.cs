@@ -14,7 +14,15 @@ public sealed record TodayTask(
     /// <summary>Ha quanto tempo o checklist espera atencao; <c>null</c> = nao espera.</summary>
     TimeSpan? WaitingForAttention = null,
     int ReminderStep = 0,
-    ReminderPolicy? Reminder = null);
+    ReminderPolicy? Reminder = null,
+    /// <summary>
+    /// A anotação livre do checklist, em Markdown. Viaja junto com a linha em
+    /// vez de ser buscada ao abrir a janela: o quadro de hoje é de dezenas de
+    /// itens, o campo tem teto de 4000 caracteres, e uma segunda consulta só
+    /// para preencher uma tela que o usuário acabou de pedir faria a janela
+    /// abrir vazia e preencher depois.
+    /// </summary>
+    string? Notes = null);
 
 /// <summary>Tela "Hoje" (§9), já separada em seções mutuamente exclusivas.</summary>
 public sealed record TodayBoard(
