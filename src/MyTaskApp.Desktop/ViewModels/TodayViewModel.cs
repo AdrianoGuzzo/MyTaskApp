@@ -13,8 +13,16 @@ using MyTaskApp.Desktop.Composition;
 using MyTaskApp.Desktop.Views;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.Lifecycle;
+using MyTaskApp.Domain.Planning;
 
 namespace MyTaskApp.Desktop.ViewModels;
+
+/// <summary>
+/// O que a view acabou de fazer na coleção: a linha saiu de <paramref name="From"/>
+/// e chegou em <paramref name="To"/>. Guarda a origem para o caminho de falha
+/// poder desfazer exatamente o movimento que foi feito.
+/// </summary>
+public sealed record SectionReorder(TodaySectionViewModel Section, int From, int To);
 
 /// <summary>
 /// Tela "Hoje" (§9). Não decide o que é atrasado nem o que é "agora" — isso é do
@@ -137,9 +145,26 @@ public sealed partial class TodayViewModel(
     /// <summary>Sem texto não há o que capturar — o botão fica desabilitado.</summary>
     public bool CanCapture => !string.IsNullOrWhiteSpace(CaptureText);
 
+    /// <summary>
+    /// Há um arrasto em curso, e ele é dono da lista.
+    /// </summary>
+    /// <remarks>
+    /// O refresh de 60 s recria as seções do zero. Se isso acontecer no meio de
+    /// um arrasto, os containers somem debaixo do ponteiro e o item levantado
+    /// fica na tela apontando para uma linha que não existe mais. Um arrasto
+    /// atravessa a fronteira do tique com facilidade, então a guarda é aqui e
+    /// não na view.
+    /// </remarks>
+    public bool IsReordering { get; set; }
+
     [RelayCommand]
     public async Task LoadAsync(CancellationToken cancellationToken)
     {
+        if (IsReordering)
+        {
+            return;
+        }
+
         TodayBoard? board = null;
 
         var loaded = await TryAsync(
@@ -321,6 +346,62 @@ public sealed partial class TodayViewModel(
         StatusMessage = "Checklist movido para a lixeira.";
     }
 
+    /// <summary>
+    /// Grava a nova ordem da seção (§9, ADR-022). A view já moveu a linha antes
+    /// de chamar — aqui só se persiste o resultado.
+    /// </summary>
+    /// <remarks>
+    /// Atualização otimista, e sem recarregar: a coleção já se moveu e o item
+    /// ainda está pousando na tela, então um <see cref="LoadAsync"/> recriaria
+    /// todos os <see cref="TaskRowViewModel"/> no meio da animação. Se a
+    /// gravação falhar, o movimento é desfeito e a mensagem aparece — e
+    /// recarregar ali apagaria a mensagem no mesmo gesto que a produziu.
+    /// </remarks>
+    [RelayCommand]
+    public async Task ReorderAsync(SectionReorder move, CancellationToken cancellationToken)
+    {
+        var ids = move.Section.Items.Select(row => row.OccurrenceId).ToList();
+
+        var saved = await TryAsync(
+            () => runner.RunAsync<ReorderOccurrencesHandler>(
+                (handler, token) => handler.HandleAsync(new ReorderOccurrences(ids), token),
+                cancellationToken),
+            "Não foi possível salvar a nova ordem.");
+
+        if (!saved)
+        {
+            move.Section.Move(move.To, move.From);
+            return;
+        }
+
+        // O quadro guardado precisa concordar com a tela: ShowSections remonta a
+        // lista a partir dele quando o painel é fixado.
+        _board = WithSection(_board, move.Section);
+    }
+
+    /// <summary>
+    /// Devolve o quadro com a seção informada na ordem em que ela está na tela.
+    /// CONCLUÍDAS não entra: lá a ordem é a da conclusão e não a da mão.
+    /// </summary>
+    private static TodayBoard? WithSection(TodayBoard? board, TodaySectionViewModel section)
+    {
+        if (board is null)
+        {
+            return null;
+        }
+
+        IReadOnlyList<TodayTask> Reordered() => [.. section.Items.Select(row => row.Source)];
+
+        return section.Section switch
+        {
+            TodaySection.Overdue => board with { Overdue = Reordered() },
+            TodaySection.Now => board with { Now = Reordered() },
+            TodaySection.Today => board with { Today = Reordered() },
+            TodaySection.Unscheduled => board with { Unscheduled = Reordered() },
+            _ => board,
+        };
+    }
+
     /// <summary>Começa a refrescar o quadro sozinho. Chamado pelo composition root.</summary>
     public void StartAutoRefresh()
     {
@@ -376,14 +457,14 @@ public sealed partial class TodayViewModel(
     private void ShowSections(TodayBoard board)
     {
         Sections.Clear();
-        AddSection("ATRASADAS", board.Overdue, isCompleted: false);
-        AddSection("AGORA", board.Now, isCompleted: false);
-        AddSection("HOJE", board.Today, isCompleted: false);
-        AddSection("SEM HORÁRIO", board.Unscheduled, isCompleted: false);
+        AddSection("ATRASADAS", TodaySection.Overdue, board.Overdue, isCompleted: false);
+        AddSection("AGORA", TodaySection.Now, board.Now, isCompleted: false);
+        AddSection("HOJE", TodaySection.Today, board.Today, isCompleted: false);
+        AddSection("SEM HORÁRIO", TodaySection.Unscheduled, board.Unscheduled, isCompleted: false);
 
         if (!HideCompleted)
         {
-            AddSection("CONCLUÍDAS", board.Completed, isCompleted: true);
+            AddSection("CONCLUÍDAS", TodaySection.Completed, board.Completed, isCompleted: true);
         }
 
         IsEmpty = Sections.Count == 0;
@@ -434,7 +515,11 @@ public sealed partial class TodayViewModel(
     }
 
     /// <summary>Seção vazia não vira cabeçalho solto na tela.</summary>
-    private void AddSection(string header, IReadOnlyList<TodayTask> tasks, bool isCompleted)
+    private void AddSection(
+        string header,
+        TodaySection section,
+        IReadOnlyList<TodayTask> tasks,
+        bool isCompleted)
     {
         if (tasks.Count == 0)
         {
@@ -443,7 +528,14 @@ public sealed partial class TodayViewModel(
 
         Sections.Add(new TodaySectionViewModel(
             header,
-            [.. tasks.Select(task => new TaskRowViewModel(task, isCompleted))]));
+            section,
+            tasks.Select(task => new TaskRowViewModel(task, isCompleted)),
+
+            // Concluída não reordena (ADR-022). A conta não olha a contagem de
+            // propósito: a linha decide a alça por IsCompleted, e um segundo
+            // critério aqui faria a seção de um item só mostrar uma alça que o
+            // code-behind recusaria — desacordo silencioso entre os dois.
+            canReorder: !isCompleted));
     }
 
     private async Task<bool> TryAsync(Func<Task> operation, string fallbackMessage)

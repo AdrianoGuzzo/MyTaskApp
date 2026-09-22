@@ -23,5 +23,19 @@ internal sealed class TaskItemRepository(MyTaskAppDbContext context) : ITaskItem
                 task => task.Occurrences.Any(occurrence => occurrence.Id == occurrenceId),
                 cancellationToken);
 
+    /// <remarks>
+    /// O <c>Include</c> traz a coleção <b>inteira</b> de cada agregado casado, e
+    /// não só as ocorrências pedidas: agregado carrega inteiro, senão uma
+    /// invariante da raiz passaria a raciocinar sobre meia coleção.
+    /// </remarks>
+    public async Task<IReadOnlyList<TaskItem>> FindByOccurrenceIdsAsync(
+        IReadOnlyCollection<Guid> occurrenceIds,
+        CancellationToken cancellationToken = default) =>
+        await context.Tasks
+            .Include(task => task.Occurrences)
+            .Where(task => task.Occurrences.Any(
+                occurrence => occurrenceIds.Contains(occurrence.Id)))
+            .ToListAsync(cancellationToken);
+
     public void Remove(TaskItem task) => context.Tasks.Remove(task);
 }
