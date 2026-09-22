@@ -53,7 +53,12 @@ public sealed partial class App : Avalonia.Application
                 StartReminders(Services, window, todayViewModel);
                 SetUpDataManagement(Services, window, todayViewModel);
                 ListenForSecondLaunch(Services, window);
-                StartHiddenIfAsked(window);
+
+                // A moldura só sabe iniciar com o Windows depois de conhecer o
+                // registro — até aqui ela usa o objeto nulo (ADR-023).
+                window.Chrome.UseStartup(Services.GetRequiredService<IStartupRegistration>());
+
+                StartHiddenIfAsked(window, Services.GetRequiredService<LaunchOptions>());
             }
 
             desktop.MainWindow = window;
@@ -196,9 +201,15 @@ public sealed partial class App : Avalonia.Application
     /// então o jeito de subir direto para a bandeja é esconder assim que ela
     /// abre.
     /// </summary>
-    private static void StartHiddenIfAsked(MainWindow window)
+    /// <remarks>
+    /// Duas origens, e nenhuma manda na outra: a preferência do menu ("abrir
+    /// recolhido da próxima vez") e o login do Windows, que sobe o app com
+    /// <c>--startup</c> justamente para ele não aparecer na frente de ninguém
+    /// no boot (ADR-023).
+    /// </remarks>
+    private static void StartHiddenIfAsked(MainWindow window, LaunchOptions launch)
     {
-        if (!window.Chrome.StartHidden)
+        if (!window.Chrome.StartHidden && !launch.StartedByWindows)
         {
             return;
         }
