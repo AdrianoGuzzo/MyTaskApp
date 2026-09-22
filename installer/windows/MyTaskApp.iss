@@ -32,6 +32,14 @@
 ; build quebra antes de alguem descobrir em producao.
 #define AppMutexName   "MyTaskApp.SingleInstance"
 
+; Onde o Windows procura o que abrir no login. Relativo a HKCU -- ver [Registry].
+#define AppRunKey      "Software\Microsoft\Windows\CurrentVersion\Run"
+
+; O mesmo argumento que src/MyTaskApp.Desktop/Composition/LaunchOptions.cs
+; conhece, e pelo mesmo motivo do AppMutexName: ha teste de packaging cobrando
+; os dois lados. Sem ele o app subiria no login com a janela na cara do usuario.
+#define StartupFlag    "--startup"
+
 [Setup]
 ; AppId identifica o produto para o Windows. Fixo para sempre: e ele que faz
 ; 1.1 atualizar 1.0 em vez de virar uma segunda instalacao ao lado.
@@ -100,6 +108,8 @@ Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortugue
 [CustomMessages]
 brazilianportuguese.DesktopIcon=Criar um atalho na área de trabalho
 brazilianportuguese.LaunchApp=Iniciar o MyTaskApp
+brazilianportuguese.StartupGroup=Ao iniciar o Windows:
+brazilianportuguese.StartupTask=Iniciar o MyTaskApp com o Windows (recolhido na bandeja)
 brazilianportuguese.OtherScopeInstalled=Já existe uma instalação do MyTaskApp %1 nesta máquina.%n%nDesinstale-a primeiro para evitar duas cópias ao mesmo tempo.
 brazilianportuguese.DowngradeWarning=A versão instalada (%1) é mais recente que esta (%2).%n%nInstalar assim mesmo?
 brazilianportuguese.RemoveDataPrompt=Remover também suas tarefas, lembretes e ajustes?%n%nEles estão em:%n%1%n%nEscolha Não para manter seus dados — você poderá reinstalar o MyTaskApp e continuar de onde parou.
@@ -109,6 +119,12 @@ brazilianportuguese.DataKept=Seus dados continuam em:%n%1
 ; Desmarcado de proposito: o Menu Iniciar ja garante o acesso, e area de
 ; trabalho cheia de icone e ruido que o usuario nao pediu.
 Name: "desktopicon"; Description: "{cm:DesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+
+; Marcada de proposito -- o oposto do atalho acima, e a diferenca tem motivo:
+; "o sistema fica responsavel por me lembrar" so e verdade se o processo estiver
+; vivo as 15:00 (ADR-016). Quem nao quer desmarca aqui; quem mudar de ideia
+; depois usa o menu do proprio app, sem reinstalar nada.
+Name: "startupicon"; Description: "{cm:StartupTask}"; GroupDescription: "{cm:StartupGroup}"
 
 [Files]
 ; ignoreversion: numa atualizacao todo binario e substituido pelo da versao
@@ -126,6 +142,16 @@ Root: HKA; Subkey: "Software\{#AppName}"; ValueType: string; ValueName: "Install
 Root: HKA; Subkey: "Software\{#AppName}"; ValueType: string; ValueName: "Version"; ValueData: "{#AppVersion}"
 Root: HKA; Subkey: "Software\{#AppName}"; ValueType: string; ValueName: "DataPath"; ValueData: "{userappdata}\{#AppName}"
 
+; Iniciar com o Windows (ADR-023). HKCU sempre, e nunca HKA: com /ALLUSERS o
+; HKA viraria HKLM, e o app -- que roda sem elevacao -- conseguiria ler a
+; entrada mas nunca apagar. O menu viraria um interruptor que so liga.
+; As aspas sao dobradas porque o caminho de instalacao tem espacos.
+Root: HKCU; Subkey: "{#AppRunKey}"; ValueType: string; ValueName: "{#AppName}"; ValueData: """{app}\{#AppExeName}"" {#StartupFlag}"; Flags: uninsdeletevalue; Tasks: startupicon
+
+; Desmarcar numa atualizacao precisa APAGAR o valor. Sem esta linha a caixa
+; desmarcada nao faria nada e o app continuaria subindo no login.
+Root: HKCU; Subkey: "{#AppRunKey}"; ValueType: none; ValueName: "{#AppName}"; Flags: deletevalue; Tasks: not startupicon
+
 [Run]
 Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchApp}"; Flags: nowait postinstall skipifsilent
 
@@ -142,6 +168,10 @@ Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchApp}"; Flags: nowait po
 
 const
   InstallerLogFolder = '{localappdata}\MyTaskApp\installer\logs';
+
+var
+  { A caixa "iniciar com o Windows" ja foi acertada pelo estado do registro? }
+  StartupPreselected: Boolean;
 
 { Onde o app guarda banco, widget.json, logs e appsettings.user.json. }
 function UserDataDir(): String;
@@ -200,6 +230,68 @@ begin
         mbConfirmation, MB_YESNO, IDNO) = IDYES;
     end;
   end;
+end;
+
+{
+  A verdade sobre "inicia com o Windows" e o valor em Run -- nunca o que foi
+  marcado na instalacao anterior. O app escreve na mesma chave, pelo menu.
+}
+function StartupIsEnabled(): Boolean;
+var
+  Command: String;
+begin
+  Result := RegQueryStringValue(HKEY_CURRENT_USER, '{#AppRunKey}', '{#AppName}', Command)
+            and (Command <> '');
+end;
+
+{
+  Instalacao nova: vale o padrao marcado do [Tasks]. Atualizacao: a caixa mostra
+  o estado de HOJE.
+
+  Sem isto o UsePreviousTasks (ligado por padrao) reimporia a escolha gravada
+  pelo instalador anterior, desfazendo em silencio um "desliga isso" que o
+  usuario tivesse feito pelo menu do app. O item e localizado pelo texto, mas os
+  dois lados saem da mesma CustomMessage -- nao ha como divergirem.
+
+  (Sem chaves no texto acima de proposito: comentario Pascal nao aninha, e um
+  "cm:" entre chaves fecharia este comentario no meio.)
+}
+procedure PreselectStartup();
+var
+  Index: Integer;
+  Caption: String;
+begin
+  { Uma vez so: depois da primeira exibicao a caixa e do usuario, e voltar a
+    pagina nao pode desfazer o clique dele. }
+  if StartupPreselected then
+    Exit;
+
+  StartupPreselected := True;
+
+  if InstalledVersion(HKEY_AUTO) = '' then
+    Exit;
+
+  Caption := ExpandConstant('{cm:StartupTask}');
+
+  for Index := 0 to WizardForm.TasksList.Items.Count - 1 do
+  begin
+    if WizardForm.TasksList.Items[Index] = Caption then
+    begin
+      WizardForm.TasksList.Checked[Index] := StartupIsEnabled();
+      Exit;
+    end;
+  end;
+end;
+
+{
+  Em CurPageChanged, e nao em InitializeWizard: e o UsePreviousTasks que restaura
+  a selecao da instalacao anterior, e ele age ate a pagina aparecer. Escrever
+  antes disso seria escrever para ser sobrescrito.
+}
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if CurPageID = wpSelectTasks then
+    PreselectStartup();
 end;
 
 {
@@ -270,6 +362,12 @@ procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
   if CurUninstallStep <> usPostUninstall then
     Exit;
+
+  { Sai sempre, sem perguntar: registro de aplicacao nao e dado do usuario. O
+    valor pode ter sido criado pelo menu do app, e ai nao existe registro de
+    desinstalacao para o uninsdeletevalue apagar -- sobraria no Run um caminho
+    para um exe que nao existe mais, falhando calado a cada login. }
+  RegDeleteValue(HKEY_CURRENT_USER, '{#AppRunKey}', '{#AppName}');
 
   if ShouldRemoveUserData() then
     RemoveUserData()

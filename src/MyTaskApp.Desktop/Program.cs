@@ -12,6 +12,8 @@ internal static class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        var launch = LaunchOptions.Parse(args);
+
         // Antes de tudo, e antes até do log: dois processos no mesmo SQLite é o
         // tipo de problema que não dá para consertar depois de acontecer. O
         // segundo lançamento não abre nada — pede para o primeiro aparecer e sai.
@@ -19,7 +21,13 @@ internal static class Program
 
         if (!instance.IsOwner)
         {
-            instance.SignalOwner();
+            // Salvo quando quem lançou foi o login do Windows: aí ninguém
+            // clicou em nada, e revelar a janela seria um susto (ADR-023).
+            if (launch.ShouldSignalExistingInstance)
+            {
+                instance.SignalOwner();
+            }
+
             return 0;
         }
 
@@ -33,7 +41,7 @@ internal static class Program
 
             LoggingSetup.Configure(configuration);
 
-            using var services = AppServices.Build(configuration, instance);
+            using var services = AppServices.Build(configuration, instance, launch);
 
             PrepareDatabase(services);
 
