@@ -19,7 +19,9 @@ public sealed record TodayOccurrenceRow(
     int ReminderAttempt = 0,
     ReminderPolicy? TaskReminder = null,
     /// <summary>A anotação livre do checklist (§12), em Markdown.</summary>
-    string? Description = null);
+    string? Description = null,
+    /// <summary>A casa escolhida à mão; <c>null</c> = ordem natural da seção.</summary>
+    int? Position = null);
 
 public interface ITodayQuery
 {

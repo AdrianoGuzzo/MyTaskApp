@@ -42,6 +42,14 @@ internal sealed class FakeTaskItemRepository : ITaskItemRepository, IUnitOfWork
             _tasks.Values.FirstOrDefault(
                 task => task.Occurrences.Any(occurrence => occurrence.Id == occurrenceId)));
 
+    public Task<IReadOnlyList<TaskItem>> FindByOccurrenceIdsAsync(
+        IReadOnlyCollection<Guid> occurrenceIds,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<TaskItem>>(
+            [.. _tasks.Values.Where(
+                task => task.Occurrences.Any(
+                    occurrence => occurrenceIds.Contains(occurrence.Id)))]);
+
     public void Remove(TaskItem task) => _tasks.Remove(task.Id);
 
     public Task SaveChangesAsync(CancellationToken cancellationToken = default)
