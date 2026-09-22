@@ -139,4 +139,98 @@ public class WindowsInstallerContractTests
         // do que "silencioso" promete.
         HasDirective("skipifsilent").Should().BeTrue();
     }
+
+    [Fact]
+    public void StartingWithWindowsIsOffered_AndTheBoxComesChecked()
+    {
+        // Ao contrário do atalho da área de trabalho, e de propósito: um app de
+        // lembretes só lembra se estiver vivo às 15:00 (ADR-016, ADR-023).
+        var task = Directives.Should()
+            .ContainSingle(line => line.Contains("Name: \"startupicon\"", StringComparison.Ordinal))
+            .Subject;
+
+        task.Contains("unchecked", StringComparison.OrdinalIgnoreCase).Should().BeFalse();
+    }
+
+    [Fact]
+    public void StartingWithWindowsIsRegisteredForThisUser_NeverForTheWholeMachine()
+    {
+        // O caminho é contrato com o app, que lê e escreve a mesma entrada.
+        HasDirective($"#define AppRunKey      \"{WindowsStartupRegistration.RunKey}\"")
+            .Should().BeTrue();
+
+        // HKA viraria HKLM numa instalação /ALLUSERS, e aí o app — que roda sem
+        // elevação — nunca conseguiria desligar a própria opção pelo menu.
+        var runEntries = Directives
+            .Where(line => line.Contains("{#AppRunKey}", StringComparison.Ordinal)
+                && line.StartsWith("Root:", StringComparison.Ordinal))
+            .ToArray();
+
+        // Uma para ligar, uma para apagar quando a caixa vem desmarcada.
+        runEntries.Should().HaveCount(2);
+        runEntries.Should().OnlyContain(line => line.StartsWith("Root: HKCU;", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void TheStartupCommandUsesTheSameFlagTheAppParses()
+    {
+        // Gêmeo do acordo do AppMutexName: renomear a constante sem editar o
+        // .iss faria o app subir no login com a janela na cara do usuário.
+        HasDirective($"#define StartupFlag    \"{LaunchOptions.StartupFlag}\"").Should().BeTrue();
+        HasDirective("{#StartupFlag}").Should().BeTrue();
+    }
+
+    [Fact]
+    public void TheStartupEntryUsesTheSameValueNameTheAppReadsAndWrites()
+    {
+        // O app e o instalador precisam mexer na mesma entrada — duas com nomes
+        // diferentes seriam dois inícios automáticos.
+        WindowsStartupRegistration.ValueName.Should().Be("MyTaskApp");
+        HasDirective($"ValueName: \"{{#AppName}}\"").Should().BeTrue();
+    }
+
+    [Fact]
+    public void UncheckingStartupRemovesTheValue_InsteadOfLeavingItBehind()
+    {
+        // Sem esta linha, desmarcar a caixa numa atualização não faria nada e o
+        // app continuaria subindo no login.
+        Directives.Should().ContainSingle(line =>
+            line.Contains("deletevalue", StringComparison.Ordinal)
+            && line.Contains("Tasks: not startupicon", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void UpgradingAsksTheRegistry_InsteadOfReimposingThePreviousChoice()
+    {
+        // UsePreviousTasks sozinho desfaria, em silêncio, um "desliga isso"
+        // feito pelo menu do app depois da instalação.
+        HasDirective("procedure PreselectStartup();").Should().BeTrue();
+        HasDirective("StartupIsEnabled()").Should().BeTrue();
+
+        // E na página, não antes dela: o UsePreviousTasks age até a página
+        // aparecer, então escrever em InitializeWizard seria escrever para ser
+        // sobrescrito.
+        HasDirective("if CurPageID = wpSelectTasks then").Should().BeTrue();
+    }
+
+    [Fact]
+    public void UninstallingAlwaysClearsTheRunValue_EvenWhenTheAppWroteIt()
+    {
+        // O valor pode não ter vindo do instalador — e aí não há registro de
+        // desinstalação para o uninsdeletevalue apagar.
+        HasDirective($"RegDeleteValue(HKEY_CURRENT_USER, '{{#AppRunKey}}', '{{#AppName}}')")
+            .Should().BeTrue();
+    }
+
+    [Fact]
+    public void LaunchingRightAfterInstalling_ShowsTheWindow()
+    {
+        // Quem acabou de clicar em Instalar quer ver o app, não procurá-lo na
+        // bandeja. O flag é para o login do Windows, não para este momento.
+        var run = Directives.Should()
+            .ContainSingle(line => line.Contains("{cm:LaunchApp}", StringComparison.Ordinal))
+            .Subject;
+
+        run.Contains("{#StartupFlag}", StringComparison.Ordinal).Should().BeFalse();
+    }
 }
