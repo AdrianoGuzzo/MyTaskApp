@@ -77,7 +77,8 @@ internal sealed class TodayQuery(MyTaskAppDbContext context) : ITodayQuery
                         ? occurrence.Reminder.WaitingSinceUtc
                         : null,
                     occurrence.Reminder.Attempt,
-                    definition.Reminder);
+                    definition.Reminder,
+                    occurrence.Position);
             })
             .ToList();
     }

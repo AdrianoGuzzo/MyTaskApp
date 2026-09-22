@@ -17,7 +17,9 @@ public sealed record TodayOccurrenceRow(
     // existente a mudar no mesmo commit.
     DateTimeOffset? ReminderWaitingSinceUtc = null,
     int ReminderAttempt = 0,
-    ReminderPolicy? TaskReminder = null);
+    ReminderPolicy? TaskReminder = null,
+    /// <summary>A casa escolhida à mão; <c>null</c> = ordem natural da seção.</summary>
+    int? Position = null);
 
 public interface ITodayQuery
 {

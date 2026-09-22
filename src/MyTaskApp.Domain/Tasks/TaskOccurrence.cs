@@ -36,6 +36,13 @@ public sealed class TaskOccurrence
     public DateTimeOffset? CompletedAt { get; private set; }
 
     /// <summary>
+    /// A casa que o usuário deu a esta ocorrência dentro da seção da tela "Hoje".
+    /// <c>null</c> = nunca foi arrastada, e a seção a ordena pelo critério de
+    /// sempre (ADR-022).
+    /// </summary>
+    public int? Position { get; private set; }
+
+    /// <summary>
     /// O estado do lembrete desta ocorrência. Nasce desarmado; quem arma é a
     /// Application, que é quem tem a política da série e o relógio do usuário.
     /// </summary>
@@ -82,6 +89,10 @@ public sealed class TaskOccurrence
         // O instante antigo não pode mais disparar. Quem rearma é a Application,
         // logo em seguida, com a política em mãos.
         Reminder.Disarm();
+
+        // Pelo mesmo motivo: a posição era um lugar na fila de outro dia, e essa
+        // fila não é mais a desta ocorrência (ADR-022).
+        Position = null;
     }
 
     public void Cancel()
@@ -108,6 +119,50 @@ public sealed class TaskOccurrence
         // Volta a ser pendente sem lembrete: rearmar é decisão da Application,
         // que sabe a política. Ressuscitar um horário vencido avisaria na hora.
         Reminder.Reset();
+
+        // Position sobrevive de propósito: reabrir devolve a linha exatamente
+        // onde o usuário a tinha posto (ADR-022).
+    }
+
+    /// <summary>
+    /// Põe a ocorrência na n-ésima casa da seção. <c>internal</c> como
+    /// <see cref="DisarmReminder"/>: o único caminho de entrada é a raiz.
+    /// </summary>
+    /// <remarks>
+    /// Só pendente se reordena. A seção CONCLUÍDAS ordena pela data de conclusão
+    /// e ignora <see cref="Position"/> — deixar a posição editável ali seria uma
+    /// escrita que a leitura descarta em silêncio, e a lista passaria a mentir
+    /// sobre a ordem em que as coisas foram feitas. Recusar congela a posição de
+    /// quem concluiu, que é o que faz reabrir devolver o lugar (ADR-022).
+    /// </remarks>
+    internal void PlaceAt(int position)
+    {
+        EnsureCanBePlaced();
+
+        if (position < 0)
+        {
+            throw new DomainException("A posição não pode ser negativa.");
+        }
+
+        Position = position;
+    }
+
+    /// <summary>
+    /// Confere que esta ocorrência aceita ser reordenada, sem alterá-la.
+    /// </summary>
+    /// <remarks>
+    /// Existe separado de <see cref="PlaceAt"/> porque reordenar é uma escrita
+    /// em <b>várias</b> ocorrências de uma vez: quem coordena precisa conferir
+    /// todas antes de mexer em qualquer uma, ou uma recusa no meio da seção
+    /// deixaria metade da lista renumerada em memória — a mesma armadilha que a
+    /// "Edição atômica" de <see cref="TaskItem.Update"/> evita.
+    /// </remarks>
+    internal void EnsureCanBePlaced()
+    {
+        if (Status is not TaskItemStatus.Pending)
+        {
+            throw new DomainException("Só é possível reordenar uma ocorrência pendente.");
+        }
     }
 
     /// <summary>

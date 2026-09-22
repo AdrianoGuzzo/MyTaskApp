@@ -23,6 +23,12 @@ internal sealed class TaskOccurrenceConfiguration : IEntityTypeConfiguration<Tas
         // Projeção do par data/hora; não é coluna.
         builder.Ignore(occurrence => occurrence.Schedule);
 
+        // Position não ganha índice, e isso é decisão. A ordem da tela "Hoje" é
+        // montada em memória pelo GetTodayBoardHandler (ADR-010): a coluna nunca
+        // é predicado nem ORDER BY em SQL. Um índice aqui seria simetria com os
+        // vizinhos, não necessidade — e custaria escrita em todo arrasto.
+        // Mapeada por convenção (int? -> INTEGER nullable).
+
         // Guarda de idempotência da materialização de recorrências (ADR-003):
         // a mesma série não pode ter duas ocorrências no mesmo instante agendado.
         builder.HasIndex(occurrence => new

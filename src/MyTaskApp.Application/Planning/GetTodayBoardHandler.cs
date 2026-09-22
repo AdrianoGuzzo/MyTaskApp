@@ -39,28 +39,44 @@ public sealed class GetTodayBoardHandler(
         return new TodayBoard(
             Date: today,
             Overdue: InSection(TodaySection.Overdue)
-                .OrderBy(entry => entry.Row.ScheduledDate)
+                .OrderBy(entry => Slot(entry.Row))
+                .ThenBy(entry => entry.Row.ScheduledDate)
                 .ThenBy(entry => entry.Row.ScheduledTime ?? TimeOnly.MinValue)
                 .Select(ToTask)
                 .ToList(),
             Now: InSection(TodaySection.Now)
-                .OrderBy(entry => entry.Row.ScheduledTime)
+                .OrderBy(entry => Slot(entry.Row))
+                .ThenBy(entry => entry.Row.ScheduledTime)
                 .Select(ToTask)
                 .ToList(),
             Today: InSection(TodaySection.Today)
-                .OrderBy(entry => entry.Row.ScheduledTime)
+                .OrderBy(entry => Slot(entry.Row))
+                .ThenBy(entry => entry.Row.ScheduledTime)
                 .Select(ToTask)
                 .ToList(),
             Unscheduled: InSection(TodaySection.Unscheduled)
-                .OrderByDescending(entry => entry.Row.Priority)
+                .OrderBy(entry => Slot(entry.Row))
+                .ThenByDescending(entry => entry.Row.Priority)
                 .ThenBy(entry => entry.Row.Title, StringComparer.CurrentCultureIgnoreCase)
                 .Select(ToTask)
                 .ToList(),
+
+            // CONCLUÍDAS não olha a posição de propósito: ali a ordem é a da
+            // conclusão, e nada mais. Deixar a posição mandar faria a lista
+            // mentir sobre a ordem em que as coisas foram feitas (ADR-022).
             Completed: InSection(TodaySection.Completed)
                 .OrderByDescending(entry => entry.Row.CompletedAt)
                 .Select(ToTask)
                 .ToList());
     }
+
+    /// <summary>
+    /// A casa escolhida à mão, ou o fim da fila para quem nunca foi arrastado.
+    /// É o que faz uma atualização não renumerar a lista de ninguém: com
+    /// <c>Position</c> nula em todo mundo, o desempate seguinte é o critério de
+    /// sempre e a seção sai exatamente como saía antes (ADR-022).
+    /// </summary>
+    private static int Slot(TodayOccurrenceRow row) => row.Position ?? int.MaxValue;
 
     private TodayPlacement? Place(
         TodayOccurrenceRow row,

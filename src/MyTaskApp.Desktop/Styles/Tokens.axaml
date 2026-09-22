@@ -66,6 +66,13 @@
   <CornerRadius x:Key="WidgetPillRadius">6</CornerRadius>
 
   <!--
+    A sombra do item que o usuário levantou da lista (ADR-022). Mais curta e
+    mais dura que a do painel: ela precisa dizer "isto está poucos milímetros
+    acima da lista", e não "isto é outra janela".
+  -->
+  <BoxShadows x:Key="WidgetLiftShadow">0 6 16 -4 #99000000</BoxShadows>
+
+  <!--
     As telas existentes já pedem estas chaves do Fluent. Reapontá-las aqui é o
     que mantém AlertWindow e a tela de lembretes coerentes com o widget sem
     precisar editar cada Setter espalhado por elas.
