@@ -34,13 +34,20 @@ internal static class AppServices
                 reloadOnChange: false)
             .Build();
 
-    public static ServiceProvider Build(IConfiguration configuration, SingleInstance instance) =>
+    public static ServiceProvider Build(
+        IConfiguration configuration,
+        SingleInstance instance,
+        LaunchOptions launch) =>
         new ServiceCollection()
             .AddSingleton(configuration)
 
             // Registrado, e não estático: quem precisa dele é a App, depois da
             // janela existir, e o contêiner já é o caminho de tudo mais.
             .AddSingleton(instance)
+
+            // Como o processo foi lançado (ADR-023). Quem lê é a App, para
+            // decidir se a janela aparece ou se o app sobe direto na bandeja.
+            .AddSingleton(launch)
             .AddLogging(builder => builder.AddSerilog(Log.Logger))
             .AddSingleton<IUseCaseRunner, ScopedUseCaseRunner>()
             .AddSingleton<TodayViewModel>()
@@ -68,6 +75,11 @@ internal static class AppServices
             // Copiar o texto de uma linha (§12). Singleton sem estado, como o
             // dialogo: descobre a janela a cada escrita.
             .AddSingleton<IClipboardWriter, ClipboardWriter>()
+
+            // Iniciar com o Windows (ADR-023). Registrado sem condicao, como o
+            // WindowsSoundPlayer: a guarda de plataforma mora dentro dele, e
+            // fora do Windows a resposta e "nao da" em vez de excecao.
+            .AddSingleton<IStartupRegistration, WindowsStartupRegistration>()
 
             // Singletons: a janela de ajustes e a bandeja sao uma so por app.
             .AddSingleton<ReminderSettingsViewModel>()

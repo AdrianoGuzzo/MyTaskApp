@@ -73,6 +73,11 @@ como texto, então `dotnet test` fica verde numa máquina sem o Inno.
 O assistente tem quatro passos — Diretório → Opções → Instalando → Concluído.
 Sem UAC: a instalação é por usuário.
 
+Em *Opções*, **"Iniciar o MyTaskApp com o Windows"** vem **marcada** — o app é
+de lembretes, e só lembra se estiver vivo (ADR-016, ADR-023). Marcada, o app
+sobe no login **recolhido na bandeja**, sem abrir o painel na frente de
+ninguém. Dá para mudar de ideia depois pelo menu ☰ do painel, sem reinstalar.
+
 ### Instalação silenciosa
 
 ```bat
@@ -88,10 +93,16 @@ MyTaskAppSetup-1.0.0.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
 | `/DIR="C:\caminho"` | diretório de instalação |
 | `/MERGETASKS="desktopicon"` | cria também o atalho na área de trabalho |
 | `/MERGETASKS="!desktopicon"` | garante que não cria |
+| `/MERGETASKS="!startupicon"` | **não** inicia com o Windows (vem ligado por padrão) |
 | `/CURRENTUSER` | força instalação por usuário (padrão) |
 | `/ALLUSERS` | instala para todos — **pede elevação** |
 | `/LOG="C:\setup.log"` | log num caminho escolhido |
 | `/NOCANCEL` | remove o botão Cancelar |
+
+Atenção ao silencioso: **"Iniciar com o Windows" vem marcado**, então uma
+instalação `/VERYSILENT` liga o início automático. Para não ligar, passe
+`/MERGETASKS="!startupicon"` — o `/MERGETASKS` soma à seleção padrão, e só o
+`!` remove.
 
 O instalador **sempre** grava um log, mesmo sem `/LOG`, e copia uma cópia com
 data para `%LOCALAPPDATA%\MyTaskApp\installer\logs\`.
@@ -120,7 +131,10 @@ Basta rodar o instalador da versão nova. Como o `AppId` é fixo:
 - os atalhos continuam válidos;
 - os dados não são tocados;
 - se o app estiver aberto, o `AppMutex` detecta (o mesmo nome que
-  `SingleInstance` cria no código) e o instalador pede para fechá-lo.
+  `SingleInstance` cria no código) e o instalador pede para fechá-lo;
+- a caixa "Iniciar com o Windows" reflete o estado **atual** da chave `Run`,
+  e não o que foi marcado na instalação anterior — quem desligou a opção pelo
+  menu do app não a vê voltar sozinha ao atualizar.
 
 Instalar uma versão **anterior** pede confirmação em vez de recusar ou
 silenciosamente degradar.
@@ -167,6 +181,8 @@ Não implementado. `installer/macos/README.md` tem o roteiro.
 
 - Instalação **por usuário** por padrão: nada de UAC, nada em `Program Files`,
   nada em `/usr`.
+- Início automático em `HKCU`, nunca `HKLM`: o app roda sem elevação e precisa
+  conseguir **desligar** o que ligou. A desinstalação apaga a entrada sempre.
 - Elevação só quando alguém pede (`/ALLUSERS`).
 - Nenhum script é baixado ou executado durante a instalação.
 - Publisher e versão aparecem em *Aplicativos Instalados*.
@@ -191,4 +207,12 @@ O que os testes automatizados **não** alcançam. Vale rodar antes de publicar:
 5. Desinstalar respondendo **Não** à pergunta sobre os dados; conferir que
    `%APPDATA%\MyTaskApp\mytaskapp.db` continua no lugar.
 6. Reinstalar: as tarefas voltam.
-7. Desinstalar com `/VERYSILENT /DELETEDATA=1`; conferir que a pasta sumiu.
+7. Conferir o início automático:
+   `reg query "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v MyTaskApp`
+   → `"…\MyTaskApp.exe" --startup`. Fazer logoff/logon: **nada aparece na
+   tela**, e o ícone está na bandeja.
+8. No menu ☰ do painel, desmarcar **"Iniciar com o Windows"**; o `reg query`
+   não acha mais o valor. Rodar o instalador por cima: a caixa vem
+   **desmarcada**.
+9. Desinstalar com `/VERYSILENT /DELETEDATA=1`; conferir que a pasta sumiu e
+   que o valor em `Run` também.
