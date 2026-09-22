@@ -126,6 +126,60 @@ public class UpgradePreservationTests
         (await read.Tasks.CountAsync(Ct)).Should().Be(2);
     }
 
+    /// <summary>
+    /// A migration da ordem manual não faz backfill, e isso é promessa, não
+    /// acaso (ADR-014, ADR-022): a lista de quem atualiza sai exatamente como
+    /// saía antes. Posição nula em todo mundo é literalmente "a ordem de hoje
+    /// continua valendo" — semear qualquer critério aqui o congelaria para
+    /// sempre.
+    /// </summary>
+    [Fact]
+    public async Task TheManualOrderUpgrade_DoesNotNumberAnybodysList()
+    {
+        // O banco como ele era antes da coluna existir.
+        await using var db = await new TempSqliteDatabase()
+            .MigrateToAsync("ChecklistLifecycle", Ct);
+
+        // SQL cru, e não o DbContext: o modelo de hoje já conhece Position e
+        // tentaria gravá-la numa tabela que ainda não a tem. Quem escreveu estas
+        // linhas foi a versão antiga do app, que é justamente o ponto.
+        await using (var write = db.CreateContext())
+        {
+            foreach (var title in (string[])["Renovar o contrato", "Comprar pão", "Abrir chamado"])
+            {
+                var taskId = Guid.CreateVersion7();
+                var occurrenceId = Guid.CreateVersion7();
+                var createdAt = Now.UtcTicks;
+
+                // As colunas que a versão antiga conhecia. As acrescentadas
+                // depois são NOT NULL com default, então o INSERT nem as cita.
+                await write.Database.ExecuteSqlAsync(
+                    $"""
+                     INSERT INTO Tasks (Id, Title, Description, Priority, CreatedAt)
+                     VALUES ({taskId}, {title}, NULL, 0, {createdAt});
+                     """,
+                    Ct);
+
+                await write.Database.ExecuteSqlAsync(
+                    $"""
+                     INSERT INTO TaskOccurrences
+                         (Id, TaskItemId, ScheduledDate, ScheduledTime, Status, CompletedAt)
+                     VALUES ({occurrenceId}, {taskId}, '2026-09-21', NULL, 0, NULL);
+                     """,
+                    Ct);
+            }
+        }
+
+        await db.MigrateAsync(Ct);
+
+        await using var read = db.CreateContext();
+        var occurrences = await read.Occurrences.ToListAsync(Ct);
+
+        occurrences.Should().NotBeEmpty();
+        occurrences.Should().AllSatisfy(
+            occurrence => occurrence.Position.Should().BeNull());
+    }
+
     [Fact]
     public async Task TheDatabaseIsCreatedOutsideTheInstallDirectory()
     {

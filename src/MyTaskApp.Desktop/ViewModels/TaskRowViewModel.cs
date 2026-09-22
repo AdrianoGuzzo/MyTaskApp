@@ -10,6 +10,7 @@ public sealed class TaskRowViewModel
 {
     public TaskRowViewModel(TodayTask task, bool isCompleted)
     {
+        Source = task;
         OccurrenceId = task.OccurrenceId;
         TaskId = task.TaskId;
         Title = task.Title;
@@ -38,6 +39,13 @@ public sealed class TaskRowViewModel
         Editor = new ReminderEditorViewModel { CanRemindAtScheduledTime = HasScheduledTime };
         Editor.Load(Reminder);
     }
+
+    /// <summary>
+    /// A tarefa de onde esta linha veio. Guardada para o quadro em memória
+    /// (<c>TodayViewModel._board</c>) poder ser remontado depois de um arrasto
+    /// sem uma consulta nova (ADR-022).
+    /// </summary>
+    public TodayTask Source { get; }
 
     public Guid OccurrenceId { get; }
 
