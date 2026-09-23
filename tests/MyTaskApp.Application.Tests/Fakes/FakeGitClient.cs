@@ -51,6 +51,12 @@ internal sealed class FakeGitClient : IGitClient
 
     public GitCommandResult RemoveResult { get; set; } = Ok("git worktree remove");
 
+    /// <summary>
+    /// A falha de quando algo segura a pasta: o Git apaga os arquivos, esquece o
+    /// worktree e só então sai com erro (ADR-029).
+    /// </summary>
+    public bool RemoveForgetsOnFailure { get; set; }
+
     /// <summary>Faz o método de dado lançar, como o Git saindo com erro.</summary>
     public Dictionary<string, GitCommandResult> Failures { get; } = [];
 
@@ -173,7 +179,7 @@ internal sealed class FakeGitClient : IGitClient
     {
         Calls.Add($"worktree remove {path}");
 
-        if (RemoveResult.Succeeded)
+        if (RemoveResult.Succeeded || RemoveForgetsOnFailure)
         {
             Worktrees.RemoveAll(worktree => WorktreePathPlanner.SamePath(worktree.Path, path));
         }
@@ -206,6 +212,26 @@ internal sealed class FakeDirectoryProbe : IDirectoryProbe
 
     public Task<bool> PathExistsAsync(string path, CancellationToken cancellationToken = default) =>
         ExistsAsync(path, cancellationToken);
+}
+
+/// <summary>
+/// Apagar pasta, em memória: devolve o que o teste enfileirou (ou "apagou") e
+/// guarda quem mandou encerrar.
+/// </summary>
+internal sealed class FakeDirectoryRemover : IDirectoryRemover
+{
+    public Queue<DirectoryRemoval> Results { get; } = [];
+
+    public List<(string Path, IReadOnlyCollection<DirectoryLocker> Terminate)> Calls { get; } = [];
+
+    public Task<DirectoryRemoval> RemoveAsync(
+        string path,
+        IReadOnlyCollection<DirectoryLocker> terminate,
+        CancellationToken cancellationToken = default)
+    {
+        Calls.Add((path, terminate));
+        return Task.FromResult(Results.TryDequeue(out var result) ? result : DirectoryRemoval.Done);
+    }
 }
 
 /// <summary>Guarda cada aviso de progresso, na ordem, sem trocar de thread.</summary>

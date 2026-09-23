@@ -37,6 +37,7 @@ public class ApplicationRegistrationTests
             .AddSingleton<ISoundPlayer>(new StubSoundPlayer())
             .AddSingleton<IGitClient>(new FakeGitClient())
             .AddSingleton<IDirectoryProbe>(new FakeDirectoryProbe())
+            .AddSingleton<IDirectoryRemover>(new FakeDirectoryRemover())
             // Normalmente vem do composition root do Desktop (ADR-012).
             .AddSingleton<IUseCaseRunner>(new CountingUseCaseRunner())
             .AddApplication()

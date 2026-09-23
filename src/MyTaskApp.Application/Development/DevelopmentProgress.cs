@@ -1,3 +1,4 @@
+using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.Tasks;
 
@@ -50,7 +51,8 @@ public sealed class DevelopmentStepException(
     DevelopmentStep step,
     string message,
     GitCommandResult? command = null,
-    IReadOnlyList<string>? changes = null) : DomainException(message)
+    IReadOnlyList<string>? changes = null,
+    IReadOnlyList<DirectoryLocker>? lockers = null) : DomainException(message)
 {
     public DevelopmentStep Step { get; } = step;
 
@@ -58,6 +60,14 @@ public sealed class DevelopmentStepException(
 
     /// <summary>As alterações locais que impediram a etapa, quando for o caso.</summary>
     public IReadOnlyList<string> Changes { get; } = changes ?? [];
+
+    /// <summary>
+    /// A pasta não pôde ser apagada. <see cref="Lockers"/> diz quem a segura,
+    /// quando o sistema deixa saber (ADR-029).
+    /// </summary>
+    public bool IsDirectoryLocked { get; init; }
+
+    public IReadOnlyList<DirectoryLocker> Lockers { get; } = lockers ?? [];
 }
 
 /// <summary>
