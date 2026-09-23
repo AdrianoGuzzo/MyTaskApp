@@ -76,6 +76,49 @@ public class ChecklistArchiveQueryTests
         rows.Should().AllSatisfy(row => row.DeletedBy.Should().Be("adriano"));
     }
 
+    /// <summary>
+    /// O histórico do que saiu de "Hoje" com a virada do dia: concluído, mas
+    /// ainda na lista principal. Pendente, arquivado e excluído têm outro lugar.
+    /// </summary>
+    [Fact]
+    public async Task TheConcludedArea_ShowsOnlyConcludedChecklistsStillInTheMainList()
+    {
+        var older = Concluded("Concluído semana passada", Now.AddDays(-7));
+        var newer = Concluded("Concluído ontem", Now.AddDays(-1));
+
+        var pending = TaskItem.Create("Pendente", Now.AddDays(-3));
+
+        var archived = Concluded("Arquivado", Now.AddDays(-10));
+        archived.Archive(Now.AddDays(-2));
+
+        var trashed = Concluded("Excluído", Now.AddDays(-10));
+        trashed.MoveToTrash(Now.AddDays(-1), "adriano");
+
+        await using var db = await SeedAsync(older, newer, pending, archived, trashed);
+        await using var read = db.CreateContext();
+
+        var rows = await new ChecklistArchiveQuery(read)
+            .SearchAsync(ChecklistScope.Concluded, null, cancellationToken: Ct);
+
+        // Mais recente primeiro.
+        rows.Select(row => row.Title).Should().Equal("Concluído ontem", "Concluído semana passada");
+    }
+
+    [Fact]
+    public async Task ThePeriodFilterInTheConcludedArea_LooksAtWhenItWasConcluded()
+    {
+        var recent = Concluded("Concluído esta semana", Now.AddDays(-3));
+        var old = Concluded("Concluído há meses", Now.AddDays(-120));
+
+        await using var db = await SeedAsync(recent, old);
+        await using var read = db.CreateContext();
+
+        var rows = await new ChecklistArchiveQuery(read)
+            .SearchAsync(ChecklistScope.Concluded, null, Now.AddDays(-30), Ct);
+
+        rows.Select(row => row.Title).Should().Equal("Concluído esta semana");
+    }
+
     [Fact]
     public async Task TheRowsCarryTheItemCountsTheScreenDraws()
     {

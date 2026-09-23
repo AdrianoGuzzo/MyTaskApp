@@ -994,6 +994,16 @@ de contexto da linha, e o `⋯` que aparece no hover **abre o mesmo
 divergiriam no primeiro item novo. Arquivados, Lixeira e a seção "Gerenciamento
 de dados" ficam numa janela à parte, aberta pelo menu do painel.
 
+**Concluídos ganhou uma aba própria, antes de Arquivados.** A tela "Hoje" só
+mostra o que terminou no dia (`TodayClassifier`), então na virada o concluído
+some sem deixar onde olhar — e com o arquivamento automático desligado de
+fábrica ele nunca chegaria aos Arquivados. A aba é um terceiro
+`ChecklistScope.Concluded` na mesma consulta: `ConcludedAt` preenchido, fora do
+arquivo e da lixeira — exatamente o predicado do `IX_Tasks_ReadyToArchive`, que
+serve o filtro e a ordenação sem índice novo. Série recorrente com ocorrência
+pendente não tem `ConcludedAt` e por isso não aparece ali: o histórico por
+ocorrência ficou fora deste passo.
+
 **Arquivar não pergunta; excluir pergunta duas vezes, de formas diferentes.**
 Arquivar não perde nada e se desfaz em dois cliques — confirmar ali só treinaria
 o usuário a clicar "Sim" sem ler, encarecendo a pergunta que importa. A

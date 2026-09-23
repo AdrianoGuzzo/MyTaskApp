@@ -11,7 +11,7 @@ namespace MyTaskApp.Desktop.Tests.ViewModels;
 
 /// <summary>
 /// A janela de gerenciamento de dados sobe de verdade (sem display). Binding de
-/// XAML só falha em runtime, e esta tela tem três abas ligadas a um mesmo
+/// XAML só falha em runtime, e esta tela tem quatro abas ligadas a um mesmo
 /// ViewModel — o tipo de coisa que compila e só quebra quando alguém abre.
 /// </summary>
 public class DataManagementWindowTests
@@ -45,7 +45,7 @@ public class DataManagementWindowTests
     }
 
     [AvaloniaFact]
-    public void TheWindow_OpensWithTheThreeAreasTheBriefingAsksFor()
+    public void TheWindow_OpensWithTheConcludedHistoryAndTheThreeAreasTheBriefingAsksFor()
     {
         var window = Show();
 
@@ -54,7 +54,7 @@ public class DataManagementWindowTests
             .Select(tab => tab.Header)
             .ToList();
 
-        headers.Should().Equal("Arquivados", "Lixeira", "Configurações");
+        headers.Should().Equal("Concluídos", "Arquivados", "Lixeira", "Configurações");
     }
 
     /// <summary>
@@ -87,10 +87,11 @@ public class DataManagementWindowTests
     {
         var window = Show();
 
+        var concluded = window.FindControl<ComboBox>("ConcludedPeriodBox");
         var archived = window.FindControl<ComboBox>("ArchivedPeriodBox");
         var trash = window.FindControl<ComboBox>("TrashPeriodBox");
 
-        foreach (var combo in new[] { archived, trash })
+        foreach (var combo in new[] { concluded, archived, trash })
         {
             combo.Should().NotBeNull();
             combo!.ItemCount.Should().Be(DataManagementViewModel.PeriodOptionCount);
@@ -112,6 +113,7 @@ public class DataManagementWindowTests
             .Where(text => !string.IsNullOrWhiteSpace(text))
             .ToList();
 
+        texts.Should().Contain(text => text!.StartsWith("Nenhum checklist concluído"));
         texts.Should().Contain(text => text!.StartsWith("Nenhum checklist arquivado"));
     }
 }
