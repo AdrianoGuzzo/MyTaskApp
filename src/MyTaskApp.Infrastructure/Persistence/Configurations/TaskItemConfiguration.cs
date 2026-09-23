@@ -107,5 +107,17 @@ internal sealed class TaskItemConfiguration : IEntityTypeConfiguration<TaskItem>
         builder.Navigation(task => task.Occurrences)
             .HasField("_occurrences")
             .UsePropertyAccessMode(PropertyAccessMode.Field);
+
+        // Os vínculos com etiquetas. A outra ponta (e a cascata a partir da
+        // etiqueta) está em TaskItemTagConfiguration.
+        builder.HasMany(task => task.Tags)
+            .WithOne()
+            .HasForeignKey(link => link.TaskItemId)
+            .IsRequired()
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Navigation(task => task.Tags)
+            .HasField("_tags")
+            .UsePropertyAccessMode(PropertyAccessMode.Field);
     }
 }

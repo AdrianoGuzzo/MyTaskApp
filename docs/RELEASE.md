@@ -96,7 +96,7 @@ precisa dela commitada:
 dotnet tool restore
 dotnet ef migrations add <Nome> \
   --project src/MyTaskApp.Infrastructure \
-  --startup-project src/MyTaskApp.Desktop
+  --startup-project src/MyTaskApp.Infrastructure
 ```
 
 A aplicação aplica o que estiver pendente no próximo start, antes da primeira

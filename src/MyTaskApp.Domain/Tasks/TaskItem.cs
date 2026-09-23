@@ -14,6 +14,8 @@ public sealed class TaskItem
 
     private readonly List<TaskOccurrence> _occurrences = [];
 
+    private readonly List<TaskItemTag> _tags = [];
+
     private TaskItem(
         Guid id,
         string title,
@@ -39,6 +41,9 @@ public sealed class TaskItem
     public DateTimeOffset CreatedAt { get; }
 
     public IReadOnlyList<TaskOccurrence> Occurrences => _occurrences.AsReadOnly();
+
+    /// <summary>As etiquetas deste checklist, uma vez cada (ADR-025).</summary>
+    public IReadOnlyList<TaskItemTag> Tags => _tags.AsReadOnly();
 
     /// <summary>
     /// A política de lembrete da série. O domínio não conhece o padrão global do
@@ -124,6 +129,26 @@ public sealed class TaskItem
         Title = normalizedTitle;
         Description = normalizedDescription;
         Priority = priority;
+    }
+
+    /// <summary>
+    /// Troca o conjunto de etiquetas pelo informado. Recebe o estado final, e não
+    /// "adicione esta": repetir a chamada não muda nada, e a mesma etiqueta nunca
+    /// entra duas vezes. Só mexe no que mudou, para o EF não apagar e reinserir
+    /// vínculos que continuam iguais.
+    /// </summary>
+    public void SetTags(IEnumerable<Guid> tagIds)
+    {
+        RefuseWhenOutOfTheMainList("etiquetar");
+
+        var wanted = tagIds.ToHashSet();
+
+        _tags.RemoveAll(tag => !wanted.Contains(tag.TagId));
+
+        foreach (var tagId in wanted.Where(id => !_tags.Exists(tag => tag.TagId == id)))
+        {
+            _tags.Add(new TaskItemTag(Id, tagId));
+        }
     }
 
     public void Rename(string title) => Title = NormalizeTitle(title);

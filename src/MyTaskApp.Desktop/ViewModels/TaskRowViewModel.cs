@@ -39,6 +39,8 @@ public sealed class TaskRowViewModel
         // clique, e um editor so daria corrida entre carregar e desenhar.
         Editor = new ReminderEditorViewModel { CanRemindAtScheduledTime = HasScheduledTime };
         Editor.Load(Reminder);
+
+        Tags = new TaskTagsViewModel(TaskId, task.Tags, Title);
     }
 
     /// <summary>
@@ -103,6 +105,9 @@ public sealed class TaskRowViewModel
     public string AttentionLabel { get; }
 
     public bool HasReminder => Reminder.IsEnabled;
+
+    /// <summary>As bolinhas das etiquetas e o seletor do botão de etiqueta (ADR-025).</summary>
+    public TaskTagsViewModel Tags { get; }
 
     /// <summary>O ajuste individual desta tarefa, aberto pelo botao "Lembrete".</summary>
     public ReminderEditorViewModel Editor { get; }

@@ -6,6 +6,7 @@ using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Tasks;
 using MyTaskApp.Application.Tests.Fakes;
 using MyTaskApp.Domain;
+using MyTaskApp.Domain.Tags;
 using MyTaskApp.Domain.Tasks;
 
 namespace MyTaskApp.Application.Tests.Tasks;
@@ -25,6 +26,7 @@ public class QuickCaptureHandlerTests
 
     private readonly FakeTaskItemRepository _repository = new();
     private readonly FakeReminderSettingsStore _settings = new();
+    private readonly FakeTagRepository _tags = new();
 
     private QuickCaptureHandler Handler()
     {
@@ -34,6 +36,7 @@ public class QuickCaptureHandlerTests
 
         return new(
             _repository,
+            _tags,
             _repository,
             _settings,
             new FakeTaskAuditLog(),
@@ -53,6 +56,45 @@ public class QuickCaptureHandlerTests
             Ct);
 
         Titles.Should().BeEquivalentTo("comprar pão", "ligar pro dentista", "revisar PR do time");
+    }
+
+    [Fact]
+    public async Task TheChosenTags_GoOnEveryLine()
+    {
+        var urgent = Tag.Create("Urgente", "#EF4444", NowUtc);
+        var finance = Tag.Create("Financeiro", "#3B82F6", NowUtc);
+        _tags.Seed(urgent, finance);
+
+        await Handler().HandleAsync(
+            new QuickCapture("pagar boleto\nenviar nota", [urgent.Id, finance.Id, urgent.Id]),
+            Ct);
+
+        _repository.Tasks.Should().HaveCount(2).And.AllSatisfy(task =>
+            task.Tags.Select(link => link.TagId).Should().BeEquivalentTo([urgent.Id, finance.Id]));
+        _repository.SaveCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task WithoutTags_TasksAreCreatedUntagged()
+    {
+        await Handler().HandleAsync(new QuickCapture("pagar boleto"), Ct);
+
+        _repository.Tasks.Single().Tags.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ATagDeletedMeanwhile_RefusesTheWholeCapture()
+    {
+        var urgent = Tag.Create("Urgente", "#EF4444", NowUtc);
+        _tags.Seed(urgent);
+
+        var capture = () => Handler().HandleAsync(
+            new QuickCapture("pagar boleto", [urgent.Id, Guid.NewGuid()]),
+            Ct);
+
+        await capture.Should().ThrowAsync<DomainException>();
+        _repository.Tasks.Should().BeEmpty();
+        _repository.SaveCount.Should().Be(0);
     }
 
     [Fact]
