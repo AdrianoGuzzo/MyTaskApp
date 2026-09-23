@@ -39,6 +39,22 @@
     <Setter Property="FontWeight" Value="SemiBold" />
   </Style>
 
+  <!--
+    As etiquetas embaixo do título completo, no balão da linha (TodayView):
+    pílulas na cor de cada uma, com o nome. A cor e o texto vêm por binding.
+  -->
+  <Style Selector="Border.tipTag">
+    <Setter Property="CornerRadius" Value="{StaticResource WidgetPillRadius}" />
+    <Setter Property="Padding" Value="7,1" />
+    <Setter Property="Margin" Value="0,0,4,4" />
+  </Style>
+
+  <Style Selector="Border.tipTag > TextBlock">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="TextWrapping" Value="NoWrap" />
+  </Style>
+
   <Style Selector="Button">
     <Setter Property="CornerRadius" Value="{StaticResource WidgetPillRadius}" />
     <Setter Property="Padding" Value="10,5" />
