@@ -180,7 +180,7 @@ public class TaskNotesRenderingTests
     {
         var window = ShowNotes(Row("já escrito"));
 
-        var editor = window.GetVisualDescendants().OfType<TextBox>().Single();
+        var editor = window.GetVisualDescendants().OfType<TextBox>().Single(box => box.Name == "Editor");
 
         editor.IsVisible.Should().BeTrue();
         editor.Text.Should().Be("já escrito");
@@ -189,6 +189,32 @@ public class TaskNotesRenderingTests
             .OfType<Button>()
             .Where(button => button.Classes.Contains("tool"))
             .Should().NotBeEmpty();
+    }
+
+    [AvaloniaFact]
+    public void AnOpenTask_ShowsTheTitleReadyToEdit()
+    {
+        var window = ShowNotes(Row());
+
+        var title = window.GetVisualDescendants().OfType<TextBox>().Single(box => box.Name == "TitleEditor");
+
+        title.IsEffectivelyVisible.Should().BeTrue();
+        title.Text.Should().Be("Fechar o mês");
+        title.MaxLength.Should().Be(TaskItem.MaxTitleLength);
+    }
+
+    /// <summary>Concluída, o título também vira registro — como a anotação.</summary>
+    [AvaloniaFact]
+    public void ACompletedTask_ShowsTheTitleButDoesNotLetItBeEdited()
+    {
+        var window = ShowNotes(Row(isCompleted: true));
+
+        window.GetVisualDescendants().OfType<TextBox>().Single(box => box.Name == "TitleEditor")
+            .IsVisible.Should().BeFalse();
+
+        window.GetVisualDescendants()
+            .OfType<TextBlock>()
+            .Should().Contain(block => block.Text == "Fechar o mês" && block.IsEffectivelyVisible);
     }
 
     /// <summary>
@@ -273,7 +299,7 @@ public class TaskNotesRenderingTests
     {
         var window = ShowNotes(Row("texto"));
 
-        var editor = window.GetVisualDescendants().OfType<TextBox>().Single();
+        var editor = window.GetVisualDescendants().OfType<TextBox>().Single(box => box.Name == "Editor");
         editor.SelectionStart = 0;
         editor.SelectionEnd = 5;
 

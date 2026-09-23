@@ -45,7 +45,7 @@ public class TaskNotesAliasRenderingTests
     }
 
     private static TextBox Editor(Window window) =>
-        window.GetVisualDescendants().OfType<TextBox>().Single();
+        window.GetVisualDescendants().OfType<TextBox>().Single(box => box.Name == "Editor");
 
     private static Popup AliasPopup(Window window) =>
         window.GetVisualDescendants().OfType<Popup>().Single(popup => popup.Name == "AliasPopup");

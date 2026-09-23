@@ -22,10 +22,11 @@ namespace MyTaskApp.Desktop.ViewModels;
 /// uma segunda resposta para "onde fica o texto deste checklist".
 /// </para>
 /// <para>
-/// Título e prioridade são guardados na carga e devolvidos inalterados no
-/// salvamento porque <see cref="UpdateTask"/> é uma edição atômica dos três
-/// campos. Mandar o que se leu é o que impede esta tela de zerar uma
-/// prioridade que ela nem mostra.
+/// O título se edita aqui também, no cabeçalho, e vai no mesmo "Salvar" da
+/// anotação: <see cref="UpdateTask"/> é uma edição atômica de título, descrição
+/// e prioridade. A prioridade é guardada na carga e devolvida inalterada — mandar
+/// o que se leu é o que impede esta tela de zerar uma prioridade que ela nem
+/// mostra.
 /// </para>
 /// <para>
 /// A janela tem duas abas: a anotação e, desde o ADR-027, o ambiente de
@@ -53,6 +54,11 @@ public sealed partial class TaskNotesViewModel(
     private TaskPriority _priority = TaskPriority.Normal;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasUnsavedChanges))]
+    [NotifyPropertyChangedFor(nameof(NotesTabHeader))]
+    [NotifyPropertyChangedFor(nameof(TitleError))]
+    [NotifyPropertyChangedFor(nameof(WindowTitle))]
+    [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
     private string _taskTitle = string.Empty;
 
     [ObservableProperty]
@@ -75,6 +81,7 @@ public sealed partial class TaskNotesViewModel(
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsEditable))]
     [NotifyPropertyChangedFor(nameof(HasUnsavedChanges))]
+    [NotifyPropertyChangedFor(nameof(TitleError))]
     [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
     private bool _isReadOnly;
 
@@ -99,7 +106,25 @@ public sealed partial class TaskNotesViewModel(
     public bool IsEditable => !IsReadOnly;
 
     public bool HasUnsavedChanges =>
-        IsEditable && !string.Equals(Text, _persisted, StringComparison.Ordinal);
+        IsEditable
+        && (!string.Equals(Text, _persisted, StringComparison.Ordinal)
+            || !string.Equals(TaskTitle.Trim(), _persistedTitle, StringComparison.Ordinal));
+
+    public int MaxTitleLength => TaskItem.MaxTitleLength;
+
+    /// <summary>
+    /// As mesmas regras do domínio, ditas antes do clique: um "Salvar" que só
+    /// recusa depois de apertado faria o usuário descobrir a regra errando.
+    /// </summary>
+    public string? TitleError =>
+        !IsEditable ? null
+        : string.IsNullOrWhiteSpace(TaskTitle) ? "A tarefa precisa de um título."
+        : TaskTitle.Trim().Length > TaskItem.MaxTitleLength
+            ? $"O título não pode passar de {TaskItem.MaxTitleLength} caracteres."
+            : null;
+
+    /// <summary>A barra da janela não fica vazia enquanto o título é reescrito.</summary>
+    public string WindowTitle => string.IsNullOrWhiteSpace(TaskTitle) ? _persistedTitle : TaskTitle.Trim();
 
     /// <summary>
     /// Só informa: a anotação não tem teto, então não há fração nem alerta —
@@ -113,7 +138,7 @@ public sealed partial class TaskNotesViewModel(
     /// <summary>A lista precisa saber, para o ícone da linha acender.</summary>
     public event Action? Saved;
 
-    public bool CanSave => IsEditable && !IsBusy && HasUnsavedChanges;
+    public bool CanSave => IsEditable && !IsBusy && HasUnsavedChanges && TitleError is null;
 
     public void Load(TaskRowViewModel row)
     {
@@ -149,6 +174,7 @@ public sealed partial class TaskNotesViewModel(
         // Texto em branco vira nulo no domínio; normalizar aqui também mantém a
         // régua do "alterações não salvas" honesta depois de gravar.
         var notes = string.IsNullOrWhiteSpace(Text) ? null : Text.Trim();
+        var title = TaskTitle.Trim();
 
         IsBusy = true;
         ErrorMessage = null;
@@ -157,7 +183,7 @@ public sealed partial class TaskNotesViewModel(
         {
             await runner.RunAsync<UpdateTaskHandler>(
                 (handler, token) => handler.HandleAsync(
-                    new UpdateTask(_taskId, _persistedTitle, notes, _priority), token),
+                    new UpdateTask(_taskId, title, notes, _priority), token),
                 cancellationToken);
         }
         catch (DomainException exception)
@@ -179,7 +205,9 @@ public sealed partial class TaskNotesViewModel(
         }
 
         _persisted = notes ?? string.Empty;
+        _persistedTitle = title;
         Text = _persisted;
+        TaskTitle = title;
 
         // Explícito porque a régua mudou sem que Text necessariamente mudasse:
         // gravar um texto que já estava aparado não dispara notificação nenhuma,
@@ -239,12 +267,13 @@ public sealed partial class TaskNotesViewModel(
     }
 
     /// <summary>
-    /// Devolve o texto ao que está no banco. Usado quando o usuário confirma que
+    /// Devolve o texto e o título ao que está no banco. Usado quando o usuário confirma que
     /// quer descartar — depois disto a janela fecha sem perguntar de novo.
     /// </summary>
     public void Discard()
     {
         Text = _persisted;
+        TaskTitle = _persistedTitle;
         ErrorMessage = null;
     }
 }

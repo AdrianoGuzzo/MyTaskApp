@@ -162,8 +162,8 @@ public sealed partial class TaskNotesWindow : Window
     private async Task AskThenCloseAsync(TaskNotesViewModel viewModel)
     {
         var discard = await _confirmation!.AskAsync(new ConfirmationRequest(
-            "Descartar esta anotação?",
-            "O que você escreveu ainda não foi salvo. Fechar agora perde o texto.",
+            "Descartar as alterações?",
+            "O que você mudou no título ou na anotação ainda não foi salvo. Fechar agora perde as alterações.",
             "Descartar"));
 
         if (!discard)
@@ -174,6 +174,22 @@ public sealed partial class TaskNotesWindow : Window
         viewModel.Discard();
         _discarding = true;
         Close();
+    }
+
+    /// <summary>
+    /// O título é uma linha só: Enter não quebra, leva para a anotação — o
+    /// próximo lugar onde se escreve. Gravar continua sendo Ctrl+S ou o botão.
+    /// </summary>
+    private void OnTitleKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key is not (Key.Enter or Key.Return) || e.KeyModifiers != KeyModifiers.None)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        Editor.Focus();
+        Editor.CaretIndex = Editor.Text?.Length ?? 0;
     }
 
     private void OnFormatClick(object? sender, RoutedEventArgs e)
