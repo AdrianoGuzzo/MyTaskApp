@@ -7,6 +7,7 @@ using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Application.Tasks;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Reminders;
+using MyTaskApp.Application.Tags;
 using MyTaskApp.Application.Tests.Fakes;
 
 namespace MyTaskApp.Application.Tests;
@@ -29,6 +30,8 @@ public class ApplicationRegistrationTests
             .AddSingleton<IDataRetentionSettingsStore>(new FakeDataRetentionSettingsStore())
             .AddSingleton<IChecklistArchiveQuery>(new FakeChecklistArchiveQuery())
             .AddSingleton<ILifecycleSweepQuery>(new FakeLifecycleSweepQuery())
+            .AddSingleton<ITagRepository>(new FakeTagRepository())
+            .AddSingleton<ITagQuery>(new StubTagQuery())
             .AddSingleton<IAlertPresenter>(new StubAlertPresenter())
             .AddSingleton<ISoundPlayer>(new StubSoundPlayer())
             // Normalmente vem do composition root do Desktop (ADR-012).
@@ -45,6 +48,11 @@ public class ApplicationRegistrationTests
     [InlineData(typeof(CancelOccurrenceHandler))]
     [InlineData(typeof(UpdateTaskHandler))]
     [InlineData(typeof(RescheduleOccurrenceHandler))]
+    [InlineData(typeof(GetTagsHandler))]
+    [InlineData(typeof(CreateTagHandler))]
+    [InlineData(typeof(UpdateTagHandler))]
+    [InlineData(typeof(DeleteTagHandler))]
+    [InlineData(typeof(SetTaskTagsHandler))]
     [InlineData(typeof(ArchiveChecklistHandler))]
     [InlineData(typeof(RestoreChecklistHandler))]
     [InlineData(typeof(MoveChecklistToTrashHandler))]
@@ -83,6 +91,12 @@ public class ApplicationRegistrationTests
 
         provider.GetRequiredService<IUserClock>()
             .Should().BeSameAs(provider.GetRequiredService<IUserClock>());
+    }
+
+    private sealed class StubTagQuery : ITagQuery
+    {
+        public Task<IReadOnlyList<TagRow>> ListAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<TagRow>>([]);
     }
 
     private sealed class StubTodayQuery : ITodayQuery

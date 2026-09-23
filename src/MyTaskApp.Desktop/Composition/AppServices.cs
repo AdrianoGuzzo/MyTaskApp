@@ -91,6 +91,10 @@ internal static class AppServices
             .AddSingleton<DataManagementViewModel>()
             .AddSingleton<DataManagementWindow>()
 
+            // Etiquetas (ADR-025): janela única, como a de gerenciamento de dados.
+            .AddSingleton<TagsViewModel>()
+            .AddSingleton<TagsWindow>()
+
             // A anotacao de um item (§12). Transient, e nao singleton como as
             // duas acima: sao duas telas diferentes para dois checklists
             // diferentes, e o truque do "X que esconde" so faz sentido para

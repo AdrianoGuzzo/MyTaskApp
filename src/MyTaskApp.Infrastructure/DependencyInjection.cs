@@ -6,6 +6,7 @@ using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Reminders;
+using MyTaskApp.Application.Tags;
 using MyTaskApp.Infrastructure.Persistence;
 using MyTaskApp.Infrastructure.Persistence.Queries;
 using MyTaskApp.Infrastructure.Persistence.Repositories;
@@ -37,6 +38,8 @@ public static class DependencyInjection
         services.AddScoped<ITodayQuery, TodayQuery>();
         services.AddScoped<IReminderSettingsStore, ReminderSettingsStore>();
         services.AddScoped<IDueReminderQuery, DueReminderQuery>();
+        services.AddScoped<ITagRepository, TagRepository>();
+        services.AddScoped<ITagQuery, TagQuery>();
 
         // Ciclo de vida: auditoria, configuracao de retencao e as consultas das
         // areas de arquivados/lixeira e da varredura automatica.

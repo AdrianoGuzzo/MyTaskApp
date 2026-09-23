@@ -1,0 +1,245 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
+        x:Class="MyTaskApp.Desktop.Views.TagsWindow"
+        x:DataType="vm:TagsViewModel"
+        x:Name="Root"
+        Title="Etiquetas"
+        Width="460"
+        Height="600"
+        MinWidth="380"
+        MinHeight="440"
+        WindowStartupLocation="CenterOwner">
+
+  <!--
+    Criar, editar e excluir etiquetas (ADR-025). A lista de hoje só mostra as
+    bolinhas e o seletor da linha só marca: nome e cor se decidem aqui.
+  -->
+
+  <Window.Styles>
+
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="{DynamicResource WidgetSurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetStrokeSoftBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetCardRadius}" />
+      <Setter Property="Padding" Value="12,10" />
+    </Style>
+
+    <Style Selector="TextBlock.sectionTitle">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.meta">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.empty">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Opacity" Value="0.6" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="Margin" Value="0,24,0,0" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="TextAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Border.tagChip">
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetPillRadius}" />
+      <Setter Property="Padding" Value="8,2" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+    </Style>
+
+    <Style Selector="Border.tagChip TextBlock">
+      <Setter Property="FontSize" Value="11.5" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <!-- A amostra da paleta. O anel marca a escolhida sem depender só da cor. -->
+    <Style Selector="Button.swatch">
+      <Setter Property="Width" Value="26" />
+      <Setter Property="Height" Value="26" />
+      <Setter Property="Margin" Value="0,0,6,6" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="CornerRadius" Value="13" />
+      <Setter Property="BorderThickness" Value="2" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+
+    <Style Selector="Button.swatch.selected">
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetTextHighBrush}" />
+    </Style>
+
+    <Style Selector="Button.rowAction">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Padding" Value="8,3" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+  </Window.Styles>
+
+  <DockPanel Margin="16,14">
+
+    <!-- Erro e confirmação no mesmo lugar, como no gerenciamento de dados. -->
+    <Border DockPanel.Dock="Bottom"
+            Margin="0,10,0,0"
+            Padding="10,7"
+            CornerRadius="6"
+            Background="{DynamicResource SystemFillColorCriticalBackgroundBrush}"
+            IsVisible="{Binding ErrorMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <TextBlock Text="{Binding ErrorMessage}"
+                 FontSize="12"
+                 Foreground="{DynamicResource WidgetDangerBrush}"
+                 TextWrapping="Wrap" />
+    </Border>
+
+    <Border DockPanel.Dock="Bottom"
+            Margin="0,10,0,0"
+            Padding="10,7"
+            CornerRadius="6"
+            Background="{DynamicResource WidgetAccentSoftBrush}"
+            IsVisible="{Binding StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <TextBlock Text="{Binding StatusMessage}"
+                 FontSize="12"
+                 TextWrapping="Wrap" />
+    </Border>
+
+    <!-- ============================ FORMULÁRIO ============================ -->
+    <Border DockPanel.Dock="Top" Classes="card" Margin="0,0,0,12">
+      <StackPanel Spacing="10">
+
+        <TextBlock Classes="sectionTitle" Text="{Binding FormTitle}" />
+
+        <TextBox x:Name="NameBox"
+                 FontSize="12"
+                 MaxLength="40"
+                 PlaceholderText="Nome da etiqueta (ex.: Urgente)"
+                 Text="{Binding Name}" />
+
+        <ItemsControl ItemsSource="{Binding Palette}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <WrapPanel />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:SwatchViewModel">
+              <Button Classes="swatch"
+                      Classes.selected="{Binding IsSelected}"
+                      Background="{Binding Fill}"
+                      ToolTip.Tip="{Binding ColorHex}"
+                      Command="{Binding #Root.((vm:TagsViewModel)DataContext).PickColorCommand}"
+                      CommandParameter="{Binding ColorHex}" />
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <ToggleButton HorizontalAlignment="Left"
+                      FontSize="11"
+                      Padding="8,3"
+                      Content="Personalizar cor…"
+                      IsChecked="{Binding IsCustomizing}" />
+
+        <!--
+          Cor livre. Alfa fora: a cor é salva como #RRGGBB. A aba de paleta do
+          próprio ColorView sai também — a paleta que importa é a de cima.
+        -->
+        <ColorView IsVisible="{Binding IsCustomizing}"
+                   Color="{Binding Color}"
+                   IsAlphaEnabled="False"
+                   IsAlphaVisible="False"
+                   IsColorPaletteVisible="False"
+                   HorizontalAlignment="Left" />
+
+        <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+
+          <!-- A prévia: nome sobre a cor, com o texto que mais contrasta. -->
+          <Border Grid.Column="0"
+                  Classes="tagChip"
+                  MaxWidth="200"
+                  Background="{Binding PreviewFill}"
+                  ToolTip.Tip="{Binding ColorHex}">
+            <TextBlock Text="{Binding PreviewName}"
+                       Foreground="{Binding PreviewForeground}" />
+          </Border>
+
+          <Button Grid.Column="2"
+                  Margin="0,0,8,0"
+                  Content="Cancelar"
+                  IsVisible="{Binding IsEditing}"
+                  Command="{Binding CancelEditCommand}" />
+
+          <Button Grid.Column="3"
+                  Classes="accent"
+                  Content="{Binding SaveLabel}"
+                  IsDefault="True"
+                  Command="{Binding SaveCommand}" />
+        </Grid>
+
+      </StackPanel>
+    </Border>
+
+    <!-- ============================== LISTA =============================== -->
+    <DockPanel>
+
+      <TextBlock DockPanel.Dock="Top"
+                 Classes="meta"
+                 Margin="2,0,0,6"
+                 Text="Carregando…"
+                 IsVisible="{Binding IsBusy}" />
+
+      <TextBlock DockPanel.Dock="Top"
+                 Classes="empty"
+                 IsVisible="{Binding IsEmpty}"
+                 Text="Nenhuma etiqueta ainda. Crie a primeira acima — depois é só marcar nas tarefas pelo botão de etiqueta da linha." />
+
+      <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+        <ItemsControl ItemsSource="{Binding Tags}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:TagListItemViewModel">
+              <Border Classes="card" Margin="0,0,0,6" Padding="10,7">
+                <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+
+                  <Ellipse Grid.Column="0"
+                           Width="12"
+                           Height="12"
+                           Margin="0,0,10,0"
+                           VerticalAlignment="Center"
+                           Fill="{Binding Chip.Fill}" />
+
+                  <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Chip.Name}"
+                               FontSize="12.5"
+                               FontWeight="SemiBold"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock Classes="meta" Text="{Binding UsageLabel}" />
+                  </StackPanel>
+
+                  <Button Grid.Column="2"
+                          Classes="rowAction"
+                          Margin="8,0,6,0"
+                          Content="Editar"
+                          Command="{Binding #Root.((vm:TagsViewModel)DataContext).EditCommand}"
+                          CommandParameter="{Binding}" />
+
+                  <Button Grid.Column="3"
+                          Classes="rowAction danger"
+                          Content="Excluir"
+                          Command="{Binding #Root.((vm:TagsViewModel)DataContext).DeleteCommand}"
+                          CommandParameter="{Binding}" />
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+
+    </DockPanel>
+
+  </DockPanel>
+</Window>
