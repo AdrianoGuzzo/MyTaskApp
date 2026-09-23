@@ -11,7 +11,7 @@ namespace MyTaskApp.Desktop.ViewModels;
 /// anotação e o campo Diretório da aba Desenvolvimento (ADR-027) têm cada uma a
 /// sua, com os mesmos diretórios.
 /// </summary>
-public sealed partial class AliasCompletionViewModel : ObservableObject
+public sealed partial class AliasCompletionViewModel : ObservableObject, IAliasCompletionSource
 {
     /// <summary>Os diretórios das etiquetas da tarefa, na última carga.</summary>
     private IReadOnlyList<TagDirectoryRow> _directories = [];
@@ -43,6 +43,12 @@ public sealed partial class AliasCompletionViewModel : ObservableObject
     public bool HasDirectories => _directories.Count > 0;
 
     public IReadOnlyList<TagDirectoryRow> Directories => _directories;
+
+    object? IAliasCompletionSource.SelectedItem => SelectedSuggestion;
+
+    /// <summary>Aceitar um diretório insere o path: o alias é só atalho de digitação.</summary>
+    string? IAliasCompletionSource.ReplacementFor(object? suggestion) =>
+        suggestion is AliasSuggestionViewModel item && Suggestions.Contains(item) ? item.Path : null;
 
     public void SetDirectories(
         IReadOnlyList<TagDirectoryRow> directories,

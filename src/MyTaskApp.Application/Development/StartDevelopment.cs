@@ -10,10 +10,16 @@ namespace MyTaskApp.Application.Development;
 /// </summary>
 /// <param name="WorktreePath">O caminho do plano, ou o que o usuário escolheu no lugar dele.</param>
 /// <param name="AdoptExisting">Usar o worktree que já está no caminho, em vez de criar.</param>
+/// <param name="Commands">
+/// A lista de comandos pós-Worktree, gravada junto com o ambiente (ADR-028).
+/// <c>null</c> mantém a que já estava. Gravar não roda nada: a tela roda depois,
+/// só se o worktree ficou pronto.
+/// </param>
 public sealed record StartDevelopment(
     DevelopmentPlan Plan,
     string WorktreePath,
-    bool AdoptExisting = false);
+    bool AdoptExisting = false,
+    IReadOnlyList<string>? Commands = null);
 
 /// <summary>
 /// Não é cancelável depois de gravar "Criando": matar o <c>git worktree add</c>
@@ -54,14 +60,23 @@ public sealed class StartDevelopmentHandler(
         path = WorktreePathPlanner.Canonical(path);
 
         return command.AdoptExisting
-            ? await AdoptAsync(task, plan, path, progress, cancellationToken)
-            : await CreateAsync(task, plan, path, progress, cancellationToken);
+            ? await AdoptAsync(task, plan, path, command.Commands, progress, cancellationToken)
+            : await CreateAsync(task, plan, path, command.Commands, progress, cancellationToken);
+    }
+
+    private void SetCommands(TaskItem task, IReadOnlyList<string>? commands)
+    {
+        if (commands is not null)
+        {
+            task.SetDevelopmentCommands(commands, timeProvider.GetUtcNow());
+        }
     }
 
     private async Task<TaskDevelopmentView> CreateAsync(
         TaskItem task,
         DevelopmentPlan plan,
         string path,
+        IReadOnlyList<string>? commands,
         IProgress<DevelopmentProgress>? progress,
         CancellationToken cancellationToken)
     {
@@ -74,6 +89,7 @@ public sealed class StartDevelopmentHandler(
         }
 
         task.BeginDevelopment(plan.RepositoryPath, plan.Source.ShortName, plan.NewBranch, path, timeProvider.GetUtcNow());
+        SetCommands(task, commands);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         // Daqui em diante, nada de cancelar: ver o remarks da classe.
@@ -116,6 +132,7 @@ public sealed class StartDevelopmentHandler(
         TaskItem task,
         DevelopmentPlan plan,
         string path,
+        IReadOnlyList<string>? commands,
         IProgress<DevelopmentProgress>? progress,
         CancellationToken cancellationToken)
     {
@@ -138,6 +155,7 @@ public sealed class StartDevelopmentHandler(
 
         var now = timeProvider.GetUtcNow();
         task.BeginDevelopment(plan.RepositoryPath, plan.Source.ShortName, branch, path, now);
+        SetCommands(task, commands);
         task.MarkDevelopmentReady(now);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 

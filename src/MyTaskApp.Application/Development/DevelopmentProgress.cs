@@ -90,7 +90,8 @@ public sealed record TaskDevelopmentView(
     string WorktreePath,
     TaskDevelopmentStatus Status,
     DateTimeOffset CreatedAt,
-    string? FailureReason)
+    string? FailureReason,
+    IReadOnlyList<string>? Commands = null)
 {
     public static TaskDevelopmentView From(TaskDevelopment development) =>
         new(
@@ -100,7 +101,8 @@ public sealed record TaskDevelopmentView(
             development.WorktreePath,
             development.Status,
             development.CreatedAt,
-            development.FailureReason);
+            development.FailureReason,
+            development.Commands.Select(command => command.Command).ToList());
 }
 
 internal static class ProgressExtensions

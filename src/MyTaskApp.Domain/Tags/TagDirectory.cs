@@ -1,5 +1,3 @@
-using System.Text.RegularExpressions;
-
 namespace MyTaskApp.Domain.Tags;
 
 /// <summary>
@@ -13,9 +11,9 @@ namespace MyTaskApp.Domain.Tags;
 /// entidade, com identidade própria, porque a integração com Git vai se prender
 /// a ele.
 /// </remarks>
-public sealed partial class TagDirectory
+public sealed class TagDirectory
 {
-    public const int MaxAliasLength = 40;
+    public const int MaxAliasLength = AliasRule.MaxLength;
 
     public const int MaxPathLength = 1024;
 
@@ -89,38 +87,10 @@ public sealed partial class TagDirectory
     }
 
     /// <summary>
-    /// Apara e põe o <c>@</c> quando falta: quem digitou "eco-core" quis dizer
-    /// "@eco-core". Depois do <c>@</c>, só letras, dígitos, ponto, hífen e
-    /// sublinhado — os mesmos caracteres que o autocomplete reconhece no texto.
+    /// Apara e põe o <c>@</c> quando falta (ver <see cref="AliasRule.Normalize"/>).
     /// </summary>
-    public static string NormalizeAlias(string? alias)
-    {
-        var normalized = alias?.Trim() ?? string.Empty;
-
-        if (normalized.Length > 0 && normalized[0] != '@')
-        {
-            normalized = "@" + normalized;
-        }
-
-        if (normalized.Length <= 1)
-        {
-            throw new DomainException("O diretório precisa de um alias (ex.: @meu-projeto).");
-        }
-
-        if (normalized.Length > MaxAliasLength)
-        {
-            throw new DomainException(
-                $"O alias não pode passar de {MaxAliasLength} caracteres.");
-        }
-
-        if (!AliasPattern().IsMatch(normalized))
-        {
-            throw new DomainException(
-                "O alias começa com @ e usa só letras, números, ponto, hífen e sublinhado.");
-        }
-
-        return normalized;
-    }
+    public static string NormalizeAlias(string? alias) =>
+        AliasRule.Normalize(alias, "O diretório precisa de um alias (ex.: @meu-projeto).");
 
     /// <summary>
     /// Apara, tira as aspas que o "Copiar como caminho" do Explorer põe e a
@@ -175,7 +145,4 @@ public sealed partial class TagDirectory
 
         return normalized;
     }
-
-    [GeneratedRegex("^@[A-Za-z0-9][A-Za-z0-9._-]*$")]
-    private static partial Regex AliasPattern();
 }

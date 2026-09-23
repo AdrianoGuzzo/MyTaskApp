@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Commands;
 using MyTaskApp.Application.Development;
 using MyTaskApp.Desktop.Composition;
 using MyTaskApp.Desktop.Development;
@@ -254,6 +255,17 @@ public sealed partial class TaskDevelopmentViewModel(
         ? $"Usar Worktree existente (branch {branch})"
         : "Usar Worktree existente";
 
+    // --- Comandos pós-Worktree (ADR-028) ------------------------------------
+
+    /// <summary>
+    /// A lista que roda depois de o worktree ficar pronto. Editável no formulário
+    /// e com o ambiente pronto; nunca durante a criação.
+    /// </summary>
+    public PostWorktreeCommandsViewModel Commands { get; } = new();
+
+    /// <summary>Pede a janela de comandos globais.</summary>
+    public event Action? CommandsRequested;
+
     // --- Pronto ------------------------------------------------------------
 
     [ObservableProperty]
@@ -316,6 +328,14 @@ public sealed partial class TaskDevelopmentViewModel(
         && SelectedBranchOption is { IsSelectable: true }
         && BranchNameError is null;
 
+    partial void OnStateChanged(DevelopmentPanelState value) => SyncCommandsEditable();
+
+    partial void OnIsReadOnlyChanged(bool value) => SyncCommandsEditable();
+
+    private void SyncCommandsEditable() =>
+        Commands.IsEditable = !IsReadOnly
+            && State is DevelopmentPanelState.Setup or DevelopmentPanelState.Failed or DevelopmentPanelState.Ready;
+
     /// <summary>A tarefa que esta aba prepara. Chamado uma vez, na abertura da janela.</summary>
     public void Load(Guid taskId, string taskTitle, bool isReadOnly)
     {
@@ -345,6 +365,8 @@ public sealed partial class TaskDevelopmentViewModel(
                 cancellationToken);
 
             Development = development;
+            ShowSavedCommands(development);
+            await LoadGlobalCommandsAsync(cancellationToken);
 
             if (development is { Status: TaskDevelopmentStatus.Ready })
             {
@@ -563,6 +585,13 @@ public sealed partial class TaskDevelopmentViewModel(
             return;
         }
 
+        // Um @alias que não existe é descoberto agora, e não com o worktree já
+        // criado e a lista parada na primeira etapa.
+        if (!await ValidateCommandsAsync())
+        {
+            return;
+        }
+
         ResetRun();
         State = DevelopmentPanelState.Running;
         CanCancel = true;
@@ -649,19 +678,195 @@ public sealed partial class TaskDevelopmentViewModel(
         try
         {
             // Sem token: criar o worktree não se interrompe (ver StartDevelopmentHandler).
+            var commands = Commands.Entries;
+
             var development = await runner.RunAsync<StartDevelopmentHandler, TaskDevelopmentView>(
-                (handler, token) => handler.HandleAsync(new StartDevelopment(plan, path, adopt), progress, token),
+                (handler, token) => handler.HandleAsync(
+                    new StartDevelopment(plan, path, adopt, commands), progress, token),
                 CancellationToken.None);
 
             Development = development;
             PreviousAttempt = null;
+            Commands.MarkSaved();
             State = DevelopmentPanelState.Ready;
             Message = "✓ Implementação iniciada.";
         }
         catch (Exception exception)
         {
             HandleFailure(exception);
+            return;
         }
+
+        // Só aqui, com o worktree pronto: a falha acima retorna antes (ADR-028).
+        if (Commands.Entries.Count > 0)
+        {
+            await RunCommandsAsync();
+        }
+    }
+
+    // --- Comandos pós-Worktree ---------------------------------------------
+
+    /// <summary>
+    /// Roda a lista gravada, em ordem, no worktree. Com a lista alterada, grava
+    /// antes: roda o que está na tela, e o que está na tela é o que fica.
+    /// </summary>
+    [RelayCommand]
+    public async Task RunCommandsAsync()
+    {
+        if (State is not DevelopmentPanelState.Ready || Commands.IsRunning)
+        {
+            return;
+        }
+
+        if (Commands.IsDirty && !await SaveCommandsCoreAsync())
+        {
+            return;
+        }
+
+        if (Commands.Entries.Count == 0)
+        {
+            Message = "Nenhum comando para executar. Adicione um na lista.";
+            return;
+        }
+
+        var token = Commands.BeginRun();
+        var progress = new UiProgress<CommandStepProgress>(Commands.Apply);
+
+        try
+        {
+            var summary = await runner.RunAsync<RunDevelopmentCommandsHandler, CommandRunSummary>(
+                (handler, cancel) => handler.HandleAsync(new RunDevelopmentCommands(_taskId), progress, cancel),
+                token);
+
+            Commands.Complete(summary);
+        }
+        catch (OperationCanceledException)
+        {
+            Commands.Fail("Execução cancelada antes de começar. Nenhum comando rodou.");
+        }
+        catch (DomainException exception)
+        {
+            Commands.Fail(exception.Message);
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "DevelopmentCommandsFailed {TaskId}", _taskId);
+            Commands.Fail("Não foi possível executar os comandos.");
+        }
+    }
+
+    [RelayCommand]
+    public void CancelCommands() => Commands.Cancel();
+
+    /// <summary>"Salvar comandos", com o ambiente pronto.</summary>
+    [RelayCommand]
+    public async Task SaveCommandsAsync()
+    {
+        if (await SaveCommandsCoreAsync())
+        {
+            Message = "Comandos salvos.";
+        }
+    }
+
+    [RelayCommand]
+    public void OpenGlobalCommands() => CommandsRequested?.Invoke();
+
+    /// <summary>
+    /// Os comandos globais, para o autocomplete e o aviso de alias inexistente.
+    /// A cada ativação: podem ter mudado na outra janela.
+    /// </summary>
+    public async Task LoadGlobalCommandsAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var rows = await runner.RunAsync<GetDevelopmentCommandsHandler, IReadOnlyList<DevelopmentCommandRow>>(
+                (handler, token) => handler.HandleAsync(new GetDevelopmentCommands(), token),
+                cancellationToken);
+
+            Commands.SetCatalog(rows);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // Sem a lista, o autocomplete só não abre; digitar o comando continua valendo.
+            logger.LogWarning(exception, "DevelopmentCommandsLoadFailed");
+        }
+    }
+
+    private async Task<bool> SaveCommandsCoreAsync()
+    {
+        if (Development is null || State is not DevelopmentPanelState.Ready)
+        {
+            return false;
+        }
+
+        try
+        {
+            var entries = Commands.Entries;
+
+            Development = await runner.RunAsync<SetDevelopmentCommandsHandler, TaskDevelopmentView>(
+                (handler, token) => handler.HandleAsync(new SetDevelopmentCommands(_taskId, entries), token),
+                CancellationToken.None);
+
+            Commands.MarkSaved();
+            return true;
+        }
+        catch (DomainException exception)
+        {
+            Message = exception.Message;
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "DevelopmentCommandsSaveFailed {TaskId}", _taskId);
+            Message = "Não foi possível salvar os comandos.";
+        }
+
+        return false;
+    }
+
+    private async Task<bool> ValidateCommandsAsync()
+    {
+        var entries = Commands.Entries;
+
+        if (entries.Count == 0)
+        {
+            return true;
+        }
+
+        try
+        {
+            await runner.RunAsync<ValidateCommandEntriesHandler, IReadOnlyList<ResolvedCommand>>(
+                (handler, token) => handler.HandleAsync(new ValidateCommandEntries(entries), token),
+                CancellationToken.None);
+
+            return true;
+        }
+        catch (DomainException exception)
+        {
+            Message = exception.Message;
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "DevelopmentCommandsValidationFailed {TaskId}", _taskId);
+            Message = "Não foi possível conferir os comandos pós-Worktree.";
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// A lista gravada, a menos que o usuário esteja no meio de uma edição ou de
+    /// uma execução. Igual à da tela, não mexe: trocar apagaria o output.
+    /// </summary>
+    private void ShowSavedCommands(TaskDevelopmentView? development)
+    {
+        var saved = development?.Commands ?? [];
+
+        if (Commands.IsDirty || Commands.IsRunning || saved.SequenceEqual(Commands.Entries))
+        {
+            return;
+        }
+
+        Commands.SetEntries(saved);
     }
 
     private void OnProgress(DevelopmentProgress progress)
@@ -836,6 +1041,12 @@ public sealed partial class TaskDevelopmentViewModel(
     {
         if (Development is not { } development)
         {
+            return;
+        }
+
+        if (Commands.IsRunning)
+        {
+            Message = "Aguarde os comandos terminarem, ou cancele, antes de remover o worktree.";
             return;
         }
 

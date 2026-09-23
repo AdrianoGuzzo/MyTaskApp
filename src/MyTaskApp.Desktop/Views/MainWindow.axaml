@@ -141,6 +141,8 @@
                               Command="{Binding OpenSettingsCommand}" />
                     <MenuItem Header="Etiquetas…"
                               Command="{Binding OpenTagsCommand}" />
+                    <MenuItem Header="Comandos globais…"
+                              Command="{Binding OpenCommandsCommand}" />
                     <MenuItem Header="Gerenciamento de dados…"
                               Command="{Binding OpenDataManagementCommand}" />
                   </MenuFlyout>

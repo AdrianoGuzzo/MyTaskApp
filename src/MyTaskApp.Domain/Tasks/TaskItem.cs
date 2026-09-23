@@ -208,6 +208,16 @@ public sealed class TaskItem
         }
     }
 
+    /// <summary>
+    /// Troca a lista de comandos pós-Worktree (ADR-028). Configuração, e não
+    /// execução: rodá-los é decisão da tela, sempre por ação explícita.
+    /// </summary>
+    public void SetDevelopmentCommands(IEnumerable<string?>? commands, DateTimeOffset at)
+    {
+        RefuseWhenOutOfTheMainList("alterar os comandos de");
+        RequireDevelopment().ReplaceCommands(commands, at);
+    }
+
     public void MarkDevelopmentReady(DateTimeOffset at) => RequireDevelopment().MarkReady(at);
 
     public void MarkDevelopmentFailed(string reason, DateTimeOffset at) =>
