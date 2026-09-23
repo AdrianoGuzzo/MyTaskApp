@@ -201,6 +201,7 @@ public sealed partial class App : Avalonia.Application
         TodayViewModel todayViewModel)
     {
         todayViewModel.TagsRequested += () => ShowTags(services, window);
+        todayViewModel.CommandsRequested += () => ShowDevelopmentCommands(services, window);
 
         // Renomear, recolorir ou excluir muda as bolinhas de todo o painel; sem
         // isto a mudança só apareceria no refresh de 60 s.
@@ -212,6 +213,19 @@ public sealed partial class App : Avalonia.Application
     private static void ShowTags(IServiceProvider services, Window owner)
     {
         var window = services.GetRequiredService<TagsWindow>();
+
+        window.Show(owner);
+        window.Activate();
+        window.Reveal();
+    }
+
+    /// <summary>
+    /// A janela de comandos globais (ADR-028). Aberta pela aba Desenvolvimento
+    /// e pelo menu; uma só, como a de etiquetas.
+    /// </summary>
+    private static void ShowDevelopmentCommands(IServiceProvider services, Window owner)
+    {
+        var window = services.GetRequiredService<DevelopmentCommandsWindow>();
 
         window.Show(owner);
         window.Activate();
@@ -259,6 +273,8 @@ public sealed partial class App : Avalonia.Application
         var notes = new TaskNotesWindow(
             viewModel,
             services.GetRequiredService<IConfirmationDialog>());
+
+        viewModel.Development.CommandsRequested += () => ShowDevelopmentCommands(services, notes);
 
         _notes[row.TaskId] = notes;
         notes.Closed += (_, _) => _notes.Remove(row.TaskId);

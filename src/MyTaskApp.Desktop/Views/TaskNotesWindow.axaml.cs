@@ -1,7 +1,9 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using Avalonia.VisualTree;
 using MyTaskApp.Desktop.Notes;
 using MyTaskApp.Desktop.ViewModels;
 
@@ -72,6 +74,7 @@ public sealed partial class TaskNotesWindow : Window
             if (ViewModel is { IsEditable: true } viewModel)
             {
                 _ = viewModel.LoadAliasesAsync(CancellationToken.None);
+                _ = viewModel.Development.LoadGlobalCommandsAsync(CancellationToken.None);
             }
         };
     }
@@ -137,6 +140,15 @@ public sealed partial class TaskNotesWindow : Window
                     viewModel.Development.Message = "Aguarde a criação do worktree terminar para fechar.";
                 }
             }
+            else if (viewModel.Development.Commands.IsRunning)
+            {
+                // Fechar com um comando rodando o mataria sem ninguém ver o
+                // output: o primeiro "X" cancela e mostra; o segundo fecha.
+                e.Cancel = true;
+                viewModel.SelectedTabIndex = TaskNotesViewModel.DevelopmentTab;
+                viewModel.Development.CancelCommands();
+                viewModel.Development.Message = "Execução dos comandos cancelada. Feche de novo para sair.";
+            }
             else if (_confirmation is not null && viewModel.HasUnsavedChanges)
             {
                 e.Cancel = true;
@@ -177,7 +189,9 @@ public sealed partial class TaskNotesWindow : Window
     {
         // Com uma lista aberta, as teclas dela vêm antes de tudo — inclusive do
         // Escape que fecha a janela e do Enter que quebraria a linha.
-        if (_notesCompletion.HandleKey(e) || _directoryCompletion.HandleKey(e))
+        if (_notesCompletion.HandleKey(e)
+            || _directoryCompletion.HandleKey(e)
+            || ((e.Source as Visual)?.FindAncestorOfType<CommandInputBox>(includeSelf: true)?.HandleKey(e) ?? false))
         {
             e.Handled = true;
             return;

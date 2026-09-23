@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using MyTaskApp.Domain.Auditing;
+using MyTaskApp.Domain.Commands;
 using MyTaskApp.Domain.Tags;
 using MyTaskApp.Domain.Tasks;
 
@@ -22,6 +23,12 @@ public sealed class MyTaskAppDbContext(DbContextOptions<MyTaskAppDbContext> opti
 
     /// <summary>O worktree de cada tarefa, quando houver (ADR-027).</summary>
     public DbSet<TaskDevelopment> TaskDevelopments => Set<TaskDevelopment>();
+
+    /// <summary>Os comandos pós-Worktree de cada ambiente, em ordem (ADR-028).</summary>
+    public DbSet<TaskDevelopmentCommand> TaskDevelopmentCommands => Set<TaskDevelopmentCommand>();
+
+    /// <summary>Os comandos globais chamados por <c>@alias</c> (ADR-028).</summary>
+    public DbSet<DevelopmentCommand> DevelopmentCommands => Set<DevelopmentCommand>();
 
     /// <summary>
     /// A trilha de auditoria do ciclo de vida. <b>Não</b> tem relacionamento com

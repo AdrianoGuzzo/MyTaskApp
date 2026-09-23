@@ -1,0 +1,122 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
+             xmlns:views="using:MyTaskApp.Desktop.Views"
+             x:Class="MyTaskApp.Desktop.Views.PostWorktreeCommandsView"
+             x:DataType="vm:PostWorktreeCommandsViewModel">
+
+  <!--
+    A lista de comandos pós-Worktree e a execução dela (ADR-028). Aparece no
+    formulário e no cartão "pronto", ligada ao mesmo ViewModel: só uma das duas
+    está visível de cada vez. Os botões que dependem do ambiente (executar,
+    salvar, gerenciar) ficam com quem hospeda.
+  -->
+
+  <UserControl.Styles>
+    <Style Selector="Button.runStep">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="4,2" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+    </Style>
+
+    <Style Selector="Button.runStep.selected /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource WidgetAccentSoftBrush}" />
+    </Style>
+  </UserControl.Styles>
+
+  <StackPanel Spacing="8">
+
+    <StackPanel Spacing="2">
+      <TextBlock Classes="fieldLabel" Text="Comandos pós-Worktree" />
+      <TextBlock Classes="hint"
+                 Text="Rodam em ordem, dentro da pasta do worktree, depois que ele é criado. Um comando que falhar interrompe os seguintes. Digite @ para um comando global." />
+    </StackPanel>
+
+    <ItemsControl x:Name="CommandItems" ItemsSource="{Binding Items}">
+      <ItemsControl.ItemsPanel>
+        <ItemsPanelTemplate>
+          <StackPanel Spacing="6" />
+        </ItemsPanelTemplate>
+      </ItemsControl.ItemsPanel>
+      <ItemsControl.ItemTemplate>
+        <DataTemplate x:DataType="vm:PostWorktreeCommandItemViewModel">
+          <views:CommandInputBox />
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+
+    <Button x:Name="AddCommandButton"
+            HorizontalAlignment="Left"
+            Content="+ Adicionar comando"
+            Command="{Binding AddCommand}" />
+
+    <!-- Execução: status de cada etapa e o terminal da escolhida. -->
+    <StackPanel Spacing="8" IsVisible="{Binding ShowRun}" x:Name="RunPanel">
+
+      <Border Height="1" Background="{DynamicResource WidgetStrokeSoftBrush}" />
+
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock Grid.Column="0"
+                   Classes="fieldLabel"
+                   VerticalAlignment="Center"
+                   Text="Execução" />
+        <Button Grid.Column="1"
+                x:Name="CancelCommandsButton"
+                Content="Cancelar"
+                IsVisible="{Binding IsRunning}"
+                Command="{Binding CancelCommand}" />
+      </Grid>
+
+      <ItemsControl ItemsSource="{Binding Items}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <StackPanel Spacing="2" />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:PostWorktreeCommandItemViewModel">
+            <Button Classes="runStep"
+                    Classes.selected="{Binding IsSelected}"
+                    IsVisible="{Binding HasRunState}"
+                    ToolTip.Tip="Ver o output deste comando"
+                    Command="{Binding ShowOutputCommand}">
+              <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6">
+                <TextBlock Grid.Column="0"
+                           Classes="stepGlyph"
+                           Classes.done="{Binding IsDone}"
+                           Classes.running="{Binding IsRunning}"
+                           Classes.failed="{Binding IsFailed}"
+                           Text="{Binding Glyph}" />
+                <TextBlock Grid.Column="1"
+                           Classes="stepTitle"
+                           Classes.pending="{Binding IsPending}"
+                           TextTrimming="CharacterEllipsis">
+                  <Run Text="{Binding Number, StringFormat='{}{0}. '}" />
+                  <Run Text="{Binding Title}" />
+                </TextBlock>
+                <TextBlock Grid.Column="2"
+                           Classes="hint"
+                           VerticalAlignment="Center"
+                           Text="{Binding StatusText}" />
+              </Grid>
+            </Button>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <TextBlock Classes="body"
+                 x:Name="RunMessage"
+                 Classes.ok="{Binding RunSucceeded}"
+                 Classes.bad="{Binding !RunSucceeded}"
+                 Text="{Binding RunMessage}"
+                 IsVisible="{Binding HasRunMessage}" />
+
+      <views:CommandOutputView x:Name="Terminal"
+                               DataContext="{Binding SelectedItem.Output, FallbackValue={x:Null}}"
+                               IsVisible="{Binding #RunPanel.((vm:PostWorktreeCommandsViewModel)DataContext).HasSelectedItem, FallbackValue=False}" />
+    </StackPanel>
+
+  </StackPanel>
+</UserControl>

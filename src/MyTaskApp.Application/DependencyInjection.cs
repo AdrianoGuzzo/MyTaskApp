@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Commands;
 using MyTaskApp.Application.Configuration;
 using MyTaskApp.Application.Development;
 using MyTaskApp.Application.Lifecycle;
@@ -71,6 +72,16 @@ public static class DependencyInjection
         services.AddScoped<StartDevelopmentHandler>();
         services.AddScoped<InspectWorktreeHandler>();
         services.AddScoped<RemoveWorktreeHandler>();
+
+        // Comandos pós-Worktree e comandos globais por @alias (ADR-028).
+        services.AddScoped<GetDevelopmentCommandsHandler>();
+        services.AddScoped<CreateDevelopmentCommandHandler>();
+        services.AddScoped<UpdateDevelopmentCommandHandler>();
+        services.AddScoped<DeleteDevelopmentCommandHandler>();
+        services.AddScoped<ValidateCommandEntriesHandler>();
+        services.AddScoped<RunCommandHandler>();
+        services.AddScoped<SetDevelopmentCommandsHandler>();
+        services.AddScoped<RunDevelopmentCommandsHandler>();
 
         // Ciclo de vida do checklist: arquivar, lixeira, exclusao definitiva e
         // auditoria (§1 a §8).

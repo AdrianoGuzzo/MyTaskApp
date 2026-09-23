@@ -99,6 +99,10 @@ internal static class AppServices
             .AddSingleton<TagsViewModel>()
             .AddSingleton<TagsWindow>()
 
+            // Comandos globais (ADR-028): janela única, como a de etiquetas.
+            .AddSingleton<DevelopmentCommandsViewModel>()
+            .AddSingleton<DevelopmentCommandsWindow>()
+
             // A anotacao de um item (§12). Transient, e nao singleton como as
             // duas acima: sao duas telas diferentes para dois checklists
             // diferentes, e o truque do "X que esconde" so faz sentido para

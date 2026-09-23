@@ -57,6 +57,40 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                     b.ToTable("TaskAuditEntries", (string)null);
                 });
 
+            modelBuilder.Entity("MyTaskApp.Domain.Commands.DevelopmentCommand", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Alias")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT")
+                        .UseCollation("NOCASE");
+
+                    b.Property<string>("Command")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Alias")
+                        .IsUnique();
+
+                    b.ToTable("DevelopmentCommands", (string)null);
+                });
+
             modelBuilder.Entity("MyTaskApp.Domain.Tags.Tag", b =>
                 {
                     b.Property<Guid>("Id")
@@ -170,6 +204,29 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("TaskDevelopments", (string)null);
+                });
+
+            modelBuilder.Entity("MyTaskApp.Domain.Tasks.TaskDevelopmentCommand", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Command")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("TaskDevelopmentId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TaskDevelopmentId", "Order");
+
+                    b.ToTable("TaskDevelopmentCommands", (string)null);
                 });
 
             modelBuilder.Entity("MyTaskApp.Domain.Tasks.TaskItem", b =>
@@ -347,6 +404,15 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("MyTaskApp.Domain.Tasks.TaskDevelopmentCommand", b =>
+                {
+                    b.HasOne("MyTaskApp.Domain.Tasks.TaskDevelopment", null)
+                        .WithMany("Commands")
+                        .HasForeignKey("TaskDevelopmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("MyTaskApp.Domain.Tasks.TaskItem", b =>
                 {
                     b.OwnsOne("MyTaskApp.Domain.Reminders.ReminderPolicy", "Reminder", b1 =>
@@ -460,6 +526,11 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MyTaskApp.Domain.Tags.Tag", b =>
                 {
                     b.Navigation("Directories");
+                });
+
+            modelBuilder.Entity("MyTaskApp.Domain.Tasks.TaskDevelopment", b =>
+                {
+                    b.Navigation("Commands");
                 });
 
             modelBuilder.Entity("MyTaskApp.Domain.Tasks.TaskItem", b =>

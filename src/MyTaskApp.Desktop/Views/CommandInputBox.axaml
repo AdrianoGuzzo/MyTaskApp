@@ -1,0 +1,94 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
+             x:Class="MyTaskApp.Desktop.Views.CommandInputBox"
+             x:DataType="vm:PostWorktreeCommandItemViewModel">
+
+  <!--
+    Uma linha da lista de comandos pós-Worktree (ADR-028): o texto, ↑ ↓ × e o
+    autocomplete de @alias, com o mesmo gesto do campo Diretório. Controle
+    próprio porque são N caixas, e cada uma precisa do seu binder.
+  -->
+
+  <StackPanel Spacing="2">
+    <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="6">
+
+      <TextBlock Grid.Column="0"
+                 Width="22"
+                 VerticalAlignment="Center"
+                 FontSize="12"
+                 Foreground="{DynamicResource WidgetTextLowBrush}"
+                 Text="{Binding Number, StringFormat='{}{0}.'}" />
+
+      <TextBox Grid.Column="1"
+               x:Name="CommandBox"
+               FontFamily="Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace"
+               FontSize="12"
+               MaxLength="2000"
+               Text="{Binding Text}"
+               IsEnabled="{Binding IsEditable}"
+               PlaceholderText="dotnet restore, ou @ para um comando global" />
+
+      <Button Grid.Column="2"
+              Content="↑"
+              ToolTip.Tip="Subir"
+              IsEnabled="{Binding IsEditable}"
+              IsVisible="{Binding CanMoveUp}"
+              Command="{Binding MoveUpCommand}" />
+
+      <Button Grid.Column="3"
+              Content="↓"
+              ToolTip.Tip="Descer"
+              IsEnabled="{Binding IsEditable}"
+              IsVisible="{Binding CanMoveDown}"
+              Command="{Binding MoveDownCommand}" />
+
+      <Button Grid.Column="4"
+              x:Name="RemoveButton"
+              Content="×"
+              ToolTip.Tip="Remover da lista"
+              IsEnabled="{Binding IsEditable}"
+              Command="{Binding RemoveCommand}" />
+    </Grid>
+
+    <TextBlock Margin="28,0,0,0"
+               FontSize="11"
+               TextTrimming="CharacterEllipsis"
+               Foreground="{DynamicResource WidgetTextLowBrush}"
+               Classes.warn="{Binding IsUnknownAlias}"
+               Text="{Binding Hint}"
+               ToolTip.Tip="{Binding Hint}"
+               IsVisible="{Binding HasHint}" />
+
+    <Popup x:Name="CommandPopup"
+           PlacementTarget="{Binding #CommandBox}"
+           Placement="Bottom"
+           IsLightDismissEnabled="True"
+           IsOpen="{Binding Completion.IsCompletionOpen, Mode=TwoWay}">
+      <Border Classes="aliasList">
+        <ScrollViewer MaxHeight="280" HorizontalScrollBarVisibility="Disabled">
+          <ItemsControl x:Name="CommandAliasList" ItemsSource="{Binding Completion.Suggestions}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:CommandSuggestionViewModel">
+                <Border Classes="aliasItem"
+                        Classes.selected="{Binding IsSelected}"
+                        ToolTip.Tip="{Binding Description}"
+                        PointerPressed="OnSuggestionPressed">
+                  <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+                    <TextBlock Grid.Column="0" Classes="aliasName" Text="{Binding Alias}" />
+                    <TextBlock Grid.Column="1"
+                               Classes="aliasPath"
+                               VerticalAlignment="Center"
+                               FontFamily="Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace"
+                               TextTrimming="CharacterEllipsis"
+                               Text="{Binding Command}" />
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </Border>
+    </Popup>
+  </StackPanel>
+</UserControl>
