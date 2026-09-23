@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Platform.Storage;
 using MyTaskApp.Desktop.Notes;
 using MyTaskApp.Desktop.ViewModels;
 
@@ -25,10 +26,19 @@ namespace MyTaskApp.Desktop.Views;
 /// dá para separar foi separado: a aritmética inteira está em
 /// <see cref="MarkdownEditing"/>, testada sem janela nenhuma.
 /// </para>
+/// <para>
+/// Desde o ADR-027 a janela tem a aba Desenvolvimento. O autocomplete de
+/// <c>@alias</c> serve às duas caixas — a anotação e o campo Diretório — por
+/// um <see cref="AliasCompletionBinder"/> cada.
+/// </para>
 /// </remarks>
 public sealed partial class TaskNotesWindow : Window
 {
     private readonly IConfirmationDialog? _confirmation;
+
+    private readonly AliasCompletionBinder _notesCompletion;
+
+    private readonly AliasCompletionBinder _directoryCompletion;
 
     /// <summary>
     /// Liga depois de o usuário confirmar o descarte: sem isto, o
@@ -44,6 +54,26 @@ public sealed partial class TaskNotesWindow : Window
         // formatação precisam chegar primeiro. Mesmo motivo do Enter da captura
         // rápida em TodayView.
         AddHandler(KeyDownEvent, OnKeyDown, RoutingStrategies.Tunnel);
+
+        _notesCompletion = new AliasCompletionBinder(
+            Editor,
+            AliasPopup,
+            () => ViewModel?.Completion);
+
+        _directoryCompletion = new AliasCompletionBinder(
+            DirectoryBox,
+            DirectoryPopup,
+            () => ViewModel?.Development.DirectoryCompletion);
+
+        // A cada ativação, e não só na abertura: etiquetas e diretórios podem ter
+        // mudado em outra janela enquanto esta estava aberta.
+        Activated += (_, _) =>
+        {
+            if (ViewModel is { IsEditable: true } viewModel)
+            {
+                _ = viewModel.LoadAliasesAsync(CancellationToken.None);
+            }
+        };
     }
 
     public TaskNotesWindow(TaskNotesViewModel viewModel, IConfirmationDialog confirmation)
@@ -55,11 +85,13 @@ public sealed partial class TaskNotesWindow : Window
         viewModel.CloseRequested += Close;
     }
 
+    private TaskNotesViewModel? ViewModel => DataContext as TaskNotesViewModel;
+
     protected override void OnOpened(EventArgs e)
     {
         base.OnOpened(e);
 
-        if (DataContext is not TaskNotesViewModel { IsEditable: true })
+        if (ViewModel is not { IsEditable: true, IsNotesTab: true })
         {
             return;
         }
@@ -79,16 +111,37 @@ public sealed partial class TaskNotesWindow : Window
     /// Só o fechamento pedido pelo usuário é interceptado. Encerrar o app fecha
     /// por outro motivo, e segurar <b>aquele</b> numa caixa de pergunta deixaria
     /// o processo pendurado na bandeja.
+    /// <para>
+    /// A criação do worktree também segura a janela (ADR-027): ela não pode ser
+    /// interrompida, e fechar no meio esconderia o resultado. A preparação,
+    /// sim, pode — e fechar a cancela.
+    /// </para>
     /// </remarks>
     protected override void OnClosing(WindowClosingEventArgs e)
     {
         if (!_discarding
             && e.CloseReason is WindowCloseReason.WindowClosing
-            && _confirmation is not null
-            && DataContext is TaskNotesViewModel { HasUnsavedChanges: true } viewModel)
+            && ViewModel is { } viewModel)
         {
-            e.Cancel = true;
-            _ = AskThenCloseAsync(viewModel);
+            if (viewModel.Development.IsRunning)
+            {
+                e.Cancel = true;
+
+                if (viewModel.Development.CanCancel)
+                {
+                    viewModel.Development.CancelRun();
+                }
+                else
+                {
+                    viewModel.SelectedTabIndex = TaskNotesViewModel.DevelopmentTab;
+                    viewModel.Development.Message = "Aguarde a criação do worktree terminar para fechar.";
+                }
+            }
+            else if (_confirmation is not null && viewModel.HasUnsavedChanges)
+            {
+                e.Cancel = true;
+                _ = AskThenCloseAsync(viewModel);
+            }
         }
 
         base.OnClosing(e);
@@ -122,6 +175,14 @@ public sealed partial class TaskNotesWindow : Window
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
+        // Com uma lista aberta, as teclas dela vêm antes de tudo — inclusive do
+        // Escape que fecha a janela e do Enter que quebraria a linha.
+        if (_notesCompletion.HandleKey(e) || _directoryCompletion.HandleKey(e))
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key is Key.Escape)
         {
             e.Handled = true;
@@ -151,9 +212,88 @@ public sealed partial class TaskNotesWindow : Window
         Format(command.Value);
     }
 
+    private void OnAliasPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is not Control { DataContext: AliasSuggestionViewModel suggestion })
+        {
+            return;
+        }
+
+        e.Handled = true;
+
+        if (_directoryCompletion.Owns(suggestion))
+        {
+            _directoryCompletion.Accept(suggestion);
+        }
+        else
+        {
+            _notesCompletion.Accept(suggestion);
+        }
+    }
+
+    /// <summary>Usado pelos testes de renderização, como o clique num item.</summary>
+    internal void AcceptSuggestion(AliasSuggestionViewModel? suggestion) =>
+        _notesCompletion.Accept(suggestion);
+
+    /// <summary>
+    /// O "@" ao lado do campo Diretório: abre a lista de todos os diretórios das
+    /// etiquetas, como se o usuário tivesse digitado "@".
+    /// </summary>
+    private void OnDirectoryAliasesClick(object? sender, RoutedEventArgs e)
+    {
+        if (ViewModel?.Development is not { } development)
+        {
+            return;
+        }
+
+        if (!development.DirectoryCompletion.HasDirectories)
+        {
+            development.Message =
+                "As etiquetas desta tarefa não têm diretórios. Cadastre-os em Etiquetas, ou digite o caminho.";
+            return;
+        }
+
+        DirectoryBox.Text = "@";
+        DirectoryBox.Focus();
+        DirectoryBox.CaretIndex = 1;
+    }
+
+    private async void OnBrowseDirectoryClick(object? sender, RoutedEventArgs e)
+    {
+        if (await PickFolderAsync("Escolher o repositório") is { } path && ViewModel is { } viewModel)
+        {
+            viewModel.Development.DirectoryText = path;
+        }
+    }
+
+    /// <summary>
+    /// "Escolher outro caminho": escolhe a pasta onde o worktree vai morar e
+    /// mantém o nome sugerido — o worktree é uma pasta nova, que ainda não existe.
+    /// </summary>
+    private async void OnBrowseAlternativeClick(object? sender, RoutedEventArgs e)
+    {
+        if (await PickFolderAsync("Escolher onde criar o worktree") is { } parent
+            && ViewModel?.Development is { } development)
+        {
+            var name = Path.GetFileName(development.AlternativePath.TrimEnd('\\', '/'));
+            development.AlternativePath = Path.Combine(parent, string.IsNullOrEmpty(name) ? "worktree" : name);
+        }
+    }
+
+    private async Task<string?> PickFolderAsync(string title)
+    {
+        var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = title,
+            AllowMultiple = false,
+        });
+
+        return folders.Count > 0 ? folders[0].TryGetLocalPath() : null;
+    }
+
     private void Format(MarkdownCommand command)
     {
-        if (DataContext is not TaskNotesViewModel { IsEditable: true })
+        if (ViewModel is not { IsEditable: true, IsNotesTab: true })
         {
             return;
         }

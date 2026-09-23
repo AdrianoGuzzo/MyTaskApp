@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Development;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Application.Tags;
@@ -73,6 +74,8 @@ public class InfrastructureRegistrationTests : IDisposable
     [InlineData(typeof(IDueReminderQuery))]
     [InlineData(typeof(ITagRepository))]
     [InlineData(typeof(ITagQuery))]
+    [InlineData(typeof(IDirectoryProbe))]
+    [InlineData(typeof(IGitClient))]
     public void EveryPort_IsWiredToAnImplementation(Type serviceType)
     {
         using var provider = BuildProvider();
