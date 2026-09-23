@@ -75,6 +75,7 @@ public class InfrastructureRegistrationTests : IDisposable
     [InlineData(typeof(ITagRepository))]
     [InlineData(typeof(ITagQuery))]
     [InlineData(typeof(IDirectoryProbe))]
+    [InlineData(typeof(IDirectoryRemover))]
     [InlineData(typeof(IGitClient))]
     public void EveryPort_IsWiredToAnImplementation(Type serviceType)
     {

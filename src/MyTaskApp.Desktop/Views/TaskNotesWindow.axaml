@@ -942,6 +942,31 @@
                   </StackPanel>
                 </Border>
 
+                <!-- ADR-029: o Git esqueceu o worktree, mas algum processo segura a pasta. -->
+                <Border Classes="card caution" x:Name="RemoveLockedCard" IsVisible="{Binding IsRemoveLocked}">
+                  <StackPanel Spacing="8">
+                    <TextBlock Classes="body" Text="{Binding RemoveLockedMessage}" />
+                    <TextBlock Classes="fieldLabel" Text="Usando a pasta" />
+                    <Border Classes="codeBox">
+                      <SelectableTextBlock Classes="code" x:Name="RemoveLockersText" Text="{Binding RemoveLockersText}" />
+                    </Border>
+                    <TextBlock Classes="body"
+                               Text="Forçar encerra esses processos e apaga a pasta. O que não estiver salvo neles será perdido." />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <Button Content="Cancelar" Command="{Binding CancelRemoveCommand}" />
+                      <Button Content="Tentar de novo"
+                              Command="{Binding RemoveWorktreeCommand}"
+                              IsEnabled="{Binding !IsRemoving}" />
+                      <Button Classes="danger"
+                              Content="Encerrar processos e remover"
+                              x:Name="ForceRemoveWorktreeButton"
+                              Command="{Binding ForceRemoveWorktreeCommand}"
+                              IsVisible="{Binding CanForceRemove}"
+                              IsEnabled="{Binding !IsRemoving}" />
+                    </StackPanel>
+                  </StackPanel>
+                </Border>
+
                 <!-- Comandos pós-Worktree (ADR-028): a última execução e rodar de novo. -->
                 <Border Height="1" Margin="0,4,0,0" Background="{DynamicResource WidgetStrokeSoftBrush}" />
 

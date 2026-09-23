@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
+using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Development;
 using MyTaskApp.Domain.Tasks;
 using MyTaskApp.Infrastructure.FileSystem;
@@ -125,6 +126,57 @@ public sealed class GitWorktreeIntegrationTests : IAsyncLifetime
         Directory.Exists(ExpectedWorktree).Should().BeFalse();
         (await _git.CommitExistsAsync(Repository, "refs/heads/feature/123-corrigir-animais", Ct))
             .Should().BeTrue("a branch continua no repositório");
+    }
+
+    /// <summary>
+    /// ADR-029: um terminal aberto dentro do worktree. O Git apaga os arquivos,
+    /// esquece o worktree e sai com erro deixando a pasta; o app mostra quem a
+    /// segura e, quando o usuário manda, encerra esse processo e termina o serviço.
+    /// </summary>
+    [Fact]
+    public async Task AFolderHeldByATerminal_ShowsTheLocker_ThenForcingRemovesIt()
+    {
+        Assert.SkipWhen(_executable is null, "Git não instalado nesta máquina.");
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Só o Windows prende pasta aberta.");
+
+        var task = await SeedTaskAsync();
+        await StartAsync(await PrepareAsync(task, "refs/remotes/origin/main", []));
+        Directory.CreateDirectory(Path.Combine(ExpectedWorktree, "src"));
+
+        using var terminal = System.Diagnostics.Process.Start(
+            new System.Diagnostics.ProcessStartInfo("cmd.exe", "/d /c ping -n 120 127.0.0.1 >nul")
+            {
+                WorkingDirectory = Path.Combine(ExpectedWorktree, "src"),
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            })!;
+
+        try
+        {
+            await Task.Delay(500, Ct);
+
+            var failure = (await FluentActions.Awaiting(() => RemoveAsync(task))
+                .Should().ThrowAsync<DevelopmentStepException>()).Which;
+
+            failure.IsDirectoryLocked.Should().BeTrue();
+            failure.Lockers.Should().Contain(locker => locker.ProcessId == terminal.Id);
+            terminal.HasExited.Should().BeFalse();
+            (await _git.ListWorktreesAsync(Repository, Ct))
+                .Should().NotContain(worktree => WorktreePathPlanner.SamePath(worktree.Path, ExpectedWorktree));
+
+            var removed = await RemoveAsync(task, failure.Lockers);
+
+            removed.Status.Should().Be(TaskDevelopmentStatus.Removed);
+            Directory.Exists(ExpectedWorktree).Should().BeFalse();
+            terminal.HasExited.Should().BeTrue();
+        }
+        finally
+        {
+            if (!terminal.HasExited)
+            {
+                terminal.Kill(entireProcessTree: true);
+            }
+        }
     }
 
     /// <summary>
@@ -306,7 +358,7 @@ public sealed class GitWorktreeIntegrationTests : IAsyncLifetime
         return await handler.HandleAsync(new StartDevelopment(plan, plan.WorktreePath), null, Ct);
     }
 
-    private async Task<TaskDevelopmentView> RemoveAsync(TaskItem task)
+    private async Task<TaskDevelopmentView> RemoveAsync(TaskItem task, IReadOnlyList<DirectoryLocker>? terminate = null)
     {
         await using var context = _database!.CreateContext();
 
@@ -315,10 +367,15 @@ public sealed class GitWorktreeIntegrationTests : IAsyncLifetime
             new EfUnitOfWork(context),
             _git,
             new FileSystemDirectoryProbe(),
+            new FileSystemDirectoryRemover(
+                OperatingSystem.IsWindows()
+                    ? new WindowsDirectoryLockFinder(NullLogger<WindowsDirectoryLockFinder>.Instance)
+                    : new NoDirectoryLockFinder(),
+                NullLogger<FileSystemDirectoryRemover>.Instance),
             new FakeTimeProvider(Now),
             NullLogger<RemoveWorktreeHandler>.Instance);
 
-        return await handler.HandleAsync(new RemoveWorktree(task.Id), Ct);
+        return await handler.HandleAsync(new RemoveWorktree(task.Id, terminate), Ct);
     }
 
     private Task<ProcessResult> CommitAsync(string directory, string message) =>
