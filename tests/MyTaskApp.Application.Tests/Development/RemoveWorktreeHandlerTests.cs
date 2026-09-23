@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
+using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Development;
 using MyTaskApp.Application.Tests.Fakes;
 using MyTaskApp.Domain;
@@ -19,6 +20,7 @@ public class RemoveWorktreeHandlerTests
     private readonly FakeTaskItemRepository _tasks = new();
     private readonly FakeGitClient _git = new();
     private readonly FakeDirectoryProbe _disk = new();
+    private readonly FakeDirectoryRemover _remover = new();
     private readonly TaskItem _task;
 
     public RemoveWorktreeHandlerTests()
@@ -32,7 +34,7 @@ public class RemoveWorktreeHandlerTests
     }
 
     private RemoveWorktreeHandler Remove() =>
-        new(_tasks, _tasks, _git, _disk, new FakeTimeProvider(Now), NullLogger<RemoveWorktreeHandler>.Instance);
+        new(_tasks, _tasks, _git, _disk, _remover, new FakeTimeProvider(Now), NullLogger<RemoveWorktreeHandler>.Instance);
 
     private InspectWorktreeHandler Inspect() => new(_tasks, _git, _disk);
 
@@ -44,6 +46,7 @@ public class RemoveWorktreeHandlerTests
         view.Status.Should().Be(TaskDevelopmentStatus.Removed);
         _git.Calls.Should().Contain($"worktree remove {Path}");
         _git.Calls.Should().NotContain(call => call.Contains("branch", StringComparison.Ordinal));
+        _remover.Calls.Should().ContainSingle().Which.Path.Should().Be(Path, "o que o Git deixou na pasta também sai");
         _tasks.SaveCount.Should().Be(1);
     }
 
@@ -96,6 +99,61 @@ public class RemoveWorktreeHandlerTests
             .Should().ThrowAsync<DevelopmentStepException>()).Which;
 
         failure.Command!.StandardError.Should().Contain("locked");
+        failure.IsDirectoryLocked.Should().BeFalse();
+        _remover.Calls.Should().BeEmpty("o worktree continua registrado: a pasta não é sobra");
+        _task.Development!.Status.Should().Be(TaskDevelopmentStatus.Ready);
+    }
+
+    private static readonly DirectoryLocker Terminal = new(4242, "pwsh", @"C:\Program Files\PowerShell\7\pwsh.exe", true);
+
+    /// <summary>
+    /// Um terminal aberto na pasta: o Git esquece o worktree e sai com erro. Não é
+    /// "o Git não removeu" — é a pasta que ficou, e a tela precisa saber quem a segura.
+    /// </summary>
+    [Fact]
+    public async Task AHeldFolder_ReportsWhoHoldsIt_AndKeepsTheTaskReady()
+    {
+        _git.RemoveResult = FakeGitClient.Failed("git worktree remove", "error: failed to delete 'x': Permission denied", 255);
+        _git.RemoveForgetsOnFailure = true;
+        _remover.Results.Enqueue(new DirectoryRemoval(false, [Terminal], [], "Access denied"));
+
+        var failure = (await FluentActions.Awaiting(() => Remove().HandleAsync(new RemoveWorktree(_task.Id), Ct))
+            .Should().ThrowAsync<DevelopmentStepException>()).Which;
+
+        failure.IsDirectoryLocked.Should().BeTrue();
+        failure.Lockers.Should().Equal(Terminal);
+        failure.Message.Should().Contain("1 processo");
+        _remover.Calls.Single().Terminate.Should().BeEmpty("a primeira tentativa não encerra ninguém");
+        _task.Development!.Status.Should().Be(TaskDevelopmentStatus.Ready);
+        _tasks.SaveCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task TheLeftoverFolder_IsDeleted_WithoutAskingGitAgain()
+    {
+        // O Git já esqueceu numa tentativa anterior; sobrou a pasta.
+        _git.Worktrees.RemoveAll(worktree => WorktreePathPlanner.SamePath(worktree.Path, Path));
+
+        var inspection = await Inspect().HandleAsync(new InspectWorktree(_task.Id), Ct);
+        var view = await Remove().HandleAsync(new RemoveWorktree(_task.Id, [Terminal]), Ct);
+
+        inspection.IsLeftover.Should().BeTrue();
+        inspection.IsClean.Should().BeTrue();
+        view.Status.Should().Be(TaskDevelopmentStatus.Removed);
+        _git.Calls.Should().NotContain(call => call.StartsWith("worktree remove", StringComparison.Ordinal));
+        _remover.Calls.Should().ContainSingle().Which.Terminate.Should().Equal(Terminal);
+    }
+
+    [Fact]
+    public async Task ALeftoverThatBecameARepository_IsNotDeleted()
+    {
+        _git.Worktrees.RemoveAll(worktree => WorktreePathPlanner.SamePath(worktree.Path, Path));
+        _git.Repositories[Path] = Path.Replace('\\', '/');
+
+        await FluentActions.Awaiting(() => Remove().HandleAsync(new RemoveWorktree(_task.Id), Ct))
+            .Should().ThrowAsync<DevelopmentStepException>().WithMessage("*outro repositório*");
+
+        _remover.Calls.Should().BeEmpty();
         _task.Development!.Status.Should().Be(TaskDevelopmentStatus.Ready);
     }
 

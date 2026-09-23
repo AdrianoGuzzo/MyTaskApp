@@ -60,6 +60,18 @@ public static class DependencyInjection
         services.AddSingleton(_ => GitLocator.ForCurrentSystem());
         services.AddSingleton<IGitClient, GitClient>();
 
+        // O que sobra do worktree quando algo segura a pasta (ADR-029).
+        if (OperatingSystem.IsWindows())
+        {
+            services.AddSingleton<IDirectoryLockFinder, WindowsDirectoryLockFinder>();
+        }
+        else
+        {
+            services.AddSingleton<IDirectoryLockFinder, NoDirectoryLockFinder>();
+        }
+
+        services.AddSingleton<IDirectoryRemover, FileSystemDirectoryRemover>();
+
         // Comandos pós-Worktree pelo shell do sistema (ADR-028).
         services.AddSingleton<ICommandExecutor, ShellCommandExecutor>();
 
