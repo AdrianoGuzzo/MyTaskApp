@@ -31,6 +31,19 @@ internal sealed class FakeUseCaseRunner : IUseCaseRunner
     /// <summary>Falha aplicada à próxima chamada e então descartada.</summary>
     public Exception? NextFailure { get; set; }
 
+    /// <summary>Falha por caso de uso, a cada chamada dele, até ser removida.</summary>
+    public Dictionary<Type, Exception> FailuresByHandler { get; } = [];
+
+    /// <summary>
+    /// Resultados em fila, por caso de uso: cada chamada tira um. Para quando o
+    /// mesmo caso de uso é chamado mais de uma vez com respostas diferentes —
+    /// "Verificar novamente" que encontra o Git na segunda vez. O último fica.
+    /// </summary>
+    public Dictionary<Type, Queue<object?>> QueuedResults { get; } = [];
+
+    public void Enqueue<THandler>(params object?[] results) =>
+        QueuedResults[typeof(THandler)] = new Queue<object?>(results);
+
     public Type? LastInvoked => Invoked.Count == 0 ? null : Invoked[^1];
 
     public Task<TResult> RunAsync<THandler, TResult>(
@@ -43,6 +56,25 @@ internal sealed class FakeUseCaseRunner : IUseCaseRunner
         if (TakeFailure() is { } failure)
         {
             return Task.FromException<TResult>(failure);
+        }
+
+        if (FailuresByHandler.TryGetValue(typeof(THandler), out var handlerFailure))
+        {
+            return Task.FromException<TResult>(handlerFailure);
+        }
+
+        if (Handlers.TryGetValue(typeof(THandler), out var handler))
+        {
+            return operation((THandler)handler, cancellationToken);
+        }
+
+        if (QueuedResults.TryGetValue(typeof(THandler), out var queue) && queue.Count > 0)
+        {
+            var next = queue.Count == 1 ? queue.Peek() : queue.Dequeue();
+
+            return next is Exception queuedFailure
+                ? Task.FromException<TResult>(queuedFailure)
+                : Task.FromResult((TResult)next!);
         }
 
         if (ResultsByHandler.TryGetValue(typeof(THandler), out var specific)
@@ -66,6 +98,11 @@ internal sealed class FakeUseCaseRunner : IUseCaseRunner
         if (TakeFailure() is { } failure)
         {
             return Task.FromException(failure);
+        }
+
+        if (FailuresByHandler.TryGetValue(typeof(THandler), out var handlerFailure))
+        {
+            return Task.FromException(handlerFailure);
         }
 
         return Handlers.TryGetValue(typeof(THandler), out var handler)

@@ -28,5 +28,16 @@ internal sealed class TagConfiguration : IEntityTypeConfiguration<Tag>
         builder.Property(tag => tag.CreatedAt)
             .HasConversion(UtcInstantConverter.Instance)
             .IsRequired();
+
+        // As pastas são parte do agregado: excluir a etiqueta leva todas junto.
+        builder.HasMany(tag => tag.Directories)
+            .WithOne()
+            .HasForeignKey(directory => directory.TagId)
+            .IsRequired()
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Navigation(tag => tag.Directories)
+            .HasField("_directories")
+            .UsePropertyAccessMode(PropertyAccessMode.Field);
     }
 }

@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Tags;
 using MyTaskApp.Application.Tasks;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.Tasks;
@@ -26,11 +27,22 @@ namespace MyTaskApp.Desktop.ViewModels;
 /// campos. Mandar o que se leu é o que impede esta tela de zerar uma
 /// prioridade que ela nem mostra.
 /// </para>
+/// <para>
+/// A janela tem duas abas: a anotação e, desde o ADR-027, o ambiente de
+/// desenvolvimento (<see cref="Development"/>). Os diretórios das etiquetas são
+/// carregados uma vez e servem aos dois autocompletes.
+/// </para>
 /// </remarks>
 public sealed partial class TaskNotesViewModel(
     IUseCaseRunner runner,
+    IDirectoryProbe directoryProbe,
+    TaskDevelopmentViewModel development,
     ILogger<TaskNotesViewModel> logger) : ObservableObject
 {
+    public const int NotesTab = 0;
+
+    public const int DevelopmentTab = 1;
+
     /// <summary>O texto como está no banco — a régua do "alterações não salvas".</summary>
     private string _persisted = string.Empty;
 
@@ -45,9 +57,15 @@ public sealed partial class TaskNotesViewModel(
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasUnsavedChanges))]
+    [NotifyPropertyChangedFor(nameof(NotesTabHeader))]
     [NotifyPropertyChangedFor(nameof(CountLabel))]
     [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
     private string _text = string.Empty;
+
+    /// <summary>A aba aberta: <see cref="NotesTab"/> ou <see cref="DevelopmentTab"/>.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsNotesTab))]
+    private int _selectedTabIndex;
 
     /// <summary>
     /// Concluída, a anotação vira histórico: dá para ler e copiar, não para
@@ -66,6 +84,17 @@ public sealed partial class TaskNotesViewModel(
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
     private bool _isBusy;
+
+    /// <summary>O <c>@alias</c> da anotação (ADR-026).</summary>
+    public AliasCompletionViewModel Completion { get; } = new();
+
+    /// <summary>A aba Desenvolvimento (ADR-027).</summary>
+    public TaskDevelopmentViewModel Development { get; } = development;
+
+    public bool IsNotesTab => SelectedTabIndex == NotesTab;
+
+    /// <summary>O ponto avisa, da outra aba, que a anotação tem texto não salvo.</summary>
+    public string NotesTabHeader => HasUnsavedChanges ? "Anotação •" : "Anotação";
 
     public bool IsEditable => !IsReadOnly;
 
@@ -89,6 +118,8 @@ public sealed partial class TaskNotesViewModel(
     public void Load(TaskRowViewModel row)
     {
         _taskId = row.TaskId;
+        Completion.Reset();
+        Development.DirectoryCompletion.Reset();
         _persistedTitle = row.Title;
         _priority = row.Priority;
         _persisted = row.Notes ?? string.Empty;
@@ -96,7 +127,20 @@ public sealed partial class TaskNotesViewModel(
         TaskTitle = row.Title;
         Text = _persisted;
         IsReadOnly = row.IsCompleted;
+        Completion.IsEnabled = !row.IsCompleted;
         ErrorMessage = null;
+        SelectedTabIndex = NotesTab;
+
+        Development.Load(row.TaskId, row.Title, row.IsCompleted);
+    }
+
+    /// <summary>A aba Desenvolvimento se atualiza a cada vez que aparece.</summary>
+    partial void OnSelectedTabIndexChanged(int value)
+    {
+        if (value == DevelopmentTab)
+        {
+            _ = Development.ActivateAsync(CancellationToken.None);
+        }
     }
 
     [RelayCommand(CanExecute = nameof(CanSave))]
@@ -141,6 +185,7 @@ public sealed partial class TaskNotesViewModel(
         // gravar um texto que já estava aparado não dispara notificação nenhuma,
         // e o aviso de "alterações não salvas" ficaria aceso sobre nada.
         OnPropertyChanged(nameof(HasUnsavedChanges));
+        OnPropertyChanged(nameof(NotesTabHeader));
         SaveCommand.NotifyCanExecuteChanged();
 
         Saved?.Invoke();
@@ -149,6 +194,49 @@ public sealed partial class TaskNotesViewModel(
 
     [RelayCommand]
     public void Cancel() => CloseRequested?.Invoke();
+
+    /// <summary>
+    /// Carrega os atalhos das etiquetas da tarefa. Pela tarefa, a cada ativação
+    /// da janela, para acompanhar etiquetas e diretórios mudados enquanto ela
+    /// estava aberta. Falhar aqui não impede de escrever: só não há atalhos.
+    /// </summary>
+    /// <remarks>
+    /// A lista vale na hora; a conferência das pastas vem depois, todas ao
+    /// mesmo tempo. Uma pasta de rede desconectada atrasaria o aviso de "pasta
+    /// não encontrada", mas não os atalhos.
+    /// </remarks>
+    public async Task LoadAliasesAsync(CancellationToken cancellationToken)
+    {
+        if (IsReadOnly)
+        {
+            return;
+        }
+
+        try
+        {
+            var directories = await runner.RunAsync<GetTaskDirectoriesHandler, IReadOnlyList<TagDirectoryRow>>(
+                (handler, token) => handler.HandleAsync(new GetTaskDirectories(_taskId), token),
+                cancellationToken);
+
+            var unknown = new Dictionary<Guid, bool>();
+            Completion.SetDirectories(directories, unknown);
+            Development.DirectoryCompletion.SetDirectories(directories, unknown);
+
+            var checks = await Task.WhenAll(directories.Select(async directory =>
+                (directory.Id, Exists: await directoryProbe.ExistsAsync(directory.Path, cancellationToken))));
+
+            var existence = checks.ToDictionary(check => check.Id, check => check.Exists);
+            Completion.SetDirectories(directories, existence);
+            Development.DirectoryCompletion.SetDirectories(directories, existence);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "TaskNotesAliasesLoadFailed {TaskId}", _taskId);
+        }
+    }
 
     /// <summary>
     /// Devolve o texto ao que está no banco. Usado quando o usuário confirma que

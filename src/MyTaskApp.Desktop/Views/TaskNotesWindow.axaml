@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
         xmlns:notes="using:MyTaskApp.Desktop.Notes"
+        xmlns:dev="using:MyTaskApp.Desktop.Development"
         x:Class="MyTaskApp.Desktop.Views.TaskNotesWindow"
         x:DataType="vm:TaskNotesViewModel"
         x:Name="Root"
@@ -133,13 +134,209 @@
       <Setter Property="BorderBrush" Value="{DynamicResource WidgetAccentLineBrush}" />
     </Style>
 
+    <!--
+      Autocomplete de diretórios (ADR-026). Os itens não recebem foco: o cursor
+      precisa ficar na caixa de texto enquanto o usuário escolhe, pelo mesmo
+      motivo do Button.tool.
+    -->
+    <Style Selector="Border.aliasList">
+      <Setter Property="Background" Value="{DynamicResource WidgetSurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetStrokeBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetCardRadius}" />
+      <Setter Property="Padding" Value="4" />
+      <Setter Property="MinWidth" Value="320" />
+      <Setter Property="MaxWidth" Value="560" />
+    </Style>
+
+    <Style Selector="Border.aliasItem">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetPillRadius}" />
+      <Setter Property="Padding" Value="10,6" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style Selector="Border.aliasItem:pointerover">
+      <Setter Property="Background" Value="{DynamicResource WidgetSurfaceHoverBrush}" />
+    </Style>
+
+    <Style Selector="Border.aliasItem.selected">
+      <Setter Property="Background" Value="{DynamicResource WidgetAccentSoftBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.aliasName">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.aliasPath">
+      <Setter Property="FontSize" Value="11.5" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextMidBrush}" />
+      <Setter Property="TextTrimming" Value="PrefixCharacterEllipsis" />
+    </Style>
+
+    <Style Selector="TextBlock.aliasTag">
+      <Setter Property="FontSize" Value="10.5" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
     <Style Selector="TextBlock.footNote">
       <Setter Property="FontSize" Value="11" />
       <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
+    <!-- Abas: Anotação e Desenvolvimento (ADR-027). -->
+    <Style Selector="TabControl.taskTabs TabItem">
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="MinHeight" Value="36" />
+      <Setter Property="Padding" Value="12,0" />
+    </Style>
+
+    <!-- Aba Desenvolvimento: cartões empilhados, como a folha da anotação. -->
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="{DynamicResource WidgetSurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetStrokeSoftBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetCardRadius}" />
+      <Setter Property="Padding" Value="20,16" />
+    </Style>
+
+    <Style Selector="Border.card.danger">
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetDangerBrush}" />
+    </Style>
+
+    <Style Selector="Border.card.caution">
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetCautionBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.sectionTitle">
+      <Setter Property="FontSize" Value="15" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.fieldLabel">
+      <Setter Property="FontSize" Value="11.5" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextMidBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.body">
+      <Setter Property="FontSize" Value="12.5" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style Selector="TextBlock.hint">
+      <Setter Property="FontSize" Value="11.5" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style Selector="TextBlock.ok">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetAccentBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.bad">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetDangerBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.warn">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetCautionBrush}" />
+    </Style>
+
+    <!-- Comando, caminho e saída do Git: fonte de terminal, selecionável. -->
+    <Style Selector="SelectableTextBlock.code">
+      <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style Selector="Border.codeBox">
+      <Setter Property="Background" Value="{DynamicResource WidgetCanvasBrush}" />
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetPillRadius}" />
+      <Setter Property="Padding" Value="10,6" />
+    </Style>
+
+    <Style Selector="TextBlock.stepGlyph">
+      <Setter Property="Width" Value="18" />
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.stepGlyph.done">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetAccentBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.stepGlyph.running">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.stepGlyph.warning">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetCautionBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.stepGlyph.failed">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetDangerBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.stepTitle">
+      <Setter Property="FontSize" Value="12.5" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.stepTitle.pending">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.branchHeader">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+    </Style>
+
   </Window.Styles>
+
+  <Window.Resources>
+
+    <!--
+      Um item do autocomplete de diretórios (ADR-026). Recurso porque são duas
+      listas: a da anotação e a do campo Diretório (ADR-027).
+    -->
+    <DataTemplate x:Key="AliasSuggestionTemplate" x:DataType="vm:AliasSuggestionViewModel">
+      <Border Classes="aliasItem"
+              Classes.selected="{Binding IsSelected}"
+              ToolTip.Tip="{Binding Details}"
+              PointerPressed="OnAliasPressed">
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+          <StackPanel Grid.Column="0" Spacing="1">
+            <TextBlock Classes="aliasName" Text="{Binding Alias}" />
+            <TextBlock Classes="aliasPath" Text="{Binding Path}" />
+          </StackPanel>
+          <StackPanel Grid.Column="1"
+                      Orientation="Horizontal"
+                      Spacing="6"
+                      VerticalAlignment="Top">
+            <TextBlock Classes="aliasTag"
+                       Text="&#x26A0; pasta não encontrada"
+                       Foreground="{DynamicResource WidgetCautionBrush}"
+                       IsVisible="{Binding IsMissing}" />
+            <Ellipse Width="8"
+                     Height="8"
+                     VerticalAlignment="Center"
+                     Fill="{Binding Tag.Fill}" />
+            <TextBlock Classes="aliasTag" Text="{Binding Tag.Name}" />
+          </StackPanel>
+        </Grid>
+      </Border>
+    </DataTemplate>
+
+  </Window.Resources>
 
   <!--
     Tudo numa coluna centralizada, e não coladas à esquerda: maximizada, a
@@ -171,44 +368,8 @@
       </Grid>
     </Border>
 
-    <!-- Barra de formatação: some inteira no modo leitura, e não fica apagada. -->
-    <Border DockPanel.Dock="Top"
-            Margin="24,0,24,10"
-            Padding="4"
-            CornerRadius="{StaticResource WidgetPillRadius}"
-            Background="{DynamicResource WidgetSurfaceBrush}"
-            HorizontalAlignment="Left"
-            IsVisible="{Binding IsEditable}">
-      <StackPanel Orientation="Horizontal" Spacing="1">
-
-        <Button Classes="tool bold" Content="B" Tag="Bold"
-                Click="OnFormatClick" ToolTip.Tip="Negrito (Ctrl+B)" />
-        <Button Classes="tool italic" Content="I" Tag="Italic"
-                Click="OnFormatClick" ToolTip.Tip="Itálico (Ctrl+I)" />
-        <Button Classes="tool underline" Content="U" Tag="Underline"
-                Click="OnFormatClick" ToolTip.Tip="Sublinhado (Ctrl+U)" />
-        <Button Classes="tool strike" Content="S" Tag="Strikethrough"
-                Click="OnFormatClick" ToolTip.Tip="Tachado" />
-
-        <Border Classes="toolDivider" />
-
-        <Button Classes="tool" Content="H1" Tag="Heading1"
-                Click="OnFormatClick" ToolTip.Tip="Título" />
-        <Button Classes="tool" Content="H2" Tag="Heading2"
-                Click="OnFormatClick" ToolTip.Tip="Subtítulo" />
-
-        <Border Classes="toolDivider" />
-
-        <Button Classes="tool" Content="&#x2022;" Tag="Bullet"
-                Click="OnFormatClick" ToolTip.Tip="Lista com marcadores" />
-        <Button Classes="tool" Content="1." Tag="Numbered"
-                Click="OnFormatClick" ToolTip.Tip="Lista numerada" />
-
-      </StackPanel>
-    </Border>
-
     <!-- Rodapé: o que foi escrito à esquerda, o que fazer com isso à direita. -->
-    <Border DockPanel.Dock="Bottom" Padding="24,12,24,18">
+    <Border DockPanel.Dock="Bottom" Padding="24,12,24,18" IsVisible="{Binding IsNotesTab}">
       <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
 
         <StackPanel Grid.Column="0"
@@ -259,33 +420,481 @@
                  TextWrapping="Wrap" />
     </Border>
 
-    <Border Classes="sheet" Margin="24,0,24,10">
-      <Panel>
+    <!--
+      Duas abas (ADR-027). O cabeçalho fica fora delas: o título é o assunto
+      das duas. O rodapé de salvar é só da anotação — a aba Desenvolvimento
+      grava cada coisa quando acontece, e um "Salvar" ali não salvaria nada.
+    -->
+    <TabControl Classes="taskTabs"
+                x:Name="Tabs"
+                Margin="24,0,24,0"
+                SelectedIndex="{Binding SelectedTabIndex}">
 
-        <TextBox x:Name="Editor"
-                 IsVisible="{Binding IsEditable}"
-                 Text="{Binding Text}"
-                 AcceptsReturn="True"
-                 AcceptsTab="False"
-                 TextWrapping="Wrap"
-                 FontSize="13.5"
-                 LineHeight="21"
-                 Padding="0"
-                 BorderThickness="0"
-                 Background="Transparent"
-                 VerticalAlignment="Stretch"
-                 VerticalContentAlignment="Top"
-                 PlaceholderText="Escreva o que mais importa sobre esta tarefa…" />
+      <TabItem x:Name="NotesTabItem" Header="{Binding NotesTabHeader}">
+        <DockPanel Margin="0,10,0,0">
 
-        <ScrollViewer IsVisible="{Binding IsReadOnly}"
-                      HorizontalScrollBarVisibility="Disabled">
-          <notes:MarkdownView Text="{Binding Text}"
-                              Placeholder="Esta tarefa foi concluída sem nenhuma anotação."
-                              Foreground="{DynamicResource WidgetTextHighBrush}" />
+          <!-- Barra de formatação: some inteira no modo leitura, e não fica apagada. -->
+          <Border DockPanel.Dock="Top"
+                  Margin="0,0,0,10"
+                  Padding="4"
+                  CornerRadius="{StaticResource WidgetPillRadius}"
+                  Background="{DynamicResource WidgetSurfaceBrush}"
+                  HorizontalAlignment="Left"
+                  IsVisible="{Binding IsEditable}">
+            <StackPanel Orientation="Horizontal" Spacing="1">
+
+              <Button Classes="tool bold" Content="B" Tag="Bold"
+                      Click="OnFormatClick" ToolTip.Tip="Negrito (Ctrl+B)" />
+              <Button Classes="tool italic" Content="I" Tag="Italic"
+                      Click="OnFormatClick" ToolTip.Tip="Itálico (Ctrl+I)" />
+              <Button Classes="tool underline" Content="U" Tag="Underline"
+                      Click="OnFormatClick" ToolTip.Tip="Sublinhado (Ctrl+U)" />
+              <Button Classes="tool strike" Content="S" Tag="Strikethrough"
+                      Click="OnFormatClick" ToolTip.Tip="Tachado" />
+
+              <Border Classes="toolDivider" />
+
+              <Button Classes="tool" Content="H1" Tag="Heading1"
+                      Click="OnFormatClick" ToolTip.Tip="Título" />
+              <Button Classes="tool" Content="H2" Tag="Heading2"
+                      Click="OnFormatClick" ToolTip.Tip="Subtítulo" />
+
+              <Border Classes="toolDivider" />
+
+              <Button Classes="tool" Content="&#x2022;" Tag="Bullet"
+                      Click="OnFormatClick" ToolTip.Tip="Lista com marcadores" />
+              <Button Classes="tool" Content="1." Tag="Numbered"
+                      Click="OnFormatClick" ToolTip.Tip="Lista numerada" />
+
+            </StackPanel>
+          </Border>
+
+          <Border Classes="sheet" Margin="0,0,0,10">
+            <Panel>
+
+              <TextBox x:Name="Editor"
+                       IsVisible="{Binding IsEditable}"
+                       Text="{Binding Text}"
+                       AcceptsReturn="True"
+                       AcceptsTab="False"
+                       TextWrapping="Wrap"
+                       FontSize="13.5"
+                       LineHeight="21"
+                       Padding="0"
+                       BorderThickness="0"
+                       Background="Transparent"
+                       VerticalAlignment="Stretch"
+                       VerticalContentAlignment="Top"
+                       PlaceholderText="Escreva o que mais importa sobre esta tarefa… (@ insere o caminho de um diretório da etiqueta)" />
+
+              <!--
+                O "@" abre, o texto filtra, ↑/↓ andam, Enter/Tab ou o clique inserem o
+                path real. O PlacementRect é o cursor, calculado no code-behind.
+              -->
+              <Popup x:Name="AliasPopup"
+                     PlacementTarget="{Binding #Editor}"
+                     Placement="Bottom"
+                     IsLightDismissEnabled="True"
+                     IsOpen="{Binding Completion.IsCompletionOpen, Mode=TwoWay}">
+                <Border Classes="aliasList">
+                  <ScrollViewer MaxHeight="280" HorizontalScrollBarVisibility="Disabled">
+                    <ItemsControl x:Name="AliasList"
+                                  ItemsSource="{Binding Completion.Suggestions}"
+                                  ItemTemplate="{StaticResource AliasSuggestionTemplate}" />
+                  </ScrollViewer>
+                </Border>
+              </Popup>
+
+              <ScrollViewer IsVisible="{Binding IsReadOnly}"
+                            HorizontalScrollBarVisibility="Disabled">
+                <notes:MarkdownView Text="{Binding Text}"
+                                    Placeholder="Esta tarefa foi concluída sem nenhuma anotação."
+                                    Foreground="{DynamicResource WidgetTextHighBrush}" />
+              </ScrollViewer>
+
+            </Panel>
+          </Border>
+
+        </DockPanel>
+      </TabItem>
+
+      <TabItem x:Name="DevelopmentTabItem" Header="Desenvolvimento">
+        <!--
+          A aba Desenvolvimento (ADR-027). O DataContext é o ViewModel da aba, e
+          o painel tem nome para os itens das listas chegarem aos comandos dele.
+        -->
+        <ScrollViewer x:Name="DevelopmentScroll"
+                      HorizontalScrollBarVisibility="Disabled"
+                      Margin="0,10,0,10">
+          <StackPanel x:Name="DevelopmentPanel"
+                      x:DataType="vm:TaskDevelopmentViewModel"
+                      DataContext="{Binding Development}"
+                      Spacing="12">
+
+            <TextBlock Classes="hint"
+                       Text="Prepare um worktree Git para implementar esta tarefa: uma branch nova, numa pasta ao lado do repositório."
+                       IsVisible="{Binding !IsReady}" />
+
+            <TextBlock Classes="hint" Text="Carregando…" IsVisible="{Binding IsLoading}" />
+
+            <!-- Git -->
+            <Border Classes="card" x:Name="GitCard" IsVisible="{Binding !IsReady}">
+              <StackPanel Spacing="8">
+
+                <TextBlock Classes="sectionTitle" Text="Git" />
+
+                <TextBlock Classes="body"
+                           Classes.ok="{Binding Git.IsInstalled, FallbackValue=False}"
+                           Classes.bad="{Binding IsGitMissing}"
+                           Text="{Binding GitStatusText}" />
+
+                <StackPanel Spacing="10" IsVisible="{Binding IsGitMissing}" x:Name="GitMissingPanel">
+
+                  <TextBlock Classes="body"
+                             Text="Para utilizar a integração de desenvolvimento, instale o Git e depois clique em &quot;Verificar novamente&quot;. O MyTaskApp não instala nada sozinho." />
+
+                  <TextBlock Classes="fieldLabel" Text="{Binding Instructions.SystemName}" />
+                  <TextBlock Classes="hint" Text="{Binding Instructions.Explanation}" />
+
+                  <ItemsControl ItemsSource="{Binding Instructions.Commands}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <StackPanel Spacing="8" />
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="dev:InstallCommand">
+                        <StackPanel Spacing="3">
+                          <TextBlock Classes="hint" Text="{Binding Label}" />
+                          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <Border Grid.Column="0" Classes="codeBox">
+                              <SelectableTextBlock Classes="code installCommand" Text="{Binding Command}" />
+                            </Border>
+                            <Button Grid.Column="1"
+                                    Classes="copyCommand"
+                                    Content="Copiar comando"
+                                    VerticalAlignment="Center"
+                                    Command="{Binding #DevelopmentPanel.((vm:TaskDevelopmentViewModel)DataContext).CopyCommand}"
+                                    CommandParameter="{Binding Command}" />
+                          </Grid>
+                        </StackPanel>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+
+                  <StackPanel Spacing="3">
+                    <TextBlock Classes="hint" Text="{Binding Instructions.Verify.Label}" />
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                      <Border Grid.Column="0" Classes="codeBox">
+                        <SelectableTextBlock Classes="code" Text="{Binding Instructions.Verify.Command}" />
+                      </Border>
+                      <Button Grid.Column="1"
+                              Content="Copiar comando"
+                              VerticalAlignment="Center"
+                              Command="{Binding CopyCommand}"
+                              CommandParameter="{Binding Instructions.Verify.Command}" />
+                    </Grid>
+                  </StackPanel>
+
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Content="Como instalar o Git" Command="{Binding OpenInstallPageCommand}" />
+                    <Button Classes="accent"
+                            x:Name="RecheckGitButton"
+                            Content="Verificar novamente"
+                            Command="{Binding RecheckGitCommand}" />
+                  </StackPanel>
+
+                </StackPanel>
+
+              </StackPanel>
+            </Border>
+
+            <!-- A tentativa anterior: falhou, foi interrompida ou removida. -->
+            <Border Classes="card caution" IsVisible="{Binding HasPreviousAttempt}">
+              <TextBlock Classes="body" Text="{Binding PreviousAttempt}" />
+            </Border>
+
+            <!-- Formulário -->
+            <Border Classes="card" x:Name="SetupCard" IsVisible="{Binding ShowForm}">
+              <StackPanel Spacing="14">
+
+                <TextBlock Classes="sectionTitle" Text="Desenvolvimento" />
+
+                <StackPanel Spacing="4">
+                  <TextBlock Classes="fieldLabel" Text="Diretório" />
+                  <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+                    <TextBox Grid.Column="0"
+                             x:Name="DirectoryBox"
+                             Text="{Binding DirectoryText}"
+                             IsEnabled="{Binding IsFormEnabled}"
+                             PlaceholderText="@alias de uma etiqueta ou o caminho do repositório" />
+                    <Button Grid.Column="1"
+                            x:Name="DirectoryAliasesButton"
+                            Content="@"
+                            ToolTip.Tip="Diretórios das etiquetas desta tarefa"
+                            IsEnabled="{Binding IsFormEnabled}"
+                            Click="OnDirectoryAliasesClick" />
+                    <Button Grid.Column="2"
+                            Content="Procurar…"
+                            IsEnabled="{Binding IsFormEnabled}"
+                            Click="OnBrowseDirectoryClick" />
+                  </Grid>
+
+                  <!-- O mesmo autocomplete da anotação: o "@alias" vira o caminho. -->
+                  <Popup x:Name="DirectoryPopup"
+                         PlacementTarget="{Binding #DirectoryBox}"
+                         Placement="Bottom"
+                         IsLightDismissEnabled="True"
+                         IsOpen="{Binding DirectoryCompletion.IsCompletionOpen, Mode=TwoWay}">
+                    <Border Classes="aliasList">
+                      <ScrollViewer MaxHeight="280" HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl x:Name="DirectoryAliasList"
+                                      ItemsSource="{Binding DirectoryCompletion.Suggestions}"
+                                      ItemTemplate="{StaticResource AliasSuggestionTemplate}" />
+                      </ScrollViewer>
+                    </Border>
+                  </Popup>
+
+                  <StackPanel Orientation="Horizontal" Spacing="16">
+                    <TextBlock Classes="hint" Text="Conferindo…" IsVisible="{Binding IsInspecting}" />
+                    <TextBlock Classes="hint"
+                               x:Name="DirectoryStatus"
+                               Classes.ok="{Binding DirectoryFound}"
+                               Classes.bad="{Binding !DirectoryFound}"
+                               Text="{Binding DirectoryStatusText}"
+                               IsVisible="{Binding HasDirectoryStatus}" />
+                    <TextBlock Classes="hint"
+                               x:Name="RepositoryStatus"
+                               Classes.ok="{Binding RepositoryValid}"
+                               Classes.bad="{Binding !RepositoryValid}"
+                               Text="{Binding RepositoryStatusText}"
+                               IsVisible="{Binding HasRepositoryStatus}" />
+                  </StackPanel>
+                </StackPanel>
+
+                <StackPanel Spacing="4">
+                  <TextBlock Classes="fieldLabel" Text="Branch de origem" />
+                  <ComboBox x:Name="SourceBranchBox"
+                            HorizontalAlignment="Stretch"
+                            ItemsSource="{Binding BranchOptions}"
+                            SelectedItem="{Binding SelectedBranchOption}"
+                            IsEnabled="{Binding IsFormEnabled}"
+                            PlaceholderText="Escolha a branch de onde a tarefa parte">
+                    <ComboBox.Styles>
+                      <!-- Cabeçalho de grupo não é escolha. -->
+                      <Style Selector="ComboBoxItem" x:DataType="vm:BranchOptionViewModel">
+                        <Setter Property="IsEnabled" Value="{Binding IsSelectable}" />
+                      </Style>
+                    </ComboBox.Styles>
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate x:DataType="vm:BranchOptionViewModel">
+                        <TextBlock Text="{Binding Label}"
+                                   Classes.branchHeader="{Binding IsHeader}" />
+                      </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
+                  <TextBlock Classes="hint" Text="Carregando branches…" IsVisible="{Binding IsLoadingBranches}" />
+                  <TextBlock Classes="hint bad"
+                             Text="{Binding BranchesError}"
+                             IsVisible="{Binding BranchesError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                </StackPanel>
+
+                <StackPanel Spacing="4">
+                  <TextBlock Classes="fieldLabel" Text="Nova branch" />
+                  <TextBox x:Name="NewBranchBox"
+                           Text="{Binding NewBranchName}"
+                           IsEnabled="{Binding IsFormEnabled}"
+                           PlaceholderText="feature/nome-da-tarefa" />
+                  <TextBlock Classes="hint bad"
+                             x:Name="BranchNameError"
+                             Text="{Binding BranchNameError}"
+                             IsVisible="{Binding HasBranchNameError}" />
+                </StackPanel>
+
+                <StackPanel Spacing="4">
+                  <TextBlock Classes="fieldLabel" Text="Worktree" />
+                  <SelectableTextBlock Classes="code"
+                                       x:Name="WorktreePreview"
+                                       Text="{Binding WorktreePreview, FallbackValue='—', TargetNullValue='—'}" />
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                  <Button Content="Cancelar"
+                          Command="{Binding CancelRunCommand}"
+                          IsVisible="{Binding IsRunning}" />
+                  <Button Classes="accent"
+                          x:Name="StartButton"
+                          Content="Iniciar implementação"
+                          Command="{Binding StartCommand}" />
+                </StackPanel>
+
+              </StackPanel>
+            </Border>
+
+            <!-- Progresso -->
+            <Border Classes="card" x:Name="StepsCard" IsVisible="{Binding ShowSteps}">
+              <StackPanel Spacing="8">
+                <TextBlock Classes="sectionTitle" Text="Preparando ambiente…" />
+                <ItemsControl ItemsSource="{Binding Steps}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <StackPanel Spacing="4" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:DevelopmentStepViewModel">
+                      <Grid ColumnDefinitions="Auto,*">
+                        <TextBlock Grid.Column="0"
+                                   Classes="stepGlyph"
+                                   Classes.done="{Binding IsDone}"
+                                   Classes.running="{Binding IsRunning}"
+                                   Classes.warning="{Binding IsWarning}"
+                                   Classes.failed="{Binding IsFailed}"
+                                   Text="{Binding Glyph}" />
+                        <StackPanel Grid.Column="1" Spacing="1">
+                          <TextBlock Classes="stepTitle"
+                                     Classes.pending="{Binding IsPending}"
+                                     Text="{Binding Title}" />
+                          <TextBlock Classes="hint"
+                                     Text="{Binding Note}"
+                                     IsVisible="{Binding HasNote}" />
+                        </StackPanel>
+                      </Grid>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </Border>
+
+            <!-- A pasta do worktree já existe -->
+            <Border Classes="card caution" x:Name="ConflictCard" IsVisible="{Binding IsConflict}">
+              <StackPanel Spacing="10">
+                <TextBlock Classes="body" Text="{Binding ConflictMessage}" />
+                <TextBlock Classes="hint"
+                           Text="Nada foi sobrescrito nem apagado. Escolha como seguir." />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Button Content="{Binding AdoptLabel}"
+                          Command="{Binding UseExistingCommand}"
+                          IsVisible="{Binding CanAdopt}" />
+                  <Button Content="Escolher outro caminho" Command="{Binding ChooseAnotherPathCommand}" />
+                  <Button Content="Cancelar" Command="{Binding CancelConflictCommand}" />
+                </StackPanel>
+                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6" IsVisible="{Binding IsChoosingAlternative}">
+                  <TextBox Grid.Column="0" x:Name="AlternativePathBox" Text="{Binding AlternativePath}" />
+                  <Button Grid.Column="1" Content="Procurar…" Click="OnBrowseAlternativeClick" />
+                  <Button Grid.Column="2"
+                          Classes="accent"
+                          Content="Criar aqui"
+                          Command="{Binding UseAlternativePathCommand}" />
+                </Grid>
+              </StackPanel>
+            </Border>
+
+            <!-- Falha -->
+            <Border Classes="card danger" x:Name="FailureCard" IsVisible="{Binding ShowFailure}">
+              <StackPanel Spacing="8">
+                <TextBlock Classes="sectionTitle bad" Text="Não foi possível criar o ambiente de desenvolvimento." />
+
+                <TextBlock Classes="fieldLabel" Text="Etapa" />
+                <TextBlock Classes="body" Text="{Binding Failure.StepTitle, FallbackValue=''}" />
+
+                <TextBlock Classes="fieldLabel" Text="Motivo" />
+                <TextBlock Classes="body" x:Name="FailureReason" Text="{Binding Failure.Reason, FallbackValue=''}" />
+
+                <StackPanel Spacing="6" IsVisible="{Binding Failure.HasChanges, FallbackValue=False}">
+                  <TextBlock Classes="fieldLabel" Text="Repositório" />
+                  <SelectableTextBlock Classes="code" Text="{Binding RepositoryPath}" />
+                  <TextBlock Classes="fieldLabel" Text="Alterações locais" />
+                  <Border Classes="codeBox">
+                    <SelectableTextBlock Classes="code" Text="{Binding Failure.ChangesText, FallbackValue=''}" />
+                  </Border>
+                  <Button Content="Abrir terminal no repositório" Command="{Binding OpenRepositoryTerminalCommand}" />
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding Failure.HasCommand, FallbackValue=False}">
+                  <ToggleButton x:Name="DetailsToggle"
+                                Content="Ver detalhes"
+                                IsChecked="{Binding IsDetailsOpen}" />
+                  <Button Content="Copiar detalhes" Command="{Binding CopyFailureDetailsCommand}" />
+                </StackPanel>
+
+                <StackPanel x:Name="FailureDetails" Spacing="4" IsVisible="{Binding IsDetailsOpen}">
+                  <TextBlock Classes="fieldLabel" Text="Command" />
+                  <Border Classes="codeBox">
+                    <SelectableTextBlock Classes="code" Text="{Binding Failure.CommandLine, FallbackValue=''}" />
+                  </Border>
+                  <TextBlock Classes="fieldLabel" Text="Exit Code" />
+                  <Border Classes="codeBox">
+                    <SelectableTextBlock Classes="code" Text="{Binding Failure.ExitCode, FallbackValue=''}" />
+                  </Border>
+                  <TextBlock Classes="fieldLabel" Text="Standard Output" />
+                  <Border Classes="codeBox">
+                    <SelectableTextBlock Classes="code" Text="{Binding Failure.StandardOutput, FallbackValue=''}" />
+                  </Border>
+                  <TextBlock Classes="fieldLabel" Text="Standard Error" />
+                  <Border Classes="codeBox">
+                    <SelectableTextBlock Classes="code" x:Name="StandardErrorText" Text="{Binding Failure.StandardError, FallbackValue=''}" />
+                  </Border>
+                </StackPanel>
+              </StackPanel>
+            </Border>
+
+            <!-- Pronto -->
+            <Border Classes="card" x:Name="ReadyCard" IsVisible="{Binding IsReady}">
+              <StackPanel Spacing="10">
+                <TextBlock Classes="sectionTitle" Text="Desenvolvimento" />
+
+                <TextBlock Classes="fieldLabel" Text="Status" />
+                <TextBlock Classes="body ok" Text="✓ Ambiente pronto" />
+
+                <TextBlock Classes="fieldLabel" Text="Repositório" />
+                <SelectableTextBlock Classes="code" Text="{Binding Development.RepositoryPath, FallbackValue=''}" />
+
+                <TextBlock Classes="fieldLabel" Text="Branch de origem" />
+                <SelectableTextBlock Classes="code" Text="{Binding Development.SourceBranch, FallbackValue=''}" />
+
+                <TextBlock Classes="fieldLabel" Text="Branch da tarefa" />
+                <SelectableTextBlock Classes="code" Text="{Binding Development.Branch, FallbackValue=''}" />
+
+                <TextBlock Classes="fieldLabel" Text="Worktree" />
+                <SelectableTextBlock Classes="code" x:Name="ReadyWorktree" Text="{Binding Development.WorktreePath, FallbackValue=''}" />
+
+                <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
+                  <Button Classes="accent" Content="Abrir diretório" Command="{Binding OpenFolderCommand}" />
+                  <Button Content="Abrir terminal" Command="{Binding OpenTerminalCommand}" />
+                  <Button Content="Copiar caminho" Command="{Binding CopyPathCommand}" />
+                  <Button Content="Remover Worktree"
+                          x:Name="RemoveWorktreeButton"
+                          Command="{Binding RemoveWorktreeCommand}"
+                          IsEnabled="{Binding !IsRemoving}" />
+                </WrapPanel>
+
+                <Border Classes="card caution" x:Name="RemoveBlockedCard" IsVisible="{Binding IsRemoveBlocked}">
+                  <StackPanel Spacing="8">
+                    <TextBlock Classes="body"
+                               Text="Este Worktree possui alterações não commitadas. Remover o Worktree pode fazer com que essas alterações sejam perdidas. Nada foi removido." />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <Button Content="Cancelar" Command="{Binding CancelRemoveCommand}" />
+                      <Button Content="Ver alterações" Command="{Binding ShowRemoveChangesCommand}" />
+                    </StackPanel>
+                    <Border Classes="codeBox" IsVisible="{Binding IsShowingRemoveChanges}">
+                      <SelectableTextBlock Classes="code" Text="{Binding RemoveChangesText}" />
+                    </Border>
+                  </StackPanel>
+                </Border>
+              </StackPanel>
+            </Border>
+
+            <TextBlock Classes="hint"
+                       x:Name="DevelopmentMessage"
+                       Text="{Binding Message}"
+                       IsVisible="{Binding Message, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+          </StackPanel>
         </ScrollViewer>
+      </TabItem>
 
-      </Panel>
-    </Border>
+    </TabControl>
 
   </DockPanel>
 

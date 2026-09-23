@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using MyTaskApp.Application;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Development;
 using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Application.Tasks;
 using MyTaskApp.Application.Planning;
@@ -34,6 +35,8 @@ public class ApplicationRegistrationTests
             .AddSingleton<ITagQuery>(new StubTagQuery())
             .AddSingleton<IAlertPresenter>(new StubAlertPresenter())
             .AddSingleton<ISoundPlayer>(new StubSoundPlayer())
+            .AddSingleton<IGitClient>(new FakeGitClient())
+            .AddSingleton<IDirectoryProbe>(new FakeDirectoryProbe())
             // Normalmente vem do composition root do Desktop (ADR-012).
             .AddSingleton<IUseCaseRunner>(new CountingUseCaseRunner())
             .AddApplication()
@@ -53,6 +56,19 @@ public class ApplicationRegistrationTests
     [InlineData(typeof(UpdateTagHandler))]
     [InlineData(typeof(DeleteTagHandler))]
     [InlineData(typeof(SetTaskTagsHandler))]
+    [InlineData(typeof(GetTagDirectoriesHandler))]
+    [InlineData(typeof(GetTaskDirectoriesHandler))]
+    [InlineData(typeof(AddTagDirectoryHandler))]
+    [InlineData(typeof(UpdateTagDirectoryHandler))]
+    [InlineData(typeof(RemoveTagDirectoryHandler))]
+    [InlineData(typeof(GetTaskDevelopmentHandler))]
+    [InlineData(typeof(DetectGitHandler))]
+    [InlineData(typeof(InspectDirectoryHandler))]
+    [InlineData(typeof(ListBranchesHandler))]
+    [InlineData(typeof(PrepareDevelopmentHandler))]
+    [InlineData(typeof(StartDevelopmentHandler))]
+    [InlineData(typeof(InspectWorktreeHandler))]
+    [InlineData(typeof(RemoveWorktreeHandler))]
     [InlineData(typeof(ArchiveChecklistHandler))]
     [InlineData(typeof(RestoreChecklistHandler))]
     [InlineData(typeof(MoveChecklistToTrashHandler))]
@@ -97,6 +113,16 @@ public class ApplicationRegistrationTests
     {
         public Task<IReadOnlyList<TagRow>> ListAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<TagRow>>([]);
+
+        public Task<IReadOnlyList<TagDirectoryRow>> ListDirectoriesAsync(
+            Guid tagId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<TagDirectoryRow>>([]);
+
+        public Task<IReadOnlyList<TagDirectoryRow>> ListDirectoriesForTaskAsync(
+            Guid taskId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<TagDirectoryRow>>([]);
     }
 
     private sealed class StubTodayQuery : ITodayQuery

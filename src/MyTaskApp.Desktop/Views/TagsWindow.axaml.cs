@@ -1,4 +1,6 @@
 using Avalonia.Controls;
+using Avalonia.Interactivity;
+using Avalonia.Platform.Storage;
 using MyTaskApp.Desktop.ViewModels;
 
 namespace MyTaskApp.Desktop.Views;
@@ -39,5 +41,28 @@ public sealed partial class TagsWindow : Window
         }
 
         NameBox.Focus();
+    }
+
+    /// <summary>
+    /// "Procurar…" do diretório (ADR-026). Fica aqui porque o seletor de pastas é
+    /// serviço da janela; o que fazer com a pasta escolhida está no ViewModel.
+    /// </summary>
+    private async void OnBrowseFolderClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Control { DataContext: TagListItemViewModel item })
+        {
+            return;
+        }
+
+        var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = "Escolher a pasta do diretório",
+            AllowMultiple = false,
+        });
+
+        if (folders.Count > 0 && folders[0].TryGetLocalPath() is { } path)
+        {
+            item.UseFolder(path);
+        }
     }
 }

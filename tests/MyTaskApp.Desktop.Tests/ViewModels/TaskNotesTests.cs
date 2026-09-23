@@ -19,8 +19,10 @@ public class TaskNotesTests
 
     private readonly FakeUseCaseRunner _runner = new();
 
+    private readonly FakeDirectoryProbe _probe = new();
+
     private TaskNotesViewModel ViewModel() =>
-        new(_runner, NullLogger<TaskNotesViewModel>.Instance);
+        new(_runner, _probe, TestDevelopment.For(_runner), NullLogger<TaskNotesViewModel>.Instance);
 
     private static TaskRowViewModel Row(
         string? notes = null,

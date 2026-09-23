@@ -228,7 +228,7 @@ public class TagRenderingTests
             (IReadOnlyList<TagRow>)[new TagRow(Guid.NewGuid(), "Urgente", "#EF4444", 2)];
 
         var viewModel = new TagsViewModel(
-            runner, new FakeConfirmationDialog(), NullLogger<TagsViewModel>.Instance);
+            runner, new FakeConfirmationDialog(), new FakeDirectoryProbe(), NullLogger<TagsViewModel>.Instance);
 
         var window = new TagsWindow(viewModel);
         window.Show();

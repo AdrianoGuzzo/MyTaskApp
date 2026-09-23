@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Configuration;
+using MyTaskApp.Application.Development;
 using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Reminders;
@@ -55,6 +56,21 @@ public static class DependencyInjection
         services.AddScoped<UpdateTagHandler>();
         services.AddScoped<DeleteTagHandler>();
         services.AddScoped<SetTaskTagsHandler>();
+        services.AddScoped<GetTagDirectoriesHandler>();
+        services.AddScoped<GetTaskDirectoriesHandler>();
+        services.AddScoped<AddTagDirectoryHandler>();
+        services.AddScoped<UpdateTagDirectoryHandler>();
+        services.AddScoped<RemoveTagDirectoryHandler>();
+
+        // Ambiente de desenvolvimento: Git e worktree da tarefa (ADR-027).
+        services.AddScoped<GetTaskDevelopmentHandler>();
+        services.AddScoped<DetectGitHandler>();
+        services.AddScoped<InspectDirectoryHandler>();
+        services.AddScoped<ListBranchesHandler>();
+        services.AddScoped<PrepareDevelopmentHandler>();
+        services.AddScoped<StartDevelopmentHandler>();
+        services.AddScoped<InspectWorktreeHandler>();
+        services.AddScoped<RemoveWorktreeHandler>();
 
         // Ciclo de vida do checklist: arquivar, lixeira, exclusao definitiva e
         // auditoria (§1 a §8).

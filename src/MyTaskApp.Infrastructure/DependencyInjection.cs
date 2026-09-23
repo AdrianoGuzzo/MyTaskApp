@@ -3,13 +3,17 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Development;
 using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Application.Tags;
+using MyTaskApp.Infrastructure.FileSystem;
+using MyTaskApp.Infrastructure.Git;
 using MyTaskApp.Infrastructure.Persistence;
 using MyTaskApp.Infrastructure.Persistence.Queries;
 using MyTaskApp.Infrastructure.Persistence.Repositories;
+using MyTaskApp.Infrastructure.Processes;
 
 namespace MyTaskApp.Infrastructure;
 
@@ -47,6 +51,13 @@ public static class DependencyInjection
         services.AddScoped<IDataRetentionSettingsStore, DataRetentionSettingsStore>();
         services.AddScoped<IChecklistArchiveQuery, ChecklistArchiveQuery>();
         services.AddScoped<ILifecycleSweepQuery, LifecycleSweepQuery>();
+
+        // Disco e Git (ADR-026, ADR-027). Singletons sem estado de escopo: o
+        // cliente Git só guarda o caminho do executável que achou.
+        services.AddSingleton<IDirectoryProbe, FileSystemDirectoryProbe>();
+        services.AddSingleton<IProcessRunner, ProcessRunner>();
+        services.AddSingleton(_ => GitLocator.ForCurrentSystem());
+        services.AddSingleton<IGitClient, GitClient>();
 
         return services;
     }
