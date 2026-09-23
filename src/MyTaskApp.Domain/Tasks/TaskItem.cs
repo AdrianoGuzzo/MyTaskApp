@@ -11,7 +11,6 @@ namespace MyTaskApp.Domain.Tasks;
 public sealed class TaskItem
 {
     public const int MaxTitleLength = 200;
-    public const int MaxDescriptionLength = 4000;
 
     private readonly List<TaskOccurrence> _occurrences = [];
 
@@ -415,28 +414,32 @@ public sealed class TaskItem
     private void AddOccurrence(TaskSchedule schedule, DateTimeOffset createdAt) =>
         _occurrences.Add(new TaskOccurrence(Guid.CreateVersion7(createdAt), Id, schedule));
 
-    private static string NormalizeTitle(string? title) =>
-        NormalizeOptionalText(title, MaxTitleLength, "O título")
-        ?? throw new DomainException("A tarefa precisa de um título.");
-
-    private static string? NormalizeDescription(string? description) =>
-        NormalizeOptionalText(description, MaxDescriptionLength, "A descrição");
-
-    /// <summary>Texto em branco vira nulo; texto acima do limite é recusado.</summary>
-    private static string? NormalizeOptionalText(string? value, int maxLength, string fieldLabel)
+    /// <summary>Título em branco é recusado; acima do limite, também.</summary>
+    private static string NormalizeTitle(string? title)
     {
-        var normalized = value?.Trim();
+        var normalized = NormalizeOptionalText(title)
+            ?? throw new DomainException("A tarefa precisa de um título.");
 
-        if (string.IsNullOrEmpty(normalized))
+        if (normalized.Length > MaxTitleLength)
         {
-            return null;
-        }
-
-        if (normalized.Length > maxLength)
-        {
-            throw new DomainException($"{fieldLabel} não pode passar de {maxLength} caracteres.");
+            throw new DomainException($"O título não pode passar de {MaxTitleLength} caracteres.");
         }
 
         return normalized;
+    }
+
+    /// <summary>
+    /// A descrição não tem teto: é onde cabe o que não coube no título, e cortar
+    /// uma anotação longa no meio seria perder justamente o detalhe.
+    /// </summary>
+    private static string? NormalizeDescription(string? description) =>
+        NormalizeOptionalText(description);
+
+    /// <summary>Texto em branco vira nulo.</summary>
+    private static string? NormalizeOptionalText(string? value)
+    {
+        var normalized = value?.Trim();
+
+        return string.IsNullOrEmpty(normalized) ? null : normalized;
     }
 }

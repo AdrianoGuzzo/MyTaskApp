@@ -31,8 +31,6 @@ public sealed partial class TaskNotesViewModel(
     IUseCaseRunner runner,
     ILogger<TaskNotesViewModel> logger) : ObservableObject
 {
-    public const int CharacterLimit = TaskItem.MaxDescriptionLength;
-
     /// <summary>O texto como está no banco — a régua do "alterações não salvas".</summary>
     private string _persisted = string.Empty;
 
@@ -48,7 +46,6 @@ public sealed partial class TaskNotesViewModel(
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasUnsavedChanges))]
     [NotifyPropertyChangedFor(nameof(CountLabel))]
-    [NotifyPropertyChangedFor(nameof(IsOverLimit))]
     [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
     private string _text = string.Empty;
 
@@ -75,9 +72,11 @@ public sealed partial class TaskNotesViewModel(
     public bool HasUnsavedChanges =>
         IsEditable && !string.Equals(Text, _persisted, StringComparison.Ordinal);
 
-    public string CountLabel => $"{Text.Length}/{CharacterLimit}";
-
-    public bool IsOverLimit => Text.Length > CharacterLimit;
+    /// <summary>
+    /// Só informa: a anotação não tem teto, então não há fração nem alerta —
+    /// um "x/y" sugeriria um limite que não existe.
+    /// </summary>
+    public string CountLabel => Text.Length == 1 ? "1 caractere" : $"{Text.Length} caracteres";
 
     /// <summary>Pede o fechamento da janela. Quem fecha é a janela.</summary>
     public event Action? CloseRequested;
@@ -85,7 +84,7 @@ public sealed partial class TaskNotesViewModel(
     /// <summary>A lista precisa saber, para o ícone da linha acender.</summary>
     public event Action? Saved;
 
-    public bool CanSave => IsEditable && !IsBusy && !IsOverLimit && HasUnsavedChanges;
+    public bool CanSave => IsEditable && !IsBusy && HasUnsavedChanges;
 
     public void Load(TaskRowViewModel row)
     {
