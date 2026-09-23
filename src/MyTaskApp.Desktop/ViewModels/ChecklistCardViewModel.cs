@@ -7,7 +7,7 @@ using MyTaskApp.Domain.Lifecycle;
 namespace MyTaskApp.Desktop.ViewModels;
 
 /// <summary>
-/// Um checklist nas áreas de Arquivados e Lixeira (§3, §5). Carrega só o que a
+/// Um checklist nas áreas de Concluídos, Arquivados e Lixeira (§3, §5). Carrega só o que a
 /// tela desenha; a trilha de auditoria chega depois, quando alguém abre os
 /// detalhes.
 /// </summary>
@@ -32,11 +32,15 @@ public sealed partial class ChecklistCardViewModel : ObservableObject
         // surpresa de restaurar e não encontrar nada em "Hoje".
         WasArchivedBeforeTrash = IsInTrash && row.ArchivedAt is not null;
 
-        StateLabel = IsInTrash ? "NA LIXEIRA" : "ARQUIVADO";
+        IsArchived = !IsInTrash && row.ArchivedAt is not null;
 
-        WhenLabel = IsInTrash
-            ? $"Excluído em {Format(row.DeletedAt)}"
-            : $"Arquivado em {Format(row.ArchivedAt)}";
+        StateLabel = IsInTrash ? "NA LIXEIRA"
+            : IsArchived ? "ARQUIVADO"
+            : "CONCLUÍDO";
+
+        WhenLabel = IsInTrash ? $"Excluído em {Format(row.DeletedAt)}"
+            : IsArchived ? $"Arquivado em {Format(row.ArchivedAt)}"
+            : $"Concluído em {Format(row.ConcludedAt)}";
 
         DeletedByLabel = row.DeletedBy is { } who ? $"por {who}" : null;
         HasDeletedBy = DeletedByLabel is not null;
@@ -77,6 +81,9 @@ public sealed partial class ChecklistCardViewModel : ObservableObject
     public bool IsInTrash { get; }
 
     public bool WasArchivedBeforeTrash { get; }
+
+    /// <summary>Arquivado e fora da lixeira; nem um nem outro é um concluído ativo.</summary>
+    public bool IsArchived { get; }
 
     public string StateLabel { get; }
 

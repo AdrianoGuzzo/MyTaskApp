@@ -18,18 +18,27 @@ internal sealed class ChecklistArchiveQuery(MyTaskAppDbContext context) : ICheck
         var query = context.Tasks.AsNoTracking();
 
         // A lixeira vence o arquivo: um checklist arquivado e depois excluído
-        // aparece só na lixeira, que é onde o usuário pode agir sobre ele.
-        query = scope is ChecklistScope.Trashed
-            ? query.Where(task => task.DeletedAt != null)
-            : query.Where(task => task.ArchivedAt != null && task.DeletedAt == null);
+        // aparece só na lixeira, que é onde o usuário pode agir sobre ele. E o
+        // arquivo vence a conclusão: concluídos são só os que continuam na lista
+        // principal — o mesmo predicado do índice IX_Tasks_ReadyToArchive.
+        query = scope switch
+        {
+            ChecklistScope.Trashed => query.Where(task => task.DeletedAt != null),
+            ChecklistScope.Concluded => query.Where(task =>
+                task.ConcludedAt != null && task.ArchivedAt == null && task.DeletedAt == null),
+            _ => query.Where(task => task.ArchivedAt != null && task.DeletedAt == null),
+        };
 
         // O recorte usa a data que define a área, e cai no mesmo índice parcial
         // da ordenação logo abaixo.
         if (since is { } from)
         {
-            query = scope is ChecklistScope.Trashed
-                ? query.Where(task => task.DeletedAt >= from)
-                : query.Where(task => task.ArchivedAt >= from);
+            query = scope switch
+            {
+                ChecklistScope.Trashed => query.Where(task => task.DeletedAt >= from),
+                ChecklistScope.Concluded => query.Where(task => task.ConcludedAt >= from),
+                _ => query.Where(task => task.ArchivedAt >= from),
+            };
         }
 
         if (BuildPattern(search) is { } pattern)
@@ -40,9 +49,12 @@ internal sealed class ChecklistArchiveQuery(MyTaskAppDbContext context) : ICheck
                     && EF.Functions.Like(task.Description, pattern, LikeEscape)));
         }
 
-        query = scope is ChecklistScope.Trashed
-            ? query.OrderByDescending(task => task.DeletedAt)
-            : query.OrderByDescending(task => task.ArchivedAt);
+        query = scope switch
+        {
+            ChecklistScope.Trashed => query.OrderByDescending(task => task.DeletedAt),
+            ChecklistScope.Concluded => query.OrderByDescending(task => task.ConcludedAt),
+            _ => query.OrderByDescending(task => task.ArchivedAt),
+        };
 
         return await query
             .Select(task => new ChecklistSummaryRow(
