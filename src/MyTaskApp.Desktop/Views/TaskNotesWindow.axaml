@@ -7,7 +7,7 @@
         x:Class="MyTaskApp.Desktop.Views.TaskNotesWindow"
         x:DataType="vm:TaskNotesViewModel"
         x:Name="Root"
-        Title="{Binding TaskTitle}"
+        Title="{Binding WindowTitle}"
         Width="900"
         Height="640"
         MinWidth="460"
@@ -31,6 +31,39 @@
       <Setter Property="FontWeight" Value="SemiBold" />
       <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
       <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <!--
+      O título editável se veste de título: mesma fonte do TextBlock.pageTitle,
+      sem a moldura de formulário. A borda só aparece no hover e no foco, para
+      dizer que dá para escrever sem transformar o cabeçalho num campo.
+    -->
+    <Style Selector="TextBox.pageTitle">
+      <Setter Property="FontSize" Value="21" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="AcceptsReturn" Value="False" />
+      <Setter Property="Padding" Value="6,2" />
+      <Setter Property="Margin" Value="-6,0,0,0" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+
+    <Style Selector="TextBox.pageTitle /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+
+    <Style Selector="TextBox.pageTitle:pointerover /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetStrokeBrush}" />
+    </Style>
+
+    <Style Selector="TextBox.pageTitle:focus /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetStrokeBrush}" />
     </Style>
 
     <Style Selector="TextBlock.pageHint">
@@ -348,12 +381,29 @@
   -->
   <DockPanel MaxWidth="920" HorizontalAlignment="Center">
 
-    <!-- Cabeçalho: o título do item, que é o assunto da janela inteira. -->
+    <!--
+      Cabeçalho: o título do item, que é o assunto da janela inteira. Editável
+      enquanto a tarefa está em aberto, e gravado pelo mesmo "Salvar" da anotação.
+    -->
     <Border DockPanel.Dock="Top" Padding="24,18,24,12">
       <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
 
         <StackPanel Grid.Column="0" Spacing="3">
-          <TextBlock Classes="pageTitle" Text="{Binding TaskTitle}" />
+          <TextBox Classes="pageTitle"
+                   x:Name="TitleEditor"
+                   Text="{Binding TaskTitle}"
+                   MaxLength="{Binding MaxTitleLength}"
+                   PlaceholderText="Título da tarefa"
+                   ToolTip.Tip="Clique para editar o título"
+                   IsVisible="{Binding IsEditable}"
+                   KeyDown="OnTitleKeyDown" />
+          <TextBlock Classes="pageTitle"
+                     Text="{Binding TaskTitle}"
+                     IsVisible="{Binding IsReadOnly}" />
+          <TextBlock Classes="pageHint"
+                     Text="{Binding TitleError}"
+                     Foreground="{DynamicResource WidgetDangerBrush}"
+                     IsVisible="{Binding TitleError, Converter={x:Static ObjectConverters.IsNotNull}}" />
           <TextBlock Classes="pageHint"
                      Text="Anote aqui o que mais precisa saber sobre esta tarefa."
                      IsVisible="{Binding IsEditable}" />
