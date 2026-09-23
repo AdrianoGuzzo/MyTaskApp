@@ -157,20 +157,19 @@ public class TaskNotesTests
     }
 
     /// <summary>
-    /// O domínio recusa acima de 4000 caracteres. Bloquear aqui troca uma
-    /// mensagem de erro depois do clique por um botão que já não convida.
+    /// A anotação não tem teto: um texto enorme continua salvável, e o
+    /// contador só informa, sem sugerir um limite que não existe.
     /// </summary>
     [Fact]
-    public void PastTheCharacterLimit_SavingIsBlockedBeforeTheDomainRefuses()
+    public void AVeryLongNote_CanStillBeSaved()
     {
         var viewModel = ViewModel();
         viewModel.Load(Row());
 
-        viewModel.Text = new string('x', TaskNotesViewModel.CharacterLimit + 1);
+        viewModel.Text = new string('x', 100_000);
 
-        viewModel.IsOverLimit.Should().BeTrue();
-        viewModel.SaveCommand.CanExecute(null).Should().BeFalse();
-        viewModel.CountLabel.Should().Be("4001/4000");
+        viewModel.SaveCommand.CanExecute(null).Should().BeTrue();
+        viewModel.CountLabel.Should().Be("100000 caracteres");
     }
 
     [Fact]
