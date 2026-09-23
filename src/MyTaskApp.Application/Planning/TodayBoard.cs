@@ -18,7 +18,7 @@ public sealed record TodayTask(
     /// <summary>
     /// A anotação livre do checklist, em Markdown. Viaja junto com a linha em
     /// vez de ser buscada ao abrir a janela: o quadro de hoje é de dezenas de
-    /// itens, o campo tem teto de 4000 caracteres, e uma segunda consulta só
+    /// itens, anotações costumam ser curtas, e uma segunda consulta só
     /// para preencher uma tela que o usuário acabou de pedir faria a janela
     /// abrir vazia e preencher depois.
     /// </summary>

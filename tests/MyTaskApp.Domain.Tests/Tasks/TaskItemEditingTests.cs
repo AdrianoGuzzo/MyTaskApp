@@ -74,13 +74,14 @@ public class TaskItemEditingTests
     }
 
     [Fact]
-    public void ChangeDescription_BeyondMaximumLength_IsRejected()
+    public void ChangeDescription_WithVeryLongText_KeepsItWhole()
     {
         var task = NewTask();
+        var description = new string('d', 100_000);
 
-        var change = () => task.ChangeDescription(new string('d', TaskItem.MaxDescriptionLength + 1));
+        task.ChangeDescription(description);
 
-        change.Should().Throw<DomainException>();
+        task.Description.Should().Be(description);
     }
 
     [Fact]
