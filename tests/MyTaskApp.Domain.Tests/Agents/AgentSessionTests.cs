@@ -2,7 +2,7 @@ using MyTaskApp.Domain.Agents;
 
 namespace MyTaskApp.Domain.Tests.Agents;
 
-/// <summary>A sessão de agente associada à tarefa (ADR-029).</summary>
+/// <summary>A sessão de agente associada à tarefa (ADR-030).</summary>
 public class AgentSessionTests
 {
     private static readonly DateTimeOffset Now = new(2026, 9, 23, 18, 42, 0, TimeSpan.Zero);

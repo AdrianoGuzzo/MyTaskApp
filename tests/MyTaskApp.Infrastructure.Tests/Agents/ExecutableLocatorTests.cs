@@ -2,7 +2,7 @@ using MyTaskApp.Infrastructure.Processes;
 
 namespace MyTaskApp.Infrastructure.Tests.Agents;
 
-/// <summary>A procura de executáveis que o Git e os agentes compartilham (ADR-027, ADR-029).</summary>
+/// <summary>A procura de executáveis que o Git e os agentes compartilham (ADR-027, ADR-030).</summary>
 public class ExecutableLocatorTests
 {
     [Fact]

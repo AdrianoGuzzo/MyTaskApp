@@ -8,7 +8,7 @@ namespace MyTaskApp.Infrastructure.Terminals.Windows;
 
 /// <summary>
 /// Abre o agente numa janela de console nova, hospedada pelo terminal padrão do
-/// Windows (ADR-029).
+/// Windows (ADR-030).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -68,7 +68,7 @@ internal sealed class WindowsTerminalLauncher(
         try
         {
             // Descartar o Process só solta o handle — não encerra o agente, que
-            // continua vivo depois que o app fecha (ADR-029).
+            // continua vivo depois que o app fecha (ADR-030).
             using var process = Process.Start(startInfo);
 
             if (process is null)

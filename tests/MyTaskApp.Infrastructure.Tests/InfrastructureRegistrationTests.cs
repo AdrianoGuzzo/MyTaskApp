@@ -76,6 +76,7 @@ public class InfrastructureRegistrationTests : IDisposable
     [InlineData(typeof(ITagRepository))]
     [InlineData(typeof(ITagQuery))]
     [InlineData(typeof(IDirectoryProbe))]
+    [InlineData(typeof(IDirectoryRemover))]
     [InlineData(typeof(IGitClient))]
     [InlineData(typeof(IAgentSessionRepository))]
     [InlineData(typeof(IAgentCliProvider))]
@@ -90,7 +91,7 @@ public class InfrastructureRegistrationTests : IDisposable
         scope.ServiceProvider.GetRequiredService(serviceType).Should().NotBeNull();
     }
 
-    /// <summary>Hoje o único agente é o Claude Code (ADR-029).</summary>
+    /// <summary>Hoje o único agente é o Claude Code (ADR-030).</summary>
     [Fact]
     public void TheClaudeCode_IsTheRegisteredAgent()
     {

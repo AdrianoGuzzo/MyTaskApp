@@ -3,7 +3,7 @@ using MyTaskApp.Domain.Agents;
 namespace MyTaskApp.Application.Agents;
 
 /// <summary>
-/// Confere uma sessão gravada contra o sistema (ADR-029): o estado do banco é
+/// Confere uma sessão gravada contra o sistema (ADR-030): o estado do banco é
 /// só o que era verdade da última vez. Antes de mostrar "Em execução", o
 /// processo precisa existir — e ser o mesmo.
 /// </summary>

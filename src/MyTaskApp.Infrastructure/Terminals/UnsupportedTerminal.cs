@@ -3,7 +3,7 @@ using MyTaskApp.Application.Agents;
 namespace MyTaskApp.Infrastructure.Terminals;
 
 /// <summary>
-/// O terminal em sistemas que ainda não têm implementação (ADR-029). Existe
+/// O terminal em sistemas que ainda não têm implementação (ADR-030). Existe
 /// para o app subir e dizer "ainda não", em vez de falhar ao montar o contêiner.
 /// O Linux entra trocando esta classe, sem mexer no resto.
 /// </summary>

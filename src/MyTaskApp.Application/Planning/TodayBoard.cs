@@ -27,7 +27,7 @@ public sealed record TodayTask(
     IReadOnlyList<TagBadge>? Tags = null,
     /// <summary>
     /// O nome do agente de IA aberto para a tarefa ("Claude Code"); <c>null</c>
-    /// = nenhum (ADR-029). É o que acende o selo na linha.
+    /// = nenhum (ADR-030). É o que acende o selo na linha.
     /// </summary>
     string? ActiveAgentName = null);
 

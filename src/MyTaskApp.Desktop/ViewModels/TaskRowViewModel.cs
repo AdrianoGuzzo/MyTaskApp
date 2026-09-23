@@ -58,7 +58,7 @@ public sealed class TaskRowViewModel
 
     public string Title { get; }
 
-    /// <summary>O agente de IA aberto para a tarefa ("Claude Code"); <c>null</c> = nenhum (ADR-029).</summary>
+    /// <summary>O agente de IA aberto para a tarefa ("Claude Code"); <c>null</c> = nenhum (ADR-030).</summary>
     public string? AgentName { get; }
 
     public bool HasActiveAgent => AgentName is not null;
@@ -100,14 +100,16 @@ public sealed class TaskRowViewModel
     public bool HasNotes => !string.IsNullOrWhiteSpace(Notes);
 
     /// <summary>
-    /// Lápis enquanto dá para escrever, documento depois de concluída. O glifo
-    /// é a única pista, antes do clique, de que a janela vai abrir só para ler.
+    /// "Abrir em janela" enquanto dá para mexer, olho depois de concluída. Não é
+    /// mais um lápis: a janela deixou de ser só a anotação — tem o título e a aba
+    /// Desenvolvimento —, então o ícone diz "abre esta tarefa", não "escreve".
+    /// O olho é a única pista, antes do clique, de que ela vai abrir só para ler.
     /// </summary>
-    public string NotesGlyph => IsCompleted ? "" : "";
+    public string NotesGlyph => IsCompleted ? "" : "";
 
     public string NotesLabel => IsCompleted
-        ? "Ver as anotações desta tarefa"
-        : "Anotações desta tarefa";
+        ? "Ver esta tarefa (somente leitura)"
+        : "Abrir esta tarefa";
 
     public ReminderPolicy Reminder { get; }
 

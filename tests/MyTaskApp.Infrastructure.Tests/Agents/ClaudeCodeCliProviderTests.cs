@@ -7,7 +7,7 @@ using MyTaskApp.Infrastructure.Processes;
 namespace MyTaskApp.Infrastructure.Tests.Agents;
 
 /// <summary>
-/// O Claude Code como agente (ADR-029), sem Claude nenhum: onde ele é
+/// O Claude Code como agente (ADR-030), sem Claude nenhum: onde ele é
 /// procurado, como a versão é lida e o que o terminal vai executar.
 /// </summary>
 public class ClaudeCodeCliProviderTests

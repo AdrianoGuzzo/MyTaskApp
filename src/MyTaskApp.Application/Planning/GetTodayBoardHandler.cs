@@ -16,7 +16,7 @@ public sealed class GetTodayBoardHandler(
     TimeProvider timeProvider,
     IOptions<ApplicationOptions> options,
     // Opcional para os testes do quadro não precisarem montar agentes: sem
-    // catálogo, o selo mostra o id do agente em vez do nome (ADR-029).
+    // catálogo, o selo mostra o id do agente em vez do nome (ADR-030).
     IAgentCliProviders? agents = null)
 {
     public async Task<TodayBoard> HandleAsync(CancellationToken cancellationToken = default)

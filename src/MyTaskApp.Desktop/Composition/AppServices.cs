@@ -113,7 +113,7 @@ internal static class AppServices
             // como a própria anotação.
             .AddTransient<TaskDevelopmentViewModel>()
 
-            // O card do agente de IA dentro dela (ADR-029): também um por janela.
+            // O card do agente de IA dentro dela (ADR-030): também um por janela.
             .AddTransient<AgentSessionViewModel>()
             .AddApplication(configuration)
             .AddInfrastructure(configuration)

@@ -4,7 +4,7 @@ namespace MyTaskApp.Infrastructure.Agents.ClaudeCode;
 
 /// <summary>
 /// Como instalar o Claude Code no Linux. Já existe para a tela ter o que
-/// mostrar quando o terminal do Linux for implementado (ADR-029).
+/// mostrar quando o terminal do Linux for implementado (ADR-030).
 /// </summary>
 internal static class LinuxInstallationGuide
 {

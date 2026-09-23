@@ -7,7 +7,7 @@ using MyTaskApp.Infrastructure.Processes;
 namespace MyTaskApp.Infrastructure.Agents.ClaudeCode;
 
 /// <summary>
-/// O Claude Code CLI (<c>claude</c>) como agente de desenvolvimento (ADR-029).
+/// O Claude Code CLI (<c>claude</c>) como agente de desenvolvimento (ADR-030).
 /// É o único lugar do app que sabe o nome do executável, onde ele costuma
 /// morar e como pedir a versão.
 /// </summary>

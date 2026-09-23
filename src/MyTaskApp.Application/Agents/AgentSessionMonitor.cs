@@ -7,7 +7,7 @@ namespace MyTaskApp.Application.Agents;
 
 /// <summary>
 /// Acompanha os processos das sessões de agente e mantém o banco em dia com
-/// eles (ADR-029).
+/// eles (ADR-030).
 /// </summary>
 /// <remarks>
 /// <para>

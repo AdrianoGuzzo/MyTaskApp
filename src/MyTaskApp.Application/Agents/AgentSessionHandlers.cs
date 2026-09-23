@@ -8,7 +8,7 @@ using MyTaskApp.Domain.Tasks;
 namespace MyTaskApp.Application.Agents;
 
 /// <summary>
-/// Quem acompanha os processos das sessões (ADR-029). Os casos de uso avisam
+/// Quem acompanha os processos das sessões (ADR-030). Os casos de uso avisam
 /// por aqui; o monitor é a implementação.
 /// </summary>
 public interface IAgentSessionWatcher
@@ -59,7 +59,7 @@ public sealed record GetTaskAgentSession(Guid TaskId);
 
 /// <summary>
 /// Nunca devolve "Em execução" só porque o banco diz: sessão ativa cujo processo
-/// sumiu é encerrada e gravada antes de voltar (ADR-029).
+/// sumiu é encerrada e gravada antes de voltar (ADR-030).
 /// </summary>
 public sealed class GetTaskAgentSessionHandler(
     IAgentSessionRepository sessions,
@@ -94,7 +94,7 @@ public sealed class GetTaskAgentSessionHandler(
 public sealed record StartAgentSession(Guid TaskId, string? ProviderId = null);
 
 /// <summary>
-/// O fluxo da ADR-029: worktree pronto → agente instalado → sessão gravada como
+/// O fluxo da ADR-030: worktree pronto → agente instalado → sessão gravada como
 /// "iniciando" → terminal aberto → PID gravado → monitor vigiando.
 /// </summary>
 /// <remarks>
@@ -343,7 +343,7 @@ public sealed record AgentReconciliation(int Alive, int Ended)
 }
 
 /// <summary>
-/// É o que recupera as sessões depois de o app ser reaberto (ADR-029): processo
+/// É o que recupera as sessões depois de o app ser reaberto (ADR-030): processo
 /// vivo volta a ser vigiado; processo que sumiu vira "encerrada". Nunca cria
 /// sessão.
 /// </summary>

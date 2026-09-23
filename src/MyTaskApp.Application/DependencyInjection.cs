@@ -84,7 +84,7 @@ public static class DependencyInjection
         services.AddScoped<SetDevelopmentCommandsHandler>();
         services.AddScoped<RunDevelopmentCommandsHandler>();
 
-        // Sessões de agente de IA (Claude Code) por tarefa (ADR-029). Os
+        // Sessões de agente de IA (Claude Code) por tarefa (ADR-030). Os
         // agentes em si vêm da Infrastructure; aqui, o catálogo e os casos de uso.
         services.TryAddSingleton<IAgentCliProviders, AgentCliProviders>();
         services.AddScoped<DetectAgentCliHandler>();

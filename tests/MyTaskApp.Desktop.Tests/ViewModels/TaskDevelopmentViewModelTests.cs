@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Time.Testing;
+using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Development;
 using MyTaskApp.Desktop.ViewModels;
 using MyTaskApp.Domain.Tasks;
@@ -490,6 +491,68 @@ public class TaskDevelopmentViewModelTests
 
         _runner.Invoked.Should().NotContain(typeof(RemoveWorktreeHandler));
         viewModel.State.Should().Be(DevelopmentPanelState.Ready);
+    }
+
+    private static DevelopmentStepException Locked(params DirectoryLocker[] lockers) =>
+        new(DevelopmentStep.RemoveWorktree, $"O Git removeu o worktree, mas a pasta {Worktree} está sendo usada.", lockers: lockers)
+        {
+            IsDirectoryLocked = true,
+        };
+
+    /// <summary>ADR-029: a pasta presa mostra quem a segura, e só encerra depois do clique.</summary>
+    [Fact]
+    public async Task Remove_AHeldFolder_ShowsTheLockers_ThenForcingRemoves()
+    {
+        var terminal = new DirectoryLocker(4242, "pwsh", @"C:\Program Files\PowerShell\7\pwsh.exe", true);
+        var viewModel = await ActivatedAsync(development: View(TaskDevelopmentStatus.Ready));
+        _runner.ResultsByHandler[typeof(InspectWorktreeHandler)] = new WorktreeInspection(true, []);
+        _runner.Enqueue<RemoveWorktreeHandler>(Locked(terminal), View(TaskDevelopmentStatus.Removed));
+        _confirmation.Answer = true;
+
+        await viewModel.RemoveWorktreeAsync();
+
+        viewModel.IsRemoveLocked.Should().BeTrue();
+        viewModel.CanForceRemove.Should().BeTrue();
+        viewModel.RemoveLockedMessage.Should().Contain(Worktree);
+        viewModel.RemoveLockersText.Should().Contain("pwsh (PID 4242)").And.Contain("pwsh.exe");
+        viewModel.State.Should().Be(DevelopmentPanelState.Ready);
+
+        await viewModel.ForceRemoveWorktreeAsync();
+
+        _runner.Invoked.Count(type => type == typeof(RemoveWorktreeHandler)).Should().Be(2);
+        viewModel.IsRemoveLocked.Should().BeFalse();
+        viewModel.State.Should().Be(DevelopmentPanelState.Setup);
+        viewModel.Message.Should().Contain("encerrados");
+    }
+
+    [Fact]
+    public async Task Remove_AFolderHeldOnlyByTheApp_OffersNoForce()
+    {
+        var viewModel = await ActivatedAsync(development: View(TaskDevelopmentStatus.Ready));
+        _runner.ResultsByHandler[typeof(InspectWorktreeHandler)] = new WorktreeInspection(true, []);
+        _runner.Enqueue<RemoveWorktreeHandler>(Locked(new DirectoryLocker(1, "explorer", null, false)));
+        _confirmation.Answer = true;
+
+        await viewModel.RemoveWorktreeAsync();
+
+        viewModel.IsRemoveLocked.Should().BeTrue();
+        viewModel.CanForceRemove.Should().BeFalse();
+        viewModel.RemoveLockersText.Should().Contain("não será encerrado");
+
+        viewModel.CancelRemove();
+
+        viewModel.IsRemoveLocked.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Remove_TheLeftoverFolder_SaysGitAlreadyForgotIt()
+    {
+        var viewModel = await ActivatedAsync(development: View(TaskDevelopmentStatus.Ready));
+        _runner.ResultsByHandler[typeof(InspectWorktreeHandler)] = new WorktreeInspection(true, [], IsLeftover: true);
+
+        await viewModel.RemoveWorktreeAsync();
+
+        _confirmation.LastAsked!.Message.Should().Contain("já esqueceu");
     }
 
     // --- Tentativa anterior -------------------------------------------------------

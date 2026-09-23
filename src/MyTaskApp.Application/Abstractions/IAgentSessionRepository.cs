@@ -2,7 +2,7 @@ using MyTaskApp.Domain.Agents;
 
 namespace MyTaskApp.Application.Abstractions;
 
-/// <summary>Acesso às sessões de agente (ADR-029). Estreita por necessidade (ADR-005).</summary>
+/// <summary>Acesso às sessões de agente (ADR-030). Estreita por necessidade (ADR-005).</summary>
 public interface IAgentSessionRepository
 {
     Task AddAsync(AgentSession session, CancellationToken cancellationToken = default);

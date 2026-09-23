@@ -7,7 +7,7 @@ using MyTaskApp.Domain.Agents;
 namespace MyTaskApp.Desktop.Tests.ViewModels;
 
 /// <summary>
-/// O card do agente na aba Desenvolvimento (ADR-029): o que ele mostra em cada
+/// O card do agente na aba Desenvolvimento (ADR-030): o que ele mostra em cada
 /// situação e quais casos de uso ele pede.
 /// </summary>
 public class AgentSessionViewModelTests

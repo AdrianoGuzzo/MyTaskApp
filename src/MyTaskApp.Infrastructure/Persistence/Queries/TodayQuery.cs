@@ -82,7 +82,7 @@ internal sealed class TodayQuery(MyTaskAppDbContext context) : ITodayQuery
                     .Select(row => new TagBadge(row.Id, row.Name, row.ColorHex))
                     .ToList());
 
-        // O selo de agente em execução (ADR-029). O status vem do banco, que o
+        // O selo de agente em execução (ADR-030). O status vem do banco, que o
         // monitor mantém em dia com os processos — a lista não consulta o sistema.
         var agents = await context.AgentSessions
             .AsNoTracking()

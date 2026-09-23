@@ -1,6 +1,6 @@
 namespace MyTaskApp.Domain.Agents;
 
-/// <summary>Em que pé está uma sessão de agente (ADR-029).</summary>
+/// <summary>Em que pé está uma sessão de agente (ADR-030).</summary>
 /// <remarks>
 /// Sem "Stopped": o app não encerra o agente nesta versão — quem sai é o
 /// usuário, no terminal, e isso é <see cref="Exited"/>. Os números são
@@ -25,7 +25,7 @@ public enum AgentSessionStatus
 
 /// <summary>
 /// Uma execução de um agente de IA de linha de comando (hoje, o Claude Code)
-/// num terminal do sistema, aberta pelo app para uma tarefa (ADR-029).
+/// num terminal do sistema, aberta pelo app para uma tarefa (ADR-030).
 /// </summary>
 /// <remarks>
 /// <para>

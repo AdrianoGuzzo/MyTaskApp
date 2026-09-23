@@ -6,7 +6,7 @@ namespace MyTaskApp.Infrastructure.Agents;
 
 /// <summary>
 /// Os processos das sessões, pelo que o .NET sabe deles — igual em qualquer
-/// sistema (ADR-029).
+/// sistema (ADR-030).
 /// </summary>
 /// <remarks>
 /// <para>
