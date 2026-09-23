@@ -101,7 +101,14 @@ public class TodayViewRenderingTests
             .OfType<TextBlock>()
             .Single(block => block.Classes.Contains("taskTitle"));
 
-        ToolTip.GetTip(titleBlock).Should().Be(title);
+        ToolTip.SetIsOpen(titleBlock, true);
+        Avalonia.Headless.AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+
+        var tip = ToolTip.GetTip(titleBlock).Should().BeOfType<ToolTip>().Subject;
+        tip.GetVisualDescendants().OfType<TextBlock>()
+            .Should().Contain(block => block.Text == title);
+
+        ToolTip.SetIsOpen(titleBlock, false);
     }
 
     [AvaloniaFact]
