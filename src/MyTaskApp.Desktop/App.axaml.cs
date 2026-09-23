@@ -4,6 +4,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using Microsoft.Extensions.DependencyInjection;
+using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Desktop.Composition;
@@ -62,6 +63,7 @@ public sealed partial class App : Avalonia.Application
                 SetUpDataManagement(Services, window, todayViewModel);
                 SetUpNotes(Services, window, todayViewModel);
                 SetUpTags(Services, window, todayViewModel);
+                SetUpAgentSessions(Services, todayViewModel);
                 ListenForSecondLaunch(Services, window);
 
                 // A moldura só sabe iniciar com o Windows depois de conhecer o
@@ -208,6 +210,34 @@ public sealed partial class App : Avalonia.Application
         services.GetRequiredService<TagsViewModel>().Changed +=
             () => Dispatcher.UIThread.Post(
                 () => _ = todayViewModel.LoadAsync(CancellationToken.None));
+    }
+
+    /// <summary>
+    /// Liga o monitor das sessões de agente (ADR-030). O primeiro tique
+    /// reencontra os terminais que ficaram abertos com o app fechado; depois,
+    /// cada fim de processo acende ou apaga o selo da linha e o card da tarefa
+    /// sem esperar o refresh de 60 s.
+    /// </summary>
+    /// <remarks>
+    /// A janela da tarefa é avisada por aqui, e não assinando o monitor: o
+    /// ViewModel dela é transitório, e um singleton segurando o evento dele o
+    /// manteria vivo depois de a janela fechar.
+    /// </remarks>
+    private void SetUpAgentSessions(IServiceProvider services, TodayViewModel todayViewModel)
+    {
+        var monitor = services.GetRequiredService<AgentSessionMonitor>();
+
+        monitor.SessionsChanged += taskId => OnUiThread(() =>
+        {
+            _ = todayViewModel.LoadAsync(CancellationToken.None);
+
+            if (_notes.TryGetValue(taskId, out var notes) && notes.DataContext is TaskNotesViewModel viewModel)
+            {
+                _ = viewModel.Development.Agent.RefreshAsync(CancellationToken.None);
+            }
+        });
+
+        monitor.Start();
     }
 
     private static void ShowTags(IServiceProvider services, Window owner)
@@ -369,6 +399,10 @@ public sealed partial class App : Avalonia.Application
         // Também aqui: um tique de manutenção em voo precisa terminar antes de
         // o banco ser solto, senão um lote pela metade seria interrompido.
         services.GetRequiredService<LifecycleMaintenanceScheduler>().Dispose();
+
+        // Só para de vigiar: o Claude continua aberto no terminal, e a próxima
+        // abertura o reencontra pelo PID (ADR-030).
+        services.GetRequiredService<AgentSessionMonitor>().Dispose();
 
         _tray?.Dispose();
         _tray = null;

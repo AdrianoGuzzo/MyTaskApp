@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using MyTaskApp.Domain.Agents;
 using MyTaskApp.Domain.Auditing;
 using MyTaskApp.Domain.Commands;
 using MyTaskApp.Domain.Tags;
@@ -29,6 +30,9 @@ public sealed class MyTaskAppDbContext(DbContextOptions<MyTaskAppDbContext> opti
 
     /// <summary>Os comandos globais chamados por <c>@alias</c> (ADR-028).</summary>
     public DbSet<DevelopmentCommand> DevelopmentCommands => Set<DevelopmentCommand>();
+
+    /// <summary>As sessões de agente de IA abertas para as tarefas (ADR-030).</summary>
+    public DbSet<AgentSession> AgentSessions => Set<AgentSession>();
 
     /// <summary>
     /// A trilha de auditoria do ciclo de vida. <b>Não</b> tem relacionamento com

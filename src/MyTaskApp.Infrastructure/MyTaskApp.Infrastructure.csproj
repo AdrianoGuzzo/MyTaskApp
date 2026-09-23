@@ -4,6 +4,11 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <!-- [LibraryImport] gera codigo unsafe (WindowsTerminalWindowManager, ADR-030). -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\MyTaskApp.Application\MyTaskApp.Application.csproj" />
   </ItemGroup>

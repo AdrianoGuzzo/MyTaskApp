@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using MyTaskApp.Application.Planning;
+using MyTaskApp.Domain.Agents;
 using MyTaskApp.Domain.Tasks;
 
 namespace MyTaskApp.Infrastructure.Persistence.Queries;
@@ -60,7 +61,7 @@ internal sealed class TodayQuery(MyTaskAppDbContext context) : ITodayQuery
 
         var byId = definitions.ToDictionary(definition => definition.Id);
 
-        // Terceira e última ida ao banco, qualquer que seja o tamanho da lista:
+        // Terceira ida ao banco, qualquer que seja o tamanho da lista:
         // as etiquetas de todos os checklists de uma vez, nunca uma por linha.
         var tagLinks = await context.TaskItemTags
             .AsNoTracking()
@@ -80,6 +81,19 @@ internal sealed class TodayQuery(MyTaskAppDbContext context) : ITodayQuery
                 group => (IReadOnlyList<TagBadge>)group
                     .Select(row => new TagBadge(row.Id, row.Name, row.ColorHex))
                     .ToList());
+
+        // O selo de agente em execução (ADR-030). O status vem do banco, que o
+        // monitor mantém em dia com os processos — a lista não consulta o sistema.
+        var agents = await context.AgentSessions
+            .AsNoTracking()
+            .Where(session => taskIds.Contains(session.TaskItemId)
+                && session.Status == AgentSessionStatus.Running)
+            .Select(session => new { session.TaskItemId, session.ProviderId })
+            .ToListAsync(cancellationToken);
+
+        var agentByTask = agents
+            .GroupBy(row => row.TaskItemId)
+            .ToDictionary(group => group.Key, group => group.First().ProviderId);
 
         return occurrences
             .Select(occurrence =>
@@ -102,7 +116,8 @@ internal sealed class TodayQuery(MyTaskAppDbContext context) : ITodayQuery
                     definition.Reminder,
                     definition.Description,
                     occurrence.Position,
-                    tagsByTask.GetValueOrDefault(definition.Id));
+                    tagsByTask.GetValueOrDefault(definition.Id),
+                    agentByTask.GetValueOrDefault(definition.Id));
             })
             .ToList();
     }

@@ -7,6 +7,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
+using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Development;
 using MyTaskApp.Application.Tags;
 using MyTaskApp.Desktop.ViewModels;
@@ -212,5 +213,66 @@ public class TaskNotesDevelopmentRenderingTests
 
         buttons.Should().Contain(["Abrir diretório", "Abrir terminal", "Copiar caminho", "Remover Worktree"]);
         Named<Border>(window, "SetupCard").IsEffectivelyVisible.Should().BeFalse();
+    }
+
+    private static TaskDevelopmentView ReadyDevelopment() =>
+        new(
+            Repository, "origin/main", "feature/x", Repository + "-feature-x",
+            Domain.Tasks.TaskDevelopmentStatus.Ready, DateTimeOffset.UnixEpoch, null);
+
+    /// <summary>O card do agente: PID e o botão que leva ao terminal (ADR-030).</summary>
+    [AvaloniaFact]
+    public async Task AReadyTaskWithTheAgentRunning_ShowsThePid_AndTheTerminalButton()
+    {
+        var (window, viewModel, runner) = await ShowAsync(development: ReadyDevelopment());
+        runner.ResultsByHandler[typeof(GetTaskAgentSessionHandler)] = new AgentSessionView(
+            Guid.CreateVersion7(), Guid.CreateVersion7(), "claude-code", "Claude Code", @"C:\claude.exe",
+            Repository + "-feature-x", 15432, DateTimeOffset.UnixEpoch, null,
+            Domain.Agents.AgentSessionStatus.Running, null);
+
+        await OpenDevelopmentTabAsync(window, viewModel);
+        await viewModel.Development.Agent.RefreshAsync(CancellationToken.None);
+        Settle(window);
+
+        var card = Named<Border>(window, "AgentCard");
+        card.IsEffectivelyVisible.Should().BeTrue();
+        Texts(card).Should().Contain(["Claude Code", "● Em execução"]);
+        Named<SelectableTextBlock>(window, "AgentProcess").Text.Should().Be("PID 15432");
+        Named<Button>(window, "FocusAgentButton").IsEffectivelyVisible.Should().BeTrue();
+        Named<Button>(window, "StartAgentButton").IsEffectivelyVisible.Should().BeFalse();
+    }
+
+    [AvaloniaFact]
+    public async Task WithoutTheAgentInstalled_TheCardShowsTheInstallCommand()
+    {
+        var (window, viewModel, runner) = await ShowAsync(development: ReadyDevelopment());
+        runner.Enqueue<GetTaskAgentSessionHandler>([null]);
+        runner.ResultsByHandler[typeof(DetectAgentCliHandler)] = new AgentCliStatus(
+            "claude-code", "Claude Code", "claude",
+            CliDetectionResult.NotInstalled("Claude Code não encontrado."),
+            new AgentCliInstallGuide(
+                "Instalar o Claude Code no Windows",
+                [new AgentCliInstallStep("No PowerShell:", "irm https://claude.ai/install.ps1 | iex")],
+                new Uri("https://docs.claude.com/en/docs/claude-code/setup")));
+
+        await OpenDevelopmentTabAsync(window, viewModel);
+        await viewModel.Development.Agent.RefreshAsync(CancellationToken.None);
+        Settle(window);
+
+        Named<StackPanel>(window, "AgentInstallPanel").IsEffectivelyVisible.Should().BeTrue();
+        Texts(Named<Border>(window, "AgentCard")).Should().Contain("Claude Code não encontrado.");
+        window.GetVisualDescendants().OfType<SelectableTextBlock>().Select(block => block.Text)
+            .Should().Contain("irm https://claude.ai/install.ps1 | iex");
+        Named<Button>(window, "StartAgentButton").IsEffectivelyVisible.Should().BeFalse();
+    }
+
+    [AvaloniaFact]
+    public async Task ATaskNotReady_HidesTheAgentCard()
+    {
+        var (window, viewModel, _) = await ShowAsync();
+
+        await OpenDevelopmentTabAsync(window, viewModel);
+
+        Named<Border>(window, "AgentCard").IsEffectivelyVisible.Should().BeFalse();
     }
 }
