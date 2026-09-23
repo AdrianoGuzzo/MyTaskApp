@@ -1321,9 +1321,11 @@ simples, desfazendo uma feature recente. O ícone não disputa com nada.
 **O ícone é o indicador.** Ele segue a discrição do sino (`Opacity=0`, aparece no
 `:pointerover` da linha), mas com anotação escrita fica aceso em
 `WidgetAccentBrush` mesmo sem o mouse. Sem isso, descobrir onde há texto custaria
-abrir item por item. O glifo muda com o estado — lápis em aberto, documento
-concluída —, que é a única pista, antes do clique, de que a janela vai abrir só
-para ler.
+abrir item por item. O glifo muda com o estado — "abrir em janela" em
+aberto, olho concluída —, que é a única pista, antes do clique, de que a janela
+vai abrir só para ler. Já foi um lápis; deixou de ser quando a janela passou a
+ter título editável e a aba Desenvolvimento, e "escrever" virou só uma das coisas
+que se faz nela.
 
 **Concluída vira leitura, e a barra some.** É a regra do pedido: terminada a
 tarefa, a anotação é registro. A barra de formatação **desaparece** em vez de
