@@ -238,12 +238,11 @@ public class TaskNotesTests
 
     /// <summary>
     /// <c>UpdateTask</c> é edição atômica de título, descrição e prioridade.
-    /// Esta tela mostra só a descrição, então tem de devolver os outros dois
-    /// inalterados — o erro tentador é mandar um título vazio e apagar o nome
-    /// da tarefa pelo simples gesto de anotar algo nela.
+    /// Esta tela não mostra a prioridade, então tem de devolvê-la inalterada; e
+    /// quem só anotou algo não pode ver o título mudar por tabela.
     /// </summary>
     [Fact]
-    public async Task Saving_KeepsTheTitleAndThePriorityThisScreenNeverShowed()
+    public async Task Saving_KeepsTheTitleUntouched_AndThePriorityThisScreenNeverShowed()
     {
         var task = TaskItem.Create(
             "Fechar o mês",
@@ -261,6 +260,113 @@ public class TaskNotesTests
         task.Title.Should().Be("Fechar o mês");
         task.Priority.Should().Be(TaskPriority.Urgent);
         saved.Saves.Should().Be(1);
+    }
+
+    // ------------------------------------------------------------------
+    // Título
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void EditingTheTitle_MarksTheScreenAsUnsaved()
+    {
+        var viewModel = ViewModel();
+        viewModel.Load(Row(title: "Fechar o mês"));
+
+        viewModel.TaskTitle = "Fechar o mês de setembro";
+
+        viewModel.HasUnsavedChanges.Should().BeTrue();
+        viewModel.CanSave.Should().BeTrue();
+        viewModel.NotesTabHeader.Should().Be("Anotação •");
+    }
+
+    /// <summary>Espaço a mais nas pontas não é mudança: o domínio apara.</summary>
+    [Fact]
+    public void OnlyPaddingTheTitle_IsNotAChange()
+    {
+        var viewModel = ViewModel();
+        viewModel.Load(Row(title: "Fechar o mês"));
+
+        viewModel.TaskTitle = "  Fechar o mês ";
+
+        viewModel.HasUnsavedChanges.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task SavingANewTitle_RenamesTheTask_AndKeepsTheNoteAndPriority()
+    {
+        var task = TaskItem.Create(
+            "Fechar o mês",
+            DateTimeOffset.UtcNow,
+            "conferir o caixa",
+            priority: TaskPriority.Urgent);
+
+        UseRealHandler(task);
+
+        var viewModel = ViewModel();
+        viewModel.Load(Row(notes: "conferir o caixa", title: "Fechar o mês", priority: TaskPriority.Urgent));
+        viewModel.TaskTitle = "  Fechar o mês de setembro  ";
+
+        await viewModel.SaveAsync(CancellationToken.None);
+
+        task.Title.Should().Be("Fechar o mês de setembro");
+        task.Description.Should().Be("conferir o caixa");
+        task.Priority.Should().Be(TaskPriority.Urgent);
+        viewModel.TaskTitle.Should().Be("Fechar o mês de setembro");
+        viewModel.HasUnsavedChanges.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// O domínio recusaria; a tela diz antes, e não deixa apertar "Salvar" para
+    /// descobrir. Nem a barra da janela fica vazia enquanto isso.
+    /// </summary>
+    [Fact]
+    public void ABlankTitle_CannotBeSaved_AndSaysWhy()
+    {
+        var viewModel = ViewModel();
+        viewModel.Load(Row(title: "Fechar o mês"));
+
+        viewModel.TaskTitle = "   ";
+
+        viewModel.TitleError.Should().Be("A tarefa precisa de um título.");
+        viewModel.CanSave.Should().BeFalse();
+        viewModel.WindowTitle.Should().Be("Fechar o mês");
+    }
+
+    [Fact]
+    public void ATitleOverTheLimit_CannotBeSaved()
+    {
+        var viewModel = ViewModel();
+        viewModel.Load(Row());
+
+        viewModel.TaskTitle = new string('a', TaskItem.MaxTitleLength + 1);
+
+        viewModel.TitleError.Should().NotBeNull();
+        viewModel.CanSave.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Discarding_PutsTheTitleBackToo()
+    {
+        var viewModel = ViewModel();
+        viewModel.Load(Row(title: "Fechar o mês"));
+        viewModel.TaskTitle = "outro nome";
+
+        viewModel.Discard();
+
+        viewModel.TaskTitle.Should().Be("Fechar o mês");
+        viewModel.HasUnsavedChanges.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ACompletedItem_DoesNotComplainAboutItsTitle()
+    {
+        var viewModel = ViewModel();
+        viewModel.Load(Row(title: "Fechar o mês", isCompleted: true));
+
+        viewModel.TaskTitle = "";
+
+        viewModel.TitleError.Should().BeNull();
+        viewModel.HasUnsavedChanges.Should().BeFalse();
     }
 
     /// <summary>
