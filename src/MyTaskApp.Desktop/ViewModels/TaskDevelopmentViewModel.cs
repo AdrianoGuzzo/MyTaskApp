@@ -63,6 +63,7 @@ public sealed partial class TaskDevelopmentViewModel(
     IShellLauncher shell,
     IConfirmationDialog confirmation,
     TimeProvider timeProvider,
+    AgentSessionViewModel agent,
     ILogger<TaskDevelopmentViewModel> logger) : ObservableObject
 {
     /// <summary>Espera entre a última tecla no campo Diretório e a pergunta ao Git.</summary>
@@ -266,6 +267,11 @@ public sealed partial class TaskDevelopmentViewModel(
     /// <summary>Pede a janela de comandos globais.</summary>
     public event Action? CommandsRequested;
 
+    // --- Agente de IA (ADR-029) ---------------------------------------------
+
+    /// <summary>O card do Claude Code: só aparece com o worktree pronto.</summary>
+    public AgentSessionViewModel Agent { get; } = agent;
+
     // --- Pronto ------------------------------------------------------------
 
     [ObservableProperty]
@@ -328,7 +334,16 @@ public sealed partial class TaskDevelopmentViewModel(
         && SelectedBranchOption is { IsSelectable: true }
         && BranchNameError is null;
 
-    partial void OnStateChanged(DevelopmentPanelState value) => SyncCommandsEditable();
+    partial void OnStateChanged(DevelopmentPanelState value)
+    {
+        SyncCommandsEditable();
+
+        // O agente abre no worktree: só com ele pronto há o que mostrar.
+        if (value is DevelopmentPanelState.Ready)
+        {
+            _ = Agent.RefreshAsync(CancellationToken.None);
+        }
+    }
 
     partial void OnIsReadOnlyChanged(bool value) => SyncCommandsEditable();
 
@@ -342,6 +357,7 @@ public sealed partial class TaskDevelopmentViewModel(
         _taskId = taskId;
         _taskTitle = taskTitle;
         IsReadOnly = isReadOnly;
+        Agent.Load(taskId, isReadOnly);
         DirectoryCompletion.IsEnabled = !isReadOnly;
         NewBranchName = GitBranchName.Suggest(taskTitle);
         State = DevelopmentPanelState.Loading;

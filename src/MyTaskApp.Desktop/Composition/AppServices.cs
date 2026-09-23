@@ -112,6 +112,9 @@ internal static class AppServices
             // A aba Desenvolvimento de cada anotação (ADR-027): uma por janela,
             // como a própria anotação.
             .AddTransient<TaskDevelopmentViewModel>()
+
+            // O card do agente de IA dentro dela (ADR-029): também um por janela.
+            .AddTransient<AgentSessionViewModel>()
             .AddApplication(configuration)
             .AddInfrastructure(configuration)
             .BuildServiceProvider(validateScopes: true);

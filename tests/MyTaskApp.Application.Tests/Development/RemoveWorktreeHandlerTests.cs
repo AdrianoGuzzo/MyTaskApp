@@ -3,6 +3,7 @@ using Microsoft.Extensions.Time.Testing;
 using MyTaskApp.Application.Development;
 using MyTaskApp.Application.Tests.Fakes;
 using MyTaskApp.Domain;
+using MyTaskApp.Domain.Agents;
 using MyTaskApp.Domain.Tasks;
 
 namespace MyTaskApp.Application.Tests.Development;
@@ -19,6 +20,8 @@ public class RemoveWorktreeHandlerTests
     private readonly FakeTaskItemRepository _tasks = new();
     private readonly FakeGitClient _git = new();
     private readonly FakeDirectoryProbe _disk = new();
+    private readonly FakeAgentSessionRepository _agents = new();
+    private readonly FakeAgentProcessTracker _processes = new();
     private readonly TaskItem _task;
 
     public RemoveWorktreeHandlerTests()
@@ -32,7 +35,15 @@ public class RemoveWorktreeHandlerTests
     }
 
     private RemoveWorktreeHandler Remove() =>
-        new(_tasks, _tasks, _git, _disk, new FakeTimeProvider(Now), NullLogger<RemoveWorktreeHandler>.Instance);
+        new(
+            _tasks,
+            _tasks,
+            _git,
+            _disk,
+            _agents,
+            _processes,
+            new FakeTimeProvider(Now),
+            NullLogger<RemoveWorktreeHandler>.Instance);
 
     private InspectWorktreeHandler Inspect() => new(_tasks, _git, _disk);
 
@@ -118,5 +129,36 @@ public class RemoveWorktreeHandlerTests
 
         await FluentActions.Awaiting(() => Remove().HandleAsync(new RemoveWorktree(plain.Id), Ct))
             .Should().ThrowAsync<DomainException>();
+    }
+
+    /// <summary>O agente está com a pasta aberta: nada é removido (ADR-029).</summary>
+    [Fact]
+    public async Task ARunningAgent_BlocksTheRemoval()
+    {
+        var session = AgentSession.Create(_task.Id, "claude-code", @"C:\claude.exe", Path, Now);
+        session.MarkRunning(4242, Now);
+        _agents.Seed(session);
+        _processes.Run(4242, Now);
+
+        await FluentActions.Awaiting(() => Remove().HandleAsync(new RemoveWorktree(_task.Id), Ct))
+            .Should().ThrowAsync<DomainException>()
+            .WithMessage("*agente*");
+
+        _git.Calls.Should().NotContain(call => call.StartsWith("worktree remove", StringComparison.Ordinal));
+        _task.Development!.Status.Should().Be(TaskDevelopmentStatus.Ready);
+    }
+
+    /// <summary>Sessão gravada como ativa, mas o processo já saiu: não trava nada.</summary>
+    [Fact]
+    public async Task AnAgentWhoseProcessIsGone_IsEnded_AndTheRemovalGoesOn()
+    {
+        var session = AgentSession.Create(_task.Id, "claude-code", @"C:\claude.exe", Path, Now);
+        session.MarkRunning(4242, Now);
+        _agents.Seed(session);
+
+        var view = await Remove().HandleAsync(new RemoveWorktree(_task.Id), Ct);
+
+        view.Status.Should().Be(TaskDevelopmentStatus.Removed);
+        session.Status.Should().Be(AgentSessionStatus.Exited);
     }
 }

@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Options;
+using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Configuration;
 using MyTaskApp.Domain.Planning;
 using MyTaskApp.Domain.Reminders;
@@ -13,7 +14,10 @@ public sealed class GetTodayBoardHandler(
     ITodayQuery query,
     IUserClock clock,
     TimeProvider timeProvider,
-    IOptions<ApplicationOptions> options)
+    IOptions<ApplicationOptions> options,
+    // Opcional para os testes do quadro não precisarem montar agentes: sem
+    // catálogo, o selo mostra o id do agente em vez do nome (ADR-029).
+    IAgentCliProviders? agents = null)
 {
     public async Task<TodayBoard> HandleAsync(CancellationToken cancellationToken = default)
     {
@@ -31,7 +35,7 @@ public sealed class GetTodayBoardHandler(
             .ToList();
 
         TodayTask ToTask((TodayOccurrenceRow Row, TodayPlacement? Placement) entry) =>
-            Project(entry, nowUtc);
+            Project(entry, nowUtc) with { ActiveAgentName = AgentName(entry.Row.ActiveAgentProviderId) };
 
         IEnumerable<(TodayOccurrenceRow Row, TodayPlacement? Placement)> InSection(TodaySection section) =>
             placed.Where(entry => entry.Placement!.Section == section);
@@ -93,6 +97,9 @@ public sealed class GetTodayBoardHandler(
             today,
             now,
             window);
+
+    private string? AgentName(string? providerId) =>
+        providerId is null ? null : agents?.Find(providerId)?.Name ?? providerId;
 
     private static TodayTask Project(
         (TodayOccurrenceRow Row, TodayPlacement? Placement) entry,

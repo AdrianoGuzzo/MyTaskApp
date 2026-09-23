@@ -23,7 +23,9 @@ public sealed record TodayOccurrenceRow(
     /// <summary>A casa escolhida à mão; <c>null</c> = ordem natural da seção.</summary>
     int? Position = null,
     /// <summary>As etiquetas do checklist, em ordem alfabética (ADR-025).</summary>
-    IReadOnlyList<TagBadge>? Tags = null);
+    IReadOnlyList<TagBadge>? Tags = null,
+    /// <summary>O agente de IA em execução para a tarefa, se houver (ADR-029).</summary>
+    string? ActiveAgentProviderId = null);
 
 /// <summary>O que a linha precisa de uma etiqueta: a bolinha e o nome do balão.</summary>
 public sealed record TagBadge(Guid Id, string Name, string ColorHex);

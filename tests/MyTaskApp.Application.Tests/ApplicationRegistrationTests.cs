@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using MyTaskApp.Application;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Development;
 using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Application.Tasks;
@@ -37,6 +38,11 @@ public class ApplicationRegistrationTests
             .AddSingleton<ISoundPlayer>(new StubSoundPlayer())
             .AddSingleton<IGitClient>(new FakeGitClient())
             .AddSingleton<IDirectoryProbe>(new FakeDirectoryProbe())
+            .AddSingleton<IAgentSessionRepository>(new FakeAgentSessionRepository())
+            .AddSingleton<IAgentProcessTracker>(new FakeAgentProcessTracker())
+            .AddSingleton<ITerminalWindowManager>(new FakeTerminalWindowManager())
+            .AddSingleton<ITerminalLauncher>(new FakeTerminalLauncher(new FakeAgentProcessTracker(), DateTimeOffset.UnixEpoch))
+            .AddSingleton<IAgentCliProvider>(new FakeAgentCliProvider())
             // Normalmente vem do composition root do Desktop (ADR-012).
             .AddSingleton<IUseCaseRunner>(new CountingUseCaseRunner())
             .AddApplication()
@@ -69,6 +75,15 @@ public class ApplicationRegistrationTests
     [InlineData(typeof(StartDevelopmentHandler))]
     [InlineData(typeof(InspectWorktreeHandler))]
     [InlineData(typeof(RemoveWorktreeHandler))]
+    [InlineData(typeof(DetectAgentCliHandler))]
+    [InlineData(typeof(GetTaskAgentSessionHandler))]
+    [InlineData(typeof(StartAgentSessionHandler))]
+    [InlineData(typeof(FocusAgentSessionHandler))]
+    [InlineData(typeof(EndAgentSessionHandler))]
+    [InlineData(typeof(ReconcileAgentSessionsHandler))]
+    [InlineData(typeof(AgentSessionMonitor))]
+    [InlineData(typeof(IAgentSessionWatcher))]
+    [InlineData(typeof(IAgentCliProviders))]
     [InlineData(typeof(ArchiveChecklistHandler))]
     [InlineData(typeof(RestoreChecklistHandler))]
     [InlineData(typeof(MoveChecklistToTrashHandler))]
@@ -98,6 +113,19 @@ public class ApplicationRegistrationTests
         using var scope = provider.CreateScope();
 
         scope.ServiceProvider.GetRequiredService(handlerType).Should().NotBeNull();
+    }
+
+    /// <summary>
+    /// Os casos de uso avisam o mesmo monitor que vigia os processos — dois
+    /// objetos seriam dois donos dos vigias (ADR-029).
+    /// </summary>
+    [Fact]
+    public void TheSessionWatcher_IsTheMonitorItself()
+    {
+        using var provider = BuildProvider();
+
+        provider.GetRequiredService<IAgentSessionWatcher>()
+            .Should().BeSameAs(provider.GetRequiredService<AgentSessionMonitor>());
     }
 
     [Fact]

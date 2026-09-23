@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Commands;
 using MyTaskApp.Application.Configuration;
 using MyTaskApp.Application.Development;
@@ -83,6 +84,16 @@ public static class DependencyInjection
         services.AddScoped<SetDevelopmentCommandsHandler>();
         services.AddScoped<RunDevelopmentCommandsHandler>();
 
+        // Sessões de agente de IA (Claude Code) por tarefa (ADR-029). Os
+        // agentes em si vêm da Infrastructure; aqui, o catálogo e os casos de uso.
+        services.TryAddSingleton<IAgentCliProviders, AgentCliProviders>();
+        services.AddScoped<DetectAgentCliHandler>();
+        services.AddScoped<GetTaskAgentSessionHandler>();
+        services.AddScoped<StartAgentSessionHandler>();
+        services.AddScoped<FocusAgentSessionHandler>();
+        services.AddScoped<EndAgentSessionHandler>();
+        services.AddScoped<ReconcileAgentSessionsHandler>();
+
         // Ciclo de vida do checklist: arquivar, lixeira, exclusao definitiva e
         // auditoria (§1 a §8).
         services.AddScoped<ArchiveChecklistHandler>();
@@ -112,6 +123,12 @@ public static class DependencyInjection
         // Mesmo desenho, cadencia de horas: arquiva o que venceu e esvazia a
         // lixeira vencida. Tambem so recebe IUseCaseRunner, pelo mesmo motivo.
         services.TryAddSingleton<LifecycleMaintenanceScheduler>();
+
+        // O monitor das sessões de agente é o mesmo objeto que os casos de uso
+        // avisam: um só dono dos vigias de processo.
+        services.TryAddSingleton<AgentSessionMonitor>();
+        services.TryAddSingleton<IAgentSessionWatcher>(
+            provider => provider.GetRequiredService<AgentSessionMonitor>());
 
         return services;
     }

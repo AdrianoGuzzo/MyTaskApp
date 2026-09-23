@@ -21,5 +21,10 @@ internal static class TestDevelopment
             shell ?? new FakeShellLauncher(),
             confirmation ?? new FakeConfirmationDialog(),
             timeProvider ?? TimeProvider.System,
+            new AgentSessionViewModel(
+                runner,
+                clipboard ?? new FakeClipboardWriter(),
+                shell ?? new FakeShellLauncher(),
+                NullLogger<AgentSessionViewModel>.Instance),
             NullLogger<TaskDevelopmentViewModel>.Instance);
 }

@@ -140,4 +140,26 @@ public class TodayViewRenderingTests
         checkBox.Command.Should().NotBeNull();
         checkBox.CommandParameter.Should().BeOfType<TaskRowViewModel>();
     }
+
+    /// <summary>O selo do agente de IA aberto, só na tarefa que o tem (ADR-029).</summary>
+    [AvaloniaFact]
+    public async Task ATaskWithARunningAgent_ShowsTheBadge_AndTheOthersDoNot()
+    {
+        var window = await ShowAsync(new TodayBoard(
+            Date,
+            Overdue: [],
+            Now: [],
+            Today: [Row("Implementar autenticação") with { ActiveAgentName = "Claude Code" }, Row("Ajustar tela de login")],
+            Unscheduled: [],
+            Completed: []));
+
+        var badges = window.GetVisualDescendants()
+            .OfType<TextBlock>()
+            .Where(block => block.Name == "AgentBadge")
+            .ToList();
+
+        badges.Should().HaveCount(2);
+        badges.Where(badge => badge.IsEffectivelyVisible).Should().ContainSingle()
+            .Which.Text.Should().Be("● Claude Code");
+    }
 }
