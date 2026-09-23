@@ -10,7 +10,9 @@ internal sealed class TagRepository(MyTaskAppDbContext context) : ITagRepository
         await context.Tags.AddAsync(tag, cancellationToken);
 
     public Task<Tag?> FindByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
-        context.Tags.SingleOrDefaultAsync(tag => tag.Id == id, cancellationToken);
+        context.Tags
+            .Include(tag => tag.Directories)
+            .SingleOrDefaultAsync(tag => tag.Id == id, cancellationToken);
 
     /// <remarks>
     /// A coluna é NOCASE, então a igualdade aqui já ignora maiúsculas — no

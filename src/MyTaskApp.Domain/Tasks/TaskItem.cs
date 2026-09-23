@@ -51,6 +51,12 @@ public sealed class TaskItem
     /// </summary>
     public ReminderPolicy Reminder { get; private set; } = ReminderPolicy.None;
 
+    /// <summary>
+    /// O worktree em que esta tarefa está sendo implementada (ADR-027).
+    /// <c>null</c> = a implementação não foi iniciada pelo app.
+    /// </summary>
+    public TaskDevelopment? Development { get; private set; }
+
     /// <summary>Quando foi arquivado. <c>null</c> = está na lista principal.</summary>
     public DateTimeOffset? ArchivedAt { get; private set; }
 
@@ -150,6 +156,67 @@ public sealed class TaskItem
             _tags.Add(new TaskItemTag(Id, tagId));
         }
     }
+
+    // ---------------------------------------------------------------------
+    // Ambiente de desenvolvimento (ADR-027)
+    //
+    // Só começar passa pela guarda da lista principal. Pronto, falha e remoção
+    // registram o que já aconteceu no disco: a varredura pode arquivar o
+    // checklist no meio de um "git worktree add", e o registro do que foi
+    // criado não pode se perder por isso — nem a limpeza do worktree ficar
+    // impossível depois.
+    // ---------------------------------------------------------------------
+
+    /// <summary>
+    /// Marca o início da criação do worktree. Uma tentativa anterior que falhou,
+    /// foi removida ou ficou pela metade é reaproveitada, e não substituída.
+    /// </summary>
+    public TaskDevelopment BeginDevelopment(
+        string repositoryPath,
+        string sourceBranch,
+        string branch,
+        string worktreePath,
+        DateTimeOffset at)
+    {
+        EnsureDevelopmentCanBegin();
+
+        if (Development is null)
+        {
+            Development = TaskDevelopment.Begin(Id, repositoryPath, sourceBranch, branch, worktreePath, at);
+        }
+        else
+        {
+            Development.Restart(repositoryPath, sourceBranch, branch, worktreePath, at);
+        }
+
+        return Development;
+    }
+
+    /// <summary>
+    /// Confere, sem alterar nada, que a implementação pode começar. O caso de uso
+    /// pergunta antes do fetch: descobrir a recusa depois de um minuto de rede
+    /// seria desperdiçar o tempo do usuário.
+    /// </summary>
+    public void EnsureDevelopmentCanBegin()
+    {
+        RefuseWhenOutOfTheMainList("iniciar a implementação de");
+
+        if (Development is { Status: TaskDevelopmentStatus.Ready })
+        {
+            throw new DomainException(
+                "Esta tarefa já tem um worktree pronto. Remova-o antes de criar outro.");
+        }
+    }
+
+    public void MarkDevelopmentReady(DateTimeOffset at) => RequireDevelopment().MarkReady(at);
+
+    public void MarkDevelopmentFailed(string reason, DateTimeOffset at) =>
+        RequireDevelopment().MarkFailed(reason, at);
+
+    public void MarkDevelopmentRemoved(DateTimeOffset at) => RequireDevelopment().MarkRemoved(at);
+
+    private TaskDevelopment RequireDevelopment() =>
+        Development ?? throw new DomainException("Esta tarefa não tem ambiente de desenvolvimento.");
 
     public void Rename(string title) => Title = NormalizeTitle(title);
 

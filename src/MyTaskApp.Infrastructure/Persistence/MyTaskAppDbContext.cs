@@ -17,6 +17,12 @@ public sealed class MyTaskAppDbContext(DbContextOptions<MyTaskAppDbContext> opti
     /// <summary>O vínculo N:N entre checklist e etiqueta (ADR-025).</summary>
     public DbSet<TaskItemTag> TaskItemTags => Set<TaskItemTag>();
 
+    /// <summary>As pastas de cada etiqueta, com o alias da anotação (ADR-026).</summary>
+    public DbSet<TagDirectory> TagDirectories => Set<TagDirectory>();
+
+    /// <summary>O worktree de cada tarefa, quando houver (ADR-027).</summary>
+    public DbSet<TaskDevelopment> TaskDevelopments => Set<TaskDevelopment>();
+
     /// <summary>
     /// A trilha de auditoria do ciclo de vida. <b>Não</b> tem relacionamento com
     /// <see cref="Tasks"/>: as linhas precisam sobreviver à exclusão definitiva
