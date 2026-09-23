@@ -8,6 +8,7 @@ using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Reminders;
+using MyTaskApp.Application.Tags;
 using MyTaskApp.Application.Tasks;
 using MyTaskApp.Desktop.Composition;
 using MyTaskApp.Desktop.Views;
@@ -51,6 +52,13 @@ public sealed partial class TodayViewModel(
     private const string CopiedMessage = "Texto copiado.";
 
     private ITimer? _refresh;
+
+    /// <summary>
+    /// Uma gravação de etiquetas por vez. Cada clique manda o conjunto inteiro,
+    /// e dois cliques rápidos em voo ao mesmo tempo poderiam chegar ao banco na
+    /// ordem trocada — o primeiro conjunto sobrescreveria o segundo.
+    /// </summary>
+    private readonly SemaphoreSlim _tagSaves = new(1, 1);
 
     /// <summary>
     /// O último quadro carregado. Esconder as concluídas remonta a lista sem
@@ -157,6 +165,18 @@ public sealed partial class TodayViewModel(
     /// </remarks>
     public bool IsReordering { get; set; }
 
+    /// <summary>
+    /// O seletor de etiquetas de alguma linha está aberto. O refresh de 60 s
+    /// espera: recriar as linhas fecharia o seletor no meio da escolha.
+    /// </summary>
+    public bool IsPickingTags { get; private set; }
+
+    /// <summary>
+    /// As etiquetas escolhidas no botão da caixa de captura. Valem para todas as
+    /// linhas da próxima captura e se esvaziam junto com o texto (ADR-025).
+    /// </summary>
+    public TaskTagsViewModel CaptureTags { get; } = TaskTagsViewModel.Draft();
+
     [RelayCommand]
     public async Task LoadAsync(CancellationToken cancellationToken)
     {
@@ -187,10 +207,11 @@ public sealed partial class TodayViewModel(
     public async Task CaptureAsync(CancellationToken cancellationToken)
     {
         var text = CaptureText;
+        var tagIds = CaptureTags.SelectedIds;
 
         var captured = await TryAsync(
             () => runner.RunAsync<QuickCaptureHandler>(
-                (handler, token) => handler.HandleAsync(new QuickCapture(text), token),
+                (handler, token) => handler.HandleAsync(new QuickCapture(text, tagIds), token),
                 cancellationToken),
             "Não foi possível salvar o que você escreveu.");
 
@@ -202,6 +223,7 @@ public sealed partial class TodayViewModel(
         }
 
         CaptureText = string.Empty;
+        CaptureTags.Clear();
         await LoadAsync(cancellationToken);
     }
 
@@ -263,6 +285,88 @@ public sealed partial class TodayViewModel(
 
     [RelayCommand]
     public void OpenNotes(TaskRowViewModel row) => NotesRequested?.Invoke(row);
+
+    /// <summary>Pede a janela de gerenciamento de etiquetas (ADR-025).</summary>
+    public event Action? TagsRequested;
+
+    [RelayCommand]
+    public void OpenTags() => TagsRequested?.Invoke();
+
+    /// <summary>
+    /// Prepara o seletor de etiquetas da linha. A lista é lida a cada abertura,
+    /// e não junto com o quadro: ela só interessa a quem abriu o seletor, e
+    /// assim uma etiqueta criada agora mesmo já aparece.
+    /// </summary>
+    [RelayCommand]
+    public async Task OpenTagPickerAsync(TaskTagsViewModel tags, CancellationToken cancellationToken)
+    {
+        IsPickingTags = true;
+
+        tags.IsLoading = true;
+        tags.ErrorMessage = null;
+
+        try
+        {
+            var all = await runner.RunAsync<GetTagsHandler, IReadOnlyList<TagRow>>(
+                (handler, token) => handler.HandleAsync(new GetTags(), token),
+                cancellationToken);
+
+            tags.ShowOptions(all);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.LogError(exception, "TagPickerLoadFailed");
+            tags.ErrorMessage = "Não foi possível carregar as etiquetas.";
+        }
+        finally
+        {
+            tags.IsLoading = false;
+        }
+    }
+
+    /// <summary>
+    /// Fechou o seletor. As bolinhas já estão certas na tela; a recarga é para o
+    /// quadro guardado concordar com elas, porque é dele que a lista se remonta
+    /// ao esconder as concluídas ou depois de um arrasto.
+    /// </summary>
+    [RelayCommand]
+    public async Task CloseTagPickerAsync(TaskTagsViewModel tags, CancellationToken cancellationToken)
+    {
+        IsPickingTags = false;
+
+        // O rascunho da captura não gravou nada: não há o que recarregar.
+        if (tags.HasChanged && !tags.IsDraft)
+        {
+            await LoadAsync(cancellationToken);
+        }
+    }
+
+    /// <summary>Marca ou desmarca uma etiqueta no seletor. O seletor continua aberto.</summary>
+    [RelayCommand]
+    public async Task ToggleTagAsync(TagOptionViewModel option, CancellationToken cancellationToken)
+    {
+        var saved = await SaveTagsAsync(
+            option.Owner,
+            option.Owner.Toggled(option.Tag.Id),
+            cancellationToken);
+
+        if (!saved)
+        {
+            option.Resync();
+        }
+    }
+
+    /// <summary>O "×" de uma pílula: tira a etiqueta sem passar pela lista.</summary>
+    [RelayCommand]
+    public async Task RemoveTagAsync(TagChipViewModel chip, CancellationToken cancellationToken)
+    {
+        if (chip.Owner is not { } owner)
+        {
+            return;
+        }
+
+        await SaveTagsAsync(owner, owner.Toggled(chip.Id), cancellationToken);
+    }
 
     /// <summary>
     /// Copia o título da linha para a área de transferência. Não recarrega o
@@ -416,7 +520,13 @@ public sealed partial class TodayViewModel(
     public void StartAutoRefresh()
     {
         _refresh ??= timeProvider.CreateTimer(
-            _ => Dispatcher.UIThread.Post(() => _ = LoadAsync(CancellationToken.None)),
+            _ => Dispatcher.UIThread.Post(() =>
+            {
+                if (!IsPickingTags)
+                {
+                    _ = LoadAsync(CancellationToken.None);
+                }
+            }),
             state: null,
             dueTime: RefreshEvery,
             period: RefreshEvery);
@@ -426,6 +536,7 @@ public sealed partial class TodayViewModel(
     {
         _refresh?.Dispose();
         _refresh = null;
+        _tagSaves.Dispose();
     }
 
     [RelayCommand]
@@ -546,6 +657,54 @@ public sealed partial class TodayViewModel(
             // critério aqui faria a seção de um item só mostrar uma alça que o
             // code-behind recusaria — desacordo silencioso entre os dois.
             canReorder: !isCompleted));
+    }
+
+    /// <summary>
+    /// Mostra o conjunto novo antes de gravar e desfaz se a gravação falhar. O
+    /// erro fica no seletor, que é para onde o usuário está olhando, e não na
+    /// faixa do painel, escondida atrás dele.
+    /// </summary>
+    private async Task<bool> SaveTagsAsync(
+        TaskTagsViewModel tags,
+        IReadOnlyCollection<Guid> ids,
+        CancellationToken cancellationToken)
+    {
+        var before = tags.SelectedIds;
+
+        tags.ErrorMessage = null;
+        tags.Apply(ids);
+
+        if (tags.IsDraft)
+        {
+            return true;
+        }
+
+        await _tagSaves.WaitAsync(cancellationToken);
+
+        try
+        {
+            await runner.RunAsync<SetTaskTagsHandler>(
+                (handler, token) => handler.HandleAsync(new SetTaskTags(tags.TaskId, ids), token),
+                cancellationToken);
+
+            return true;
+        }
+        catch (DomainException exception)
+        {
+            tags.ErrorMessage = exception.Message;
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "TaskTagsSaveFailed");
+            tags.ErrorMessage = "Não foi possível salvar as etiquetas.";
+        }
+        finally
+        {
+            _tagSaves.Release();
+        }
+
+        tags.Apply(before);
+        return false;
     }
 
     private async Task<bool> TryAsync(Func<Task> operation, string fallbackMessage)

@@ -1,6 +1,7 @@
 using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
@@ -115,6 +116,32 @@ public sealed partial class TodayView : UserControl
             flyout.ShowAt(row);
         }
     }
+
+    /// <summary>
+    /// Abrir o seletor carrega a lista de etiquetas. Evento de código, e não
+    /// binding: Flyout não tem comando de abertura. O seletor é o conteúdo do
+    /// próprio flyout — o de uma linha ou o da caixa de captura.
+    /// </summary>
+    private void OnTagsFlyoutOpened(object? sender, EventArgs e)
+    {
+        if (PickerOf(sender) is { } tags && DataContext is TodayViewModel viewModel)
+        {
+            viewModel.OpenTagPickerCommand.Execute(tags);
+        }
+    }
+
+    private void OnTagsFlyoutClosed(object? sender, EventArgs e)
+    {
+        if (PickerOf(sender) is { } tags && DataContext is TodayViewModel viewModel)
+        {
+            viewModel.CloseTagPickerCommand.Execute(tags);
+        }
+    }
+
+    private static TaskTagsViewModel? PickerOf(object? flyout) =>
+        flyout is Flyout { Content: Control { DataContext: TaskTagsViewModel tags } }
+            ? tags
+            : null;
 
     private void OnCaptureKeyDown(object? sender, KeyEventArgs e)
     {

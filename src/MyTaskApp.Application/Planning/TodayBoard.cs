@@ -22,7 +22,9 @@ public sealed record TodayTask(
     /// para preencher uma tela que o usuário acabou de pedir faria a janela
     /// abrir vazia e preencher depois.
     /// </summary>
-    string? Notes = null);
+    string? Notes = null,
+    /// <summary>As etiquetas do checklist; <c>null</c> = nenhuma.</summary>
+    IReadOnlyList<TagBadge>? Tags = null);
 
 /// <summary>Tela "Hoje" (§9), já separada em seções mutuamente exclusivas.</summary>
 public sealed record TodayBoard(

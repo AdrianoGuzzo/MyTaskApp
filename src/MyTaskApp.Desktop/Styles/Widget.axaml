@@ -25,6 +25,20 @@
     <Setter Property="TextBlock.TextWrapping" Value="Wrap" />
   </Style>
 
+  <!--
+    O balão da bolinha de etiqueta (ADR-025): pílula na cor da etiqueta, com o
+    texto preto ou branco que vem do ViewModel. Fundo, borda e texto chegam por
+    binding no próprio ToolTip (TodayView); aqui só a forma, e pela mesma razão
+    do estilo acima — o balão vive fora da árvore do UserControl.
+  -->
+  <Style Selector="ToolTip.tagTip">
+    <Setter Property="Padding" Value="8,2" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="CornerRadius" Value="{StaticResource WidgetPillRadius}" />
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+
   <Style Selector="Button">
     <Setter Property="CornerRadius" Value="{StaticResource WidgetPillRadius}" />
     <Setter Property="Padding" Value="10,5" />

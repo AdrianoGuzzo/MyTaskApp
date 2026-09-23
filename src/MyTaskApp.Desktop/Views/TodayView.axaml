@@ -10,6 +10,100 @@
   <UserControl.Resources>
 
     <!--
+      O seletor de etiquetas, uma vez só (ADR-025). Dois lugares o abrem: o
+      botão da linha, que grava a cada marca, e o da caixa de captura, que só
+      guarda a escolha para a próxima captura (TaskTagsViewModel.IsDraft).
+      Marcar não fecha: escolher três etiquetas custa três cliques, não três
+      aberturas.
+    -->
+    <DataTemplate x:Key="TagPicker" x:DataType="vm:TaskTagsViewModel">
+      <StackPanel Width="260" Margin="2" Spacing="8">
+
+        <TextBlock Text="{Binding Heading}"
+                   FontWeight="SemiBold"
+                   TextTrimming="CharacterEllipsis" />
+
+        <!-- As escolhidas, com o nome: o "×" tira sem procurar na lista. -->
+        <ItemsControl ItemsSource="{Binding Selected}"
+                      IsVisible="{Binding HasTags}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <WrapPanel />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:TagChipViewModel">
+              <Border Classes="tagChip" Background="{Binding Fill}">
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                  <TextBlock Text="{Binding Name}"
+                             Foreground="{Binding Foreground}"
+                             MaxWidth="160"
+                             TextTrimming="CharacterEllipsis" />
+                  <Button Classes="tagRemove"
+                          Content="&#xE711;"
+                          Foreground="{Binding Foreground}"
+                          ToolTip.Tip="Remover esta etiqueta"
+                          Command="{Binding #Root.((vm:TodayViewModel)DataContext).RemoveTagCommand}"
+                          CommandParameter="{Binding}" />
+                </StackPanel>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <TextBox FontSize="12"
+                 PlaceholderText="Pesquisar etiqueta…"
+                 Text="{Binding SearchText}"
+                 IsVisible="{Binding !HasNoTagsAtAll}" />
+
+        <TextBlock Classes="tagHint"
+                   Text="Carregando…"
+                   IsVisible="{Binding IsLoading}" />
+
+        <ScrollViewer MaxHeight="240" HorizontalScrollBarVisibility="Disabled">
+          <ItemsControl ItemsSource="{Binding Options}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:TagOptionViewModel">
+                <CheckBox Classes="tagOption"
+                          IsChecked="{Binding IsSelected, Mode=OneWay}"
+                          Command="{Binding #Root.((vm:TodayViewModel)DataContext).ToggleTagCommand}"
+                          CommandParameter="{Binding}">
+                  <StackPanel Orientation="Horizontal" Spacing="7">
+                    <Ellipse Classes="tagDot" Fill="{Binding Tag.Fill}" />
+                    <TextBlock Text="{Binding Tag.Name}"
+                               FontSize="12"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" />
+                  </StackPanel>
+                </CheckBox>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+
+        <TextBlock Classes="tagHint"
+                   Text="Nada encontrado."
+                   IsVisible="{Binding HasNoMatches}" />
+
+        <TextBlock Classes="tagHint"
+                   Text="Nenhuma etiqueta ainda. Crie a primeira para começar a organizar."
+                   IsVisible="{Binding HasNoTagsAtAll}" />
+
+        <TextBlock Text="{Binding ErrorMessage}"
+                   FontSize="11.5"
+                   TextWrapping="Wrap"
+                   Foreground="{DynamicResource WidgetDangerBrush}"
+                   IsVisible="{Binding ErrorMessage, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+        <Button HorizontalAlignment="Left"
+                Classes="tagManage"
+                Content="Gerenciar etiquetas…"
+                Command="{Binding #Root.((vm:TodayViewModel)DataContext).OpenTagsCommand}" />
+
+      </StackPanel>
+    </DataTemplate>
+
+    <!--
       A linha, uma vez só. Dois desenhos a usam: a lista e o item levantado
       durante o arrasto (o ContentControl lá embaixo). Mesma razão pela qual o
       "⋯" abre o ContextFlyout da própria linha em vez de ter um menu só dele —
@@ -38,7 +132,7 @@
           </MenuFlyout>
         </Border.ContextFlyout>
 
-        <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto,Auto">
+        <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto,Auto,Auto,Auto">
 
           <!--
             A alça. Border e não Button de propósito: botão por linha herdaria
@@ -119,7 +213,75 @@
             </StackPanel>
           </StackPanel>
 
-          <Button Grid.Column="4"
+          <!--
+            As etiquetas (ADR-025): só bolinhas, o nome vem no balão. Com mais
+            de cinco, o resto vira um "+N" — a linha não quebra nem espreme o
+            título além disso.
+          -->
+          <StackPanel Grid.Column="4"
+                      Orientation="Horizontal"
+                      Spacing="3"
+                      Margin="6,0,0,0"
+                      VerticalAlignment="Center"
+                      IsVisible="{Binding Tags.HasTags}">
+            <ItemsControl ItemsSource="{Binding Tags.Dots}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <StackPanel Orientation="Horizontal" Spacing="3" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:TagChipViewModel">
+                  <!--
+                    O balão tem a cor da própria etiqueta: é ele que confirma
+                    de qual bolinha o nome veio. Um ToolTip explícito, e não
+                    texto solto, porque é o único jeito de pintar o fundo de
+                    um balão só sem mexer em todos os outros do app.
+
+                    As amarrações apontam para a bolinha pelo nome (#Dot), e
+                    não para o DataContext: o balão é valor de propriedade, não
+                    filho, e o DataContext não desce até ele — um {Binding Name}
+                    abriria um balão vazio.
+                  -->
+                  <Ellipse x:Name="Dot" Classes="tagDot" Fill="{Binding Fill}">
+                    <ToolTip.Tip>
+                      <ToolTip Classes="tagTip"
+                               Background="{Binding #Dot.((vm:TagChipViewModel)DataContext).Fill}"
+                               BorderBrush="{Binding #Dot.((vm:TagChipViewModel)DataContext).Fill}"
+                               Foreground="{Binding #Dot.((vm:TagChipViewModel)DataContext).Foreground}"
+                               Content="{Binding #Dot.((vm:TagChipViewModel)DataContext).Name}" />
+                    </ToolTip.Tip>
+                  </Ellipse>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Classes="tagOverflow"
+                       Text="{Binding Tags.OverflowLabel}"
+                       IsVisible="{Binding Tags.HasOverflow}"
+                       ToolTip.Tip="{Binding Tags.OverflowTip}" />
+          </StackPanel>
+
+          <!--
+            O seletor (template TagPicker). Aqui cada marca grava na hora (ver
+            TodayViewModel.ToggleTagAsync), então fechar nunca perde nada.
+          -->
+          <Button Grid.Column="5"
+                  Classes="tags"
+                  Classes.on="{Binding Tags.HasTags}"
+                  Content="&#xE8EC;"
+                  ToolTip.Tip="Etiquetas desta tarefa">
+            <Button.Flyout>
+              <Flyout Placement="BottomEdgeAlignedRight"
+                      Opened="OnTagsFlyoutOpened"
+                      Closed="OnTagsFlyoutClosed">
+                <ContentControl DataContext="{Binding Tags}"
+                                Content="{Binding}"
+                                ContentTemplate="{StaticResource TagPicker}" />
+              </Flyout>
+            </Button.Flyout>
+          </Button>
+
+          <Button Grid.Column="6"
                   Classes="notes"
                   Classes.on="{Binding HasNotes}"
                   Content="{Binding NotesGlyph}"
@@ -127,7 +289,7 @@
                   Command="{Binding #Root.((vm:TodayViewModel)DataContext).OpenNotesCommand}"
                   CommandParameter="{Binding}" />
 
-          <Button Grid.Column="5"
+          <Button Grid.Column="7"
                   Classes="reminder"
                   Classes.on="{Binding HasReminder}"
                   Content="&#xEA8F;"
@@ -168,13 +330,13 @@
             </Button.Flyout>
           </Button>
 
-          <Button Grid.Column="6"
+          <Button Grid.Column="8"
                   Classes="rowMenu"
                   Content="⋯"
                   ToolTip.Tip="Arquivar ou excluir este checklist"
                   Click="OnRowMenuClick" />
 
-          <TextBlock Grid.Column="7"
+          <TextBlock Grid.Column="9"
                      Margin="8,0,2,0"
                      Text="{Binding TimeLabel}"
                      Classes="time"
@@ -384,6 +546,127 @@
       <Setter Property="Opacity" Value="1" />
     </Style>
 
+    <!--
+      Etiquetas (ADR-025). O botão segue a discrição dos vizinhos e fica meio
+      aceso quando há etiqueta, como o de anotações.
+    -->
+    <Style Selector="Button.tags">
+      <Setter Property="FontFamily" Value="{StaticResource WidgetIconFont}" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Padding" Value="6,2" />
+      <Setter Property="Opacity" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextMidBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <DoubleTransition Property="Opacity" Duration="0:0:0.12" />
+        </Transitions>
+      </Setter>
+    </Style>
+
+    <Style Selector="Border.row:pointerover Button.tags">
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+
+    <Style Selector="Button.tags.on">
+      <Setter Property="Opacity" Value="0.55" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetAccentBrush}" />
+    </Style>
+
+    <!--
+      A bolinha. O balão abre rápido — o nome é a única informação que ela
+      tem —, mas o BetweenShowDelay negativo impede que passar o mouse pela
+      lista vá abrindo um balão atrás do outro.
+    -->
+    <Style Selector="Ellipse.tagDot">
+      <Setter Property="Width" Value="8" />
+      <Setter Property="Height" Value="8" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="ToolTip.ShowDelay" Value="200" />
+      <Setter Property="ToolTip.BetweenShowDelay" Value="-1" />
+
+      <!--
+        Acima da bolinha, colado nela. O deslocamento padrão do ToolTip é de
+        20px para baixo — feito para o balão que nasce no ponteiro —, e com
+        Placement="Top" ele empurrava o balão de volta por cima da própria
+        bolinha. Sem espaço acima (a primeira linha rente à borda da tela), o
+        popup vira para baixo sozinho.
+      -->
+      <Setter Property="ToolTip.Placement" Value="Top" />
+      <Setter Property="ToolTip.VerticalOffset" Value="-4" />
+      <Setter Property="ToolTip.HorizontalOffset" Value="0" />
+    </Style>
+
+    <Style Selector="TextBlock.tagOverflow">
+      <Setter Property="FontSize" Value="9.5" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="ToolTip.ShowDelay" Value="200" />
+    </Style>
+
+    <Style Selector="Border.tagChip">
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetPillRadius}" />
+      <Setter Property="Padding" Value="7,1,3,1" />
+      <Setter Property="Margin" Value="0,0,4,4" />
+    </Style>
+
+    <Style Selector="Border.tagChip TextBlock">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Button.tagRemove">
+      <Setter Property="FontFamily" Value="{StaticResource WidgetIconFont}" />
+      <Setter Property="FontSize" Value="8" />
+      <Setter Property="Padding" Value="3" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="CheckBox.tagOption">
+      <Setter Property="MinHeight" Value="28" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+
+    <Style Selector="TextBlock.tagHint">
+      <Setter Property="FontSize" Value="11.5" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+    </Style>
+
+    <Style Selector="Button.tagManage">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Padding" Value="0,2" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetAccentBrush}" />
+    </Style>
+
+    <!--
+      O botão de etiqueta da captura. Sempre visível, ao contrário do da linha:
+      a caixa não tem hover que o revele, e é aqui que se escolhe antes de
+      escrever.
+    -->
+    <Style Selector="Button.captureTags">
+      <Setter Property="FontFamily" Value="{StaticResource WidgetIconFont}" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Padding" Value="5,4" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+    </Style>
+
+    <Style Selector="Button.captureTags.on">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetAccentBrush}" />
+    </Style>
+
     <Style Selector="Button.notes.on">
       <Setter Property="Opacity" Value="0.55" />
       <Setter Property="Foreground" Value="{DynamicResource WidgetAccentBrush}" />
@@ -555,7 +838,7 @@
               Classes="captureCard"
               chrome:WindowDecorationProperties.ElementRole="User"
               Margin="12,2,12,0">
-        <Grid ColumnDefinitions="*,Auto">
+        <Grid ColumnDefinitions="*,Auto,Auto">
 
           <TextBox x:Name="CaptureBox"
                    Grid.Column="0"
@@ -571,7 +854,62 @@
                    PlaceholderText="Uma tarefa por linha…"
                    Text="{Binding CaptureText}" />
 
-          <Button Grid.Column="1"
+          <!--
+            Etiquetas para o que está sendo escrito (ADR-025): valem para todas
+            as linhas da captura e são gravadas junto com elas. As escolhidas
+            aparecem como bolinhas ao lado do botão, as mesmas da lista, para
+            ninguém capturar achando que não marcou nada.
+          -->
+          <StackPanel Grid.Column="1"
+                      Orientation="Horizontal"
+                      Spacing="3"
+                      Margin="6,0,0,0"
+                      VerticalAlignment="Bottom">
+            <ItemsControl ItemsSource="{Binding CaptureTags.Dots}"
+                          VerticalAlignment="Center"
+                          IsVisible="{Binding CaptureTags.HasTags}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <StackPanel Orientation="Horizontal" Spacing="3" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:TagChipViewModel">
+                  <Ellipse x:Name="Dot" Classes="tagDot" Fill="{Binding Fill}">
+                    <ToolTip.Tip>
+                      <ToolTip Classes="tagTip"
+                               Background="{Binding #Dot.((vm:TagChipViewModel)DataContext).Fill}"
+                               BorderBrush="{Binding #Dot.((vm:TagChipViewModel)DataContext).Fill}"
+                               Foreground="{Binding #Dot.((vm:TagChipViewModel)DataContext).Foreground}"
+                               Content="{Binding #Dot.((vm:TagChipViewModel)DataContext).Name}" />
+                    </ToolTip.Tip>
+                  </Ellipse>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Classes="tagOverflow"
+                       Text="{Binding CaptureTags.OverflowLabel}"
+                       IsVisible="{Binding CaptureTags.HasOverflow}"
+                       ToolTip.Tip="{Binding CaptureTags.OverflowTip}" />
+
+            <Button x:Name="CaptureTagsButton"
+                    Classes="captureTags"
+                    Classes.on="{Binding CaptureTags.HasTags}"
+                    Content="&#xE8EC;"
+                    ToolTip.Tip="Etiquetas para as tarefas que você está escrevendo">
+              <Button.Flyout>
+                <Flyout Placement="BottomEdgeAlignedRight"
+                        Opened="OnTagsFlyoutOpened"
+                        Closed="OnTagsFlyoutClosed">
+                  <ContentControl DataContext="{Binding CaptureTags}"
+                                  Content="{Binding}"
+                                  ContentTemplate="{StaticResource TagPicker}" />
+                </Flyout>
+              </Button.Flyout>
+            </Button>
+          </StackPanel>
+
+          <Button Grid.Column="2"
                   Margin="8,0,0,0"
                   Padding="9,3"
                   FontSize="11"

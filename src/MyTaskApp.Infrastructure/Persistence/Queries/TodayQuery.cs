@@ -60,6 +60,27 @@ internal sealed class TodayQuery(MyTaskAppDbContext context) : ITodayQuery
 
         var byId = definitions.ToDictionary(definition => definition.Id);
 
+        // Terceira e última ida ao banco, qualquer que seja o tamanho da lista:
+        // as etiquetas de todos os checklists de uma vez, nunca uma por linha.
+        var tagLinks = await context.TaskItemTags
+            .AsNoTracking()
+            .Where(link => taskIds.Contains(link.TaskItemId))
+            .Join(
+                context.Tags,
+                link => link.TagId,
+                tag => tag.Id,
+                (link, tag) => new { link.TaskItemId, tag.Id, tag.Name, tag.ColorHex })
+            .OrderBy(row => row.Name)
+            .ToListAsync(cancellationToken);
+
+        var tagsByTask = tagLinks
+            .GroupBy(row => row.TaskItemId)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<TagBadge>)group
+                    .Select(row => new TagBadge(row.Id, row.Name, row.ColorHex))
+                    .ToList());
+
         return occurrences
             .Select(occurrence =>
             {
@@ -80,7 +101,8 @@ internal sealed class TodayQuery(MyTaskAppDbContext context) : ITodayQuery
                     occurrence.Reminder.Attempt,
                     definition.Reminder,
                     definition.Description,
-                    occurrence.Position);
+                    occurrence.Position,
+                    tagsByTask.GetValueOrDefault(definition.Id));
             })
             .ToList();
     }

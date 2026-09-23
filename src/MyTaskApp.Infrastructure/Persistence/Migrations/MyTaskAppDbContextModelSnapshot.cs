@@ -57,6 +57,34 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                     b.ToTable("TaskAuditEntries", (string)null);
                 });
 
+            modelBuilder.Entity("MyTaskApp.Domain.Tags.Tag", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ColorHex")
+                        .IsRequired()
+                        .HasMaxLength(7)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT")
+                        .UseCollation("NOCASE");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("Tags", (string)null);
+                });
+
             modelBuilder.Entity("MyTaskApp.Domain.Tasks.TaskItem", b =>
                 {
                     b.Property<Guid>("Id")
@@ -105,6 +133,21 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .HasFilter("\"DeletedAt\" IS NOT NULL");
 
                     b.ToTable("Tasks", (string)null);
+                });
+
+            modelBuilder.Entity("MyTaskApp.Domain.Tasks.TaskItemTag", b =>
+                {
+                    b.Property<Guid>("TaskItemId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("TagId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("TaskItemId", "TagId");
+
+                    b.HasIndex("TagId");
+
+                    b.ToTable("TaskItemTags", (string)null);
                 });
 
             modelBuilder.Entity("MyTaskApp.Domain.Tasks.TaskOccurrence", b =>
@@ -242,6 +285,21 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("MyTaskApp.Domain.Tasks.TaskItemTag", b =>
+                {
+                    b.HasOne("MyTaskApp.Domain.Tags.Tag", null)
+                        .WithMany()
+                        .HasForeignKey("TagId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("MyTaskApp.Domain.Tasks.TaskItem", null)
+                        .WithMany("Tags")
+                        .HasForeignKey("TaskItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("MyTaskApp.Domain.Tasks.TaskOccurrence", b =>
                 {
                     b.HasOne("MyTaskApp.Domain.Tasks.TaskItem", null)
@@ -297,6 +355,8 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MyTaskApp.Domain.Tasks.TaskItem", b =>
                 {
                     b.Navigation("Occurrences");
+
+                    b.Navigation("Tags");
                 });
 #pragma warning restore 612, 618
         }

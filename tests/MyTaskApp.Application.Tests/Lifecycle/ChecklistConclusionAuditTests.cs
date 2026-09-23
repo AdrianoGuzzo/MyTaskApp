@@ -58,6 +58,7 @@ public class ChecklistConclusionAuditTests
     private QuickCaptureHandler Capture() =>
         new(
             _repository,
+            new FakeTagRepository(),
             _repository,
             _settings,
             _audit,

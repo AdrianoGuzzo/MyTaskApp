@@ -7,6 +7,7 @@ using MyTaskApp.Application.Configuration;
 using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Reminders;
+using MyTaskApp.Application.Tags;
 using MyTaskApp.Application.Tasks;
 
 namespace MyTaskApp.Application;
@@ -47,6 +48,13 @@ public static class DependencyInjection
         services.AddScoped<CancelOccurrenceHandler>();
         services.AddScoped<UpdateTaskHandler>();
         services.AddScoped<RescheduleOccurrenceHandler>();
+
+        // Etiquetas (ADR-025).
+        services.AddScoped<GetTagsHandler>();
+        services.AddScoped<CreateTagHandler>();
+        services.AddScoped<UpdateTagHandler>();
+        services.AddScoped<DeleteTagHandler>();
+        services.AddScoped<SetTaskTagsHandler>();
 
         // Ciclo de vida do checklist: arquivar, lixeira, exclusao definitiva e
         // auditoria (§1 a §8).

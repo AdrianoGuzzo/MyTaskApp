@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using MyTaskApp.Domain.Auditing;
+using MyTaskApp.Domain.Tags;
 using MyTaskApp.Domain.Tasks;
 
 namespace MyTaskApp.Infrastructure.Persistence;
@@ -10,6 +11,11 @@ public sealed class MyTaskAppDbContext(DbContextOptions<MyTaskAppDbContext> opti
     public DbSet<TaskItem> Tasks => Set<TaskItem>();
 
     public DbSet<TaskOccurrence> Occurrences => Set<TaskOccurrence>();
+
+    public DbSet<Tag> Tags => Set<Tag>();
+
+    /// <summary>O vínculo N:N entre checklist e etiqueta (ADR-025).</summary>
+    public DbSet<TaskItemTag> TaskItemTags => Set<TaskItemTag>();
 
     /// <summary>
     /// A trilha de auditoria do ciclo de vida. <b>Não</b> tem relacionamento com

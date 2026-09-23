@@ -21,7 +21,12 @@ public sealed record TodayOccurrenceRow(
     /// <summary>A anotação livre do checklist (§12), em Markdown.</summary>
     string? Description = null,
     /// <summary>A casa escolhida à mão; <c>null</c> = ordem natural da seção.</summary>
-    int? Position = null);
+    int? Position = null,
+    /// <summary>As etiquetas do checklist, em ordem alfabética (ADR-025).</summary>
+    IReadOnlyList<TagBadge>? Tags = null);
+
+/// <summary>O que a linha precisa de uma etiqueta: a bolinha e o nome do balão.</summary>
+public sealed record TagBadge(Guid Id, string Name, string ColorHex);
 
 public interface ITodayQuery
 {

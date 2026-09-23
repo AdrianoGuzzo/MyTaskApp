@@ -61,6 +61,7 @@ public sealed partial class App : Avalonia.Application
                 StartReminders(Services, window, todayViewModel);
                 SetUpDataManagement(Services, window, todayViewModel);
                 SetUpNotes(Services, window, todayViewModel);
+                SetUpTags(Services, window, todayViewModel);
                 ListenForSecondLaunch(Services, window);
 
                 // A moldura só sabe iniciar com o Windows depois de conhecer o
@@ -188,6 +189,33 @@ public sealed partial class App : Avalonia.Application
         // Primeiro tique imediato, como o dos lembretes: é ele que põe em dia o
         // que venceu enquanto o app esteve fechado.
         services.GetRequiredService<LifecycleMaintenanceScheduler>().Start();
+    }
+
+    /// <summary>
+    /// Liga o menu "Etiquetas…" e o atalho do seletor da linha à janela de
+    /// gerenciamento (ADR-025).
+    /// </summary>
+    private static void SetUpTags(
+        IServiceProvider services,
+        MainWindow window,
+        TodayViewModel todayViewModel)
+    {
+        todayViewModel.TagsRequested += () => ShowTags(services, window);
+
+        // Renomear, recolorir ou excluir muda as bolinhas de todo o painel; sem
+        // isto a mudança só apareceria no refresh de 60 s.
+        services.GetRequiredService<TagsViewModel>().Changed +=
+            () => Dispatcher.UIThread.Post(
+                () => _ = todayViewModel.LoadAsync(CancellationToken.None));
+    }
+
+    private static void ShowTags(IServiceProvider services, Window owner)
+    {
+        var window = services.GetRequiredService<TagsWindow>();
+
+        window.Show(owner);
+        window.Activate();
+        window.Reveal();
     }
 
     /// <summary>

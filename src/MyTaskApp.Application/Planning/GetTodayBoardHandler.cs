@@ -121,6 +121,7 @@ public sealed class GetTodayBoardHandler(
                     row.ReminderAttempt,
                     row.TaskReminder?.Channels ?? AlertChannels.All).Step,
             row.TaskReminder,
-            row.Description);
+            row.Description,
+            row.Tags);
     }
 }

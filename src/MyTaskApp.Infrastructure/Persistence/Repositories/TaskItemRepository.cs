@@ -12,6 +12,7 @@ internal sealed class TaskItemRepository(MyTaskAppDbContext context) : ITaskItem
     public Task<TaskItem?> FindByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         context.Tasks
             .Include(task => task.Occurrences)
+            .Include(task => task.Tags)
             .SingleOrDefaultAsync(task => task.Id == id, cancellationToken);
 
     public Task<TaskItem?> FindByOccurrenceIdAsync(
@@ -19,6 +20,7 @@ internal sealed class TaskItemRepository(MyTaskAppDbContext context) : ITaskItem
         CancellationToken cancellationToken = default) =>
         context.Tasks
             .Include(task => task.Occurrences)
+            .Include(task => task.Tags)
             .SingleOrDefaultAsync(
                 task => task.Occurrences.Any(occurrence => occurrence.Id == occurrenceId),
                 cancellationToken);
@@ -33,6 +35,7 @@ internal sealed class TaskItemRepository(MyTaskAppDbContext context) : ITaskItem
         CancellationToken cancellationToken = default) =>
         await context.Tasks
             .Include(task => task.Occurrences)
+            .Include(task => task.Tags)
             .Where(task => task.Occurrences.Any(
                 occurrence => occurrenceIds.Contains(occurrence.Id)))
             .ToListAsync(cancellationToken);
