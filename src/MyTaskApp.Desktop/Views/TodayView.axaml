@@ -189,14 +189,44 @@
               dependeriam de mirar nos glifos.
               Tapped, e não PointerPressed: arrastar o painel por
               cima de uma linha não pode virar uma cópia.
+
+              Embaixo do texto vêm todas as etiquetas, com nome e cor —
+              inclusive as que o "+N" escondeu. Mesma regra do balão da
+              bolinha: as amarrações passam pelo nome (#TitleText), porque o
+              DataContext não desce até o balão.
             -->
-            <TextBlock Text="{Binding Title}"
+            <TextBlock x:Name="TitleText"
+                       Text="{Binding Title}"
                        Classes="taskTitle"
                        Classes.done="{Binding IsCompleted}"
                        Background="Transparent"
                        Cursor="Hand"
-                       ToolTip.Tip="{Binding Title}"
-                       Tapped="OnTitleTapped" />
+                       Tapped="OnTitleTapped">
+              <ToolTip.Tip>
+                <ToolTip>
+                  <StackPanel Spacing="6">
+                    <TextBlock Text="{Binding #TitleText.((vm:TaskRowViewModel)DataContext).Title}" />
+                    <ItemsControl Margin="0,0,0,-4"
+                                  ItemsSource="{Binding #TitleText.((vm:TaskRowViewModel)DataContext).Tags.Selected}"
+                                  IsVisible="{Binding #TitleText.((vm:TaskRowViewModel)DataContext).Tags.HasTags}">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                          <WrapPanel />
+                        </ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:TagChipViewModel">
+                          <Border Classes="tipTag" Background="{Binding Fill}">
+                            <TextBlock Text="{Binding Name}"
+                                       Foreground="{Binding Foreground}" />
+                          </Border>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </ToolTip>
+              </ToolTip.Tip>
+            </TextBlock>
 
             <StackPanel Orientation="Horizontal"
                         Spacing="4"
