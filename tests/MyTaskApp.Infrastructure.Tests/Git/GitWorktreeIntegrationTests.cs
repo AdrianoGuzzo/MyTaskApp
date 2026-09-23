@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using MyTaskApp.Application.Development;
 using MyTaskApp.Domain.Tasks;
+using MyTaskApp.Infrastructure.Agents;
 using MyTaskApp.Infrastructure.FileSystem;
 using MyTaskApp.Infrastructure.Git;
 using MyTaskApp.Infrastructure.Persistence;
@@ -315,6 +316,8 @@ public sealed class GitWorktreeIntegrationTests : IAsyncLifetime
             new EfUnitOfWork(context),
             _git,
             new FileSystemDirectoryProbe(),
+            new AgentSessionRepository(context),
+            new AgentProcessTracker(),
             new FakeTimeProvider(Now),
             NullLogger<RemoveWorktreeHandler>.Instance);
 

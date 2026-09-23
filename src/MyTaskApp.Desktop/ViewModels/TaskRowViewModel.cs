@@ -41,6 +41,8 @@ public sealed class TaskRowViewModel
         Editor.Load(Reminder);
 
         Tags = new TaskTagsViewModel(TaskId, task.Tags, Title);
+
+        AgentName = task.ActiveAgentName;
     }
 
     /// <summary>
@@ -55,6 +57,18 @@ public sealed class TaskRowViewModel
     public Guid TaskId { get; }
 
     public string Title { get; }
+
+    /// <summary>O agente de IA aberto para a tarefa ("Claude Code"); <c>null</c> = nenhum (ADR-029).</summary>
+    public string? AgentName { get; }
+
+    public bool HasActiveAgent => AgentName is not null;
+
+    /// <summary>"● Claude Code": o selo da linha.</summary>
+    public string AgentLabel => AgentName is null ? string.Empty : $"● {AgentName}";
+
+    public string AgentTip => AgentName is null
+        ? string.Empty
+        : $"{AgentName} em execução para esta tarefa. Abra a tarefa para ir ao terminal.";
 
     public string TimeLabel { get; }
 

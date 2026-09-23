@@ -24,7 +24,12 @@ public sealed record TodayTask(
     /// </summary>
     string? Notes = null,
     /// <summary>As etiquetas do checklist; <c>null</c> = nenhuma.</summary>
-    IReadOnlyList<TagBadge>? Tags = null);
+    IReadOnlyList<TagBadge>? Tags = null,
+    /// <summary>
+    /// O nome do agente de IA aberto para a tarefa ("Claude Code"); <c>null</c>
+    /// = nenhum (ADR-029). É o que acende o selo na linha.
+    /// </summary>
+    string? ActiveAgentName = null);
 
 /// <summary>Tela "Hoje" (§9), já separada em seções mutuamente exclusivas.</summary>
 public sealed record TodayBoard(

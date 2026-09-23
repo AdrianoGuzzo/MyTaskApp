@@ -1,5 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <PropertyGroup>
+    <!-- [LibraryImport] gera codigo unsafe (WindowsTerminalWindowManager, ADR-029). -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\MyTaskApp.Application\MyTaskApp.Application.csproj" />
   </ItemGroup>

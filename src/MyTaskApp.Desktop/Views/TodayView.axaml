@@ -241,6 +241,17 @@
                          Background="Transparent"
                          ToolTip.Tip="{Binding AttentionLabel}" />
             </StackPanel>
+
+            <!--
+              Agente de IA aberto para a tarefa (ADR-029): discreto, como o ⚠,
+              só para achar de relance qual tarefa tem um terminal rodando.
+            -->
+            <TextBlock x:Name="AgentBadge"
+                       Classes="agentBadge"
+                       Text="{Binding AgentLabel}"
+                       IsVisible="{Binding HasActiveAgent}"
+                       Background="Transparent"
+                       ToolTip.Tip="{Binding AgentTip}" />
           </StackPanel>
 
           <!--
@@ -437,6 +448,12 @@
       <Setter Property="FontSize" Value="10" />
       <Setter Property="Foreground" Value="{DynamicResource WidgetCautionBrush}" />
       <Setter Property="Opacity" Value="0.8" />
+    </Style>
+
+    <Style Selector="TextBlock.agentBadge">
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetAccentHoverBrush}" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
     </Style>
 
     <Style Selector="TextBlock.waiting.urgent">

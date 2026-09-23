@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Development;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Reminders;
@@ -76,12 +77,26 @@ public class InfrastructureRegistrationTests : IDisposable
     [InlineData(typeof(ITagQuery))]
     [InlineData(typeof(IDirectoryProbe))]
     [InlineData(typeof(IGitClient))]
+    [InlineData(typeof(IAgentSessionRepository))]
+    [InlineData(typeof(IAgentCliProvider))]
+    [InlineData(typeof(IAgentProcessTracker))]
+    [InlineData(typeof(ITerminalLauncher))]
+    [InlineData(typeof(ITerminalWindowManager))]
     public void EveryPort_IsWiredToAnImplementation(Type serviceType)
     {
         using var provider = BuildProvider();
         using var scope = provider.CreateScope();
 
         scope.ServiceProvider.GetRequiredService(serviceType).Should().NotBeNull();
+    }
+
+    /// <summary>Hoje o único agente é o Claude Code (ADR-029).</summary>
+    [Fact]
+    public void TheClaudeCode_IsTheRegisteredAgent()
+    {
+        using var provider = BuildProvider();
+
+        provider.GetServices<IAgentCliProvider>().Select(agent => agent.Id).Should().Equal("claude-code");
     }
 
     [Fact]

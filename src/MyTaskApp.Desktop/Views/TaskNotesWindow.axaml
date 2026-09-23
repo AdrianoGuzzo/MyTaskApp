@@ -4,6 +4,7 @@
         xmlns:notes="using:MyTaskApp.Desktop.Notes"
         xmlns:dev="using:MyTaskApp.Desktop.Development"
         xmlns:views="using:MyTaskApp.Desktop.Views"
+        xmlns:agents="using:MyTaskApp.Application.Agents"
         x:Class="MyTaskApp.Desktop.Views.TaskNotesWindow"
         x:DataType="vm:TaskNotesViewModel"
         x:Name="Root"
@@ -958,6 +959,124 @@
                           Command="{Binding SaveCommandsCommand}" />
                   <Button Content="Gerenciar comandos globais…" Command="{Binding OpenGlobalCommandsCommand}" />
                 </WrapPanel>
+              </StackPanel>
+            </Border>
+
+            <!--
+              Agente de IA no worktree (ADR-029). Só com o ambiente pronto: o
+              agente abre dentro do worktree, e sem ele não há onde abrir.
+            -->
+            <Border Classes="card" x:Name="AgentCard" IsVisible="{Binding IsReady}">
+              <StackPanel x:Name="AgentPanel"
+                          x:DataType="vm:AgentSessionViewModel"
+                          DataContext="{Binding Agent}"
+                          Spacing="10">
+
+                <TextBlock Classes="sectionTitle" Text="{Binding AgentName}" />
+
+                <TextBlock x:Name="AgentStatus"
+                           Classes="body"
+                           Classes.ok="{Binding IsRunning}"
+                           Classes.bad="{Binding IsNotInstalled}"
+                           Classes.warn="{Binding IsFailed}"
+                           Classes.hint="{Binding IsChecking}"
+                           Text="{Binding StatusText}" />
+
+                <!-- Em execução / finalizado: o que liga a tarefa ao terminal. -->
+                <StackPanel Spacing="10" IsVisible="{Binding HasSession}">
+                  <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" ColumnSpacing="16" RowSpacing="4">
+                    <TextBlock Grid.Row="0" Grid.Column="0" Classes="fieldLabel" Text="Processo" IsVisible="{Binding IsRunning}" />
+                    <SelectableTextBlock Grid.Row="0" Grid.Column="1"
+                                         x:Name="AgentProcess"
+                                         Classes="code"
+                                         IsVisible="{Binding IsRunning}"
+                                         Text="{Binding ProcessText, FallbackValue=''}" />
+                    <TextBlock Grid.Row="1" Grid.Column="0" Classes="fieldLabel" Text="Início" IsVisible="{Binding IsRunning}" />
+                    <TextBlock Grid.Row="1" Grid.Column="1" Classes="body" IsVisible="{Binding IsRunning}" Text="{Binding StartedText, FallbackValue=''}" />
+                    <TextBlock Grid.Row="0" Grid.Column="0" Classes="fieldLabel" Text="Executado" IsVisible="{Binding IsFinished}" />
+                    <TextBlock Grid.Row="0" Grid.Column="1"
+                               x:Name="AgentRange"
+                               Classes="body"
+                               IsVisible="{Binding IsFinished}"
+                               Text="{Binding RangeText, FallbackValue=''}" />
+                  </Grid>
+
+                  <TextBlock Classes="fieldLabel" Text="Pasta" />
+                  <SelectableTextBlock Classes="code" Text="{Binding WorkingDirectory, FallbackValue=''}" />
+                </StackPanel>
+
+                <TextBlock Classes="hint"
+                           Text="{Binding FailureReason, FallbackValue=''}"
+                           IsVisible="{Binding IsFailed}" />
+
+                <!-- Não instalado: as instruções do sistema atual, nada de instalar sozinho. -->
+                <StackPanel Spacing="10" IsVisible="{Binding IsNotInstalled}" x:Name="AgentInstallPanel">
+                  <TextBlock Classes="body"
+                             Text="Instale o Claude Code para utilizar este recurso, e depois clique em &quot;Verificar novamente&quot;. O MyTaskApp não instala nada sozinho." />
+
+                  <TextBlock Classes="fieldLabel" Text="{Binding InstallGuide.Title, FallbackValue=''}" IsVisible="{Binding HasInstallGuide}" />
+
+                  <ItemsControl ItemsSource="{Binding InstallGuide.Steps, FallbackValue={x:Null}}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <StackPanel Spacing="8" />
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="agents:AgentCliInstallStep">
+                        <StackPanel Spacing="3">
+                          <TextBlock Classes="hint" Text="{Binding Text}" />
+                          <Grid ColumnDefinitions="*,Auto"
+                                ColumnSpacing="8"
+                                IsVisible="{Binding Command, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                            <Border Grid.Column="0" Classes="codeBox">
+                              <SelectableTextBlock Classes="code agentInstallCommand" Text="{Binding Command}" />
+                            </Border>
+                            <Button Grid.Column="1"
+                                    Content="Copiar comando"
+                                    VerticalAlignment="Center"
+                                    Command="{Binding #AgentPanel.((vm:AgentSessionViewModel)DataContext).CopyCommand}"
+                                    CommandParameter="{Binding Command}" />
+                          </Grid>
+                        </StackPanel>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Content="Documentação de instalação" Command="{Binding OpenInstallDocsCommand}" />
+                    <Button Classes="accent"
+                            x:Name="RecheckAgentButton"
+                            Content="Verificar novamente"
+                            Command="{Binding RecheckCommand}" />
+                  </StackPanel>
+                </StackPanel>
+
+                <TextBlock Classes="hint"
+                           IsVisible="{Binding IsIdle}"
+                           Text="Abre o agente num terminal do sistema, dentro do worktree desta tarefa. O MyTaskApp lembra qual terminal é desta tarefa." />
+
+                <TextBlock Classes="hint"
+                           IsVisible="{Binding VersionText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                           Text="{Binding VersionText}" />
+
+                <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
+                  <Button Classes="accent"
+                          x:Name="FocusAgentButton"
+                          Content="Abrir terminal do agente"
+                          IsVisible="{Binding IsRunning}"
+                          Command="{Binding FocusCommand}" />
+                  <Button Classes.accent="{Binding !IsRunning}"
+                          x:Name="StartAgentButton"
+                          Content="{Binding StartLabel}"
+                          IsVisible="{Binding ShowStart}"
+                          Command="{Binding StartCommand}" />
+                </WrapPanel>
+
+                <TextBlock Classes="hint"
+                           x:Name="AgentMessage"
+                           Text="{Binding Message}"
+                           IsVisible="{Binding Message, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
               </StackPanel>
             </Border>
 
