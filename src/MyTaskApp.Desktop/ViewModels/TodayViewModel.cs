@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Reminders;
@@ -391,6 +392,41 @@ public sealed partial class TodayViewModel(
         }
 
         StatusMessage = CopiedMessage;
+    }
+
+    /// <summary>
+    /// O clique no selo "● Claude Code" da linha leva ao terminal daquela
+    /// sessão, sem abrir a tarefa (ADR-030). É o mesmo caso de uso do botão
+    /// "Abrir terminal do agente": nunca inicia um agente novo, e se o processo
+    /// já acabou a sessão é encerrada e o selo some.
+    /// </summary>
+    [RelayCommand]
+    public async Task FocusAgentAsync(TaskRowViewModel row)
+    {
+        AgentFocusResult? result = null;
+
+        var reached = await TryAsync(
+            async () => result = await runner.RunAsync<FocusAgentSessionHandler, AgentFocusResult>(
+                (handler, token) => handler.HandleAsync(new FocusAgentSession(row.TaskId), token),
+                CancellationToken.None),
+            "Não foi possível trazer o terminal para a frente.");
+
+        if (!reached || result!.Focused)
+        {
+            return;
+        }
+
+        if (result.Session.IsActive)
+        {
+            ErrorMessage =
+                $"Não foi possível localizar a janela do terminal do {row.AgentName}. Procure-a na barra de tarefas.";
+            return;
+        }
+
+        // Recarrega antes de avisar: o selo desta linha estava mentindo, e a
+        // recarga limpa o aviso — feita depois, apagaria a explicação.
+        await LoadAsync(CancellationToken.None);
+        StatusMessage = $"O {row.AgentName} desta tarefa já foi encerrado.";
     }
 
     /// <summary>

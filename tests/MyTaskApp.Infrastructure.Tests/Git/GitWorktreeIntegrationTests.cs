@@ -3,6 +3,7 @@ using Microsoft.Extensions.Time.Testing;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Development;
 using MyTaskApp.Domain.Tasks;
+using MyTaskApp.Infrastructure.Agents;
 using MyTaskApp.Infrastructure.FileSystem;
 using MyTaskApp.Infrastructure.Git;
 using MyTaskApp.Infrastructure.Persistence;
@@ -367,6 +368,8 @@ public sealed class GitWorktreeIntegrationTests : IAsyncLifetime
             new EfUnitOfWork(context),
             _git,
             new FileSystemDirectoryProbe(),
+            new AgentSessionRepository(context),
+            new AgentProcessTracker(),
             new FileSystemDirectoryRemover(
                 OperatingSystem.IsWindows()
                     ? new WindowsDirectoryLockFinder(NullLogger<WindowsDirectoryLockFinder>.Instance)

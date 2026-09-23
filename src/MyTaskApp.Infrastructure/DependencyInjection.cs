@@ -1,19 +1,26 @@
+using System.Runtime.Versioning;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Development;
 using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Application.Tags;
+using MyTaskApp.Infrastructure.Agents;
+using MyTaskApp.Infrastructure.Agents.ClaudeCode;
 using MyTaskApp.Infrastructure.FileSystem;
 using MyTaskApp.Infrastructure.Git;
 using MyTaskApp.Infrastructure.Persistence;
 using MyTaskApp.Infrastructure.Persistence.Queries;
 using MyTaskApp.Infrastructure.Persistence.Repositories;
 using MyTaskApp.Infrastructure.Processes;
+using MyTaskApp.Infrastructure.Terminals;
+using MyTaskApp.Infrastructure.Terminals.Windows;
 
 namespace MyTaskApp.Infrastructure;
 
@@ -45,6 +52,7 @@ public static class DependencyInjection
         services.AddScoped<ITagRepository, TagRepository>();
         services.AddScoped<ITagQuery, TagQuery>();
         services.AddScoped<IDevelopmentCommandRepository, DevelopmentCommandRepository>();
+        services.AddScoped<IAgentSessionRepository, AgentSessionRepository>();
 
         // Ciclo de vida: auditoria, configuracao de retencao e as consultas das
         // areas de arquivados/lixeira e da varredura automatica.
@@ -75,6 +83,31 @@ public static class DependencyInjection
         // Comandos pós-Worktree pelo shell do sistema (ADR-028).
         services.AddSingleton<ICommandExecutor, ShellCommandExecutor>();
 
+        // Agentes de IA num terminal real, por tarefa (ADR-030). Um agente novo
+        // é mais um IAgentCliProvider aqui; o terminal é escolhido por sistema.
+        services.AddSingleton(_ => ExecutableLocator.ForCurrentSystem());
+        services.AddSingleton<IAgentCliProvider, ClaudeCodeCliProvider>();
+        services.AddSingleton<IAgentProcessTracker, AgentProcessTracker>();
+
+        if (OperatingSystem.IsWindows())
+        {
+            AddWindowsTerminal(services);
+        }
+        else
+        {
+            services.AddSingleton<ITerminalLauncher, UnsupportedTerminalLauncher>();
+            services.AddSingleton<ITerminalWindowManager, UnsupportedTerminalWindowManager>();
+        }
+
         return services;
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static void AddWindowsTerminal(IServiceCollection services)
+    {
+        services.AddSingleton<ITerminalLauncher>(
+            provider => new WindowsTerminalLauncher(
+                provider.GetRequiredService<ILogger<WindowsTerminalLauncher>>()));
+        services.AddSingleton<ITerminalWindowManager, WindowsTerminalWindowManager>();
     }
 }

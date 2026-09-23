@@ -28,6 +28,13 @@ public sealed class ApplicationOptions
     /// </summary>
     public int LifecycleSweepMinutes { get; set; } = 360;
 
+    /// <summary>
+    /// De quanto em quanto tempo as sessões de agente são conferidas contra os
+    /// processos do sistema (ADR-030). É só rede de segurança: o fim de cada
+    /// processo já chega por evento, então não há por que ser curto.
+    /// </summary>
+    public int AgentSessionReconcileSeconds { get; set; } = 60;
+
     /// <summary>Limites defensivos: um tique de 0 s fritaria o disco.</summary>
     public TimeSpan ToReminderTickPeriod() =>
         TimeSpan.FromSeconds(Math.Clamp(ReminderTickSeconds, 5, 3600));
@@ -35,6 +42,10 @@ public sealed class ApplicationOptions
     /// <summary>Entre um minuto e uma semana; fora disso e engano de digitacao.</summary>
     public TimeSpan ToLifecycleSweepPeriod() =>
         TimeSpan.FromMinutes(Math.Clamp(LifecycleSweepMinutes, 1, 10080));
+
+    /// <summary>Entre 10 s e uma hora: menos que isso seria o polling agressivo que o evento evita.</summary>
+    public TimeSpan ToAgentSessionReconcilePeriod() =>
+        TimeSpan.FromSeconds(Math.Clamp(AgentSessionReconcileSeconds, 10, 3600));
 
     public NowWindow ToNowWindow() =>
         new(

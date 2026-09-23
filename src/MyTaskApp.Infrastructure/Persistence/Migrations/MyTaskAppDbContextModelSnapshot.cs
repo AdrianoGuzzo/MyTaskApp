@@ -17,6 +17,61 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
 
+            modelBuilder.Entity("MyTaskApp.Domain.Agents.AgentSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Command")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("EndedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("FailureReason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("ProcessId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ProcessStartedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ProviderId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("StartedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("TaskItemId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("WorkingDirectory")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("TaskItemId", "StartedAt");
+
+                    b.HasIndex(new[] { "TaskItemId" }, "IX_AgentSessions_TaskItemId_Active")
+                        .IsUnique()
+                        .HasFilter("\"Status\" IN (1, 2)");
+
+                    b.ToTable("AgentSessions", (string)null);
+                });
+
             modelBuilder.Entity("MyTaskApp.Domain.Auditing.TaskAuditEntry", b =>
                 {
                     b.Property<Guid>("Id")
@@ -384,6 +439,15 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         {
                             t.HasCheckConstraint("CK_ReminderSettings_SingleRow", "Id = 1");
                         });
+                });
+
+            modelBuilder.Entity("MyTaskApp.Domain.Agents.AgentSession", b =>
+                {
+                    b.HasOne("MyTaskApp.Domain.Tasks.TaskItem", null)
+                        .WithMany()
+                        .HasForeignKey("TaskItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("MyTaskApp.Domain.Tags.TagDirectory", b =>

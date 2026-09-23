@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Agents;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.Tasks;
 
@@ -78,12 +79,18 @@ public sealed record RemoveWorktree(Guid TaskId, IReadOnlyList<DirectoryLocker>?
 /// pastas vazias. Por isso a pergunta depois de uma falha é "o Git ainda
 /// conhece o worktree?", e não o exit code: se não conhece, só falta a pasta,
 /// e ela fica com <see cref="IDirectoryRemover"/>.
+///
+/// Com um agente aberto no worktree (ADR-030), nada é removido: o processo
+/// está com a pasta aberta, e apagar o chão debaixo de uma sessão em andamento
+/// é o tipo de coisa que o usuário não percebe que pediu.
 /// </remarks>
 public sealed class RemoveWorktreeHandler(
     ITaskItemRepository tasks,
     IUnitOfWork unitOfWork,
     IGitClient git,
     IDirectoryProbe directories,
+    IAgentSessionRepository agentSessions,
+    IAgentProcessTracker processes,
     IDirectoryRemover remover,
     TimeProvider timeProvider,
     ILogger<RemoveWorktreeHandler> logger)
@@ -102,6 +109,8 @@ public sealed class RemoveWorktreeHandler(
         {
             return TaskDevelopmentView.From(development);
         }
+
+        await EnsureNoAgentRunningAsync(task.Id, cancellationToken);
 
         try
         {
@@ -143,6 +152,28 @@ public sealed class RemoveWorktreeHandler(
         logger.LogInformation("WorktreeRemoved {TaskId} {WorktreePath}", task.Id, development.WorktreePath);
 
         return TaskDevelopmentView.From(development);
+    }
+
+    private async Task EnsureNoAgentRunningAsync(Guid taskId, CancellationToken cancellationToken)
+    {
+        var session = await agentSessions.FindLatestForTaskAsync(taskId, cancellationToken);
+
+        if (session is null)
+        {
+            return;
+        }
+
+        if (AgentSessionReconciler.EndIfGone(session, processes, timeProvider.GetUtcNow()))
+        {
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            return;
+        }
+
+        if (session.IsActive)
+        {
+            throw new DomainException(
+                "Há um agente de IA aberto neste worktree. Encerre-o no terminal antes de remover o worktree.");
+        }
     }
 
     private async Task RemoveRegisteredAsync(TaskDevelopment development, CancellationToken cancellationToken)
