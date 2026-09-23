@@ -294,6 +294,26 @@ public sealed partial class TaskDevelopmentViewModel(
 
     public string RemoveChangesText => string.Join(Environment.NewLine, RemoveChanges ?? []);
 
+    /// <summary>
+    /// O Git esqueceu o worktree, mas a pasta ficou presa (ADR-029). Vazia quando
+    /// o sistema não deixa saber quem segura; <c>null</c> quando não há bloqueio.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsRemoveLocked), nameof(RemoveLockersText), nameof(CanForceRemove))]
+    private IReadOnlyList<DirectoryLocker>? _removeLockers;
+
+    [ObservableProperty]
+    private string? _removeLockedMessage;
+
+    public bool IsRemoveLocked => RemoveLockers is not null;
+
+    public string RemoveLockersText =>
+        RemoveLockers is { Count: > 0 } lockers
+            ? string.Join(Environment.NewLine, lockers.Select(locker => locker.Display))
+            : "O Windows não disse quem está usando a pasta (pode ser um processo de administrador ou de outro usuário).";
+
+    public bool CanForceRemove => RemoveLockers?.Any(locker => locker.CanTerminate) is true;
+
     /// <summary>Um recado curto: "Caminho copiado", "Não foi possível abrir…".</summary>
     [ObservableProperty]
     private string? _message;
@@ -1050,8 +1070,7 @@ public sealed partial class TaskDevelopmentViewModel(
             return;
         }
 
-        RemoveChanges = null;
-        IsShowingRemoveChanges = false;
+        ClearRemoveBlock();
         Message = null;
         IsRemoving = true;
 
@@ -1067,13 +1086,19 @@ public sealed partial class TaskDevelopmentViewModel(
                 return;
             }
 
+            var detail = inspection switch
+            {
+                { Exists: false } => $"A pasta {development.WorktreePath} não existe mais. "
+                                     + "O repositório vai esquecer este worktree.",
+                { IsLeftover: true } => $"O Git já esqueceu este worktree. O que sobrou em {development.WorktreePath} será apagado. "
+                                        + $"A branch {development.Branch} continua no repositório.",
+                _ => $"A pasta {development.WorktreePath} será apagada. "
+                     + $"A branch {development.Branch} continua no repositório.",
+            };
+
             var confirmed = await confirmation.AskAsync(new ConfirmationRequest(
                 "Deseja remover este Worktree?",
-                inspection.Exists
-                    ? $"A pasta {development.WorktreePath} será apagada pelo Git. "
-                      + $"A branch {development.Branch} continua no repositório."
-                    : $"A pasta {development.WorktreePath} não existe mais. "
-                      + "O repositório vai esquecer este worktree.",
+                detail,
                 "Remover",
                 IsIrreversible: true));
 
@@ -1082,35 +1107,11 @@ public sealed partial class TaskDevelopmentViewModel(
                 return;
             }
 
-            Development = await runner.RunAsync<RemoveWorktreeHandler, TaskDevelopmentView>(
-                (handler, token) => handler.HandleAsync(new RemoveWorktree(_taskId), token),
-                CancellationToken.None);
-
-            ShowPreviousAttempt(Development);
-
-            // Pronto, a aba nem perguntou pelo Git; o formulário que volta precisa saber.
-            State = DevelopmentPanelState.Loading;
-            await DetectGitAsync(CancellationToken.None);
-
-            if (State is DevelopmentPanelState.Setup && DirectoryText.Length > 0)
-            {
-                await InspectDirectoryAsync(CancellationToken.None);
-            }
-
-            Message = "Worktree removido.";
-        }
-        catch (DevelopmentStepException exception) when (exception.Changes.Count > 0)
-        {
-            RemoveChanges = exception.Changes;
-        }
-        catch (DomainException exception)
-        {
-            Message = exception.Message;
+            await RunRemoveAsync(terminate: null);
         }
         catch (Exception exception)
         {
-            logger.LogError(exception, "WorktreeRemoveFailed {TaskId}", _taskId);
-            Message = "Não foi possível remover o worktree.";
+            ShowRemoveFailure(exception);
         }
         finally
         {
@@ -1118,15 +1119,95 @@ public sealed partial class TaskDevelopmentViewModel(
         }
     }
 
+    /// <summary>
+    /// Encerra os processos listados e apaga a pasta. Só os que o usuário está
+    /// vendo: quem aparecer depois volta para a lista em vez de ser encerrado.
+    /// </summary>
+    [RelayCommand]
+    public async Task ForceRemoveWorktreeAsync()
+    {
+        if (RemoveLockers is not { Count: > 0 } lockers || IsRemoving)
+        {
+            return;
+        }
+
+        Message = null;
+        IsRemoving = true;
+
+        try
+        {
+            await RunRemoveAsync(lockers);
+        }
+        catch (Exception exception)
+        {
+            ShowRemoveFailure(exception);
+        }
+        finally
+        {
+            IsRemoving = false;
+        }
+    }
+
+    private async Task RunRemoveAsync(IReadOnlyList<DirectoryLocker>? terminate)
+    {
+        Development = await runner.RunAsync<RemoveWorktreeHandler, TaskDevelopmentView>(
+            (handler, token) => handler.HandleAsync(new RemoveWorktree(_taskId, terminate), token),
+            CancellationToken.None);
+
+        ClearRemoveBlock();
+        ShowPreviousAttempt(Development);
+
+        // Pronto, a aba nem perguntou pelo Git; o formulário que volta precisa saber.
+        State = DevelopmentPanelState.Loading;
+        await DetectGitAsync(CancellationToken.None);
+
+        if (State is DevelopmentPanelState.Setup && DirectoryText.Length > 0)
+        {
+            await InspectDirectoryAsync(CancellationToken.None);
+        }
+
+        Message = terminate is { Count: > 0 }
+            ? "Worktree removido. Os processos que usavam a pasta foram encerrados."
+            : "Worktree removido.";
+    }
+
+    private void ShowRemoveFailure(Exception exception)
+    {
+        switch (exception)
+        {
+            case DevelopmentStepException { Changes.Count: > 0 } changes:
+                RemoveChanges = changes.Changes;
+                break;
+
+            case DevelopmentStepException { IsDirectoryLocked: true } locked:
+                RemoveLockedMessage = locked.Message;
+                RemoveLockers = locked.Lockers;
+                break;
+
+            case DomainException domain:
+                Message = domain.Message;
+                break;
+
+            default:
+                logger.LogError(exception, "WorktreeRemoveFailed {TaskId}", _taskId);
+                Message = "Não foi possível remover o worktree.";
+                break;
+        }
+    }
+
+    private void ClearRemoveBlock()
+    {
+        RemoveChanges = null;
+        IsShowingRemoveChanges = false;
+        RemoveLockers = null;
+        RemoveLockedMessage = null;
+    }
+
     [RelayCommand]
     public void ShowRemoveChanges() => IsShowingRemoveChanges = true;
 
     [RelayCommand]
-    public void CancelRemove()
-    {
-        RemoveChanges = null;
-        IsShowingRemoveChanges = false;
-    }
+    public void CancelRemove() => ClearRemoveBlock();
 
     /// <summary>
     /// Uma tentativa que não terminou pronta deixa o formulário preenchido com o
