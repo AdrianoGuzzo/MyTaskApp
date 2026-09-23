@@ -169,6 +169,43 @@ public class TagRenderingTests
             .Classes.Should().Contain("on");
     }
 
+    /// <summary>
+    /// O balão do título traz, embaixo do texto, todas as etiquetas com nome e
+    /// cor — inclusive as que o "+N" escondeu da linha.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task TheTitleTooltip_ListsEveryTagInItsOwnColor()
+    {
+        var tags = Enumerable.Range(1, 6)
+            .Select(index => new TagBadge(Guid.NewGuid(), $"Etiqueta {index}", "#94A3B8"))
+            .Append(new TagBadge(Guid.NewGuid(), "Urgente", "#B91C1C"))
+            .ToArray();
+
+        var window = await ShowListAsync(Task(tags));
+
+        var title = window.GetVisualDescendants().OfType<TextBlock>()
+            .Single(block => block.Classes.Contains("taskTitle"));
+
+        ToolTip.SetIsOpen(title, true);
+        Avalonia.Headless.AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+
+        var tip = ToolTip.GetTip(title).Should().BeOfType<ToolTip>().Subject;
+        var pills = tip.GetVisualDescendants().OfType<Border>()
+            .Where(border => border.Classes.Contains("tipTag"))
+            .ToList();
+
+        pills.Should().HaveCount(7);
+
+        var urgent = pills.Single(pill => ((TextBlock)pill.Child!).Text == "Urgente");
+        ((ISolidColorBrush)urgent.Background!).Color.Should().Be(Color.Parse("#B91C1C"));
+        ((ISolidColorBrush)((TextBlock)urgent.Child!).Foreground!).Color.Should().Be(Colors.White);
+
+        tip.GetVisualDescendants().OfType<TextBlock>()
+            .Should().Contain(block => block.Text == "Pagar boleto");
+
+        ToolTip.SetIsOpen(title, false);
+    }
+
     private static ToolTip OpenTip(Ellipse dot)
     {
         ToolTip.SetIsOpen(dot, true);
