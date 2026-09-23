@@ -100,6 +100,26 @@ public sealed partial class TodayView : UserControl
     }
 
     /// <summary>
+    /// O selo "● Claude Code" leva ao terminal do agente. Mesmo molde do
+    /// título: o clique para aqui e não sobe até a linha.
+    /// </summary>
+    private void OnAgentBadgeTapped(object? sender, TappedEventArgs e)
+    {
+        if (sender is not Control { DataContext: TaskRowViewModel row }
+            || DataContext is not TodayViewModel viewModel)
+        {
+            return;
+        }
+
+        e.Handled = true;
+
+        if (viewModel.FocusAgentCommand.CanExecute(row))
+        {
+            viewModel.FocusAgentCommand.Execute(row);
+        }
+    }
+
+    /// <summary>
     /// O botão "⋯" abre o <c>ContextFlyout</c> da própria linha, em vez de ter
     /// um menu só dele. Assim clique direito e botão são literalmente o mesmo
     /// menu — duas cópias em XAML acabariam divergindo no primeiro item novo.

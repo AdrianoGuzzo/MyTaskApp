@@ -1816,8 +1816,11 @@ do sistema**, com o worktree como pasta de trabalho. O app grava uma
 `Status` (`Starting` → `Running` → `Exited`, ou `Starting` → `Failed`) e
 `FailureReason`. O card mostra PID, início e a pasta. "Abrir terminal do agente"
 traz aquela janela para a frente. A linha da lista ganha um selo discreto,
-"● Claude Code", enquanto a sessão está em execução. O objetivo é um só: não se
-perder entre vários terminais abertos.
+"● Claude Code", enquanto a sessão está em execução. Um clique no selo faz o
+mesmo que "Abrir terminal do agente", sem abrir a tarefa: é o mesmo caso de uso
+(`FocusAgentSession`). Se o processo já acabou, o quadro é recarregado, e o selo
+some com um aviso. O objetivo é um só: não se perder entre vários terminais
+abertos.
 
 **Só manual.** Nada abre sozinho ao fim de "Iniciar implementação": o botão
 fica no card do estado Pronto. O app não captura, não lê e não escreve na
