@@ -68,7 +68,7 @@ public sealed class TaskRowViewModel
 
     public string AgentTip => AgentName is null
         ? string.Empty
-        : $"{AgentName} em execução para esta tarefa. Abra a tarefa para ir ao terminal.";
+        : $"{AgentName} em execução para esta tarefa. Clique para ir ao terminal.";
 
     public string TimeLabel { get; }
 

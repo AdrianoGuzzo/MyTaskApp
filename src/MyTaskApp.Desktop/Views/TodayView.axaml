@@ -245,12 +245,18 @@
             <!--
               Agente de IA aberto para a tarefa (ADR-029): discreto, como o ⚠,
               só para achar de relance qual tarefa tem um terminal rodando.
+              Um clique traz o terminal para a frente (ver OnAgentBadgeTapped).
+              HorizontalAlignment="Left": o alvo do clique é o texto, e não a
+              largura inteira da coluna.
             -->
             <TextBlock x:Name="AgentBadge"
                        Classes="agentBadge"
                        Text="{Binding AgentLabel}"
                        IsVisible="{Binding HasActiveAgent}"
+                       HorizontalAlignment="Left"
                        Background="Transparent"
+                       Cursor="Hand"
+                       Tapped="OnAgentBadgeTapped"
                        ToolTip.Tip="{Binding AgentTip}" />
           </StackPanel>
 
@@ -454,6 +460,10 @@
       <Setter Property="FontSize" Value="10" />
       <Setter Property="Foreground" Value="{DynamicResource WidgetAccentHoverBrush}" />
       <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <Style Selector="TextBlock.agentBadge:pointerover">
+      <Setter Property="TextDecorations" Value="Underline" />
     </Style>
 
     <Style Selector="TextBlock.waiting.urgent">
