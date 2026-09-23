@@ -109,13 +109,13 @@ public class TaskItemCreationTests
     }
 
     [Fact]
-    public void Create_WithDescriptionBeyondMaximumLength_IsRejected()
+    public void Create_WithVeryLongDescription_KeepsItWhole()
     {
-        var description = new string('d', TaskItem.MaxDescriptionLength + 1);
+        var description = new string('d', 100_000);
 
-        var create = () => TaskItem.Create("Daily", Now, description: description);
+        var task = TaskItem.Create("Daily", Now, description: description);
 
-        create.Should().Throw<DomainException>();
+        task.Description.Should().Be(description);
     }
 
     [Fact]

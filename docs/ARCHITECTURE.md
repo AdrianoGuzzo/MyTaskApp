@@ -263,10 +263,12 @@ contêiner para que esquecer um registro quebre a build, não a tela.
 ## Edição atômica
 
 `TaskItem.Update(title, description, priority)` normaliza e valida **tudo**
-antes de atribuir qualquer campo. Sem isso, um título válido seguido de uma
-descrição longa demais deixaria a entidade renomeada em memória — e o EF
-persistiria essa meia-alteração no próximo `SaveChanges`. Há teste para os dois
-sentidos da falha.
+antes de atribuir qualquer campo. Sem isso, um título recusado depois de a
+descrição já ter sido trocada deixaria a entidade meio-editada em memória — e o
+EF persistiria essa meia-alteração no próximo `SaveChanges`. Hoje só o título
+pode ser recusado (em branco ou acima de 200 caracteres): a descrição não tem
+teto — é onde cabe o que não coube no título, e o SQLite guarda TEXT sem limite.
+A ordem de validação continua importando para quando outro campo ganhar regra.
 
 ## Persistência — o que a implementação confirmou
 
@@ -1299,8 +1301,9 @@ anotação continua sendo **texto puro no banco**, legível por qualquer coisa q
 abra o SQLite, em vez de RTF ou de uma árvore serializada presa a um pacote.
 
 **Por que campo nenhum foi criado.** `TaskItem.Description` já existia no
-domínio (4000 caracteres), no schema e no `UpdateTaskHandler` — faltava só a
-tela; nenhuma migration. Um campo novo custaria duas colunas com o mesmo
+domínio, no schema e no `UpdateTaskHandler` — faltava só a tela; nenhuma
+migration. (O campo tinha teto de 4000 caracteres; depois caiu — ver "Limites
+aceitos".) Um campo novo custaria duas colunas com o mesmo
 significado e duas respostas para "onde fica o texto deste checklist". Como
 `UpdateTask` é edição **atômica** de título, descrição e prioridade, a tela
 guarda os outros dois na carga e os devolve inalterados: o erro tentador seria
@@ -1354,8 +1357,11 @@ outra.
    se declarando visível; o teste da barra que some tem de olhar
    `IsEffectivelyVisible`.
 
-**Limites aceitos:** o teto de 4000 caracteres vale para o Markdown **com** os
-marcadores, e a tela bloqueia o botão antes de o domínio recusar. A janela de
+**Limites aceitos:** a anotação não tem teto de tamanho. Nasceu com 4000
+caracteres, mas anotação é justamente onde cabe o que não coube no título, e
+cortá-la seria perder o detalhe; o SQLite guarda TEXT sem limite, então a
+migration `UnboundedDescription` só atualiza o snapshot do EF. O rodapé mostra
+a contagem sem fração, para não sugerir um limite que não existe. A janela de
 gerenciamento de dados mostra `Description` como texto cru, então lá a anotação
 aparece com os asteriscos à mostra. E o parser não resolve ênfase aninhada que
 encosta no marcador de fora (`**muito *mesmo***`): o par de dentro sai literal.

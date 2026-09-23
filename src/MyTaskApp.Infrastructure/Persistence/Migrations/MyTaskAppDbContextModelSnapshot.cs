@@ -80,7 +80,6 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Description")
-                        .HasMaxLength(4000)
                         .HasColumnType("TEXT");
 
                     b.Property<int>("Priority")

@@ -26,20 +26,6 @@ public class TaskItemAtomicUpdateTests
     }
 
     [Fact]
-    public void Update_WithInvalidDescription_DoesNotApplyTheNewTitle()
-    {
-        var task = NewTask();
-        var tooLong = new string('d', TaskItem.MaxDescriptionLength + 1);
-
-        var update = () => task.Update("Título novo e válido", tooLong, TaskPriority.Urgent);
-
-        update.Should().Throw<DomainException>();
-        task.Title.Should().Be("Investigar estoque");
-        task.Description.Should().Be("descrição original");
-        task.Priority.Should().Be(TaskPriority.Low);
-    }
-
-    [Fact]
     public void Update_WithInvalidTitle_DoesNotApplyTheNewDescription()
     {
         var task = NewTask();
@@ -47,6 +33,20 @@ public class TaskItemAtomicUpdateTests
         var update = () => task.Update("   ", "descrição nova", TaskPriority.Urgent);
 
         update.Should().Throw<DomainException>();
+        task.Description.Should().Be("descrição original");
+        task.Priority.Should().Be(TaskPriority.Low);
+    }
+
+    [Fact]
+    public void Update_WithTitleBeyondMaximumLength_DoesNotApplyTheNewDescription()
+    {
+        var task = NewTask();
+        var tooLong = new string('t', TaskItem.MaxTitleLength + 1);
+
+        var update = () => task.Update(tooLong, "descrição nova", TaskPriority.Urgent);
+
+        update.Should().Throw<DomainException>();
+        task.Title.Should().Be("Investigar estoque");
         task.Description.Should().Be("descrição original");
         task.Priority.Should().Be(TaskPriority.Low);
     }
