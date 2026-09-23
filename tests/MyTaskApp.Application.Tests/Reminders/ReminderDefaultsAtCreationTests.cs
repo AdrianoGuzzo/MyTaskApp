@@ -155,6 +155,7 @@ public class ReminderDefaultsAtCreationTests
     private QuickCaptureHandler CaptureHandler() =>
         new(
             _repository,
+            new FakeTagRepository(),
             _repository,
             _settings,
             new FakeTaskAuditLog(),

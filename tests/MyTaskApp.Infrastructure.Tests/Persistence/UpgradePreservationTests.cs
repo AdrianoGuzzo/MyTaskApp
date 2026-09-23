@@ -181,6 +181,56 @@ public class UpgradePreservationTests
     }
 
     [Fact]
+    public async Task ChecklistsFromBeforeTags_ComeBackWithoutTagsAndCanReceiveThem()
+    {
+        // O banco como ele era antes das etiquetas (ADR-025).
+        await using var db = await new TempSqliteDatabase()
+            .MigrateToAsync("ManualOrder", Ct);
+
+        var taskId = Guid.CreateVersion7();
+
+        await using (var write = db.CreateContext())
+        {
+            var occurrenceId = Guid.CreateVersion7();
+            var createdAt = Now.UtcTicks;
+
+            await write.Database.ExecuteSqlAsync(
+                $"""
+                 INSERT INTO Tasks (Id, Title, Description, Priority, CreatedAt)
+                 VALUES ({taskId}, {"Renovar o contrato"}, NULL, 0, {createdAt});
+                 """,
+                Ct);
+
+            await write.Database.ExecuteSqlAsync(
+                $"""
+                 INSERT INTO TaskOccurrences
+                     (Id, TaskItemId, ScheduledDate, ScheduledTime, Status, CompletedAt)
+                 VALUES ({occurrenceId}, {taskId}, '2026-09-21', NULL, 0, NULL);
+                 """,
+                Ct);
+        }
+
+        await db.MigrateAsync(Ct);
+
+        var tag = MyTaskApp.Domain.Tags.Tag.Create("Contratos", "#3B82F6", Now);
+
+        await using (var write = db.CreateContext())
+        {
+            write.Tags.Add(tag);
+
+            var task = await new TaskItemRepository(write).FindByIdAsync(taskId, Ct);
+            task!.Title.Should().Be("Renovar o contrato");
+            task.Tags.Should().BeEmpty();
+
+            task.SetTags([tag.Id]);
+            await write.SaveChangesAsync(Ct);
+        }
+
+        await using var read = db.CreateContext();
+        (await read.TaskItemTags.SingleAsync(Ct)).TaskItemId.Should().Be(taskId);
+    }
+
+    [Fact]
     public async Task TheDatabaseIsCreatedOutsideTheInstallDirectory()
     {
         // Onde o initializer realmente escreve — não onde a configuração diz

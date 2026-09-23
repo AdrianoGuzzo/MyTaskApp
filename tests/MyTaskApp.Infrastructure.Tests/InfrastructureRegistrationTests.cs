@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Reminders;
+using MyTaskApp.Application.Tags;
 using MyTaskApp.Infrastructure;
 using MyTaskApp.Infrastructure.Persistence;
 
@@ -70,6 +71,8 @@ public class InfrastructureRegistrationTests : IDisposable
     [InlineData(typeof(ITodayQuery))]
     [InlineData(typeof(IReminderSettingsStore))]
     [InlineData(typeof(IDueReminderQuery))]
+    [InlineData(typeof(ITagRepository))]
+    [InlineData(typeof(ITagQuery))]
     public void EveryPort_IsWiredToAnImplementation(Type serviceType)
     {
         using var provider = BuildProvider();

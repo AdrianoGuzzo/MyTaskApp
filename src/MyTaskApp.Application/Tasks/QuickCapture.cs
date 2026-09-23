@@ -13,7 +13,12 @@ namespace MyTaskApp.Application.Tasks;
 /// tarefa. Uma linha é um título e nada mais — não há sintaxe a decorar, que é
 /// justamente o que torna o registro rápido.
 /// </summary>
-public sealed record QuickCapture(string Text);
+/// <param name="TagIds">
+/// Etiquetas escolhidas no botão da caixa de captura, aplicadas a todas as
+/// linhas (ADR-025). Escolha na tela, e não "#etiqueta" no texto: seria sintaxe
+/// a decorar, e um "#1" num título viraria etiqueta sem ninguém pedir.
+/// </param>
+public sealed record QuickCapture(string Text, IReadOnlyCollection<Guid>? TagIds = null);
 
 public sealed record QuickCaptureResult(IReadOnlyList<Guid> TaskIds)
 {
@@ -22,6 +27,7 @@ public sealed record QuickCaptureResult(IReadOnlyList<Guid> TaskIds)
 
 public sealed class QuickCaptureHandler(
     ITaskItemRepository tasks,
+    ITagRepository tags,
     IUnitOfWork unitOfWork,
     IReminderSettingsStore settings,
     ITaskAuditLog audit,
@@ -58,6 +64,9 @@ public sealed class QuickCaptureHandler(
         var createdAt = timeProvider.GetUtcNow();
         var today = TaskSchedule.On(clock.Today);
 
+        // Validadas antes de criar qualquer coisa, pelo mesmo tudo-ou-nada.
+        var tagIds = await tags.GetExistingAsync(command.TagIds, cancellationToken);
+
         // Uma leitura do padrao para o lote inteiro, nao uma por linha.
         var reminder = (await settings.GetAsync(cancellationToken)).DefaultPolicy;
 
@@ -67,6 +76,7 @@ public sealed class QuickCaptureHandler(
 
         foreach (var task in created)
         {
+            task.SetTags(tagIds);
             ReminderArming.Arm(task, task.Occurrences.Single(), clock, createdAt);
             await tasks.AddAsync(task, cancellationToken);
 
