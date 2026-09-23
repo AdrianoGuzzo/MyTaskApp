@@ -4,7 +4,7 @@ using MyTaskApp.Infrastructure.Agents;
 namespace MyTaskApp.Infrastructure.Tests.Agents;
 
 /// <summary>
-/// O tracker contra processos de verdade (ADR-029): vivo, morto, PID
+/// O tracker contra processos de verdade (ADR-030): vivo, morto, PID
 /// reaproveitado, e o aviso de fim sem polling. O processo usado é um shell
 /// esperando entrada — existe em qualquer máquina que rode os testes.
 /// </summary>

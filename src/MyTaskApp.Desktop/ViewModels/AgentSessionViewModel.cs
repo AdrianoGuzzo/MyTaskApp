@@ -36,7 +36,7 @@ public enum AgentPanelState
 }
 
 /// <summary>
-/// O card do agente de IA na aba Desenvolvimento (ADR-029): se ele está
+/// O card do agente de IA na aba Desenvolvimento (ADR-030): se ele está
 /// instalado, se há um terminal aberto para esta tarefa, e o botão que leva até
 /// esse terminal.
 /// </summary>

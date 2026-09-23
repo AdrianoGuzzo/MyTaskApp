@@ -139,7 +139,7 @@ public class TaskNotesRenderingTests
     /// para ler.
     /// </summary>
     [AvaloniaFact]
-    public async Task ACompletedItem_ShowsTheReadingGlyphInsteadOfThePencil()
+    public async Task ACompletedItem_ShowsTheReadingGlyphInsteadOfTheOpenOne()
     {
         var open = await ShowListAsync(
             new TodayBoard(Date, [], [], [Task("Fechar o mês")], [], []));

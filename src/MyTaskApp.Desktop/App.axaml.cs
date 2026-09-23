@@ -213,7 +213,7 @@ public sealed partial class App : Avalonia.Application
     }
 
     /// <summary>
-    /// Liga o monitor das sessões de agente (ADR-029). O primeiro tique
+    /// Liga o monitor das sessões de agente (ADR-030). O primeiro tique
     /// reencontra os terminais que ficaram abertos com o app fechado; depois,
     /// cada fim de processo acende ou apaga o selo da linha e o card da tarefa
     /// sem esperar o refresh de 60 s.
@@ -401,7 +401,7 @@ public sealed partial class App : Avalonia.Application
         services.GetRequiredService<LifecycleMaintenanceScheduler>().Dispose();
 
         // Só para de vigiar: o Claude continua aberto no terminal, e a próxima
-        // abertura o reencontra pelo PID (ADR-029).
+        // abertura o reencontra pelo PID (ADR-030).
         services.GetRequiredService<AgentSessionMonitor>().Dispose();
 
         _tray?.Dispose();

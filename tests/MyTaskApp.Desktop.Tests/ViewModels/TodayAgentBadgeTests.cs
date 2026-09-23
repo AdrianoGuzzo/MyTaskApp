@@ -17,7 +17,7 @@ namespace MyTaskApp.Desktop.Tests.ViewModels;
 
 /// <summary>
 /// O selo "● Claude Code" da linha leva ao terminal do agente sem abrir a
-/// tarefa (ADR-029).
+/// tarefa (ADR-030).
 /// </summary>
 public class TodayAgentBadgeTests
 {

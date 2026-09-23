@@ -68,10 +68,22 @@ public static class DependencyInjection
         services.AddSingleton(_ => GitLocator.ForCurrentSystem());
         services.AddSingleton<IGitClient, GitClient>();
 
+        // O que sobra do worktree quando algo segura a pasta (ADR-029).
+        if (OperatingSystem.IsWindows())
+        {
+            services.AddSingleton<IDirectoryLockFinder, WindowsDirectoryLockFinder>();
+        }
+        else
+        {
+            services.AddSingleton<IDirectoryLockFinder, NoDirectoryLockFinder>();
+        }
+
+        services.AddSingleton<IDirectoryRemover, FileSystemDirectoryRemover>();
+
         // Comandos pós-Worktree pelo shell do sistema (ADR-028).
         services.AddSingleton<ICommandExecutor, ShellCommandExecutor>();
 
-        // Agentes de IA num terminal real, por tarefa (ADR-029). Um agente novo
+        // Agentes de IA num terminal real, por tarefa (ADR-030). Um agente novo
         // é mais um IAgentCliProvider aqui; o terminal é escolhido por sistema.
         services.AddSingleton(_ => ExecutableLocator.ForCurrentSystem());
         services.AddSingleton<IAgentCliProvider, ClaudeCodeCliProvider>();

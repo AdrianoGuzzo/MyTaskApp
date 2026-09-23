@@ -43,6 +43,7 @@ public class ApplicationRegistrationTests
             .AddSingleton<ITerminalWindowManager>(new FakeTerminalWindowManager())
             .AddSingleton<ITerminalLauncher>(new FakeTerminalLauncher(new FakeAgentProcessTracker(), DateTimeOffset.UnixEpoch))
             .AddSingleton<IAgentCliProvider>(new FakeAgentCliProvider())
+            .AddSingleton<IDirectoryRemover>(new FakeDirectoryRemover())
             // Normalmente vem do composition root do Desktop (ADR-012).
             .AddSingleton<IUseCaseRunner>(new CountingUseCaseRunner())
             .AddApplication()
@@ -117,7 +118,7 @@ public class ApplicationRegistrationTests
 
     /// <summary>
     /// Os casos de uso avisam o mesmo monitor que vigia os processos — dois
-    /// objetos seriam dois donos dos vigias (ADR-029).
+    /// objetos seriam dois donos dos vigias (ADR-030).
     /// </summary>
     [Fact]
     public void TheSessionWatcher_IsTheMonitorItself()

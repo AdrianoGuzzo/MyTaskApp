@@ -24,7 +24,7 @@ public sealed record TodayOccurrenceRow(
     int? Position = null,
     /// <summary>As etiquetas do checklist, em ordem alfabética (ADR-025).</summary>
     IReadOnlyList<TagBadge>? Tags = null,
-    /// <summary>O agente de IA em execução para a tarefa, se houver (ADR-029).</summary>
+    /// <summary>O agente de IA em execução para a tarefa, se houver (ADR-030).</summary>
     string? ActiveAgentProviderId = null);
 
 /// <summary>O que a linha precisa de uma etiqueta: a bolinha e o nome do balão.</summary>

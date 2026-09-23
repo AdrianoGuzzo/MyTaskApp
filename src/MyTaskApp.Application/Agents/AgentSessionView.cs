@@ -2,7 +2,7 @@ using MyTaskApp.Domain.Agents;
 
 namespace MyTaskApp.Application.Agents;
 
-/// <summary>A sessão como a tela a mostra (ADR-029).</summary>
+/// <summary>A sessão como a tela a mostra (ADR-030).</summary>
 public sealed record AgentSessionView(
     Guid SessionId,
     Guid TaskId,

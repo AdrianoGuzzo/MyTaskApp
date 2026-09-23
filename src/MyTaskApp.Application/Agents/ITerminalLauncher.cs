@@ -1,7 +1,7 @@
 namespace MyTaskApp.Application.Agents;
 
 /// <summary>
-/// Abre um terminal real do sistema executando um programa (ADR-029). O app não
+/// Abre um terminal real do sistema executando um programa (ADR-030). O app não
 /// vira terminal: o usuário continua conversando com o agente na janela que
 /// abriu.
 /// </summary>

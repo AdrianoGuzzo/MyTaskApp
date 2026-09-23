@@ -1,7 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- [LibraryImport] e a tabela de handles do sistema (WindowsDirectoryLockFinder). -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
 
   <PropertyGroup>
-    <!-- [LibraryImport] gera codigo unsafe (WindowsTerminalWindowManager, ADR-029). -->
+    <!-- [LibraryImport] gera codigo unsafe (WindowsTerminalWindowManager, ADR-030). -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 

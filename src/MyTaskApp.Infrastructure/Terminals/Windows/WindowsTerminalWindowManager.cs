@@ -9,7 +9,7 @@ namespace MyTaskApp.Infrastructure.Terminals.Windows;
 
 /// <summary>
 /// Acha a janela de terminal de um processo pelo <b>PID</b> e a traz para a
-/// frente (ADR-029). Nunca pelo título: vários Claude abertos têm todos o mesmo.
+/// frente (ADR-030). Nunca pelo título: vários Claude abertos têm todos o mesmo.
 /// </summary>
 /// <remarks>
 /// <para>

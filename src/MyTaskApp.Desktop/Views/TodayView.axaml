@@ -243,7 +243,7 @@
             </StackPanel>
 
             <!--
-              Agente de IA aberto para a tarefa (ADR-029): discreto, como o ⚠,
+              Agente de IA aberto para a tarefa (ADR-030): discreto, como o ⚠,
               só para achar de relance qual tarefa tem um terminal rodando.
               Um clique traz o terminal para a frente (ver OnAgentBadgeTapped).
               HorizontalAlignment="Left": o alvo do clique é o texto, e não a

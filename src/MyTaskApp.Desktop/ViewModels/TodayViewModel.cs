@@ -396,7 +396,7 @@ public sealed partial class TodayViewModel(
 
     /// <summary>
     /// O clique no selo "● Claude Code" da linha leva ao terminal daquela
-    /// sessão, sem abrir a tarefa (ADR-029). É o mesmo caso de uso do botão
+    /// sessão, sem abrir a tarefa (ADR-030). É o mesmo caso de uso do botão
     /// "Abrir terminal do agente": nunca inicia um agente novo, e se o processo
     /// já acabou a sessão é encerrada e o selo some.
     /// </summary>

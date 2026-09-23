@@ -11,7 +11,7 @@ using MyTaskApp.Domain.Tasks;
 namespace MyTaskApp.Application.Tests.Agents;
 
 /// <summary>
-/// O monitor das sessões (ADR-029): reencontra o que ficou aberto, percebe o fim
+/// O monitor das sessões (ADR-030): reencontra o que ficou aberto, percebe o fim
 /// do processo por evento e, ao ser descartado, não encerra ninguém.
 /// </summary>
 public class AgentSessionMonitorTests

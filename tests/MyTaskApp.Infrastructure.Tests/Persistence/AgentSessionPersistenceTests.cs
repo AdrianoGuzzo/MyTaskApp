@@ -7,7 +7,7 @@ using MyTaskApp.Infrastructure.Persistence.Repositories;
 namespace MyTaskApp.Infrastructure.Tests.Persistence;
 
 /// <summary>
-/// As sessões de agente contra SQLite de verdade (ADR-029): o que sobrevive ao
+/// As sessões de agente contra SQLite de verdade (ADR-030): o que sobrevive ao
 /// app fechar, a sessão ativa única por tarefa e o selo da lista.
 /// </summary>
 public class AgentSessionPersistenceTests

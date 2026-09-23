@@ -6,7 +6,7 @@ using MyTaskApp.Infrastructure.Terminals.Windows;
 namespace MyTaskApp.Infrastructure.Tests.Agents;
 
 /// <summary>
-/// O que o launcher recusa antes de abrir qualquer janela (ADR-029). Nenhum
+/// O que o launcher recusa antes de abrir qualquer janela (ADR-030). Nenhum
 /// teste aqui abre terminal: todos param na validação.
 /// </summary>
 [SupportedOSPlatform("windows")]

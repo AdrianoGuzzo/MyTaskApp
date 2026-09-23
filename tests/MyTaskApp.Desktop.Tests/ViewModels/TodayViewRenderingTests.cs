@@ -141,7 +141,7 @@ public class TodayViewRenderingTests
         checkBox.CommandParameter.Should().BeOfType<TaskRowViewModel>();
     }
 
-    /// <summary>O selo do agente de IA aberto, só na tarefa que o tem (ADR-029).</summary>
+    /// <summary>O selo do agente de IA aberto, só na tarefa que o tem (ADR-030).</summary>
     [AvaloniaFact]
     public async Task ATaskWithARunningAgent_ShowsTheBadge_AndTheOthersDoNot()
     {

@@ -30,7 +30,7 @@ public sealed class ApplicationOptions
 
     /// <summary>
     /// De quanto em quanto tempo as sessões de agente são conferidas contra os
-    /// processos do sistema (ADR-029). É só rede de segurança: o fim de cada
+    /// processos do sistema (ADR-030). É só rede de segurança: o fim de cada
     /// processo já chega por evento, então não há por que ser curto.
     /// </summary>
     public int AgentSessionReconcileSeconds { get; set; } = 60;

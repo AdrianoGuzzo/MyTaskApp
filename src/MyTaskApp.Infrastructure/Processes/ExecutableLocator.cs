@@ -2,7 +2,7 @@ namespace MyTaskApp.Infrastructure.Processes;
 
 /// <summary>
 /// Acha um executável como caminho absoluto: PATH primeiro, depois pastas de
-/// instalação conhecidas (ADR-027, ADR-029).
+/// instalação conhecidas (ADR-027, ADR-030).
 /// </summary>
 /// <remarks>
 /// <para>

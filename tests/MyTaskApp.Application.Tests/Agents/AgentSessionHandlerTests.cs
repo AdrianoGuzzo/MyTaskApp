@@ -9,7 +9,7 @@ using MyTaskApp.Domain.Tasks;
 namespace MyTaskApp.Application.Tests.Agents;
 
 /// <summary>
-/// Abrir o agente no worktree, lembrar do processo e reencontrá-lo (ADR-029).
+/// Abrir o agente no worktree, lembrar do processo e reencontrá-lo (ADR-030).
 /// Nenhum terminal abre — launcher, processos e janelas são falsos.
 /// </summary>
 public class AgentSessionHandlerTests

@@ -27,7 +27,7 @@ internal sealed class AgentSessionConfiguration : IEntityTypeConfiguration<Agent
         // "A sessão mais recente da tarefa" é a pergunta de toda tela.
         builder.HasIndex(session => new { session.TaskItemId, session.StartedAt });
 
-        // Uma sessão ativa por tarefa (ADR-029). O caso de uso já recusa a
+        // Uma sessão ativa por tarefa (ADR-030). O caso de uso já recusa a
         // segunda; o índice parcial impede que outro caminho a grave.
         // Nomeado para não se confundir com o índice comum da chave estrangeira.
         builder.HasIndex(session => session.TaskItemId, "IX_AgentSessions_TaskItemId_Active")

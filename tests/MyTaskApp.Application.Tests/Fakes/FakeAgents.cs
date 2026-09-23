@@ -5,7 +5,7 @@ using MyTaskApp.Domain.Agents;
 
 namespace MyTaskApp.Application.Tests.Fakes;
 
-/// <summary>Sessões em memória (ADR-029).</summary>
+/// <summary>Sessões em memória (ADR-030).</summary>
 internal sealed class FakeAgentSessionRepository : IAgentSessionRepository
 {
     private readonly List<AgentSession> _sessions = [];

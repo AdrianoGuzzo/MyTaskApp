@@ -220,7 +220,7 @@ public class TaskNotesDevelopmentRenderingTests
             Repository, "origin/main", "feature/x", Repository + "-feature-x",
             Domain.Tasks.TaskDevelopmentStatus.Ready, DateTimeOffset.UnixEpoch, null);
 
-    /// <summary>O card do agente: PID e o botão que leva ao terminal (ADR-029).</summary>
+    /// <summary>O card do agente: PID e o botão que leva ao terminal (ADR-030).</summary>
     [AvaloniaFact]
     public async Task AReadyTaskWithTheAgentRunning_ShowsThePid_AndTheTerminalButton()
     {

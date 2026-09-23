@@ -5,7 +5,7 @@ namespace MyTaskApp.Application.Agents;
 
 /// <summary>
 /// Um agente de IA de linha de comando que o app sabe abrir num terminal
-/// (ADR-029). Hoje só existe o Claude Code; Codex, Gemini e outros entram como
+/// (ADR-030). Hoje só existe o Claude Code; Codex, Gemini e outros entram como
 /// novas implementações, sem mexer no fluxo.
 /// </summary>
 /// <remarks>
