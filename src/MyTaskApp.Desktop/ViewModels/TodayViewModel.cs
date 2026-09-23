@@ -292,6 +292,12 @@ public sealed partial class TodayViewModel(
     [RelayCommand]
     public void OpenTags() => TagsRequested?.Invoke();
 
+    /// <summary>Pede a janela de comandos globais (ADR-028).</summary>
+    public event Action? CommandsRequested;
+
+    [RelayCommand]
+    public void OpenCommands() => CommandsRequested?.Invoke();
+
     /// <summary>
     /// Prepara o seletor de etiquetas da linha. A lista é lida a cada abertura,
     /// e não junto com o quadro: ela só interessa a quem abriu o seletor, e

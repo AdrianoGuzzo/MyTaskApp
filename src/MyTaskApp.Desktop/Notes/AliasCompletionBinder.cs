@@ -4,15 +4,15 @@ using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.VisualTree;
-using MyTaskApp.Desktop.ViewModels;
 
 namespace MyTaskApp.Desktop.Notes;
 
 /// <summary>
-/// Liga uma <see cref="TextBox"/>, o <see cref="Popup"/> da lista e um
-/// <see cref="AliasCompletionViewModel"/> (ADR-026, ADR-027). O que depende de
-/// controle mora aqui: cursor, teclado, posição do popup e a troca do
-/// <c>@alias</c> pelo caminho, feita direto na caixa para o cursor não pular.
+/// Liga uma <see cref="TextBox"/>, o <see cref="Popup"/> da lista e uma
+/// <see cref="IAliasCompletionSource"/> (ADR-026, ADR-027, ADR-028). O que
+/// depende de controle mora aqui: cursor, teclado, posição do popup e a troca
+/// do <c>@alias</c> pelo que a fonte manda inserir, feita direto na caixa para
+/// o cursor não pular.
 /// </summary>
 /// <remarks>
 /// Existe para a anotação e o campo Diretório compartilharem o mesmo
@@ -25,9 +25,9 @@ internal sealed class AliasCompletionBinder
 
     private readonly Popup _popup;
 
-    private readonly Func<AliasCompletionViewModel?> _viewModel;
+    private readonly Func<IAliasCompletionSource?> _viewModel;
 
-    public AliasCompletionBinder(TextBox box, Popup popup, Func<AliasCompletionViewModel?> viewModel)
+    public AliasCompletionBinder(TextBox box, Popup popup, Func<IAliasCompletionSource?> viewModel)
     {
         _box = box;
         _popup = popup;
@@ -63,7 +63,7 @@ internal sealed class AliasCompletionBinder
                 viewModel.MoveSelection(-1);
                 return true;
             case Key.Enter or Key.Tab:
-                Accept(viewModel.SelectedSuggestion);
+                Accept(viewModel.SelectedItem);
                 return true;
             case Key.Escape:
                 viewModel.DismissCompletion();
@@ -74,21 +74,23 @@ internal sealed class AliasCompletionBinder
     }
 
     /// <summary>Se a sugestão é desta lista — para o clique saber a quem pertence.</summary>
-    public bool Owns(AliasSuggestionViewModel suggestion) =>
-        _viewModel()?.Suggestions.Contains(suggestion) == true;
+    public bool Owns(object suggestion) =>
+        _viewModel()?.ReplacementFor(suggestion) is not null;
 
     /// <summary>
-    /// Troca o "@alias" pelo path real. O texto não guarda o alias: é atalho de
-    /// digitação, não referência.
+    /// Troca o "@alias" pelo que a fonte manda: o path real, no diretório (o
+    /// texto não guarda o alias); o próprio alias, no comando (ele é referência).
     /// </summary>
-    public void Accept(AliasSuggestionViewModel? suggestion)
+    public void Accept(object? suggestion)
     {
-        if (suggestion is null || _viewModel() is not { CompletionToken: { } token } viewModel)
+        if (suggestion is null
+            || _viewModel() is not { CompletionToken: { } token } viewModel
+            || viewModel.ReplacementFor(suggestion) is not { } replacement)
         {
             return;
         }
 
-        var edit = AliasCompletion.Accept(_box.Text, token, _box.CaretIndex, suggestion.Path);
+        var edit = AliasCompletion.Accept(_box.Text, token, _box.CaretIndex, replacement);
 
         _box.Text = edit.Text;
         _box.CaretIndex = edit.CaretIndex;

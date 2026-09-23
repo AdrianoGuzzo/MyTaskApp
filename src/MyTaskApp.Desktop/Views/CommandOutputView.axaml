@@ -1,0 +1,121 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
+             x:Class="MyTaskApp.Desktop.Views.CommandOutputView"
+             x:DataType="vm:CommandOutputViewModel">
+
+  <!--
+    O "terminal" de um comando (ADR-028): o comando, as linhas na ordem em que
+    saíram (stderr em vermelho) e o rodapé com o exit code. A lista é
+    virtualizada e tem altura fixa: um npm install são milhares de linhas, e
+    dentro do ScrollViewer da aba uma lista sem teto desenharia todas.
+  -->
+
+  <UserControl.Styles>
+    <Style Selector="Border.terminal">
+      <Setter Property="Background" Value="{DynamicResource WidgetCanvasBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetStrokeSoftBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetPillRadius}" />
+      <Setter Property="Padding" Value="10,8" />
+    </Style>
+
+    <Style Selector="SelectableTextBlock.terminalText">
+      <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style Selector="SelectableTextBlock.terminalText.error">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetDangerBrush}" />
+    </Style>
+
+    <Style Selector="SelectableTextBlock.terminalText.command">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextMidBrush}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <Style Selector="ListBox.terminalLines">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Padding" Value="0" />
+    </Style>
+
+    <Style Selector="ListBox.terminalLines ListBoxItem">
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="ListBox.terminalLines ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="ListBox.terminalLines ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="TextBlock.terminalFooter">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextMidBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.terminalFooter.ok">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetAccentBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.terminalFooter.bad">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetDangerBrush}" />
+    </Style>
+  </UserControl.Styles>
+
+  <Border Classes="terminal">
+    <DockPanel>
+
+      <SelectableTextBlock DockPanel.Dock="Top"
+                           Classes="terminalText command"
+                           Margin="0,0,0,6"
+                           Text="{Binding HeaderText}"
+                           IsVisible="{Binding HasCommand}" />
+
+      <TextBlock DockPanel.Dock="Top"
+                 FontSize="11"
+                 Margin="0,0,0,4"
+                 Foreground="{DynamicResource WidgetTextLowBrush}"
+                 Text="{Binding DroppedLinesText}"
+                 IsVisible="{Binding HasDroppedLines}" />
+
+      <StackPanel DockPanel.Dock="Bottom" Spacing="4" Margin="0,6,0,0">
+        <SelectableTextBlock Classes="terminalText error"
+                             Text="{Binding Error}"
+                             IsVisible="{Binding HasError}" />
+        <TextBlock Classes="terminalFooter"
+                   x:Name="Footer"
+                   Classes.ok="{Binding IsSucceeded}"
+                   Classes.bad="{Binding IsFailed}"
+                   Text="{Binding FooterText}"
+                   IsVisible="{Binding HasFooter}" />
+        <TextBlock FontSize="11"
+                   Foreground="{DynamicResource WidgetTextLowBrush}"
+                   Text="Executando…"
+                   IsVisible="{Binding IsRunning}" />
+      </StackPanel>
+
+      <ListBox x:Name="LinesList"
+               Classes="terminalLines"
+               MaxHeight="320"
+               ItemsSource="{Binding Lines}"
+               ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="vm:CommandOutputLineViewModel">
+            <SelectableTextBlock Classes="terminalText"
+                                 Classes.error="{Binding IsError}"
+                                 Text="{Binding Text}" />
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+
+    </DockPanel>
+  </Border>
+</UserControl>

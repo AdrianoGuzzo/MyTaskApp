@@ -127,6 +127,87 @@ public sealed class GitWorktreeIntegrationTests : IAsyncLifetime
             .Should().BeTrue("a branch continua no repositório");
     }
 
+    /// <summary>
+    /// ADR-028 de ponta a ponta: worktree de verdade, banco de verdade, shell de
+    /// verdade. Os comandos rodam na pasta do worktree, em ordem, e param no
+    /// primeiro exit code diferente de zero.
+    /// </summary>
+    [Fact]
+    public async Task TheWholeFlow_ThenThePostWorktreeCommands_RunInsideTheWorktree()
+    {
+        Assert.SkipWhen(_executable is null, "Git não instalado nesta máquina.");
+
+        await using (var seed = _database!.CreateContext())
+        {
+            seed.DevelopmentCommands.Add(
+                MyTaskApp.Domain.Commands.DevelopmentCommand.Create("@marca", "echo criado> marcador.txt", null, Now));
+            await seed.SaveChangesAsync(Ct);
+        }
+
+        var task = await SeedTaskAsync();
+        var plan = await PrepareAsync(task, "refs/heads/main", []);
+
+        string[] commands = ["@marca", "git status --short", "exit 7", "echo nunca> nunca.txt"];
+
+        await using (var context = _database.CreateContext())
+        {
+            var view = await new StartDevelopmentHandler(
+                    new TaskItemRepository(context),
+                    new EfUnitOfWork(context),
+                    _git,
+                    new FileSystemDirectoryProbe(),
+                    new FakeTimeProvider(Now),
+                    NullLogger<StartDevelopmentHandler>.Instance)
+                .HandleAsync(new StartDevelopment(plan, plan.WorktreePath, Commands: commands), null, Ct);
+
+            view.Commands.Should().Equal(commands);
+        }
+
+        var lines = new List<MyTaskApp.Application.Commands.CommandStepProgress>();
+        MyTaskApp.Application.Commands.CommandRunSummary summary;
+
+        await using (var context = _database.CreateContext())
+        {
+            summary = await new RunDevelopmentCommandsHandler(
+                    new TaskItemRepository(context),
+                    new DevelopmentCommandRepository(context),
+                    new ShellCommandExecutor(TimeProvider.System),
+                    new FileSystemDirectoryProbe(),
+                    NullLogger<RunDevelopmentCommandsHandler>.Instance)
+                .HandleAsync(new RunDevelopmentCommands(task.Id), new LockedProgress(lines), Ct);
+        }
+
+        summary.Steps.Select(step => step.State).Should().Equal(
+            MyTaskApp.Application.Commands.CommandStepState.Succeeded,
+            MyTaskApp.Application.Commands.CommandStepState.Succeeded,
+            MyTaskApp.Application.Commands.CommandStepState.Failed,
+            MyTaskApp.Application.Commands.CommandStepState.NotRun);
+        summary.Steps[0].Command.Should().Be("echo criado> marcador.txt");
+        summary.Steps[1].Result!.StandardOutput.Should().Contain("marcador.txt", "o git status roda no worktree e vê o arquivo novo");
+        summary.Steps[2].Result!.ExitCode.Should().Be(7);
+
+        File.Exists(Path.Combine(ExpectedWorktree, "marcador.txt")).Should().BeTrue();
+        File.Exists(Path.Combine(Repository, "marcador.txt")).Should().BeFalse("o comando roda no worktree, não no repositório");
+        File.Exists(Path.Combine(ExpectedWorktree, "nunca.txt")).Should().BeFalse("a falha interrompe a sequência");
+
+        lock (lines)
+        {
+            lines.Should().Contain(report => report.Index == 1 && report.Line != null && report.Line.Text.Contains("marcador.txt"));
+        }
+    }
+
+    private sealed class LockedProgress(List<MyTaskApp.Application.Commands.CommandStepProgress> reports)
+        : IProgress<MyTaskApp.Application.Commands.CommandStepProgress>
+    {
+        public void Report(MyTaskApp.Application.Commands.CommandStepProgress value)
+        {
+            lock (reports)
+            {
+                reports.Add(value);
+            }
+        }
+    }
+
     [Fact]
     public async Task LocalChanges_BlockTheUpdateOfTheCheckedOutSource_AndAreKept()
     {
