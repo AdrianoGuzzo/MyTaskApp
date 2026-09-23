@@ -91,6 +91,10 @@ internal static class AppServices
             .AddSingleton<DataManagementViewModel>()
             .AddSingleton<DataManagementWindow>()
 
+            // Abrir pasta, terminal e link fora do app (ADR-027). Sem estado,
+            // como o clipboard: descobre a janela a cada pedido.
+            .AddSingleton<IShellLauncher, ShellLauncher>()
+
             // Etiquetas (ADR-025): janela única, como a de gerenciamento de dados.
             .AddSingleton<TagsViewModel>()
             .AddSingleton<TagsWindow>()
@@ -100,6 +104,10 @@ internal static class AppServices
             // diferentes, e o truque do "X que esconde" so faz sentido para
             // quem tem uma instancia so.
             .AddTransient<TaskNotesViewModel>()
+
+            // A aba Desenvolvimento de cada anotação (ADR-027): uma por janela,
+            // como a própria anotação.
+            .AddTransient<TaskDevelopmentViewModel>()
             .AddApplication(configuration)
             .AddInfrastructure(configuration)
             .BuildServiceProvider(validateScopes: true);

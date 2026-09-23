@@ -85,6 +85,93 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                     b.ToTable("Tags", (string)null);
                 });
 
+            modelBuilder.Entity("MyTaskApp.Domain.Tags.TagDirectory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Alias")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT")
+                        .UseCollation("NOCASE");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Path")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("TagId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TagId", "Alias")
+                        .IsUnique();
+
+                    b.ToTable("TagDirectories", (string)null);
+                });
+
+            modelBuilder.Entity("MyTaskApp.Domain.Tasks.TaskDevelopment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Branch")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("FailureReason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RepositoryPath")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SourceBranch")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("StatusChangedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("TaskItemId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("WorktreePath")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TaskItemId")
+                        .IsUnique();
+
+                    b.ToTable("TaskDevelopments", (string)null);
+                });
+
             modelBuilder.Entity("MyTaskApp.Domain.Tasks.TaskItem", b =>
                 {
                     b.Property<Guid>("Id")
@@ -242,6 +329,24 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("MyTaskApp.Domain.Tags.TagDirectory", b =>
+                {
+                    b.HasOne("MyTaskApp.Domain.Tags.Tag", null)
+                        .WithMany("Directories")
+                        .HasForeignKey("TagId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MyTaskApp.Domain.Tasks.TaskDevelopment", b =>
+                {
+                    b.HasOne("MyTaskApp.Domain.Tasks.TaskItem", null)
+                        .WithOne("Development")
+                        .HasForeignKey("MyTaskApp.Domain.Tasks.TaskDevelopment", "TaskItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("MyTaskApp.Domain.Tasks.TaskItem", b =>
                 {
                     b.OwnsOne("MyTaskApp.Domain.Reminders.ReminderPolicy", "Reminder", b1 =>
@@ -352,8 +457,15 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("MyTaskApp.Domain.Tags.Tag", b =>
+                {
+                    b.Navigation("Directories");
+                });
+
             modelBuilder.Entity("MyTaskApp.Domain.Tasks.TaskItem", b =>
                 {
+                    b.Navigation("Development");
+
                     b.Navigation("Occurrences");
 
                     b.Navigation("Tags");

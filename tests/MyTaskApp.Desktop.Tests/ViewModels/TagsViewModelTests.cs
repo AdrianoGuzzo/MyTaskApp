@@ -17,13 +17,14 @@ public class TagsViewModelTests
 
     private readonly FakeUseCaseRunner _runner = new();
     private readonly FakeConfirmationDialog _confirmation = new();
+    private readonly FakeDirectoryProbe _probe = new();
 
     private TagsViewModel ViewModel(params TagRow[] tags)
     {
         _runner.ResultsByHandler[typeof(GetTagsHandler)] = (IReadOnlyList<TagRow>)tags;
         _runner.ResultsByHandler[typeof(CreateTagHandler)] = Guid.NewGuid();
 
-        return new TagsViewModel(_runner, _confirmation, NullLogger<TagsViewModel>.Instance);
+        return new TagsViewModel(_runner, _confirmation, _probe, NullLogger<TagsViewModel>.Instance);
     }
 
     [Fact]

@@ -9,6 +9,8 @@ public sealed class Tag
 {
     public const int MaxNameLength = 40;
 
+    private readonly List<TagDirectory> _directories = [];
+
     private Tag(Guid id, string name, string colorHex, DateTimeOffset createdAt)
     {
         Id = id;
@@ -25,6 +27,9 @@ public sealed class Tag
     public string ColorHex { get; private set; }
 
     public DateTimeOffset CreatedAt { get; }
+
+    /// <summary>As pastas da etiqueta, com o alias que as chama na anotação (ADR-026).</summary>
+    public IReadOnlyList<TagDirectory> Directories => _directories.AsReadOnly();
 
     public static Tag Create(string name, string colorHex, DateTimeOffset createdAt) =>
         new(Guid.CreateVersion7(createdAt), NormalizeName(name), TagColor.Normalize(colorHex), createdAt);
@@ -55,5 +60,56 @@ public sealed class Tag
         }
 
         return normalized;
+    }
+
+    /// <summary>
+    /// Acrescenta uma pasta. O alias é único <b>dentro da etiqueta</b>: duas
+    /// etiquetas podem ter um <c>@api</c> cada, e o autocomplete mostra de qual
+    /// etiqueta é cada um.
+    /// </summary>
+    public TagDirectory AddDirectory(
+        string alias,
+        string path,
+        string? name,
+        string? description,
+        DateTimeOffset createdAt)
+    {
+        var directory = TagDirectory.Create(Id, alias, path, name, description, createdAt);
+
+        EnsureAliasIsFree(directory.Alias, exceptId: null);
+
+        _directories.Add(directory);
+
+        return directory;
+    }
+
+    public void UpdateDirectory(
+        Guid directoryId,
+        string alias,
+        string path,
+        string? name,
+        string? description)
+    {
+        var directory = GetDirectory(directoryId);
+
+        EnsureAliasIsFree(TagDirectory.NormalizeAlias(alias), directoryId);
+
+        directory.Update(alias, path, name, description);
+    }
+
+    public void RemoveDirectory(Guid directoryId) => _directories.Remove(GetDirectory(directoryId));
+
+    private TagDirectory GetDirectory(Guid directoryId) =>
+        _directories.Find(directory => directory.Id == directoryId)
+        ?? throw new DomainException("Diretório não encontrado.");
+
+    private void EnsureAliasIsFree(string alias, Guid? exceptId)
+    {
+        if (_directories.Exists(directory =>
+                directory.Id != exceptId
+                && string.Equals(directory.Alias, alias, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new DomainException($"Esta etiqueta já tem um diretório {alias}.");
+        }
     }
 }

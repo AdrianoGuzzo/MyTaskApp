@@ -5,9 +5,9 @@
         x:DataType="vm:TagsViewModel"
         x:Name="Root"
         Title="Etiquetas"
-        Width="460"
-        Height="600"
-        MinWidth="380"
+        Width="540"
+        Height="640"
+        MinWidth="440"
         MinHeight="440"
         WindowStartupLocation="CenterOwner">
 
@@ -73,6 +73,12 @@
 
     <Style Selector="Button.swatch.selected">
       <Setter Property="BorderBrush" Value="{DynamicResource WidgetTextHighBrush}" />
+    </Style>
+
+    <Style Selector="ToggleButton.rowAction">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Padding" Value="8,3" />
+      <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
     <Style Selector="Button.rowAction">
@@ -203,7 +209,8 @@
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="vm:TagListItemViewModel">
               <Border Classes="card" Margin="0,0,0,6" Padding="10,7">
-                <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                <StackPanel Spacing="8">
+                <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto">
 
                   <Ellipse Grid.Column="0"
                            Width="12"
@@ -220,19 +227,150 @@
                     <TextBlock Classes="meta" Text="{Binding UsageLabel}" />
                   </StackPanel>
 
-                  <Button Grid.Column="2"
+                  <ToggleButton Grid.Column="2"
+                                Classes="rowAction"
+                                Margin="8,0,0,0"
+                                Content="{Binding DirectoriesLabel}"
+                                IsChecked="{Binding IsExpanded, Mode=OneWay}"
+                                ToolTip.Tip="Pastas desta etiqueta. O alias delas insere o caminho na anotação."
+                                Command="{Binding #Root.((vm:TagsViewModel)DataContext).ToggleDirectoriesCommand}"
+                                CommandParameter="{Binding}" />
+
+                  <Button Grid.Column="3"
                           Classes="rowAction"
-                          Margin="8,0,6,0"
+                          Margin="6,0,6,0"
                           Content="Editar"
                           Command="{Binding #Root.((vm:TagsViewModel)DataContext).EditCommand}"
                           CommandParameter="{Binding}" />
 
-                  <Button Grid.Column="3"
+                  <Button Grid.Column="4"
                           Classes="rowAction danger"
                           Content="Excluir"
                           Command="{Binding #Root.((vm:TagsViewModel)DataContext).DeleteCommand}"
                           CommandParameter="{Binding}" />
                 </Grid>
+
+                <!--
+                  Diretórios da etiqueta (ADR-026). O alias é só atalho: na
+                  anotação, "@" + alias insere o path, e o texto não guarda
+                  vínculo nenhum com este cadastro.
+                -->
+                <StackPanel Spacing="6" IsVisible="{Binding IsExpanded}">
+
+                  <Border Height="1" Background="{DynamicResource WidgetStrokeSoftBrush}" />
+
+                  <TextBlock Classes="meta"
+                             TextWrapping="Wrap"
+                             IsVisible="{Binding HasNoDirectories}"
+                             Text="Nenhum diretório ainda. Na anotação de uma tarefa com esta etiqueta, digitar @ + alias insere o caminho da pasta." />
+
+                  <ItemsControl ItemsSource="{Binding Directories}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:TagDirectoryItemViewModel">
+                        <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,0,0,4">
+
+                          <!-- ✓ a pasta existe agora; ⚠ não existe (o cadastro continua valendo). -->
+                          <Panel Grid.Column="0" Width="18" Margin="0,1,6,0"
+                                 VerticalAlignment="Top"
+                                 ToolTip.Tip="{Binding ExistenceTip}">
+                            <TextBlock Text="&#x2713;"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource WidgetAccentBrush}"
+                                       IsVisible="{Binding IsFound}" />
+                            <TextBlock Text="&#x26A0;"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource WidgetCautionBrush}"
+                                       IsVisible="{Binding IsMissing}" />
+                          </Panel>
+
+                          <StackPanel Grid.Column="1" Spacing="1">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                              <TextBlock Text="{Binding Alias}"
+                                         FontSize="12"
+                                         FontWeight="SemiBold" />
+                              <TextBlock Classes="meta"
+                                         Text="{Binding Name}"
+                                         IsVisible="{Binding HasName}"
+                                         TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                            <TextBlock Classes="meta"
+                                       Text="{Binding Path}"
+                                       TextTrimming="PrefixCharacterEllipsis"
+                                       ToolTip.Tip="{Binding Path}" />
+                            <TextBlock Classes="meta"
+                                       Text="{Binding Description}"
+                                       TextWrapping="Wrap"
+                                       IsVisible="{Binding Description, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                          </StackPanel>
+
+                          <Button Grid.Column="2"
+                                  Classes="rowAction"
+                                  Margin="6,0,6,0"
+                                  VerticalAlignment="Top"
+                                  Content="Editar"
+                                  Command="{Binding #Root.((vm:TagsViewModel)DataContext).EditDirectoryCommand}"
+                                  CommandParameter="{Binding}" />
+
+                          <Button Grid.Column="3"
+                                  Classes="rowAction danger"
+                                  VerticalAlignment="Top"
+                                  Content="Excluir"
+                                  Command="{Binding #Root.((vm:TagsViewModel)DataContext).DeleteDirectoryCommand}"
+                                  CommandParameter="{Binding}" />
+                        </Grid>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+
+                  <!-- Formulário: acrescenta, ou altera o diretório escolhido em "Editar". -->
+                  <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto"
+                        ColumnSpacing="6" RowSpacing="6">
+
+                    <TextBox Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2"
+                             FontSize="12"
+                             MaxLength="40"
+                             PlaceholderText="Alias (ex.: @ecossistema-core)"
+                             Text="{Binding Alias}" />
+
+                    <TextBox Grid.Row="1" Grid.Column="0"
+                             FontSize="12"
+                             MaxLength="1024"
+                             PlaceholderText="Caminho (ex.: C:\Projetos\ecossistema-core)"
+                             Text="{Binding Path}" />
+
+                    <Button Grid.Row="1" Grid.Column="1"
+                            Classes="rowAction"
+                            Content="Procurar…"
+                            ToolTip.Tip="Escolher a pasta"
+                            Click="OnBrowseFolderClick" />
+
+                    <TextBox Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2"
+                             FontSize="12"
+                             MaxLength="80"
+                             PlaceholderText="Nome (opcional)"
+                             Text="{Binding DirectoryName}" />
+
+                    <TextBox Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2"
+                             FontSize="12"
+                             MaxLength="500"
+                             PlaceholderText="Descrição (opcional)"
+                             Text="{Binding DirectoryDescription}" />
+                  </Grid>
+
+                  <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Right">
+                    <Button Classes="rowAction"
+                            Content="Cancelar"
+                            IsVisible="{Binding IsEditingDirectory}"
+                            Command="{Binding #Root.((vm:TagsViewModel)DataContext).CancelDirectoryEditCommand}"
+                            CommandParameter="{Binding}" />
+                    <Button Classes="rowAction accent"
+                            Content="{Binding DirectorySaveLabel}"
+                            Command="{Binding #Root.((vm:TagsViewModel)DataContext).SaveDirectoryCommand}"
+                            CommandParameter="{Binding}" />
+                  </StackPanel>
+
+                </StackPanel>
+                </StackPanel>
               </Border>
             </DataTemplate>
           </ItemsControl.ItemTemplate>

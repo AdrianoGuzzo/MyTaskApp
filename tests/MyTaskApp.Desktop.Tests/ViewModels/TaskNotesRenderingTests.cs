@@ -158,6 +158,8 @@ public class TaskNotesRenderingTests
     {
         var viewModel = new TaskNotesViewModel(
             new FakeUseCaseRunner(),
+            new FakeDirectoryProbe(),
+            TestDevelopment.For(new FakeUseCaseRunner()),
             NullLogger<TaskNotesViewModel>.Instance);
 
         viewModel.Load(row);
