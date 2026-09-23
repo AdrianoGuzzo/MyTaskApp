@@ -44,6 +44,7 @@ public static class DependencyInjection
         services.AddScoped<IDueReminderQuery, DueReminderQuery>();
         services.AddScoped<ITagRepository, TagRepository>();
         services.AddScoped<ITagQuery, TagQuery>();
+        services.AddScoped<IDevelopmentCommandRepository, DevelopmentCommandRepository>();
 
         // Ciclo de vida: auditoria, configuracao de retencao e as consultas das
         // areas de arquivados/lixeira e da varredura automatica.
@@ -58,6 +59,9 @@ public static class DependencyInjection
         services.AddSingleton<IProcessRunner, ProcessRunner>();
         services.AddSingleton(_ => GitLocator.ForCurrentSystem());
         services.AddSingleton<IGitClient, GitClient>();
+
+        // Comandos pós-Worktree pelo shell do sistema (ADR-028).
+        services.AddSingleton<ICommandExecutor, ShellCommandExecutor>();
 
         return services;
     }

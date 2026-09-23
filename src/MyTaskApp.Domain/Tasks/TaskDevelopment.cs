@@ -45,6 +45,10 @@ public sealed class TaskDevelopment
 
     public const int MaxFailureLength = 2000;
 
+    public const int MaxCommands = 50;
+
+    private readonly List<TaskDevelopmentCommand> _commands = [];
+
     private TaskDevelopment(Guid id, Guid taskItemId)
     {
         Id = id;
@@ -75,6 +79,13 @@ public sealed class TaskDevelopment
 
     /// <summary>O motivo, em pt-BR, quando <see cref="Status"/> é <see cref="TaskDevelopmentStatus.Error"/>.</summary>
     public string? FailureReason { get; private set; }
+
+    /// <summary>
+    /// Os comandos pós-Worktree, na ordem de execução (ADR-028). Vazio é o fluxo
+    /// de antes: cria o worktree e pronto.
+    /// </summary>
+    public IReadOnlyList<TaskDevelopmentCommand> Commands =>
+        _commands.OrderBy(command => command.Order).ToList().AsReadOnly();
 
     internal static TaskDevelopment Begin(
         Guid taskItemId,
@@ -113,6 +124,39 @@ public sealed class TaskDevelopment
         CreatedAt = at;
         StatusChangedAt = at;
         FailureReason = null;
+    }
+
+    /// <summary>
+    /// Troca a lista inteira, na ordem dada. Reaproveita as linhas que já existem
+    /// — reescreve texto e posição — em vez de apagar e inserir tudo de novo.
+    /// </summary>
+    internal void ReplaceCommands(IEnumerable<string?>? commands, DateTimeOffset at)
+    {
+        var normalized = TaskDevelopmentCommand.NormalizeList(commands);
+
+        if (normalized.Count > MaxCommands)
+        {
+            throw new DomainException($"A lista aceita até {MaxCommands} comandos.");
+        }
+
+        var existing = _commands.OrderBy(command => command.Order).ToList();
+
+        for (var index = 0; index < normalized.Count; index++)
+        {
+            if (index < existing.Count)
+            {
+                existing[index].Place(normalized[index], index);
+            }
+            else
+            {
+                _commands.Add(TaskDevelopmentCommand.Create(Id, normalized[index], index, at));
+            }
+        }
+
+        foreach (var surplus in existing.Skip(normalized.Count))
+        {
+            _commands.Remove(surplus);
+        }
     }
 
     internal void MarkReady(DateTimeOffset at)

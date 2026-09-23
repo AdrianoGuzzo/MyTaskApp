@@ -3,6 +3,7 @@
         xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
         xmlns:notes="using:MyTaskApp.Desktop.Notes"
         xmlns:dev="using:MyTaskApp.Desktop.Development"
+        xmlns:views="using:MyTaskApp.Desktop.Views"
         x:Class="MyTaskApp.Desktop.Views.TaskNotesWindow"
         x:DataType="vm:TaskNotesViewModel"
         x:Name="Root"
@@ -718,6 +719,14 @@
                                        Text="{Binding WorktreePreview, FallbackValue='—', TargetNullValue='—'}" />
                 </StackPanel>
 
+                <!-- Comandos pós-Worktree (ADR-028): gravados junto, rodam depois de criar. -->
+                <StackPanel Spacing="6">
+                  <views:PostWorktreeCommandsView x:Name="SetupCommands" DataContext="{Binding Commands}" />
+                  <Button HorizontalAlignment="Left"
+                          Content="Gerenciar comandos globais…"
+                          Command="{Binding OpenGlobalCommandsCommand}" />
+                </StackPanel>
+
                 <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
                   <Button Content="Cancelar"
                           Command="{Binding CancelRunCommand}"
@@ -882,6 +891,23 @@
                     </Border>
                   </StackPanel>
                 </Border>
+
+                <!-- Comandos pós-Worktree (ADR-028): a última execução e rodar de novo. -->
+                <Border Height="1" Margin="0,4,0,0" Background="{DynamicResource WidgetStrokeSoftBrush}" />
+
+                <views:PostWorktreeCommandsView x:Name="ReadyCommands" DataContext="{Binding Commands}" />
+
+                <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
+                  <Button x:Name="RunCommandsButton"
+                          Content="Executar comandos"
+                          IsEnabled="{Binding !Commands.IsRunning}"
+                          Command="{Binding RunCommandsCommand}" />
+                  <Button Content="Salvar comandos"
+                          IsVisible="{Binding Commands.IsDirty}"
+                          IsEnabled="{Binding !Commands.IsRunning}"
+                          Command="{Binding SaveCommandsCommand}" />
+                  <Button Content="Gerenciar comandos globais…" Command="{Binding OpenGlobalCommandsCommand}" />
+                </WrapPanel>
               </StackPanel>
             </Border>
 
