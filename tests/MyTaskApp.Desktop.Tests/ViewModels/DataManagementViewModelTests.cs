@@ -118,6 +118,66 @@ public class DataManagementViewModelTests
     }
 
     // ------------------------------------------------------------------
+    // Concluídos
+    // ------------------------------------------------------------------
+
+    private static ChecklistSummaryRow ConcludedRow(string title = "Pagar o boleto") =>
+        new(
+            Guid.CreateVersion7(),
+            title,
+            "Vence dia 10",
+            TaskPriority.Normal,
+            Now.AddDays(-3),
+            Now.AddDays(-2),
+            null,
+            null,
+            null,
+            TotalItems: 1,
+            CompletedItems: 1);
+
+    [Fact]
+    public void AConcludedCard_SaysItIsConcludedAndWhen()
+    {
+        var card = Card(ConcludedRow());
+
+        card.StateLabel.Should().Be("CONCLUÍDO");
+        card.WhenLabel.Should().StartWith("Concluído em ");
+        card.IsArchived.Should().BeFalse();
+        card.IsInTrash.Should().BeFalse();
+        card.HasDaysLeft.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Loading_FillsTheConcludedArea()
+    {
+        RetentionIs(DataRetentionPolicy.Factory);
+        AreaReturns(DataRetentionPolicy.Factory, ConcludedRow());
+
+        var viewModel = ViewModel();
+        await viewModel.LoadAsync(Ct);
+
+        viewModel.Concluded.Select(card => card.Title).Should().Equal("Pagar o boleto");
+        viewModel.HasConcluded.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ArchivingAConcludedChecklist_DoesNotAskAndTellsTheMainList()
+    {
+        AreaReturns(DataRetentionPolicy.Factory);
+
+        var viewModel = ViewModel();
+        var notified = 0;
+        viewModel.ChecklistsChanged += () => notified++;
+
+        await viewModel.ArchiveAsync(Card(ConcludedRow()), Ct);
+
+        _runner.Invoked.Should().Contain(typeof(ArchiveChecklistHandler));
+        _confirmation.Asked.Should().BeEmpty();
+        viewModel.StatusMessage.Should().Be("Checklist arquivado.");
+        notified.Should().Be(1);
+    }
+
+    // ------------------------------------------------------------------
     // Restauração
     // ------------------------------------------------------------------
 
