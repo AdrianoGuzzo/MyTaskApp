@@ -268,13 +268,63 @@ public class PrepareDevelopmentHandlerTests
     }
 
     [Fact]
-    public async Task AnExistingBranch_IsRefused_IgnoringCase()
+    public async Task AnExistingLocalBranch_IsReused_InItsOwnSpelling()
     {
-        _git.Branches.Add(GitBranch.Local("Feature/123-Corrigir-Animais"));
+        var existing = GitBranch.Local("Feature/123-Corrigir-Animais");
+        _git.Branches.Add(existing);
+
+        var plan = await PrepareAsync();
+
+        plan.ExistingBranch.Should().Be(existing);
+        plan.NewBranch.Should().Be("Feature/123-Corrigir-Animais");
+        var report = _progress.Last(DevelopmentStep.ValidateBranchName)!;
+        report.State.Should().Be(DevelopmentStepState.Warning);
+        report.Note.Should().Contain("já existe");
+    }
+
+    [Fact]
+    public async Task AnExistingBranch_OpenInAnotherWorktree_IsRefused()
+    {
+        _git.Branches.Add(GitBranch.Local("feature/123-corrigir-animais"));
+        _git.Worktrees.Add(new GitWorktree("C:/Outro/lugar", "refs/heads/feature/123-corrigir-animais"));
 
         var failure = await FailsAt(DevelopmentStep.ValidateBranchName, () => PrepareAsync());
 
-        failure.Message.Should().Contain("já existe");
+        failure.Message.Should().Contain("aberta em").And.Contain(@"C:\Outro\lugar");
+    }
+
+    [Fact]
+    public async Task AnExistingBranch_OpenAtThePlannedPath_BecomesAnAdoptableConflict()
+    {
+        _git.Branches.Add(GitBranch.Local("feature/123-corrigir-animais"));
+        _git.Worktrees.Add(new GitWorktree(Expected.Replace('\\', '/'), "refs/heads/feature/123-corrigir-animais"));
+        _disk.Existing.Add(Expected);
+
+        var plan = await PrepareAsync();
+
+        plan.Conflict!.CanAdopt.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ABranchOnlyOnTheRemote_IsFollowed_PreferringTheSourceRemote()
+    {
+        _git.Branches.Add(GitBranch.RemoteTracking("fork", "feature/123-corrigir-animais"));
+        _git.Branches.Add(GitBranch.RemoteTracking("origin", "Feature/123-Corrigir-Animais"));
+
+        var plan = await PrepareAsync();
+
+        plan.ExistingBranch!.FullRef.Should().Be("refs/remotes/origin/Feature/123-Corrigir-Animais");
+        plan.NewBranch.Should().Be("Feature/123-Corrigir-Animais");
+        _progress.Last(DevelopmentStep.ValidateBranchName)!.Note.Should().Contain("origin/Feature/123-Corrigir-Animais");
+    }
+
+    [Fact]
+    public async Task ANewBranch_HasNoExistingBranch()
+    {
+        var plan = await PrepareAsync();
+
+        plan.ExistingBranch.Should().BeNull();
+        _progress.Last(DevelopmentStep.ValidateBranchName)!.State.Should().Be(DevelopmentStepState.Done);
     }
 
     [Fact]

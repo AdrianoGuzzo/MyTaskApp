@@ -98,6 +98,39 @@ public class GitClientTests
     }
 
     [Fact]
+    public async Task AddWorktreeForBranch_ChecksOutTheShortName_WithoutCreatingABranch()
+    {
+        _runner.Respond("worktree", new ProcessResult(0, "", "Preparing worktree", false));
+
+        await Client().AddWorktreeForBranchAsync(Repository, @"C:\Projects\eco core-feature-x", "feature/x", Ct);
+
+        _runner.Requests.Single().Arguments.Should().Equal(
+            "-c", "core.quotepath=false",
+            "-C", Repository,
+            "worktree", "add", @"C:\Projects\eco core-feature-x", "feature/x");
+    }
+
+    [Fact]
+    public async Task AddWorktreeTracking_CreatesTheLocalBranchFollowingTheRemote()
+    {
+        _runner.Respond("worktree", new ProcessResult(0, "", "Preparing worktree", false));
+
+        await Client().AddWorktreeTrackingAsync(
+            Repository,
+            @"C:\Projects\eco core-feature-x",
+            "feature/x",
+            "refs/remotes/origin/feature/x",
+            Ct);
+
+        _runner.Requests.Single().Arguments.Should().Equal(
+            "-c", "core.quotepath=false",
+            "-C", Repository,
+            "worktree", "add", "--track", "-b", "feature/x",
+            @"C:\Projects\eco core-feature-x",
+            "refs/remotes/origin/feature/x");
+    }
+
+    [Fact]
     public async Task RemoveWorktree_NeverForces()
     {
         _runner.Respond("worktree", new ProcessResult(0, "", "", false));

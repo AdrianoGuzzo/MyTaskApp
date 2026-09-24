@@ -172,6 +172,48 @@ internal sealed class FakeGitClient : IGitClient
         return Task.FromResult(Ok("git " + command));
     }
 
+    public Task<GitCommandResult> AddWorktreeForBranchAsync(
+        string repository,
+        string path,
+        string branch,
+        CancellationToken cancellationToken = default)
+    {
+        var command = $"worktree add {path} {branch}";
+        Calls.Add(command);
+
+        if (AddWorktreeFailure is { } failure)
+        {
+            return Task.FromResult(failure);
+        }
+
+        Worktrees.Add(new GitWorktree(path.Replace('\\', '/'), GitBranch.LocalPrefix + branch));
+        Repositories[path] = path.Replace('\\', '/');
+
+        return Task.FromResult(Ok("git " + command));
+    }
+
+    public Task<GitCommandResult> AddWorktreeTrackingAsync(
+        string repository,
+        string path,
+        string newBranch,
+        string remoteBranch,
+        CancellationToken cancellationToken = default)
+    {
+        var command = $"worktree add --track -b {newBranch} {path} {remoteBranch}";
+        Calls.Add(command);
+
+        if (AddWorktreeFailure is { } failure)
+        {
+            return Task.FromResult(failure);
+        }
+
+        Worktrees.Add(new GitWorktree(path.Replace('\\', '/'), GitBranch.LocalPrefix + newBranch));
+        Branches.Add(GitBranch.Local(newBranch, upstreamRef: remoteBranch));
+        Repositories[path] = path.Replace('\\', '/');
+
+        return Task.FromResult(Ok("git " + command));
+    }
+
     public Task<string?> GetCurrentBranchAsync(string workingTree, CancellationToken cancellationToken = default) =>
         Task.FromResult(Worktrees.FirstOrDefault(worktree => WorktreePathPlanner.SamePath(worktree.Path, workingTree))?.BranchName);
 

@@ -179,6 +179,27 @@ public interface IGitClient
         string startRef,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// <c>git -C repo worktree add {path} {branch}</c>: faz checkout de uma branch
+    /// local que já existe. O nome é o curto — <c>refs/heads/x</c> daria HEAD destacado.
+    /// </summary>
+    Task<GitCommandResult> AddWorktreeForBranchAsync(
+        string repository,
+        string path,
+        string branch,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// <c>git -C repo worktree add --track -b {newBranch} {path} {remoteBranch}</c>:
+    /// a branch só existe no remoto, e a local nasce acompanhando-a.
+    /// </summary>
+    Task<GitCommandResult> AddWorktreeTrackingAsync(
+        string repository,
+        string path,
+        string newBranch,
+        string remoteBranch,
+        CancellationToken cancellationToken = default);
+
     /// <summary><c>git rev-parse --abbrev-ref HEAD</c> no worktree.</summary>
     Task<string?> GetCurrentBranchAsync(string workingTree, CancellationToken cancellationToken = default);
 
