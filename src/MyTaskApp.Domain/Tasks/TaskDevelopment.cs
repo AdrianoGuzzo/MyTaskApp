@@ -47,6 +47,9 @@ public sealed class TaskDevelopment
 
     public const int MaxCommands = 50;
 
+    /// <summary>Folga dentro dos 32 767 caracteres da linha de comando do Windows.</summary>
+    public const int MaxAgentPromptLength = 8000;
+
     private readonly List<TaskDevelopmentCommand> _commands = [];
 
     private TaskDevelopment(Guid id, Guid taskItemId)
@@ -86,6 +89,12 @@ public sealed class TaskDevelopment
     /// </summary>
     public IReadOnlyList<TaskDevelopmentCommand> Commands =>
         _commands.OrderBy(command => command.Order).ToList().AsReadOnly();
+
+    /// <summary>
+    /// O texto livre que abre o agente de IA deste ambiente (ADR-030). <c>null</c>
+    /// = o agente abre vazio, como sempre abriu.
+    /// </summary>
+    public string? AgentPrompt { get; private set; }
 
     internal static TaskDevelopment Begin(
         Guid taskItemId,
@@ -158,6 +167,19 @@ public sealed class TaskDevelopment
         {
             _commands.Remove(surplus);
         }
+    }
+
+    /// <summary>Guarda o texto do agente: aparado, e vazio vira <c>null</c>.</summary>
+    internal void ChangeAgentPrompt(string? prompt)
+    {
+        var normalized = string.IsNullOrWhiteSpace(prompt) ? null : prompt.Trim();
+
+        if (normalized?.Length > MaxAgentPromptLength)
+        {
+            throw new DomainException($"O texto para o agente não pode passar de {MaxAgentPromptLength} caracteres.");
+        }
+
+        AgentPrompt = normalized;
     }
 
     internal void MarkReady(DateTimeOffset at)

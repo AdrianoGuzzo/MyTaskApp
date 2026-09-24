@@ -9,6 +9,7 @@ using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Desktop.Composition;
 using MyTaskApp.Desktop.Reminders;
+using MyTaskApp.Desktop.SpellChecking;
 using MyTaskApp.Desktop.ViewModels;
 using MyTaskApp.Desktop.Views;
 using MyTaskApp.Desktop.Widget;
@@ -42,6 +43,13 @@ public sealed partial class App : Avalonia.Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            // Antes da primeira janela: cada caixa com SpellCheck.IsEnabled
+            // pega o corretor quando o XAML é carregado (ADR-032).
+            if (Services is not null)
+            {
+                SpellCheck.Checker = Services.GetRequiredService<ISpellChecker>();
+            }
+
             var window = new MainWindow();
             _window = window;
 
@@ -209,7 +217,11 @@ public sealed partial class App : Avalonia.Application
         // isto a mudança só apareceria no refresh de 60 s.
         services.GetRequiredService<TagsViewModel>().Changed +=
             () => Dispatcher.UIThread.Post(
-                () => _ = todayViewModel.LoadAsync(CancellationToken.None));
+                () =>
+                {
+                    _ = todayViewModel.LoadAsync(CancellationToken.None);
+                    _ = todayViewModel.RefreshCaptureTagsAsync(CancellationToken.None);
+                });
     }
 
     /// <summary>

@@ -174,7 +174,8 @@ public sealed partial class TodayViewModel(
 
     /// <summary>
     /// As etiquetas escolhidas no botão da caixa de captura. Valem para todas as
-    /// linhas da próxima captura e se esvaziam junto com o texto (ADR-025).
+    /// linhas da captura e continuam marcadas para a seguinte, até o usuário
+    /// desmarcar (ADR-025).
     /// </summary>
     public TaskTagsViewModel CaptureTags { get; } = TaskTagsViewModel.Draft();
 
@@ -223,8 +224,9 @@ public sealed partial class TodayViewModel(
             return;
         }
 
+        // As etiquetas ficam: quem registra uma leva de "Financeiro" costuma
+        // registrar a próxima com a mesma etiqueta.
         CaptureText = string.Empty;
-        CaptureTags.Clear();
         await LoadAsync(cancellationToken);
     }
 
@@ -328,6 +330,35 @@ public sealed partial class TodayViewModel(
         finally
         {
             tags.IsLoading = false;
+        }
+    }
+
+    /// <summary>
+    /// A janela "Etiquetas…" mudou alguma coisa. As etiquetas da captura ficam
+    /// marcadas de uma captura para a outra, então uma delas pode ter sido
+    /// excluída ou renomeada: sem reler, a próxima captura seria recusada por
+    /// uma etiqueta que o usuário nem vê mais que sumiu.
+    /// </summary>
+    public async Task RefreshCaptureTagsAsync(CancellationToken cancellationToken)
+    {
+        if (!CaptureTags.HasTags)
+        {
+            return;
+        }
+
+        try
+        {
+            var all = await runner.RunAsync<GetTagsHandler, IReadOnlyList<TagRow>>(
+                (handler, token) => handler.HandleAsync(new GetTags(), token),
+                cancellationToken);
+
+            CaptureTags.ShowOptions(all);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // Sem estrago: a captura ainda valida as etiquetas e explica se
+            // alguma não existir mais.
+            logger.LogError(exception, "CaptureTagsRefreshFailed");
         }
     }
 

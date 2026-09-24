@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging.Abstractions;
 using MyTaskApp.Application.Agents;
+using MyTaskApp.Domain;
 using MyTaskApp.Infrastructure.Agents.ClaudeCode;
 using MyTaskApp.Infrastructure.Processes;
 
@@ -169,6 +170,67 @@ public class ClaudeCodeCliProviderTests
         launch.Executable.Should().Be(Native);
         launch.Arguments.Should().Equal("--dangerously-skip-permissions", "--model", "opus");
         launch.WorkingDirectory.Should().Be(@"C:\Projects\eco core-feature-123");
+    }
+
+    private static readonly string Worktree = @"C:\Projects\eco core-feature-123";
+
+    private TerminalLaunchOptions Launch(string executable, string? prompt, bool runDirectly) =>
+        Provider(_ => false).CreateLaunch(
+            new AgentCliStartContext(Guid.NewGuid(), Worktree, [], prompt, runDirectly),
+            new CliDetectionResult { IsInstalled = true, ExecutablePath = executable });
+
+    /// <summary>Os parâmetros do card vêm antes; o texto, sempre por último.</summary>
+    [Theory]
+    [InlineData(false, new[] { "--dangerously-skip-permissions", "--permission-mode", "plan", "Implemente" })]
+    [InlineData(true, new[] { "--dangerously-skip-permissions", "Implemente" })]
+    public void WithArgumentsAndText_TheArgumentsComeFirst(bool runDirectly, string[] expected)
+    {
+        var launch = Provider(_ => false).CreateLaunch(
+            new AgentCliStartContext(Guid.NewGuid(), Worktree, ["--dangerously-skip-permissions"], "Implemente", runDirectly),
+            new CliDetectionResult { IsInstalled = true, ExecutablePath = Native });
+
+        launch.Arguments.Should().Equal(expected);
+    }
+
+    /// <summary>Desmarcado é o padrão: o Claude planeja, e só altera arquivos com aprovação.</summary>
+    [Fact]
+    public void WithText_NotRunningDirectly_OpensInPlanMode_WithTheTextAsOneArgument()
+    {
+        var launch = Launch(Native, "Implemente \"x\" & teste\nem 100%", runDirectly: false);
+
+        launch.Arguments.Should().Equal("--permission-mode", "plan", "Implemente \"x\" & teste\nem 100%");
+        launch.WorkingDirectory.Should().Be(Worktree);
+    }
+
+    [Fact]
+    public void WithText_RunningDirectly_SendsOnlyTheText()
+    {
+        Launch(Native, "Implemente a tarefa", runDirectly: true).Arguments.Should().Equal("Implemente a tarefa");
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("   ")]
+    public void WithoutText_TheCheckboxChangesNothing(string? prompt)
+    {
+        Launch(Native, prompt, runDirectly: true).Arguments.Should().BeEmpty();
+    }
+
+    /// <summary>O <c>cmd.exe</c> cortaria o texto na primeira quebra de linha.</summary>
+    [Fact]
+    public void ThroughTheNpmCmd_LineBreaksBecomeSpaces()
+    {
+        Launch(Npm, "Primeira linha\r\nsegunda\nterceira", runDirectly: true)
+            .Arguments.Should().Equal("Primeira linha segunda terceira");
+    }
+
+    [Theory]
+    [InlineData("Use \"aspas\"")]
+    [InlineData("Cubra 100% dos casos")]
+    public void ThroughTheNpmCmd_WhatCmdWouldMangle_IsRefused(string prompt)
+    {
+        FluentActions.Invoking(() => Launch(Npm, prompt, runDirectly: false))
+            .Should().Throw<DomainException>().WithMessage("*claude.cmd*");
     }
 
     [Fact]

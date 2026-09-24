@@ -331,6 +331,34 @@ public class TaskNotesDevelopmentRenderingTests
         Named<Button>(window, "StartAgentButton").IsEffectivelyVisible.Should().BeFalse();
     }
 
+    /// <summary>O texto gravado volta no campo, e "Executar direto" vem desmarcado.</summary>
+    [AvaloniaFact]
+    public async Task AnIdleAgent_ShowsTheSavedText_AndRunDirectlyUnchecked()
+    {
+        var development = ReadyDevelopment() with { AgentPrompt = "Implemente a tarefa" };
+        var (window, viewModel, runner) = await ShowAsync(development: development);
+        runner.Enqueue<GetTaskAgentSessionHandler>([null]);
+        runner.ResultsByHandler[typeof(DetectAgentCliHandler)] = new AgentCliStatus(
+            "claude-code", "Claude Code", "claude",
+            new CliDetectionResult { IsInstalled = true, ExecutablePath = @"C:\claude.exe", Version = "2.1.4" },
+            null);
+
+        await OpenDevelopmentTabAsync(window, viewModel);
+        await viewModel.Developments.Selected!.Agent.RefreshAsync(CancellationToken.None);
+        Settle(window);
+
+        var prompt = Named<TextBox>(window, "AgentPromptBox");
+        prompt.IsEffectivelyVisible.Should().BeTrue();
+        prompt.Text.Should().Be("Implemente a tarefa");
+
+        var runDirectly = Named<CheckBox>(window, "AgentRunDirectly");
+        runDirectly.IsChecked.Should().BeFalse();
+        runDirectly.IsEnabled.Should().BeTrue();
+
+        runDirectly.IsChecked = true;
+        viewModel.Developments.Selected!.Agent.RunDirectly.Should().BeTrue();
+    }
+
     [AvaloniaFact]
     public async Task ATaskNotReady_HidesTheAgentCard()
     {

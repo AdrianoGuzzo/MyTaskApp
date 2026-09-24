@@ -7,6 +7,7 @@ using MyTaskApp.Application.Agents;
 using MyTaskApp.Desktop.Composition;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.Agents;
+using MyTaskApp.Domain.Tasks;
 
 namespace MyTaskApp.Desktop.ViewModels;
 
@@ -100,6 +101,25 @@ public sealed partial class AgentSessionViewModel(
     [ObservableProperty]
     private string? _message;
 
+    /// <summary>
+    /// O texto livre com que o agente abre. Gravado no ambiente ao iniciar, e
+    /// de volta aqui ao reabrir a tarefa.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasPrompt))]
+    private string? _prompt;
+
+    /// <summary>
+    /// Com texto: executar direto em vez de só planejar. Não é gravado — cada
+    /// ambiente abre desmarcado, e o padrão é o agente pedir aprovação.
+    /// </summary>
+    [ObservableProperty]
+    private bool _runDirectly;
+
+    public bool HasPrompt => !string.IsNullOrWhiteSpace(Prompt);
+
+    public int MaxPromptLength => TaskDevelopment.MaxAgentPromptLength;
+
     public string AgentName => Cli?.Name ?? Session?.ProviderName ?? "Agente de IA";
 
     public string StartLabel => $"Iniciar {AgentName}";
@@ -166,9 +186,10 @@ public sealed partial class AgentSessionViewModel(
 
     /// <summary>
     /// O ambiente do card (ADR-031): cada repositório da tarefa tem o seu agente.
-    /// Chamado quando o ambiente passa a existir.
+    /// Chamado quando o ambiente passa a existir. O texto só é reposto ao trocar
+    /// de ambiente: no mesmo, o que o usuário está digitando fica.
     /// </summary>
-    public void Load(Guid taskId, Guid developmentId, bool isReadOnly)
+    public void Load(Guid taskId, Guid developmentId, bool isReadOnly, string? prompt = null)
     {
         if (_taskId == taskId && _developmentId == developmentId)
         {
@@ -180,6 +201,8 @@ public sealed partial class AgentSessionViewModel(
         _developmentId = developmentId;
         Session = null;
         IsReadOnly = isReadOnly;
+        Prompt = prompt;
+        RunDirectly = false;
         State = AgentPanelState.Checking;
     }
 
@@ -233,7 +256,8 @@ public sealed partial class AgentSessionViewModel(
         {
             Session = await runner.RunAsync<StartAgentSessionHandler, AgentSessionView>(
                 (handler, token) => handler.HandleAsync(
-                    new StartAgentSession(_taskId, _developmentId, Cli?.ProviderId, ArgumentsToSend()),
+                    new StartAgentSession(
+                        _taskId, _developmentId, Cli?.ProviderId, ArgumentsToSend(), Prompt, RunDirectly),
                     token),
                 CancellationToken.None);
 

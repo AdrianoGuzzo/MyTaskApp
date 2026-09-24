@@ -275,4 +275,45 @@ public class TaskDevelopmentTests
 
         development.FailureReason!.Length.Should().Be(TaskDevelopment.MaxFailureLength);
     }
+
+    // --- Texto do agente (ADR-030) ------------------------------------------
+
+    [Fact]
+    public void AgentPrompt_IsTrimmed_AndBlankBecomesNull()
+    {
+        var task = Task();
+        var development = Begin(task);
+
+        development.AgentPrompt.Should().BeNull();
+
+        task.SetDevelopmentAgentPrompt(development.Id, "  Implemente o cálculo\nconforme a descrição.  ");
+        development.AgentPrompt.Should().Be("Implemente o cálculo\nconforme a descrição.");
+
+        task.SetDevelopmentAgentPrompt(development.Id, "   ");
+        development.AgentPrompt.Should().BeNull();
+    }
+
+    [Fact]
+    public void AgentPrompt_BeyondTheLimit_IsRefused()
+    {
+        var task = Task();
+        var development = Begin(task);
+
+        FluentActions.Invoking(() => task.SetDevelopmentAgentPrompt(
+                development.Id, new string('x', TaskDevelopment.MaxAgentPromptLength + 1)))
+            .Should().Throw<DomainException>().WithMessage("*não pode passar de*");
+    }
+
+    [Fact]
+    public void AgentPrompt_OnAnArchivedTask_KeepsTheSameText_ButRefusesAnother()
+    {
+        var task = Task();
+        var development = Begin(task);
+        task.SetDevelopmentAgentPrompt(development.Id, "Revise o PR");
+        task.Archive(Now);
+
+        FluentActions.Invoking(() => task.SetDevelopmentAgentPrompt(development.Id, " Revise o PR ")).Should().NotThrow();
+        FluentActions.Invoking(() => task.SetDevelopmentAgentPrompt(development.Id, "Outro texto"))
+            .Should().Throw<DomainException>();
+    }
 }

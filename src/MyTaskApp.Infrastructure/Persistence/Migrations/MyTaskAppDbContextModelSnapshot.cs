@@ -222,6 +222,10 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("AgentPrompt")
+                        .HasMaxLength(8000)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Branch")
                         .IsRequired()
                         .HasMaxLength(255)

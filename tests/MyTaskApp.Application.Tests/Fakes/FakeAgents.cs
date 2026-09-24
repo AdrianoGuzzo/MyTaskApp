@@ -182,8 +182,14 @@ internal sealed class FakeAgentCliProvider : IAgentCliProvider
 
     public AgentCliInstallGuide? InstallGuideFor(OSPlatform platform) => WindowsGuide;
 
-    public TerminalLaunchOptions CreateLaunch(AgentCliStartContext context, CliDetectionResult detection) =>
-        new(detection.ExecutablePath!, context.Arguments, context.WorkingDirectory);
+    /// <summary>O último contexto recebido: o texto e o modo que a tela mandou.</summary>
+    public AgentCliStartContext? LastContext { get; private set; }
+
+    public TerminalLaunchOptions CreateLaunch(AgentCliStartContext context, CliDetectionResult detection)
+    {
+        LastContext = context;
+        return new(detection.ExecutablePath!, context.Arguments, context.WorkingDirectory);
+    }
 }
 
 /// <summary>Anota quem pediu para vigiar e quem avisou mudança.</summary>
