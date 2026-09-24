@@ -456,7 +456,7 @@ public sealed partial class TaskDevelopmentViewModel(
     {
         if (value is not null)
         {
-            Agent.Load(_taskId, value.Id, IsReadOnly);
+            Agent.Load(_taskId, value.Id, IsReadOnly, value.AgentPrompt);
         }
     }
 

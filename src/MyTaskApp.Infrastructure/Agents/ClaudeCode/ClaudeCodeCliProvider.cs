@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Agents;
+using MyTaskApp.Domain;
 using MyTaskApp.Infrastructure.Processes;
 
 namespace MyTaskApp.Infrastructure.Agents.ClaudeCode;
@@ -69,15 +70,50 @@ internal sealed partial class ClaudeCodeCliProvider(
         : null;
 
     /// <summary>
-    /// O executável com os parâmetros escolhidos: o Claude abre a sessão
-    /// interativa na pasta em que nasceu — o worktree.
+    /// O Claude abre a sessão interativa na pasta em que nasceu — o worktree.
+    /// Primeiro os parâmetros escolhidos no card. Com texto, ele vai depois, como
+    /// a primeira mensagem: <c>claude [parâmetros] "texto"</c> executa direto;
+    /// <c>claude [parâmetros] --permission-mode plan "texto"</c> só monta o plano
+    /// e espera aprovação antes de alterar arquivos.
     /// </summary>
+    /// <remarks>
+    /// O texto é <b>um</b> argumento, nunca uma linha de shell. A exceção é o
+    /// <c>claude.cmd</c> do npm: o Windows o roda pelo <c>cmd.exe</c>, que corta
+    /// o texto na quebra de linha e interpreta <c>%</c> e <c>"</c>. Ali as quebras
+    /// viram espaço, e o que o <c>cmd.exe</c> estragaria é recusado com o motivo.
+    /// </remarks>
     public TerminalLaunchOptions CreateLaunch(AgentCliStartContext context, CliDetectionResult detection)
     {
         var executable = detection.ExecutablePath
             ?? throw new InvalidOperationException("O Claude Code não foi encontrado.");
 
-        return new TerminalLaunchOptions(executable, context.Arguments, context.WorkingDirectory);
+        if (string.IsNullOrWhiteSpace(context.Prompt))
+        {
+            return new TerminalLaunchOptions(executable, context.Arguments, context.WorkingDirectory);
+        }
+
+        var prompt = RunsThroughCmd(executable) ? ForCmd(context.Prompt) : context.Prompt;
+
+        string[] arguments = context.RunDirectly
+            ? [.. context.Arguments, prompt]
+            : [.. context.Arguments, "--permission-mode", "plan", prompt];
+
+        return new TerminalLaunchOptions(executable, arguments, context.WorkingDirectory);
+    }
+
+    private static bool RunsThroughCmd(string executable) =>
+        Path.GetExtension(executable).ToUpperInvariant() is ".CMD" or ".BAT";
+
+    private static string ForCmd(string prompt)
+    {
+        if (prompt.Contains('"', StringComparison.Ordinal) || prompt.Contains('%', StringComparison.Ordinal))
+        {
+            throw new DomainException(
+                "O Claude Code instalado pelo npm (claude.cmd) não recebe texto com aspas (\") ou %. "
+                + "Tire esses caracteres do texto ou use o instalador nativo do Claude Code.");
+        }
+
+        return string.Join(' ', prompt.Split(["\r\n", "\n", "\r"], StringSplitOptions.None));
     }
 
     /// <summary>O caminho absoluto do <c>claude</c>, ou <c>null</c>.</summary>

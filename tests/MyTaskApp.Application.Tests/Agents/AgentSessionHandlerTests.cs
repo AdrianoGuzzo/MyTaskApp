@@ -251,6 +251,33 @@ public class AgentSessionHandlerTests
     }
 
     [Fact]
+    public async Task Start_WithoutText_OpensTheAgentEmpty()
+    {
+        Ready();
+
+        await StartAsync();
+
+        _claude.LastContext.Should().BeEquivalentTo(new { Prompt = (string?)null, RunDirectly = false });
+        _task.Developments[0].AgentPrompt.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Start_WithText_HandsTextAndMode_ToTheAgent_AndKeepsTheText(bool runDirectly)
+    {
+        Ready();
+        var developmentId = _task.Developments[0].Id;
+
+        await Start().HandleAsync(
+            new StartAgentSession(_task.Id, developmentId, Prompt: "  Implemente a tarefa  ", RunDirectly: runDirectly),
+            Ct);
+
+        _claude.LastContext.Should().BeEquivalentTo(new { Prompt = "Implemente a tarefa", RunDirectly = runDirectly });
+        _task.GetDevelopment(developmentId).AgentPrompt.Should().Be("Implemente a tarefa");
+    }
+
+    [Fact]
     public async Task Start_WithoutTheAgentInstalled_CreatesNoSession_AndOpensNothing()
     {
         Ready();

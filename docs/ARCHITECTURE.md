@@ -1461,9 +1461,14 @@ escolha, e quem grava é o `QuickCapture`, que recebe as etiquetas e as aplica a
 **todas as linhas**. A gravação sai no mesmo `SaveChanges` das tarefas, e uma
 etiqueta excluída nesse meio-tempo recusa a captura inteira, sem criar metade.
 Escolha na tela, e não `#etiqueta` no texto: seria sintaxe a decorar (§36), e
-um "#1" num título viraria etiqueta sem ninguém pedir. Depois de capturar a
-escolha se esvazia junto com o texto. Se a captura falhar, as duas ficam, para
-tentar de novo.
+um "#1" num título viraria etiqueta sem ninguém pedir. Depois de capturar, só o
+texto se esvazia: **as etiquetas continuam marcadas** para a próxima captura,
+porque quem registra uma leva de "Financeiro" costuma registrar a seguinte com
+a mesma etiqueta. Desmarcar é com o próprio seletor. Como a escolha atravessa
+capturas, o `Changed` da janela "Etiquetas…" também relê a lista para ela
+(`TodayViewModel.RefreshCaptureTagsAsync`): uma etiqueta excluída sai das
+bolinhas em vez de recusar a próxima captura, e uma renomeada troca de nome e
+cor. Se a captura falhar, texto e etiquetas ficam, para tentar de novo.
 
 **Janela singleton, com o "X" que esconde** (ADR-020), aberta pelo menu ⋯ do
 cabeçalho ou pelo link do seletor vazio. Ela recarrega a cada abertura porque a
@@ -2124,7 +2129,86 @@ terminal: repositório · branch", um item por ambiente.
 
 ---
 
-## ADR-032 — Parâmetros do agente: editáveis no card, lembrados por agente
+## ADR-032 — Correção ortográfica: o corretor do sistema, desenhado por cima da caixa
+
+**Contexto:** as anotações, os títulos e a captura rápida são texto livre em
+português, e a `TextBox` da Avalonia não tem corretor ortográfico. O pedido era
+o sublinhado vermelho e as sugestões no clique direito, como em qualquer editor.
+
+**Decisão:** usar o **corretor do próprio sistema** atrás de uma porta
+(`ISpellChecker`, em `Desktop/SpellChecking`) e ligá-lo por uma attached
+property: `spell:SpellCheck.IsEnabled="True"`.
+
+```
+TextBox ─ SpellCheck.IsEnabled ─► SpellCheckBinder ─► SpellCheckSession ─► ISpellChecker
+                                  (adorner, menu)     (tokens, cache)      ├─ WindowsSpellChecker (COM)
+                                                                           └─ NoSpellChecker
+```
+
+**Por que o do sistema, e não um dicionário embarcado.** O Windows já traz o
+dicionário pt-BR, as sugestões e o dicionário do usuário, que é compartilhado
+com os outros apps. Um Hunspell embarcado traria vários megabytes de dicionário
+para manter atualizados.
+
+**A API.** Windows Spell Checking API (`spellcheck.h`, Windows 8+), com COM
+gerado em compilação (`[GeneratedComInterface]`), o mesmo caminho do
+`[LibraryImport]` do resto do app. A vtable é declarada à mão, e os métodos que
+não usamos ficam como marcadores (`...Slot`) só para segurar a posição. Um
+teste de integração com o COM real existe porque um método fora de ordem
+compila e chama outro método.
+
+**Português e inglês.** Uma palavra só está errada se estiver errada em todos
+os idiomas carregados: pt-BR e, quando existir, en-US. O Windows só tem o
+dicionário de um idioma instalado, e numa máquina só em português o inglês não
+está. Por isso existe `DeveloperTerms`, uma lista curta do jargão que as
+anotações usam como português (branch, merge, deploy, commit…). Ela vale em
+qualquer máquina.
+
+**O que não é prosa não é verificado** (`SpellingTokenizer`, função pura):
+
+- código Markdown (entre crases e em bloco ```` ``` ````);
+- URL, e-mail, `@alias`, `#tag` e path;
+- palavra grudada em dígito ou em `_` (`v2`, `snake_case`); o `_` na ponta é
+  itálico e não conta;
+- sigla, camelCase e palavra de uma letra.
+
+Sublinhado em cada path ensinaria o usuário a não olhar para o sublinhado.
+
+**O desenho é um adorner.** A `TextBox` não tem decoração por trecho de texto,
+e trocar o template das caixas para enfiar uma camada seria caro de manter. O
+`SpellingSquiggles` fica na `AdornerLayer`, sobre o `TextPresenter`: acompanha
+a rolagem, é recortado pela área visível e usa as coordenadas do `TextLayout`,
+as mesmas do cursor (`AliasCompletionBinder`, ADR-026).
+
+**Quando verifica.**
+
+- A cada tecla roda só o cache, para os sublinhados andarem junto com o texto.
+- Depois de 400 ms parado, pergunta ao sistema as palavras novas.
+- A palavra sob o cursor não é marcada enquanto se digita. Ela é julgada no
+  espaço, quando o cursor sai dela ou quando a caixa perde o foco.
+- O COM só é chamado da thread de UI.
+
+**Menu.** O clique direito numa palavra errada abre, em vez do flyout padrão,
+as sugestões, "Adicionar ao dicionário" (o dicionário do usuário do Windows,
+persiste), "Ignorar" (até fechar o app), Recortar, Copiar e Colar. A troca
+passa pela seleção (`SelectedText`), então Ctrl+Z desfaz e o binding é avisado.
+Adicionar ou ignorar avisa todas as caixas abertas (`DictionaryChanged`).
+
+**Onde está ligado.** Anotação, título da tarefa, captura rápida e as
+descrições de comando global e de diretório. Paths, aliases, comandos e buscas
+ficam de fora.
+
+**Limites aceitos:**
+
+- Linux e macOS usam o `NoSpellChecker`. O próximo passo é o
+  WeCantSpell.Hunspell com `/usr/share/hunspell/pt_BR.*`, sem mexer na UI;
+- sem dicionário pt-BR nem en-US no Windows, o corretor fica desligado (log
+  `SpellCheckerUnavailable`);
+- "Ignorar" não sobrevive a reiniciar o app.
+
+---
+
+## ADR-033 — Parâmetros do agente: editáveis no card, lembrados por agente
 
 **Decisão:** o card do agente (ADR-030) ganha o campo "Parâmetros", logo acima
 de "Iniciar Claude Code". Ele vem preenchido com o padrão e mostra embaixo o que
@@ -2146,6 +2230,9 @@ aspas duplas juntam um argumento com espaço. A lista vai para o
 `AgentCliStartContext` e daí para o `ArgumentList` do processo. `&&` ou `|`
 chegam ao Claude como texto e nunca viram outro comando. Aspas sem fechar são
 recusadas antes de gravar a sessão ou o padrão.
+
+**Junto com o texto livre.** Os parâmetros vêm antes do texto da tela e do
+`--permission-mode plan` (ADR-030): `claude --dangerously-skip-permissions --permission-mode plan "texto"`.
 
 **Quem salva é o "Iniciar".** Não há botão "Salvar" próprio.
 `StartAgentSession.Arguments` informado vira o padrão no mesmo `SaveChanges`

@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MyTaskApp.Infrastructure.Persistence;
 
@@ -10,9 +11,11 @@ using MyTaskApp.Infrastructure.Persistence;
 namespace MyTaskApp.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(MyTaskAppDbContext))]
-    partial class MyTaskAppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260924172213_DevelopmentAgentPrompt")]
+    partial class DevelopmentAgentPrompt
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
@@ -391,22 +394,6 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("TaskOccurrences", (string)null);
-                });
-
-            modelBuilder.Entity("MyTaskApp.Infrastructure.Persistence.AgentSettingsRow", b =>
-                {
-                    b.Property<string>("ProviderId")
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Arguments")
-                        .IsRequired()
-                        .HasMaxLength(2000)
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("ProviderId");
-
-                    b.ToTable("AgentSettings", (string)null);
                 });
 
             modelBuilder.Entity("MyTaskApp.Infrastructure.Persistence.DataRetentionSettingsRow", b =>

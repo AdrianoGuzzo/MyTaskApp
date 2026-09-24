@@ -111,7 +111,8 @@ public sealed record TaskDevelopmentView(
     TaskDevelopmentStatus Status,
     DateTimeOffset CreatedAt,
     string? FailureReason,
-    IReadOnlyList<string>? Commands = null)
+    IReadOnlyList<string>? Commands = null,
+    string? AgentPrompt = null)
 {
     public static TaskDevelopmentView From(TaskDevelopment development) =>
         new(
@@ -124,7 +125,8 @@ public sealed record TaskDevelopmentView(
             development.Status,
             development.CreatedAt,
             development.FailureReason,
-            development.Commands.Select(command => command.Command).ToList());
+            development.Commands.Select(command => command.Command).ToList(),
+            development.AgentPrompt);
 }
 
 internal static class ProgressExtensions
