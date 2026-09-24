@@ -154,13 +154,6 @@ public sealed partial class TaskTagsViewModel : ObservableObject
         ShowSelected(ids);
     }
 
-    /// <summary>Esvazia a escolha depois que a captura a usou.</summary>
-    public void Clear()
-    {
-        HasChanged = false;
-        ShowSelected([]);
-    }
-
     partial void OnSearchTextChanged(string value) => Filter();
 
     private void ShowSelected(IReadOnlyCollection<Guid> ids)

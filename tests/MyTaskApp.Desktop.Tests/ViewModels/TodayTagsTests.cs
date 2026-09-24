@@ -249,7 +249,7 @@ public class TodayTagsTests
     }
 
     [Fact]
-    public async Task ACapture_UsesTheChosenTagsAndThenStartsClean()
+    public async Task ACapture_UsesTheChosenTagsAndKeepsThemForTheNextOne()
     {
         var viewModel = await OpenCapturePickerAsync();
         await viewModel.ToggleTagAsync(viewModel.CaptureTags.Options[2], Ct);
@@ -259,8 +259,22 @@ public class TodayTagsTests
 
         _runner.Invoked.Should().Contain(typeof(MyTaskApp.Application.Tasks.QuickCaptureHandler));
         viewModel.CaptureText.Should().BeEmpty();
-        viewModel.CaptureTags.HasTags.Should().BeFalse();
-        viewModel.CaptureTags.Dots.Should().BeEmpty();
+        viewModel.CaptureTags.SelectedIds.Should().Equal(Urgent.Id);
+        viewModel.CaptureTags.Dots.Select(dot => dot.Name).Should().Equal("Urgente");
+    }
+
+    [Fact]
+    public async Task ATagDeletedElsewhere_LeavesTheCaptureBox()
+    {
+        var viewModel = await OpenCapturePickerAsync();
+        await viewModel.ToggleTagAsync(viewModel.CaptureTags.Options[0], Ct);
+        await viewModel.ToggleTagAsync(viewModel.CaptureTags.Options[2], Ct);
+        await viewModel.CloseTagPickerAsync(viewModel.CaptureTags, Ct);
+        _runner.ResultsByHandler[typeof(GetTagsHandler)] = (IReadOnlyList<TagRow>)[Finance, Health];
+
+        await viewModel.RefreshCaptureTagsAsync(Ct);
+
+        viewModel.CaptureTags.SelectedIds.Should().Equal(Finance.Id);
     }
 
     [Fact]
