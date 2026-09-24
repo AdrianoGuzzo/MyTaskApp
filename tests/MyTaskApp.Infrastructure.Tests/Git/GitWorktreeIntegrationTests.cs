@@ -301,6 +301,48 @@ public sealed class GitWorktreeIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task AnExistingLocalBranch_IsCheckedOutInTheNewWorktree_WithItsCommits()
+    {
+        Assert.SkipWhen(_executable is null, "Git não instalado nesta máquina.");
+
+        await GitAsync(Repository, "branch", "feature/123-corrigir-animais");
+        await GitAsync(Repository, "switch", "-q", "feature/123-corrigir-animais");
+        await File.WriteAllTextAsync(Path.Combine(Repository, "feito.txt"), "x\n", Ct);
+        await CommitAsync(Repository, "trabalho anterior");
+        await GitAsync(Repository, "switch", "-q", "main");
+        var task = await SeedTaskAsync();
+
+        var plan = await PrepareAsync(task, "refs/remotes/origin/main", []);
+        var view = await StartAsync(plan);
+
+        plan.ExistingBranch!.IsRemote.Should().BeFalse();
+        view.Status.Should().Be(TaskDevelopmentStatus.Ready);
+        (await _git.GetCurrentBranchAsync(ExpectedWorktree, Ct)).Should().Be("feature/123-corrigir-animais");
+        File.Exists(Path.Combine(ExpectedWorktree, "feito.txt")).Should().BeTrue("é a branch existente, não uma nova");
+    }
+
+    [Fact]
+    public async Task ABranchOnlyOnTheRemote_BecomesALocalFollowingIt()
+    {
+        Assert.SkipWhen(_executable is null, "Git não instalado nesta máquina.");
+
+        await GitAsync(Other, "switch", "-q", "-c", "feature/123-corrigir-animais");
+        await File.WriteAllTextAsync(Path.Combine(Other, "feito.txt"), "x\n", Ct);
+        await CommitAsync(Other, "de outra máquina");
+        await GitAsync(Other, "push", "-q", "origin", "feature/123-corrigir-animais");
+        var task = await SeedTaskAsync();
+
+        var plan = await PrepareAsync(task, "refs/remotes/origin/main", []);
+        var view = await StartAsync(plan);
+
+        plan.ExistingBranch!.FullRef.Should().Be("refs/remotes/origin/feature/123-corrigir-animais");
+        view.Status.Should().Be(TaskDevelopmentStatus.Ready);
+        File.Exists(Path.Combine(ExpectedWorktree, "feito.txt")).Should().BeTrue();
+        var upstream = await GitAsync(Repository, "for-each-ref", "--format=%(upstream)", "refs/heads/feature/123-corrigir-animais");
+        upstream.StandardOutput.Trim().Should().Be("refs/remotes/origin/feature/123-corrigir-animais");
+    }
+
+    [Fact]
     public async Task AnOccupiedPath_ComesBackAsAConflict_AndIsNotTouched()
     {
         Assert.SkipWhen(_executable is null, "Git não instalado nesta máquina.");

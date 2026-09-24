@@ -19,7 +19,7 @@
 
   <Window.KeyBindings>
     <!--
-      Ctrl+S grava e fecha, igual ao botão. Um atalho que fizesse outra coisa
+      Ctrl+S grava e mantém a janela aberta, igual ao botão. Um atalho que fizesse outra coisa
       que o botão seria uma segunda regra para o mesmo gesto.
     -->
     <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}" />
@@ -492,7 +492,7 @@
                   Command="{Binding CancelCommand}"
                   IsVisible="{Binding IsReadOnly}" />
 
-          <Button Content="Cancelar"
+          <Button Content="{Binding DismissLabel}"
                   Command="{Binding CancelCommand}"
                   IsVisible="{Binding IsEditable}" />
 

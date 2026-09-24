@@ -98,7 +98,13 @@ public sealed class StartDevelopmentHandler(
 
         progress.Report(DevelopmentStep.CreateWorktree, DevelopmentStepState.Running);
 
-        var result = await git.AddWorktreeAsync(plan.RepositoryPath, path, plan.NewBranch, plan.Source.FullRef, none);
+        var result = plan.ExistingBranch switch
+        {
+            null => await git.AddWorktreeAsync(plan.RepositoryPath, path, plan.NewBranch, plan.Source.FullRef, none),
+            { IsRemote: true } remote =>
+                await git.AddWorktreeTrackingAsync(plan.RepositoryPath, path, plan.NewBranch, remote.FullRef, none),
+            _ => await git.AddWorktreeForBranchAsync(plan.RepositoryPath, path, plan.NewBranch, none),
+        };
 
         if (!result.Succeeded)
         {
@@ -117,11 +123,12 @@ public sealed class StartDevelopmentHandler(
         progress.Report(DevelopmentStep.SaveTask, DevelopmentStepState.Done);
 
         logger.LogInformation(
-            "DevelopmentStarted {TaskId} {DevelopmentId} {Branch} {WorktreePath}",
+            "DevelopmentStarted {TaskId} {DevelopmentId} {Branch} {WorktreePath} {ExistingBranch}",
             task.Id,
             development.Id,
             plan.NewBranch,
-            path);
+            path,
+            plan.ExistingBranch?.FullRef);
 
         return TaskDevelopmentView.From(development);
     }

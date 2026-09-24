@@ -218,7 +218,7 @@ public class TaskNotesTests
     }
 
     [Fact]
-    public async Task AfterSaving_TheScreenCloses_AndTheListIsToldToRefresh()
+    public async Task AfterSaving_TheScreenStaysOpen_AndTheListIsToldToRefresh()
     {
         var viewModel = ViewModel();
         viewModel.Load(Row());
@@ -232,8 +232,24 @@ public class TaskNotesTests
         await viewModel.SaveAsync(CancellationToken.None);
 
         saved.Should().BeTrue();
-        closed.Should().BeTrue();
+        closed.Should().BeFalse();
         viewModel.HasUnsavedChanges.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task TheDismissButton_CancelsWhileThereAreChanges_AndClosesAfterSaving()
+    {
+        var viewModel = ViewModel();
+        viewModel.Load(Row());
+
+        viewModel.DismissLabel.Should().Be("Fechar");
+
+        viewModel.Text = "algo novo";
+        viewModel.DismissLabel.Should().Be("Cancelar");
+
+        await viewModel.SaveAsync(CancellationToken.None);
+
+        viewModel.DismissLabel.Should().Be("Fechar");
     }
 
     /// <summary>

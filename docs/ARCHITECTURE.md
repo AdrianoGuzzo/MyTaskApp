@@ -1639,7 +1639,11 @@ Desktop ─ IUseCaseRunner ─► PrepareDevelopment / StartDevelopment / Remove
   clique.
 - **A ordem do Start é a do rastro:**
   1. grava `Creating`;
-  2. roda `git worktree add --no-track -b nova caminho origem`;
+  2. roda `git worktree add --no-track -b nova caminho origem`. Se a branch
+     já existe, reaproveita em vez de recusar: a local ganha checkout
+     (`git worktree add caminho branch`); sem local, a remota vira local
+     acompanhando-a (`git worktree add --track -b branch caminho remoto/branch`,
+     preferindo o remoto da origem, depois `origin`);
   3. confere a branch em checkout;
   4. grava `Ready`.
 
@@ -1716,7 +1720,10 @@ Cada comando tem "Copiar comando". Há também o link para git-scm.com e
 - **Branch já existente.** No Windows as refs soltas são arquivos, então
   `Feature/X` e `feature/x` disputam o mesmo nome. E `feature` impede
   `feature/x`. Por isso a checagem ignora maiúsculas e olha o conflito
-  arquivo/pasta, em vez de um `show-ref` exato.
+  arquivo/pasta, em vez de um `show-ref` exato. A existente é reaproveitada na
+  grafia dela; só é recusada se já estiver aberta em outro worktree (o Git
+  recusaria o checkout). Aberta no próprio caminho planejado, vira o conflito
+  de caminho, que oferece "Usar Worktree existente".
 - **`fetch . a:b`** é recusado se `b` estiver em checkout em **qualquer**
   worktree. Quem decide entre ele e `merge --ff-only` é o `worktree list`, e
   não só o worktree principal.
