@@ -54,8 +54,16 @@ public sealed record CliDetectionResult
     public static CliDetectionResult NotInstalled(string error) => new() { Error = error };
 }
 
-/// <summary>Para qual tarefa e em qual pasta o agente vai abrir.</summary>
-public sealed record AgentCliStartContext(Guid TaskId, string WorkingDirectory);
+/// <summary>Para qual tarefa e em qual pasta o agente vai abrir — e com qual texto.</summary>
+/// <param name="Prompt">O texto livre da tela; <c>null</c> = o agente abre vazio.</param>
+/// <param name="RunDirectly">
+/// Com texto: <c>true</c> já executa; <c>false</c> só planeja e espera aprovação.
+/// </param>
+public sealed record AgentCliStartContext(
+    Guid TaskId,
+    string WorkingDirectory,
+    string? Prompt = null,
+    bool RunDirectly = false);
 
 /// <summary>Instruções de instalação de um agente para um sistema.</summary>
 public sealed record AgentCliInstallGuide(
