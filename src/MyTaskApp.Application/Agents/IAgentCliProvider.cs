@@ -26,6 +26,12 @@ public interface IAgentCliProvider
     string Command { get; }
 
     /// <summary>
+    /// Os parâmetros com que o agente abre enquanto o usuário não escolher
+    /// outros (ex.: <c>--dangerously-skip-permissions</c>).
+    /// </summary>
+    string DefaultArguments { get; }
+
+    /// <summary>
     /// Procura o executável e, se achar, a versão — sem abrir sessão interativa.
     /// Nunca lança: o que der errado vai em <see cref="CliDetectionResult.Error"/>.
     /// </summary>
@@ -54,8 +60,8 @@ public sealed record CliDetectionResult
     public static CliDetectionResult NotInstalled(string error) => new() { Error = error };
 }
 
-/// <summary>Para qual tarefa e em qual pasta o agente vai abrir.</summary>
-public sealed record AgentCliStartContext(Guid TaskId, string WorkingDirectory);
+/// <summary>Para qual tarefa, em qual pasta e com quais parâmetros o agente vai abrir.</summary>
+public sealed record AgentCliStartContext(Guid TaskId, string WorkingDirectory, IReadOnlyList<string> Arguments);
 
 /// <summary>Instruções de instalação de um agente para um sistema.</summary>
 public sealed record AgentCliInstallGuide(

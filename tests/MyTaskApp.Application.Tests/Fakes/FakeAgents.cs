@@ -168,6 +168,8 @@ internal sealed class FakeAgentCliProvider : IAgentCliProvider
 
     public string Command => "claude";
 
+    public string DefaultArguments => "--dangerously-skip-permissions";
+
     public Task<CliDetectionResult> DetectAsync(CancellationToken cancellationToken = default)
     {
         Detections++;
@@ -181,7 +183,7 @@ internal sealed class FakeAgentCliProvider : IAgentCliProvider
     public AgentCliInstallGuide? InstallGuideFor(OSPlatform platform) => WindowsGuide;
 
     public TerminalLaunchOptions CreateLaunch(AgentCliStartContext context, CliDetectionResult detection) =>
-        new(detection.ExecutablePath!, [], context.WorkingDirectory);
+        new(detection.ExecutablePath!, context.Arguments, context.WorkingDirectory);
 }
 
 /// <summary>Anota quem pediu para vigiar e quem avisou mudança.</summary>

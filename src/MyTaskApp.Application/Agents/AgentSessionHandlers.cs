@@ -31,7 +31,7 @@ public sealed record AgentSessionWatch(Guid SessionId, Guid TaskId, int ProcessI
 /// <summary>O agente está instalado neste computador?</summary>
 public sealed record DetectAgentCli(string? ProviderId = null);
 
-public sealed class DetectAgentCliHandler(IAgentCliProviders providers)
+public sealed class DetectAgentCliHandler(IAgentCliProviders providers, IAgentSettingsStore settings)
 {
     public async Task<AgentCliStatus> HandleAsync(
         DetectAgentCli query,
@@ -45,7 +45,8 @@ public sealed class DetectAgentCliHandler(IAgentCliProviders providers)
             provider.Name,
             provider.Command,
             detection,
-            detection.IsInstalled ? null : provider.InstallGuideFor(CurrentPlatform()));
+            detection.IsInstalled ? null : provider.InstallGuideFor(CurrentPlatform()),
+            await settings.ArgumentsForAsync(provider, cancellationToken));
     }
 
     internal static OSPlatform CurrentPlatform() =>
@@ -90,8 +91,16 @@ public sealed class GetTaskAgentSessionHandler(
     }
 }
 
-/// <summary>Abre o agente num terminal, dentro do worktree de um ambiente da tarefa.</summary>
-public sealed record StartAgentSession(Guid TaskId, Guid DevelopmentId, string? ProviderId = null);
+/// <summary>
+/// Abre o agente num terminal, dentro do worktree de um ambiente da tarefa.
+/// <paramref name="Arguments"/> é o texto do campo "Parâmetros": informado, vira
+/// o padrão das próximas aberturas; <c>null</c> usa o salvo.
+/// </summary>
+public sealed record StartAgentSession(
+    Guid TaskId,
+    Guid DevelopmentId,
+    string? ProviderId = null,
+    string? Arguments = null);
 
 /// <summary>
 /// O fluxo da ADR-030: worktree pronto → agente instalado → sessão gravada como
@@ -118,6 +127,7 @@ public sealed class StartAgentSessionHandler(
     IAgentProcessTracker processes,
     IAgentSessionWatcher watcher,
     IDirectoryProbe directories,
+    IAgentSettingsStore settings,
     TimeProvider timeProvider,
     ILogger<StartAgentSessionHandler> logger)
 {
@@ -151,8 +161,10 @@ public sealed class StartAgentSessionHandler(
             throw new DomainException($"{provider.Name} não encontrado.");
         }
 
+        var argumentsText = await ResolveArgumentsAsync(provider, command.Arguments, cancellationToken);
+
         var launch = provider.CreateLaunch(
-            new AgentCliStartContext(task.Id, development.WorktreePath),
+            new AgentCliStartContext(task.Id, development.WorktreePath, AgentArguments.Parse(argumentsText)),
             detection);
 
         var session = AgentSession.Create(
@@ -209,15 +221,46 @@ public sealed class StartAgentSessionHandler(
         }
 
         logger.LogInformation(
-            "AgentSessionStarted {TaskId} {SessionId} {ProviderId} {ProcessId} {Status} {WorkingDirectory}",
+            "AgentSessionStarted {TaskId} {SessionId} {ProviderId} {ProcessId} {Status} {WorkingDirectory} {Arguments}",
             task.Id,
             session.Id,
             provider.Id,
             session.ProcessId,
             session.Status,
-            session.WorkingDirectory);
+            session.WorkingDirectory,
+            argumentsText);
 
         return AgentSessionView.From(session, providers);
+    }
+
+    /// <summary>
+    /// O texto que a tela mandou, já aparado, ou o salvo. O que a tela mandou
+    /// vira o novo padrão — gravado junto com a sessão, então parâmetro
+    /// inválido (recusado pelo <see cref="AgentArguments.Parse"/> antes disso)
+    /// nunca é salvo.
+    /// </summary>
+    private async Task<string> ResolveArgumentsAsync(
+        IAgentCliProvider provider,
+        string? requested,
+        CancellationToken cancellationToken)
+    {
+        var current = await settings.ArgumentsForAsync(provider, cancellationToken);
+
+        if (requested is null)
+        {
+            return current;
+        }
+
+        var text = requested.Trim();
+
+        AgentArguments.Parse(text);
+
+        if (text != current)
+        {
+            await settings.SaveArgumentsAsync(provider.Id, text, cancellationToken);
+        }
+
+        return text;
     }
 
     /// <summary>

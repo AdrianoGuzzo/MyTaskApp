@@ -155,17 +155,26 @@ public class ClaudeCodeCliProviderTests
         ClaudeCodeCliProvider.ParseVersion(output).Should().Be(expected);
     }
 
-    /// <summary>Nenhum argumento e nenhum shell: o executável, na pasta do worktree.</summary>
+    /// <summary>Nenhum shell: o executável com os parâmetros escolhidos, na pasta do worktree.</summary>
     [Fact]
-    public void TheLaunch_IsTheExecutableAlone_InsideTheWorktree()
+    public void TheLaunch_IsTheExecutableWithTheChosenArguments_InsideTheWorktree()
     {
         var launch = Provider(_ => false).CreateLaunch(
-            new AgentCliStartContext(Guid.NewGuid(), @"C:\Projects\eco core-feature-123"),
+            new AgentCliStartContext(
+                Guid.NewGuid(),
+                @"C:\Projects\eco core-feature-123",
+                ["--dangerously-skip-permissions", "--model", "opus"]),
             new CliDetectionResult { IsInstalled = true, ExecutablePath = Native });
 
         launch.Executable.Should().Be(Native);
-        launch.Arguments.Should().BeEmpty();
+        launch.Arguments.Should().Equal("--dangerously-skip-permissions", "--model", "opus");
         launch.WorkingDirectory.Should().Be(@"C:\Projects\eco core-feature-123");
+    }
+
+    [Fact]
+    public void ByDefault_TheClaude_OpensWithoutAskingForPermissions()
+    {
+        Provider(_ => false).DefaultArguments.Should().Be("--dangerously-skip-permissions");
     }
 
     [Fact]

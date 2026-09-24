@@ -39,6 +39,13 @@ internal sealed partial class ClaudeCodeCliProvider(
 
     public string Command => "claude";
 
+    /// <summary>
+    /// O worktree é um lugar descartável e isolado, feito para o agente
+    /// trabalhar sem parar a cada arquivo — daí abrir sem pedir permissões.
+    /// O usuário troca no card do agente.
+    /// </summary>
+    public string DefaultArguments => "--dangerously-skip-permissions";
+
     public async Task<CliDetectionResult> DetectAsync(CancellationToken cancellationToken = default)
     {
         var executable = Locate();
@@ -62,15 +69,15 @@ internal sealed partial class ClaudeCodeCliProvider(
         : null;
 
     /// <summary>
-    /// Só o executável, sem argumento: o Claude abre a sessão interativa na
-    /// pasta em que nasceu — o worktree.
+    /// O executável com os parâmetros escolhidos: o Claude abre a sessão
+    /// interativa na pasta em que nasceu — o worktree.
     /// </summary>
     public TerminalLaunchOptions CreateLaunch(AgentCliStartContext context, CliDetectionResult detection)
     {
         var executable = detection.ExecutablePath
             ?? throw new InvalidOperationException("O Claude Code não foi encontrado.");
 
-        return new TerminalLaunchOptions(executable, [], context.WorkingDirectory);
+        return new TerminalLaunchOptions(executable, context.Arguments, context.WorkingDirectory);
     }
 
     /// <summary>O caminho absoluto do <c>claude</c>, ou <c>null</c>.</summary>

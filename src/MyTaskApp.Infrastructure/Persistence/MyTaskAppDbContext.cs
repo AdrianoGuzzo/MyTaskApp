@@ -46,6 +46,9 @@ public sealed class MyTaskAppDbContext(DbContextOptions<MyTaskAppDbContext> opti
     internal DbSet<DataRetentionSettingsRow> DataRetentionSettings =>
         Set<DataRetentionSettingsRow>();
 
+    /// <summary>Os parâmetros com que cada agente abre (ADR-030).</summary>
+    internal DbSet<AgentSettingsRow> AgentSettings => Set<AgentSettingsRow>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder) =>
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(MyTaskAppDbContext).Assembly);
 }
