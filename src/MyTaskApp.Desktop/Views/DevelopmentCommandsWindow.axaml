@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
+        xmlns:spell="using:MyTaskApp.Desktop.SpellChecking"
         xmlns:views="using:MyTaskApp.Desktop.Views"
         x:Class="MyTaskApp.Desktop.Views.DevelopmentCommandsWindow"
         x:DataType="vm:DevelopmentCommandsViewModel"
@@ -146,7 +147,8 @@
         <TextBox FontSize="12"
                  MaxLength="500"
                  PlaceholderText="Descrição (opcional)"
-                 Text="{Binding Description}" />
+                 Text="{Binding Description}"
+                 spell:SpellCheck.IsEnabled="True" />
 
         <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
           <Button Content="Cancelar"

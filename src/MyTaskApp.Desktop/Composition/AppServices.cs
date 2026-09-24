@@ -4,6 +4,7 @@ using MyTaskApp.Application;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Desktop.Reminders;
+using MyTaskApp.Desktop.SpellChecking;
 using MyTaskApp.Desktop.ViewModels;
 using MyTaskApp.Desktop.Views;
 using MyTaskApp.Desktop.Widget;
@@ -76,6 +77,12 @@ internal static class AppServices
             // dialogo: descobre a janela a cada escrita.
             .AddSingleton<IClipboardWriter, ClipboardWriter>()
 
+            // Corretor ortografico (ADR-032). A escolha e aqui, e nao dentro
+            // dele: fora do Windows, ou sem dicionario instalado, as caixas
+            // recebem o objeto nulo e nao sublinham nada.
+            .AddSingleton<ISpellChecker>(services => CreateSpellChecker(
+                services.GetRequiredService<ILoggerFactory>().CreateLogger("MyTaskApp.Desktop.SpellChecking")))
+
             // Iniciar com o Windows (ADR-023). Registrado sem condicao, como o
             // WindowsSoundPlayer: a guarda de plataforma mora dentro dele, e
             // fora do Windows a resposta e "nao da" em vez de excecao.
@@ -121,4 +128,9 @@ internal static class AppServices
             .AddApplication(configuration)
             .AddInfrastructure(configuration)
             .BuildServiceProvider(validateScopes: true);
+
+    private static ISpellChecker CreateSpellChecker(Microsoft.Extensions.Logging.ILogger logger) =>
+        OperatingSystem.IsWindows()
+            ? WindowsSpellChecker.TryCreate(logger) ?? (ISpellChecker)NoSpellChecker.Instance
+            : NoSpellChecker.Instance;
 }
