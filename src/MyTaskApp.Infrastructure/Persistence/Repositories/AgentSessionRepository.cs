@@ -23,6 +23,22 @@ internal sealed class AgentSessionRepository(MyTaskAppDbContext context) : IAgen
             .ThenByDescending(session => session.Id)
             .FirstOrDefaultAsync(cancellationToken);
 
+    public Task<AgentSession?> FindLatestForDevelopmentAsync(Guid developmentId, CancellationToken cancellationToken = default) =>
+        context.AgentSessions
+            .Where(session => session.TaskDevelopmentId == developmentId)
+            .OrderByDescending(session => session.StartedAt)
+            .ThenByDescending(session => session.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<AgentSession>> ListActiveForTaskAsync(Guid taskId, CancellationToken cancellationToken = default) =>
+        await context.AgentSessions
+            .Where(session => session.TaskItemId == taskId
+                && (session.Status == AgentSessionStatus.Starting
+                    || session.Status == AgentSessionStatus.Running))
+            .OrderBy(session => session.StartedAt)
+            .ThenBy(session => session.Id)
+            .ToListAsync(cancellationToken);
+
     public async Task<IReadOnlyList<AgentSession>> ListActiveAsync(CancellationToken cancellationToken = default) =>
         await context.AgentSessions
             .Where(session => session.Status == AgentSessionStatus.Starting

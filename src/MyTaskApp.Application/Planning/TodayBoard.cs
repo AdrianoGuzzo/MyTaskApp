@@ -26,10 +26,20 @@ public sealed record TodayTask(
     /// <summary>As etiquetas do checklist; <c>null</c> = nenhuma.</summary>
     IReadOnlyList<TagBadge>? Tags = null,
     /// <summary>
-    /// O nome do agente de IA aberto para a tarefa ("Claude Code"); <c>null</c>
-    /// = nenhum (ADR-030). É o que acende o selo na linha.
+    /// Os agentes de IA abertos para a tarefa, um por ambiente; <c>null</c> =
+    /// nenhum (ADR-030, ADR-031). É o que acende o selo na linha.
     /// </summary>
-    string? ActiveAgentName = null);
+    IReadOnlyList<ActiveAgent>? ActiveAgents = null);
+
+/// <summary>
+/// Um agente aberto: o nome ("Claude Code") e o ambiente em que roda — o que o
+/// menu do selo mostra quando a tarefa tem mais de um.
+/// </summary>
+public sealed record ActiveAgent(
+    Guid? DevelopmentId,
+    string AgentName,
+    string? RepositoryName = null,
+    string? Branch = null);
 
 /// <summary>Tela "Hoje" (§9), já separada em seções mutuamente exclusivas.</summary>
 public sealed record TodayBoard(

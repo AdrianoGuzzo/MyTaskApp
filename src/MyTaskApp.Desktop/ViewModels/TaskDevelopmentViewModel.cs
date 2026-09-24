@@ -102,7 +102,8 @@ public sealed partial class TaskDevelopmentViewModel(
     [ObservableProperty]
     [NotifyPropertyChangedFor(
         nameof(IsLoading), nameof(IsGitMissing), nameof(ShowForm), nameof(IsFormEnabled),
-        nameof(IsRunning), nameof(ShowSteps), nameof(IsConflict), nameof(ShowFailure), nameof(IsReady))]
+        nameof(IsRunning), nameof(ShowSteps), nameof(IsConflict), nameof(ShowFailure), nameof(IsReady),
+        nameof(ChipGlyph), nameof(CanForget), nameof(IsBusy))]
     [NotifyCanExecuteChangedFor(nameof(StartCommand))]
     private DevelopmentPanelState _state = DevelopmentPanelState.Loading;
 
@@ -133,8 +134,11 @@ public sealed partial class TaskDevelopmentViewModel(
 
     // --- Diretório ---------------------------------------------------------
 
-    /// <summary>O <c>@alias</c> no campo Diretório vira o caminho do diretório da etiqueta.</summary>
-    public AliasCompletionViewModel DirectoryCompletion { get; } = new();
+    /// <summary>
+    /// O <c>@alias</c> no campo Diretório vira o caminho do diretório da etiqueta.
+    /// Compartilhado entre os ambientes da tarefa: as etiquetas são as mesmas.
+    /// </summary>
+    public AliasCompletionViewModel DirectoryCompletion { get; private set; } = new();
 
     [ObservableProperty]
     private string _directoryText = string.Empty;
@@ -150,7 +154,7 @@ public sealed partial class TaskDevelopmentViewModel(
 
     /// <summary>O worktree principal: de onde sai o nome do projeto e a pasta irmã.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(WorktreePreview))]
+    [NotifyPropertyChangedFor(nameof(WorktreePreview), nameof(ChipTitle))]
     private string? _repositoryPath;
 
     [ObservableProperty]
@@ -187,7 +191,7 @@ public sealed partial class TaskDevelopmentViewModel(
     private string? _branchesError;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(BranchNameError), nameof(HasBranchNameError), nameof(WorktreePreview))]
+    [NotifyPropertyChangedFor(nameof(BranchNameError), nameof(HasBranchNameError), nameof(WorktreePreview), nameof(ChipBranch))]
     [NotifyCanExecuteChangedFor(nameof(StartCommand))]
     private string _newBranchName = string.Empty;
 
@@ -275,8 +279,54 @@ public sealed partial class TaskDevelopmentViewModel(
     // --- Pronto ------------------------------------------------------------
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasPreviousAttempt))]
+    [NotifyPropertyChangedFor(
+        nameof(HasPreviousAttempt), nameof(DevelopmentId), nameof(IsDraft),
+        nameof(ChipTitle), nameof(ChipBranch), nameof(ChipGlyph), nameof(CanForget))]
     private TaskDevelopmentView? _development;
+
+    /// <summary>O ambiente gravado que esta aba mostra; <c>null</c> = um repositório novo, ainda no formulário.</summary>
+    public Guid? DevelopmentId => Development?.Id;
+
+    public bool IsDraft => Development is null;
+
+    /// <summary>
+    /// Criou, falhou, removeu ou saiu da lista: a lista de ambientes da tarefa
+    /// mudou, e quem mostra as abas de repositório precisa saber (ADR-031).
+    /// </summary>
+    public event Action<TaskDevelopmentViewModel>? Changed;
+
+    /// <summary>Algo em andamento que fechar a janela interromperia.</summary>
+    public bool IsBusy => IsRunning || IsRemoving || Commands.IsRunning;
+
+    // --- A aba do repositório (ADR-031) ------------------------------------
+
+    /// <summary>O nome da pasta do repositório; "Novo repositório" enquanto não há um.</summary>
+    public string ChipTitle =>
+        FolderName(Development?.RepositoryPath ?? RepositoryPath) ?? "Novo repositório";
+
+    public string ChipBranch => Development?.Branch ?? NewBranchName.Trim();
+
+    public string ChipGlyph => State switch
+    {
+        DevelopmentPanelState.Running or DevelopmentPanelState.Conflict => "…",
+        DevelopmentPanelState.Failed => "⚠",
+        _ => Development?.Status switch
+        {
+            TaskDevelopmentStatus.Ready => "✓",
+            TaskDevelopmentStatus.Error => "⚠",
+            TaskDevelopmentStatus.Creating => "…",
+            TaskDevelopmentStatus.Removed => "○",
+            _ => "+",
+        },
+    };
+
+    /// <summary>O agente deste ambiente está aberto: a aba ganha a bolinha.</summary>
+    public bool HasRunningAgent => Agent.IsRunning;
+
+    /// <summary>Só sai da lista o ambiente que não tem mais worktree.</summary>
+    public bool CanForget =>
+        Development is { Status: TaskDevelopmentStatus.Error or TaskDevelopmentStatus.Removed }
+        && State is not (DevelopmentPanelState.Running or DevelopmentPanelState.Conflict);
 
     /// <summary>O que aconteceu na tentativa anterior (falhou, foi interrompida, foi removida).</summary>
     [ObservableProperty]
@@ -294,6 +344,7 @@ public sealed partial class TaskDevelopmentViewModel(
     private bool _isShowingRemoveChanges;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsBusy))]
     private bool _isRemoving;
 
     public bool IsRemoveBlocked => RemoveChanges is { Count: > 0 };
@@ -371,23 +422,91 @@ public sealed partial class TaskDevelopmentViewModel(
         Commands.IsEditable = !IsReadOnly
             && State is DevelopmentPanelState.Setup or DevelopmentPanelState.Failed or DevelopmentPanelState.Ready;
 
-    /// <summary>A tarefa que esta aba prepara. Chamado uma vez, na abertura da janela.</summary>
-    public void Load(Guid taskId, string taskTitle, bool isReadOnly)
+    /// <summary>
+    /// A tarefa que esta aba prepara. Chamado uma vez, quando a aba do
+    /// repositório nasce. O <paramref name="completion"/> é o dos aliases da
+    /// tarefa, o mesmo para todos os ambientes.
+    /// </summary>
+    public void Load(Guid taskId, string taskTitle, bool isReadOnly, AliasCompletionViewModel? completion = null)
     {
         _taskId = taskId;
         _taskTitle = taskTitle;
         IsReadOnly = isReadOnly;
-        Agent.Load(taskId, isReadOnly);
+        DirectoryCompletion = completion ?? DirectoryCompletion;
         DirectoryCompletion.IsEnabled = !isReadOnly;
         NewBranchName = GitBranchName.Suggest(taskTitle);
         State = DevelopmentPanelState.Loading;
+        Agent.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName == nameof(AgentSessionViewModel.IsRunning))
+            {
+                OnPropertyChanged(nameof(HasRunningAgent));
+            }
+        };
+        Commands.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName == nameof(PostWorktreeCommandsViewModel.IsRunning))
+            {
+                OnPropertyChanged(nameof(IsBusy));
+            }
+        };
+    }
+
+    partial void OnDevelopmentChanged(TaskDevelopmentView? value)
+    {
+        if (value is not null)
+        {
+            Agent.Load(_taskId, value.Id, IsReadOnly);
+        }
     }
 
     /// <summary>
-    /// A cada vez que a aba aparece: o que está gravado na tarefa, e se o Git
+    /// Um repositório novo na tarefa (ADR-031): a branch e a origem dos outros
+    /// ambientes vêm sugeridas — o fluxo que atravessa repositórios costuma usar
+    /// a mesma branch em todos. A pasta fica vazia: é outro repositório.
+    /// </summary>
+    public void SuggestFrom(IEnumerable<TaskDevelopmentView> siblings)
+    {
+        var sibling = siblings
+            .OrderByDescending(view => view.Status == TaskDevelopmentStatus.Ready)
+            .ThenByDescending(view => view.CreatedAt)
+            .FirstOrDefault();
+
+        if (sibling is null)
+        {
+            return;
+        }
+
+        NewBranchName = sibling.Branch;
+        _preferredSource = sibling.SourceBranch;
+    }
+
+    /// <summary>
+    /// O registro mudou fora desta aba — outra aba recarregou a lista. Só o
+    /// dado: o estado da tela muda quando a aba for aberta de novo.
+    /// </summary>
+    public void UpdateRecord(TaskDevelopmentView development)
+    {
+        if (State is DevelopmentPanelState.Running or DevelopmentPanelState.Conflict)
+        {
+            return;
+        }
+
+        Development = development;
+    }
+
+    /// <summary>A lista de ambientes não veio: o formulário, com o recado.</summary>
+    public void ShowLoadFailure()
+    {
+        Message = "Não foi possível carregar o ambiente de desenvolvimento desta tarefa.";
+        State = DevelopmentPanelState.Setup;
+    }
+
+    /// <summary>
+    /// A cada vez que a aba aparece: o que está gravado no ambiente, e se o Git
     /// está lá. Não mexe numa execução em andamento nem numa pergunta aberta.
     /// </summary>
-    public async Task ActivateAsync(CancellationToken cancellationToken)
+    public async Task ActivateAsync(TaskDevelopmentView? development, CancellationToken cancellationToken)
     {
         if (State is DevelopmentPanelState.Running or DevelopmentPanelState.Conflict)
         {
@@ -396,10 +515,6 @@ public sealed partial class TaskDevelopmentViewModel(
 
         try
         {
-            var development = await runner.RunAsync<GetTaskDevelopmentHandler, TaskDevelopmentView?>(
-                (handler, token) => handler.HandleAsync(new GetTaskDevelopment(_taskId), token),
-                cancellationToken);
-
             Development = development;
             ShowSavedCommands(development);
             await LoadGlobalCommandsAsync(cancellationToken);
@@ -639,7 +754,8 @@ public sealed partial class TaskDevelopmentViewModel(
 
         try
         {
-            var command = new PrepareDevelopment(_taskId, DirectoryText, source.FullRef, NewBranchName.Trim());
+            var command = new PrepareDevelopment(
+                _taskId, DirectoryText, source.FullRef, NewBranchName.Trim(), Development?.Id);
 
             plan = await runner.RunAsync<PrepareDevelopmentHandler, DevelopmentPlan>(
                 (handler, token) => handler.HandleAsync(command, progress, token),
@@ -730,8 +846,13 @@ public sealed partial class TaskDevelopmentViewModel(
         catch (Exception exception)
         {
             HandleFailure(exception);
+
+            // A falha pode ter ficado gravada como um ambiente com erro.
+            Changed?.Invoke(this);
             return;
         }
+
+        Changed?.Invoke(this);
 
         // Só aqui, com o worktree pronto: a falha acima retorna antes (ADR-028).
         if (Commands.Entries.Count > 0)
@@ -749,7 +870,7 @@ public sealed partial class TaskDevelopmentViewModel(
     [RelayCommand]
     public async Task RunCommandsAsync()
     {
-        if (State is not DevelopmentPanelState.Ready || Commands.IsRunning)
+        if (State is not DevelopmentPanelState.Ready || Commands.IsRunning || Development is not { } development)
         {
             return;
         }
@@ -771,7 +892,7 @@ public sealed partial class TaskDevelopmentViewModel(
         try
         {
             var summary = await runner.RunAsync<RunDevelopmentCommandsHandler, CommandRunSummary>(
-                (handler, cancel) => handler.HandleAsync(new RunDevelopmentCommands(_taskId), progress, cancel),
+                (handler, cancel) => handler.HandleAsync(new RunDevelopmentCommands(_taskId, development.Id), progress, cancel),
                 token);
 
             Commands.Complete(summary);
@@ -830,7 +951,7 @@ public sealed partial class TaskDevelopmentViewModel(
 
     private async Task<bool> SaveCommandsCoreAsync()
     {
-        if (Development is null || State is not DevelopmentPanelState.Ready)
+        if (Development is not { } development || State is not DevelopmentPanelState.Ready)
         {
             return false;
         }
@@ -840,7 +961,7 @@ public sealed partial class TaskDevelopmentViewModel(
             var entries = Commands.Entries;
 
             Development = await runner.RunAsync<SetDevelopmentCommandsHandler, TaskDevelopmentView>(
-                (handler, token) => handler.HandleAsync(new SetDevelopmentCommands(_taskId, entries), token),
+                (handler, token) => handler.HandleAsync(new SetDevelopmentCommands(_taskId, development.Id, entries), token),
                 CancellationToken.None);
 
             Commands.MarkSaved();
@@ -1093,7 +1214,7 @@ public sealed partial class TaskDevelopmentViewModel(
         try
         {
             var inspection = await runner.RunAsync<InspectWorktreeHandler, WorktreeInspection>(
-                (handler, token) => handler.HandleAsync(new InspectWorktree(_taskId), token),
+                (handler, token) => handler.HandleAsync(new InspectWorktree(_taskId, development.Id), token),
                 CancellationToken.None);
 
             if (!inspection.IsClean)
@@ -1166,9 +1287,16 @@ public sealed partial class TaskDevelopmentViewModel(
 
     private async Task RunRemoveAsync(IReadOnlyList<DirectoryLocker>? terminate)
     {
+        if (Development is not { } development)
+        {
+            return;
+        }
+
         Development = await runner.RunAsync<RemoveWorktreeHandler, TaskDevelopmentView>(
-            (handler, token) => handler.HandleAsync(new RemoveWorktree(_taskId, terminate), token),
+            (handler, token) => handler.HandleAsync(new RemoveWorktree(_taskId, development.Id, terminate), token),
             CancellationToken.None);
+
+        Changed?.Invoke(this);
 
         ClearRemoveBlock();
         ShowPreviousAttempt(Development);
@@ -1217,6 +1345,59 @@ public sealed partial class TaskDevelopmentViewModel(
         IsShowingRemoveChanges = false;
         RemoveLockers = null;
         RemoveLockedMessage = null;
+    }
+
+    /// <summary>
+    /// "Remover da lista": o ambiente que falhou ou teve o worktree removido sai
+    /// das abas da tarefa (ADR-031). A branch continua no repositório.
+    /// </summary>
+    [RelayCommand]
+    public async Task ForgetAsync()
+    {
+        if (!CanForget || Development is not { } development)
+        {
+            return;
+        }
+
+        var confirmed = await confirmation.AskAsync(new ConfirmationRequest(
+            "Remover este repositório da tarefa?",
+            $"O registro de {development.RepositoryPath} sai da lista. "
+            + $"A branch {development.Branch} continua no repositório.",
+            "Remover da lista"));
+
+        if (!confirmed)
+        {
+            return;
+        }
+
+        try
+        {
+            await runner.RunAsync<ForgetDevelopmentHandler>(
+                (handler, token) => handler.HandleAsync(new ForgetDevelopment(_taskId, development.Id), token),
+                CancellationToken.None);
+
+            Changed?.Invoke(this);
+        }
+        catch (DomainException exception)
+        {
+            Message = exception.Message;
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "DevelopmentForgetFailed {TaskId}", _taskId);
+            Message = "Não foi possível remover o repositório da lista.";
+        }
+    }
+
+    private static string? FolderName(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return null;
+        }
+
+        var name = Path.GetFileName(path.TrimEnd('\\', '/'));
+        return name.Length == 0 ? path : name;
     }
 
     [RelayCommand]

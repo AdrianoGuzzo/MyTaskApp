@@ -16,6 +16,8 @@ public sealed class TaskItem
 
     private readonly List<TaskItemTag> _tags = [];
 
+    private readonly List<TaskDevelopment> _developments = [];
+
     private TaskItem(
         Guid id,
         string title,
@@ -52,10 +54,12 @@ public sealed class TaskItem
     public ReminderPolicy Reminder { get; private set; } = ReminderPolicy.None;
 
     /// <summary>
-    /// O worktree em que esta tarefa está sendo implementada (ADR-027).
-    /// <c>null</c> = a implementação não foi iniciada pelo app.
+    /// Os worktrees em que esta tarefa está sendo implementada, um por
+    /// repositório (ADR-027, ADR-031), na ordem em que foram criados. Vazio = a
+    /// implementação não foi iniciada pelo app.
     /// </summary>
-    public TaskDevelopment? Development { get; private set; }
+    public IReadOnlyList<TaskDevelopment> Developments =>
+        _developments.AsReadOnly();
 
     /// <summary>Quando foi arquivado. <c>null</c> = está na lista principal.</summary>
     public DateTimeOffset? ArchivedAt { get; private set; }
@@ -168,65 +172,119 @@ public sealed class TaskItem
     // ---------------------------------------------------------------------
 
     /// <summary>
-    /// Marca o início da criação do worktree. Uma tentativa anterior que falhou,
-    /// foi removida ou ficou pela metade é reaproveitada, e não substituída.
+    /// Marca o início da criação do worktree. Com <paramref name="developmentId"/>,
+    /// é aquele ambiente que tenta de novo. Sem ele, um ambiente anterior do
+    /// mesmo repositório que falhou, foi removido ou ficou pela metade é
+    /// reaproveitado; senão, entra um ambiente novo na lista (ADR-031).
     /// </summary>
     public TaskDevelopment BeginDevelopment(
+        Guid? developmentId,
         string repositoryPath,
         string sourceBranch,
         string branch,
         string worktreePath,
         DateTimeOffset at)
     {
-        EnsureDevelopmentCanBegin();
+        EnsureDevelopmentCanBegin(developmentId, repositoryPath);
 
-        if (Development is null)
+        var development = developmentId is { } id
+            ? GetDevelopment(id)
+            : _developments.Find(existing => existing.IsFor(repositoryPath));
+
+        if (development is null)
         {
-            Development = TaskDevelopment.Begin(Id, repositoryPath, sourceBranch, branch, worktreePath, at);
+            development = TaskDevelopment.Begin(Id, repositoryPath, sourceBranch, branch, worktreePath, at);
+            _developments.Add(development);
         }
         else
         {
-            Development.Restart(repositoryPath, sourceBranch, branch, worktreePath, at);
+            development.Restart(repositoryPath, sourceBranch, branch, worktreePath, at);
         }
 
-        return Development;
+        return development;
     }
 
     /// <summary>
     /// Confere, sem alterar nada, que a implementação pode começar. O caso de uso
     /// pergunta antes do fetch: descobrir a recusa depois de um minuto de rede
-    /// seria desperdiçar o tempo do usuário.
+    /// seria desperdiçar o tempo do usuário. O repositório só é conferido quando
+    /// informado — antes de validar o diretório, ele ainda não é conhecido.
     /// </summary>
-    public void EnsureDevelopmentCanBegin()
+    public void EnsureDevelopmentCanBegin(Guid? developmentId, string? repositoryPath = null)
     {
         RefuseWhenOutOfTheMainList("iniciar a implementação de");
 
-        if (Development is { Status: TaskDevelopmentStatus.Ready })
+        var target = developmentId is { } id ? GetDevelopment(id) : null;
+
+        if (target is { Status: TaskDevelopmentStatus.Ready })
         {
             throw new DomainException(
-                "Esta tarefa já tem um worktree pronto. Remova-o antes de criar outro.");
+                "Este ambiente já tem um worktree pronto. Remova-o antes de criar outro.");
+        }
+
+        if (repositoryPath is null)
+        {
+            return;
+        }
+
+        // Um ambiente por repositório: dois worktrees da mesma tarefa no mesmo
+        // repositório disputariam a mesma branch, e o Git recusaria o segundo.
+        var sameRepository = _developments.Find(existing => existing.IsFor(repositoryPath));
+
+        if (sameRepository is null || sameRepository == target)
+        {
+            return;
+        }
+
+        if (target is not null || sameRepository.Status == TaskDevelopmentStatus.Ready)
+        {
+            throw new DomainException(
+                $"Esta tarefa já tem um ambiente em {sameRepository.RepositoryPath}. "
+                + "Use-o, ou remova-o antes de criar outro no mesmo repositório.");
         }
     }
+
+    /// <summary>O ambiente <paramref name="developmentId"/> desta tarefa.</summary>
+    public TaskDevelopment GetDevelopment(Guid developmentId) =>
+        _developments.Find(development => development.Id == developmentId)
+        ?? throw new DomainException("Este ambiente de desenvolvimento não existe mais nesta tarefa.");
 
     /// <summary>
     /// Troca a lista de comandos pós-Worktree (ADR-028). Configuração, e não
     /// execução: rodá-los é decisão da tela, sempre por ação explícita.
     /// </summary>
-    public void SetDevelopmentCommands(IEnumerable<string?>? commands, DateTimeOffset at)
+    public void SetDevelopmentCommands(Guid developmentId, IEnumerable<string?>? commands, DateTimeOffset at)
     {
         RefuseWhenOutOfTheMainList("alterar os comandos de");
-        RequireDevelopment().ReplaceCommands(commands, at);
+        GetDevelopment(developmentId).ReplaceCommands(commands, at);
     }
 
-    public void MarkDevelopmentReady(DateTimeOffset at) => RequireDevelopment().MarkReady(at);
+    public void MarkDevelopmentReady(Guid developmentId, DateTimeOffset at) =>
+        GetDevelopment(developmentId).MarkReady(at);
 
-    public void MarkDevelopmentFailed(string reason, DateTimeOffset at) =>
-        RequireDevelopment().MarkFailed(reason, at);
+    public void MarkDevelopmentFailed(Guid developmentId, string reason, DateTimeOffset at) =>
+        GetDevelopment(developmentId).MarkFailed(reason, at);
 
-    public void MarkDevelopmentRemoved(DateTimeOffset at) => RequireDevelopment().MarkRemoved(at);
+    public void MarkDevelopmentRemoved(Guid developmentId, DateTimeOffset at) =>
+        GetDevelopment(developmentId).MarkRemoved(at);
 
-    private TaskDevelopment RequireDevelopment() =>
-        Development ?? throw new DomainException("Esta tarefa não tem ambiente de desenvolvimento.");
+    /// <summary>
+    /// Tira da lista um ambiente que não tem mais worktree: falhou ou foi
+    /// removido. Sem a guarda da lista principal, como a remoção — um checklist
+    /// arquivado ainda pode arrumar a sua lista (ADR-031).
+    /// </summary>
+    public void ForgetDevelopment(Guid developmentId)
+    {
+        var development = GetDevelopment(developmentId);
+
+        if (development.Status is not (TaskDevelopmentStatus.Error or TaskDevelopmentStatus.Removed))
+        {
+            throw new DomainException(
+                "Só um ambiente que falhou ou teve o worktree removido pode sair da lista.");
+        }
+
+        _developments.Remove(development);
+    }
 
     public void Rename(string title) => Title = NormalizeTitle(title);
 

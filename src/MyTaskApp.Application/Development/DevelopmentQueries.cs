@@ -1,19 +1,45 @@
+using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
 
 namespace MyTaskApp.Application.Development;
 
-/// <summary>O ambiente da tarefa, ou <c>null</c> se a implementação não foi iniciada.</summary>
-public sealed record GetTaskDevelopment(Guid TaskId);
+/// <summary>
+/// Os ambientes da tarefa, um por repositório, na ordem em que foram criados
+/// (ADR-031). Vazio = a implementação não foi iniciada.
+/// </summary>
+public sealed record GetTaskDevelopments(Guid TaskId);
 
-public sealed class GetTaskDevelopmentHandler(ITaskItemRepository tasks)
+public sealed class GetTaskDevelopmentsHandler(ITaskItemRepository tasks)
 {
-    public async Task<TaskDevelopmentView?> HandleAsync(
-        GetTaskDevelopment query,
+    public async Task<IReadOnlyList<TaskDevelopmentView>> HandleAsync(
+        GetTaskDevelopments query,
         CancellationToken cancellationToken = default)
     {
         var task = await tasks.GetByIdAsync(query.TaskId, cancellationToken);
 
-        return task.Development is null ? null : TaskDevelopmentView.From(task.Development);
+        return task.Developments.Select(TaskDevelopmentView.From).ToList();
+    }
+}
+
+/// <summary>
+/// Tira da lista um ambiente sem worktree — que falhou ou foi removido
+/// (ADR-031). A branch e o histórico de sessões ficam; só o registro sai.
+/// </summary>
+public sealed record ForgetDevelopment(Guid TaskId, Guid DevelopmentId);
+
+public sealed class ForgetDevelopmentHandler(
+    ITaskItemRepository tasks,
+    IUnitOfWork unitOfWork,
+    ILogger<ForgetDevelopmentHandler> logger)
+{
+    public async Task HandleAsync(ForgetDevelopment command, CancellationToken cancellationToken = default)
+    {
+        var task = await tasks.GetByIdAsync(command.TaskId, cancellationToken);
+
+        task.ForgetDevelopment(command.DevelopmentId);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("DevelopmentForgotten {TaskId} {DevelopmentId}", task.Id, command.DevelopmentId);
     }
 }
 

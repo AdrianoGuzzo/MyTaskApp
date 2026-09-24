@@ -24,8 +24,18 @@ public sealed record TodayOccurrenceRow(
     int? Position = null,
     /// <summary>As etiquetas do checklist, em ordem alfabética (ADR-025).</summary>
     IReadOnlyList<TagBadge>? Tags = null,
-    /// <summary>O agente de IA em execução para a tarefa, se houver (ADR-030).</summary>
-    string? ActiveAgentProviderId = null);
+    /// <summary>Os agentes de IA em execução para a tarefa, um por ambiente (ADR-030, ADR-031).</summary>
+    IReadOnlyList<ActiveAgentRow>? ActiveAgents = null);
+
+/// <summary>
+/// Um agente em execução: em qual ambiente e de qual repositório. Ambiente
+/// <c>null</c> é sessão de antes de haver vários ambientes, ou de um que saiu da lista.
+/// </summary>
+public sealed record ActiveAgentRow(
+    Guid? DevelopmentId,
+    string ProviderId,
+    string? RepositoryPath = null,
+    string? Branch = null);
 
 /// <summary>O que a linha precisa de uma etiqueta: a bolinha e o nome do balão.</summary>
 public sealed record TagBadge(Guid Id, string Name, string ColorHex);

@@ -2,9 +2,9 @@ namespace MyTaskApp.Domain.Tasks;
 
 /// <summary>Em que pé está o ambiente de desenvolvimento da tarefa (ADR-027).</summary>
 /// <remarks>
-/// Não há "NotStarted": tarefa sem ambiente simplesmente não tem
-/// <see cref="TaskItem.Development"/>. Um valor para "nada" seria uma linha que
-/// não diz coisa nenhuma.
+/// Não há "NotStarted": tarefa sem ambiente simplesmente tem
+/// <see cref="TaskItem.Developments"/> vazio. Um valor para "nada" seria uma
+/// linha que não diz coisa nenhuma.
 /// </remarks>
 public enum TaskDevelopmentStatus
 {
@@ -101,8 +101,9 @@ public sealed class TaskDevelopment
     }
 
     /// <summary>
-    /// Começa de novo na mesma instância. Trocar por uma nova faria o EF inserir
-    /// a linha nova antes de apagar a velha, e o índice único da tarefa recusaria.
+    /// Começa de novo na mesma instância: tentar de novo é o mesmo ambiente, e
+    /// não mais um na lista da tarefa (ADR-031). O repositório pode mudar — o
+    /// usuário pode ter errado a pasta na primeira vez.
     /// </summary>
     internal void Restart(
         string repositoryPath,
@@ -189,6 +190,51 @@ public sealed class TaskDevelopment
         Status = TaskDevelopmentStatus.Removed;
         StatusChangedAt = at;
         FailureReason = null;
+    }
+
+    /// <summary>
+    /// Este ambiente é do repositório <paramref name="repositoryPath"/>? Compara
+    /// como o sistema compara: no Windows, barra e maiúscula não importam.
+    /// </summary>
+    internal bool IsFor(string? repositoryPath)
+    {
+        if (string.IsNullOrWhiteSpace(repositoryPath))
+        {
+            return false;
+        }
+
+        return string.Equals(
+            Canonical(RepositoryPath),
+            Canonical(repositoryPath),
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+    }
+
+    private static string Canonical(string path)
+    {
+        var native = path.Trim().Trim('"').Trim();
+
+        if (OperatingSystem.IsWindows())
+        {
+            native = native.Replace('/', '\\');
+        }
+
+        try
+        {
+            native = Path.GetFullPath(native);
+        }
+        catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            // Caminho que o sistema nem aceita: compara como veio.
+        }
+
+        var root = Path.GetPathRoot(native) ?? string.Empty;
+
+        while (native.Length > root.Length && (native[^1] == '\\' || native[^1] == '/'))
+        {
+            native = native[..^1];
+        }
+
+        return native;
     }
 
     private static string NormalizePath(string? path, string label)

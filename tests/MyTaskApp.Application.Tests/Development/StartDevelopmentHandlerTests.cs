@@ -58,7 +58,7 @@ public class StartDevelopmentHandlerTests
         view.Branch.Should().Be("feature/123-corrigir-animais");
         view.WorktreePath.Should().Be(Path);
         view.CreatedAt.Should().Be(Now);
-        _task.Development!.Status.Should().Be(TaskDevelopmentStatus.Ready);
+        _task.Developments[0].Status.Should().Be(TaskDevelopmentStatus.Ready);
     }
 
     /// <summary>"Criando" vai para o banco antes do Git: um app que cai no meio deixa rastro.</summary>
@@ -87,8 +87,8 @@ public class StartDevelopmentHandlerTests
         failure.Step.Should().Be(DevelopmentStep.CreateWorktree);
         failure.Message.Should().Be("A branch feature/123-corrigir-animais já existe.");
         failure.Command!.StandardError.Should().Contain("already exists");
-        _task.Development!.Status.Should().Be(TaskDevelopmentStatus.Error);
-        _task.Development.FailureReason.Should().Be(failure.Message);
+        _task.Developments[0].Status.Should().Be(TaskDevelopmentStatus.Error);
+        _task.Developments[0].FailureReason.Should().Be(failure.Message);
         _tasks.SaveCount.Should().Be(2);
     }
 
@@ -102,7 +102,7 @@ public class StartDevelopmentHandlerTests
 
         failure.Step.Should().Be(DevelopmentStep.PlanWorktreePath);
         _git.Calls.Should().NotContain(call => call.StartsWith("worktree add", StringComparison.Ordinal));
-        _task.Development.Should().BeNull();
+        _task.Developments.Should().BeEmpty();
     }
 
     [Fact]
@@ -132,7 +132,7 @@ public class StartDevelopmentHandlerTests
         await FluentActions.Awaiting(() => StartAsync(adopt: true))
             .Should().ThrowAsync<DevelopmentStepException>();
 
-        _task.Development.Should().BeNull();
+        _task.Developments.Should().BeEmpty();
     }
 
     [Fact]
@@ -149,13 +149,13 @@ public class StartDevelopmentHandlerTests
     {
         _git.AddWorktreeFailure = FakeGitClient.Failed("git worktree add", "fatal: boom");
         await FluentActions.Awaiting(() => StartAsync()).Should().ThrowAsync<DevelopmentStepException>();
-        var first = _task.Development!.Id;
+        var first = _task.Developments[0].Id;
 
         _git.AddWorktreeFailure = null;
         await StartAsync();
 
-        _task.Development!.Id.Should().Be(first);
-        _task.Development.Status.Should().Be(TaskDevelopmentStatus.Ready);
+        _task.Developments[0].Id.Should().Be(first);
+        _task.Developments[0].Status.Should().Be(TaskDevelopmentStatus.Ready);
     }
 
     [Theory]
@@ -166,4 +166,33 @@ public class StartDevelopmentHandlerTests
     public void GitErrors_AreTranslated(string error, string expected) =>
         StartDevelopmentHandler.CreateFailureMessage(FakeGitClient.Failed("git worktree add", error), Plan(), Path)
             .Should().Contain(expected);
+
+    /// <summary>Outro repositório da tarefa é outro ambiente, ao lado do primeiro (ADR-031).</summary>
+    [Fact]
+    public async Task AnotherRepository_AddsASecondEnvironment()
+    {
+        var first = _task.BeginDevelopment(
+            null, @"C:\Projects\ecossistema-api", "main", "feature/123-corrigir-animais", @"C:\Projects\ecossistema-api-feature-123", Now);
+        _task.MarkDevelopmentReady(first.Id, Now);
+
+        var view = await StartAsync();
+
+        view.Id.Should().NotBe(first.Id);
+        view.TaskId.Should().Be(_task.Id);
+        _task.Developments.Select(development => development.Id).Should().Equal(first.Id, view.Id);
+        _task.Developments.Should().AllSatisfy(development => development.Status.Should().Be(TaskDevelopmentStatus.Ready));
+    }
+
+    [Fact]
+    public async Task ARetry_ReusesTheFailedEnvironment()
+    {
+        var failed = _task.BeginDevelopment(null, FakeGitClient.Repository, "main", "feature/x", Path, Now);
+        _task.MarkDevelopmentFailed(failed.Id, "falhou", Now);
+
+        var view = await Handler().HandleAsync(
+            new StartDevelopment(Plan() with { DevelopmentId = failed.Id }, Path), _progress, Ct);
+
+        view.Id.Should().Be(failed.Id);
+        _task.Developments.Should().ContainSingle().Which.Status.Should().Be(TaskDevelopmentStatus.Ready);
+    }
 }

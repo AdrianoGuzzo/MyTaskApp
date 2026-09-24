@@ -110,8 +110,11 @@ internal static class AppServices
             .AddTransient<TaskNotesViewModel>()
 
             // A aba Desenvolvimento de cada anotação (ADR-027): uma por janela,
-            // como a própria anotação.
+            // como a própria anotação, com um ambiente por repositório (ADR-031).
+            .AddTransient<TaskDevelopmentsViewModel>()
             .AddTransient<TaskDevelopmentViewModel>()
+            .AddTransient<Func<TaskDevelopmentViewModel>>(provider =>
+                () => provider.GetRequiredService<TaskDevelopmentViewModel>())
 
             // O card do agente de IA dentro dela (ADR-030): também um por janela.
             .AddTransient<AgentSessionViewModel>()

@@ -54,8 +54,8 @@ public sealed class DetectAgentCliHandler(IAgentCliProviders providers)
         : OSPlatform.Linux;
 }
 
-/// <summary>A sessão mais recente da tarefa, já conferida contra o sistema.</summary>
-public sealed record GetTaskAgentSession(Guid TaskId);
+/// <summary>A sessão mais recente de um ambiente da tarefa (ADR-031), já conferida contra o sistema.</summary>
+public sealed record GetTaskAgentSession(Guid TaskId, Guid DevelopmentId);
 
 /// <summary>
 /// Nunca devolve "Em execução" só porque o banco diz: sessão ativa cujo processo
@@ -73,7 +73,7 @@ public sealed class GetTaskAgentSessionHandler(
         GetTaskAgentSession query,
         CancellationToken cancellationToken = default)
     {
-        var session = await sessions.FindLatestForTaskAsync(query.TaskId, cancellationToken);
+        var session = await sessions.FindLatestForDevelopmentAsync(query.DevelopmentId, cancellationToken);
 
         if (session is null)
         {
@@ -90,8 +90,8 @@ public sealed class GetTaskAgentSessionHandler(
     }
 }
 
-/// <summary>Abre o agente num terminal, dentro do worktree da tarefa.</summary>
-public sealed record StartAgentSession(Guid TaskId, string? ProviderId = null);
+/// <summary>Abre o agente num terminal, dentro do worktree de um ambiente da tarefa.</summary>
+public sealed record StartAgentSession(Guid TaskId, Guid DevelopmentId, string? ProviderId = null);
 
 /// <summary>
 /// O fluxo da ADR-030: worktree pronto → agente instalado → sessão gravada como
@@ -128,10 +128,12 @@ public sealed class StartAgentSessionHandler(
         var provider = providers.Get(command.ProviderId);
         var task = await tasks.GetByIdAsync(command.TaskId, cancellationToken);
 
-        if (task.Development is not { Status: TaskDevelopmentStatus.Ready } development)
+        var development = task.GetDevelopment(command.DevelopmentId);
+
+        if (development.Status != TaskDevelopmentStatus.Ready)
         {
             throw new DomainException(
-                $"O {provider.Name} só abre com o worktree da tarefa pronto.");
+                $"O {provider.Name} só abre com o worktree do ambiente pronto.");
         }
 
         if (!await directories.ExistsAsync(development.WorktreePath, cancellationToken))
@@ -140,7 +142,7 @@ public sealed class StartAgentSessionHandler(
                 $"A pasta do worktree ({development.WorktreePath}) não existe mais. O {provider.Name} não foi aberto.");
         }
 
-        await EnsureNoActiveSessionAsync(task.Id, provider, cancellationToken);
+        await EnsureNoActiveSessionAsync(development.Id, provider, cancellationToken);
 
         var detection = await provider.DetectAsync(cancellationToken);
 
@@ -155,6 +157,7 @@ public sealed class StartAgentSessionHandler(
 
         var session = AgentSession.Create(
             task.Id,
+            development.Id,
             provider.Id,
             launch.Executable,
             launch.WorkingDirectory,
@@ -218,17 +221,18 @@ public sealed class StartAgentSessionHandler(
     }
 
     /// <summary>
-    /// Uma sessão ativa por tarefa: abrir outra esconderia a primeira, que é
-    /// justamente o terminal que o usuário perderia. A que já morreu é
+    /// Uma sessão ativa por ambiente (ADR-031): abrir outra no mesmo worktree
+    /// esconderia a primeira, que é justamente o terminal que o usuário
+    /// perderia. Outro repositório da tarefa pode ter o seu. A que já morreu é
     /// encerrada e gravada aqui, antes da nova — o índice único do banco
     /// recusaria as duas ativas.
     /// </summary>
     private async Task EnsureNoActiveSessionAsync(
-        Guid taskId,
+        Guid developmentId,
         IAgentCliProvider provider,
         CancellationToken cancellationToken)
     {
-        var latest = await sessions.FindLatestForTaskAsync(taskId, cancellationToken);
+        var latest = await sessions.FindLatestForDevelopmentAsync(developmentId, cancellationToken);
 
         if (latest is null || !latest.IsActive)
         {
@@ -238,7 +242,7 @@ public sealed class StartAgentSessionHandler(
         if (!AgentSessionReconciler.EndIfGone(latest, processes, timeProvider.GetUtcNow()))
         {
             throw new DomainException(
-                $"Esta tarefa já tem um {provider.Name} aberto. Use \"Abrir terminal do agente\" para ir até ele.");
+                $"Este ambiente já tem um {provider.Name} aberto. Use \"Abrir terminal do agente\" para ir até ele.");
         }
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -251,8 +255,11 @@ public sealed class StartAgentSessionHandler(
     }
 }
 
-/// <summary>Traz para a frente o terminal da sessão ativa da tarefa.</summary>
-public sealed record FocusAgentSession(Guid TaskId);
+/// <summary>
+/// Traz para a frente o terminal da sessão de um ambiente. Sem ambiente, o da
+/// sessão ativa mais recente da tarefa — o selo da lista com um agente só.
+/// </summary>
+public sealed record FocusAgentSession(Guid TaskId, Guid? DevelopmentId = null);
 
 /// <summary>
 /// Confere o processo antes: se ele acabou, a sessão é encerrada e nada abre —
@@ -272,8 +279,8 @@ public sealed class FocusAgentSessionHandler(
         FocusAgentSession command,
         CancellationToken cancellationToken = default)
     {
-        var session = await sessions.FindLatestForTaskAsync(command.TaskId, cancellationToken)
-            ?? throw new DomainException("Esta tarefa não tem sessão de agente.");
+        var session = await FindAsync(command, cancellationToken)
+            ?? throw new DomainException("Este ambiente não tem sessão de agente.");
 
         if (AgentSessionReconciler.EndIfGone(session, processes, timeProvider.GetUtcNow()))
         {
@@ -294,6 +301,20 @@ public sealed class FocusAgentSessionHandler(
         }
 
         return new AgentFocusResult(AgentSessionView.From(session, providers), focused);
+    }
+
+    private async Task<AgentSession?> FindAsync(FocusAgentSession command, CancellationToken cancellationToken)
+    {
+        if (command.DevelopmentId is { } developmentId)
+        {
+            return await sessions.FindLatestForDevelopmentAsync(developmentId, cancellationToken);
+        }
+
+        var active = await sessions.ListActiveForTaskAsync(command.TaskId, cancellationToken);
+
+        return active.Count > 0
+            ? active[^1]
+            : await sessions.FindLatestForTaskAsync(command.TaskId, cancellationToken);
     }
 }
 

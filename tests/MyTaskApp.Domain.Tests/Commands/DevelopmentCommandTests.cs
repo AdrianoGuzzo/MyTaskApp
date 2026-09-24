@@ -48,11 +48,11 @@ public class DevelopmentCommandTests
     public void TheTaskList_KeepsTheOrder_AndDropsBlankLines()
     {
         var task = TaskItem.Create("Feature X", Now);
-        task.BeginDevelopment(Repository, "origin/develop", "feature/x", Worktree, Now);
+        var development = task.BeginDevelopment(null, Repository, "origin/develop", "feature/x", Worktree, Now);
 
-        task.SetDevelopmentCommands(["@restore", "", "  @npm-install ", null, "@build"], Now);
+        task.SetDevelopmentCommands(development.Id, ["@restore", "", "  @npm-install ", null, "@build"], Now);
 
-        task.Development!.Commands.Select(command => (command.Command, command.Order))
+        development.Commands.Select(command => (command.Command, command.Order))
             .Should().Equal(("@restore", 0), ("@npm-install", 1), ("@build", 2));
     }
 
@@ -60,11 +60,11 @@ public class DevelopmentCommandTests
     public void Reordering_ReusesTheRows_AndRenumbers()
     {
         var task = TaskItem.Create("Feature X", Now);
-        var development = task.BeginDevelopment(Repository, "origin/develop", "feature/x", Worktree, Now);
-        task.SetDevelopmentCommands(["@restore", "@build", "@test"], Now);
+        var development = task.BeginDevelopment(null, Repository, "origin/develop", "feature/x", Worktree, Now);
+        task.SetDevelopmentCommands(development.Id, ["@restore", "@build", "@test"], Now);
         var ids = development.Commands.Select(command => command.Id).ToList();
 
-        task.SetDevelopmentCommands(["@build", "@restore"], Now);
+        task.SetDevelopmentCommands(development.Id, ["@build", "@restore"], Now);
 
         development.Commands.Select(command => command.Command).Should().Equal("@build", "@restore");
         development.Commands.Select(command => command.Id).Should().Equal(ids[0], ids[1]);
@@ -74,9 +74,9 @@ public class DevelopmentCommandTests
     public void AMultiLineCommand_IsRefused()
     {
         var task = TaskItem.Create("Feature X", Now);
-        task.BeginDevelopment(Repository, "origin/develop", "feature/x", Worktree, Now);
+        var development = task.BeginDevelopment(null, Repository, "origin/develop", "feature/x", Worktree, Now);
 
-        var set = () => task.SetDevelopmentCommands(["npm install\nnpm test"], Now);
+        var set = () => task.SetDevelopmentCommands(development.Id, ["npm install\nnpm test"], Now);
 
         set.Should().Throw<DomainException>().WithMessage("*uma linha só*");
     }
@@ -85,10 +85,10 @@ public class DevelopmentCommandTests
     public void AnArchivedTask_DoesNotChangeItsCommands()
     {
         var task = TaskItem.Create("Feature X", Now);
-        task.BeginDevelopment(Repository, "origin/develop", "feature/x", Worktree, Now);
+        var development = task.BeginDevelopment(null, Repository, "origin/develop", "feature/x", Worktree, Now);
         task.Archive(Now);
 
-        var set = () => task.SetDevelopmentCommands(["@restore"], Now);
+        var set = () => task.SetDevelopmentCommands(development.Id, ["@restore"], Now);
 
         set.Should().Throw<DomainException>();
     }

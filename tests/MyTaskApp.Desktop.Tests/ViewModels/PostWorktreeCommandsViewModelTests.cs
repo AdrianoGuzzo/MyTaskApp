@@ -19,6 +19,8 @@ public class PostWorktreeCommandsViewModelTests
 
     private static readonly Guid TaskId = Guid.CreateVersion7();
 
+    private static readonly Guid DevelopmentId = Guid.CreateVersion7();
+
     private static readonly DateTimeOffset At = new(2026, 9, 23, 10, 0, 0, TimeSpan.Zero);
 
     private static readonly GitInstallation Installed = new(true, "2.51.0", "git");
@@ -41,21 +43,20 @@ public class PostWorktreeCommandsViewModelTests
     private readonly FakeUseCaseRunner _runner = new();
 
     private static TaskDevelopmentView View(TaskDevelopmentStatus status, params string[] commands) =>
-        new(Repository, "origin/develop", "feature/x", Worktree, status, At, null, commands);
+        new(DevelopmentId, TaskId, Repository, "origin/develop", "feature/x", Worktree, status, At, null, commands);
 
     private static CommandExecutionResult Exit(int code) => new(code, "", "", At, At.AddSeconds(3));
 
     private async Task<TaskDevelopmentViewModel> ActivatedAsync(TaskDevelopmentView? development = null)
     {
-        _runner.Enqueue<GetTaskDevelopmentHandler>(development);
         _runner.ResultsByHandler[typeof(GetDevelopmentCommandsHandler)] = Globals;
         _runner.ResultsByHandler[typeof(DetectGitHandler)] = Installed;
         _runner.ResultsByHandler[typeof(InspectDirectoryHandler)] = new DirectoryInspection(true, true, Repository);
         _runner.ResultsByHandler[typeof(ListBranchesHandler)] = new BranchList(Branches, Branches[0]);
 
-        var viewModel = TestDevelopment.For(_runner, timeProvider: new FakeTimeProvider());
+        var viewModel = TestDevelopment.Environment(_runner, timeProvider: new FakeTimeProvider());
         viewModel.Load(TaskId, "Feature X", isReadOnly: false);
-        await viewModel.ActivateAsync(Ct);
+        await viewModel.ActivateAsync(development, Ct);
 
         viewModel.DirectoryText = Repository;
         await viewModel.InspectDirectoryAsync(Ct);

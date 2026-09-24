@@ -42,7 +42,7 @@ public sealed class TaskRowViewModel
 
         Tags = new TaskTagsViewModel(TaskId, task.Tags, Title);
 
-        AgentName = task.ActiveAgentName;
+        Agents = (task.ActiveAgents ?? []).Select(agent => new TaskAgentViewModel(this, agent)).ToList();
     }
 
     /// <summary>
@@ -58,17 +58,28 @@ public sealed class TaskRowViewModel
 
     public string Title { get; }
 
-    /// <summary>O agente de IA aberto para a tarefa ("Claude Code"); <c>null</c> = nenhum (ADR-030).</summary>
-    public string? AgentName { get; }
+    /// <summary>Os agentes de IA abertos para a tarefa, um por ambiente (ADR-030, ADR-031).</summary>
+    public IReadOnlyList<TaskAgentViewModel> Agents { get; }
 
-    public bool HasActiveAgent => AgentName is not null;
+    /// <summary>O nome do agente ("Claude Code"); <c>null</c> = nenhum aberto.</summary>
+    public string? AgentName => Agents.Count > 0 ? Agents[0].AgentName : null;
 
-    /// <summary>"● Claude Code": o selo da linha.</summary>
-    public string AgentLabel => AgentName is null ? string.Empty : $"● {AgentName}";
+    public bool HasActiveAgent => Agents.Count > 0;
 
-    public string AgentTip => AgentName is null
-        ? string.Empty
-        : $"{AgentName} em execução para esta tarefa. Clique para ir ao terminal.";
+    /// <summary>"● Claude Code", ou "● Claude Code ×2" com um por repositório: o selo da linha.</summary>
+    public string AgentLabel => Agents.Count switch
+    {
+        0 => string.Empty,
+        1 => $"● {AgentName}",
+        var count => $"● {AgentName} ×{count}",
+    };
+
+    public string AgentTip => Agents.Count switch
+    {
+        0 => string.Empty,
+        1 => $"{AgentName} em execução para esta tarefa. Clique para ir ao terminal.",
+        _ => $"Em execução: {string.Join(", ", Agents.Select(agent => agent.Label))}. Clique para escolher o terminal.",
+    };
 
     public string TimeLabel { get; }
 
@@ -159,4 +170,22 @@ public sealed class TaskRowViewModel
 
         return $"Aguardando sua atenção há {(int)waiting.TotalDays} dias.";
     }
+}
+
+/// <summary>
+/// Um agente aberto da linha, com o repositório em que roda — o item do menu
+/// do selo quando a tarefa tem mais de um (ADR-031).
+/// </summary>
+public sealed class TaskAgentViewModel(TaskRowViewModel row, ActiveAgent agent)
+{
+    public TaskRowViewModel Row { get; } = row;
+
+    public Guid? DevelopmentId { get; } = agent.DevelopmentId;
+
+    public string AgentName { get; } = agent.AgentName;
+
+    /// <summary>"ecossistema-core · feature/x"; só o nome do agente, sem ambiente conhecido.</summary>
+    public string Label { get; } = agent.RepositoryName is { } repository
+        ? agent.Branch is { } branch ? $"{repository} · {branch}" : repository
+        : agent.AgentName;
 }

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using MyTaskApp.Domain.Agents;
 using MyTaskApp.Domain.Tasks;
 using MyTaskApp.Infrastructure.Persistence.Repositories;
 
@@ -6,7 +7,7 @@ namespace MyTaskApp.Infrastructure.Tests.Persistence;
 
 /// <summary>
 /// O ambiente de desenvolvimento da tarefa contra SQLite de verdade (ADR-027):
-/// a tabela nova, o id que nasce no domínio e o índice único por tarefa.
+/// a tabela nova, o id que nasce no domínio e um ambiente por repositório (ADR-031).
 /// </summary>
 public class TaskDevelopmentPersistenceTests
 {
@@ -14,6 +15,9 @@ public class TaskDevelopmentPersistenceTests
 
     private const string Repository = @"C:\Projects\ecossistema-core";
     private const string Worktree = @"C:\Projects\ecossistema-core-feature-x";
+
+    private const string OtherRepository = @"C:\Projects\ecossistema-api";
+    private const string OtherWorktree = @"C:\Projects\ecossistema-api-feature-x";
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
@@ -41,18 +45,18 @@ public class TaskDevelopmentPersistenceTests
         await using (var write = db.CreateContext())
         {
             var task = await new TaskItemRepository(write).FindByIdAsync(seeded.Id, Ct);
-            task!.Development.Should().BeNull();
+            task!.Developments.Should().BeEmpty();
 
-            task.BeginDevelopment(Repository, "origin/develop", "feature/x", Worktree, Now);
+            task.BeginDevelopment(null, Repository, "origin/develop", "feature/x", Worktree, Now);
             await write.SaveChangesAsync(Ct);
 
-            task.MarkDevelopmentReady(Now.AddMinutes(1));
+            task.MarkDevelopmentReady(task.Developments[0].Id, Now.AddMinutes(1));
             await write.SaveChangesAsync(Ct);
         }
 
         await using var read = db.CreateContext();
         var stored = await new TaskItemRepository(read).FindByIdAsync(seeded.Id, Ct);
-        var development = stored!.Development!;
+        var development = stored!.Developments.Should().ContainSingle().Subject;
 
         development.TaskItemId.Should().Be(seeded.Id);
         development.RepositoryPath.Should().Be(Repository);
@@ -73,16 +77,16 @@ public class TaskDevelopmentPersistenceTests
         await using (var write = db.CreateContext())
         {
             var task = await new TaskItemRepository(write).FindByIdAsync(seeded.Id, Ct);
-            task!.BeginDevelopment(Repository, "main", "feature/x", Worktree, Now);
-            task.MarkDevelopmentReady(Now);
-            task.MarkDevelopmentRemoved(Now);
+            task!.BeginDevelopment(null, Repository, "main", "feature/x", Worktree, Now);
+            task.MarkDevelopmentReady(task.Developments[0].Id, Now);
+            task.MarkDevelopmentRemoved(task.Developments[0].Id, Now);
             await write.SaveChangesAsync(Ct);
         }
 
         await using (var write = db.CreateContext())
         {
             var task = await new TaskItemRepository(write).FindByIdAsync(seeded.Id, Ct);
-            task!.BeginDevelopment(Repository, "develop", "feature/y", Worktree + "-y", Now.AddDays(1));
+            task!.BeginDevelopment(null, Repository, "develop", "feature/y", Worktree + "-y", Now.AddDays(1));
             await write.SaveChangesAsync(Ct);
         }
 
@@ -100,7 +104,7 @@ public class TaskDevelopmentPersistenceTests
         await using (var write = db.CreateContext())
         {
             var task = await new TaskItemRepository(write).FindByIdAsync(seeded.Id, Ct);
-            task!.BeginDevelopment(Repository, "main", "feature/x", Worktree, Now);
+            task!.BeginDevelopment(null, Repository, "main", "feature/x", Worktree, Now);
             await write.SaveChangesAsync(Ct);
         }
 
@@ -115,30 +119,72 @@ public class TaskDevelopmentPersistenceTests
         (await read.TaskDevelopments.CountAsync(Ct)).Should().Be(0);
     }
 
+    /// <summary>Um ambiente por repositório, na mesma tarefa (ADR-031).</summary>
     [Fact]
-    public async Task TheDatabaseRefusesASecondRowForTheSameTask()
+    public async Task TwoRepositories_AreTwoEnvironments_InTheOrderTheyWereCreated()
     {
         await using var db = await new TempSqliteDatabase().MigrateAsync(Ct);
         var seeded = await SeedAsync(db);
 
-        await using var write = db.CreateContext();
-        var ticks = Now.UtcTicks;
-
-        var insert = async () =>
+        await using (var write = db.CreateContext())
         {
-            for (var index = 0; index < 2; index++)
-            {
-                await write.Database.ExecuteSqlAsync(
-                    $"""
-                     INSERT INTO TaskDevelopments
-                         (Id, TaskItemId, RepositoryPath, SourceBranch, Branch, WorktreePath, Status, CreatedAt, StatusChangedAt)
-                     VALUES ({Guid.CreateVersion7()}, {seeded.Id}, {Repository}, 'main', 'feature/x', {Worktree}, 1, {ticks}, {ticks});
-                     """,
-                    Ct);
-            }
-        };
+            var task = await new TaskItemRepository(write).FindByIdAsync(seeded.Id, Ct);
+            task!.BeginDevelopment(null, Repository, "main", "feature/x", Worktree, Now);
+            await write.SaveChangesAsync(Ct);
+        }
 
-        await insert.Should().ThrowAsync<Microsoft.Data.Sqlite.SqliteException>();
+        await using (var write = db.CreateContext())
+        {
+            var task = await new TaskItemRepository(write).FindByIdAsync(seeded.Id, Ct);
+            task!.BeginDevelopment(null, OtherRepository, "main", "feature/x", OtherWorktree, Now.AddMinutes(1));
+            await write.SaveChangesAsync(Ct);
+        }
+
+        await using var read = db.CreateContext();
+        var stored = await new TaskItemRepository(read).FindByIdAsync(seeded.Id, Ct);
+        stored!.Developments.Select(development => development.RepositoryPath).Should().Equal(Repository, OtherRepository);
+    }
+
+    /// <summary>
+    /// Tirar da lista apaga o ambiente e os comandos dele, mas não o histórico
+    /// de sessões de agente: a sessão só perde o vínculo.
+    /// </summary>
+    [Fact]
+    public async Task Forgetting_DeletesTheRowAndItsCommands_ButKeepsTheAgentHistory()
+    {
+        await using var db = await new TempSqliteDatabase().MigrateAsync(Ct);
+        var seeded = await SeedAsync(db);
+        Guid sessionId;
+
+        await using (var write = db.CreateContext())
+        {
+            var task = await new TaskItemRepository(write).FindByIdAsync(seeded.Id, Ct);
+            var development = task!.BeginDevelopment(null, Repository, "main", "feature/x", Worktree, Now);
+            task.SetDevelopmentCommands(development.Id, ["dotnet restore"], Now);
+            task.MarkDevelopmentReady(development.Id, Now);
+
+            var session = AgentSession.Create(task.Id, development.Id, "claude-code", @"C:\claude.exe", Worktree, Now);
+            session.MarkRunning(4242, Now);
+            session.MarkExited(Now.AddMinutes(5));
+            sessionId = session.Id;
+            write.AgentSessions.Add(session);
+
+            task.MarkDevelopmentRemoved(development.Id, Now.AddMinutes(6));
+            await write.SaveChangesAsync(Ct);
+        }
+
+        await using (var write = db.CreateContext())
+        {
+            var task = await new TaskItemRepository(write).FindByIdAsync(seeded.Id, Ct);
+            task!.ForgetDevelopment(task.Developments[0].Id);
+            await write.SaveChangesAsync(Ct);
+        }
+
+        await using var read = db.CreateContext();
+        (await read.TaskDevelopments.CountAsync(Ct)).Should().Be(0);
+        (await read.TaskDevelopmentCommands.CountAsync(Ct)).Should().Be(0);
+        var kept = await read.AgentSessions.SingleAsync(session => session.Id == sessionId, Ct);
+        kept.TaskDevelopmentId.Should().BeNull();
     }
 
     /// <summary>
@@ -173,6 +219,6 @@ public class TaskDevelopmentPersistenceTests
         await using var read = db.CreateContext();
         var task = await new TaskItemRepository(read).FindByIdAsync(taskId, Ct);
         task!.Title.Should().Be("Tarefa antiga");
-        task.Development.Should().BeNull();
+        task.Developments.Should().BeEmpty();
     }
 }

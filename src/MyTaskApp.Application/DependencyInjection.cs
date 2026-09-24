@@ -65,7 +65,8 @@ public static class DependencyInjection
         services.AddScoped<RemoveTagDirectoryHandler>();
 
         // Ambiente de desenvolvimento: Git e worktree da tarefa (ADR-027).
-        services.AddScoped<GetTaskDevelopmentHandler>();
+        services.AddScoped<GetTaskDevelopmentsHandler>();
+        services.AddScoped<ForgetDevelopmentHandler>();
         services.AddScoped<DetectGitHandler>();
         services.AddScoped<InspectDirectoryHandler>();
         services.AddScoped<ListBranchesHandler>();

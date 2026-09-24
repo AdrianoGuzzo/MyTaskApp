@@ -149,7 +149,7 @@ public class TodayViewRenderingTests
             Date,
             Overdue: [],
             Now: [],
-            Today: [Row("Implementar autenticação") with { ActiveAgentName = "Claude Code" }, Row("Ajustar tela de login")],
+            Today: [Row("Implementar autenticação") with { ActiveAgents = [new ActiveAgent(Guid.CreateVersion7(), "Claude Code")] }, Row("Ajustar tela de login")],
             Unscheduled: [],
             Completed: []));
 
