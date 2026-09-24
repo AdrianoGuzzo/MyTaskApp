@@ -389,6 +389,22 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                     b.ToTable("TaskOccurrences", (string)null);
                 });
 
+            modelBuilder.Entity("MyTaskApp.Infrastructure.Persistence.AgentSettingsRow", b =>
+                {
+                    b.Property<string>("ProviderId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Arguments")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ProviderId");
+
+                    b.ToTable("AgentSettings", (string)null);
+                });
+
             modelBuilder.Entity("MyTaskApp.Infrastructure.Persistence.DataRetentionSettingsRow", b =>
                 {
                     b.Property<int>("Id")

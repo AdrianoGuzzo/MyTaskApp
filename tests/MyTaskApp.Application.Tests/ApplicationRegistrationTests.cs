@@ -43,6 +43,7 @@ public class ApplicationRegistrationTests
             .AddSingleton<ITerminalWindowManager>(new FakeTerminalWindowManager())
             .AddSingleton<ITerminalLauncher>(new FakeTerminalLauncher(new FakeAgentProcessTracker(), DateTimeOffset.UnixEpoch))
             .AddSingleton<IAgentCliProvider>(new FakeAgentCliProvider())
+            .AddSingleton<IAgentSettingsStore>(new FakeAgentSettingsStore())
             .AddSingleton<IDirectoryRemover>(new FakeDirectoryRemover())
             // Normalmente vem do composition root do Desktop (ADR-012).
             .AddSingleton<IUseCaseRunner>(new CountingUseCaseRunner())

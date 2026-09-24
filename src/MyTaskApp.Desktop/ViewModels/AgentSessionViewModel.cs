@@ -55,6 +55,9 @@ public sealed partial class AgentSessionViewModel(
 
     private Guid _developmentId;
 
+    /// <summary>O último valor vindo do banco: se o campo ainda o mostra, o usuário não mexeu.</summary>
+    private string _loadedArguments = string.Empty;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(
         nameof(IsChecking), nameof(IsNotInstalled), nameof(IsIdle), nameof(IsStarting), nameof(IsRunning),
@@ -71,8 +74,17 @@ public sealed partial class AgentSessionViewModel(
     [ObservableProperty]
     [NotifyPropertyChangedFor(
         nameof(AgentName), nameof(StartLabel), nameof(NotFoundText), nameof(VersionText),
-        nameof(ExecutablePath), nameof(InstallGuide), nameof(HasInstallGuide), nameof(StatusText))]
+        nameof(ExecutablePath), nameof(InstallGuide), nameof(HasInstallGuide), nameof(StatusText),
+        nameof(CommandPreview))]
     private AgentCliStatus? _cli;
+
+    /// <summary>
+    /// O campo "Parâmetros": vem com o padrão salvo e, ao iniciar, o que estiver
+    /// nele vira o novo padrão.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CommandPreview))]
+    private string _arguments = string.Empty;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(
@@ -97,6 +109,9 @@ public sealed partial class AgentSessionViewModel(
     public string? VersionText => Cli?.Detection.Version is { } version ? $"Versão {version}" : null;
 
     public string? ExecutablePath => Cli?.Detection.ExecutablePath;
+
+    /// <summary>"Roda: claude --dangerously-skip-permissions".</summary>
+    public string CommandPreview => $"Roda: {$"{Cli?.Command ?? "claude"} {Arguments}".Trim()}";
 
     public AgentCliInstallGuide? InstallGuide => Cli?.InstallGuide;
 
@@ -217,8 +232,15 @@ public sealed partial class AgentSessionViewModel(
         try
         {
             Session = await runner.RunAsync<StartAgentSessionHandler, AgentSessionView>(
-                (handler, token) => handler.HandleAsync(new StartAgentSession(_taskId, _developmentId, Cli?.ProviderId), token),
+                (handler, token) => handler.HandleAsync(
+                    new StartAgentSession(_taskId, _developmentId, Cli?.ProviderId, ArgumentsToSend()),
+                    token),
                 CancellationToken.None);
+
+            if (Cli is not null)
+            {
+                _loadedArguments = Arguments = Arguments.Trim();
+            }
 
             State = StateFor(Session);
 
@@ -330,15 +352,29 @@ public sealed partial class AgentSessionViewModel(
     {
         try
         {
-            Cli = await runner.RunAsync<DetectAgentCliHandler, AgentCliStatus>(
+            var cli = await runner.RunAsync<DetectAgentCliHandler, AgentCliStatus>(
                 (handler, token) => handler.HandleAsync(new DetectAgentCli(Cli?.ProviderId), token),
                 cancellationToken);
+
+            Cli = cli;
+
+            // Não atropela o que o usuário está digitando.
+            if (Arguments == _loadedArguments)
+            {
+                _loadedArguments = Arguments = cli.Arguments;
+            }
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             logger.LogWarning(exception, "AgentDetectionFailed");
         }
     }
+
+    /// <summary>
+    /// Antes de a detecção trazer o padrão salvo, o campo vazio não é escolha
+    /// do usuário — mandar <c>null</c> faz o caso de uso usar o salvo.
+    /// </summary>
+    private string? ArgumentsToSend() => Cli is null ? null : Arguments;
 
     private AgentPanelState StateFor(AgentSessionView? session) => session?.Status switch
     {

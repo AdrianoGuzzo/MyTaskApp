@@ -29,6 +29,7 @@ public class AgentSessionHandlerTests
     private readonly FakeAgentCliProvider _claude = new();
     private readonly RecordingAgentSessionWatcher _watcher = new();
     private readonly FakeDirectoryProbe _disk = new();
+    private readonly FakeAgentSettingsStore _settings = new();
     private readonly AgentCliProviders _providers;
     private readonly TaskItem _task;
 
@@ -61,6 +62,7 @@ public class AgentSessionHandlerTests
             _processes,
             _watcher,
             _disk,
+            _settings,
             _time,
             NullLogger<StartAgentSessionHandler>.Instance);
 
@@ -100,7 +102,7 @@ public class AgentSessionHandlerTests
     [Fact]
     public async Task Detect_Installed_BringsPathAndVersion_AndNoGuide()
     {
-        var status = await new DetectAgentCliHandler(_providers).HandleAsync(new DetectAgentCli(), Ct);
+        var status = await new DetectAgentCliHandler(_providers, _settings).HandleAsync(new DetectAgentCli(), Ct);
 
         status.Name.Should().Be("Claude Code");
         status.Command.Should().Be("claude");
@@ -115,7 +117,7 @@ public class AgentSessionHandlerTests
     {
         _claude.Installed = false;
 
-        var status = await new DetectAgentCliHandler(_providers).HandleAsync(new DetectAgentCli(), Ct);
+        var status = await new DetectAgentCliHandler(_providers, _settings).HandleAsync(new DetectAgentCli(), Ct);
 
         status.Detection.IsInstalled.Should().BeFalse();
         status.InstallGuide.Should().Be(FakeAgentCliProvider.WindowsGuide);
@@ -124,8 +126,101 @@ public class AgentSessionHandlerTests
     [Fact]
     public async Task AnUnknownAgent_IsRefused()
     {
-        await FluentActions.Awaiting(() => new DetectAgentCliHandler(_providers).HandleAsync(new DetectAgentCli("gemini"), Ct))
+        await FluentActions.Awaiting(() => new DetectAgentCliHandler(_providers, _settings).HandleAsync(new DetectAgentCli("gemini"), Ct))
             .Should().ThrowAsync<DomainException>();
+    }
+
+    [Fact]
+    public async Task Detect_BringsTheDefaultArguments_WhileNothingWasSaved()
+    {
+        var status = await new DetectAgentCliHandler(_providers, _settings).HandleAsync(new DetectAgentCli(), Ct);
+
+        status.Arguments.Should().Be("--dangerously-skip-permissions");
+    }
+
+    [Fact]
+    public async Task Detect_BringsTheSavedArguments_EvenWhenEmpty()
+    {
+        _settings.Arguments["claude-code"] = "";
+
+        var status = await new DetectAgentCliHandler(_providers, _settings).HandleAsync(new DetectAgentCli(), Ct);
+
+        status.Arguments.Should().BeEmpty();
+    }
+
+    // --- Parâmetros --------------------------------------------------------
+
+    private Task<AgentSessionView> StartWithAsync(string? arguments) =>
+        Start().HandleAsync(new StartAgentSession(_task.Id, _task.Developments[0].Id, Arguments: arguments), Ct);
+
+    [Fact]
+    public async Task Start_WithoutArguments_UsesTheDefault_AndSavesNothing()
+    {
+        Ready();
+
+        await StartAsync();
+
+        _launcher.Launched.Should().ContainSingle()
+            .Which.Arguments.Should().Equal("--dangerously-skip-permissions");
+        _settings.SaveCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Start_WithoutArguments_UsesTheSavedOnes()
+    {
+        Ready();
+        _settings.Arguments["claude-code"] = "--model opus";
+
+        await StartAsync();
+
+        _launcher.Launched.Should().ContainSingle().Which.Arguments.Should().Equal("--model", "opus");
+    }
+
+    [Fact]
+    public async Task Start_WithArguments_LaunchesWithThem_AndMakesThemTheDefault()
+    {
+        Ready();
+
+        await StartWithAsync("  --dangerously-skip-permissions --append-system-prompt \"seja breve\" ");
+
+        _launcher.Launched.Should().ContainSingle()
+            .Which.Arguments.Should().Equal("--dangerously-skip-permissions", "--append-system-prompt", "seja breve");
+        _settings.Arguments["claude-code"].Should().Be("--dangerously-skip-permissions --append-system-prompt \"seja breve\"");
+    }
+
+    [Fact]
+    public async Task Start_WithTheSameArguments_DoesNotSaveAgain()
+    {
+        Ready();
+
+        await StartWithAsync("--dangerously-skip-permissions");
+
+        _settings.SaveCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Start_WithEmptyArguments_OpensTheBareAgent_AndRemembersIt()
+    {
+        Ready();
+
+        await StartWithAsync("");
+
+        _launcher.Launched.Should().ContainSingle().Which.Arguments.Should().BeEmpty();
+        _settings.Arguments["claude-code"].Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Start_WithInvalidArguments_IsRefused_BeforeAnythingIsRecorded()
+    {
+        Ready();
+
+        await FluentActions.Awaiting(() => StartWithAsync("--append-system-prompt \"sem fim"))
+            .Should().ThrowAsync<DomainException>()
+            .WithMessage("Aspas sem fechar nos parâmetros do agente.");
+
+        _launcher.Launched.Should().BeEmpty();
+        _sessions.Sessions.Should().BeEmpty();
+        _settings.SaveCount.Should().Be(0);
     }
 
     // --- Iniciar -----------------------------------------------------------

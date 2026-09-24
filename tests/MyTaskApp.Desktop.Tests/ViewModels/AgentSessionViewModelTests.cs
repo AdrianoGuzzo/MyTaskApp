@@ -26,10 +26,11 @@ public class AgentSessionViewModelTests
         [new AgentCliInstallStep("No PowerShell:", "irm https://claude.ai/install.ps1 | iex")],
         new Uri("https://docs.claude.com/en/docs/claude-code/setup"));
 
-    private static AgentCliStatus Installed() =>
+    private static AgentCliStatus Installed(string arguments = "--dangerously-skip-permissions") =>
         new("claude-code", "Claude Code", "claude",
             new CliDetectionResult { IsInstalled = true, ExecutablePath = @"C:\claude.exe", Version = "2.1.4" },
-            null);
+            null,
+            arguments);
 
     private static AgentCliStatus Missing() =>
         new("claude-code", "Claude Code", "claude", CliDetectionResult.NotInstalled("Claude Code não encontrado."), Guide);
@@ -67,6 +68,50 @@ public class AgentSessionViewModelTests
         viewModel.StartCommand.CanExecute(null).Should().BeTrue();
         viewModel.FocusCommand.CanExecute(null).Should().BeFalse();
         viewModel.VersionText.Should().Be("Versão 2.1.4");
+    }
+
+    [Fact]
+    public async Task TheArguments_ComeFilledWithTheSavedDefault()
+    {
+        _runner.Enqueue<GetTaskAgentSessionHandler>([null]);
+        _runner.ResultsByHandler[typeof(DetectAgentCliHandler)] = Installed();
+        var viewModel = Create();
+
+        await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
+
+        viewModel.Arguments.Should().Be("--dangerously-skip-permissions");
+        viewModel.CommandPreview.Should().Be("Roda: claude --dangerously-skip-permissions");
+    }
+
+    /// <summary>A volta periódica da detecção não apaga o que o usuário está digitando.</summary>
+    [Fact]
+    public async Task ARefresh_KeepsWhatTheUserTyped()
+    {
+        _runner.Enqueue<GetTaskAgentSessionHandler>([null]);
+        _runner.ResultsByHandler[typeof(DetectAgentCliHandler)] = Installed();
+        var viewModel = Create();
+        await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
+
+        viewModel.Arguments = "--model opus";
+        _runner.ResultsByHandler[typeof(DetectAgentCliHandler)] = Installed("--verbose");
+        await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
+
+        viewModel.Arguments.Should().Be("--model opus");
+        viewModel.CommandPreview.Should().Be("Roda: claude --model opus");
+    }
+
+    [Fact]
+    public async Task ARefresh_BringsANewDefault_WhenTheFieldWasUntouched()
+    {
+        _runner.Enqueue<GetTaskAgentSessionHandler>([null]);
+        _runner.ResultsByHandler[typeof(DetectAgentCliHandler)] = Installed();
+        var viewModel = Create();
+        await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
+
+        _runner.ResultsByHandler[typeof(DetectAgentCliHandler)] = Installed("--model opus");
+        await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
+
+        viewModel.Arguments.Should().Be("--model opus");
     }
 
     [Fact]
