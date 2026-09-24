@@ -31,7 +31,7 @@ public class StartDevelopmentHandlerTests
     private StartDevelopmentHandler Handler() =>
         new(_tasks, _tasks, _git, _disk, new FakeTimeProvider(Now), NullLogger<StartDevelopmentHandler>.Instance);
 
-    private DevelopmentPlan Plan(WorktreeConflict? conflict = null) =>
+    private DevelopmentPlan Plan(WorktreeConflict? conflict = null, GitBranch? existing = null) =>
         new(
             _task.Id,
             FakeGitClient.Repository,
@@ -39,10 +39,32 @@ public class StartDevelopmentHandlerTests
             "feature/123-corrigir-animais",
             Path,
             [],
-            conflict);
+            conflict,
+            existing);
 
-    private Task<TaskDevelopmentView> StartAsync(string path = Path, bool adopt = false) =>
-        Handler().HandleAsync(new StartDevelopment(Plan(), path, adopt), _progress, Ct);
+    private Task<TaskDevelopmentView> StartAsync(string path = Path, bool adopt = false, GitBranch? existing = null) =>
+        Handler().HandleAsync(new StartDevelopment(Plan(existing: existing), path, adopt), _progress, Ct);
+
+    [Fact]
+    public async Task AnExistingLocalBranch_IsCheckedOut_WithoutCreatingAnother()
+    {
+        var view = await StartAsync(existing: GitBranch.Local("feature/123-corrigir-animais"));
+
+        _git.Calls.Should().Contain($"worktree add {Path} feature/123-corrigir-animais");
+        _git.Calls.Should().NotContain(call => call.Contains("-b"));
+        view.Status.Should().Be(TaskDevelopmentStatus.Ready);
+        view.Branch.Should().Be("feature/123-corrigir-animais");
+    }
+
+    [Fact]
+    public async Task ABranchOnlyOnTheRemote_BecomesALocalFollowingIt()
+    {
+        var view = await StartAsync(existing: GitBranch.RemoteTracking("origin", "feature/123-corrigir-animais"));
+
+        _git.Calls.Should().Contain(
+            $"worktree add --track -b feature/123-corrigir-animais {Path} refs/remotes/origin/feature/123-corrigir-animais");
+        view.Status.Should().Be(TaskDevelopmentStatus.Ready);
+    }
 
     [Fact]
     public async Task CreatesBranchAndWorktree_AndTheTaskIsReady()
