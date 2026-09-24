@@ -1186,6 +1186,32 @@
                            IsVisible="{Binding VersionText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                            Text="{Binding VersionText}" />
 
+                <!--
+                  O texto livre vai como a primeira mensagem do agente. Desmarcado
+                  (o padrão), ele só monta o plano e pede aprovação antes de mexer
+                  em arquivos; marcado, já executa.
+                -->
+                <StackPanel Spacing="6" IsVisible="{Binding ShowStart}" x:Name="AgentPromptPanel">
+                  <TextBlock Classes="fieldLabel" Text="{Binding AgentName, StringFormat='Texto para o {0} (opcional)'}" />
+                  <TextBox x:Name="AgentPromptBox"
+                           Text="{Binding Prompt}"
+                           MaxLength="{Binding MaxPromptLength}"
+                           AcceptsReturn="True"
+                           AcceptsTab="False"
+                           TextWrapping="Wrap"
+                           MinHeight="80"
+                           MaxHeight="220"
+                           VerticalContentAlignment="Top"
+                           PlaceholderText="O que o agente deve fazer ao abrir…" />
+                  <CheckBox x:Name="AgentRunDirectly"
+                            Content="Executar direto"
+                            IsEnabled="{Binding HasPrompt}"
+                            IsChecked="{Binding RunDirectly}" />
+                  <TextBlock Classes="hint"
+                             IsVisible="{Binding HasPrompt}"
+                             Text="Desmarcado, o agente só monta um plano e espera sua aprovação antes de alterar arquivos." />
+                </StackPanel>
+
                 <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
                   <Button Classes="accent"
                           x:Name="FocusAgentButton"

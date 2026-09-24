@@ -259,6 +259,25 @@ public sealed class TaskItem
         GetDevelopment(developmentId).ReplaceCommands(commands, at);
     }
 
+    /// <summary>
+    /// O texto livre com que o agente de IA do ambiente abre (ADR-030). Igual ao
+    /// que já está gravado não é edição: abrir o agente de novo com o mesmo texto
+    /// não esbarra na regra da lista principal.
+    /// </summary>
+    public void SetDevelopmentAgentPrompt(Guid developmentId, string? prompt)
+    {
+        var development = GetDevelopment(developmentId);
+        var normalized = string.IsNullOrWhiteSpace(prompt) ? null : prompt.Trim();
+
+        if (normalized == development.AgentPrompt)
+        {
+            return;
+        }
+
+        RefuseWhenOutOfTheMainList("alterar o texto do agente de");
+        development.ChangeAgentPrompt(normalized);
+    }
+
     public void MarkDevelopmentReady(Guid developmentId, DateTimeOffset at) =>
         GetDevelopment(developmentId).MarkReady(at);
 
