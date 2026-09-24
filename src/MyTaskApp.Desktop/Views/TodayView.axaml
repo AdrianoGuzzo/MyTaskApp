@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
+        xmlns:spell="using:MyTaskApp.Desktop.SpellChecking"
              xmlns:views="using:MyTaskApp.Desktop.Views"
              xmlns:chrome="using:Avalonia.Controls.Chrome"
              x:Class="MyTaskApp.Desktop.Views.TodayView"
@@ -898,6 +899,7 @@
         <Grid ColumnDefinitions="*,Auto,Auto">
 
           <TextBox x:Name="CaptureBox"
+                   spell:SpellCheck.IsEnabled="True"
                    Grid.Column="0"
                    AcceptsReturn="True"
                    TextWrapping="Wrap"
