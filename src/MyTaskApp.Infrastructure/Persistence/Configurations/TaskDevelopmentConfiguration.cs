@@ -51,6 +51,9 @@ internal sealed class TaskDevelopmentConfiguration : IEntityTypeConfiguration<Ta
         builder.Property(development => development.FailureReason)
             .HasMaxLength(TaskDevelopment.MaxFailureLength);
 
+        builder.Property(development => development.AgentPrompt)
+            .HasMaxLength(TaskDevelopment.MaxAgentPromptLength);
+
         // Os comandos pós-Worktree são parte do ambiente (ADR-028): tirar um da
         // lista apaga a linha, e apagar o ambiente leva todos.
         builder.HasMany(development => development.Commands)

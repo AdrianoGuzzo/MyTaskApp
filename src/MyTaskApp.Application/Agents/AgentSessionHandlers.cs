@@ -91,7 +91,14 @@ public sealed class GetTaskAgentSessionHandler(
 }
 
 /// <summary>Abre o agente num terminal, dentro do worktree de um ambiente da tarefa.</summary>
-public sealed record StartAgentSession(Guid TaskId, Guid DevelopmentId, string? ProviderId = null);
+/// <param name="Prompt">O texto livre com que o agente abre; fica gravado no ambiente.</param>
+/// <param name="RunDirectly">Com texto: executar direto, em vez de só planejar.</param>
+public sealed record StartAgentSession(
+    Guid TaskId,
+    Guid DevelopmentId,
+    string? ProviderId = null,
+    string? Prompt = null,
+    bool RunDirectly = false);
 
 /// <summary>
 /// O fluxo da ADR-030: worktree pronto → agente instalado → sessão gravada como
@@ -151,8 +158,12 @@ public sealed class StartAgentSessionHandler(
             throw new DomainException($"{provider.Name} não encontrado.");
         }
 
+        // O texto vai junto com a sessão, no mesmo SaveChanges: reaparece no
+        // "iniciar novamente" e ao reabrir a tarefa.
+        task.SetDevelopmentAgentPrompt(development.Id, command.Prompt);
+
         var launch = provider.CreateLaunch(
-            new AgentCliStartContext(task.Id, development.WorktreePath),
+            new AgentCliStartContext(task.Id, development.WorktreePath, development.AgentPrompt, command.RunDirectly),
             detection);
 
         var session = AgentSession.Create(

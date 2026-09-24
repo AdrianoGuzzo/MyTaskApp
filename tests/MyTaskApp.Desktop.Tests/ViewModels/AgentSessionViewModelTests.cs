@@ -1,8 +1,11 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
 using MyTaskApp.Desktop.ViewModels;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.Agents;
+using MyTaskApp.Domain.Tasks;
+using NSubstitute;
 
 namespace MyTaskApp.Desktop.Tests.ViewModels;
 
@@ -269,6 +272,99 @@ public class AgentSessionViewModelTests
 
         viewModel.Message.Should().Be("Não foi possível verificar o agente de IA desta tarefa.");
         viewModel.State.Should().Be(AgentPanelState.Idle);
+    }
+
+    // --- Texto para o agente -----------------------------------------------
+
+    [Fact]
+    public void Load_BringsTheSavedText_AndRunDirectlyStartsUnchecked()
+    {
+        var viewModel = new AgentSessionViewModel(_runner, _clipboard, _shell, NullLogger<AgentSessionViewModel>.Instance);
+        viewModel.Load(_taskId, Guid.CreateVersion7(), isReadOnly: false, prompt: "Implemente a tarefa");
+
+        viewModel.Prompt.Should().Be("Implemente a tarefa");
+        viewModel.HasPrompt.Should().BeTrue();
+        viewModel.RunDirectly.Should().BeFalse();
+
+        viewModel.RunDirectly = true;
+        viewModel.Load(_taskId, Guid.CreateVersion7(), isReadOnly: false, prompt: null);
+
+        viewModel.Prompt.Should().BeNull();
+        viewModel.HasPrompt.Should().BeFalse();
+        viewModel.RunDirectly.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Load_OfTheSameEnvironment_KeepsWhatIsBeingTyped()
+    {
+        var developmentId = Guid.CreateVersion7();
+        var viewModel = new AgentSessionViewModel(_runner, _clipboard, _shell, NullLogger<AgentSessionViewModel>.Instance);
+        viewModel.Load(_taskId, developmentId, isReadOnly: false, prompt: "gravado");
+
+        viewModel.Prompt = "digitando";
+        viewModel.Load(_taskId, developmentId, isReadOnly: false, prompt: "gravado");
+
+        viewModel.Prompt.Should().Be("digitando");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Start_HandsTheTextAndTheMode_ToTheUseCase(bool runDirectly)
+    {
+        var (task, developmentId) = ReadyTask();
+        var provider = Substitute.For<IAgentCliProvider>();
+        AgentCliStartContext? received = null;
+        provider.Name.Returns("Claude Code");
+        provider.DetectAsync(Arg.Any<CancellationToken>())
+            .Returns(new CliDetectionResult { IsInstalled = true, ExecutablePath = @"C:\claude.exe" });
+        provider.CreateLaunch(Arg.Do<AgentCliStartContext>(context => received = context), Arg.Any<CliDetectionResult>())
+            .Returns(_ => throw new DomainException("parou aqui"));
+        UseRealStart(task, provider);
+
+        _runner.ResultsByHandler[typeof(DetectAgentCliHandler)] = Installed();
+        var viewModel = new AgentSessionViewModel(_runner, _clipboard, _shell, NullLogger<AgentSessionViewModel>.Instance);
+        viewModel.Load(task.Id, developmentId, isReadOnly: false);
+        viewModel.Prompt = "Implemente a tarefa";
+        viewModel.RunDirectly = runDirectly;
+
+        await viewModel.StartCommand.ExecuteAsync(null);
+
+        received.Should().BeEquivalentTo(new { Prompt = "Implemente a tarefa", RunDirectly = runDirectly });
+        task.GetDevelopment(developmentId).AgentPrompt.Should().Be("Implemente a tarefa");
+    }
+
+    private static (TaskItem Task, Guid DevelopmentId) ReadyTask()
+    {
+        var task = TaskItem.Create("Corrigir cálculo", Started);
+        var development = task.BeginDevelopment(null, @"C:\Projects\eco-core", "main", "feature/123", Worktree, Started);
+        task.MarkDevelopmentReady(development.Id, Started);
+        return (task, development.Id);
+    }
+
+    /// <summary>O caso de uso de verdade, para conferir o comando que o ViewModel montou.</summary>
+    private void UseRealStart(TaskItem task, IAgentCliProvider provider)
+    {
+        var tasks = Substitute.For<ITaskItemRepository>();
+        tasks.FindByIdAsync(task.Id, Arg.Any<CancellationToken>()).Returns(task);
+
+        var providers = Substitute.For<IAgentCliProviders>();
+        providers.Get(Arg.Any<string?>()).Returns(provider);
+
+        var directories = Substitute.For<IDirectoryProbe>();
+        directories.ExistsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(true);
+
+        _runner.Handlers[typeof(StartAgentSessionHandler)] = new StartAgentSessionHandler(
+            tasks,
+            Substitute.For<IAgentSessionRepository>(),
+            Substitute.For<IUnitOfWork>(),
+            providers,
+            Substitute.For<ITerminalLauncher>(),
+            Substitute.For<IAgentProcessTracker>(),
+            Substitute.For<IAgentSessionWatcher>(),
+            directories,
+            TimeProvider.System,
+            NullLogger<StartAgentSessionHandler>.Instance);
     }
 
     [Fact]
