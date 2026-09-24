@@ -56,6 +56,7 @@ public sealed partial class TaskNotesViewModel(
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasUnsavedChanges))]
     [NotifyPropertyChangedFor(nameof(NotesTabHeader))]
+    [NotifyPropertyChangedFor(nameof(DismissLabel))]
     [NotifyPropertyChangedFor(nameof(TitleError))]
     [NotifyPropertyChangedFor(nameof(WindowTitle))]
     [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
@@ -64,6 +65,7 @@ public sealed partial class TaskNotesViewModel(
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasUnsavedChanges))]
     [NotifyPropertyChangedFor(nameof(NotesTabHeader))]
+    [NotifyPropertyChangedFor(nameof(DismissLabel))]
     [NotifyPropertyChangedFor(nameof(CountLabel))]
     [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
     private string _text = string.Empty;
@@ -102,6 +104,12 @@ public sealed partial class TaskNotesViewModel(
 
     /// <summary>O ponto avisa, da outra aba, que a anotação tem texto não salvo.</summary>
     public string NotesTabHeader => HasUnsavedChanges ? "Anotação •" : "Anotação";
+
+    /// <summary>
+    /// Salvar não fecha a janela: depois de gravar não há o que cancelar, e o
+    /// botão diz o que faz de verdade.
+    /// </summary>
+    public string DismissLabel => HasUnsavedChanges ? "Cancelar" : "Fechar";
 
     public bool IsEditable => !IsReadOnly;
 
@@ -214,10 +222,12 @@ public sealed partial class TaskNotesViewModel(
         // e o aviso de "alterações não salvas" ficaria aceso sobre nada.
         OnPropertyChanged(nameof(HasUnsavedChanges));
         OnPropertyChanged(nameof(NotesTabHeader));
+        OnPropertyChanged(nameof(DismissLabel));
         SaveCommand.NotifyCanExecuteChanged();
 
+        // A janela fica aberta: gravar é um ponto de salvamento no meio do
+        // trabalho, não o fim dele. Fechar é o "Fechar" ou o Escape.
         Saved?.Invoke();
-        CloseRequested?.Invoke();
     }
 
     [RelayCommand]
