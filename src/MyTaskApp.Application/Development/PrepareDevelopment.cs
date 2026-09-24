@@ -96,8 +96,19 @@ public sealed class PrepareDevelopmentHandler(
 
             step = DevelopmentStep.ValidateBranchName;
             progress.Report(step, DevelopmentStepState.Running);
-            var newBranch = await ValidateNewBranchAsync(command.NewBranch, branches, cancellationToken);
-            progress.Report(step, DevelopmentStepState.Done, newBranch);
+            var (newBranch, existing) = await ValidateNewBranchAsync(
+                repository,
+                command.NewBranch,
+                source,
+                branches,
+                worktrees,
+                cancellationToken);
+            progress.Report(
+                step,
+                existing is null ? DevelopmentStepState.Done : DevelopmentStepState.Warning,
+                existing is null ? newBranch
+                    : existing.IsRemote ? $"A branch {newBranch} só existe em {existing.ShortName}; o worktree vai acompanhá-la."
+                    : $"A branch {newBranch} já existe; o worktree vai usá-la.");
 
             step = DevelopmentStep.PlanWorktreePath;
             progress.Report(step, DevelopmentStepState.Running);
@@ -109,13 +120,14 @@ public sealed class PrepareDevelopmentHandler(
                 conflict is null ? path : $"Já existe algo em {path}.");
 
             logger.LogInformation(
-                "DevelopmentPrepared {TaskId} {Source} {Branch} {HasConflict}",
+                "DevelopmentPrepared {TaskId} {Source} {Branch} {ExistingBranch} {HasConflict}",
                 task.Id,
                 source.FullRef,
                 newBranch,
+                existing?.FullRef,
                 conflict is not null);
 
-            return new DevelopmentPlan(task.Id, repository, source, newBranch, path, changes.Entries, conflict);
+            return new DevelopmentPlan(task.Id, repository, source, newBranch, path, changes.Entries, conflict, existing);
         }
         catch (GitCommandFailedException exception)
         {
@@ -292,9 +304,16 @@ public sealed class PrepareDevelopmentHandler(
         progress.Report(step, DevelopmentStepState.Done, $"{Commits(divergence.Behind)} trazidos de {upstream}.");
     }
 
-    private async Task<string> ValidateNewBranchAsync(
+    /// <summary>
+    /// O nome da branch do worktree e, se já existir, qual: a local ganha
+    /// checkout; sem local, a remota vira local acompanhando-a.
+    /// </summary>
+    private async Task<(string Name, GitBranch? Existing)> ValidateNewBranchAsync(
+        string repository,
         string requested,
+        GitBranch source,
         IReadOnlyList<GitBranch> branches,
+        IReadOnlyList<GitWorktree> worktrees,
         CancellationToken cancellationToken)
     {
         const DevelopmentStep step = DevelopmentStep.ValidateBranchName;
@@ -312,14 +331,31 @@ public sealed class PrepareDevelopmentHandler(
         }
 
         // Sem distinguir maiúsculas: no Windows as refs soltas são arquivos, e
-        // "Feature/X" e "feature/x" disputariam o mesmo.
-        foreach (var branch in branches.Where(branch => !branch.IsRemote))
+        // "Feature/X" e "feature/x" são a mesma. Por isso a existente vale na
+        // grafia dela.
+        var local = branches.FirstOrDefault(branch =>
+            !branch.IsRemote && string.Equals(branch.ShortName, name, StringComparison.OrdinalIgnoreCase));
+
+        if (local is not null)
         {
-            if (string.Equals(branch.ShortName, name, StringComparison.OrdinalIgnoreCase))
+            var checkedOut = worktrees.FirstOrDefault(worktree => worktree.BranchRef == local.FullRef);
+
+            // Aberta no próprio caminho planejado, o conflito de caminho já
+            // oferece "Usar Worktree existente".
+            if (checkedOut is not null
+                && !WorktreePathPlanner.SamePath(checkedOut.Path, WorktreePathPlanner.Plan(repository, local.ShortName)))
             {
-                throw new DevelopmentStepException(step, $"A branch {branch.ShortName} já existe.");
+                throw new DevelopmentStepException(
+                    step,
+                    $"A branch {local.ShortName} já existe e está aberta em "
+                    + $"{WorktreePathPlanner.Canonical(checkedOut.Path)}. Use outro nome.");
             }
 
+            return (local.ShortName, local);
+        }
+
+        foreach (var branch in branches.Where(branch => !branch.IsRemote))
+        {
             if (branch.ShortName.StartsWith(name + "/", StringComparison.OrdinalIgnoreCase)
                 || name.StartsWith(branch.ShortName + "/", StringComparison.OrdinalIgnoreCase))
             {
@@ -329,7 +365,14 @@ public sealed class PrepareDevelopmentHandler(
             }
         }
 
-        return name;
+        // Com mais de um remoto: o da origem, depois origin, depois o primeiro.
+        var remote = branches
+            .Where(branch => branch.IsRemote
+                && string.Equals(branch.ShortName, $"{branch.Remote}/{name}", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(branch => branch.Remote == source.Remote ? 0 : branch.Remote == "origin" ? 1 : 2)
+            .FirstOrDefault();
+
+        return remote is null ? (name, null) : (remote.ShortName[(remote.Remote!.Length + 1)..], remote);
     }
 
     private async Task<WorktreeConflict?> FindConflictAsync(
