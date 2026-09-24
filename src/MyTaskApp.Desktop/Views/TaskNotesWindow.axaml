@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
+        xmlns:spell="using:MyTaskApp.Desktop.SpellChecking"
         xmlns:notes="using:MyTaskApp.Desktop.Notes"
         xmlns:dev="using:MyTaskApp.Desktop.Development"
         xmlns:views="using:MyTaskApp.Desktop.Views"
@@ -439,6 +440,7 @@
         <StackPanel Grid.Column="0" Spacing="3">
           <TextBox Classes="pageTitle"
                    x:Name="TitleEditor"
+                   spell:SpellCheck.IsEnabled="True"
                    Text="{Binding TaskTitle}"
                    MaxLength="{Binding MaxTitleLength}"
                    PlaceholderText="Título da tarefa"
@@ -572,6 +574,7 @@
             <Panel>
 
               <TextBox x:Name="Editor"
+                       spell:SpellCheck.IsEnabled="True"
                        IsVisible="{Binding IsEditable}"
                        Text="{Binding Text}"
                        AcceptsReturn="True"
