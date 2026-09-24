@@ -199,6 +199,25 @@ internal sealed class GitClient(
             CheckoutTimeout,
             cancellationToken);
 
+    public Task<GitCommandResult> AddWorktreeForBranchAsync(
+        string repository,
+        string path,
+        string branch,
+        CancellationToken cancellationToken = default) =>
+        RunAsync(repository, ["worktree", "add", path, branch], CheckoutTimeout, cancellationToken);
+
+    public Task<GitCommandResult> AddWorktreeTrackingAsync(
+        string repository,
+        string path,
+        string newBranch,
+        string remoteBranch,
+        CancellationToken cancellationToken = default) =>
+        RunAsync(
+            repository,
+            ["worktree", "add", "--track", "-b", newBranch, path, remoteBranch],
+            CheckoutTimeout,
+            cancellationToken);
+
     public async Task<string?> GetCurrentBranchAsync(string workingTree, CancellationToken cancellationToken = default)
     {
         var result = await RunAsync(workingTree, ["rev-parse", "--abbrev-ref", "HEAD"], DefaultTimeout, cancellationToken);

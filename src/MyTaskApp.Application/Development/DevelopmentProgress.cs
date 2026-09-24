@@ -83,6 +83,11 @@ public sealed record WorktreeConflict(string Path, GitWorktree? Registered, stri
 /// O resultado da preparação: tudo validado, a origem atualizada e o caminho
 /// calculado. Nada foi gravado ainda — é isto que o usuário confirma ou ajusta.
 /// </summary>
+/// <param name="NewBranch">A branch do worktree, na grafia da existente quando for o caso.</param>
+/// <param name="ExistingBranch">
+/// A branch com esse nome que já existe: a local, para checkout, ou a remota,
+/// para a local nascer acompanhando-a. <c>null</c> cria a partir da origem.
+/// </param>
 public sealed record DevelopmentPlan(
     Guid TaskId,
     string RepositoryPath,
@@ -91,6 +96,7 @@ public sealed record DevelopmentPlan(
     string WorktreePath,
     IReadOnlyList<string> RepositoryChanges,
     WorktreeConflict? Conflict,
+    GitBranch? ExistingBranch = null,
     /// <summary>O ambiente que tenta de novo; <c>null</c> = um repositório novo na tarefa (ADR-031).</summary>
     Guid? DevelopmentId = null);
 
