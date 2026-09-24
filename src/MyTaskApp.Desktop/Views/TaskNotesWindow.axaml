@@ -230,6 +230,53 @@
       <Setter Property="Padding" Value="12,0" />
     </Style>
 
+    <!--
+      As abas de repositório da tarefa (ADR-031): pílulas lado a lado, que
+      quebram linha quando não cabem. A escolhida ganha o tom de destaque.
+    -->
+    <Style Selector="ListBox.repoStrip">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Padding" Value="0" />
+    </Style>
+
+    <Style Selector="ListBox.repoStrip ListBoxItem">
+      <Setter Property="Padding" Value="12,6" />
+      <Setter Property="Margin" Value="0,0,8,8" />
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetPillRadius}" />
+      <Setter Property="Background" Value="{DynamicResource WidgetSurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetStrokeSoftBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style Selector="ListBox.repoStrip ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource WidgetSurfaceHoverBrush}" />
+    </Style>
+
+    <Style Selector="ListBox.repoStrip ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource WidgetAccentSoftBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetAccentLineBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.chipTitle">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="TextBlock.chipMeta">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextMidBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="TextBlock.chipAgent">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetAccentBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
     <!-- Aba Desenvolvimento: cartões empilhados, como a folha da anotação. -->
     <Style Selector="Border.card">
       <Setter Property="Background" Value="{DynamicResource WidgetSurfaceBrush}" />
@@ -572,15 +619,59 @@
 
       <TabItem x:Name="DevelopmentTabItem" Header="Desenvolvimento">
         <!--
-          A aba Desenvolvimento (ADR-027). O DataContext é o ViewModel da aba, e
-          o painel tem nome para os itens das listas chegarem aos comandos dele.
+          A aba Desenvolvimento (ADR-027). Em cima, um repositório por aba
+          (ADR-031); embaixo, o painel do escolhido. O DataContext do painel é o
+          ViewModel do ambiente, e ele tem nome para os itens das listas
+          chegarem aos comandos dele.
         -->
         <ScrollViewer x:Name="DevelopmentScroll"
                       HorizontalScrollBarVisibility="Disabled"
                       Margin="0,10,0,10">
+          <StackPanel Spacing="4">
+
+          <DockPanel x:Name="RepositoryStrip"
+                     x:DataType="vm:TaskDevelopmentsViewModel"
+                     DataContext="{Binding Developments}"
+                     IsVisible="{Binding ShowStrip}">
+            <Button x:Name="AddRepositoryButton"
+                    DockPanel.Dock="Right"
+                    VerticalAlignment="Top"
+                    Content="+ Adicionar repositório"
+                    ToolTip.Tip="Mais um ambiente desta tarefa, em outro repositório — o fluxo que atravessa repositórios."
+                    Command="{Binding AddRepositoryCommand}"
+                    IsVisible="{Binding CanAddRepository}" />
+
+            <ListBox x:Name="RepositoryList"
+                     Classes="repoStrip"
+                     ItemsSource="{Binding Items}"
+                     SelectedItem="{Binding Selected}"
+                     SelectionMode="Single,AlwaysSelected">
+              <ListBox.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <WrapPanel Orientation="Horizontal" />
+                </ItemsPanelTemplate>
+              </ListBox.ItemsPanel>
+              <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:TaskDevelopmentViewModel">
+                  <StackPanel Orientation="Horizontal" Spacing="6"
+                              ToolTip.Tip="{Binding Development.RepositoryPath, FallbackValue='Novo repositório'}">
+                    <TextBlock Classes="chipMeta" Text="{Binding ChipGlyph}" />
+                    <TextBlock Classes="chipTitle" Text="{Binding ChipTitle}" />
+                    <TextBlock Classes="chipMeta" Text="·"
+                               IsVisible="{Binding ChipBranch, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                    <TextBlock Classes="chipMeta" Text="{Binding ChipBranch}" />
+                    <TextBlock Classes="chipAgent" Text="●"
+                               ToolTip.Tip="Agente de IA aberto neste repositório"
+                               IsVisible="{Binding HasRunningAgent}" />
+                  </StackPanel>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+          </DockPanel>
+
           <StackPanel x:Name="DevelopmentPanel"
                       x:DataType="vm:TaskDevelopmentViewModel"
-                      DataContext="{Binding Development}"
+                      DataContext="{Binding Developments.Selected}"
                       Spacing="12">
 
             <TextBlock Classes="hint"
@@ -663,7 +754,17 @@
 
             <!-- A tentativa anterior: falhou, foi interrompida ou removida. -->
             <Border Classes="card caution" IsVisible="{Binding HasPreviousAttempt}">
-              <TextBlock Classes="body" Text="{Binding PreviousAttempt}" />
+              <DockPanel>
+                <!-- Sem worktree, o ambiente pode sair das abas da tarefa (ADR-031). -->
+                <Button x:Name="ForgetButton"
+                        DockPanel.Dock="Right"
+                        VerticalAlignment="Center"
+                        Margin="12,0,0,0"
+                        Content="Remover da lista"
+                        Command="{Binding ForgetCommand}"
+                        IsVisible="{Binding CanForget}" />
+                <TextBlock Classes="body" Text="{Binding PreviousAttempt}" />
+              </DockPanel>
             </Border>
 
             <!-- Formulário -->
@@ -1110,6 +1211,7 @@
                        Text="{Binding Message}"
                        IsVisible="{Binding Message, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
+          </StackPanel>
           </StackPanel>
         </ScrollViewer>
       </TabItem>

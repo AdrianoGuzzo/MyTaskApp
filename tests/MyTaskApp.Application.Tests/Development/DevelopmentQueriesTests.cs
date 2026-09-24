@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using MyTaskApp.Application.Development;
 using MyTaskApp.Application.Tests.Fakes;
 using MyTaskApp.Domain.Tasks;
@@ -77,19 +78,44 @@ public class DevelopmentQueriesTests
     }
 
     [Fact]
-    public async Task GetTaskDevelopment_IsNullUntilStarted_ThenShowsTheRecord()
+    public async Task GetTaskDevelopments_IsEmptyUntilStarted_ThenListsOnePerRepository()
     {
         var tasks = new FakeTaskItemRepository();
         var task = TaskItem.Create("Corrigir", Now);
         tasks.Seed(task);
-        var handler = new GetTaskDevelopmentHandler(tasks);
+        var handler = new GetTaskDevelopmentsHandler(tasks);
 
-        (await handler.HandleAsync(new GetTaskDevelopment(task.Id), Ct)).Should().BeNull();
+        (await handler.HandleAsync(new GetTaskDevelopments(task.Id), Ct)).Should().BeEmpty();
 
-        task.BeginDevelopment(FakeGitClient.Repository, "main", "feature/x", @"C:\Projects\ecossistema-core-feature-x", Now);
+        var first = task.BeginDevelopment(
+            null, FakeGitClient.Repository, "main", "feature/x", @"C:\Projects\ecossistema-core-feature-x", Now);
+        var second = task.BeginDevelopment(
+            null, @"C:\Projects\ecossistema-api", "main", "feature/x", @"C:\Projects\ecossistema-api-feature-x", Now);
 
-        var view = await handler.HandleAsync(new GetTaskDevelopment(task.Id), Ct);
-        view!.Status.Should().Be(TaskDevelopmentStatus.Creating);
-        view.Branch.Should().Be("feature/x");
+        var views = await handler.HandleAsync(new GetTaskDevelopments(task.Id), Ct);
+
+        views.Select(view => view.Id).Should().Equal(first.Id, second.Id);
+        views.Should().AllSatisfy(view =>
+        {
+            view.TaskId.Should().Be(task.Id);
+            view.Status.Should().Be(TaskDevelopmentStatus.Creating);
+            view.Branch.Should().Be("feature/x");
+        });
+    }
+
+    [Fact]
+    public async Task ForgetDevelopment_TakesAFailedEnvironmentOffTheList()
+    {
+        var tasks = new FakeTaskItemRepository();
+        var task = TaskItem.Create("Corrigir", Now);
+        tasks.Seed(task);
+        var development = task.BeginDevelopment(
+            null, FakeGitClient.Repository, "main", "feature/x", @"C:\Projects\ecossistema-core-feature-x", Now);
+        task.MarkDevelopmentFailed(development.Id, "falhou", Now);
+        await new ForgetDevelopmentHandler(tasks, tasks, NullLogger<ForgetDevelopmentHandler>.Instance)
+            .HandleAsync(new ForgetDevelopment(task.Id, development.Id), Ct);
+
+        task.Developments.Should().BeEmpty();
+        tasks.SaveCount.Should().Be(1);
     }
 }

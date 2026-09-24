@@ -35,7 +35,7 @@ public sealed class GetTodayBoardHandler(
             .ToList();
 
         TodayTask ToTask((TodayOccurrenceRow Row, TodayPlacement? Placement) entry) =>
-            Project(entry, nowUtc) with { ActiveAgentName = AgentName(entry.Row.ActiveAgentProviderId) };
+            Project(entry, nowUtc) with { ActiveAgents = Agents(entry.Row.ActiveAgents) };
 
         IEnumerable<(TodayOccurrenceRow Row, TodayPlacement? Placement)> InSection(TodaySection section) =>
             placed.Where(entry => entry.Placement!.Section == section);
@@ -98,8 +98,27 @@ public sealed class GetTodayBoardHandler(
             now,
             window);
 
-    private string? AgentName(string? providerId) =>
-        providerId is null ? null : agents?.Find(providerId)?.Name ?? providerId;
+    private IReadOnlyList<ActiveAgent>? Agents(IReadOnlyList<ActiveAgentRow>? rows) =>
+        rows is null or { Count: 0 }
+            ? null
+            : rows
+                .Select(row => new ActiveAgent(
+                    row.DevelopmentId,
+                    agents?.Find(row.ProviderId)?.Name ?? row.ProviderId,
+                    RepositoryName(row.RepositoryPath),
+                    row.Branch))
+                .ToList();
+
+    private static string? RepositoryName(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return null;
+        }
+
+        var name = Path.GetFileName(path.TrimEnd('\\', '/'));
+        return name.Length == 0 ? path : name;
+    }
 
     private static TodayTask Project(
         (TodayOccurrenceRow Row, TodayPlacement? Placement) entry,

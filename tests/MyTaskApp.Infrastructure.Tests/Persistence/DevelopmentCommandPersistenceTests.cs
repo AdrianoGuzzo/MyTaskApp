@@ -99,35 +99,35 @@ public class DevelopmentCommandPersistenceTests
         await using (var write = db.CreateContext())
         {
             var tracked = await new TaskItemRepository(write).FindByIdAsync(task.Id, Ct);
-            tracked!.BeginDevelopment(Repository, "origin/develop", "feature/x", Worktree, Now);
-            tracked.SetDevelopmentCommands(["@restore", "@npm-install", "dotnet ef database update"], Now);
-            tracked.MarkDevelopmentReady(Now);
+            tracked!.BeginDevelopment(null, Repository, "origin/develop", "feature/x", Worktree, Now);
+            tracked.SetDevelopmentCommands(tracked.Developments[0].Id, ["@restore", "@npm-install", "dotnet ef database update"], Now);
+            tracked.MarkDevelopmentReady(tracked.Developments[0].Id, Now);
             await write.SaveChangesAsync(Ct);
         }
 
         await using (var reorder = db.CreateContext())
         {
             var tracked = await new TaskItemRepository(reorder).FindByIdAsync(task.Id, Ct);
-            tracked!.Development!.Commands.Select(command => command.Command)
+            tracked!.Developments[0].Commands.Select(command => command.Command)
                 .Should().Equal("@restore", "@npm-install", "dotnet ef database update");
 
-            tracked.SetDevelopmentCommands(["dotnet ef database update", "@restore", "@build", "@test"], Now);
+            tracked.SetDevelopmentCommands(tracked.Developments[0].Id, ["dotnet ef database update", "@restore", "@build", "@test"], Now);
             await reorder.SaveChangesAsync(Ct);
         }
 
         await using (var shrink = db.CreateContext())
         {
             var tracked = await new TaskItemRepository(shrink).FindByIdAsync(task.Id, Ct);
-            tracked!.Development!.Commands.Select(command => command.Command)
+            tracked!.Developments[0].Commands.Select(command => command.Command)
                 .Should().Equal("dotnet ef database update", "@restore", "@build", "@test");
 
-            tracked.SetDevelopmentCommands(["@build"], Now);
+            tracked.SetDevelopmentCommands(tracked.Developments[0].Id, ["@build"], Now);
             await shrink.SaveChangesAsync(Ct);
         }
 
         await using var read = db.CreateContext();
         var stored = await new TaskItemRepository(read).FindByIdAsync(task.Id, Ct);
-        stored!.Development!.Commands.Select(command => (command.Command, command.Order))
+        stored!.Developments[0].Commands.Select(command => (command.Command, command.Order))
             .Should().Equal(("@build", 0));
         (await read.TaskDevelopmentCommands.CountAsync(Ct)).Should().Be(1);
     }
@@ -168,8 +168,8 @@ public class DevelopmentCommandPersistenceTests
 
         await using var read = db.CreateContext();
         var task = await new TaskItemRepository(read).FindByIdAsync(taskId, Ct);
-        task!.Development!.Status.Should().Be(TaskDevelopmentStatus.Ready);
-        task.Development.Commands.Should().BeEmpty();
+        task!.Developments[0].Status.Should().Be(TaskDevelopmentStatus.Ready);
+        task.Developments[0].Commands.Should().BeEmpty();
         (await read.DevelopmentCommands.CountAsync(Ct)).Should().Be(0);
     }
 }

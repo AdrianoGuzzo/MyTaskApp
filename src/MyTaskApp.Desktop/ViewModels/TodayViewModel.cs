@@ -400,14 +400,27 @@ public sealed partial class TodayViewModel(
     /// "Abrir terminal do agente": nunca inicia um agente novo, e se o processo
     /// já acabou a sessão é encerrada e o selo some.
     /// </summary>
+    /// <remarks>
+    /// Com um agente por repositório (ADR-031), o selo de vários abre um menu
+    /// e cada item chama <see cref="FocusAgentOfAsync"/>; este fica para o
+    /// selo de um agente só.
+    /// </remarks>
     [RelayCommand]
-    public async Task FocusAgentAsync(TaskRowViewModel row)
+    public Task FocusAgentAsync(TaskRowViewModel row) =>
+        FocusAsync(row.TaskId, row.Agents.Count == 1 ? row.Agents[0].DevelopmentId : null, row.AgentName);
+
+    /// <summary>Um item do menu do selo: o terminal do agente daquele repositório.</summary>
+    [RelayCommand]
+    public Task FocusAgentOfAsync(TaskAgentViewModel agent) =>
+        FocusAsync(agent.Row.TaskId, agent.DevelopmentId, agent.AgentName);
+
+    private async Task FocusAsync(Guid taskId, Guid? developmentId, string? agentName)
     {
         AgentFocusResult? result = null;
 
         var reached = await TryAsync(
             async () => result = await runner.RunAsync<FocusAgentSessionHandler, AgentFocusResult>(
-                (handler, token) => handler.HandleAsync(new FocusAgentSession(row.TaskId), token),
+                (handler, token) => handler.HandleAsync(new FocusAgentSession(taskId, developmentId), token),
                 CancellationToken.None),
             "Não foi possível trazer o terminal para a frente.");
 
@@ -419,14 +432,14 @@ public sealed partial class TodayViewModel(
         if (result.Session.IsActive)
         {
             ErrorMessage =
-                $"Não foi possível localizar a janela do terminal do {row.AgentName}. Procure-a na barra de tarefas.";
+                $"Não foi possível localizar a janela do terminal do {agentName}. Procure-a na barra de tarefas.";
             return;
         }
 
         // Recarrega antes de avisar: o selo desta linha estava mentindo, e a
         // recarga limpa o aviso — feita depois, apagaria a explicação.
         await LoadAsync(CancellationToken.None);
-        StatusMessage = $"O {row.AgentName} desta tarefa já foi encerrado.";
+        StatusMessage = $"O {agentName} desta tarefa já foi encerrado.";
     }
 
     /// <summary>

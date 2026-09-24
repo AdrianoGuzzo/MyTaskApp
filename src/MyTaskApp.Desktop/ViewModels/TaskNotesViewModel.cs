@@ -30,14 +30,14 @@ namespace MyTaskApp.Desktop.ViewModels;
 /// </para>
 /// <para>
 /// A janela tem duas abas: a anotação e, desde o ADR-027, o ambiente de
-/// desenvolvimento (<see cref="Development"/>). Os diretórios das etiquetas são
+/// desenvolvimento (<see cref="Developments"/>, um por repositório desde o ADR-031). Os diretórios das etiquetas são
 /// carregados uma vez e servem aos dois autocompletes.
 /// </para>
 /// </remarks>
 public sealed partial class TaskNotesViewModel(
     IUseCaseRunner runner,
     IDirectoryProbe directoryProbe,
-    TaskDevelopmentViewModel development,
+    TaskDevelopmentsViewModel developments,
     ILogger<TaskNotesViewModel> logger) : ObservableObject
 {
     public const int NotesTab = 0;
@@ -95,8 +95,8 @@ public sealed partial class TaskNotesViewModel(
     /// <summary>O <c>@alias</c> da anotação (ADR-026).</summary>
     public AliasCompletionViewModel Completion { get; } = new();
 
-    /// <summary>A aba Desenvolvimento (ADR-027).</summary>
-    public TaskDevelopmentViewModel Development { get; } = development;
+    /// <summary>A aba Desenvolvimento (ADR-027), com um ambiente por repositório (ADR-031).</summary>
+    public TaskDevelopmentsViewModel Developments { get; } = developments;
 
     public bool IsNotesTab => SelectedTabIndex == NotesTab;
 
@@ -144,7 +144,7 @@ public sealed partial class TaskNotesViewModel(
     {
         _taskId = row.TaskId;
         Completion.Reset();
-        Development.DirectoryCompletion.Reset();
+        Developments.DirectoryCompletion.Reset();
         _persistedTitle = row.Title;
         _priority = row.Priority;
         _persisted = row.Notes ?? string.Empty;
@@ -156,7 +156,7 @@ public sealed partial class TaskNotesViewModel(
         ErrorMessage = null;
         SelectedTabIndex = NotesTab;
 
-        Development.Load(row.TaskId, row.Title, row.IsCompleted);
+        Developments.Load(row.TaskId, row.Title, row.IsCompleted);
     }
 
     /// <summary>A aba Desenvolvimento se atualiza a cada vez que aparece.</summary>
@@ -164,7 +164,7 @@ public sealed partial class TaskNotesViewModel(
     {
         if (value == DevelopmentTab)
         {
-            _ = Development.ActivateAsync(CancellationToken.None);
+            _ = Developments.ActivateAsync(CancellationToken.None);
         }
     }
 
@@ -248,14 +248,14 @@ public sealed partial class TaskNotesViewModel(
 
             var unknown = new Dictionary<Guid, bool>();
             Completion.SetDirectories(directories, unknown);
-            Development.DirectoryCompletion.SetDirectories(directories, unknown);
+            Developments.DirectoryCompletion.SetDirectories(directories, unknown);
 
             var checks = await Task.WhenAll(directories.Select(async directory =>
                 (directory.Id, Exists: await directoryProbe.ExistsAsync(directory.Path, cancellationToken))));
 
             var existence = checks.ToDictionary(check => check.Id, check => check.Exists);
             Completion.SetDirectories(directories, existence);
-            Development.DirectoryCompletion.SetDirectories(directories, existence);
+            Developments.DirectoryCompletion.SetDirectories(directories, existence);
         }
         catch (OperationCanceledException)
         {

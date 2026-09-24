@@ -321,14 +321,65 @@ public class PrepareDevelopmentHandlerTests
     }
 
     [Fact]
-    public async Task ATaskAlreadyReady_IsRefused()
+    public async Task RetryingAReadyEnvironment_IsRefused_BeforeAnyGit()
     {
-        _task.BeginDevelopment(FakeGitClient.Repository, "main", "feature/x", @"C:\Projects\ecossistema-core-feature-x", Now);
-        _task.MarkDevelopmentReady(Now);
+        var ready = _task.BeginDevelopment(
+            null, FakeGitClient.Repository, "main", "feature/x", @"C:\Projects\ecossistema-core-feature-x", Now);
+        _task.MarkDevelopmentReady(ready.Id, Now);
 
-        var failure = (await FluentActions.Awaiting(() => PrepareAsync()).Should().ThrowAsync<DomainException>()).Which;
+        var failure = (await FluentActions.Awaiting(() => Handler().HandleAsync(
+                new PrepareDevelopment(_task.Id, FakeGitClient.Repository, OriginDevelop, "feature/y", ready.Id),
+                _progress,
+                Ct))
+            .Should().ThrowAsync<DomainException>()).Which;
 
         failure.Message.Should().Contain("já tem um worktree pronto");
+        _git.Calls.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Um ambiente por repositório (ADR-031). A recusa sai na etapa do
+    /// repositório — é ali que se sabe qual é — e antes do fetch, que demora.
+    /// </summary>
+    [Fact]
+    public async Task ARepositoryWithAReadyEnvironment_IsRefusedAtTheRepositoryStep()
+    {
+        var ready = _task.BeginDevelopment(
+            null, FakeGitClient.Repository, "main", "feature/x", @"C:\Projects\ecossistema-core-feature-x", Now);
+        _task.MarkDevelopmentReady(ready.Id, Now);
+
+        var failure = await FailsAt(DevelopmentStep.ValidateRepository, () => PrepareAsync());
+
+        failure.Message.Should().Contain("já tem um ambiente em");
+        _git.Calls.Should().NotContain("fetch");
+    }
+
+    [Fact]
+    public async Task AnotherRepository_IsPrepared_WhileTheFirstStaysReady()
+    {
+        var other = _task.BeginDevelopment(
+            null, @"C:\Projects\ecossistema-api", "main", "feature/x", @"C:\Projects\ecossistema-api-feature-x", Now);
+        _task.MarkDevelopmentReady(other.Id, Now);
+
+        var plan = await PrepareAsync();
+
+        plan.RepositoryPath.Should().Be(FakeGitClient.Repository);
+        plan.DevelopmentId.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task ARetry_CarriesTheEnvironmentIntoThePlan()
+    {
+        var failed = _task.BeginDevelopment(
+            null, FakeGitClient.Repository, "main", "feature/x", @"C:\Projects\ecossistema-core-feature-x", Now);
+        _task.MarkDevelopmentFailed(failed.Id, "falhou", Now);
+
+        var plan = await Handler().HandleAsync(
+            new PrepareDevelopment(_task.Id, FakeGitClient.Repository, OriginDevelop, "feature/123-corrigir-animais", failed.Id),
+            _progress,
+            Ct);
+
+        plan.DevelopmentId.Should().Be(failed.Id);
     }
 
     [Fact]

@@ -18,6 +18,8 @@ public class TaskDevelopmentViewModelTests
 
     private static readonly Guid TaskId = Guid.CreateVersion7();
 
+    private static readonly Guid DevelopmentId = Guid.CreateVersion7();
+
     private static readonly GitInstallation Installed = new(true, "2.51.0", "git");
 
     private static readonly IReadOnlyList<GitBranch> Branches =
@@ -39,14 +41,13 @@ public class TaskDevelopmentViewModelTests
     private readonly FakeTimeProvider _time = new();
 
     private static TaskDevelopmentView View(TaskDevelopmentStatus status, string? failure = null) =>
-        new(Repository, "origin/develop", "feature/x", Worktree, status, DateTimeOffset.UnixEpoch, failure);
+        new(DevelopmentId, TaskId, Repository, "origin/develop", "feature/x", Worktree, status, DateTimeOffset.UnixEpoch, failure);
 
     private async Task<TaskDevelopmentViewModel> ActivatedAsync(
         GitInstallation? git = null,
         TaskDevelopmentView? development = null,
         bool isReadOnly = false)
     {
-        _runner.Enqueue<GetTaskDevelopmentHandler>(development);
 
         if (!_runner.QueuedResults.ContainsKey(typeof(DetectGitHandler)))
         {
@@ -56,9 +57,9 @@ public class TaskDevelopmentViewModelTests
         _runner.ResultsByHandler[typeof(InspectDirectoryHandler)] = new DirectoryInspection(true, true, Repository);
         _runner.ResultsByHandler[typeof(ListBranchesHandler)] = new BranchList(Branches, Branches[0]);
 
-        var viewModel = TestDevelopment.For(_runner, _clipboard, _shell, _confirmation, _time);
+        var viewModel = TestDevelopment.Environment(_runner, _clipboard, _shell, _confirmation, _time);
         viewModel.Load(TaskId, "Corrigir cálculo de animais", isReadOnly);
-        await viewModel.ActivateAsync(Ct);
+        await viewModel.ActivateAsync(development, Ct);
 
         return viewModel;
     }

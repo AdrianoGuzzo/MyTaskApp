@@ -31,6 +31,21 @@ internal sealed class FakeAgentSessionRepository : IAgentSessionRepository
                 .ThenByDescending(session => session.Id)
                 .FirstOrDefault());
 
+    public Task<AgentSession?> FindLatestForDevelopmentAsync(Guid developmentId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(
+            _sessions
+                .Where(session => session.TaskDevelopmentId == developmentId)
+                .OrderByDescending(session => session.StartedAt)
+                .ThenByDescending(session => session.Id)
+                .FirstOrDefault());
+
+    public Task<IReadOnlyList<AgentSession>> ListActiveForTaskAsync(Guid taskId, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<AgentSession>>(
+            [.. _sessions
+                .Where(session => session.TaskItemId == taskId && session.IsActive)
+                .OrderBy(session => session.StartedAt)
+                .ThenBy(session => session.Id)]);
+
     public Task<IReadOnlyList<AgentSession>> ListActiveAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<AgentSession>>([.. _sessions.Where(session => session.IsActive)]);
 }
