@@ -12,7 +12,9 @@ public sealed record PrepareDevelopment(
     Guid TaskId,
     string DirectoryPath,
     string SourceRef,
-    string NewBranch);
+    string NewBranch,
+    /// <summary>O ambiente que tenta de novo; <c>null</c> = um repositório novo na tarefa (ADR-031).</summary>
+    Guid? DevelopmentId = null);
 
 /// <summary>
 /// Não grava nada no banco e pode ser cancelado a qualquer momento: a única
@@ -46,7 +48,7 @@ public sealed class PrepareDevelopmentHandler(
         CancellationToken cancellationToken = default)
     {
         var task = await tasks.GetByIdAsync(command.TaskId, cancellationToken);
-        task.EnsureDevelopmentCanBegin();
+        task.EnsureDevelopmentCanBegin(command.DevelopmentId);
 
         var step = DevelopmentStep.CheckGit;
 
@@ -63,6 +65,7 @@ public sealed class PrepareDevelopmentHandler(
             step = DevelopmentStep.ValidateRepository;
             progress.Report(step, DevelopmentStepState.Running);
             var repository = await ValidateRepositoryAsync(directory, cancellationToken);
+            EnsureRepositoryIsFree(task, command.DevelopmentId, repository);
             progress.Report(step, DevelopmentStepState.Done, repository);
 
             step = DevelopmentStep.Fetch;
@@ -127,7 +130,8 @@ public sealed class PrepareDevelopmentHandler(
                 existing?.FullRef,
                 conflict is not null);
 
-            return new DevelopmentPlan(task.Id, repository, source, newBranch, path, changes.Entries, conflict, existing);
+            return new DevelopmentPlan(
+                task.Id, repository, source, newBranch, path, changes.Entries, conflict, existing, command.DevelopmentId);
         }
         catch (GitCommandFailedException exception)
         {
@@ -175,6 +179,22 @@ public sealed class PrepareDevelopmentHandler(
         }
 
         return WorktreePathPlanner.Canonical(path);
+    }
+
+    /// <summary>
+    /// Um ambiente por repositório (ADR-031). Só dá para perguntar depois de
+    /// saber qual é o worktree principal — e antes do fetch, que demora.
+    /// </summary>
+    private static void EnsureRepositoryIsFree(Domain.Tasks.TaskItem task, Guid? developmentId, string repository)
+    {
+        try
+        {
+            task.EnsureDevelopmentCanBegin(developmentId, repository);
+        }
+        catch (Domain.DomainException exception)
+        {
+            throw new DevelopmentStepException(DevelopmentStep.ValidateRepository, exception.Message);
+        }
     }
 
     private async Task<string> ValidateRepositoryAsync(string directory, CancellationToken cancellationToken)

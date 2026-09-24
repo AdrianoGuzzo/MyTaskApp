@@ -17,7 +17,8 @@ namespace MyTaskApp.Desktop.Tests.ViewModels;
 
 /// <summary>
 /// O selo "● Claude Code" da linha leva ao terminal do agente sem abrir a
-/// tarefa (ADR-030).
+/// tarefa (ADR-030). Com um agente por repositório, o selo conta e pergunta qual
+/// (ADR-031).
 /// </summary>
 public class TodayAgentBadgeTests
 {
@@ -32,9 +33,10 @@ public class TodayAgentBadgeTests
         new(_runner, new FakeConfirmationDialog(), new FakeClipboardWriter(), TimeProvider.System,
             NullLogger<TodayViewModel>.Instance);
 
-    private static TodayTask Listed(string title = "Integrar o Claude") =>
+    private static TodayTask Listed(string title = "Integrar o Claude", int agents = 1) =>
         new(Guid.CreateVersion7(), Guid.CreateVersion7(), title, TaskPriority.Normal, Date, null, false,
-            ActiveAgentName: "Claude Code");
+            ActiveAgents: [.. Enumerable.Range(0, agents).Select(index => new ActiveAgent(
+                Guid.CreateVersion7(), "Claude Code", index == 0 ? "eco-core" : "eco-api", "feature/x"))]);
 
     private static AgentFocusResult Focus(AgentSessionStatus status, bool focused) =>
         new(new AgentSessionView(Guid.CreateVersion7(), Guid.CreateVersion7(), "claude-code", "Claude Code",
@@ -53,6 +55,30 @@ public class TodayAgentBadgeTests
         _runner.Invoked.Should().Equal(typeof(FocusAgentSessionHandler));
         viewModel.ErrorMessage.Should().BeNull();
         viewModel.StatusMessage.Should().BeNull();
+    }
+
+    [Fact]
+    public void OneAgentPerRepository_TheBadgeCountsThem_AndTheTipNamesThem()
+    {
+        var row = new TaskRowViewModel(Listed(agents: 2), false);
+
+        row.HasActiveAgent.Should().BeTrue();
+        row.AgentLabel.Should().Be("● Claude Code ×2");
+        row.AgentTip.Should().Contain("eco-core · feature/x").And.Contain("eco-api · feature/x");
+        new TaskRowViewModel(Listed(), false).AgentLabel.Should().Be("● Claude Code");
+    }
+
+    [Fact]
+    public async Task ChoosingAnAgentFromTheMenu_FocusesIt()
+    {
+        _runner.ResultsByHandler[typeof(FocusAgentSessionHandler)] = Focus(AgentSessionStatus.Running, true);
+        var viewModel = ViewModel();
+        var row = new TaskRowViewModel(Listed(agents: 2), false);
+
+        await viewModel.FocusAgentOfAsync(row.Agents[1]);
+
+        _runner.Invoked.Should().Equal(typeof(FocusAgentSessionHandler));
+        viewModel.ErrorMessage.Should().BeNull();
     }
 
     [Fact]
@@ -125,5 +151,36 @@ public class TodayAgentBadgeTests
         window.MouseUp(point, MouseButton.Left);
 
         _runner.Invoked.Should().Contain(typeof(FocusAgentSessionHandler));
+    }
+
+    /// <summary>Com dois agentes, o clique pergunta qual — e não escolhe um por conta própria.</summary>
+    [AvaloniaFact]
+    public async Task AClickOnTheBadgeOfTwoAgents_AsksWhich_InsteadOfFocusing()
+    {
+        _runner.Result = new TodayBoard(Date, [], [], [Listed(agents: 2)], [], []);
+        _runner.ResultsByHandler[typeof(FocusAgentSessionHandler)] = Focus(AgentSessionStatus.Running, true);
+        var viewModel = ViewModel();
+
+        await viewModel.LoadAsync(CancellationToken.None);
+
+        var window = new MainWindow { DataContext = viewModel };
+        window.Show();
+        window.UpdateLayout();
+
+        var badge = window.GetVisualDescendants()
+            .OfType<TextBlock>()
+            .Single(block => block.Name == "AgentBadge");
+
+        badge.Text.Should().Be("● Claude Code ×2");
+
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+
+        var centre = new Point(badge.Bounds.Width / 2, badge.Bounds.Height / 2);
+        var point = badge.TranslatePoint(centre, window)!.Value;
+
+        window.MouseDown(point, MouseButton.Left);
+        window.MouseUp(point, MouseButton.Left);
+
+        _runner.Invoked.Should().NotContain(typeof(FocusAgentSessionHandler));
     }
 }

@@ -113,6 +113,25 @@ public sealed partial class TodayView : UserControl
 
         e.Handled = true;
 
+        // Um agente por repositório (ADR-031): com mais de um, o usuário escolhe qual.
+        if (row.Agents.Count > 1)
+        {
+            var menu = new MenuFlyout { Placement = PlacementMode.BottomEdgeAlignedLeft };
+
+            foreach (var agent in row.Agents)
+            {
+                menu.Items.Add(new MenuItem
+                {
+                    Header = $"Abrir terminal: {agent.Label}",
+                    Command = viewModel.FocusAgentOfCommand,
+                    CommandParameter = agent,
+                });
+            }
+
+            menu.ShowAt((Control)sender);
+            return;
+        }
+
         if (viewModel.FocusAgentCommand.CanExecute(row))
         {
             viewModel.FocusAgentCommand.Execute(row);

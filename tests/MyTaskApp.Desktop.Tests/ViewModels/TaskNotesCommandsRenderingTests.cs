@@ -38,7 +38,7 @@ public class TaskNotesCommandsRenderingTests
         var runner = new FakeUseCaseRunner();
         runner.ResultsByHandler[typeof(GetTaskDirectoriesHandler)] = TaskNotesAliasTests.Directories;
         runner.ResultsByHandler[typeof(GetDevelopmentCommandsHandler)] = Globals;
-        runner.Enqueue<GetTaskDevelopmentHandler>(development);
+        runner.Enqueue<GetTaskDevelopmentsHandler>(TestDevelopment.List(development));
         runner.ResultsByHandler[typeof(DetectGitHandler)] = new GitInstallation(true, "2.51.0", "git");
         runner.ResultsByHandler[typeof(InspectDirectoryHandler)] = new DirectoryInspection(true, true, Repository);
         runner.ResultsByHandler[typeof(ListBranchesHandler)] = new BranchList(
@@ -57,7 +57,7 @@ public class TaskNotesCommandsRenderingTests
         window.Show();
 
         viewModel.SelectedTabIndex = TaskNotesViewModel.DevelopmentTab;
-        await viewModel.Development.ActivateAsync(CancellationToken.None);
+        await viewModel.Developments.ActivateAsync(CancellationToken.None);
         Settle(window);
 
         return (window, viewModel);
@@ -86,8 +86,8 @@ public class TaskNotesCommandsRenderingTests
         Texts(section).Should().Contain("Comandos pós-Worktree");
         section.GetVisualDescendants().OfType<CommandInputBox>().Should().BeEmpty();
 
-        viewModel.Development.Commands.Add();
-        viewModel.Development.Commands.Add();
+        viewModel.Developments.Selected!.Commands.Add();
+        viewModel.Developments.Selected!.Commands.Add();
         Settle(window);
 
         section.GetVisualDescendants().OfType<CommandInputBox>().Should().HaveCount(2);
@@ -97,13 +97,13 @@ public class TaskNotesCommandsRenderingTests
     public async Task TypingAt_OpensTheGlobalCommands_AndAcceptingInsertsTheAlias()
     {
         var (window, viewModel) = await ShowAsync();
-        viewModel.Development.Commands.Add();
+        viewModel.Developments.Selected!.Commands.Add();
         Settle(window);
 
         var input = Named<PostWorktreeCommandsView>(window, "SetupCommands")
             .GetVisualDescendants().OfType<CommandInputBox>().Single();
         var box = Named<TextBox>(input, "CommandBox");
-        var item = viewModel.Development.Commands.Items[0];
+        var item = viewModel.Developments.Selected!.Commands.Items[0];
 
         box.Focus();
         box.Text = "@re";
@@ -126,8 +126,8 @@ public class TaskNotesCommandsRenderingTests
     public async Task AfterARun_TheTerminalShowsTheOutputAndTheExitCode()
     {
         var (window, viewModel) = await ShowAsync(new TaskDevelopmentView(
-            Repository, "origin/main", "feature/x", Worktree, TaskDevelopmentStatus.Ready, At, null, ["@build"]));
-        var commands = viewModel.Development.Commands;
+            Guid.CreateVersion7(), Guid.CreateVersion7(), Repository, "origin/main", "feature/x", Worktree, TaskDevelopmentStatus.Ready, At, null, ["@build"]));
+        var commands = viewModel.Developments.Selected!.Commands;
 
         commands.BeginRun();
         commands.Apply(new CommandStepProgress(0, CommandStepState.Running, "dotnet build"));

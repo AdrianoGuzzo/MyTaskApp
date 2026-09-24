@@ -40,9 +40,9 @@ public class DevelopmentCommandsHandlerTests
 
     private void Ready(params string[] commands)
     {
-        _task.BeginDevelopment(FakeGitClient.Repository, "origin/develop", "feature/x", Worktree, Now);
-        _task.SetDevelopmentCommands(commands, Now);
-        _task.MarkDevelopmentReady(Now);
+        _task.BeginDevelopment(null, FakeGitClient.Repository, "origin/develop", "feature/x", Worktree, Now);
+        _task.SetDevelopmentCommands(_task.Developments[0].Id, commands, Now);
+        _task.MarkDevelopmentReady(_task.Developments[0].Id, Now);
     }
 
     private RunDevelopmentCommandsHandler Runner() =>
@@ -50,7 +50,7 @@ public class DevelopmentCommandsHandlerTests
 
     private Task<CommandRunSummary> RunAsync(CancellationToken? cancellationToken = null) =>
         Runner().HandleAsync(
-            new RunDevelopmentCommands(_task.Id),
+            new RunDevelopmentCommands(_task.Id, _task.Developments[0].Id),
             new SynchronousProgress<CommandStepProgress>(_progress.Add),
             cancellationToken ?? Ct);
 
@@ -167,9 +167,9 @@ public class DevelopmentCommandsHandlerTests
     [Fact]
     public async Task AWorktreeThatWasNotCreated_RunsNothing()
     {
-        _task.BeginDevelopment(FakeGitClient.Repository, "origin/develop", "feature/x", Worktree, Now);
-        _task.SetDevelopmentCommands(["@restore"], Now);
-        _task.MarkDevelopmentFailed("O Git não conseguiu criar o worktree.", Now);
+        _task.BeginDevelopment(null, FakeGitClient.Repository, "origin/develop", "feature/x", Worktree, Now);
+        _task.SetDevelopmentCommands(_task.Developments[0].Id, ["@restore"], Now);
+        _task.MarkDevelopmentFailed(_task.Developments[0].Id, "O Git não conseguiu criar o worktree.", Now);
 
         var run = () => RunAsync();
 
@@ -228,10 +228,10 @@ public class DevelopmentCommandsHandlerTests
 
         var view = await new SetDevelopmentCommandsHandler(
                 _tasks, _tasks, new FakeTimeProvider(Now), NullLogger<SetDevelopmentCommandsHandler>.Instance)
-            .HandleAsync(new SetDevelopmentCommands(_task.Id, ["@build", " ", "@restore", "npm test"]), Ct);
+            .HandleAsync(new SetDevelopmentCommands(_task.Id, _task.Developments[0].Id, ["@build", " ", "@restore", "npm test"]), Ct);
 
         view.Commands.Should().Equal("@build", "@restore", "npm test");
-        _task.Development!.Commands.Select(command => command.Order).Should().Equal(0, 1, 2);
+        _task.Developments[0].Commands.Select(command => command.Order).Should().Equal(0, 1, 2);
     }
 
     [Fact]

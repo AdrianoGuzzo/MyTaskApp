@@ -96,10 +96,14 @@ public sealed record DevelopmentPlan(
     string WorktreePath,
     IReadOnlyList<string> RepositoryChanges,
     WorktreeConflict? Conflict,
-    GitBranch? ExistingBranch = null);
+    GitBranch? ExistingBranch = null,
+    /// <summary>O ambiente que tenta de novo; <c>null</c> = um repositório novo na tarefa (ADR-031).</summary>
+    Guid? DevelopmentId = null);
 
-/// <summary>O ambiente da tarefa, como a tela o mostra.</summary>
+/// <summary>Um ambiente da tarefa, como a tela o mostra.</summary>
 public sealed record TaskDevelopmentView(
+    Guid Id,
+    Guid TaskId,
     string RepositoryPath,
     string SourceBranch,
     string Branch,
@@ -111,6 +115,8 @@ public sealed record TaskDevelopmentView(
 {
     public static TaskDevelopmentView From(TaskDevelopment development) =>
         new(
+            development.Id,
+            development.TaskItemId,
             development.RepositoryPath,
             development.SourceBranch,
             development.Branch,

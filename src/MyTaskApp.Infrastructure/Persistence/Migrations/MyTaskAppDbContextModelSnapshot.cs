@@ -51,6 +51,9 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("INTEGER");
 
+                    b.Property<Guid?>("TaskDevelopmentId")
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid>("TaskItemId")
                         .HasColumnType("TEXT");
 
@@ -63,9 +66,11 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("Status");
 
+                    b.HasIndex("TaskDevelopmentId", "StartedAt");
+
                     b.HasIndex("TaskItemId", "StartedAt");
 
-                    b.HasIndex(new[] { "TaskItemId" }, "IX_AgentSessions_TaskItemId_Active")
+                    b.HasIndex(new[] { "TaskDevelopmentId" }, "IX_AgentSessions_TaskDevelopmentId_Active")
                         .IsUnique()
                         .HasFilter("\"Status\" IN (1, 2)");
 
@@ -255,8 +260,7 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("TaskItemId")
-                        .IsUnique();
+                    b.HasIndex("TaskItemId");
 
                     b.ToTable("TaskDevelopments", (string)null);
                 });
@@ -443,6 +447,11 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("MyTaskApp.Domain.Agents.AgentSession", b =>
                 {
+                    b.HasOne("MyTaskApp.Domain.Tasks.TaskDevelopment", null)
+                        .WithMany()
+                        .HasForeignKey("TaskDevelopmentId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("MyTaskApp.Domain.Tasks.TaskItem", null)
                         .WithMany()
                         .HasForeignKey("TaskItemId")
@@ -462,8 +471,8 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MyTaskApp.Domain.Tasks.TaskDevelopment", b =>
                 {
                     b.HasOne("MyTaskApp.Domain.Tasks.TaskItem", null)
-                        .WithOne("Development")
-                        .HasForeignKey("MyTaskApp.Domain.Tasks.TaskDevelopment", "TaskItemId")
+                        .WithMany("Developments")
+                        .HasForeignKey("TaskItemId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
@@ -599,7 +608,7 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("MyTaskApp.Domain.Tasks.TaskItem", b =>
                 {
-                    b.Navigation("Development");
+                    b.Navigation("Developments");
 
                     b.Navigation("Occurrences");
 

@@ -17,7 +17,7 @@ public sealed record WorktreeInspection(bool Exists, IReadOnlyList<string> Chang
 }
 
 /// <summary>A pasta do worktree ainda existe? Tem alterações não commitadas?</summary>
-public sealed record InspectWorktree(Guid TaskId);
+public sealed record InspectWorktree(Guid TaskId, Guid DevelopmentId);
 
 public sealed class InspectWorktreeHandler(
     ITaskItemRepository tasks,
@@ -29,8 +29,7 @@ public sealed class InspectWorktreeHandler(
         CancellationToken cancellationToken = default)
     {
         var task = await tasks.GetByIdAsync(query.TaskId, cancellationToken);
-        var development = task.Development
-            ?? throw new DomainException("Esta tarefa não tem ambiente de desenvolvimento.");
+        var development = task.GetDevelopment(query.DevelopmentId);
 
         if (!await directories.ExistsAsync(development.WorktreePath, cancellationToken))
         {
@@ -66,7 +65,10 @@ public sealed class InspectWorktreeHandler(
 /// Os processos que o usuário viu segurando a pasta e mandou encerrar. Vazio,
 /// nada é encerrado: a primeira tentativa só descobre quem são (ADR-029).
 /// </param>
-public sealed record RemoveWorktree(Guid TaskId, IReadOnlyList<DirectoryLocker>? TerminateLockers = null);
+public sealed record RemoveWorktree(
+    Guid TaskId,
+    Guid DevelopmentId,
+    IReadOnlyList<DirectoryLocker>? TerminateLockers = null);
 
 /// <summary>
 /// Confere as alterações de novo, aqui dentro, mesmo que a tela já tenha
@@ -102,15 +104,14 @@ public sealed class RemoveWorktreeHandler(
         CancellationToken cancellationToken = default)
     {
         var task = await tasks.GetByIdAsync(command.TaskId, cancellationToken);
-        var development = task.Development
-            ?? throw new DomainException("Esta tarefa não tem ambiente de desenvolvimento.");
+        var development = task.GetDevelopment(command.DevelopmentId);
 
         if (development.Status is TaskDevelopmentStatus.Removed)
         {
             return TaskDevelopmentView.From(development);
         }
 
-        await EnsureNoAgentRunningAsync(task.Id, cancellationToken);
+        await EnsureNoAgentRunningAsync(development.Id, cancellationToken);
 
         try
         {
@@ -146,7 +147,7 @@ public sealed class RemoveWorktreeHandler(
             throw new DevelopmentStepException(Step, "Não foi possível verificar as alterações do worktree.", exception.Result);
         }
 
-        task.MarkDevelopmentRemoved(timeProvider.GetUtcNow());
+        task.MarkDevelopmentRemoved(development.Id, timeProvider.GetUtcNow());
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation("WorktreeRemoved {TaskId} {WorktreePath}", task.Id, development.WorktreePath);
@@ -154,9 +155,10 @@ public sealed class RemoveWorktreeHandler(
         return TaskDevelopmentView.From(development);
     }
 
-    private async Task EnsureNoAgentRunningAsync(Guid taskId, CancellationToken cancellationToken)
+    /// <remarks>Só o agente deste ambiente segura a remoção (ADR-031): o de outro repositório está em outra pasta.</remarks>
+    private async Task EnsureNoAgentRunningAsync(Guid developmentId, CancellationToken cancellationToken)
     {
-        var session = await agentSessions.FindLatestForTaskAsync(taskId, cancellationToken);
+        var session = await agentSessions.FindLatestForDevelopmentAsync(developmentId, cancellationToken);
 
         if (session is null)
         {

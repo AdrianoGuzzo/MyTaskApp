@@ -17,9 +17,10 @@ internal sealed class TaskDevelopmentConfiguration : IEntityTypeConfiguration<Ta
         // INSERT — a mesma armadilha do TagDirectory.
         builder.Property(development => development.Id).ValueGeneratedNever();
 
-        // Um ambiente por tarefa. TaskItem.BeginDevelopment reaproveita a linha
-        // em vez de trocá-la, justamente para não esbarrar aqui.
-        builder.HasIndex(development => development.TaskItemId).IsUnique();
+        // Vários ambientes por tarefa, um por repositório (ADR-031). A regra do
+        // repositório fica no domínio: no Windows, dois textos diferentes podem
+        // ser a mesma pasta, e um índice único não saberia disso.
+        builder.HasIndex(development => development.TaskItemId);
 
         builder.Property(development => development.RepositoryPath)
             .IsRequired()

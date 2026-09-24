@@ -53,6 +53,8 @@ public sealed partial class AgentSessionViewModel(
 {
     private Guid _taskId;
 
+    private Guid _developmentId;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(
         nameof(IsChecking), nameof(IsNotInstalled), nameof(IsIdle), nameof(IsStarting), nameof(IsRunning),
@@ -147,10 +149,21 @@ public sealed partial class AgentSessionViewModel(
 
     public bool CanFocus => !IsBusy && State is AgentPanelState.Running;
 
-    /// <summary>A tarefa do card. Chamado uma vez, na abertura da janela.</summary>
-    public void Load(Guid taskId, bool isReadOnly)
+    /// <summary>
+    /// O ambiente do card (ADR-031): cada repositório da tarefa tem o seu agente.
+    /// Chamado quando o ambiente passa a existir.
+    /// </summary>
+    public void Load(Guid taskId, Guid developmentId, bool isReadOnly)
     {
+        if (_taskId == taskId && _developmentId == developmentId)
+        {
+            IsReadOnly = isReadOnly;
+            return;
+        }
+
         _taskId = taskId;
+        _developmentId = developmentId;
+        Session = null;
         IsReadOnly = isReadOnly;
         State = AgentPanelState.Checking;
     }
@@ -161,7 +174,7 @@ public sealed partial class AgentSessionViewModel(
     /// </summary>
     public async Task RefreshAsync(CancellationToken cancellationToken = default)
     {
-        if (_taskId == Guid.Empty || State is AgentPanelState.Starting)
+        if (_developmentId == Guid.Empty || State is AgentPanelState.Starting)
         {
             return;
         }
@@ -169,7 +182,7 @@ public sealed partial class AgentSessionViewModel(
         try
         {
             var session = await runner.RunAsync<GetTaskAgentSessionHandler, AgentSessionView?>(
-                (handler, token) => handler.HandleAsync(new GetTaskAgentSession(_taskId), token),
+                (handler, token) => handler.HandleAsync(new GetTaskAgentSession(_taskId, _developmentId), token),
                 cancellationToken);
 
             Session = session;
@@ -204,7 +217,7 @@ public sealed partial class AgentSessionViewModel(
         try
         {
             Session = await runner.RunAsync<StartAgentSessionHandler, AgentSessionView>(
-                (handler, token) => handler.HandleAsync(new StartAgentSession(_taskId, Cli?.ProviderId), token),
+                (handler, token) => handler.HandleAsync(new StartAgentSession(_taskId, _developmentId, Cli?.ProviderId), token),
                 CancellationToken.None);
 
             State = StateFor(Session);
@@ -252,7 +265,7 @@ public sealed partial class AgentSessionViewModel(
         try
         {
             var result = await runner.RunAsync<FocusAgentSessionHandler, AgentFocusResult>(
-                (handler, token) => handler.HandleAsync(new FocusAgentSession(_taskId), token),
+                (handler, token) => handler.HandleAsync(new FocusAgentSession(_taskId, _developmentId), token),
                 CancellationToken.None);
 
             Session = result.Session;
@@ -262,7 +275,7 @@ public sealed partial class AgentSessionViewModel(
             {
                 Message = result.Session.IsActive
                     ? $"Não foi possível localizar a janela do terminal ({ProcessText}). Procure-a na barra de tarefas."
-                    : $"O {AgentName} desta tarefa já foi encerrado.";
+                    : $"O {AgentName} deste ambiente já foi encerrado.";
             }
         }
         catch (DomainException exception)

@@ -84,16 +84,34 @@ internal sealed class TodayQuery(MyTaskAppDbContext context) : ITodayQuery
 
         // O selo de agente em execução (ADR-030). O status vem do banco, que o
         // monitor mantém em dia com os processos — a lista não consulta o sistema.
-        var agents = await context.AgentSessions
-            .AsNoTracking()
-            .Where(session => taskIds.Contains(session.TaskItemId)
-                && session.Status == AgentSessionStatus.Running)
-            .Select(session => new { session.TaskItemId, session.ProviderId })
+        // Um por ambiente (ADR-031), com o repositório para o menu de escolha.
+        var agents = await (
+                from session in context.AgentSessions.AsNoTracking()
+                where taskIds.Contains(session.TaskItemId)
+                    && session.Status == AgentSessionStatus.Running
+                join development in context.TaskDevelopments.AsNoTracking()
+                    on session.TaskDevelopmentId equals (Guid?)development.Id into developments
+                from development in developments.DefaultIfEmpty()
+                select new
+                {
+                    session.TaskItemId,
+                    session.TaskDevelopmentId,
+                    session.ProviderId,
+                    session.StartedAt,
+                    RepositoryPath = development == null ? null : development.RepositoryPath,
+                    Branch = development == null ? null : development.Branch,
+                })
             .ToListAsync(cancellationToken);
 
-        var agentByTask = agents
+        var agentsByTask = agents
             .GroupBy(row => row.TaskItemId)
-            .ToDictionary(group => group.Key, group => group.First().ProviderId);
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<ActiveAgentRow>)group
+                    .OrderBy(row => row.StartedAt)
+                    .Select(row => new ActiveAgentRow(
+                        row.TaskDevelopmentId, row.ProviderId, row.RepositoryPath, row.Branch))
+                    .ToList());
 
         return occurrences
             .Select(occurrence =>
@@ -117,7 +135,7 @@ internal sealed class TodayQuery(MyTaskAppDbContext context) : ITodayQuery
                     definition.Description,
                     occurrence.Position,
                     tagsByTask.GetValueOrDefault(definition.Id),
-                    agentByTask.GetValueOrDefault(definition.Id));
+                    agentsByTask.GetValueOrDefault(definition.Id));
             })
             .ToList();
     }
