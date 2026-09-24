@@ -21,7 +21,7 @@
 
     <!--
       Os detalhes de um checklist (§3) e a sua trilha de auditoria (§8). Um
-      template só, usado pelas duas áreas: arquivado e excluído mostram as
+      template só, usado pelas três áreas: concluído, arquivado e excluído mostram as
       mesmas informações, e duplicar isto garantiria que uma das cópias
       envelhecesse.
     -->
@@ -186,6 +186,107 @@
     </Border>
 
     <TabControl>
+
+      <!-- ============================ CONCLUÍDOS ============================ -->
+      <!--
+        O histórico do que foi feito. A tela "Hoje" só mostra o que terminou no
+        dia; na virada ele sai de lá, e é aqui que continua dando para abrir.
+      -->
+      <TabItem Header="Concluídos">
+        <DockPanel Margin="0,8,0,0">
+
+          <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,10">
+            <TextBox Grid.Column="0"
+                     x:Name="ConcludedSearchBox"
+                     FontSize="12"
+                     PlaceholderText="Pesquisar nos concluídos…"
+                     Text="{Binding ConcludedSearch}" />
+            <ComboBox Grid.Column="1"
+                      x:Name="ConcludedPeriodBox"
+                      Width="150"
+                      Margin="8,0,0,0"
+                      ToolTip.Tip="Filtrar por quando foi concluído"
+                      ItemsSource="{Binding PeriodOptions}"
+                      SelectedIndex="{Binding ConcludedPeriodIndex}" />
+            <Button Grid.Column="2"
+                    Margin="8,0,0,0"
+                    Content="Aplicar"
+                    Command="{Binding RefreshConcludedCommand}" />
+          </Grid>
+
+          <TextBlock Classes="empty"
+                     IsVisible="{Binding !HasConcluded}"
+                     Text="Nenhum checklist concluído. Os que você terminar aparecem aqui, mesmo depois de saírem da lista de hoje." />
+
+          <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+            <ItemsControl ItemsSource="{Binding Concluded}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:ChecklistCardViewModel">
+                  <Border Classes="card">
+                    <StackPanel Spacing="6">
+
+                      <Grid ColumnDefinitions="*,Auto">
+
+                        <StackPanel Grid.Column="0" Spacing="3" Margin="0,0,10,0">
+
+                          <StackPanel Orientation="Horizontal" Spacing="7">
+                            <Border Classes="stateTag">
+                              <TextBlock Text="{Binding StateLabel}" />
+                            </Border>
+                            <TextBlock Text="{Binding Title}"
+                                       FontSize="13"
+                                       FontWeight="SemiBold"
+                                       VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis" />
+                          </StackPanel>
+
+                          <TextBlock Classes="meta" Text="{Binding WhenLabel}" />
+                          <TextBlock Classes="meta" Text="{Binding ItemsLabel}" />
+
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+
+                          <Button Classes="rowAction"
+                                  Content="Detalhes"
+                                  Command="{Binding #Root.((vm:DataManagementViewModel)DataContext).ToggleDetailsCommand}"
+                                  CommandParameter="{Binding}" />
+
+                          <Button Classes="rowAction"
+                                  Content="Arquivar"
+                                  ToolTip.Tip="Guardar no arquivo, com todo o histórico"
+                                  Command="{Binding #Root.((vm:DataManagementViewModel)DataContext).ArchiveCommand}"
+                                  CommandParameter="{Binding}" />
+
+                          <Button Classes="rowAction"
+                                  Content="⋯"
+                                  ToolTip.Tip="Mais ações">
+                            <Button.Flyout>
+                              <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                <MenuItem Header="Mover para a lixeira…"
+                                          Command="{Binding #Root.((vm:DataManagementViewModel)DataContext).MoveToTrashCommand}"
+                                          CommandParameter="{Binding}" />
+                              </MenuFlyout>
+                            </Button.Flyout>
+                          </Button>
+
+                        </StackPanel>
+
+                      </Grid>
+
+                      <ContentControl Content="{Binding}"
+                                      IsVisible="{Binding IsExpanded}"
+                                      ContentTemplate="{StaticResource ChecklistDetails}" />
+
+                    </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+
+        </DockPanel>
+      </TabItem>
 
       <!-- ============================ ARQUIVADOS ============================ -->
       <TabItem Header="Arquivados">

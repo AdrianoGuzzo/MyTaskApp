@@ -8,10 +8,16 @@ public enum ChecklistScope
 {
     Archived = 0,
     Trashed = 1,
+
+    /// <summary>
+    /// Concluídos que ainda estão na lista principal: o histórico do que saiu
+    /// da tela "Hoje" com a virada do dia, mas não foi arquivado nem excluído.
+    /// </summary>
+    Concluded = 2,
 }
 
 /// <summary>
-/// Uma linha das áreas de arquivados/lixeira. DTO de leitura: não passa pelo
+/// Uma linha das áreas de concluídos/arquivados/lixeira. DTO de leitura: não passa pelo
 /// agregado (ADR-005), e já traz o resumo dos itens para a tela não precisar de
 /// uma segunda consulta por linha.
 /// </summary>
@@ -44,7 +50,7 @@ public interface IChecklistArchiveQuery
     /// </summary>
     /// <param name="since">
     /// Recorte por período (§3). Compara com a data que define a área — quando
-    /// foi arquivado, ou quando foi excluído —, e não com a criação: numa lista
+    /// foi concluído, arquivado ou excluído —, e não com a criação: numa lista
     /// de arquivados, "últimos 30 dias" quer dizer "arquivados nos últimos 30
     /// dias". <c>null</c> não recorta nada.
     /// </param>

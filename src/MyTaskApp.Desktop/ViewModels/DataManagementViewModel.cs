@@ -12,8 +12,8 @@ using MyTaskApp.Domain.Lifecycle;
 namespace MyTaskApp.Desktop.ViewModels;
 
 /// <summary>
-/// "Gerenciamento de dados": Arquivados, Lixeira e as configurações de retenção
-/// (§3, §5, §11).
+/// "Gerenciamento de dados": Concluídos, Arquivados, Lixeira e as configurações
+/// de retenção (§3, §5, §11).
 /// </summary>
 /// <remarks>
 /// Uma janela só, fora do painel, porque é aí que o §12 é atendido: a lista
@@ -37,10 +37,16 @@ public sealed partial class DataManagementViewModel(
     private string? _statusMessage;
 
     [ObservableProperty]
+    private string _concludedSearch = string.Empty;
+
+    [ObservableProperty]
     private string _archivedSearch = string.Empty;
 
     [ObservableProperty]
     private string _trashSearch = string.Empty;
+
+    [ObservableProperty]
+    private int _concludedPeriodIndex;
 
     [ObservableProperty]
     private int _archivedPeriodIndex;
@@ -77,6 +83,12 @@ public sealed partial class DataManagementViewModel(
     /// <summary>Quantas opções o combo deve mostrar, para a tela poder conferir.</summary>
     public static int PeriodOptionCount => PeriodDays.Length;
 
+    /// <summary>
+    /// O histórico do que foi concluído: a tela "Hoje" só mostra o que terminou
+    /// hoje, e sem esta área o concluído de ontem sumiria sem deixar onde olhar.
+    /// </summary>
+    public ObservableCollection<ChecklistCardViewModel> Concluded { get; } = [];
+
     public ObservableCollection<ChecklistCardViewModel> Archived { get; } = [];
 
     public ObservableCollection<ChecklistCardViewModel> Trashed { get; } = [];
@@ -84,6 +96,8 @@ public sealed partial class DataManagementViewModel(
     public RetentionChoiceViewModel ArchiveAfter { get; } = new();
 
     public RetentionChoiceViewModel TrashRetention { get; } = new();
+
+    public bool HasConcluded => Concluded.Count > 0;
 
     public bool HasArchived => Archived.Count > 0;
 
@@ -96,9 +110,19 @@ public sealed partial class DataManagementViewModel(
     public async Task LoadAsync(CancellationToken cancellationToken)
     {
         await LoadSettingsAsync(cancellationToken);
+        await RefreshConcludedAsync(cancellationToken);
         await RefreshArchivedAsync(cancellationToken);
         await RefreshTrashAsync(cancellationToken);
     }
+
+    [RelayCommand]
+    public Task RefreshConcludedAsync(CancellationToken cancellationToken) =>
+        FillAsync(
+            ChecklistScope.Concluded,
+            ConcludedSearch,
+            WindowOf(ConcludedPeriodIndex),
+            Concluded,
+            cancellationToken);
 
     [RelayCommand]
     public Task RefreshArchivedAsync(CancellationToken cancellationToken) =>
@@ -122,6 +146,22 @@ public sealed partial class DataManagementViewModel(
     private static int? WindowOf(int index) =>
         index >= 0 && index < PeriodDays.Length ? PeriodDays[index] : null;
 
+    /// <summary>Guarda um concluído no arquivo (§1). Não pergunta: se desfaz em dois cliques.</summary>
+    [RelayCommand]
+    public async Task ArchiveAsync(ChecklistCardViewModel card, CancellationToken cancellationToken)
+    {
+        var archived = await TryAsync(
+            () => runner.RunAsync<ArchiveChecklistHandler>(
+                (handler, token) => handler.HandleAsync(new ArchiveChecklist(card.TaskId), token),
+                cancellationToken),
+            "Não foi possível arquivar este checklist.");
+
+        if (archived)
+        {
+            await AfterChangeAsync("Checklist arquivado.", cancellationToken);
+        }
+    }
+
     /// <summary>Tira do arquivo e devolve à lista principal (§1).</summary>
     [RelayCommand]
     public async Task RestoreAsync(ChecklistCardViewModel card, CancellationToken cancellationToken)
@@ -138,7 +178,7 @@ public sealed partial class DataManagementViewModel(
         }
     }
 
-    /// <summary>Do arquivo para a lixeira — ainda reversível (§4).</summary>
+    /// <summary>Dos concluídos ou do arquivo para a lixeira — ainda reversível (§4).</summary>
     [RelayCommand]
     public async Task MoveToTrashAsync(
         ChecklistCardViewModel card,
@@ -387,17 +427,20 @@ public sealed partial class DataManagementViewModel(
             target.Add(new ChecklistCardViewModel(row, view.Retention, view.AsOfUtc));
         }
 
+        OnPropertyChanged(nameof(HasConcluded));
         OnPropertyChanged(nameof(HasArchived));
         OnPropertyChanged(nameof(HasTrashed));
     }
 
     /// <summary>
-    /// Toda operação de ciclo de vida mexe nas duas áreas: restaurar tira dos
-    /// arquivados, excluir põe na lixeira. Recarregar as duas é mais barato do
-    /// que raciocinar sobre qual lista mudou — e nunca deixa a tela mentindo.
+    /// Toda operação de ciclo de vida mexe em mais de uma área: arquivar tira
+    /// dos concluídos, restaurar tira dos arquivados, excluir põe na lixeira.
+    /// Recarregar todas é mais barato do que raciocinar sobre qual lista mudou —
+    /// e nunca deixa a tela mentindo.
     /// </summary>
     private async Task AfterChangeAsync(string message, CancellationToken cancellationToken)
     {
+        await RefreshConcludedAsync(cancellationToken);
         await RefreshArchivedAsync(cancellationToken);
         await RefreshTrashAsync(cancellationToken);
 
