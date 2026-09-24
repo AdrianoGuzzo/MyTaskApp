@@ -209,7 +209,11 @@ public sealed partial class App : Avalonia.Application
         // isto a mudança só apareceria no refresh de 60 s.
         services.GetRequiredService<TagsViewModel>().Changed +=
             () => Dispatcher.UIThread.Post(
-                () => _ = todayViewModel.LoadAsync(CancellationToken.None));
+                () =>
+                {
+                    _ = todayViewModel.LoadAsync(CancellationToken.None);
+                    _ = todayViewModel.RefreshCaptureTagsAsync(CancellationToken.None);
+                });
     }
 
     /// <summary>

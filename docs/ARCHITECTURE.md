@@ -1461,9 +1461,14 @@ escolha, e quem grava é o `QuickCapture`, que recebe as etiquetas e as aplica a
 **todas as linhas**. A gravação sai no mesmo `SaveChanges` das tarefas, e uma
 etiqueta excluída nesse meio-tempo recusa a captura inteira, sem criar metade.
 Escolha na tela, e não `#etiqueta` no texto: seria sintaxe a decorar (§36), e
-um "#1" num título viraria etiqueta sem ninguém pedir. Depois de capturar a
-escolha se esvazia junto com o texto. Se a captura falhar, as duas ficam, para
-tentar de novo.
+um "#1" num título viraria etiqueta sem ninguém pedir. Depois de capturar, só o
+texto se esvazia: **as etiquetas continuam marcadas** para a próxima captura,
+porque quem registra uma leva de "Financeiro" costuma registrar a seguinte com
+a mesma etiqueta. Desmarcar é com o próprio seletor. Como a escolha atravessa
+capturas, o `Changed` da janela "Etiquetas…" também relê a lista para ela
+(`TodayViewModel.RefreshCaptureTagsAsync`): uma etiqueta excluída sai das
+bolinhas em vez de recusar a próxima captura, e uma renomeada troca de nome e
+cor. Se a captura falhar, texto e etiquetas ficam, para tentar de novo.
 
 **Janela singleton, com o "X" que esconde** (ADR-020), aberta pelo menu ⋯ do
 cabeçalho ou pelo link do seletor vazio. Ela recarrega a cada abertura porque a
