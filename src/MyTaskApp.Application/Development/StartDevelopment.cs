@@ -64,11 +64,11 @@ public sealed class StartDevelopmentHandler(
             : await CreateAsync(task, plan, path, command.Commands, progress, cancellationToken);
     }
 
-    private void SetCommands(TaskItem task, IReadOnlyList<string>? commands)
+    private void SetCommands(TaskItem task, TaskDevelopment development, IReadOnlyList<string>? commands)
     {
         if (commands is not null)
         {
-            task.SetDevelopmentCommands(commands, timeProvider.GetUtcNow());
+            task.SetDevelopmentCommands(development.Id, commands, timeProvider.GetUtcNow());
         }
     }
 
@@ -88,8 +88,9 @@ public sealed class StartDevelopmentHandler(
                 $"O caminho {path} já existe. Escolha outro.");
         }
 
-        task.BeginDevelopment(plan.RepositoryPath, plan.Source.ShortName, plan.NewBranch, path, timeProvider.GetUtcNow());
-        SetCommands(task, commands);
+        var development = task.BeginDevelopment(
+            plan.DevelopmentId, plan.RepositoryPath, plan.Source.ShortName, plan.NewBranch, path, timeProvider.GetUtcNow());
+        SetCommands(task, development, commands);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         // Daqui em diante, nada de cancelar: ver o remarks da classe.
@@ -107,28 +108,29 @@ public sealed class StartDevelopmentHandler(
 
         if (!result.Succeeded)
         {
-            await FailAsync(task, DevelopmentStep.CreateWorktree, CreateFailureMessage(result, plan, path), result);
+            await FailAsync(task, development, DevelopmentStep.CreateWorktree, CreateFailureMessage(result, plan, path), result);
         }
 
         progress.Report(DevelopmentStep.CreateWorktree, DevelopmentStepState.Done, path);
 
         progress.Report(DevelopmentStep.ValidateWorktree, DevelopmentStepState.Running);
-        await ValidateAsync(task, path, plan.NewBranch);
+        await ValidateAsync(task, development, path, plan.NewBranch);
         progress.Report(DevelopmentStep.ValidateWorktree, DevelopmentStepState.Done);
 
         progress.Report(DevelopmentStep.SaveTask, DevelopmentStepState.Running);
-        task.MarkDevelopmentReady(timeProvider.GetUtcNow());
+        task.MarkDevelopmentReady(development.Id, timeProvider.GetUtcNow());
         await unitOfWork.SaveChangesAsync(none);
         progress.Report(DevelopmentStep.SaveTask, DevelopmentStepState.Done);
 
         logger.LogInformation(
-            "DevelopmentStarted {TaskId} {Branch} {WorktreePath} {ExistingBranch}",
+            "DevelopmentStarted {TaskId} {DevelopmentId} {Branch} {WorktreePath} {ExistingBranch}",
             task.Id,
+            development.Id,
             plan.NewBranch,
             path,
             plan.ExistingBranch?.FullRef);
 
-        return TaskDevelopmentView.From(task.Development!);
+        return TaskDevelopmentView.From(development);
     }
 
     /// <summary>
@@ -161,19 +163,19 @@ public sealed class StartDevelopmentHandler(
         progress.Report(DevelopmentStep.SaveTask, DevelopmentStepState.Running);
 
         var now = timeProvider.GetUtcNow();
-        task.BeginDevelopment(plan.RepositoryPath, plan.Source.ShortName, branch, path, now);
-        SetCommands(task, commands);
-        task.MarkDevelopmentReady(now);
+        var development = task.BeginDevelopment(plan.DevelopmentId, plan.RepositoryPath, plan.Source.ShortName, branch, path, now);
+        SetCommands(task, development, commands);
+        task.MarkDevelopmentReady(development.Id, now);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         progress.Report(DevelopmentStep.SaveTask, DevelopmentStepState.Done);
 
         logger.LogInformation("DevelopmentAdopted {TaskId} {Branch} {WorktreePath}", task.Id, branch, path);
 
-        return TaskDevelopmentView.From(task.Development!);
+        return TaskDevelopmentView.From(development);
     }
 
-    private async Task ValidateAsync(TaskItem task, string path, string branch)
+    private async Task ValidateAsync(TaskItem task, TaskDevelopment development, string path, string branch)
     {
         try
         {
@@ -186,6 +188,7 @@ public sealed class StartDevelopmentHandler(
             {
                 await FailAsync(
                     task,
+                    development,
                     DevelopmentStep.ValidateWorktree,
                     $"O worktree foi criado, mas não está na branch {branch}. Confira {path}.",
                     info.Result);
@@ -195,6 +198,7 @@ public sealed class StartDevelopmentHandler(
         {
             await FailAsync(
                 task,
+                development,
                 DevelopmentStep.ValidateWorktree,
                 "Não foi possível conferir o worktree criado.",
                 exception.Result);
@@ -202,9 +206,14 @@ public sealed class StartDevelopmentHandler(
     }
 
     /// <summary>Grava a falha na tarefa e a devolve à tela como exceção.</summary>
-    private async Task FailAsync(TaskItem task, DevelopmentStep step, string message, GitCommandResult? result)
+    private async Task FailAsync(
+        TaskItem task,
+        TaskDevelopment development,
+        DevelopmentStep step,
+        string message,
+        GitCommandResult? result)
     {
-        task.MarkDevelopmentFailed(message, timeProvider.GetUtcNow());
+        task.MarkDevelopmentFailed(development.Id, message, timeProvider.GetUtcNow());
 
         try
         {

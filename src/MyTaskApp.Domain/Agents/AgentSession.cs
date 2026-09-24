@@ -52,6 +52,7 @@ public sealed class AgentSession
     private AgentSession(
         Guid id,
         Guid taskItemId,
+        Guid? taskDevelopmentId,
         string providerId,
         string command,
         string workingDirectory,
@@ -59,6 +60,7 @@ public sealed class AgentSession
     {
         Id = id;
         TaskItemId = taskItemId;
+        TaskDevelopmentId = taskDevelopmentId;
         ProviderId = providerId;
         Command = command;
         WorkingDirectory = workingDirectory;
@@ -69,6 +71,13 @@ public sealed class AgentSession
     public Guid Id { get; }
 
     public Guid TaskItemId { get; }
+
+    /// <summary>
+    /// O ambiente da tarefa em que o agente foi aberto (ADR-031): uma tarefa
+    /// com vários repositórios tem um agente por ambiente. <c>null</c> quando o
+    /// ambiente saiu da lista — a sessão fica só como histórico.
+    /// </summary>
+    public Guid? TaskDevelopmentId { get; private set; }
 
     /// <summary>Qual agente: <c>claude-code</c>. Texto, para um agente novo não pedir migration.</summary>
     public string ProviderId { get; }
@@ -98,6 +107,7 @@ public sealed class AgentSession
 
     public static AgentSession Create(
         Guid taskItemId,
+        Guid taskDevelopmentId,
         string providerId,
         string command,
         string workingDirectory,
@@ -108,9 +118,15 @@ public sealed class AgentSession
             throw new DomainException("A sessão precisa de uma tarefa.");
         }
 
+        if (taskDevelopmentId == Guid.Empty)
+        {
+            throw new DomainException("A sessão precisa de um ambiente de desenvolvimento.");
+        }
+
         return new AgentSession(
             Guid.CreateVersion7(startedAt),
             taskItemId,
+            taskDevelopmentId,
             Required(providerId, MaxProviderIdLength, "Informe o agente da sessão."),
             Required(command, MaxPathLength, "Informe o comando da sessão."),
             Required(workingDirectory, MaxPathLength, "Informe a pasta da sessão."),

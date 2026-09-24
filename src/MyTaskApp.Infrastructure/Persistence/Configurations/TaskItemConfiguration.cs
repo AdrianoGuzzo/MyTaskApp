@@ -120,13 +120,16 @@ internal sealed class TaskItemConfiguration : IEntityTypeConfiguration<TaskItem>
             .HasField("_tags")
             .UsePropertyAccessMode(PropertyAccessMode.Field);
 
-        // O worktree da tarefa (ADR-027): tabela própria, e não owned. Um owned
-        // opcional tem o mesmo "ausente ou tudo nulo?" do lembrete, e o futuro
-        // (commit, push, PR) cresce aqui sem mover dado de coluna.
-        builder.HasOne(task => task.Development)
+        // Os worktrees da tarefa (ADR-027, ADR-031): tabela própria, um por
+        // repositório. Tirar um da lista apaga a linha; apagar a tarefa leva todos.
+        builder.HasMany(task => task.Developments)
             .WithOne()
-            .HasForeignKey<TaskDevelopment>(development => development.TaskItemId)
+            .HasForeignKey(development => development.TaskItemId)
             .IsRequired()
             .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Navigation(task => task.Developments)
+            .HasField("_developments")
+            .UsePropertyAccessMode(PropertyAccessMode.Field);
     }
 }

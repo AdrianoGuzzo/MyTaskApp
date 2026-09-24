@@ -29,8 +29,8 @@ public class RemoveWorktreeHandlerTests
     public RemoveWorktreeHandlerTests()
     {
         _task = TaskItem.Create("Corrigir", Now);
-        _task.BeginDevelopment(FakeGitClient.Repository, "origin/main", "feature/x", Path, Now);
-        _task.MarkDevelopmentReady(Now);
+        _task.BeginDevelopment(null, FakeGitClient.Repository, "origin/main", "feature/x", Path, Now);
+        _task.MarkDevelopmentReady(_task.Developments[0].Id, Now);
         _tasks.Seed(_task);
         _disk.Existing.Add(Path);
         _git.Worktrees.Add(new GitWorktree(Path.Replace('\\', '/'), "refs/heads/feature/x"));
@@ -53,7 +53,7 @@ public class RemoveWorktreeHandlerTests
     [Fact]
     public async Task ACleanWorktree_IsRemoved_AndTheBranchStays()
     {
-        var view = await Remove().HandleAsync(new RemoveWorktree(_task.Id), Ct);
+        var view = await Remove().HandleAsync(new RemoveWorktree(_task.Id, _task.Developments[0].Id), Ct);
 
         view.Status.Should().Be(TaskDevelopmentStatus.Removed);
         _git.Calls.Should().Contain($"worktree remove {Path}");
@@ -67,12 +67,12 @@ public class RemoveWorktreeHandlerTests
     {
         _git.Statuses[Path] = new GitStatus([" M src/App.cs"]);
 
-        var failure = (await FluentActions.Awaiting(() => Remove().HandleAsync(new RemoveWorktree(_task.Id), Ct))
+        var failure = (await FluentActions.Awaiting(() => Remove().HandleAsync(new RemoveWorktree(_task.Id, _task.Developments[0].Id), Ct))
             .Should().ThrowAsync<DevelopmentStepException>()).Which;
 
         failure.Changes.Should().Equal(" M src/App.cs");
         _git.Calls.Should().NotContain(call => call.StartsWith("worktree remove", StringComparison.Ordinal));
-        _task.Development!.Status.Should().Be(TaskDevelopmentStatus.Ready);
+        _task.Developments[0].Status.Should().Be(TaskDevelopmentStatus.Ready);
         _tasks.SaveCount.Should().Be(0);
     }
 
@@ -81,7 +81,7 @@ public class RemoveWorktreeHandlerTests
     {
         _git.Statuses[Path] = new GitStatus(["?? novo.txt"]);
 
-        var inspection = await Inspect().HandleAsync(new InspectWorktree(_task.Id), Ct);
+        var inspection = await Inspect().HandleAsync(new InspectWorktree(_task.Id, _task.Developments[0].Id), Ct);
 
         inspection.Exists.Should().BeTrue();
         inspection.IsClean.Should().BeFalse();
@@ -93,8 +93,8 @@ public class RemoveWorktreeHandlerTests
     {
         _disk.Existing.Remove(Path);
 
-        var inspection = await Inspect().HandleAsync(new InspectWorktree(_task.Id), Ct);
-        var view = await Remove().HandleAsync(new RemoveWorktree(_task.Id), Ct);
+        var inspection = await Inspect().HandleAsync(new InspectWorktree(_task.Id, _task.Developments[0].Id), Ct);
+        var view = await Remove().HandleAsync(new RemoveWorktree(_task.Id, _task.Developments[0].Id), Ct);
 
         inspection.Exists.Should().BeFalse();
         view.Status.Should().Be(TaskDevelopmentStatus.Removed);
@@ -107,13 +107,13 @@ public class RemoveWorktreeHandlerTests
     {
         _git.RemoveResult = FakeGitClient.Failed("git worktree remove", "fatal: 'x' is locked");
 
-        var failure = (await FluentActions.Awaiting(() => Remove().HandleAsync(new RemoveWorktree(_task.Id), Ct))
+        var failure = (await FluentActions.Awaiting(() => Remove().HandleAsync(new RemoveWorktree(_task.Id, _task.Developments[0].Id), Ct))
             .Should().ThrowAsync<DevelopmentStepException>()).Which;
 
         failure.Command!.StandardError.Should().Contain("locked");
         failure.IsDirectoryLocked.Should().BeFalse();
         _remover.Calls.Should().BeEmpty("o worktree continua registrado: a pasta não é sobra");
-        _task.Development!.Status.Should().Be(TaskDevelopmentStatus.Ready);
+        _task.Developments[0].Status.Should().Be(TaskDevelopmentStatus.Ready);
     }
 
     private static readonly DirectoryLocker Terminal = new(4242, "pwsh", @"C:\Program Files\PowerShell\7\pwsh.exe", true);
@@ -129,14 +129,14 @@ public class RemoveWorktreeHandlerTests
         _git.RemoveForgetsOnFailure = true;
         _remover.Results.Enqueue(new DirectoryRemoval(false, [Terminal], [], "Access denied"));
 
-        var failure = (await FluentActions.Awaiting(() => Remove().HandleAsync(new RemoveWorktree(_task.Id), Ct))
+        var failure = (await FluentActions.Awaiting(() => Remove().HandleAsync(new RemoveWorktree(_task.Id, _task.Developments[0].Id), Ct))
             .Should().ThrowAsync<DevelopmentStepException>()).Which;
 
         failure.IsDirectoryLocked.Should().BeTrue();
         failure.Lockers.Should().Equal(Terminal);
         failure.Message.Should().Contain("1 processo");
         _remover.Calls.Single().Terminate.Should().BeEmpty("a primeira tentativa não encerra ninguém");
-        _task.Development!.Status.Should().Be(TaskDevelopmentStatus.Ready);
+        _task.Developments[0].Status.Should().Be(TaskDevelopmentStatus.Ready);
         _tasks.SaveCount.Should().Be(0);
     }
 
@@ -146,8 +146,8 @@ public class RemoveWorktreeHandlerTests
         // O Git já esqueceu numa tentativa anterior; sobrou a pasta.
         _git.Worktrees.RemoveAll(worktree => WorktreePathPlanner.SamePath(worktree.Path, Path));
 
-        var inspection = await Inspect().HandleAsync(new InspectWorktree(_task.Id), Ct);
-        var view = await Remove().HandleAsync(new RemoveWorktree(_task.Id, [Terminal]), Ct);
+        var inspection = await Inspect().HandleAsync(new InspectWorktree(_task.Id, _task.Developments[0].Id), Ct);
+        var view = await Remove().HandleAsync(new RemoveWorktree(_task.Id, _task.Developments[0].Id, [Terminal]), Ct);
 
         inspection.IsLeftover.Should().BeTrue();
         inspection.IsClean.Should().BeTrue();
@@ -162,11 +162,11 @@ public class RemoveWorktreeHandlerTests
         _git.Worktrees.RemoveAll(worktree => WorktreePathPlanner.SamePath(worktree.Path, Path));
         _git.Repositories[Path] = Path.Replace('\\', '/');
 
-        await FluentActions.Awaiting(() => Remove().HandleAsync(new RemoveWorktree(_task.Id), Ct))
+        await FluentActions.Awaiting(() => Remove().HandleAsync(new RemoveWorktree(_task.Id, _task.Developments[0].Id), Ct))
             .Should().ThrowAsync<DevelopmentStepException>().WithMessage("*outro repositório*");
 
         _remover.Calls.Should().BeEmpty();
-        _task.Development!.Status.Should().Be(TaskDevelopmentStatus.Ready);
+        _task.Developments[0].Status.Should().Be(TaskDevelopmentStatus.Ready);
     }
 
     /// <summary>Arquivar a tarefa não pode prender um worktree no disco para sempre.</summary>
@@ -175,7 +175,7 @@ public class RemoveWorktreeHandlerTests
     {
         _task.Archive(Now);
 
-        var view = await Remove().HandleAsync(new RemoveWorktree(_task.Id), Ct);
+        var view = await Remove().HandleAsync(new RemoveWorktree(_task.Id, _task.Developments[0].Id), Ct);
 
         view.Status.Should().Be(TaskDevelopmentStatus.Removed);
     }
@@ -186,7 +186,7 @@ public class RemoveWorktreeHandlerTests
         var plain = TaskItem.Create("Sem ambiente", Now);
         _tasks.Seed(plain);
 
-        await FluentActions.Awaiting(() => Remove().HandleAsync(new RemoveWorktree(plain.Id), Ct))
+        await FluentActions.Awaiting(() => Remove().HandleAsync(new RemoveWorktree(plain.Id, Guid.NewGuid()), Ct))
             .Should().ThrowAsync<DomainException>();
     }
 
@@ -194,30 +194,53 @@ public class RemoveWorktreeHandlerTests
     [Fact]
     public async Task ARunningAgent_BlocksTheRemoval()
     {
-        var session = AgentSession.Create(_task.Id, "claude-code", @"C:\claude.exe", Path, Now);
+        var session = AgentSession.Create(_task.Id, _task.Developments[0].Id, "claude-code", @"C:\claude.exe", Path, Now);
         session.MarkRunning(4242, Now);
         _agents.Seed(session);
         _processes.Run(4242, Now);
 
-        await FluentActions.Awaiting(() => Remove().HandleAsync(new RemoveWorktree(_task.Id), Ct))
+        await FluentActions.Awaiting(() => Remove().HandleAsync(new RemoveWorktree(_task.Id, _task.Developments[0].Id), Ct))
             .Should().ThrowAsync<DomainException>()
             .WithMessage("*agente*");
 
         _git.Calls.Should().NotContain(call => call.StartsWith("worktree remove", StringComparison.Ordinal));
-        _task.Development!.Status.Should().Be(TaskDevelopmentStatus.Ready);
+        _task.Developments[0].Status.Should().Be(TaskDevelopmentStatus.Ready);
     }
 
     /// <summary>Sessão gravada como ativa, mas o processo já saiu: não trava nada.</summary>
     [Fact]
     public async Task AnAgentWhoseProcessIsGone_IsEnded_AndTheRemovalGoesOn()
     {
-        var session = AgentSession.Create(_task.Id, "claude-code", @"C:\claude.exe", Path, Now);
+        var session = AgentSession.Create(_task.Id, _task.Developments[0].Id, "claude-code", @"C:\claude.exe", Path, Now);
         session.MarkRunning(4242, Now);
         _agents.Seed(session);
 
-        var view = await Remove().HandleAsync(new RemoveWorktree(_task.Id), Ct);
+        var view = await Remove().HandleAsync(new RemoveWorktree(_task.Id, _task.Developments[0].Id), Ct);
 
         view.Status.Should().Be(TaskDevelopmentStatus.Removed);
         session.Status.Should().Be(AgentSessionStatus.Exited);
+    }
+
+    /// <summary>
+    /// Um agente por ambiente (ADR-031): o aberto em outro repositório da tarefa
+    /// está em outra pasta, e não segura esta.
+    /// </summary>
+    [Fact]
+    public async Task TheAgentOfAnotherRepository_DoesNotBlockTheRemoval()
+    {
+        var other = _task.BeginDevelopment(
+            null, @"C:\Projects\ecossistema-api", "origin/main", "feature/x", @"C:\Projects\ecossistema-api-feature-x", Now);
+        _task.MarkDevelopmentReady(other.Id, Now);
+
+        var session = AgentSession.Create(_task.Id, other.Id, "claude-code", @"C:\claude.exe", other.WorktreePath, Now);
+        session.MarkRunning(4242, Now);
+        _agents.Seed(session);
+        _processes.Run(4242, Now);
+
+        var view = await Remove().HandleAsync(new RemoveWorktree(_task.Id, _task.Developments[0].Id), Ct);
+
+        view.Status.Should().Be(TaskDevelopmentStatus.Removed);
+        other.Status.Should().Be(TaskDevelopmentStatus.Ready);
+        session.Status.Should().Be(AgentSessionStatus.Running);
     }
 }

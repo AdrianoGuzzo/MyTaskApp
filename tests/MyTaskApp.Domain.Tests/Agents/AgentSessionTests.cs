@@ -12,8 +12,10 @@ public class AgentSessionTests
 
     private static readonly Guid TaskId = Guid.CreateVersion7(Now);
 
+    private static readonly Guid DevelopmentId = Guid.CreateVersion7(Now);
+
     private static AgentSession NewSession() =>
-        AgentSession.Create(TaskId, "claude-code", Claude, Worktree, Now);
+        AgentSession.Create(TaskId, DevelopmentId, "claude-code", Claude, Worktree, Now);
 
     [Fact]
     public void ANewSession_BelongsToTheTask_AndIsStarting()
@@ -22,6 +24,7 @@ public class AgentSessionTests
 
         session.Id.Should().NotBe(Guid.Empty);
         session.TaskItemId.Should().Be(TaskId);
+        session.TaskDevelopmentId.Should().Be(DevelopmentId);
         session.ProviderId.Should().Be("claude-code");
         session.Command.Should().Be(Claude);
         session.WorkingDirectory.Should().Be(Worktree);
@@ -35,7 +38,16 @@ public class AgentSessionTests
     [Fact]
     public void WithoutATask_ThereIsNoSession()
     {
-        var create = () => AgentSession.Create(Guid.Empty, "claude-code", Claude, Worktree, Now);
+        var create = () => AgentSession.Create(Guid.Empty, DevelopmentId, "claude-code", Claude, Worktree, Now);
+
+        create.Should().Throw<DomainException>();
+    }
+
+    /// <summary>Um agente por ambiente (ADR-031): a sessão sabe em qual repositório roda.</summary>
+    [Fact]
+    public void WithoutAnEnvironment_ThereIsNoSession()
+    {
+        var create = () => AgentSession.Create(TaskId, Guid.Empty, "claude-code", Claude, Worktree, Now);
 
         create.Should().Throw<DomainException>();
     }
@@ -46,7 +58,7 @@ public class AgentSessionTests
     [InlineData("claude-code", Claude, "")]
     public void EveryFieldIsRequired(string provider, string command, string directory)
     {
-        var create = () => AgentSession.Create(TaskId, provider, command, directory, Now);
+        var create = () => AgentSession.Create(TaskId, DevelopmentId, provider, command, directory, Now);
 
         create.Should().Throw<DomainException>();
     }

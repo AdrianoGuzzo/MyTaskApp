@@ -26,11 +26,12 @@ public class TaskNotesDevelopmentRenderingTests
 
     private static async Task<(TaskNotesWindow Window, TaskNotesViewModel ViewModel, FakeUseCaseRunner Runner)> ShowAsync(
         GitInstallation? git = null,
-        TaskDevelopmentView? development = null)
+        TaskDevelopmentView? development = null,
+        IReadOnlyList<TaskDevelopmentView>? developments = null)
     {
         var runner = new FakeUseCaseRunner();
         runner.ResultsByHandler[typeof(GetTaskDirectoriesHandler)] = TaskNotesAliasTests.Directories;
-        runner.Enqueue<GetTaskDevelopmentHandler>(development);
+        runner.Enqueue<GetTaskDevelopmentsHandler>(developments ?? TestDevelopment.List(development));
         runner.ResultsByHandler[typeof(DetectGitHandler)] = git ?? new GitInstallation(true, "2.51.0", "git");
         runner.ResultsByHandler[typeof(InspectDirectoryHandler)] = new DirectoryInspection(true, true, Repository);
         runner.ResultsByHandler[typeof(ListBranchesHandler)] = new BranchList(
@@ -56,7 +57,7 @@ public class TaskNotesDevelopmentRenderingTests
     private static async Task OpenDevelopmentTabAsync(TaskNotesWindow window, TaskNotesViewModel viewModel)
     {
         viewModel.SelectedTabIndex = TaskNotesViewModel.DevelopmentTab;
-        await viewModel.Development.ActivateAsync(CancellationToken.None);
+        await viewModel.Developments.ActivateAsync(CancellationToken.None);
         Settle(window);
     }
 
@@ -118,12 +119,52 @@ public class TaskNotesDevelopmentRenderingTests
 
         Named<StackPanel>(window, "GitMissingPanel").IsEffectivelyVisible.Should().BeTrue();
         window.GetVisualDescendants().OfType<SelectableTextBlock>().Select(block => block.Text)
-            .Should().Contain(viewModel.Development.Instructions.Commands[0].Command);
+            .Should().Contain(viewModel.Developments.Selected!.Instructions.Commands[0].Command);
         Named<Button>(window, "RecheckGitButton").Command.Should().NotBeNull();
 
         var copy = window.GetVisualDescendants().OfType<Button>().First(button => button.Classes.Contains("copyCommand"));
         copy.Command.Should().NotBeNull("o botão dentro da lista chega ao comando do painel");
-        copy.CommandParameter.Should().Be(viewModel.Development.Instructions.Commands[0].Command);
+        copy.CommandParameter.Should().Be(viewModel.Developments.Selected!.Instructions.Commands[0].Command);
+    }
+
+    /// <summary>O primeiro repositório é só o formulário: sem abas até existir um ambiente.</summary>
+    [AvaloniaFact]
+    public async Task WithoutEnvironments_TheRepositoryTabsStayHidden()
+    {
+        var (window, viewModel, _) = await ShowAsync();
+
+        await OpenDevelopmentTabAsync(window, viewModel);
+
+        Named<DockPanel>(window, "RepositoryStrip").IsEffectivelyVisible.Should().BeFalse();
+        Named<Border>(window, "SetupCard").IsEffectivelyVisible.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Um repositório por aba (ADR-031): a aba escolhida troca o painel inteiro,
+    /// e o botão de mais um repositório fica ao lado.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task TwoRepositories_AreTwoTabs_AndChoosingOneSwapsThePanel()
+    {
+        var taskId = TaskNotesAliasTests.Row().TaskId;
+        var ready = TestDevelopment.View(taskId, Domain.Tasks.TaskDevelopmentStatus.Ready, Repository);
+        var removed = TestDevelopment.View(taskId, Domain.Tasks.TaskDevelopmentStatus.Removed, @"C:\Projects\ecossistema-api");
+        var (window, viewModel, _) = await ShowAsync(developments: TestDevelopment.List(ready, removed));
+
+        await OpenDevelopmentTabAsync(window, viewModel);
+
+        Named<DockPanel>(window, "RepositoryStrip").IsEffectivelyVisible.Should().BeTrue();
+        Named<Button>(window, "AddRepositoryButton").IsEffectivelyVisible.Should().BeTrue();
+        Texts(Named<ListBox>(window, "RepositoryList")).Should().Contain(["ecossistema-core", "ecossistema-api"]);
+        Named<Border>(window, "ReadyCard").IsEffectivelyVisible.Should().BeTrue();
+
+        viewModel.Developments.Selected = viewModel.Developments.Items[1];
+        await Task.Yield();
+        Settle(window);
+
+        Named<Border>(window, "ReadyCard").IsEffectivelyVisible.Should().BeFalse();
+        Named<Border>(window, "SetupCard").IsEffectivelyVisible.Should().BeTrue();
+        Named<Button>(window, "ForgetButton").IsEffectivelyVisible.Should().BeTrue();
     }
 
     [AvaloniaFact]
@@ -132,8 +173,8 @@ public class TaskNotesDevelopmentRenderingTests
         var (window, viewModel, _) = await ShowAsync();
         await OpenDevelopmentTabAsync(window, viewModel);
 
-        viewModel.Development.DirectoryText = Repository;
-        await viewModel.Development.InspectDirectoryAsync(CancellationToken.None);
+        viewModel.Developments.Selected!.DirectoryText = Repository;
+        await viewModel.Developments.Selected!.InspectDirectoryAsync(CancellationToken.None);
         Settle(window);
 
         Named<TextBlock>(window, "RepositoryStatus").Text.Should().Be("✓ Repositório Git válido");
@@ -162,7 +203,7 @@ public class TaskNotesDevelopmentRenderingTests
         Settle(window);
 
         box.Text.Should().Be(Repository);
-        viewModel.Development.DirectoryText.Should().Be(Repository);
+        viewModel.Developments.Selected!.DirectoryText.Should().Be(Repository);
         window.IsVisible.Should().BeTrue("o Enter foi da lista, e não da janela");
     }
 
@@ -171,14 +212,14 @@ public class TaskNotesDevelopmentRenderingTests
     {
         var (window, viewModel, runner) = await ShowAsync();
         await OpenDevelopmentTabAsync(window, viewModel);
-        viewModel.Development.DirectoryText = Repository;
-        await viewModel.Development.InspectDirectoryAsync(CancellationToken.None);
+        viewModel.Developments.Selected!.DirectoryText = Repository;
+        await viewModel.Developments.Selected!.InspectDirectoryAsync(CancellationToken.None);
         runner.FailuresByHandler[typeof(PrepareDevelopmentHandler)] = new DevelopmentStepException(
             DevelopmentStep.Fetch,
             "Não foi possível atualizar as referências remotas.",
             new GitCommandResult("git fetch --all --prune", 128, "", "fatal: Could not resolve host"));
 
-        await viewModel.Development.StartAsync();
+        await viewModel.Developments.Selected!.StartAsync();
         Settle(window);
 
         Named<Border>(window, "FailureCard").IsEffectivelyVisible.Should().BeTrue();
@@ -196,7 +237,7 @@ public class TaskNotesDevelopmentRenderingTests
     public async Task AReadyTask_ShowsTheEnvironmentAndItsActions()
     {
         var ready = new TaskDevelopmentView(
-            Repository, "origin/main", "feature/x", Repository + "-feature-x",
+            Guid.CreateVersion7(), Guid.CreateVersion7(), Repository, "origin/main", "feature/x", Repository + "-feature-x",
             Domain.Tasks.TaskDevelopmentStatus.Ready, DateTimeOffset.UnixEpoch, null);
         var (window, viewModel, _) = await ShowAsync(development: ready);
 
@@ -217,7 +258,7 @@ public class TaskNotesDevelopmentRenderingTests
 
     private static TaskDevelopmentView ReadyDevelopment() =>
         new(
-            Repository, "origin/main", "feature/x", Repository + "-feature-x",
+            Guid.CreateVersion7(), Guid.CreateVersion7(), Repository, "origin/main", "feature/x", Repository + "-feature-x",
             Domain.Tasks.TaskDevelopmentStatus.Ready, DateTimeOffset.UnixEpoch, null);
 
     /// <summary>O card do agente: PID e o botão que leva ao terminal (ADR-030).</summary>
@@ -231,7 +272,7 @@ public class TaskNotesDevelopmentRenderingTests
             Domain.Agents.AgentSessionStatus.Running, null);
 
         await OpenDevelopmentTabAsync(window, viewModel);
-        await viewModel.Development.Agent.RefreshAsync(CancellationToken.None);
+        await viewModel.Developments.Selected!.Agent.RefreshAsync(CancellationToken.None);
         Settle(window);
 
         var card = Named<Border>(window, "AgentCard");
@@ -256,7 +297,7 @@ public class TaskNotesDevelopmentRenderingTests
                 new Uri("https://docs.claude.com/en/docs/claude-code/setup")));
 
         await OpenDevelopmentTabAsync(window, viewModel);
-        await viewModel.Development.Agent.RefreshAsync(CancellationToken.None);
+        await viewModel.Developments.Selected!.Agent.RefreshAsync(CancellationToken.None);
         Settle(window);
 
         Named<StackPanel>(window, "AgentInstallPanel").IsEffectivelyVisible.Should().BeTrue();

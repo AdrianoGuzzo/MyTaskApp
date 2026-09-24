@@ -65,7 +65,7 @@ public sealed partial class TaskNotesWindow : Window
         _directoryCompletion = new AliasCompletionBinder(
             DirectoryBox,
             DirectoryPopup,
-            () => ViewModel?.Development.DirectoryCompletion);
+            () => ViewModel?.Developments.DirectoryCompletion);
 
         // A cada ativação, e não só na abertura: etiquetas e diretórios podem ter
         // mudado em outra janela enquanto esta estava aberta.
@@ -74,7 +74,7 @@ public sealed partial class TaskNotesWindow : Window
             if (ViewModel is { IsEditable: true } viewModel)
             {
                 _ = viewModel.LoadAliasesAsync(CancellationToken.None);
-                _ = viewModel.Development.LoadGlobalCommandsAsync(CancellationToken.None);
+                _ = viewModel.Developments.Selected?.LoadGlobalCommandsAsync(CancellationToken.None);
             }
         };
     }
@@ -126,28 +126,33 @@ public sealed partial class TaskNotesWindow : Window
             && e.CloseReason is WindowCloseReason.WindowClosing
             && ViewModel is { } viewModel)
         {
-            if (viewModel.Development.IsRunning)
+            // Qualquer repositório da tarefa ocupado segura a janela (ADR-031).
+            var busy = viewModel.Developments.Busy;
+
+            if (busy is { IsRunning: true })
             {
                 e.Cancel = true;
 
-                if (viewModel.Development.CanCancel)
+                if (busy.CanCancel)
                 {
-                    viewModel.Development.CancelRun();
+                    busy.CancelRun();
                 }
                 else
                 {
                     viewModel.SelectedTabIndex = TaskNotesViewModel.DevelopmentTab;
-                    viewModel.Development.Message = "Aguarde a criação do worktree terminar para fechar.";
+                    viewModel.Developments.Selected = busy;
+                    busy.Message = "Aguarde a criação do worktree terminar para fechar.";
                 }
             }
-            else if (viewModel.Development.Commands.IsRunning)
+            else if (busy is { Commands.IsRunning: true })
             {
                 // Fechar com um comando rodando o mataria sem ninguém ver o
                 // output: o primeiro "X" cancela e mostra; o segundo fecha.
                 e.Cancel = true;
                 viewModel.SelectedTabIndex = TaskNotesViewModel.DevelopmentTab;
-                viewModel.Development.CancelCommands();
-                viewModel.Development.Message = "Execução dos comandos cancelada. Feche de novo para sair.";
+                viewModel.Developments.Selected = busy;
+                busy.CancelCommands();
+                busy.Message = "Execução dos comandos cancelada. Feche de novo para sair.";
             }
             else if (_confirmation is not null && viewModel.HasUnsavedChanges)
             {
@@ -271,7 +276,7 @@ public sealed partial class TaskNotesWindow : Window
     /// </summary>
     private void OnDirectoryAliasesClick(object? sender, RoutedEventArgs e)
     {
-        if (ViewModel?.Development is not { } development)
+        if (ViewModel?.Developments.Selected is not { } development)
         {
             return;
         }
@@ -290,9 +295,10 @@ public sealed partial class TaskNotesWindow : Window
 
     private async void OnBrowseDirectoryClick(object? sender, RoutedEventArgs e)
     {
-        if (await PickFolderAsync("Escolher o repositório") is { } path && ViewModel is { } viewModel)
+        if (await PickFolderAsync("Escolher o repositório") is { } path
+            && ViewModel?.Developments.Selected is { } development)
         {
-            viewModel.Development.DirectoryText = path;
+            development.DirectoryText = path;
         }
     }
 
@@ -303,7 +309,7 @@ public sealed partial class TaskNotesWindow : Window
     private async void OnBrowseAlternativeClick(object? sender, RoutedEventArgs e)
     {
         if (await PickFolderAsync("Escolher onde criar o worktree") is { } parent
-            && ViewModel?.Development is { } development)
+            && ViewModel?.Developments.Selected is { } development)
         {
             var name = Path.GetFileName(development.AlternativePath.TrimEnd('\\', '/'));
             development.AlternativePath = Path.Combine(parent, string.IsNullOrEmpty(name) ? "worktree" : name);

@@ -227,7 +227,7 @@ public sealed class GitWorktreeIntegrationTests : IAsyncLifetime
                     new ShellCommandExecutor(TimeProvider.System),
                     new FileSystemDirectoryProbe(),
                     NullLogger<RunDevelopmentCommandsHandler>.Instance)
-                .HandleAsync(new RunDevelopmentCommands(task.Id), new LockedProgress(lines), Ct);
+                .HandleAsync(new RunDevelopmentCommands(task.Id, context.TaskDevelopments.Single(development => development.TaskItemId == task.Id).Id), new LockedProgress(lines), Ct);
         }
 
         summary.Steps.Select(step => step.State).Should().Equal(
@@ -420,7 +420,7 @@ public sealed class GitWorktreeIntegrationTests : IAsyncLifetime
             new FakeTimeProvider(Now),
             NullLogger<RemoveWorktreeHandler>.Instance);
 
-        return await handler.HandleAsync(new RemoveWorktree(task.Id, terminate), Ct);
+        return await handler.HandleAsync(new RemoveWorktree(task.Id, context.TaskDevelopments.Single(development => development.TaskItemId == task.Id).Id, terminate), Ct);
     }
 
     private Task<ProcessResult> CommitAsync(string directory, string message) =>

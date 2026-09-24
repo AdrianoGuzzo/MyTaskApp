@@ -39,12 +39,16 @@ public class AgentSessionHandlerTests
         _task = TaskItem.Create("Implementar autenticação", Now);
         _tasks.Seed(_task);
         _disk.Existing.Add(Worktree);
+
+        // O ambiente existe desde o começo, ainda sem worktree pronto: é nele que
+        // as sessões moram (ADR-031).
+        _task.BeginDevelopment(null, FakeGitClient.Repository, "origin/develop", "feature/123", Worktree, Now);
     }
 
     private void Ready()
     {
-        _task.BeginDevelopment(FakeGitClient.Repository, "origin/develop", "feature/123", Worktree, Now);
-        _task.MarkDevelopmentReady(Now);
+        _task.BeginDevelopment(null, FakeGitClient.Repository, "origin/develop", "feature/123", Worktree, Now);
+        _task.MarkDevelopmentReady(_task.Developments[0].Id, Now);
     }
 
     private StartAgentSessionHandler Start() =>
@@ -72,11 +76,14 @@ public class AgentSessionHandlerTests
     private ReconcileAgentSessionsHandler Reconcile() =>
         new(_sessions, _tasks, _processes, _watcher, _time, NullLogger<ReconcileAgentSessionsHandler>.Instance);
 
-    private Task<AgentSessionView> StartAsync() => Start().HandleAsync(new StartAgentSession(_task.Id), Ct);
+    private Task<AgentSessionView> StartAsync() => Start().HandleAsync(new StartAgentSession(_task.Id, _task.Developments[0].Id), Ct);
 
     private AgentSession Persisted(int processId, bool alive, Guid? taskId = null)
     {
-        var session = AgentSession.Create(taskId ?? _task.Id, "claude-code", FakeAgentCliProvider.Executable, Worktree, Now);
+        var session = AgentSession.Create(
+            taskId ?? _task.Id,
+            taskId is null ? _task.Developments[0].Id : Guid.CreateVersion7(),
+            "claude-code", FakeAgentCliProvider.Executable, Worktree, Now);
         session.MarkRunning(processId, Now);
         _sessions.Seed(session);
 
@@ -174,7 +181,7 @@ public class AgentSessionHandlerTests
     [Fact]
     public async Task Start_WithAWorktreeStillBeingCreated_IsRefused()
     {
-        _task.BeginDevelopment(FakeGitClient.Repository, "origin/develop", "feature/123", Worktree, Now);
+        _task.BeginDevelopment(null, FakeGitClient.Repository, "origin/develop", "feature/123", Worktree, Now);
 
         await FluentActions.Awaiting(StartAsync).Should().ThrowAsync<DomainException>();
 
@@ -254,18 +261,61 @@ public class AgentSessionHandlerTests
     {
         Ready();
         var other = TaskItem.Create("Corrigir consulta SQL", Now);
-        other.BeginDevelopment(FakeGitClient.Repository, "origin/develop", "feature/121", Worktree + "-121", Now);
-        other.MarkDevelopmentReady(Now);
+        other.BeginDevelopment(null, FakeGitClient.Repository, "origin/develop", "feature/121", Worktree + "-121", Now);
+        other.MarkDevelopmentReady(other.Developments[0].Id, Now);
         _tasks.Seed(other);
         _disk.Existing.Add(Worktree + "-121");
 
         var first = await StartAsync();
-        var second = await Start().HandleAsync(new StartAgentSession(other.Id), Ct);
+        var second = await Start().HandleAsync(new StartAgentSession(other.Id, other.Developments[0].Id), Ct);
 
         first.ProcessId.Should().NotBe(second.ProcessId);
-        (await Get().HandleAsync(new GetTaskAgentSession(_task.Id), Ct))!.ProcessId.Should().Be(first.ProcessId);
-        (await Get().HandleAsync(new GetTaskAgentSession(other.Id), Ct))!.ProcessId.Should().Be(second.ProcessId);
+        (await Get().HandleAsync(new GetTaskAgentSession(_task.Id, _task.Developments[0].Id), Ct))!.ProcessId.Should().Be(first.ProcessId);
+        (await Get().HandleAsync(new GetTaskAgentSession(other.Id, other.Developments[0].Id), Ct))!.ProcessId.Should().Be(second.ProcessId);
         _launcher.Launched.Select(launch => launch.WorkingDirectory).Should().Equal(Worktree, Worktree + "-121");
+    }
+
+    /// <summary>Um agente por ambiente (ADR-031): cada repositório da tarefa tem o seu.</summary>
+    [Fact]
+    public async Task EachRepositoryOfTheTask_HasItsOwnAgent()
+    {
+        Ready();
+        var api = AnotherReadyRepository();
+
+        var first = await StartAsync();
+        var second = await Start().HandleAsync(new StartAgentSession(_task.Id, api.Id), Ct);
+
+        second.Status.Should().Be(AgentSessionStatus.Running);
+        first.ProcessId.Should().NotBe(second.ProcessId);
+        _launcher.Launched.Select(launch => launch.WorkingDirectory).Should().Equal(Worktree, api.WorktreePath);
+        (await Get().HandleAsync(new GetTaskAgentSession(_task.Id, api.Id), Ct))!.ProcessId.Should().Be(second.ProcessId);
+
+        await FluentActions.Awaiting(() => Start().HandleAsync(new StartAgentSession(_task.Id, api.Id), Ct))
+            .Should().ThrowAsync<DomainException>()
+            .WithMessage("Este ambiente já tem um Claude Code aberto*");
+    }
+
+    [Fact]
+    public async Task Focus_ReachesTheAgentOfTheChosenRepository()
+    {
+        Ready();
+        var api = AnotherReadyRepository();
+        await StartAsync();
+        var second = await Start().HandleAsync(new StartAgentSession(_task.Id, api.Id), Ct);
+
+        await Focus().HandleAsync(new FocusAgentSession(_task.Id, api.Id), Ct);
+
+        _windows.Focused.Should().Equal(second.ProcessId!.Value);
+    }
+
+    private TaskDevelopment AnotherReadyRepository()
+    {
+        const string ApiWorktree = @"C:\Projects\ecossistema-api-feature-123";
+
+        var api = _task.BeginDevelopment(null, @"C:\Projects\ecossistema-api", "origin/develop", "feature/123", ApiWorktree, Now);
+        _task.MarkDevelopmentReady(api.Id, Now);
+        _disk.Existing.Add(ApiWorktree);
+        return api;
     }
 
     // --- Consultar ---------------------------------------------------------
@@ -273,7 +323,7 @@ public class AgentSessionHandlerTests
     [Fact]
     public async Task Get_ATaskWithoutSession_ReturnsNothing()
     {
-        (await Get().HandleAsync(new GetTaskAgentSession(_task.Id), Ct)).Should().BeNull();
+        (await Get().HandleAsync(new GetTaskAgentSession(_task.Id, _task.Developments[0].Id), Ct)).Should().BeNull();
     }
 
     [Fact]
@@ -281,7 +331,7 @@ public class AgentSessionHandlerTests
     {
         Persisted(15432, alive: true);
 
-        var view = await Get().HandleAsync(new GetTaskAgentSession(_task.Id), Ct);
+        var view = await Get().HandleAsync(new GetTaskAgentSession(_task.Id, _task.Developments[0].Id), Ct);
 
         view!.Status.Should().Be(AgentSessionStatus.Running);
         view.IsActive.Should().BeTrue();
@@ -294,7 +344,7 @@ public class AgentSessionHandlerTests
     {
         Persisted(15432, alive: false);
 
-        var view = await Get().HandleAsync(new GetTaskAgentSession(_task.Id), Ct);
+        var view = await Get().HandleAsync(new GetTaskAgentSession(_task.Id, _task.Developments[0].Id), Ct);
 
         view!.Status.Should().Be(AgentSessionStatus.Exited);
         view.EndedAt.Should().Be(Now);
@@ -309,7 +359,7 @@ public class AgentSessionHandlerTests
         Persisted(15432, alive: false);
         _processes.Run(15432, Now.AddHours(3));
 
-        var view = await Get().HandleAsync(new GetTaskAgentSession(_task.Id), Ct);
+        var view = await Get().HandleAsync(new GetTaskAgentSession(_task.Id, _task.Developments[0].Id), Ct);
 
         view!.Status.Should().Be(AgentSessionStatus.Exited);
     }
@@ -320,7 +370,7 @@ public class AgentSessionHandlerTests
         var session = Persisted(15432, alive: false);
         session.MarkExited(Now.AddMinutes(35));
 
-        var view = await Get().HandleAsync(new GetTaskAgentSession(_task.Id), Ct);
+        var view = await Get().HandleAsync(new GetTaskAgentSession(_task.Id, _task.Developments[0].Id), Ct);
 
         view!.Status.Should().Be(AgentSessionStatus.Exited);
         view.EndedAt.Should().Be(Now.AddMinutes(35));
@@ -426,7 +476,7 @@ public class AgentSessionHandlerTests
     [Fact]
     public async Task Reconcile_ASessionStuckStarting_IsEndedOnlyAfterTheGrace()
     {
-        var session = AgentSession.Create(_task.Id, "claude-code", FakeAgentCliProvider.Executable, Worktree, Now);
+        var session = AgentSession.Create(_task.Id, _task.Developments[0].Id, "claude-code", FakeAgentCliProvider.Executable, Worktree, Now);
         _sessions.Seed(session);
 
         await Reconcile().HandleAsync(new ReconcileAgentSessions(), Ct);

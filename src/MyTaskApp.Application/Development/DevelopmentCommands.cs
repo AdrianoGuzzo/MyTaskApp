@@ -7,7 +7,7 @@ using MyTaskApp.Domain.Tasks;
 namespace MyTaskApp.Application.Development;
 
 /// <summary>Troca a lista de comandos pós-Worktree de um ambiente que já existe (ADR-028).</summary>
-public sealed record SetDevelopmentCommands(Guid TaskId, IReadOnlyList<string> Commands);
+public sealed record SetDevelopmentCommands(Guid TaskId, Guid DevelopmentId, IReadOnlyList<string> Commands);
 
 public sealed class SetDevelopmentCommandsHandler(
     ITaskItemRepository tasks,
@@ -21,24 +21,25 @@ public sealed class SetDevelopmentCommandsHandler(
     {
         var task = await tasks.GetByIdAsync(command.TaskId, cancellationToken);
 
-        task.SetDevelopmentCommands(command.Commands, timeProvider.GetUtcNow());
+        task.SetDevelopmentCommands(command.DevelopmentId, command.Commands, timeProvider.GetUtcNow());
+        var development = task.GetDevelopment(command.DevelopmentId);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation(
             "DevelopmentCommandsSaved {TaskId} {Count}",
             task.Id,
-            task.Development!.Commands.Count);
+            development.Commands.Count);
 
-        return TaskDevelopmentView.From(task.Development);
+        return TaskDevelopmentView.From(development);
     }
 }
 
 /// <summary>
-/// Roda a lista de comandos pós-Worktree da tarefa, em ordem, dentro do
-/// worktree (ADR-028).
+/// Roda a lista de comandos pós-Worktree de um ambiente da tarefa, em ordem,
+/// dentro do worktree dele (ADR-028, ADR-031).
 /// </summary>
-public sealed record RunDevelopmentCommands(Guid TaskId);
+public sealed record RunDevelopmentCommands(Guid TaskId, Guid DevelopmentId);
 
 /// <summary>
 /// Só com o ambiente <see cref="TaskDevelopmentStatus.Ready"/>: comando nenhum
@@ -63,10 +64,7 @@ public sealed class RunDevelopmentCommandsHandler(
     {
         var task = await tasks.GetByIdAsync(command.TaskId, cancellationToken);
 
-        if (task.Development is not { } development)
-        {
-            throw new DomainException("Esta tarefa não tem ambiente de desenvolvimento.");
-        }
+        var development = task.GetDevelopment(command.DevelopmentId);
 
         if (development.Status != TaskDevelopmentStatus.Ready)
         {

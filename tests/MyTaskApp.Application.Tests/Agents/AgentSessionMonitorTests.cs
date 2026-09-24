@@ -48,7 +48,7 @@ public class AgentSessionMonitorTests
 
     private AgentSession Running(int processId, bool alive)
     {
-        var session = AgentSession.Create(_task.Id, "claude-code", @"C:\claude.exe", @"C:\wt", Now);
+        var session = AgentSession.Create(_task.Id, Guid.CreateVersion7(), "claude-code", @"C:\claude.exe", @"C:\wt", Now);
         session.MarkRunning(processId, Now);
         _sessions.Seed(session);
 

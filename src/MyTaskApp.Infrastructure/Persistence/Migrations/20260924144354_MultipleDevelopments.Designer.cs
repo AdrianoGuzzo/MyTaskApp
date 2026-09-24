@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MyTaskApp.Infrastructure.Persistence;
 
@@ -10,9 +11,11 @@ using MyTaskApp.Infrastructure.Persistence;
 namespace MyTaskApp.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(MyTaskAppDbContext))]
-    partial class MyTaskAppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260924144354_MultipleDevelopments")]
+    partial class MultipleDevelopments
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.12");

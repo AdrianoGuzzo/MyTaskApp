@@ -45,7 +45,7 @@ public class AgentSessionViewModelTests
     private AgentSessionViewModel Create(bool isReadOnly = false)
     {
         var viewModel = new AgentSessionViewModel(_runner, _clipboard, _shell, NullLogger<AgentSessionViewModel>.Instance);
-        viewModel.Load(_taskId, isReadOnly);
+        viewModel.Load(_taskId, Guid.CreateVersion7(), isReadOnly);
         return viewModel;
     }
 
@@ -229,7 +229,7 @@ public class AgentSessionViewModelTests
         await viewModel.FocusCommand.ExecuteAsync(null);
 
         viewModel.State.Should().Be(AgentPanelState.Finished);
-        viewModel.Message.Should().Be("O Claude Code desta tarefa já foi encerrado.");
+        viewModel.Message.Should().Be("O Claude Code deste ambiente já foi encerrado.");
     }
 
     [Fact]

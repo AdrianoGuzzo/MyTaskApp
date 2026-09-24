@@ -233,7 +233,7 @@ public sealed partial class App : Avalonia.Application
 
             if (_notes.TryGetValue(taskId, out var notes) && notes.DataContext is TaskNotesViewModel viewModel)
             {
-                _ = viewModel.Development.Agent.RefreshAsync(CancellationToken.None);
+                _ = viewModel.Developments.RefreshAgentsAsync();
             }
         });
 
@@ -304,7 +304,7 @@ public sealed partial class App : Avalonia.Application
             viewModel,
             services.GetRequiredService<IConfirmationDialog>());
 
-        viewModel.Development.CommandsRequested += () => ShowDevelopmentCommands(services, notes);
+        viewModel.Developments.CommandsRequested += () => ShowDevelopmentCommands(services, notes);
 
         _notes[row.TaskId] = notes;
         notes.Closed += (_, _) => _notes.Remove(row.TaskId);
