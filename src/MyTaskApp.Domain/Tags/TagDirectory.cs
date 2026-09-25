@@ -21,6 +21,9 @@ public sealed class TagDirectory
 
     public const int MaxDescriptionLength = 500;
 
+    /// <summary>O mesmo limite do Git para nome de branch.</summary>
+    public const int MaxDefaultBranchLength = 255;
+
     private TagDirectory(
         Guid id,
         Guid tagId,
@@ -28,6 +31,7 @@ public sealed class TagDirectory
         string path,
         string? name,
         string? description,
+        string? defaultBranch,
         DateTimeOffset createdAt)
     {
         Id = id;
@@ -36,6 +40,7 @@ public sealed class TagDirectory
         Path = path;
         Name = name;
         Description = description;
+        DefaultBranch = defaultBranch;
         CreatedAt = createdAt;
     }
 
@@ -53,6 +58,13 @@ public sealed class TagDirectory
 
     public string? Description { get; private set; }
 
+    /// <summary>
+    /// A branch de origem que "Iniciar implementação" já traz escolhida quando o
+    /// repositório é esta pasta: <c>develop</c> ou <c>origin/develop</c>. Só uma
+    /// preferência — se não existir no repositório, a tela sugere outra.
+    /// </summary>
+    public string? DefaultBranch { get; private set; }
+
     public DateTimeOffset CreatedAt { get; }
 
     internal static TagDirectory Create(
@@ -61,6 +73,7 @@ public sealed class TagDirectory
         string path,
         string? name,
         string? description,
+        string? defaultBranch,
         DateTimeOffset createdAt) =>
         new(
             Guid.CreateVersion7(createdAt),
@@ -69,21 +82,24 @@ public sealed class TagDirectory
             NormalizePath(path),
             NormalizeOptional(name, MaxNameLength, "O nome do diretório"),
             NormalizeOptional(description, MaxDescriptionLength, "A descrição do diretório"),
+            NormalizeDefaultBranch(defaultBranch),
             createdAt);
 
     /// <summary>Atômico: valida tudo antes de trocar qualquer campo.</summary>
-    internal void Update(string alias, string path, string? name, string? description)
+    internal void Update(string alias, string path, string? name, string? description, string? defaultBranch)
     {
         var normalizedAlias = NormalizeAlias(alias);
         var normalizedPath = NormalizePath(path);
         var normalizedName = NormalizeOptional(name, MaxNameLength, "O nome do diretório");
         var normalizedDescription = NormalizeOptional(
             description, MaxDescriptionLength, "A descrição do diretório");
+        var normalizedDefaultBranch = NormalizeDefaultBranch(defaultBranch);
 
         Alias = normalizedAlias;
         Path = normalizedPath;
         Name = normalizedName;
         Description = normalizedDescription;
+        DefaultBranch = normalizedDefaultBranch;
     }
 
     /// <summary>
@@ -124,6 +140,22 @@ public sealed class TagDirectory
                && (normalized[^1] == '\\' || normalized[^1] == '/'))
         {
             normalized = normalized[..^1];
+        }
+
+        return normalized;
+    }
+
+    /// <summary>
+    /// Opcional. Só o que é certo sem perguntar ao Git: sem espaços e no
+    /// tamanho. Se a branch existe, só o repositório sabe — e na hora de usar.
+    /// </summary>
+    public static string? NormalizeDefaultBranch(string? branch)
+    {
+        var normalized = NormalizeOptional(branch, MaxDefaultBranchLength, "O nome da branch padrão");
+
+        if (normalized is not null && normalized.Any(char.IsWhiteSpace))
+        {
+            throw new DomainException("O nome da branch padrão não pode ter espaços.");
         }
 
         return normalized;

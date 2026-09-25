@@ -11,6 +11,7 @@ public sealed record TagRow(
     int DirectoryCount = 0);
 
 /// <summary>Uma pasta de etiqueta, com a etiqueta junto para o autocomplete diferenciar.</summary>
+/// <param name="DefaultBranch">A origem preferida quando o repositório é esta pasta.</param>
 public sealed record TagDirectoryRow(
     Guid Id,
     Guid TagId,
@@ -19,7 +20,8 @@ public sealed record TagDirectoryRow(
     string Alias,
     string Path,
     string? Name,
-    string? Description);
+    string? Description,
+    string? DefaultBranch = null);
 
 public interface ITagQuery
 {

@@ -853,6 +853,9 @@
                   <TextBlock Classes="hint bad"
                              Text="{Binding BranchesError}"
                              IsVisible="{Binding BranchesError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                  <TextBlock Classes="hint"
+                             Text="{Binding BranchesNotice}"
+                             IsVisible="{Binding BranchesNotice, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                 </StackPanel>
 
                 <StackPanel Spacing="4">
