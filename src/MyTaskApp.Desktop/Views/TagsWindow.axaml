@@ -299,6 +299,10 @@
                                        TextTrimming="PrefixCharacterEllipsis"
                                        ToolTip.Tip="{Binding Path}" />
                             <TextBlock Classes="meta"
+                                       Text="{Binding DefaultBranchLabel}"
+                                       TextTrimming="CharacterEllipsis"
+                                       IsVisible="{Binding HasDefaultBranch}" />
+                            <TextBlock Classes="meta"
                                        Text="{Binding Description}"
                                        TextWrapping="Wrap"
                                        IsVisible="{Binding Description, Converter={x:Static ObjectConverters.IsNotNull}}" />
@@ -324,7 +328,7 @@
                   </ItemsControl>
 
                   <!-- Formulário: acrescenta, ou altera o diretório escolhido em "Editar". -->
-                  <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto"
+                  <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto"
                         ColumnSpacing="6" RowSpacing="6">
 
                     <TextBox Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2"
@@ -357,6 +361,14 @@
                              PlaceholderText="Descrição (opcional)"
                              Text="{Binding DirectoryDescription}"
                              spell:SpellCheck.IsEnabled="True" />
+
+                    <!-- Só uma preferência: se o repositório não tiver a branch, a tela sugere outra. -->
+                    <TextBox Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="2"
+                             FontSize="12"
+                             MaxLength="255"
+                             PlaceholderText="Branch de origem padrão (opcional, ex.: develop ou origin/develop)"
+                             ToolTip.Tip="Já vem escolhida em &quot;Iniciar implementação&quot; quando o repositório é esta pasta."
+                             Text="{Binding DirectoryDefaultBranch}" />
                   </Grid>
 
                   <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Right">

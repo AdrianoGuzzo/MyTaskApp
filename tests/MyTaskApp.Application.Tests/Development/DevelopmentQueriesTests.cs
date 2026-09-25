@@ -65,6 +65,25 @@ public class DevelopmentQueriesTests
     }
 
     [Fact]
+    public void FindConfigured_PrefersTheExactName_ThenTheRemoteCopy()
+    {
+        IReadOnlyList<GitBranch> branches =
+        [
+            GitBranch.Local("main"),
+            GitBranch.RemoteTracking("upstream", "release"),
+            GitBranch.RemoteTracking("origin", "release"),
+            GitBranch.RemoteTracking("origin", "main"),
+        ];
+
+        ListBranchesHandler.FindConfigured(branches, "main")!.FullRef.Should().Be("refs/heads/main");
+        ListBranchesHandler.FindConfigured(branches, " origin/main ")!.FullRef.Should().Be("refs/remotes/origin/main");
+        ListBranchesHandler.FindConfigured(branches, "release")!.FullRef.Should().Be("refs/remotes/origin/release");
+        ListBranchesHandler.FindConfigured(branches, "Main")!.FullRef.Should().Be("refs/heads/main");
+        ListBranchesHandler.FindConfigured(branches, "develop").Should().BeNull();
+        ListBranchesHandler.FindConfigured(branches, null).Should().BeNull();
+    }
+
+    [Fact]
     public void Suggest_FallsBackToConventionalNames_ThenHead()
     {
         ListBranchesHandler.Suggest([GitBranch.Local("x", isHead: true), GitBranch.Local("develop")], null)!

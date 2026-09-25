@@ -11,7 +11,7 @@ public class TagDirectoriesViewModelTests
     private static readonly TagRow Eco = new(Guid.NewGuid(), "ECO CORE", "#22C55E", 1, 2);
 
     private static readonly TagDirectoryRow Core =
-        new(Guid.NewGuid(), Eco.Id, Eco.Name, Eco.ColorHex, "@ecossistema-core", @"C:\Projects\ecossistema-core", "Core", null);
+        new(Guid.NewGuid(), Eco.Id, Eco.Name, Eco.ColorHex, "@ecossistema-core", @"C:\Projects\ecossistema-core", "Core", null, "develop");
 
     private static readonly TagDirectoryRow Web =
         new(Guid.NewGuid(), Eco.Id, Eco.Name, Eco.ColorHex, "@ecossistema-web", @"C:\Projects\ecossistema-web", null, null);
@@ -86,6 +86,9 @@ public class TagDirectoriesViewModelTests
         item.IsEditingDirectory.Should().BeTrue();
         item.Alias.Should().Be("@ecossistema-core");
         item.DirectoryName.Should().Be("Core");
+        item.DirectoryDefaultBranch.Should().Be("develop");
+        item.Directories[0].DefaultBranchLabel.Should().Be("Branch padrão: develop");
+        item.Directories[1].HasDefaultBranch.Should().BeFalse();
 
         item.Path = @"D:\Projects\ecossistema-core";
         await viewModel.SaveDirectoryAsync(item, Ct);

@@ -161,4 +161,37 @@ public class TagDirectoryTests
         var again = () => tag.RemoveDirectory(directory.Id);
         again.Should().Throw<DomainException>();
     }
+
+    [Fact]
+    public void DefaultBranch_IsOptional_Trimmed_AndChangedByUpdate()
+    {
+        var tag = EcoCore();
+
+        var directory = tag.AddDirectory("@eco", @"C:\eco", null, null, Now, "  develop ");
+        directory.DefaultBranch.Should().Be("develop");
+
+        tag.UpdateDirectory(directory.Id, "@eco", @"C:\eco", null, null, "origin/main");
+        directory.DefaultBranch.Should().Be("origin/main");
+
+        tag.UpdateDirectory(directory.Id, "@eco", @"C:\eco", null, null, "   ");
+        directory.DefaultBranch.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("minha branch")]
+    [InlineData("develop	x")]
+    public void DefaultBranch_WithSpaces_IsRejected(string branch)
+    {
+        var normalize = () => TagDirectory.NormalizeDefaultBranch(branch);
+
+        normalize.Should().Throw<DomainException>();
+    }
+
+    [Fact]
+    public void DefaultBranch_BeyondMaximumLength_IsRejected()
+    {
+        var normalize = () => TagDirectory.NormalizeDefaultBranch(new string('a', TagDirectory.MaxDefaultBranchLength + 1));
+
+        normalize.Should().Throw<DomainException>();
+    }
 }

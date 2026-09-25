@@ -29,6 +29,12 @@ public sealed partial class TagDirectoryItemViewModel(TagListItemViewModel owner
 
     public bool HasName => !string.IsNullOrEmpty(Row.Name);
 
+    public string? DefaultBranch => Row.DefaultBranch;
+
+    public bool HasDefaultBranch => !string.IsNullOrEmpty(Row.DefaultBranch);
+
+    public string DefaultBranchLabel => $"Branch padrão: {Row.DefaultBranch}";
+
     /// <summary><c>null</c> enquanto a conferência não volta.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsMissing), nameof(IsFound), nameof(ExistenceTip))]

@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Time.Testing;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Development;
+using MyTaskApp.Application.Tags;
 using MyTaskApp.Desktop.ViewModels;
 using MyTaskApp.Domain.Tasks;
 
@@ -196,6 +197,49 @@ public class TaskDevelopmentViewModelTests
 
         viewModel.DirectoryCompletion.Suggestions.Select(item => item.Path)
             .Should().Equal(@"C:\Projects\ecossistema-core", @"C:\Projects\ecossistema-web");
+    }
+
+    private static TagDirectoryRow TagDirectory(string path, string? defaultBranch) =>
+        new(Guid.NewGuid(), Guid.NewGuid(), "ECO CORE", "#22C55E", "@eco", path, null, null, defaultBranch);
+
+    [Fact]
+    public async Task TheDefaultBranchOfTheTagDirectory_ComesSelected()
+    {
+        var viewModel = await ActivatedAsync();
+        viewModel.DirectoryCompletion.SetDirectories(
+            [TagDirectory(@"C:\Projects\outro", "main"), TagDirectory(Repository + @"\", "origin/develop")],
+            new Dictionary<Guid, bool>());
+
+        await ChooseRepositoryAsync(viewModel);
+
+        viewModel.SelectedBranchOption!.Branch!.FullRef.Should().Be("refs/remotes/origin/develop");
+        viewModel.BranchesNotice.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task TheDefaultBranch_BeatsTheOneFromTheOtherRepositories()
+    {
+        var viewModel = await ActivatedAsync();
+        viewModel.SuggestFrom([View(TaskDevelopmentStatus.Ready) with { SourceBranch = "origin/main" }]);
+        viewModel.DirectoryCompletion.SetDirectories(
+            [TagDirectory(Repository, "develop")], new Dictionary<Guid, bool>());
+
+        await ChooseRepositoryAsync(viewModel);
+
+        viewModel.SelectedBranchOption!.Branch!.FullRef.Should().Be("refs/heads/develop");
+    }
+
+    [Fact]
+    public async Task ADefaultBranchTheRepositoryDoesNotHave_FallsBackToTheSuggestion_AndSaysSo()
+    {
+        var viewModel = await ActivatedAsync();
+        viewModel.DirectoryCompletion.SetDirectories(
+            [TagDirectory(Repository, "release")], new Dictionary<Guid, bool>());
+
+        await ChooseRepositoryAsync(viewModel);
+
+        viewModel.SelectedBranchOption!.Branch.Should().Be(Branches[0]);
+        viewModel.BranchesNotice.Should().Contain("release");
     }
 
     [Fact]

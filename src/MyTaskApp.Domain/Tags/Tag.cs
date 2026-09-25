@@ -72,9 +72,10 @@ public sealed class Tag
         string path,
         string? name,
         string? description,
-        DateTimeOffset createdAt)
+        DateTimeOffset createdAt,
+        string? defaultBranch = null)
     {
-        var directory = TagDirectory.Create(Id, alias, path, name, description, createdAt);
+        var directory = TagDirectory.Create(Id, alias, path, name, description, defaultBranch, createdAt);
 
         EnsureAliasIsFree(directory.Alias, exceptId: null);
 
@@ -88,13 +89,14 @@ public sealed class Tag
         string alias,
         string path,
         string? name,
-        string? description)
+        string? description,
+        string? defaultBranch = null)
     {
         var directory = GetDirectory(directoryId);
 
         EnsureAliasIsFree(TagDirectory.NormalizeAlias(alias), directoryId);
 
-        directory.Update(alias, path, name, description);
+        directory.Update(alias, path, name, description, defaultBranch);
     }
 
     public void RemoveDirectory(Guid directoryId) => _directories.Remove(GetDirectory(directoryId));
