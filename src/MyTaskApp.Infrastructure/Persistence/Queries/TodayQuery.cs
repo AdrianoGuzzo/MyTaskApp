@@ -113,6 +113,34 @@ internal sealed class TodayQuery(MyTaskAppDbContext context) : ITodayQuery
                         row.TaskDevelopmentId, row.ProviderId, row.RepositoryPath, row.Branch))
                     .ToList());
 
+        // A bolinha de worktree (ADR-034): só os prontos. Criando, com erro ou
+        // removido não é pasta onde haja trabalho a perder.
+        var worktrees = await context.TaskDevelopments
+            .AsNoTracking()
+            .Where(development => taskIds.Contains(development.TaskItemId)
+                && development.Status == TaskDevelopmentStatus.Ready)
+            .Select(development => new
+            {
+                development.TaskItemId,
+                development.Id,
+                development.RepositoryPath,
+                development.Branch,
+                development.SourceBranch,
+                development.WorktreePath,
+                development.CreatedAt,
+            })
+            .ToListAsync(cancellationToken);
+
+        var worktreesByTask = worktrees
+            .GroupBy(row => row.TaskItemId)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<WorktreeRow>)group
+                    .OrderBy(row => row.CreatedAt)
+                    .Select(row => new WorktreeRow(
+                        row.Id, row.RepositoryPath, row.Branch, row.SourceBranch, row.WorktreePath))
+                    .ToList());
+
         return occurrences
             .Select(occurrence =>
             {
@@ -135,7 +163,8 @@ internal sealed class TodayQuery(MyTaskAppDbContext context) : ITodayQuery
                     definition.Description,
                     occurrence.Position,
                     tagsByTask.GetValueOrDefault(definition.Id),
-                    agentsByTask.GetValueOrDefault(definition.Id));
+                    agentsByTask.GetValueOrDefault(definition.Id),
+                    worktreesByTask.GetValueOrDefault(definition.Id));
             })
             .ToList();
     }

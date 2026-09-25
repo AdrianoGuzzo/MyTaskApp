@@ -359,6 +359,40 @@ public sealed class GitWorktreeIntegrationTests : IAsyncLifetime
         File.Exists(Path.Combine(ExpectedWorktree, "meu.txt")).Should().BeTrue();
     }
 
+    /// <summary>
+    /// ADR-034 com o Git de verdade: a bolinha passa de cinza a âmbar, a azul e
+    /// a verde conforme o trabalho é feito, commitado e enviado.
+    /// </summary>
+    [Fact]
+    public async Task TheListDot_FollowsTheWorkThroughCommitAndPush()
+    {
+        Assert.SkipWhen(_executable is null, "Git não instalado nesta máquina.");
+
+        var task = await SeedTaskAsync();
+        var view = await StartAsync(await PrepareAsync(task, "refs/remotes/origin/main", []));
+        var worktree = new MyTaskApp.Application.Planning.TaskWorktree(
+            view.Id, "eco-core", view.Branch, view.SourceBranch, view.WorktreePath);
+
+        var probe = new ProbeWorktreesHandler(_git, new FileSystemDirectoryProbe(), NullLogger<ProbeWorktreesHandler>.Instance);
+
+        async Task<WorktreeSync> SyncAsync() => (await probe.HandleAsync(new ProbeWorktrees([worktree]), Ct)).Single();
+
+        (await SyncAsync()).State.Should().Be(WorktreeSyncState.Clean);
+
+        await File.WriteAllTextAsync(Path.Combine(ExpectedWorktree, "trabalho.txt"), "x\n", Ct);
+        (await SyncAsync()).Should().Match<WorktreeSync>(sync => sync.State == WorktreeSyncState.Dirty && sync.Changes == 1);
+
+        await GitAsync(ExpectedWorktree, "add", "trabalho.txt");
+        await CommitAsync(ExpectedWorktree, "trabalho");
+        (await SyncAsync()).Should().Match<WorktreeSync>(sync =>
+            sync.State == WorktreeSyncState.Unpushed && sync.Commits == 1 && sync.Unpushed == 1 && !sync.IsPublished);
+
+        // Sem -u: a branch não ganha upstream, e mesmo assim foi enviada.
+        await GitAsync(ExpectedWorktree, "push", "-q", "origin", view.Branch);
+        (await SyncAsync()).Should().Match<WorktreeSync>(sync =>
+            sync.State == WorktreeSyncState.Pushed && sync.Unpushed == 0 && sync.IsPublished);
+    }
+
     private async Task<TaskItem> SeedTaskAsync()
     {
         var task = TaskItem.Create("Corrigir cálculo de animais", Now);

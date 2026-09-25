@@ -43,6 +43,8 @@ public sealed class TaskRowViewModel
         Tags = new TaskTagsViewModel(TaskId, task.Tags, Title);
 
         Agents = (task.ActiveAgents ?? []).Select(agent => new TaskAgentViewModel(this, agent)).ToList();
+
+        Worktree = new TaskWorktreeViewModel(task.Worktrees, isCompleted);
     }
 
     /// <summary>
@@ -65,6 +67,9 @@ public sealed class TaskRowViewModel
     public string? AgentName => Agents.Count > 0 ? Agents[0].AgentName : null;
 
     public bool HasActiveAgent => Agents.Count > 0;
+
+    /// <summary>A bolinha de worktree e o que o balão diz dele (ADR-034).</summary>
+    public TaskWorktreeViewModel Worktree { get; }
 
     /// <summary>"● Claude Code", ou "● Claude Code ×2" com um por repositório: o selo da linha.</summary>
     public string AgentLabel => Agents.Count switch

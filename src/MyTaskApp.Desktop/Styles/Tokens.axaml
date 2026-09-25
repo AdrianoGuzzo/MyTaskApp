@@ -34,6 +34,15 @@
   <Color x:Key="WidgetCautionColor">#FBBF24</Color>
   <Color x:Key="WidgetCautionSoftColor">#2A2318</Color>
 
+  <!--
+    Estado do worktree (ADR-034). Âmbar é "tem trabalho que não foi salvo"
+    (o Caution acima); azul é "há o que enviar"; verde é "está tudo lá fora".
+    Tons 400: passam de 4.5:1 sobre a superfície, e nenhum é o indigo do
+    destaque — senão a bolinha se confundiria com o selo do agente.
+  -->
+  <Color x:Key="WidgetInfoColor">#60A5FA</Color>
+  <Color x:Key="WidgetSuccessColor">#34D399</Color>
+
   <SolidColorBrush x:Key="WidgetCanvasBrush" Color="{StaticResource WidgetCanvasColor}" />
   <SolidColorBrush x:Key="WidgetSurfaceBrush" Color="{StaticResource WidgetSurfaceColor}" />
   <SolidColorBrush x:Key="WidgetSurfaceHoverBrush" Color="{StaticResource WidgetSurfaceHoverColor}" />
@@ -51,6 +60,13 @@
   <SolidColorBrush x:Key="WidgetDangerSoftBrush" Color="{StaticResource WidgetDangerSoftColor}" />
   <SolidColorBrush x:Key="WidgetCautionBrush" Color="{StaticResource WidgetCautionColor}" />
   <SolidColorBrush x:Key="WidgetCautionSoftBrush" Color="{StaticResource WidgetCautionSoftColor}" />
+  <SolidColorBrush x:Key="WidgetInfoBrush" Color="{StaticResource WidgetInfoColor}" />
+  <SolidColorBrush x:Key="WidgetSuccessBrush" Color="{StaticResource WidgetSuccessColor}" />
+  <!-- O halo da bolinha de worktree na tarefa concluída: a mesma cor, translúcida. -->
+  <SolidColorBrush x:Key="WidgetCautionHaloBrush" Color="{StaticResource WidgetCautionColor}" Opacity="0.35" />
+  <SolidColorBrush x:Key="WidgetInfoHaloBrush" Color="{StaticResource WidgetInfoColor}" Opacity="0.35" />
+  <SolidColorBrush x:Key="WidgetSuccessHaloBrush" Color="{StaticResource WidgetSuccessColor}" Opacity="0.35" />
+  <SolidColorBrush x:Key="WidgetTextMidHaloBrush" Color="{StaticResource WidgetTextMidColor}" Opacity="0.35" />
   <SolidColorBrush x:Key="WidgetTransparentBrush" Color="Transparent" />
 
   <!-- Geometria: um raio só para o painel, outro para o que vive dentro dele. -->

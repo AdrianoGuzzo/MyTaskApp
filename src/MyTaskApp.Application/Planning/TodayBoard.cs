@@ -29,7 +29,20 @@ public sealed record TodayTask(
     /// Os agentes de IA abertos para a tarefa, um por ambiente; <c>null</c> =
     /// nenhum (ADR-030, ADR-031). É o que acende o selo na linha.
     /// </summary>
-    IReadOnlyList<ActiveAgent>? ActiveAgents = null);
+    IReadOnlyList<ActiveAgent>? ActiveAgents = null,
+    /// <summary>
+    /// Os worktrees prontos da tarefa; <c>null</c> = nenhum (ADR-034). É o que
+    /// acende a bolinha — a cor vem depois, do Git.
+    /// </summary>
+    IReadOnlyList<TaskWorktree>? Worktrees = null);
+
+/// <summary>Um worktree da tarefa, com o nome do repositório para a linha e o balão.</summary>
+public sealed record TaskWorktree(
+    Guid DevelopmentId,
+    string RepositoryName,
+    string Branch,
+    string SourceBranch,
+    string WorktreePath);
 
 /// <summary>
 /// Um agente aberto: o nome ("Claude Code") e o ambiente em que roda — o que o

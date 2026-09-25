@@ -88,6 +88,36 @@ public class GitOutputParserTests
     [Fact]
     public void Status_Clean() => GitOutputParser.ParseStatus(string.Empty).Should().BeEmpty();
 
+    [Fact]
+    public void BranchStatus_WithUpstream_ReadsDistanceAndChanges()
+    {
+        const string output =
+            "# branch.oid 1a2b3c\0"
+            + "# branch.head feature/x\0"
+            + "# branch.upstream origin/feature/x\0"
+            + "# branch.ab +2 -1\0"
+            + "1 .M N... 100644 100644 100644 aaa bbb src/App.cs\0"
+            + "2 R. N... 100644 100644 100644 aaa bbb R100 novo.cs\0velho.cs\0"
+            + "? ação.txt\0";
+
+        var status = GitOutputParser.ParseBranchStatus(output);
+
+        status.Upstream.Should().Be("origin/feature/x");
+        status.Ahead.Should().Be(2);
+        status.Behind.Should().Be(1);
+        status.Changes.Should().HaveCount(3, "o nome antigo da renomeação não é outra alteração");
+    }
+
+    [Fact]
+    public void BranchStatus_NeverPushed_HasNoUpstream()
+    {
+        var status = GitOutputParser.ParseBranchStatus("# branch.oid 1a2b3c\0# branch.head feature/x\0");
+
+        status.Upstream.Should().BeNull();
+        status.Ahead.Should().Be(0);
+        status.IsClean.Should().BeTrue();
+    }
+
     [Theory]
     [InlineData("0\t0\n", 0, 0)]
     [InlineData("2\t5\n", 2, 5)]

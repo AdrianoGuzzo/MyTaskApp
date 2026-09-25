@@ -165,6 +165,17 @@ internal sealed class GitClient(
         return new GitStatus(GitOutputParser.ParseStatus(result.StandardOutput));
     }
 
+    public async Task<GitBranchStatus> GetBranchStatusAsync(string workingTree, CancellationToken cancellationToken = default)
+    {
+        var result = await RequireAsync(
+            workingTree,
+            ["status", "--porcelain=v2", "--branch", "-z"],
+            DefaultTimeout,
+            cancellationToken);
+
+        return GitOutputParser.ParseBranchStatus(result.StandardOutput);
+    }
+
     public Task<GitCommandResult> FastForwardCheckedOutAsync(
         string workingTree,
         string upstreamRef,

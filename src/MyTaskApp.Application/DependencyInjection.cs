@@ -74,6 +74,7 @@ public static class DependencyInjection
         services.AddScoped<StartDevelopmentHandler>();
         services.AddScoped<InspectWorktreeHandler>();
         services.AddScoped<RemoveWorktreeHandler>();
+        services.AddScoped<ProbeWorktreesHandler>();
 
         // Comandos pós-Worktree e comandos globais por @alias (ADR-028).
         services.AddScoped<GetDevelopmentCommandsHandler>();

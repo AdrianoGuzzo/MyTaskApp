@@ -1,3 +1,4 @@
+using MyTaskApp.Application.Planning;
 using MyTaskApp.Domain.Tasks;
 using MyTaskApp.Infrastructure.Persistence;
 using MyTaskApp.Infrastructure.Persistence.Queries;
@@ -123,5 +124,36 @@ public class TodayQueryTests
         await SeedAsync(db, task);
 
         (await TitlesAsync(db)).Should().Equal("Daily");
+    }
+
+    /// <summary>
+    /// A bolinha de worktree (ADR-034) só acende com worktree pronto: o que
+    /// falhou ou foi removido não tem pasta onde haja trabalho a perder.
+    /// </summary>
+    [Fact]
+    public async Task BringsOnlyTheReadyWorktrees()
+    {
+        await using var db = await new TempSqliteDatabase().MigrateAsync(Ct);
+        var task = TaskItem.Create("Corrigir animais", NowUtc, schedule: TaskSchedule.On(Today));
+
+        var ready = task.BeginDevelopment(null, @"C:\Projects\eco-core", "origin/main", "feature/x", @"C:\Projects\eco-core-feature-x", NowUtc);
+        task.MarkDevelopmentReady(ready.Id, NowUtc);
+
+        var removed = task.BeginDevelopment(null, @"C:\Projects\eco-api", "origin/main", "feature/x", @"C:\Projects\eco-api-feature-x", NowUtc);
+        task.MarkDevelopmentReady(removed.Id, NowUtc);
+        task.MarkDevelopmentRemoved(removed.Id, NowUtc);
+
+        var failed = task.BeginDevelopment(null, @"C:\Projects\eco-web", "origin/main", "feature/x", @"C:\Projects\eco-web-feature-x", NowUtc);
+        task.MarkDevelopmentFailed(failed.Id, "falhou", NowUtc);
+
+        await SeedAsync(db, task, TaskItem.Create("Sem worktree", NowUtc, schedule: TaskSchedule.On(Today)));
+
+        await using var context = db.CreateContext();
+        var rows = await new TodayQuery(context).GetCandidatesAsync(Today, Ct);
+
+        rows.Single(row => row.Title == "Sem worktree").Worktrees.Should().BeNull();
+        rows.Single(row => row.Title == "Corrigir animais").Worktrees.Should().ContainSingle()
+            .Which.Should().Be(new WorktreeRow(
+                ready.Id, @"C:\Projects\eco-core", "feature/x", "origin/main", @"C:\Projects\eco-core-feature-x"));
     }
 }
