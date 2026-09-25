@@ -80,6 +80,7 @@ public class InfrastructureRegistrationTests : IDisposable
     [InlineData(typeof(IGitClient))]
     [InlineData(typeof(IAgentSessionRepository))]
     [InlineData(typeof(IAgentCliProvider))]
+    [InlineData(typeof(IAgentSettingsStore))]
     [InlineData(typeof(IAgentProcessTracker))]
     [InlineData(typeof(ITerminalLauncher))]
     [InlineData(typeof(ITerminalWindowManager))]
