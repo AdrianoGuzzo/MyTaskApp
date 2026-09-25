@@ -33,13 +33,17 @@ public sealed record AgentSessionView(
             session.FailureReason);
 }
 
-/// <summary>O agente, se está instalado, e como instalar quando não está.</summary>
+/// <summary>
+/// O agente, se está instalado, como instalar quando não está, e os parâmetros
+/// com que ele abre agora (o salvo, ou o padrão do agente).
+/// </summary>
 public sealed record AgentCliStatus(
     string ProviderId,
     string Name,
     string Command,
     CliDetectionResult Detection,
-    AgentCliInstallGuide? InstallGuide);
+    AgentCliInstallGuide? InstallGuide,
+    string Arguments = "");
 
 /// <summary>O que "Abrir terminal" conseguiu.</summary>
 public sealed record AgentFocusResult(AgentSessionView Session, bool Focused);

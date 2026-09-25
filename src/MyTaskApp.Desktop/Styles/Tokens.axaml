@@ -35,7 +35,7 @@
   <Color x:Key="WidgetCautionSoftColor">#2A2318</Color>
 
   <!--
-    Estado do worktree (ADR-032). Âmbar é "tem trabalho que não foi salvo"
+    Estado do worktree (ADR-034). Âmbar é "tem trabalho que não foi salvo"
     (o Caution acima); azul é "há o que enviar"; verde é "está tudo lá fora".
     Tons 400: passam de 4.5:1 sobre a superfície, e nenhum é o indigo do
     destaque — senão a bolinha se confundiria com o selo do agente.

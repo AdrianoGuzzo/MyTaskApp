@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
+        xmlns:spell="using:MyTaskApp.Desktop.SpellChecking"
         x:Class="MyTaskApp.Desktop.Views.TagsWindow"
         x:DataType="vm:TagsViewModel"
         x:Name="Root"
@@ -354,7 +355,8 @@
                              FontSize="12"
                              MaxLength="500"
                              PlaceholderText="Descrição (opcional)"
-                             Text="{Binding DirectoryDescription}" />
+                             Text="{Binding DirectoryDescription}"
+                             spell:SpellCheck.IsEnabled="True" />
                   </Grid>
 
                   <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Right">

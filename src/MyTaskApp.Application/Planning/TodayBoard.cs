@@ -31,7 +31,7 @@ public sealed record TodayTask(
     /// </summary>
     IReadOnlyList<ActiveAgent>? ActiveAgents = null,
     /// <summary>
-    /// Os worktrees prontos da tarefa; <c>null</c> = nenhum (ADR-032). É o que
+    /// Os worktrees prontos da tarefa; <c>null</c> = nenhum (ADR-034). É o que
     /// acende a bolinha — a cor vem depois, do Git.
     /// </summary>
     IReadOnlyList<TaskWorktree>? Worktrees = null);

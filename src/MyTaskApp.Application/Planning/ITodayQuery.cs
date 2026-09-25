@@ -26,7 +26,7 @@ public sealed record TodayOccurrenceRow(
     IReadOnlyList<TagBadge>? Tags = null,
     /// <summary>Os agentes de IA em execução para a tarefa, um por ambiente (ADR-030, ADR-031).</summary>
     IReadOnlyList<ActiveAgentRow>? ActiveAgents = null,
-    /// <summary>Os worktrees prontos da tarefa, um por ambiente (ADR-031, ADR-032).</summary>
+    /// <summary>Os worktrees prontos da tarefa, um por ambiente (ADR-031, ADR-034).</summary>
     IReadOnlyList<WorktreeRow>? Worktrees = null);
 
 /// <summary>
@@ -41,7 +41,7 @@ public sealed record ActiveAgentRow(
 
 /// <summary>
 /// Um worktree pronto da tarefa. Só caminhos e nomes: se tem alteração ou
-/// commit por enviar é pergunta para o Git, nunca para o banco (ADR-032).
+/// commit por enviar é pergunta para o Git, nunca para o banco (ADR-034).
 /// </summary>
 public sealed record WorktreeRow(
     Guid DevelopmentId,

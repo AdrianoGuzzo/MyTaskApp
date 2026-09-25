@@ -40,6 +40,13 @@ internal sealed partial class ClaudeCodeCliProvider(
 
     public string Command => "claude";
 
+    /// <summary>
+    /// O worktree é um lugar descartável e isolado, feito para o agente
+    /// trabalhar sem parar a cada arquivo — daí abrir sem pedir permissões.
+    /// O usuário troca no card do agente.
+    /// </summary>
+    public string DefaultArguments => "--dangerously-skip-permissions";
+
     public async Task<CliDetectionResult> DetectAsync(CancellationToken cancellationToken = default)
     {
         var executable = Locate();
@@ -64,9 +71,10 @@ internal sealed partial class ClaudeCodeCliProvider(
 
     /// <summary>
     /// O Claude abre a sessão interativa na pasta em que nasceu — o worktree.
-    /// Sem texto, só o executável. Com texto, ele vai como a primeira mensagem:
-    /// <c>claude "texto"</c> executa direto; <c>claude --permission-mode plan "texto"</c>
-    /// só monta o plano e espera aprovação antes de alterar arquivos.
+    /// Primeiro os parâmetros escolhidos no card. Com texto, ele vai depois, como
+    /// a primeira mensagem: <c>claude [parâmetros] "texto"</c> executa direto;
+    /// <c>claude [parâmetros] --permission-mode plan "texto"</c> só monta o plano
+    /// e espera aprovação antes de alterar arquivos.
     /// </summary>
     /// <remarks>
     /// O texto é <b>um</b> argumento, nunca uma linha de shell. A exceção é o
@@ -81,14 +89,14 @@ internal sealed partial class ClaudeCodeCliProvider(
 
         if (string.IsNullOrWhiteSpace(context.Prompt))
         {
-            return new TerminalLaunchOptions(executable, [], context.WorkingDirectory);
+            return new TerminalLaunchOptions(executable, context.Arguments, context.WorkingDirectory);
         }
 
         var prompt = RunsThroughCmd(executable) ? ForCmd(context.Prompt) : context.Prompt;
 
         string[] arguments = context.RunDirectly
-            ? [prompt]
-            : ["--permission-mode", "plan", prompt];
+            ? [.. context.Arguments, prompt]
+            : [.. context.Arguments, "--permission-mode", "plan", prompt];
 
         return new TerminalLaunchOptions(executable, arguments, context.WorkingDirectory);
     }

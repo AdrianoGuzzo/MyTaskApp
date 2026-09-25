@@ -10,7 +10,7 @@ namespace MyTaskApp.Desktop.Tests.ViewModels;
 
 /// <summary>
 /// A bolinha de worktree da linha e a pergunta "remover o worktree?" ao
-/// concluir a tarefa (ADR-032).
+/// concluir a tarefa (ADR-034).
 /// </summary>
 public class TodayWorktreeTests
 {

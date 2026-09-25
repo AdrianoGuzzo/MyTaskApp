@@ -101,7 +101,7 @@ public sealed partial class TodayView : UserControl
 
     /// <summary>
     /// "● Worktree criado" abre a tarefa: é lá, na aba Desenvolvimento, que o
-    /// worktree se remove (ADR-032).
+    /// worktree se remove (ADR-034).
     /// </summary>
     private void OnWorktreeBadgeTapped(object? sender, TappedEventArgs e)
     {

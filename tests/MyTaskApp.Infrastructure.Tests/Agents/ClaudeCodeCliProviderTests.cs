@@ -156,16 +156,19 @@ public class ClaudeCodeCliProviderTests
         ClaudeCodeCliProvider.ParseVersion(output).Should().Be(expected);
     }
 
-    /// <summary>Nenhum argumento e nenhum shell: o executável, na pasta do worktree.</summary>
+    /// <summary>Nenhum shell: o executável com os parâmetros escolhidos, na pasta do worktree.</summary>
     [Fact]
-    public void TheLaunch_IsTheExecutableAlone_InsideTheWorktree()
+    public void TheLaunch_IsTheExecutableWithTheChosenArguments_InsideTheWorktree()
     {
         var launch = Provider(_ => false).CreateLaunch(
-            new AgentCliStartContext(Guid.NewGuid(), @"C:\Projects\eco core-feature-123"),
+            new AgentCliStartContext(
+                Guid.NewGuid(),
+                @"C:\Projects\eco core-feature-123",
+                ["--dangerously-skip-permissions", "--model", "opus"]),
             new CliDetectionResult { IsInstalled = true, ExecutablePath = Native });
 
         launch.Executable.Should().Be(Native);
-        launch.Arguments.Should().BeEmpty();
+        launch.Arguments.Should().Equal("--dangerously-skip-permissions", "--model", "opus");
         launch.WorkingDirectory.Should().Be(@"C:\Projects\eco core-feature-123");
     }
 
@@ -173,8 +176,21 @@ public class ClaudeCodeCliProviderTests
 
     private TerminalLaunchOptions Launch(string executable, string? prompt, bool runDirectly) =>
         Provider(_ => false).CreateLaunch(
-            new AgentCliStartContext(Guid.NewGuid(), Worktree, prompt, runDirectly),
+            new AgentCliStartContext(Guid.NewGuid(), Worktree, [], prompt, runDirectly),
             new CliDetectionResult { IsInstalled = true, ExecutablePath = executable });
+
+    /// <summary>Os parâmetros do card vêm antes; o texto, sempre por último.</summary>
+    [Theory]
+    [InlineData(false, new[] { "--dangerously-skip-permissions", "--permission-mode", "plan", "Implemente" })]
+    [InlineData(true, new[] { "--dangerously-skip-permissions", "Implemente" })]
+    public void WithArgumentsAndText_TheArgumentsComeFirst(bool runDirectly, string[] expected)
+    {
+        var launch = Provider(_ => false).CreateLaunch(
+            new AgentCliStartContext(Guid.NewGuid(), Worktree, ["--dangerously-skip-permissions"], "Implemente", runDirectly),
+            new CliDetectionResult { IsInstalled = true, ExecutablePath = Native });
+
+        launch.Arguments.Should().Equal(expected);
+    }
 
     /// <summary>Desmarcado é o padrão: o Claude planeja, e só altera arquivos com aprovação.</summary>
     [Fact]
@@ -215,6 +231,12 @@ public class ClaudeCodeCliProviderTests
     {
         FluentActions.Invoking(() => Launch(Npm, prompt, runDirectly: false))
             .Should().Throw<DomainException>().WithMessage("*claude.cmd*");
+    }
+
+    [Fact]
+    public void ByDefault_TheClaude_OpensWithoutAskingForPermissions()
+    {
+        Provider(_ => false).DefaultArguments.Should().Be("--dangerously-skip-permissions");
     }
 
     [Fact]

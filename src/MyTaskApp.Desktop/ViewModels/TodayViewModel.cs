@@ -70,7 +70,7 @@ public sealed partial class TodayViewModel(
     private TodayBoard? _board;
 
     /// <summary>
-    /// O que o Git disse de cada worktree na última conferência (ADR-032). As
+    /// O que o Git disse de cada worktree na última conferência (ADR-034). As
     /// linhas nascem com isto aplicado: sem o cache, o refresh de 60 s apagaria
     /// as cores e a lista piscaria até o Git responder de novo.
     /// </summary>
@@ -671,7 +671,7 @@ public sealed partial class TodayViewModel(
     }
 
     /// <summary>
-    /// Tarefa concluída com worktree: remover agora? (ADR-032). A pergunta vem
+    /// Tarefa concluída com worktree: remover agora? (ADR-034). A pergunta vem
     /// depois de concluir, e nunca no lugar: concluir não pode depender de o Git
     /// responder. "Manter" deixa a bolinha acesa na linha concluída.
     /// </summary>

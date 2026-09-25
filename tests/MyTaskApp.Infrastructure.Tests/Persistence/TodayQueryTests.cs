@@ -127,7 +127,7 @@ public class TodayQueryTests
     }
 
     /// <summary>
-    /// A bolinha de worktree (ADR-032) só acende com worktree pronto: o que
+    /// A bolinha de worktree (ADR-034) só acende com worktree pronto: o que
     /// falhou ou foi removido não tem pasta onde haja trabalho a perder.
     /// </summary>
     [Fact]

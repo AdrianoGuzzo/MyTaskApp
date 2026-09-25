@@ -5,7 +5,7 @@ using MyTaskApp.Application.Planning;
 namespace MyTaskApp.Desktop.ViewModels;
 
 /// <summary>
-/// A bolinha de worktree de uma linha (ADR-032). O quadro diz quais worktrees
+/// A bolinha de worktree de uma linha (ADR-034). O quadro diz quais worktrees
 /// existem; a cor chega depois, quando o Git responde — até lá a bolinha é só
 /// um anel, "existe, ainda não sei como está".
 /// </summary>
