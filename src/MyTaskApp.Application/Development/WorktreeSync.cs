@@ -5,7 +5,7 @@ using MyTaskApp.Application.Planning;
 namespace MyTaskApp.Application.Development;
 
 /// <summary>
-/// A cor da bolinha de worktree na lista (ADR-032), em ordem de gravidade: com
+/// A cor da bolinha de worktree na lista (ADR-034), em ordem de gravidade: com
 /// vários repositórios, a linha mostra o pior.
 /// </summary>
 public enum WorktreeSyncState

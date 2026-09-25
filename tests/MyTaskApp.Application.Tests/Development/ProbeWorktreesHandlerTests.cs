@@ -5,7 +5,7 @@ using MyTaskApp.Application.Tests.Fakes;
 
 namespace MyTaskApp.Application.Tests.Development;
 
-/// <summary>A cor da bolinha de worktree na lista, perguntada ao Git (ADR-032).</summary>
+/// <summary>A cor da bolinha de worktree na lista, perguntada ao Git (ADR-034).</summary>
 public class ProbeWorktreesHandlerTests
 {
     private const string Path = @"C:\Projects\ecossistema-core-feature-x";

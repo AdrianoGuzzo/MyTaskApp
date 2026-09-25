@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
+        xmlns:spell="using:MyTaskApp.Desktop.SpellChecking"
         xmlns:notes="using:MyTaskApp.Desktop.Notes"
         xmlns:dev="using:MyTaskApp.Desktop.Development"
         xmlns:views="using:MyTaskApp.Desktop.Views"
@@ -439,6 +440,7 @@
         <StackPanel Grid.Column="0" Spacing="3">
           <TextBox Classes="pageTitle"
                    x:Name="TitleEditor"
+                   spell:SpellCheck.IsEnabled="True"
                    Text="{Binding TaskTitle}"
                    MaxLength="{Binding MaxTitleLength}"
                    PlaceholderText="Título da tarefa"
@@ -572,6 +574,7 @@
             <Panel>
 
               <TextBox x:Name="Editor"
+                       spell:SpellCheck.IsEnabled="True"
                        IsVisible="{Binding IsEditable}"
                        Text="{Binding Text}"
                        AcceptsReturn="True"
@@ -1210,6 +1213,23 @@
                   <TextBlock Classes="hint"
                              IsVisible="{Binding HasPrompt}"
                              Text="Desmarcado, o agente só monta um plano e espera sua aprovação antes de alterar arquivos." />
+                </StackPanel>
+
+                <!-- Parâmetros do agente: o que for usado ao iniciar vira o padrão. -->
+                <StackPanel Spacing="4" IsVisible="{Binding ShowStart}">
+                  <TextBlock Classes="fieldLabel" Text="Parâmetros" />
+                  <TextBox x:Name="AgentArgumentsBox"
+                           FontFamily="Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace"
+                           FontSize="12"
+                           MaxLength="2000"
+                           Text="{Binding Arguments}"
+                           IsEnabled="{Binding !IsBusy}"
+                           PlaceholderText="ex.: --dangerously-skip-permissions" />
+                  <TextBlock Classes="hint"
+                             x:Name="AgentCommandPreview"
+                             Text="{Binding CommandPreview}" />
+                  <TextBlock Classes="hint"
+                             Text="O valor usado ao iniciar vira o padrão das próximas aberturas." />
                 </StackPanel>
 
                 <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">

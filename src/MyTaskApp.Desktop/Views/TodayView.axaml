@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
+        xmlns:spell="using:MyTaskApp.Desktop.SpellChecking"
              xmlns:views="using:MyTaskApp.Desktop.Views"
              xmlns:chrome="using:Avalonia.Controls.Chrome"
              x:Class="MyTaskApp.Desktop.Views.TodayView"
@@ -197,7 +198,7 @@
             -->
             <DockPanel>
               <!--
-                O worktree da tarefa (ADR-032): a cor diz o estado no Git, e o
+                O worktree da tarefa (ADR-034): a cor diz o estado no Git, e o
                 balão do título diz o mesmo em texto — cor nunca é o único
                 sinal. Na concluída que manteve o worktree, a bolinha cresce e
                 ganha halo: a linha apagou, o que ainda pede atenção não.
@@ -306,7 +307,7 @@
                        ToolTip.Tip="{Binding AgentTip}" />
 
             <!--
-              Concluída, e o worktree ficou (ADR-032): a resposta "manter" vira
+              Concluída, e o worktree ficou (ADR-034): a resposta "manter" vira
               texto na linha, na cor do estado. Um clique abre a tarefa, onde
               o worktree se remove.
             -->
@@ -530,7 +531,7 @@
     </Style>
 
     <!--
-      A bolinha de worktree (ADR-032). Âmbar: alteração não commitada; azul:
+      A bolinha de worktree (ADR-034). Âmbar: alteração não commitada; azul:
       commit sem push; verde: tudo enviado; cinza: nada feito ainda; anel vazio:
       o Git ainda não respondeu, ou não pôde responder.
     -->
@@ -1051,6 +1052,7 @@
         <Grid ColumnDefinitions="*,Auto,Auto">
 
           <TextBox x:Name="CaptureBox"
+                   spell:SpellCheck.IsEnabled="True"
                    Grid.Column="0"
                    AcceptsReturn="True"
                    TextWrapping="Wrap"

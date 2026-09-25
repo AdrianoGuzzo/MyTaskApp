@@ -53,6 +53,7 @@ public static class DependencyInjection
         services.AddScoped<ITagQuery, TagQuery>();
         services.AddScoped<IDevelopmentCommandRepository, DevelopmentCommandRepository>();
         services.AddScoped<IAgentSessionRepository, AgentSessionRepository>();
+        services.AddScoped<IAgentSettingsStore, AgentSettingsStore>();
 
         // Ciclo de vida: auditoria, configuracao de retencao e as consultas das
         // areas de arquivados/lixeira e da varredura automatica.

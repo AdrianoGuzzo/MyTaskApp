@@ -1944,7 +1944,7 @@ lançador: entrega o pedido ao Windows Terminal e sai na hora. O PID dele morre
 em milissegundos, e o shell de verdade nasce filho do `WindowsTerminal.exe`,
 sem ligação que se possa seguir. O `WindowsTerminalLauncher` inicia o próprio
 `claude` com `UseShellExecute = false`, `CreateNoWindow = false`, `ArgumentList`
-vazio e `WorkingDirectory` = worktree. O MyTaskApp é um app gráfico, sem
+com os parâmetros escolhidos (ADR-032) e `WorkingDirectory` = worktree. O MyTaskApp é um app gráfico, sem
 console, então o Windows cria um **console novo** para o filho, hospedado pelo
 **terminal padrão do usuário** (Windows Terminal, se estiver configurado como
 padrão; senão o console clássico). O PID é o do próprio agente e vive exatamente
@@ -2127,7 +2127,122 @@ terminal: repositório · branch", um item por ambiente.
 - a regra do repositório compara o worktree principal, então duas pastas do
   mesmo repositório (dois worktrees dele) contam como um só.
 
-## ADR-032 — Bolinha de worktree na lista, e a pergunta ao concluir
+---
+
+## ADR-032 — Correção ortográfica: o corretor do sistema, desenhado por cima da caixa
+
+**Contexto:** as anotações, os títulos e a captura rápida são texto livre em
+português, e a `TextBox` da Avalonia não tem corretor ortográfico. O pedido era
+o sublinhado vermelho e as sugestões no clique direito, como em qualquer editor.
+
+**Decisão:** usar o **corretor do próprio sistema** atrás de uma porta
+(`ISpellChecker`, em `Desktop/SpellChecking`) e ligá-lo por uma attached
+property: `spell:SpellCheck.IsEnabled="True"`.
+
+```
+TextBox ─ SpellCheck.IsEnabled ─► SpellCheckBinder ─► SpellCheckSession ─► ISpellChecker
+                                  (adorner, menu)     (tokens, cache)      ├─ WindowsSpellChecker (COM)
+                                                                           └─ NoSpellChecker
+```
+
+**Por que o do sistema, e não um dicionário embarcado.** O Windows já traz o
+dicionário pt-BR, as sugestões e o dicionário do usuário, que é compartilhado
+com os outros apps. Um Hunspell embarcado traria vários megabytes de dicionário
+para manter atualizados.
+
+**A API.** Windows Spell Checking API (`spellcheck.h`, Windows 8+), com COM
+gerado em compilação (`[GeneratedComInterface]`), o mesmo caminho do
+`[LibraryImport]` do resto do app. A vtable é declarada à mão, e os métodos que
+não usamos ficam como marcadores (`...Slot`) só para segurar a posição. Um
+teste de integração com o COM real existe porque um método fora de ordem
+compila e chama outro método.
+
+**Português e inglês.** Uma palavra só está errada se estiver errada em todos
+os idiomas carregados: pt-BR e, quando existir, en-US. O Windows só tem o
+dicionário de um idioma instalado, e numa máquina só em português o inglês não
+está. Por isso existe `DeveloperTerms`, uma lista curta do jargão que as
+anotações usam como português (branch, merge, deploy, commit…). Ela vale em
+qualquer máquina.
+
+**O que não é prosa não é verificado** (`SpellingTokenizer`, função pura):
+
+- código Markdown (entre crases e em bloco ```` ``` ````);
+- URL, e-mail, `@alias`, `#tag` e path;
+- palavra grudada em dígito ou em `_` (`v2`, `snake_case`); o `_` na ponta é
+  itálico e não conta;
+- sigla, camelCase e palavra de uma letra.
+
+Sublinhado em cada path ensinaria o usuário a não olhar para o sublinhado.
+
+**O desenho é um adorner.** A `TextBox` não tem decoração por trecho de texto,
+e trocar o template das caixas para enfiar uma camada seria caro de manter. O
+`SpellingSquiggles` fica na `AdornerLayer`, sobre o `TextPresenter`: acompanha
+a rolagem, é recortado pela área visível e usa as coordenadas do `TextLayout`,
+as mesmas do cursor (`AliasCompletionBinder`, ADR-026).
+
+**Quando verifica.**
+
+- A cada tecla roda só o cache, para os sublinhados andarem junto com o texto.
+- Depois de 400 ms parado, pergunta ao sistema as palavras novas.
+- A palavra sob o cursor não é marcada enquanto se digita. Ela é julgada no
+  espaço, quando o cursor sai dela ou quando a caixa perde o foco.
+- O COM só é chamado da thread de UI.
+
+**Menu.** O clique direito numa palavra errada abre, em vez do flyout padrão,
+as sugestões, "Adicionar ao dicionário" (o dicionário do usuário do Windows,
+persiste), "Ignorar" (até fechar o app), Recortar, Copiar e Colar. A troca
+passa pela seleção (`SelectedText`), então Ctrl+Z desfaz e o binding é avisado.
+Adicionar ou ignorar avisa todas as caixas abertas (`DictionaryChanged`).
+
+**Onde está ligado.** Anotação, título da tarefa, captura rápida e as
+descrições de comando global e de diretório. Paths, aliases, comandos e buscas
+ficam de fora.
+
+**Limites aceitos:**
+
+- Linux e macOS usam o `NoSpellChecker`. O próximo passo é o
+  WeCantSpell.Hunspell com `/usr/share/hunspell/pt_BR.*`, sem mexer na UI;
+- sem dicionário pt-BR nem en-US no Windows, o corretor fica desligado (log
+  `SpellCheckerUnavailable`);
+- "Ignorar" não sobrevive a reiniciar o app.
+
+---
+
+## ADR-033 — Parâmetros do agente: editáveis no card, lembrados por agente
+
+**Decisão:** o card do agente (ADR-030) ganha o campo "Parâmetros", logo acima
+de "Iniciar Claude Code". Ele vem preenchido com o padrão e mostra embaixo o que
+vai rodar ("Roda: claude --dangerously-skip-permissions"). O texto usado ao
+iniciar vira o novo padrão, para todas as tarefas.
+
+**Padrão de fábrica: `--dangerously-skip-permissions`.** O worktree é uma pasta
+descartável e isolada, feita para o agente trabalhar sem parar a cada arquivo.
+Cada `IAgentCliProvider` diz o seu em `DefaultArguments`, e só o
+`ClaudeCodeCliProvider` sabe dessa flag.
+
+**Guardado por agente, no banco.** A tabela `AgentSettings` (`ProviderId` →
+`Arguments`), atrás do `IAgentSettingsStore`, segue o desenho das outras
+configurações (ADR-014). Sem linha, vale o padrão do agente. Texto **vazio**
+gravado é escolha do usuário (abrir o `claude` puro), e não "sem configuração".
+
+**Texto → lista, sem shell.** `AgentArguments.Parse` separa por espaço, e as
+aspas duplas juntam um argumento com espaço. A lista vai para o
+`AgentCliStartContext` e daí para o `ArgumentList` do processo. `&&` ou `|`
+chegam ao Claude como texto e nunca viram outro comando. Aspas sem fechar são
+recusadas antes de gravar a sessão ou o padrão.
+
+**Junto com o texto livre.** Os parâmetros vêm antes do texto da tela e do
+`--permission-mode plan` (ADR-030): `claude --dangerously-skip-permissions --permission-mode plan "texto"`.
+
+**Quem salva é o "Iniciar".** Não há botão "Salvar" próprio.
+`StartAgentSession.Arguments` informado vira o padrão no mesmo `SaveChanges`
+da sessão; `null` usa o salvo. A tela só manda `null` antes de a detecção
+trazer o padrão, para um campo ainda vazio não apagar o que foi salvo. A
+detecção periódica só repõe o campo se o usuário não o editou.
+
+---
+
+## ADR-034 — Bolinha de worktree na lista, e a pergunta ao concluir
 
 **Contexto:** na lista de hoje, só dava para saber que uma tarefa tinha
 worktree abrindo a tarefa. E concluir a tarefa deixava a pasta no disco sem

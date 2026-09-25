@@ -360,7 +360,7 @@ public sealed class GitWorktreeIntegrationTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// ADR-032 com o Git de verdade: a bolinha passa de cinza a âmbar, a azul e
+    /// ADR-034 com o Git de verdade: a bolinha passa de cinza a âmbar, a azul e
     /// a verde conforme o trabalho é feito, commitado e enviado.
     /// </summary>
     [Fact]

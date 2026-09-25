@@ -113,7 +113,7 @@ internal sealed class TodayQuery(MyTaskAppDbContext context) : ITodayQuery
                         row.TaskDevelopmentId, row.ProviderId, row.RepositoryPath, row.Branch))
                     .ToList());
 
-        // A bolinha de worktree (ADR-032): só os prontos. Criando, com erro ou
+        // A bolinha de worktree (ADR-034): só os prontos. Criando, com erro ou
         // removido não é pasta onde haja trabalho a perder.
         var worktrees = await context.TaskDevelopments
             .AsNoTracking()
