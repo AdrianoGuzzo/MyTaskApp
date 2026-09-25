@@ -124,6 +124,19 @@ public class PostWorktreeCommandsViewModelTests
         commands.Items[2].HasHint.Should().BeFalse();
     }
 
+    [Fact]
+    public void AParameter_ShowsTheFilledCommand_OrWarnsWhatIsMissing()
+    {
+        var commands = new PostWorktreeCommandsViewModel();
+        commands.SetCatalog([.. Globals, new(Guid.CreateVersion7(), "@eco-sync", "eco-sync {nomebanco} -Dev", null, At)]);
+        commands.SetEntries(["@eco-sync nomebanco=MeuBanco", "@eco-sync"]);
+
+        commands.Items[0].Hint.Should().Be("→ eco-sync MeuBanco -Dev");
+        commands.Items[0].IsUnknownAlias.Should().BeFalse();
+        commands.Items[1].Hint.Should().Be("⚠ Falta preencher: nomebanco=…");
+        commands.Items[1].IsUnknownAlias.Should().BeTrue();
+    }
+
     // --- Autocomplete ----------------------------------------------------------
 
     [Fact]
@@ -172,6 +185,19 @@ public class PostWorktreeCommandsViewModelTests
 
         source.ReplacementFor(completion.SelectedSuggestion).Should().Be("@restore");
         source.ReplacementFor(new CommandSuggestionViewModel(Globals[0])).Should().BeNull("não é desta lista");
+    }
+
+    [Fact]
+    public void AcceptingACommandWithParameters_InsertsTheNamesToFill()
+    {
+        var completion = new CommandCompletionViewModel(new DevelopmentCommandCatalog
+        {
+            Rows = [new(Guid.CreateVersion7(), "@copy", "copy {origem} {destino}", null, At)],
+        });
+        completion.UpdateCompletion("@co", 3);
+        MyTaskApp.Desktop.Notes.IAliasCompletionSource source = completion;
+
+        source.ReplacementFor(completion.SelectedSuggestion).Should().Be("@copy origem= destino=");
     }
 
     // --- Execução, vista pela lista ---------------------------------------------

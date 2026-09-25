@@ -9,6 +9,10 @@ namespace MyTaskApp.Domain.Commands;
 /// Ao contrário do alias de diretório, este alias é <b>referência</b>: a tarefa
 /// guarda <c>@restore</c> e o texto do comando é lido na hora de executar. Mudar
 /// o comando aqui vale para todas as tarefas que o chamam.
+/// <para>
+/// O texto pode ter parâmetros <c>{nome}</c> (ver <see cref="CommandParameters"/>):
+/// <c>eco-sync {nomebanco} -Dev</c>, chamado por <c>@eco-sync nomebanco=MeuBanco</c>.
+/// </para>
 /// </remarks>
 public sealed class DevelopmentCommand
 {

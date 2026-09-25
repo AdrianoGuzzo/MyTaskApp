@@ -222,6 +222,22 @@ public class DevelopmentCommandsHandlerTests
     }
 
     [Fact]
+    public async Task Validate_RefusesAParameterWithoutAValue_BeforeAnythingRuns()
+    {
+        _globals.Seed("@eco-sync", "eco-sync {nomebanco} -Dev");
+
+        var ok = await new ValidateCommandEntriesHandler(_globals).HandleAsync(
+            new ValidateCommandEntries(["@eco-sync nomebanco=MeuBanco"]), Ct);
+        var validate = () => new ValidateCommandEntriesHandler(_globals).HandleAsync(
+            new ValidateCommandEntries(["@restore", "@eco-sync", "@sumiu"]), Ct);
+
+        ok.Single().Command.Should().Be("eco-sync MeuBanco -Dev");
+        var refused = await validate.Should().ThrowAsync<DomainException>();
+        refused.Which.Message.Should().Contain("@sumiu não existe")
+            .And.Contain("Comando 2: @eco-sync precisa do parâmetro nomebanco");
+    }
+
+    [Fact]
     public async Task Set_ReplacesTheList_KeepingTheOrder()
     {
         Ready("@restore", "@build");
