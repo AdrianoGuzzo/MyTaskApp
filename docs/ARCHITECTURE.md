@@ -1944,7 +1944,7 @@ lançador: entrega o pedido ao Windows Terminal e sai na hora. O PID dele morre
 em milissegundos, e o shell de verdade nasce filho do `WindowsTerminal.exe`,
 sem ligação que se possa seguir. O `WindowsTerminalLauncher` inicia o próprio
 `claude` com `UseShellExecute = false`, `CreateNoWindow = false`, `ArgumentList`
-vazio e `WorkingDirectory` = worktree. O MyTaskApp é um app gráfico, sem
+com os parâmetros escolhidos (ADR-032) e `WorkingDirectory` = worktree. O MyTaskApp é um app gráfico, sem
 console, então o Windows cria um **console novo** para o filho, hospedado pelo
 **terminal padrão do usuário** (Windows Terminal, se estiver configurado como
 padrão; senão o console clássico). O PID é o do próprio agente e vive exatamente
@@ -2127,6 +2127,8 @@ terminal: repositório · branch", um item por ambiente.
 - a regra do repositório compara o worktree principal, então duas pastas do
   mesmo repositório (dois worktrees dele) contam como um só.
 
+---
+
 ## ADR-032 — Correção ortográfica: o corretor do sistema, desenhado por cima da caixa
 
 **Contexto:** as anotações, os títulos e a captura rápida são texto livre em
@@ -2203,3 +2205,37 @@ ficam de fora.
 - sem dicionário pt-BR nem en-US no Windows, o corretor fica desligado (log
   `SpellCheckerUnavailable`);
 - "Ignorar" não sobrevive a reiniciar o app.
+
+---
+
+## ADR-033 — Parâmetros do agente: editáveis no card, lembrados por agente
+
+**Decisão:** o card do agente (ADR-030) ganha o campo "Parâmetros", logo acima
+de "Iniciar Claude Code". Ele vem preenchido com o padrão e mostra embaixo o que
+vai rodar ("Roda: claude --dangerously-skip-permissions"). O texto usado ao
+iniciar vira o novo padrão, para todas as tarefas.
+
+**Padrão de fábrica: `--dangerously-skip-permissions`.** O worktree é uma pasta
+descartável e isolada, feita para o agente trabalhar sem parar a cada arquivo.
+Cada `IAgentCliProvider` diz o seu em `DefaultArguments`, e só o
+`ClaudeCodeCliProvider` sabe dessa flag.
+
+**Guardado por agente, no banco.** A tabela `AgentSettings` (`ProviderId` →
+`Arguments`), atrás do `IAgentSettingsStore`, segue o desenho das outras
+configurações (ADR-014). Sem linha, vale o padrão do agente. Texto **vazio**
+gravado é escolha do usuário (abrir o `claude` puro), e não "sem configuração".
+
+**Texto → lista, sem shell.** `AgentArguments.Parse` separa por espaço, e as
+aspas duplas juntam um argumento com espaço. A lista vai para o
+`AgentCliStartContext` e daí para o `ArgumentList` do processo. `&&` ou `|`
+chegam ao Claude como texto e nunca viram outro comando. Aspas sem fechar são
+recusadas antes de gravar a sessão ou o padrão.
+
+**Junto com o texto livre.** Os parâmetros vêm antes do texto da tela e do
+`--permission-mode plan` (ADR-030): `claude --dangerously-skip-permissions --permission-mode plan "texto"`.
+
+**Quem salva é o "Iniciar".** Não há botão "Salvar" próprio.
+`StartAgentSession.Arguments` informado vira o padrão no mesmo `SaveChanges`
+da sessão; `null` usa o salvo. A tela só manda `null` antes de a detecção
+trazer o padrão, para um campo ainda vazio não apagar o que foi salvo. A
+detecção periódica só repõe o campo se o usuário não o editou.

@@ -281,6 +281,30 @@ public class TaskNotesDevelopmentRenderingTests
         Named<SelectableTextBlock>(window, "AgentProcess").Text.Should().Be("PID 15432");
         Named<Button>(window, "FocusAgentButton").IsEffectivelyVisible.Should().BeTrue();
         Named<Button>(window, "StartAgentButton").IsEffectivelyVisible.Should().BeFalse();
+        Named<TextBox>(window, "AgentArgumentsBox").IsEffectivelyVisible.Should().BeFalse();
+    }
+
+    /// <summary>Antes de iniciar, os parâmetros aparecem prontos para editar.</summary>
+    [AvaloniaFact]
+    public async Task AReadyTaskWithoutAgent_ShowsTheArguments_FilledWithTheDefault()
+    {
+        var (window, viewModel, runner) = await ShowAsync(development: ReadyDevelopment());
+        runner.Enqueue<GetTaskAgentSessionHandler>([null]);
+        runner.ResultsByHandler[typeof(DetectAgentCliHandler)] = new AgentCliStatus(
+            "claude-code", "Claude Code", "claude",
+            new CliDetectionResult { IsInstalled = true, ExecutablePath = @"C:\claude.exe", Version = "2.1.4" },
+            null,
+            "--dangerously-skip-permissions");
+
+        await OpenDevelopmentTabAsync(window, viewModel);
+        await viewModel.Developments.Selected!.Agent.RefreshAsync(CancellationToken.None);
+        Settle(window);
+
+        var box = Named<TextBox>(window, "AgentArgumentsBox");
+        box.IsEffectivelyVisible.Should().BeTrue();
+        box.Text.Should().Be("--dangerously-skip-permissions");
+        Named<TextBlock>(window, "AgentCommandPreview").Text.Should().Be("Roda: claude --dangerously-skip-permissions");
+        Named<Button>(window, "StartAgentButton").IsEffectivelyVisible.Should().BeTrue();
     }
 
     [AvaloniaFact]

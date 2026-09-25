@@ -1215,6 +1215,23 @@
                              Text="Desmarcado, o agente só monta um plano e espera sua aprovação antes de alterar arquivos." />
                 </StackPanel>
 
+                <!-- Parâmetros do agente: o que for usado ao iniciar vira o padrão. -->
+                <StackPanel Spacing="4" IsVisible="{Binding ShowStart}">
+                  <TextBlock Classes="fieldLabel" Text="Parâmetros" />
+                  <TextBox x:Name="AgentArgumentsBox"
+                           FontFamily="Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace"
+                           FontSize="12"
+                           MaxLength="2000"
+                           Text="{Binding Arguments}"
+                           IsEnabled="{Binding !IsBusy}"
+                           PlaceholderText="ex.: --dangerously-skip-permissions" />
+                  <TextBlock Classes="hint"
+                             x:Name="AgentCommandPreview"
+                             Text="{Binding CommandPreview}" />
+                  <TextBlock Classes="hint"
+                             Text="O valor usado ao iniciar vira o padrão das próximas aberturas." />
+                </StackPanel>
+
                 <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
                   <Button Classes="accent"
                           x:Name="FocusAgentButton"
