@@ -1783,6 +1783,19 @@ do que descobrir com o ambiente já criado. A regra de forma do alias
 `IAliasCompletionSource`. Diferenças do lado do comando: a lista só abre no
 **primeiro** termo, e aceitar insere o apelido, e não o comando.
 
+**Parâmetros.** O comando global pode ter `{nome}` (`CommandParameters`, no
+domínio): `eco-sync {nomebanco} -Dev`. Quem chama preenche na própria linha,
+`@eco-sync nomebanco=MeuBanco`, e o valor fica gravado com a tarefa. A lista
+roda sem perguntar nada. O valor entra como foi escrito, com as aspas. O que
+não é `nome=valor` de um parâmetro continua sendo acrescentado no fim. O nome
+começa com letra ou sublinhado e não tem espaço, então `{ $_ }`, `${env:X}` e
+`HEAD@{1}` continuam literais. Parâmetro sem valor é erro da etapa, como alias
+que não existe: `ValidateCommandEntries` recusa antes de criar o worktree, e o
+shell nunca recebe `{nome}`. Nada muda no banco, porque os parâmetros saem do
+texto do comando. A janela de globais explica a sintaxe, mostra os parâmetros
+enquanto o usuário digita e mostra o "Uso: @alias nome=…" na lista. "Testar"
+tem um campo para os valores. O autocomplete insere `@alias nome=`.
+
 **Quando roda.** Só depois de `StartDevelopment` terminar com o ambiente
 `Ready`. Isso vale para a criação, para "usar Worktree existente" e para
 "caminho alternativo". Falha na criação retorna antes. Rodar de novo é pelo botão

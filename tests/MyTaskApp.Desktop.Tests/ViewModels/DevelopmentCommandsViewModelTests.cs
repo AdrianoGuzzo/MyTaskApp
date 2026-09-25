@@ -16,6 +16,7 @@ public class DevelopmentCommandsViewModelTests
         new(Guid.CreateVersion7(), "@build", "dotnet build", "Compila o projeto", At),
         new(Guid.CreateVersion7(), "@docker-up", "docker compose up -d", "Inicia containers", At),
         new(Guid.CreateVersion7(), "@restore", "dotnet restore", null, At),
+        new(Guid.CreateVersion7(), "@eco-sync", "eco-sync {nomebanco} -Dev", null, At),
     ];
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
@@ -39,7 +40,7 @@ public class DevelopmentCommandsViewModelTests
     {
         var viewModel = await LoadedAsync();
 
-        viewModel.Commands.Select(item => item.Alias).Should().Equal("@build", "@docker-up", "@restore");
+        viewModel.Commands.Select(item => item.Alias).Should().Equal("@build", "@docker-up", "@restore", "@eco-sync");
         viewModel.IsEmpty.Should().BeFalse();
     }
 
@@ -166,5 +167,61 @@ public class DevelopmentCommandsViewModelTests
         viewModel.IsTesting.Should().BeFalse();
         viewModel.TestOutput.IsFailed.Should().BeTrue();
         viewModel.TestOutput.FooterText.Should().Contain("Exit Code 1");
+    }
+
+    // --- Parâmetros -------------------------------------------------------------
+
+    [Fact]
+    public async Task TheForm_ShowsTheParametersWhileTyping()
+    {
+        var viewModel = await LoadedAsync();
+
+        viewModel.Command = "dotnet build";
+        viewModel.HasDetectedParameters.Should().BeFalse();
+
+        viewModel.Alias = "eco-sync";
+        viewModel.Command = "eco-sync {nomebanco} -Dev";
+
+        viewModel.HasDetectedParameters.Should().BeTrue();
+        viewModel.DetectedParameters.Should().Contain("nomebanco").And.Contain("@eco-sync nomebanco=…");
+    }
+
+    [Fact]
+    public async Task TheList_ShowsHowToCallACommandWithParameters()
+    {
+        var viewModel = await LoadedAsync();
+
+        var eco = viewModel.Commands.Single(item => item.Alias == "@eco-sync");
+        eco.HasParameters.Should().BeTrue();
+        eco.Usage.Should().Be("Uso: @eco-sync nomebanco=…");
+        viewModel.Commands[0].HasParameters.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Test_WithAMissingParameter_AsksForIt_AndRunsNothing()
+    {
+        var viewModel = await LoadedAsync();
+        viewModel.UseTestDirectory(@"C:\Projects\ecossistema-core");
+
+        await viewModel.TestAsync(viewModel.Commands.Single(item => item.Alias == "@eco-sync"));
+
+        viewModel.TestArguments.Should().Be("nomebanco=");
+        viewModel.ErrorMessage.Should().Contain("nomebanco");
+        _runner.Invoked.Should().NotContain(typeof(RunCommandHandler));
+    }
+
+    [Fact]
+    public async Task Test_WithTheParameter_Runs()
+    {
+        var viewModel = await LoadedAsync();
+        viewModel.UseTestDirectory(@"C:\Projects\ecossistema-core");
+        viewModel.TestArguments = "nomebanco=MeuBanco";
+        _runner.ResultsByHandler[typeof(RunCommandHandler)] = new CommandRunSummary([]);
+
+        await viewModel.TestAsync(viewModel.Commands.Single(item => item.Alias == "@eco-sync"));
+
+        viewModel.ErrorMessage.Should().BeNull();
+        viewModel.TestOutput.Command.Should().Be("eco-sync MeuBanco -Dev");
+        _runner.Invoked.Should().Contain(typeof(RunCommandHandler));
     }
 }

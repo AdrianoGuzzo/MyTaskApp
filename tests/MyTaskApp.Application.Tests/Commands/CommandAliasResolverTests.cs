@@ -10,6 +10,8 @@ public class CommandAliasResolverTests
         ["@restore"] = "dotnet restore",
         ["@build"] = "dotnet build",
         ["@npm-install"] = "npm install",
+        ["@eco-sync"] = "eco-sync {nomebanco} -Dev",
+        ["@copy"] = "copy {origem} {destino}",
     };
 
     [Fact]
@@ -76,5 +78,55 @@ public class CommandAliasResolverTests
     public void AliasOf_FindsOnlyTheLeadingAlias(string entry, string? expected)
     {
         CommandAliasResolver.AliasOf(entry).Should().Be(expected);
+    }
+
+    // --- Parâmetros -------------------------------------------------------------
+
+    [Fact]
+    public void AParameter_IsFilledFromTheLine()
+    {
+        CommandAliasResolver.Resolve(["@eco-sync nomebanco=MeuBanco"], Globals)[0].Command
+            .Should().Be("eco-sync MeuBanco -Dev");
+    }
+
+    [Fact]
+    public void TheValue_GoesAsTyped_QuotesIncluded()
+    {
+        CommandAliasResolver.Resolve(["@eco-sync NomeBanco=\"Meu Banco\""], Globals)[0].Command
+            .Should().Be("eco-sync \"Meu Banco\" -Dev");
+    }
+
+    [Fact]
+    public void WhatIsNotAParameter_IsStillAppended()
+    {
+        CommandAliasResolver.Resolve(["@copy destino=b --force origem=a x=1"], Globals)[0].Command
+            .Should().Be("copy a b --force x=1");
+    }
+
+    [Theory]
+    [InlineData("@eco-sync")]
+    [InlineData("@eco-sync nomebanco=")]
+    [InlineData("@eco-sync MeuBanco")]
+    public void AMissingParameter_IsAnError_AndNotSentToTheShell(string entry)
+    {
+        var resolved = CommandAliasResolver.Resolve([entry], Globals)[0];
+
+        resolved.IsResolved.Should().BeFalse();
+        resolved.LacksParameters.Should().BeTrue();
+        resolved.MissingParameters.Should().Equal("nomebanco");
+        resolved.Error.Should().Contain("@eco-sync nomebanco=…");
+    }
+
+    [Fact]
+    public void ACommandWithoutParameters_KeepsNameValueArguments()
+    {
+        CommandAliasResolver.Resolve(["@build nomebanco=x"], Globals)[0].Command
+            .Should().Be("dotnet build nomebanco=x");
+    }
+
+    [Fact]
+    public void UsageOf_ShowsEveryParameter()
+    {
+        CommandAliasResolver.UsageOf("@copy", ["origem", "destino"]).Should().Be("@copy origem=… destino=…");
     }
 }

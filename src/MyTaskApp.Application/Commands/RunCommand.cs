@@ -16,26 +16,39 @@ internal static class GlobalCommandLookup
         return all.ToDictionary(command => command.Alias, command => command.Command, StringComparer.OrdinalIgnoreCase);
     }
 
-    /// <summary>Recusa, com todos os apelidos que faltam numa mensagem só.</summary>
+    /// <summary>
+    /// Recusa, numa mensagem só, com todos os apelidos que faltam e todos os
+    /// parâmetros sem valor.
+    /// </summary>
     public static void EnsureResolved(IReadOnlyList<ResolvedCommand> resolved)
     {
+        var problems = new List<string>();
+
         var missing = resolved
-            .Where(step => !step.IsResolved)
+            .Where(step => !step.IsResolved && !step.LacksParameters)
             .Select(step => CommandAliasResolver.AliasOf(step.Entry))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
         if (missing.Count == 1)
         {
-            throw new DomainException(
-                $"O comando {missing[0]} não existe. Cadastre-o em Comandos globais ou corrija o apelido.");
+            problems.Add($"O comando {missing[0]} não existe. Cadastre-o em Comandos globais ou corrija o apelido.");
         }
 
         if (missing.Count > 1)
         {
-            throw new DomainException(
+            problems.Add(
                 $"Os comandos {string.Join(", ", missing)} não existem. "
                 + "Cadastre-os em Comandos globais ou corrija os apelidos.");
+        }
+
+        problems.AddRange(resolved
+            .Where(step => step.LacksParameters)
+            .Select(step => $"Comando {step.Index + 1}: {step.Error}"));
+
+        if (problems.Count > 0)
+        {
+            throw new DomainException(string.Join(Environment.NewLine, problems));
         }
     }
 }
