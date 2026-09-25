@@ -4,6 +4,7 @@ using Avalonia.Controls.Documents;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.VisualTree;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -267,6 +268,185 @@ public class TaskNotesRenderingTests
         window.GetVisualDescendants()
             .OfType<TextBlock>()
             .Should().Contain(block => block.Text == "Esta tarefa foi concluída sem nenhuma anotação.");
+    }
+
+    // ------------------------------------------------------------------
+    // Pré-visualização enquanto escreve
+    // ------------------------------------------------------------------
+
+    private static TextBox Editor(Visual window) =>
+        window.GetVisualDescendants().OfType<TextBox>().Single(box => box.Name == "Editor");
+
+    // Pelo nome, e não pela árvore visual: escondido, o leitor nem entra nela.
+    private static MarkdownView Preview(TaskNotesWindow window) =>
+        window.FindControl<MarkdownView>("Preview")!;
+
+    /// <summary>
+    /// Pela árvore lógica: fora da árvore visual, <c>IsEffectivelyVisible</c>
+    /// não tem pai para consultar e responde sempre que sim.
+    /// </summary>
+    private static bool IsShown(Control control) =>
+        control.GetLogicalAncestors().OfType<Control>().Prepend(control).All(item => item.IsVisible);
+
+    /// <summary>Abrir para escrever continua como era: só a caixa de texto.</summary>
+    [AvaloniaFact]
+    public void AnOpenTask_StartsWritingWithThePreviewHidden()
+    {
+        var window = ShowNotes(Row("um **forte**"));
+
+        Editor(window).IsEffectivelyVisible.Should().BeTrue();
+        IsShown(Preview(window)).Should().BeFalse();
+    }
+
+    [AvaloniaFact]
+    public void PreviewMode_SwapsTheEditorForTheFormattedText()
+    {
+        var window = ShowNotes(Row("um **forte**"));
+        var viewModel = (TaskNotesViewModel)window.DataContext!;
+
+        viewModel.SetViewModeCommand.Execute(NotesViewMode.Preview);
+        window.UpdateLayout();
+
+        Editor(window).IsEffectivelyVisible.Should().BeFalse();
+        IsShown(Preview(window)).Should().BeTrue();
+
+        // Sem seleção para formatar, a barra de formatação sai junto.
+        window.GetVisualDescendants()
+            .OfType<Button>()
+            .Where(button => button.Classes.Contains("tool"))
+            .Should().AllSatisfy(button => button.IsEffectivelyVisible.Should().BeFalse());
+    }
+
+    /// <summary>
+    /// Lado a lado, a pré-visualização acompanha cada tecla — é para isso que
+    /// ela existe — e as duas folhas dividem a largura.
+    /// </summary>
+    [AvaloniaFact]
+    public void SplitMode_ShowsBothAndFollowsTheTyping()
+    {
+        var window = ShowNotes(Row("antes"));
+        var viewModel = (TaskNotesViewModel)window.DataContext!;
+
+        viewModel.SetViewModeCommand.Execute(NotesViewMode.Split);
+        window.UpdateLayout();
+
+        var editor = Editor(window);
+        var preview = Preview(window);
+
+        editor.IsEffectivelyVisible.Should().BeTrue();
+        IsShown(preview).Should().BeTrue();
+
+        editor.Text = "# Depois";
+        window.UpdateLayout();
+
+        preview.GetVisualDescendants()
+            .OfType<SelectableTextBlock>()
+            .SelectMany(block => block.Inlines ?? [])
+            .OfType<Run>()
+            .Should().Contain(run => run.Text == "Depois");
+
+        var editorSheet = editor.FindAncestorOfType<Border>()!;
+        var previewSheet = preview.FindAncestorOfType<ScrollViewer>()!.FindAncestorOfType<Border>()!;
+
+        previewSheet.Bounds.Left.Should().BeGreaterThan(editorSheet.Bounds.Right - 1);
+    }
+
+    [AvaloniaFact]
+    public void CtrlShiftV_TogglesThePreviewLikeVsCode()
+    {
+        var window = ShowNotes(Row("texto"));
+        var viewModel = (TaskNotesViewModel)window.DataContext!;
+
+        Editor(window).Focus();
+
+        window.KeyPressQwerty(PhysicalKey.V, RawInputModifiers.Control | RawInputModifiers.Shift);
+        viewModel.ViewMode.Should().Be(NotesViewMode.Preview);
+
+        window.KeyPressQwerty(PhysicalKey.V, RawInputModifiers.Control | RawInputModifiers.Shift);
+        viewModel.ViewMode.Should().Be(NotesViewMode.Write);
+
+        // O atalho não pode ter colado nada na anotação no caminho.
+        Editor(window).Text.Should().Be("texto");
+    }
+
+    [AvaloniaFact]
+    public void ACompletedTask_HasNoModeSwitch()
+    {
+        var window = ShowNotes(Row("feito", isCompleted: true));
+
+        window.GetVisualDescendants()
+            .OfType<Button>()
+            .Where(button => button.Classes.Contains("mode"))
+            .Should().AllSatisfy(button => button.IsEffectivelyVisible.Should().BeFalse());
+    }
+
+    /// <summary>
+    /// O que o leitor antigo mostrava com os marcadores à mostra, ou achatado
+    /// num parágrafo: agora cada um vira o controle certo.
+    /// </summary>
+    [AvaloniaFact]
+    public void TheReader_DrawsCodeTablesAndQuotes()
+    {
+        var window = ShowNotes(Row(
+            "### Passos\n\n> cuidado\n\n```\ngit status\n```\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\nrode `dotnet test`",
+            isCompleted: true));
+
+        var runs = window.GetVisualDescendants()
+            .OfType<SelectableTextBlock>()
+            .SelectMany(block => block.Inlines ?? [])
+            .OfType<Run>()
+            .ToList();
+
+        runs.Should().Contain(run => run.Text == "Passos");
+        runs.Should().Contain(run => run.Text == "cuidado");
+        runs.Should().Contain(run => run.Text == "dotnet test" && run.FontFamily.Name.Contains("Mono"));
+        runs.Should().NotContain(run => run.Text!.IndexOfAny(new[] { '#', '`', '|', '>' }) >= 0);
+
+        window.GetVisualDescendants()
+            .OfType<SelectableTextBlock>()
+            .Should().Contain(block => block.Text == "git status" && block.TextWrapping == TextWrapping.NoWrap);
+
+        window.GetVisualDescendants()
+            .OfType<Grid>()
+            .Should().Contain(grid => grid.ColumnDefinitions.Count == 2 && grid.RowDefinitions.Count == 2);
+    }
+
+    /// <summary>
+    /// O clique no link é resolvido pela posição no texto do bloco, contada à
+    /// mão. Se a quebra de linha tiver outro tamanho no <c>TextLayout</c>, todo
+    /// link depois de uma quebra abre o vizinho — ou nada.
+    /// </summary>
+    [AvaloniaFact]
+    public void ALinkAfterALineBreak_IsFoundWhereTheLayoutPutsIt()
+    {
+        var window = ShowNotes(Row("primeira linha\n[o link](https://exemplo.com)", isCompleted: true));
+        var preview = Preview(window);
+
+        var block = preview.GetVisualDescendants().OfType<SelectableTextBlock>().Single();
+        var secondLine = block.TextLayout.TextLines[1].FirstTextSourceIndex;
+
+        preview.LinkAt(block, secondLine).Should().Be("https://exemplo.com");
+        preview.LinkAt(block, secondLine - 1).Should().BeNull();
+    }
+
+    [AvaloniaFact]
+    public void OnlyWebAndMailLinks_AreOpened()
+    {
+        var window = ShowNotes(Row("x", isCompleted: true));
+        var preview = Preview(window);
+        var opened = new List<Uri>();
+        preview.LinkLauncher = uri =>
+        {
+            opened.Add(uri);
+            return System.Threading.Tasks.Task.CompletedTask;
+        };
+
+        preview.OpenLink("https://exemplo.com");
+        preview.OpenLink("mailto:alguem@exemplo.com");
+        preview.OpenLink("file:///C:/Windows/System32/calc.exe");
+        preview.OpenLink("C:\\Windows\\notepad.exe");
+
+        opened.Select(uri => uri.Scheme).Should().Equal("https", "mailto");
     }
 
     /// <summary>
