@@ -148,6 +148,31 @@ public sealed class ListBranchesHandler(IGitClient git)
 
         return branches.FirstOrDefault(branch => branch.IsHead) ?? branches.FirstOrDefault();
     }
+
+    /// <summary>
+    /// A branch que o usuário escreveu como padrão do diretório: o nome curto
+    /// exato (<c>develop</c> é a local, <c>origin/develop</c> a remota); sem
+    /// local, <c>develop</c> ainda acha a remota — de <c>origin</c> primeiro.
+    /// <c>null</c> quando o repositório não tem nenhuma com esse nome.
+    /// </summary>
+    public static GitBranch? FindConfigured(IReadOnlyList<GitBranch> branches, string? name)
+    {
+        var wanted = name?.Trim();
+
+        if (string.IsNullOrEmpty(wanted))
+        {
+            return null;
+        }
+
+        return branches.FirstOrDefault(branch => branch.ShortName == wanted)
+            ?? branches.FirstOrDefault(branch =>
+                string.Equals(branch.ShortName, wanted, StringComparison.OrdinalIgnoreCase))
+            ?? branches
+                .Where(branch => branch.IsRemote
+                    && string.Equals(branch.ShortName, $"{branch.Remote}/{wanted}", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(branch => branch.Remote == "origin" ? 0 : 1)
+                .FirstOrDefault();
+    }
 }
 
 internal static class RepositoryPaths

@@ -60,7 +60,8 @@ internal sealed class TagQuery(MyTaskAppDbContext context) : ITagQuery
                     directory.Alias,
                     directory.Path,
                     directory.Name,
-                    directory.Description))
+                    directory.Description,
+                    directory.DefaultBranch))
             .ToListAsync(cancellationToken);
 
         return
