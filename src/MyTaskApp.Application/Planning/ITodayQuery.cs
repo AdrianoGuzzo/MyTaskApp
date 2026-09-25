@@ -25,7 +25,9 @@ public sealed record TodayOccurrenceRow(
     /// <summary>As etiquetas do checklist, em ordem alfabética (ADR-025).</summary>
     IReadOnlyList<TagBadge>? Tags = null,
     /// <summary>Os agentes de IA em execução para a tarefa, um por ambiente (ADR-030, ADR-031).</summary>
-    IReadOnlyList<ActiveAgentRow>? ActiveAgents = null);
+    IReadOnlyList<ActiveAgentRow>? ActiveAgents = null,
+    /// <summary>Os worktrees prontos da tarefa, um por ambiente (ADR-031, ADR-032).</summary>
+    IReadOnlyList<WorktreeRow>? Worktrees = null);
 
 /// <summary>
 /// Um agente em execução: em qual ambiente e de qual repositório. Ambiente
@@ -36,6 +38,17 @@ public sealed record ActiveAgentRow(
     string ProviderId,
     string? RepositoryPath = null,
     string? Branch = null);
+
+/// <summary>
+/// Um worktree pronto da tarefa. Só caminhos e nomes: se tem alteração ou
+/// commit por enviar é pergunta para o Git, nunca para o banco (ADR-032).
+/// </summary>
+public sealed record WorktreeRow(
+    Guid DevelopmentId,
+    string RepositoryPath,
+    string Branch,
+    string SourceBranch,
+    string WorktreePath);
 
 /// <summary>O que a linha precisa de uma etiqueta: a bolinha e o nome do balão.</summary>
 public sealed record TagBadge(Guid Id, string Name, string ColorHex);

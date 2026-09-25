@@ -195,38 +195,84 @@
               bolinha: as amarrações passam pelo nome (#TitleText), porque o
               DataContext não desce até o balão.
             -->
-            <TextBlock x:Name="TitleText"
-                       Text="{Binding Title}"
-                       Classes="taskTitle"
-                       Classes.done="{Binding IsCompleted}"
-                       Background="Transparent"
-                       Cursor="Hand"
-                       Tapped="OnTitleTapped">
-              <ToolTip.Tip>
-                <ToolTip>
-                  <StackPanel Spacing="6">
-                    <TextBlock Text="{Binding #TitleText.((vm:TaskRowViewModel)DataContext).Title}" />
-                    <ItemsControl Margin="0,0,0,-4"
-                                  ItemsSource="{Binding #TitleText.((vm:TaskRowViewModel)DataContext).Tags.Selected}"
-                                  IsVisible="{Binding #TitleText.((vm:TaskRowViewModel)DataContext).Tags.HasTags}">
-                      <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                          <WrapPanel />
-                        </ItemsPanelTemplate>
-                      </ItemsControl.ItemsPanel>
-                      <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="vm:TagChipViewModel">
-                          <Border Classes="tipTag" Background="{Binding Fill}">
-                            <TextBlock Text="{Binding Name}"
-                                       Foreground="{Binding Foreground}" />
-                          </Border>
-                        </DataTemplate>
-                      </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                  </StackPanel>
-                </ToolTip>
-              </ToolTip.Tip>
-            </TextBlock>
+            <DockPanel>
+              <!--
+                O worktree da tarefa (ADR-032): a cor diz o estado no Git, e o
+                balão do título diz o mesmo em texto — cor nunca é o único
+                sinal. Na concluída que manteve o worktree, a bolinha cresce e
+                ganha halo: a linha apagou, o que ainda pede atenção não.
+              -->
+              <Ellipse DockPanel.Dock="Left"
+                       Classes="worktreeDot"
+                       Classes.dirty="{Binding Worktree.IsDirty}"
+                       Classes.unpushed="{Binding Worktree.IsUnpushed}"
+                       Classes.pushed="{Binding Worktree.IsPushed}"
+                       Classes.clean="{Binding Worktree.IsClean}"
+                       Classes.unknown="{Binding Worktree.IsUnknown}"
+                       Classes.retained="{Binding Worktree.IsRetained}"
+                       IsVisible="{Binding Worktree.HasWorktree}"
+                       ToolTip.Tip="{Binding Worktree.DotTip}" />
+
+              <TextBlock x:Name="TitleText"
+                         Text="{Binding Title}"
+                         Classes="taskTitle"
+                         Classes.done="{Binding IsCompleted}"
+                         Background="Transparent"
+                         Cursor="Hand"
+                         Tapped="OnTitleTapped">
+                <ToolTip.Tip>
+                  <ToolTip>
+                    <StackPanel Spacing="6">
+                      <TextBlock Text="{Binding #TitleText.((vm:TaskRowViewModel)DataContext).Title}" />
+                      <ItemsControl Margin="0,0,0,-4"
+                                    ItemsSource="{Binding #TitleText.((vm:TaskRowViewModel)DataContext).Tags.Selected}"
+                                    IsVisible="{Binding #TitleText.((vm:TaskRowViewModel)DataContext).Tags.HasTags}">
+                        <ItemsControl.ItemsPanel>
+                          <ItemsPanelTemplate>
+                            <WrapPanel />
+                          </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="vm:TagChipViewModel">
+                            <Border Classes="tipTag" Background="{Binding Fill}">
+                              <TextBlock Text="{Binding Name}"
+                                         Foreground="{Binding Foreground}" />
+                            </Border>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+
+                      <!-- Um bloco por repositório: onde está e como está. -->
+                      <StackPanel Spacing="4"
+                                  IsVisible="{Binding #TitleText.((vm:TaskRowViewModel)DataContext).Worktree.HasWorktree}">
+                        <TextBlock Classes="tipHeading" Text="WORKTREE" />
+                        <ItemsControl ItemsSource="{Binding #TitleText.((vm:TaskRowViewModel)DataContext).Worktree.Lines}">
+                          <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:WorktreeLineViewModel">
+                              <DockPanel Margin="0,0,0,3">
+                                <Ellipse DockPanel.Dock="Left"
+                                         Classes="worktreeDot"
+                                         Classes.dirty="{Binding IsDirty}"
+                                         Classes.unpushed="{Binding IsUnpushed}"
+                                         Classes.pushed="{Binding IsPushed}"
+                                         Classes.clean="{Binding IsClean}"
+                                         Classes.unknown="{Binding IsUnknown}"
+                                         VerticalAlignment="Top"
+                                         Margin="0,5,7,0" />
+                                <StackPanel>
+                                  <TextBlock Text="{Binding Label}" FontWeight="SemiBold" />
+                                  <TextBlock Classes="tipDetail" Text="{Binding Detail}" />
+                                </StackPanel>
+                              </DockPanel>
+                            </DataTemplate>
+                          </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                      </StackPanel>
+                    </StackPanel>
+                  </ToolTip>
+                </ToolTip.Tip>
+              </TextBlock>
+            </DockPanel>
 
             <StackPanel Orientation="Horizontal"
                         Spacing="4"
@@ -258,6 +304,23 @@
                        Cursor="Hand"
                        Tapped="OnAgentBadgeTapped"
                        ToolTip.Tip="{Binding AgentTip}" />
+
+            <!--
+              Concluída, e o worktree ficou (ADR-032): a resposta "manter" vira
+              texto na linha, na cor do estado. Um clique abre a tarefa, onde
+              o worktree se remove.
+            -->
+            <TextBlock Classes="worktreeBadge"
+                       Classes.dirty="{Binding Worktree.IsDirty}"
+                       Classes.unpushed="{Binding Worktree.IsUnpushed}"
+                       Classes.pushed="{Binding Worktree.IsPushed}"
+                       Text="{Binding Worktree.RetainedLabel}"
+                       IsVisible="{Binding Worktree.IsRetained}"
+                       HorizontalAlignment="Left"
+                       Background="Transparent"
+                       Cursor="Hand"
+                       Tapped="OnWorktreeBadgeTapped"
+                       ToolTip.Tip="{Binding Worktree.RetainedTip}" />
           </StackPanel>
 
           <!--
@@ -464,6 +527,96 @@
 
     <Style Selector="TextBlock.agentBadge:pointerover">
       <Setter Property="TextDecorations" Value="Underline" />
+    </Style>
+
+    <!--
+      A bolinha de worktree (ADR-032). Âmbar: alteração não commitada; azul:
+      commit sem push; verde: tudo enviado; cinza: nada feito ainda; anel vazio:
+      o Git ainda não respondeu, ou não pôde responder.
+    -->
+    <Style Selector="Ellipse.worktreeDot">
+      <Setter Property="Width" Value="7" />
+      <Setter Property="Height" Value="7" />
+      <Setter Property="Margin" Value="0,0,6,0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Fill" Value="{DynamicResource WidgetTextMidBrush}" />
+    </Style>
+
+    <Style Selector="Ellipse.worktreeDot.dirty">
+      <Setter Property="Fill" Value="{DynamicResource WidgetCautionBrush}" />
+    </Style>
+
+    <Style Selector="Ellipse.worktreeDot.unpushed">
+      <Setter Property="Fill" Value="{DynamicResource WidgetInfoBrush}" />
+    </Style>
+
+    <Style Selector="Ellipse.worktreeDot.pushed">
+      <Setter Property="Fill" Value="{DynamicResource WidgetSuccessBrush}" />
+    </Style>
+
+    <Style Selector="Ellipse.worktreeDot.unknown">
+      <Setter Property="Fill" Value="{DynamicResource WidgetTransparentBrush}" />
+      <Setter Property="Stroke" Value="{DynamicResource WidgetTextLowBrush}" />
+      <Setter Property="StrokeThickness" Value="1.5" />
+    </Style>
+
+    <!-- Concluída que manteve o worktree: maior, com halo da mesma cor. -->
+    <Style Selector="Ellipse.worktreeDot.retained">
+      <Setter Property="Width" Value="11" />
+      <Setter Property="Height" Value="11" />
+      <Setter Property="StrokeThickness" Value="3" />
+      <Setter Property="Stroke" Value="{DynamicResource WidgetTextMidHaloBrush}" />
+    </Style>
+
+    <Style Selector="Ellipse.worktreeDot.retained.dirty">
+      <Setter Property="Stroke" Value="{DynamicResource WidgetCautionHaloBrush}" />
+    </Style>
+
+    <Style Selector="Ellipse.worktreeDot.retained.unpushed">
+      <Setter Property="Stroke" Value="{DynamicResource WidgetInfoHaloBrush}" />
+    </Style>
+
+    <Style Selector="Ellipse.worktreeDot.retained.pushed">
+      <Setter Property="Stroke" Value="{DynamicResource WidgetSuccessHaloBrush}" />
+    </Style>
+
+    <Style Selector="Ellipse.worktreeDot.retained.unknown">
+      <Setter Property="Fill" Value="{DynamicResource WidgetTextMidBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.worktreeBadge">
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextMidBrush}" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <Style Selector="TextBlock.worktreeBadge.dirty">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetCautionBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.worktreeBadge.unpushed">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetInfoBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.worktreeBadge.pushed">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetSuccessBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.worktreeBadge:pointerover">
+      <Setter Property="TextDecorations" Value="Underline" />
+    </Style>
+
+    <Style Selector="TextBlock.tipHeading">
+      <Setter Property="FontSize" Value="9.5" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="LetterSpacing" Value="0.8" />
+      <Setter Property="Opacity" Value="0.7" />
+    </Style>
+
+    <Style Selector="TextBlock.tipDetail">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Opacity" Value="0.8" />
     </Style>
 
     <Style Selector="TextBlock.waiting.urgent">

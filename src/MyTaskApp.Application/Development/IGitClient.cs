@@ -79,6 +79,22 @@ public sealed record GitStatus(IReadOnlyList<string> Entries)
 public sealed record GitDivergence(int Ahead, int Behind);
 
 /// <summary>
+/// <c>git status --porcelain=v2 --branch</c>: as alterações do working tree e,
+/// na mesma chamada, a distância até o upstream. <see cref="Upstream"/> nulo é
+/// branch que nunca foi enviada — aí <see cref="Ahead"/> e <see cref="Behind"/> ficam em zero.
+/// </summary>
+public sealed record GitBranchStatus(
+    IReadOnlyList<string> Changes,
+    string? Upstream = null,
+    int Ahead = 0,
+    int Behind = 0)
+{
+    public static readonly GitBranchStatus Clean = new([]);
+
+    public bool IsClean => Changes.Count == 0;
+}
+
+/// <summary>
 /// O Git rodou e recusou. Carrega a execução inteira para a área de detalhes;
 /// quem chama decide a mensagem, porque só ele sabe em que etapa estava.
 /// </summary>
@@ -146,6 +162,12 @@ public interface IGitClient
 
     /// <summary><c>git status --porcelain</c> no working tree, incluindo arquivos novos.</summary>
     Task<GitStatus> GetStatusAsync(string workingTree, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// <c>git status --porcelain=v2 --branch</c> no working tree: alterações e
+    /// commits por enviar numa ida só. É o que acende a bolinha da lista.
+    /// </summary>
+    Task<GitBranchStatus> GetBranchStatusAsync(string workingTree, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// <c>git merge --ff-only {upstream}</c> dentro do worktree onde a branch
