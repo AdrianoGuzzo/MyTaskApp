@@ -42,7 +42,12 @@ nada para o usuário.
 ```powershell
 dotnet build MyTaskApp.slnx -c Release    # TreatWarningsAsErrors=true
 dotnet test  MyTaskApp.slnx               # 5 suítes
+.\scripts\coverage.ps1 -Open              # mesmo portão de cobertura do CI
 ```
+
+O CI reprova com cobertura abaixo do mínimo (linhas e branches, definidos em
+`scripts/coverage.ps1`) e comenta no PR o alcançado contra o mínimo. O
+relatório HTML linha a linha fica em `artifacts/coverage/report`.
 
 ## 3. Empacotar
 
