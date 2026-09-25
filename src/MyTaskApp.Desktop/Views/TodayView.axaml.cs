@@ -100,6 +100,22 @@ public sealed partial class TodayView : UserControl
     }
 
     /// <summary>
+    /// "● Worktree criado" abre a tarefa: é lá, na aba Desenvolvimento, que o
+    /// worktree se remove (ADR-034).
+    /// </summary>
+    private void OnWorktreeBadgeTapped(object? sender, TappedEventArgs e)
+    {
+        if (sender is not Control { DataContext: TaskRowViewModel row }
+            || DataContext is not TodayViewModel viewModel)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        viewModel.OpenNotesCommand.Execute(row);
+    }
+
+    /// <summary>
     /// O selo "● Claude Code" leva ao terminal do agente. Mesmo molde do
     /// título: o clique para aqui e não sobe até a linha.
     /// </summary>

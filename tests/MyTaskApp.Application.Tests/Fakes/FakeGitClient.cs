@@ -43,6 +43,12 @@ internal sealed class FakeGitClient : IGitClient
     /// <summary>Status por pasta; o que não estiver aqui está limpo.</summary>
     public Dictionary<string, GitStatus> Statuses { get; } = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Status com branch por pasta; o que não estiver aqui está limpo e sem upstream.</summary>
+    public Dictionary<string, GitBranchStatus> BranchStatuses { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Divergência por ref comparada (o lado direito); o que não estiver aqui cai em <see cref="Divergence"/>.</summary>
+    public Dictionary<string, GitDivergence> Divergences { get; } = new(StringComparer.OrdinalIgnoreCase);
+
     public GitCommandResult FastForwardResult { get; set; } = Ok("git merge --ff-only");
 
     public Func<string, bool> AcceptsBranchName { get; set; } = _ => true;
@@ -117,7 +123,7 @@ internal sealed class FakeGitClient : IGitClient
         CancellationToken cancellationToken = default)
     {
         Throw(nameof(CompareAsync));
-        return Task.FromResult(Divergence);
+        return Task.FromResult(Divergences.TryGetValue(upstreamRef, out var divergence) ? divergence : Divergence);
     }
 
     public Task<GitStatus> GetStatusAsync(string workingTree, CancellationToken cancellationToken = default)
@@ -126,6 +132,14 @@ internal sealed class FakeGitClient : IGitClient
 
         var key = Statuses.Keys.FirstOrDefault(path => WorktreePathPlanner.SamePath(path, workingTree));
         return Task.FromResult(key is null ? GitStatus.Clean : Statuses[key]);
+    }
+
+    public Task<GitBranchStatus> GetBranchStatusAsync(string workingTree, CancellationToken cancellationToken = default)
+    {
+        Throw(nameof(GetBranchStatusAsync));
+
+        var key = BranchStatuses.Keys.FirstOrDefault(path => WorktreePathPlanner.SamePath(path, workingTree));
+        return Task.FromResult(key is null ? GitBranchStatus.Clean : BranchStatuses[key]);
     }
 
     public Task<GitCommandResult> FastForwardCheckedOutAsync(

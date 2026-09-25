@@ -35,7 +35,11 @@ public sealed class GetTodayBoardHandler(
             .ToList();
 
         TodayTask ToTask((TodayOccurrenceRow Row, TodayPlacement? Placement) entry) =>
-            Project(entry, nowUtc) with { ActiveAgents = Agents(entry.Row.ActiveAgents) };
+            Project(entry, nowUtc) with
+            {
+                ActiveAgents = Agents(entry.Row.ActiveAgents),
+                Worktrees = Worktrees(entry.Row.Worktrees),
+            };
 
         IEnumerable<(TodayOccurrenceRow Row, TodayPlacement? Placement)> InSection(TodaySection section) =>
             placed.Where(entry => entry.Placement!.Section == section);
@@ -107,6 +111,18 @@ public sealed class GetTodayBoardHandler(
                     agents?.Find(row.ProviderId)?.Name ?? row.ProviderId,
                     RepositoryName(row.RepositoryPath),
                     row.Branch))
+                .ToList();
+
+    private static IReadOnlyList<TaskWorktree>? Worktrees(IReadOnlyList<WorktreeRow>? rows) =>
+        rows is null or { Count: 0 }
+            ? null
+            : rows
+                .Select(row => new TaskWorktree(
+                    row.DevelopmentId,
+                    RepositoryName(row.RepositoryPath) ?? row.RepositoryPath,
+                    row.Branch,
+                    row.SourceBranch,
+                    row.WorktreePath))
                 .ToList();
 
     private static string? RepositoryName(string? path)
