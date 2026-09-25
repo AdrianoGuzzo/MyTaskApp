@@ -141,6 +141,55 @@
       <Setter Property="TextBlock.TextDecorations" Value="Strikethrough" />
     </Style>
 
+    <!--
+      Escrever / Visualizar / Lado a lado. Também não recebe foco: trocar de
+      modo não deve tirar o cursor de onde ele estava na caixa de texto.
+    -->
+    <Style Selector="Button.mode">
+      <Setter Property="Focusable" Value="False" />
+      <Setter Property="Height" Value="30" />
+      <Setter Property="Padding" Value="10,0" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextMidBrush}" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Button.mode /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetPillRadius}" />
+    </Style>
+
+    <Style Selector="Button.mode:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource WidgetSurfaceHoverBrush}" />
+    </Style>
+
+    <Style Selector="Button.mode:pointerover">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+    </Style>
+
+    <Style Selector="Button.mode.active /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource WidgetAccentSoftBrush}" />
+    </Style>
+
+    <Style Selector="Button.mode.active">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+    </Style>
+
+    <!--
+      A coluna de leitura. Lado a lado ela alarga: duas metades de 460px seriam
+      estreitas demais para escrever ou para ler.
+    -->
+    <Style Selector="DockPanel.page">
+      <Setter Property="MaxWidth" Value="920" />
+    </Style>
+
+    <Style Selector="DockPanel.page.wide">
+      <Setter Property="MaxWidth" Value="1680" />
+    </Style>
+
     <Style Selector="Border.toolDivider">
       <Setter Property="Width" Value="1" />
       <Setter Property="Height" Value="16" />
@@ -164,6 +213,10 @@
           <BrushTransition Property="BorderBrush" Duration="0:0:0.15" />
         </Transitions>
       </Setter>
+    </Style>
+
+    <Style Selector="Border.sheet.split">
+      <Setter Property="Margin" Value="12,0,0,0" />
     </Style>
 
     <Style Selector="Border.sheet:focus-within">
@@ -428,7 +481,9 @@
     folha deixaria a barra de formatação flutuando longe do texto que ela
     formata, que foi exatamente o que a primeira versão fez.
   -->
-  <DockPanel MaxWidth="920" HorizontalAlignment="Center">
+  <DockPanel Classes="page"
+             Classes.wide="{Binding IsWide}"
+             HorizontalAlignment="Center">
 
     <!--
       Cabeçalho: o título do item, que é o assunto da janela inteira. Editável
@@ -534,88 +589,143 @@
       <TabItem x:Name="NotesTabItem" Header="{Binding NotesTabHeader}">
         <DockPanel Margin="0,10,0,0">
 
-          <!-- Barra de formatação: some inteira no modo leitura, e não fica apagada. -->
-          <Border DockPanel.Dock="Top"
-                  Margin="0,0,0,10"
-                  Padding="4"
-                  CornerRadius="{StaticResource WidgetPillRadius}"
-                  Background="{DynamicResource WidgetSurfaceBrush}"
-                  HorizontalAlignment="Left"
-                  IsVisible="{Binding IsEditable}">
-            <StackPanel Orientation="Horizontal" Spacing="1">
+          <!--
+            Barra de formatação: some inteira no modo leitura, e não fica apagada.
+            Os botões de formatar somem também quando só a pré-visualização está
+            à vista — não há seleção para formatar.
+          -->
+          <Grid DockPanel.Dock="Top"
+                Margin="0,0,0,10"
+                ColumnDefinitions="*,Auto"
+                IsVisible="{Binding IsEditable}">
 
-              <Button Classes="tool bold" Content="B" Tag="Bold"
-                      Click="OnFormatClick" ToolTip.Tip="Negrito (Ctrl+B)" />
-              <Button Classes="tool italic" Content="I" Tag="Italic"
-                      Click="OnFormatClick" ToolTip.Tip="Itálico (Ctrl+I)" />
-              <Button Classes="tool underline" Content="U" Tag="Underline"
-                      Click="OnFormatClick" ToolTip.Tip="Sublinhado (Ctrl+U)" />
-              <Button Classes="tool strike" Content="S" Tag="Strikethrough"
-                      Click="OnFormatClick" ToolTip.Tip="Tachado" />
+            <Border Grid.Column="0"
+                    Padding="4"
+                    CornerRadius="{StaticResource WidgetPillRadius}"
+                    Background="{DynamicResource WidgetSurfaceBrush}"
+                    HorizontalAlignment="Left"
+                    IsVisible="{Binding ShowsEditor}">
+              <StackPanel Orientation="Horizontal" Spacing="1">
 
-              <Border Classes="toolDivider" />
+                <Button Classes="tool bold" Content="B" Tag="Bold"
+                        Click="OnFormatClick" ToolTip.Tip="Negrito (Ctrl+B)" />
+                <Button Classes="tool italic" Content="I" Tag="Italic"
+                        Click="OnFormatClick" ToolTip.Tip="Itálico (Ctrl+I)" />
+                <Button Classes="tool underline" Content="U" Tag="Underline"
+                        Click="OnFormatClick" ToolTip.Tip="Sublinhado (Ctrl+U)" />
+                <Button Classes="tool strike" Content="S" Tag="Strikethrough"
+                        Click="OnFormatClick" ToolTip.Tip="Tachado" />
 
-              <Button Classes="tool" Content="H1" Tag="Heading1"
-                      Click="OnFormatClick" ToolTip.Tip="Título" />
-              <Button Classes="tool" Content="H2" Tag="Heading2"
-                      Click="OnFormatClick" ToolTip.Tip="Subtítulo" />
+                <Border Classes="toolDivider" />
 
-              <Border Classes="toolDivider" />
+                <Button Classes="tool" Content="H1" Tag="Heading1"
+                        Click="OnFormatClick" ToolTip.Tip="Título" />
+                <Button Classes="tool" Content="H2" Tag="Heading2"
+                        Click="OnFormatClick" ToolTip.Tip="Subtítulo" />
 
-              <Button Classes="tool" Content="&#x2022;" Tag="Bullet"
-                      Click="OnFormatClick" ToolTip.Tip="Lista com marcadores" />
-              <Button Classes="tool" Content="1." Tag="Numbered"
-                      Click="OnFormatClick" ToolTip.Tip="Lista numerada" />
+                <Border Classes="toolDivider" />
 
-            </StackPanel>
-          </Border>
+                <Button Classes="tool" Content="&#x2022;" Tag="Bullet"
+                        Click="OnFormatClick" ToolTip.Tip="Lista com marcadores" />
+                <Button Classes="tool" Content="1." Tag="Numbered"
+                        Click="OnFormatClick" ToolTip.Tip="Lista numerada" />
 
-          <Border Classes="sheet" Margin="0,0,0,10">
-            <Panel>
+              </StackPanel>
+            </Border>
 
-              <TextBox x:Name="Editor"
-                       spell:SpellCheck.IsEnabled="True"
-                       IsVisible="{Binding IsEditable}"
-                       Text="{Binding Text}"
-                       AcceptsReturn="True"
-                       AcceptsTab="False"
-                       TextWrapping="Wrap"
-                       FontSize="13.5"
-                       LineHeight="21"
-                       Padding="0"
-                       BorderThickness="0"
-                       Background="Transparent"
-                       VerticalAlignment="Stretch"
-                       VerticalContentAlignment="Top"
-                       PlaceholderText="Escreva o que mais importa sobre esta tarefa… (@ insere o caminho de um diretório da etiqueta)" />
+            <Border Grid.Column="1"
+                    Padding="4"
+                    CornerRadius="{StaticResource WidgetPillRadius}"
+                    Background="{DynamicResource WidgetSurfaceBrush}">
+              <StackPanel Orientation="Horizontal" Spacing="1">
+                <Button Classes="mode" Classes.active="{Binding IsWriteMode}"
+                        x:Name="WriteModeButton"
+                        Content="Escrever"
+                        Command="{Binding SetViewModeCommand}"
+                        CommandParameter="{x:Static vm:NotesViewMode.Write}"
+                        ToolTip.Tip="Só o texto em Markdown (Ctrl+Shift+V alterna)" />
+                <Button Classes="mode" Classes.active="{Binding IsPreviewMode}"
+                        x:Name="PreviewModeButton"
+                        Content="Visualizar"
+                        Command="{Binding SetViewModeCommand}"
+                        CommandParameter="{x:Static vm:NotesViewMode.Preview}"
+                        ToolTip.Tip="Como a anotação fica formatada (Ctrl+Shift+V alterna)" />
+                <Button Classes="mode" Classes.active="{Binding IsSplitMode}"
+                        x:Name="SplitModeButton"
+                        Content="Lado a lado"
+                        Command="{Binding SetViewModeCommand}"
+                        CommandParameter="{x:Static vm:NotesViewMode.Split}"
+                        ToolTip.Tip="Escrever vendo o resultado formatado" />
+              </StackPanel>
+            </Border>
 
-              <!--
-                O "@" abre, o texto filtra, ↑/↓ andam, Enter/Tab ou o clique inserem o
-                path real. O PlacementRect é o cursor, calculado no code-behind.
-              -->
-              <Popup x:Name="AliasPopup"
-                     PlacementTarget="{Binding #Editor}"
-                     Placement="Bottom"
-                     IsLightDismissEnabled="True"
-                     IsOpen="{Binding Completion.IsCompletionOpen, Mode=TwoWay}">
-                <Border Classes="aliasList">
-                  <ScrollViewer MaxHeight="280" HorizontalScrollBarVisibility="Disabled">
-                    <ItemsControl x:Name="AliasList"
-                                  ItemsSource="{Binding Completion.Suggestions}"
-                                  ItemTemplate="{StaticResource AliasSuggestionTemplate}" />
-                  </ScrollViewer>
-                </Border>
-              </Popup>
+          </Grid>
 
-              <ScrollViewer IsVisible="{Binding IsReadOnly}"
-                            HorizontalScrollBarVisibility="Disabled">
-                <notes:MarkdownView Text="{Binding Text}"
-                                    Placeholder="Esta tarefa foi concluída sem nenhuma anotação."
-                                    Foreground="{DynamicResource WidgetTextHighBrush}" />
+          <!--
+            Editor e pré-visualização numa grade de uma linha: o que estiver
+            escondido não ocupa coluna, então cada modo usa a largura inteira, e
+            lado a lado ela se divide ao meio.
+          -->
+          <UniformGrid Rows="1" Margin="0,0,0,10">
+
+            <Border Classes="sheet" IsVisible="{Binding ShowsEditor}">
+              <Panel>
+
+                <TextBox x:Name="Editor"
+                         spell:SpellCheck.IsEnabled="True"
+                         IsVisible="{Binding IsEditable}"
+                         Text="{Binding Text}"
+                         AcceptsReturn="True"
+                         AcceptsTab="False"
+                         TextWrapping="Wrap"
+                         FontSize="13.5"
+                         LineHeight="21"
+                         Padding="0"
+                         BorderThickness="0"
+                         Background="Transparent"
+                         VerticalAlignment="Stretch"
+                         VerticalContentAlignment="Top"
+                         PlaceholderText="Escreva o que mais importa sobre esta tarefa… (@ insere o caminho de um diretório da etiqueta)" />
+
+                <!--
+                  O "@" abre, o texto filtra, ↑/↓ andam, Enter/Tab ou o clique inserem o
+                  path real. O PlacementRect é o cursor, calculado no code-behind.
+                -->
+                <Popup x:Name="AliasPopup"
+                       PlacementTarget="{Binding #Editor}"
+                       Placement="Bottom"
+                       IsLightDismissEnabled="True"
+                       IsOpen="{Binding Completion.IsCompletionOpen, Mode=TwoWay}">
+                  <Border Classes="aliasList">
+                    <ScrollViewer MaxHeight="280" HorizontalScrollBarVisibility="Disabled">
+                      <ItemsControl x:Name="AliasList"
+                                    ItemsSource="{Binding Completion.Suggestions}"
+                                    ItemTemplate="{StaticResource AliasSuggestionTemplate}" />
+                    </ScrollViewer>
+                  </Border>
+                </Popup>
+
+              </Panel>
+            </Border>
+
+            <!--
+              Um leitor só, para a tarefa concluída e para a pré-visualização: são
+              a mesma coisa, e dois desenhariam a mesma anotação de dois jeitos.
+            -->
+            <Border Classes="sheet"
+                    Classes.split="{Binding IsSplit}"
+                    IsVisible="{Binding ShowsPreview}">
+              <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                <notes:MarkdownView x:Name="Preview"
+                                    Text="{Binding Text}"
+                                    Placeholder="{Binding PreviewPlaceholder}"
+                                    Foreground="{DynamicResource WidgetTextHighBrush}"
+                                    LinkForeground="{DynamicResource WidgetInfoBrush}"
+                                    AccentBrush="{DynamicResource WidgetAccentBrush}" />
               </ScrollViewer>
+            </Border>
 
-            </Panel>
-          </Border>
+          </UniformGrid>
 
         </DockPanel>
       </TabItem>
