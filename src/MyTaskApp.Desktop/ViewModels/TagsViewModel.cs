@@ -49,6 +49,10 @@ public sealed partial class TagListItemViewModel(TagRow row) : ObservableObject
     [ObservableProperty]
     private string _directoryDescription = string.Empty;
 
+    /// <summary>A origem que "Iniciar implementação" já traz escolhida para este repositório.</summary>
+    [ObservableProperty]
+    private string _directoryDefaultBranch = string.Empty;
+
     public string DirectoriesLabel => DirectoryCount == 0 ? "Diretórios" : $"Diretórios ({DirectoryCount})";
 
     public bool HasNoDirectories => IsExpanded && DirectoryCount == 0;
@@ -78,6 +82,7 @@ public sealed partial class TagListItemViewModel(TagRow row) : ObservableObject
         Path = string.Empty;
         DirectoryName = string.Empty;
         DirectoryDescription = string.Empty;
+        DirectoryDefaultBranch = string.Empty;
     }
 
     internal void EditDirectory(TagDirectoryItemViewModel directory)
@@ -87,6 +92,7 @@ public sealed partial class TagListItemViewModel(TagRow row) : ObservableObject
         Path = directory.Path;
         DirectoryName = directory.Name ?? string.Empty;
         DirectoryDescription = directory.Description ?? string.Empty;
+        DirectoryDefaultBranch = directory.DefaultBranch ?? string.Empty;
     }
 
     public TagChipViewModel Chip { get; } = new(row.Id, row.Name, row.ColorHex);
@@ -251,16 +257,17 @@ public sealed partial class TagsViewModel(
         var path = item.Path;
         var name = item.DirectoryName;
         var description = item.DirectoryDescription;
+        var defaultBranch = item.DirectoryDefaultBranch;
 
         var saved = await TryAsync(
             () => editingId is { } id
                 ? runner.RunAsync<UpdateTagDirectoryHandler>(
                     (handler, token) => handler.HandleAsync(
-                        new UpdateTagDirectory(tagId, id, alias, path, name, description), token),
+                        new UpdateTagDirectory(tagId, id, alias, path, name, description, defaultBranch), token),
                     cancellationToken)
                 : runner.RunAsync<AddTagDirectoryHandler, Guid>(
                     (handler, token) => handler.HandleAsync(
-                        new AddTagDirectory(tagId, alias, path, name, description), token),
+                        new AddTagDirectory(tagId, alias, path, name, description, defaultBranch), token),
                     cancellationToken),
             "Não foi possível salvar o diretório.");
 

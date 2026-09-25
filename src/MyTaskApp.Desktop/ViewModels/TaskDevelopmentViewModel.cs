@@ -92,6 +92,12 @@ public sealed partial class TaskDevelopmentViewModel(
     /// <summary>A origem a escolher quando as branches chegarem (a da tentativa anterior).</summary>
     private string? _preferredSource;
 
+    /// <summary>
+    /// A origem dos outros ambientes da tarefa. Vem depois da branch padrão do
+    /// diretório: aquela é de outro repositório, esta foi escolhida para este.
+    /// </summary>
+    private string? _siblingSource;
+
     private CancellationTokenSource? _inspection;
 
     private CancellationTokenSource? _run;
@@ -189,6 +195,10 @@ public sealed partial class TaskDevelopmentViewModel(
 
     [ObservableProperty]
     private string? _branchesError;
+
+    /// <summary>A branch padrão do diretório não existe no repositório: a escolha caiu na sugestão.</summary>
+    [ObservableProperty]
+    private string? _branchesNotice;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(BranchNameError), nameof(HasBranchNameError), nameof(WorktreePreview), nameof(ChipBranch))]
@@ -478,7 +488,7 @@ public sealed partial class TaskDevelopmentViewModel(
         }
 
         NewBranchName = sibling.Branch;
-        _preferredSource = sibling.SourceBranch;
+        _siblingSource = sibling.SourceBranch;
     }
 
     /// <summary>
@@ -602,6 +612,7 @@ public sealed partial class TaskDevelopmentViewModel(
         BranchOptions.Clear();
         SelectedBranchOption = null;
         BranchesError = null;
+        BranchesNotice = null;
 
         _inspection?.Cancel();
         _inspection = new CancellationTokenSource();
@@ -675,6 +686,7 @@ public sealed partial class TaskDevelopmentViewModel(
     {
         IsLoadingBranches = true;
         BranchesError = null;
+        BranchesNotice = null;
 
         try
         {
@@ -694,12 +706,21 @@ public sealed partial class TaskDevelopmentViewModel(
             // Só branches: o cabeçalho de grupo tem Branch nulo, e "nulo == nulo"
             // o escolheria quando não há escolha anterior.
             var selectable = BranchOptions.Where(option => option.IsSelectable).ToList();
+            var configuredName = ConfiguredDefaultBranch(repository);
+            var configured = ListBranchesHandler.FindConfigured(list.Branches, configuredName);
 
             SelectedBranchOption =
                 selectable.FirstOrDefault(option => option.Branch!.FullRef == previous)
                 ?? selectable.FirstOrDefault(option => option.Branch!.ShortName == _preferredSource)
+                ?? selectable.FirstOrDefault(option => option.Branch == configured)
+                ?? selectable.FirstOrDefault(option => option.Branch!.ShortName == _siblingSource)
                 ?? selectable.FirstOrDefault(option => option.Branch == list.Suggested)
                 ?? selectable.FirstOrDefault();
+
+            if (configuredName is not null && configured is null && list.Branches.Count > 0)
+            {
+                BranchesNotice = $"A branch padrão do diretório ({configuredName}) não existe neste repositório.";
+            }
 
             if (list.Branches.Count == 0)
             {
@@ -715,6 +736,24 @@ public sealed partial class TaskDevelopmentViewModel(
         {
             IsLoadingBranches = false;
         }
+    }
+
+    /// <summary>
+    /// A branch padrão cadastrada no diretório da etiqueta que é esta pasta —
+    /// o caminho digitado ou o worktree principal dele. Com a mesma pasta em
+    /// duas etiquetas, vale a primeira que tiver uma.
+    /// </summary>
+    private string? ConfiguredDefaultBranch(string repository)
+    {
+        var typed = DirectoryText.Trim().Trim('"').Trim();
+        var candidates = DirectoryCompletion.Directories
+            .Where(directory => !string.IsNullOrWhiteSpace(directory.DefaultBranch))
+            .ToList();
+
+        var match = candidates.FirstOrDefault(directory => WorktreePathPlanner.SamePath(directory.Path, typed))
+            ?? candidates.FirstOrDefault(directory => WorktreePathPlanner.SamePath(directory.Path, repository));
+
+        return match?.DefaultBranch!.Trim();
     }
 
     /// <summary>Cabeçalho de grupo não é escolha: volta para a branch anterior.</summary>

@@ -48,7 +48,7 @@ public class TagDirectoryPersistenceTests
         {
             var tag = await new TagRepository(write).FindByIdAsync(eco.Id, Ct);
             tag!.Directories.Should().HaveCount(2);
-            tag.UpdateDirectory(coreId, "@ecossistema-core", @"D:\Projects\ecossistema-core", "Core", "API");
+            tag.UpdateDirectory(coreId, "@ecossistema-core", @"D:\Projects\ecossistema-core", "Core", "API", "develop");
             await write.SaveChangesAsync(Ct);
         }
 
@@ -57,6 +57,7 @@ public class TagDirectoryPersistenceTests
         core.Path.Should().Be(@"D:\Projects\ecossistema-core");
         core.Name.Should().Be("Core");
         core.Description.Should().Be("API");
+        core.DefaultBranch.Should().Be("develop");
         core.CreatedAt.Should().Be(Now);
     }
 
@@ -122,7 +123,7 @@ public class TagDirectoryPersistenceTests
         var app = Tag.Create("MY TASK APP", "#6366F1", Now);
         var other = Tag.Create("Outra", "#EF4444", Now);
         eco.AddDirectory("@ecossistema-web", @"C:\Projects\ecossistema-web", null, null, Now);
-        eco.AddDirectory("@ecossistema-core", @"C:\Projects\ecossistema-core", "Core", null, Now);
+        eco.AddDirectory("@ecossistema-core", @"C:\Projects\ecossistema-core", "Core", null, Now, "develop");
         app.AddDirectory("@mytaskapp", @"C:\Projetos\MyTaskApp", null, null, Now);
         other.AddDirectory("@fora", @"C:\fora", null, null, Now);
         var task = TodayTask("Corrigir problema no processamento dos animais");
@@ -140,6 +141,8 @@ public class TagDirectoryPersistenceTests
         rows[0].Path.Should().Be(@"C:\Projects\ecossistema-core");
         rows[0].Name.Should().Be("Core");
         rows[0].TagColorHex.Should().Be("#22C55E");
+        rows[0].DefaultBranch.Should().Be("develop");
+        rows[1].DefaultBranch.Should().BeNull();
     }
 
     [Fact]

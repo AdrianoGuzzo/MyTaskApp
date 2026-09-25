@@ -4,12 +4,14 @@ using MyTaskApp.Application.Abstractions;
 namespace MyTaskApp.Application.Tags;
 
 /// <summary>Uma pasta nova na etiqueta, com o alias que a chama na anotação (ADR-026).</summary>
+/// <param name="DefaultBranch">A origem que "Iniciar implementação" já traz escolhida para este repositório.</param>
 public sealed record AddTagDirectory(
     Guid TagId,
     string Alias,
     string Path,
     string? Name,
-    string? Description);
+    string? Description,
+    string? DefaultBranch = null);
 
 public sealed class AddTagDirectoryHandler(
     ITagRepository tags,
@@ -26,7 +28,8 @@ public sealed class AddTagDirectoryHandler(
             command.Path,
             command.Name,
             command.Description,
-            timeProvider.GetUtcNow());
+            timeProvider.GetUtcNow(),
+            command.DefaultBranch);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -37,7 +40,7 @@ public sealed class AddTagDirectoryHandler(
 }
 
 /// <summary>
-/// Troca alias, path, nome e descrição de uma vez. Anotações que já receberam o
+/// Troca alias, path, nome, descrição e branch padrão de uma vez. Anotações que já receberam o
 /// path antigo ficam como estão: o texto nunca guardou referência ao diretório.
 /// </summary>
 public sealed record UpdateTagDirectory(
@@ -46,7 +49,8 @@ public sealed record UpdateTagDirectory(
     string Alias,
     string Path,
     string? Name,
-    string? Description);
+    string? Description,
+    string? DefaultBranch = null);
 
 public sealed class UpdateTagDirectoryHandler(
     ITagRepository tags,
@@ -62,7 +66,8 @@ public sealed class UpdateTagDirectoryHandler(
             command.Alias,
             command.Path,
             command.Name,
-            command.Description);
+            command.Description,
+            command.DefaultBranch);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 

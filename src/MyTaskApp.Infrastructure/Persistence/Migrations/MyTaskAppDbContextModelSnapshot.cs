@@ -193,6 +193,10 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                     b.Property<long>("CreatedAt")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("DefaultBranch")
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Description")
                         .HasMaxLength(500)
                         .HasColumnType("TEXT");
