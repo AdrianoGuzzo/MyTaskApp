@@ -53,7 +53,10 @@ public sealed partial class PostWorktreeCommandItemViewModel : ObservableObject
 
     public string Title => Text.Trim();
 
-    /// <summary>O que um <c>@alias</c> vai rodar, ou o aviso de que ele não existe.</summary>
+    /// <summary>
+    /// O que um <c>@alias</c> vai rodar, já com os parâmetros, ou o aviso de que
+    /// ele não existe ou de que falta preencher algum.
+    /// </summary>
     public string? Hint
     {
         get
@@ -70,14 +73,17 @@ public sealed partial class PostWorktreeCommandItemViewModel : ObservableObject
                     : null;
             }
 
-            var arguments = Text.Trim()[alias.Length..].Trim();
+            var expansion = CommandAliasResolver.Expand(row.Command, Text.Trim()[alias.Length..]);
 
-            return arguments.Length == 0 ? $"→ {row.Command}" : $"→ {row.Command} {arguments}";
+            return expansion.IsComplete
+                ? $"→ {expansion.Command}"
+                : $"⚠ Falta preencher: {string.Join(' ', expansion.Missing.Select(name => $"{name}=…"))}";
         }
     }
 
     public bool HasHint => Hint is not null;
 
+    /// <summary>A dica é aviso: apelido que não existe ou parâmetro sem valor.</summary>
     public bool IsUnknownAlias => Hint?.StartsWith('⚠') == true;
 
     public bool HasRunState => RunState is not null;
