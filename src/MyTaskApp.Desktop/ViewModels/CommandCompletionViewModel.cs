@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using MyTaskApp.Application.Commands;
 using MyTaskApp.Desktop.Notes;
+using MyTaskApp.Domain.Commands;
 
 namespace MyTaskApp.Desktop.ViewModels;
 
@@ -69,8 +70,23 @@ public sealed partial class CommandCompletionViewModel(DevelopmentCommandCatalog
 
     object? IAliasCompletionSource.SelectedItem => SelectedSuggestion;
 
-    string? IAliasCompletionSource.ReplacementFor(object? suggestion) =>
-        suggestion is CommandSuggestionViewModel item && Suggestions.Contains(item) ? item.Alias : null;
+    /// <summary>
+    /// O apelido e, se o comando tem <c>{nome}</c>, os <c>nome=</c> a preencher:
+    /// o usuário só digita o valor.
+    /// </summary>
+    string? IAliasCompletionSource.ReplacementFor(object? suggestion)
+    {
+        if (suggestion is not CommandSuggestionViewModel item || !Suggestions.Contains(item))
+        {
+            return null;
+        }
+
+        var parameters = CommandParameters.Names(item.Command);
+
+        return parameters.Count == 0
+            ? item.Alias
+            : string.Join(' ', parameters.Select(name => $"{name}=").Prepend(item.Alias));
+    }
 
     public void UpdateCompletion(string? text, int caretIndex)
     {

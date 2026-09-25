@@ -6,6 +6,7 @@ using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Commands;
 using MyTaskApp.Desktop.Views;
 using MyTaskApp.Domain;
+using MyTaskApp.Domain.Commands;
 
 namespace MyTaskApp.Desktop.ViewModels;
 
@@ -21,6 +22,14 @@ public sealed class DevelopmentCommandListItemViewModel(DevelopmentCommandRow ro
     public string? Description => Row.Description;
 
     public bool HasDescription => !string.IsNullOrEmpty(Row.Description);
+
+    /// <summary>Os <c>{nome}</c> do comando, que quem chama preenche.</summary>
+    public IReadOnlyList<string> Parameters { get; } = CommandParameters.Names(row.Command);
+
+    public bool HasParameters => Parameters.Count > 0;
+
+    /// <summary>Como chamar: <c>@eco-sync nomebanco=…</c>.</summary>
+    public string Usage => $"Uso: {CommandAliasResolver.UsageOf(Alias, Parameters)}";
 
     public bool Matches(string query) =>
         Row.Alias.Contains(query, StringComparison.OrdinalIgnoreCase)
@@ -67,10 +76,12 @@ public sealed partial class DevelopmentCommandsViewModel(
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
+    [NotifyPropertyChangedFor(nameof(DetectedParameters))]
     private string _alias = string.Empty;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
+    [NotifyPropertyChangedFor(nameof(DetectedParameters), nameof(HasDetectedParameters))]
     private string _command = string.Empty;
 
     [ObservableProperty]
@@ -79,6 +90,10 @@ public sealed partial class DevelopmentCommandsViewModel(
     /// <summary>Onde "Testar" roda. Fica entre um teste e outro.</summary>
     [ObservableProperty]
     private string _testDirectory = string.Empty;
+
+    /// <summary>Os <c>nome=valor</c> que "Testar" passa depois do apelido.</summary>
+    [ObservableProperty]
+    private string _testArguments = string.Empty;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(CancelTestCommand))]
@@ -100,7 +115,26 @@ public sealed partial class DevelopmentCommandsViewModel(
 
     public string SaveLabel => IsEditing ? "Salvar alterações" : "Criar comando";
 
+    /// <summary>Os parâmetros do comando em edição, enquanto o usuário digita.</summary>
+    public string? DetectedParameters =>
+        CommandParameters.Names(Command) is { Count: > 0 } names
+            ? $"Parâmetros: {string.Join(", ", names)} — quem chama preenche com "
+              + CommandAliasResolver.UsageOf(AliasForUsage, names)
+            : null;
+
+    public bool HasDetectedParameters => DetectedParameters is not null;
+
     public bool CanSave => !string.IsNullOrWhiteSpace(Alias) && !string.IsNullOrWhiteSpace(Command);
+
+    private string AliasForUsage
+    {
+        get
+        {
+            var alias = Alias.Trim();
+
+            return alias.Length == 0 ? "@apelido" : alias[0] == '@' ? alias : "@" + alias;
+        }
+    }
 
     [RelayCommand]
     public async Task LoadAsync(CancellationToken cancellationToken)
@@ -224,17 +258,36 @@ public sealed partial class DevelopmentCommandsViewModel(
             return;
         }
 
+        // Só comando com {nome} usa o campo: os outros testam como sempre, pelo apelido.
+        var arguments = item.HasParameters ? TestArguments.Trim() : string.Empty;
+        var expansion = CommandAliasResolver.Expand(item.Command, arguments);
+
+        if (!expansion.IsComplete)
+        {
+            // O campo já vem com o que falta, e nada roda.
+            var blanks = expansion.Missing.Select(name => $"{name}=").ToList();
+
+            TestArguments = string.Join(' ', arguments
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .Where(part => !blanks.Contains(part, StringComparer.OrdinalIgnoreCase))
+                .Concat(blanks));
+            ErrorMessage = expansion.Missing.Count == 1
+                ? $"Preencha {expansion.Missing[0]} em Parâmetros do teste."
+                : $"Preencha {string.Join(", ", expansion.Missing)} em Parâmetros do teste.";
+            return;
+        }
+
         _test?.Dispose();
         _test = new CancellationTokenSource();
 
         TestTitle = $"Teste de {item.Alias} em {TestDirectory.Trim()}";
-        TestOutput.Reset(item.Command);
+        TestOutput.Reset(expansion.Command);
         HasTest = true;
         IsTesting = true;
 
         var progress = new UiProgress<CommandStepProgress>(ApplyTestProgress);
         // Pelo apelido, como a lista da tarefa chama: testa a resolução junto.
-        var entry = item.Alias;
+        var entry = arguments.Length == 0 ? item.Alias : $"{item.Alias} {arguments}";
         var directory = TestDirectory;
 
         try
