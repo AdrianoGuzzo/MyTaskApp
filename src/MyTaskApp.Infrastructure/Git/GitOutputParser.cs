@@ -139,6 +139,63 @@ internal static partial class GitOutputParser
         return entries;
     }
 
+    /// <summary>
+    /// Registros de <c>git status --porcelain=v2 --branch -z</c>. Os cabeçalhos
+    /// <c># branch.upstream</c> e <c># branch.ab +N -M</c> dão o upstream e a
+    /// distância; o resto são alterações. Renomeação (<c>2 …</c>) traz um
+    /// registro extra com o nome antigo, que é pulado.
+    /// </summary>
+    public static GitBranchStatus ParseBranchStatus(string output)
+    {
+        const string UpstreamHeader = "# branch.upstream ";
+        const string DivergenceHeader = "# branch.ab ";
+
+        var changes = new List<string>();
+        string? upstream = null;
+        var ahead = 0;
+        var behind = 0;
+
+        var records = output.Split('\0');
+
+        for (var index = 0; index < records.Length; index++)
+        {
+            var record = records[index];
+
+            if (record.Length == 0)
+            {
+                continue;
+            }
+
+            if (record.StartsWith(UpstreamHeader, StringComparison.Ordinal))
+            {
+                upstream = record[UpstreamHeader.Length..].Trim();
+            }
+            else if (record.StartsWith(DivergenceHeader, StringComparison.Ordinal))
+            {
+                var parts = record[DivergenceHeader.Length..].Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+                if (parts.Length == 2
+                    && int.TryParse(parts[0].TrimStart('+'), NumberStyles.None, CultureInfo.InvariantCulture, out var left)
+                    && int.TryParse(parts[1].TrimStart('-'), NumberStyles.None, CultureInfo.InvariantCulture, out var right))
+                {
+                    ahead = left;
+                    behind = right;
+                }
+            }
+            else if (record[0] is '1' or '2' or 'u' or '?')
+            {
+                changes.Add(record);
+
+                if (record[0] == '2')
+                {
+                    index++;
+                }
+            }
+        }
+
+        return new GitBranchStatus(changes, upstream, ahead, behind);
+    }
+
     /// <summary>"3\t5" de <c>rev-list --left-right --count</c>: 3 só na esquerda, 5 só na direita.</summary>
     public static GitDivergence ParseDivergence(string output)
     {

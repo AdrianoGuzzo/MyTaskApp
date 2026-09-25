@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
+using MyTaskApp.Application.Development;
 using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Reminders;
@@ -67,6 +68,16 @@ public sealed partial class TodayViewModel(
     /// consulta.
     /// </summary>
     private TodayBoard? _board;
+
+    /// <summary>
+    /// O que o Git disse de cada worktree na última conferência (ADR-032). As
+    /// linhas nascem com isto aplicado: sem o cache, o refresh de 60 s apagaria
+    /// as cores e a lista piscaria até o Git responder de novo.
+    /// </summary>
+    private readonly Dictionary<Guid, WorktreeSync> _worktreeSync = [];
+
+    /// <summary>Descarta a resposta de uma conferência que outra mais nova já superou.</summary>
+    private int _worktreeProbe;
 
     [ObservableProperty]
     private string _title = string.Empty;
@@ -198,6 +209,10 @@ public sealed partial class TodayViewModel(
         if (loaded)
         {
             Show(board!);
+
+            // Sem await: o Git é lento perto do banco, e a lista não espera por
+            // ele — as cores chegam quando ele responder.
+            _ = RefreshWorktreesAsync();
         }
     }
 
@@ -628,6 +643,8 @@ public sealed partial class TodayViewModel(
     [RelayCommand]
     public async Task ToggleAsync(TaskRowViewModel row, CancellationToken cancellationToken)
     {
+        var completing = !row.IsCompleted;
+
         var changed = await TryAsync(
             () => row.IsCompleted
                 ? runner.RunAsync<ReopenOccurrenceHandler>(
@@ -640,9 +657,200 @@ public sealed partial class TodayViewModel(
 
         // Só recarrega se deu certo: recarregar depois de falhar apagaria a
         // mensagem de erro antes de o usuário lê-la.
-        if (changed)
+        if (!changed)
         {
-            await LoadAsync(cancellationToken);
+            return;
+        }
+
+        await LoadAsync(cancellationToken);
+
+        if (completing && row.Worktree.HasWorktree)
+        {
+            await OfferWorktreeRemovalAsync(row, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Tarefa concluída com worktree: remover agora? (ADR-032). A pergunta vem
+    /// depois de concluir, e nunca no lugar: concluir não pode depender de o Git
+    /// responder. "Manter" deixa a bolinha acesa na linha concluída.
+    /// </summary>
+    private async Task OfferWorktreeRemovalAsync(TaskRowViewModel row, CancellationToken cancellationToken)
+    {
+        var worktrees = row.Worktree.Worktrees;
+
+        // Confere de novo: a pergunta tem de contar o que existe agora, e não o
+        // que existia no último tique.
+        var syncs = await ProbeWorktreesAsync(worktrees);
+
+        if (!await confirmation.AskAsync(WorktreeRemovalPrompt(worktrees, syncs)))
+        {
+            return;
+        }
+
+        var failures = new List<string>();
+        var removed = 0;
+
+        IsBusy = true;
+
+        try
+        {
+            foreach (var worktree in worktrees)
+            {
+                try
+                {
+                    await runner.RunAsync<RemoveWorktreeHandler, TaskDevelopmentView>(
+                        (handler, token) => handler.HandleAsync(
+                            new RemoveWorktree(row.TaskId, worktree.DevelopmentId), token),
+                        cancellationToken);
+
+                    removed++;
+                }
+                catch (DomainException exception)
+                {
+                    // Alteração não commitada, agente aberto, pasta presa: o
+                    // handler já escreveu a mensagem para o usuário.
+                    failures.Add($"{worktree.RepositoryName}: {exception.Message}");
+                }
+                catch (Exception exception)
+                {
+                    logger.LogError(exception, "WorktreeRemovalOnCompleteFailed {TaskId}", row.TaskId);
+                    failures.Add($"{worktree.RepositoryName}: não foi possível remover o worktree.");
+                }
+            }
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+
+        // A mensagem vem depois da recarga, que limpa as duas faixas ao começar.
+        await LoadAsync(cancellationToken);
+
+        if (failures.Count > 0)
+        {
+            ErrorMessage = string.Join(" ", failures) + " Abra a tarefa na aba Desenvolvimento para resolver.";
+        }
+        else
+        {
+            StatusMessage = removed == 1 ? "Worktree removido." : $"{removed} worktrees removidos.";
+        }
+    }
+
+    /// <summary>
+    /// O texto da pergunta. Alteração não commitada impede a remoção (o Git
+    /// recusa); commit sem push não impede, mas só existe nesta máquina — as
+    /// duas coisas precisam estar escritas antes do clique.
+    /// </summary>
+    public static ConfirmationRequest WorktreeRemovalPrompt(
+        IReadOnlyList<TaskWorktree> worktrees,
+        IReadOnlyDictionary<Guid, WorktreeSync> syncs)
+    {
+        var lines = new List<string>
+        {
+            worktrees.Count == 1
+                ? "A tarefa foi concluída e ainda tem um worktree:"
+                : $"A tarefa foi concluída e ainda tem {worktrees.Count} worktrees:",
+            string.Empty,
+        };
+
+        foreach (var worktree in worktrees)
+        {
+            var sync = syncs.GetValueOrDefault(worktree.DevelopmentId);
+
+            lines.Add($"• {worktree.RepositoryName} · {worktree.Branch} — {WorktreeLineViewModel.Describe(sync)}");
+            lines.Add($"   {worktree.WorktreePath}");
+
+            if (sync is { Changes: > 0 })
+            {
+                lines.Add(sync.Changes == 1
+                    ? "   ⚠ Tem 1 alteração não commitada: este worktree não será removido."
+                    : $"   ⚠ Tem {sync.Changes} alterações não commitadas: este worktree não será removido.");
+            }
+
+            if (sync is { Unpushed: > 0 })
+            {
+                lines.Add(sync.Unpushed == 1
+                    ? "   ⚠ 1 commit ainda não foi enviado (push) e só existe nesta máquina."
+                    : $"   ⚠ {sync.Unpushed} commits ainda não foram enviados (push) e só existem nesta máquina.");
+            }
+        }
+
+        lines.Add(string.Empty);
+        lines.Add("A pasta é apagada; a branch continua no repositório.");
+
+        return new ConfirmationRequest(
+            worktrees.Count == 1 ? "Remover o worktree desta tarefa?" : "Remover os worktrees desta tarefa?",
+            string.Join(Environment.NewLine, lines),
+            "Remover",
+            IsIrreversible: true,
+            CancelLabel: worktrees.Count == 1 ? "Manter worktree" : "Manter worktrees");
+    }
+
+    /// <summary>
+    /// Pede ao Git as cores das bolinhas do quadro inteiro — inclusive das
+    /// concluídas escondidas, para que mostrá-las não comece sem cor.
+    /// </summary>
+    private async Task RefreshWorktreesAsync()
+    {
+        if (_board is not { } board)
+        {
+            return;
+        }
+
+        var worktrees = new[] { board.Overdue, board.Now, board.Today, board.Unscheduled, board.Completed }
+            .SelectMany(tasks => tasks)
+            .SelectMany(task => task.Worktrees ?? [])
+            .DistinctBy(worktree => worktree.DevelopmentId)
+            .ToList();
+
+        var probe = ++_worktreeProbe;
+
+        if (worktrees.Count == 0)
+        {
+            _worktreeSync.Clear();
+            return;
+        }
+
+        var syncs = await ProbeWorktreesAsync(worktrees);
+
+        if (probe != _worktreeProbe || syncs.Count == 0)
+        {
+            return;
+        }
+
+        _worktreeSync.Clear();
+
+        foreach (var (id, sync) in syncs)
+        {
+            _worktreeSync[id] = sync;
+        }
+
+        foreach (var row in Sections.SelectMany(section => section.Items))
+        {
+            row.Worktree.Apply(_worktreeSync);
+        }
+    }
+
+    /// <summary>
+    /// Nunca lança e nunca mexe nas faixas de erro: é um indicador, e o Git
+    /// fora do ar não é motivo para interromper quem está usando a lista.
+    /// </summary>
+    private async Task<IReadOnlyDictionary<Guid, WorktreeSync>> ProbeWorktreesAsync(
+        IReadOnlyList<TaskWorktree> worktrees)
+    {
+        try
+        {
+            var syncs = await runner.RunAsync<ProbeWorktreesHandler, IReadOnlyList<WorktreeSync>>(
+                (handler, token) => handler.HandleAsync(new ProbeWorktrees(worktrees), token),
+                CancellationToken.None);
+
+            return syncs.ToDictionary(sync => sync.DevelopmentId);
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "WorktreeProbeFailed");
+            return new Dictionary<Guid, WorktreeSync>();
         }
     }
 
@@ -736,7 +944,12 @@ public sealed partial class TodayViewModel(
         Sections.Add(new TodaySectionViewModel(
             header,
             section,
-            tasks.Select(task => new TaskRowViewModel(task, isCompleted)),
+            tasks.Select(task =>
+            {
+                var row = new TaskRowViewModel(task, isCompleted);
+                row.Worktree.Apply(_worktreeSync);
+                return row;
+            }),
 
             // Concluída não reordena (ADR-022). A conta não olha a contagem de
             // propósito: a linha decide a alça por IsCompleted, e um segundo

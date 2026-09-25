@@ -12,11 +12,16 @@ namespace MyTaskApp.Desktop.Views;
 /// Liga a confirmação forte do §7: faixa de aviso e botão de perigo. O foco
 /// continua em Cancelar nos dois modos.
 /// </param>
+/// <param name="CancelLabel">
+/// O botão que não faz nada, quando "Cancelar" não diz o que acontece — depois
+/// de concluir a tarefa, "Manter worktree" é uma escolha, não uma desistência.
+/// </param>
 public sealed record ConfirmationRequest(
     string Headline,
     string Message,
     string ConfirmLabel,
-    bool IsIrreversible = false);
+    bool IsIrreversible = false,
+    string CancelLabel = "Cancelar");
 
 /// <summary>
 /// Pergunta antes de agir. Existe como porta para que os ViewModels sejam
@@ -48,6 +53,7 @@ public sealed partial class ConfirmWindow : Window
         HeadlineText.Text = request.Headline;
         MessageText.Text = request.Message;
         ConfirmButton.Content = request.ConfirmLabel;
+        CancelButton.Content = request.CancelLabel;
         DangerNotice.IsVisible = request.IsIrreversible;
 
         if (request.IsIrreversible)
