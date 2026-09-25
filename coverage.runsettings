@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cobertura de testes (coverlet.collector). Usado pelo CI e pelo
+  scripts/coverage.ps1, que reproduz localmente o mesmo portao do CI.
+
+  O limite minimo NAO fica aqui: o coverlet.collector nao sabe reprovar. Quem
+  reprova e o scripts/coverage.ps1, depois de o ReportGenerator juntar os
+  relatorios dos cinco projetos de teste.
+-->
+<RunSettings>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="XPlat Code Coverage">
+        <Configuration>
+          <Format>cobertura</Format>
+          <!-- So o codigo do produto conta; os proprios testes nao.
+               O Desktop se chama MyTaskApp (AssemblyName do .exe). -->
+          <Include>[MyTaskApp.Domain]*,[MyTaskApp.Application]*,[MyTaskApp.Infrastructure]*,[MyTaskApp]*</Include>
+          <!-- Migrations sao geradas pelo dotnet-ef; ja sao exercitadas pelos
+               testes de integracao, mas nao e codigo que alguem escreve.
+               obj/ traz o que os geradores emitem (interop COM, XAML). -->
+          <ExcludeByFile>**/Persistence/Migrations/*.cs,**/obj/**/*.cs</ExcludeByFile>
+          <ExcludeByAttribute>GeneratedCodeAttribute,CompilerGeneratedAttribute,ExcludeFromCodeCoverageAttribute</ExcludeByAttribute>
+          <SkipAutoProps>true</SkipAutoProps>
+          <DeterministicReport>false</DeterministicReport>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>
