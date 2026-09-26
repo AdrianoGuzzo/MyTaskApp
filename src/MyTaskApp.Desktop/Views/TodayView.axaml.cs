@@ -128,6 +128,7 @@ public sealed partial class TodayView : UserControl
         }
 
         e.Handled = true;
+        viewModel.SeeAgentAlerts(row);
 
         // Um agente por repositório (ADR-031): com mais de um, o usuário escolhe qual.
         if (row.Agents.Count > 1)
@@ -138,7 +139,7 @@ public sealed partial class TodayView : UserControl
             {
                 menu.Items.Add(new MenuItem
                 {
-                    Header = $"Abrir terminal: {agent.Label}",
+                    Header = $"Abrir terminal: {agent.Label} ({agent.StatusText})",
                     Command = viewModel.FocusAgentOfCommand,
                     CommandParameter = agent,
                 });

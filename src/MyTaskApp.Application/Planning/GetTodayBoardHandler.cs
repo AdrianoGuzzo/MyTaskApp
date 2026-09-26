@@ -110,7 +110,9 @@ public sealed class GetTodayBoardHandler(
                     row.DevelopmentId,
                     agents?.Find(row.ProviderId)?.Name ?? row.ProviderId,
                     RepositoryName(row.RepositoryPath),
-                    row.Branch))
+                    row.Branch,
+                    row.Activity,
+                    row.ActivityChangedAt))
                 .ToList();
 
     private static IReadOnlyList<TaskWorktree>? Worktrees(IReadOnlyList<WorktreeRow>? rows) =>
@@ -125,7 +127,8 @@ public sealed class GetTodayBoardHandler(
                     row.WorktreePath))
                 .ToList();
 
-    private static string? RepositoryName(string? path)
+    /// <summary>"ecossistema-core" de <c>C:\Projetos\ecossistema-core</c>.</summary>
+    internal static string? RepositoryName(string? path)
     {
         if (string.IsNullOrWhiteSpace(path))
         {

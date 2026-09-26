@@ -39,6 +39,9 @@ internal sealed partial class WindowsTerminalWindowManager(ILogger<WindowsTermin
     private const uint GaRootOwner = 3;
     private const int SwRestore = 9;
     private const uint AttachParentProcess = unchecked((uint)-1);
+    private const uint FlashwStop = 0;
+    private const uint FlashwAll = 0x3;
+    private const uint FlashwTimerNoForeground = 0xC;
 
     // O console é um só por processo: dois pedidos simultâneos se anexariam um
     // por cima do outro.
@@ -48,23 +51,11 @@ internal sealed partial class WindowsTerminalWindowManager(ILogger<WindowsTermin
     {
         try
         {
-            var window = ConsoleWindowOf(processId);
-
-            if (window == 0)
-            {
-                window = MainWindowOf(processId);
-            }
-
-            if (window == 0)
-            {
-                return Task.FromResult(false);
-            }
-
-            var target = GetAncestor(window, GaRootOwner);
+            var target = VisibleWindowOf(processId);
 
             if (target == 0)
             {
-                target = window;
+                return Task.FromResult(false);
             }
 
             if (IsIconic(target))
@@ -85,6 +76,91 @@ internal sealed partial class WindowsTerminalWindowManager(ILogger<WindowsTermin
             logger.LogWarning(exception, "TerminalFocusUnavailable {ProcessId}", processId);
             return Task.FromResult(false);
         }
+    }
+
+    /// <summary>
+    /// Compara a janela do terminal com a que está em primeiro plano (ADR-037).
+    /// Com vários consoles como abas da mesma janela do Windows Terminal, basta
+    /// a janela estar na frente — a aba não se descobre (a mesma limitação do foco).
+    /// </summary>
+    public Task<bool> IsInForegroundAsync(int processId)
+    {
+        try
+        {
+            var target = VisibleWindowOf(processId);
+
+            return Task.FromResult(target != 0 && target == GetForegroundWindow());
+        }
+        catch (Exception exception) when (exception is DllNotFoundException or EntryPointNotFoundException)
+        {
+            logger.LogWarning(exception, "TerminalForegroundUnavailable {ProcessId}", processId);
+            return Task.FromResult(false);
+        }
+    }
+
+    /// <summary>
+    /// Pisca botão e moldura até a janela vir para a frente (<c>FLASHW_TIMERNOFG</c>):
+    /// quem para de piscar é o próprio Windows, quando o usuário chega ao
+    /// terminal — o app não precisa vigiar o foco.
+    /// </summary>
+    public Task<bool> FlashAsync(int processId) =>
+        Task.FromResult(Flash(processId, FlashwAll | FlashwTimerNoForeground));
+
+    public Task StopFlashingAsync(int processId)
+    {
+        Flash(processId, FlashwStop);
+        return Task.CompletedTask;
+    }
+
+    private bool Flash(int processId, uint flags)
+    {
+        try
+        {
+            var target = VisibleWindowOf(processId);
+
+            if (target == 0)
+            {
+                return false;
+            }
+
+            var info = new FlashWindowInfo
+            {
+                Size = (uint)Marshal.SizeOf<FlashWindowInfo>(),
+                Window = target,
+                Flags = flags,
+            };
+
+            FlashWindowEx(in info);
+            return true;
+        }
+        catch (Exception exception) when (exception is DllNotFoundException or EntryPointNotFoundException)
+        {
+            logger.LogWarning(exception, "TerminalFlashUnavailable {ProcessId}", processId);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// A janela que o usuário vê: a do console (ou a principal do processo) e,
+    /// no Windows Terminal, a dona dela. <c>0</c> quando não há.
+    /// </summary>
+    private static nint VisibleWindowOf(int processId)
+    {
+        var window = ConsoleWindowOf(processId);
+
+        if (window == 0)
+        {
+            window = MainWindowOf(processId);
+        }
+
+        if (window == 0)
+        {
+            return 0;
+        }
+
+        var owner = GetAncestor(window, GaRootOwner);
+
+        return owner == 0 ? window : owner;
     }
 
     /// <summary>
@@ -203,4 +279,20 @@ internal sealed partial class WindowsTerminalWindowManager(ILogger<WindowsTermin
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool BringWindowToTop(nint window);
+
+    // O retorno diz se a janela estava ativa antes, não se deu certo: ignorado.
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool FlashWindowEx(in FlashWindowInfo info);
+
+    /// <summary><c>FLASHWINFO</c>. Contagem e intervalo zerados: o ritmo do cursor, sem fim.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    private struct FlashWindowInfo
+    {
+        public uint Size;
+        public nint Window;
+        public uint Flags;
+        public uint Count;
+        public uint Timeout;
+    }
 }

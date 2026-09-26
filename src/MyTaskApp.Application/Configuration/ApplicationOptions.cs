@@ -35,6 +35,14 @@ public sealed class ApplicationOptions
     /// </summary>
     public int AgentSessionReconcileSeconds { get; set; } = 60;
 
+    /// <summary>
+    /// A porta local (só 127.0.0.1) em que os hooks do agente avisam o app
+    /// (ADR-037). Fixa de propósito: o Claude que ficou aberto com o app
+    /// fechado guarda esta URL e volta a ser ouvido quando o app reabre. Ocupada,
+    /// vale qualquer livre; <c>0</c> = sempre qualquer livre.
+    /// </summary>
+    public int AgentEventsPort { get; set; } = 47831;
+
     /// <summary>Limites defensivos: um tique de 0 s fritaria o disco.</summary>
     public TimeSpan ToReminderTickPeriod() =>
         TimeSpan.FromSeconds(Math.Clamp(ReminderTickSeconds, 5, 3600));

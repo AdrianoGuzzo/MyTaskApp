@@ -19,6 +19,7 @@ using MyTaskApp.Infrastructure.Persistence;
 using MyTaskApp.Infrastructure.Persistence.Queries;
 using MyTaskApp.Infrastructure.Persistence.Repositories;
 using MyTaskApp.Infrastructure.Processes;
+using MyTaskApp.Infrastructure.Storage;
 using MyTaskApp.Infrastructure.Terminals;
 using MyTaskApp.Infrastructure.Terminals.Windows;
 
@@ -89,6 +90,14 @@ public static class DependencyInjection
         services.AddSingleton(_ => ExecutableLocator.ForCurrentSystem());
         services.AddSingleton<IAgentCliProvider, ClaudeCodeCliProvider>();
         services.AddSingleton<IAgentProcessTracker, AgentProcessTracker>();
+
+        // Os avisos do agente (ADR-037): o arquivo de hooks mora com os dados
+        // do usuário, e a porta local é uma só para o app inteiro.
+        services.AddSingleton(provider => ClaudeCodeHooks.ForCurrentSystem(
+            Path.Combine(UserDataLocation.Current.State, "agents"),
+            provider.GetRequiredService<ILogger<ClaudeCodeHooks>>()));
+        services.AddSingleton<AgentEventListener>();
+        services.AddSingleton<IAgentEventEndpoint>(provider => provider.GetRequiredService<AgentEventListener>());
 
         if (OperatingSystem.IsWindows())
         {

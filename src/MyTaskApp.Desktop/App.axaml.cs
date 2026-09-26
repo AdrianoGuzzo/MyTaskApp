@@ -250,6 +250,11 @@ public sealed partial class App : Avalonia.Application
         });
 
         monitor.Start();
+
+        // A porta local dos hooks (ADR-037). Antes de qualquer "Iniciar": sem
+        // ela, o agente abre sem acompanhamento. Os Claude que ficaram abertos
+        // com o app fechado voltam a ser ouvidos a partir daqui.
+        services.GetRequiredService<IAgentEventEndpoint>().Start();
     }
 
     private static void ShowTags(IServiceProvider services, Window owner)
@@ -415,6 +420,10 @@ public sealed partial class App : Avalonia.Application
         // Só para de vigiar: o Claude continua aberto no terminal, e a próxima
         // abertura o reencontra pelo PID (ADR-030).
         services.GetRequiredService<AgentSessionMonitor>().Dispose();
+
+        // Para de ouvir antes de o banco ser solto: um aviso em voo termina ou
+        // é descartado, nunca gravado pela metade.
+        (services.GetRequiredService<IAgentEventEndpoint>() as IDisposable)?.Dispose();
 
         _tray?.Dispose();
         _tray = null;
