@@ -1114,7 +1114,7 @@
                            Classes.hint="{Binding IsChecking}"
                            Text="{Binding StatusText}" />
 
-                <!-- O que os hooks disseram por último (ADR-036): a pergunta, o erro. -->
+                <!-- O que os hooks disseram por último (ADR-037): a pergunta, o erro. -->
                 <TextBlock x:Name="AgentActivity"
                            Classes="hint"
                            TextWrapping="Wrap"
@@ -1251,7 +1251,7 @@
                 </StackPanel>
 
                 <!--
-                  Acompanhamento pelos hooks do agente (ADR-036). Só este app
+                  Acompanhamento pelos hooks do agente (ADR-037). Só este app
                   recebe os hooks, e só nos agentes que ele abre: nenhum arquivo
                   de configuração do usuário é alterado.
                 -->

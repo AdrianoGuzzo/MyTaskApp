@@ -613,7 +613,7 @@ public class AgentSessionHandlerTests
         session.Status.Should().Be(AgentSessionStatus.Exited);
     }
 
-    // --- Acompanhamento pelos hooks (ADR-036) -------------------------------
+    // --- Acompanhamento pelos hooks (ADR-037) -------------------------------
 
     /// <summary>
     /// A associação é explícita: o processo nasce sabendo a tarefa, o ambiente,

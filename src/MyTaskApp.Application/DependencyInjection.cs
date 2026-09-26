@@ -96,7 +96,7 @@ public static class DependencyInjection
         services.AddScoped<EndAgentSessionHandler>();
         services.AddScoped<ReconcileAgentSessionsHandler>();
 
-        // Os avisos do agente pelos hooks dele (ADR-036). A porta local vem da
+        // Os avisos do agente pelos hooks dele (ADR-037). A porta local vem da
         // Infrastructure; o aviso na tela, do Desktop — registrado antes desta
         // chamada, ele ganha do objeto nulo.
         services.AddScoped<RecordAgentEventHandler>();

@@ -23,7 +23,7 @@ public sealed record AgentSessionView(
     public bool IsActive => Status is AgentSessionStatus.Starting or AgentSessionStatus.Running;
 
     /// <summary>
-    /// Por que a sessão que acabou de abrir ficou sem acompanhamento (ADR-036).
+    /// Por que a sessão que acabou de abrir ficou sem acompanhamento (ADR-037).
     /// Só na resposta do "Iniciar": não é gravado.
     /// </summary>
     public string? MonitoringNote { get; init; }
@@ -50,7 +50,7 @@ public sealed record AgentSessionView(
 /// <summary>
 /// O agente, se está instalado, como instalar quando não está, e os parâmetros
 /// com que ele abre agora (o salvo, ou o padrão do agente) — e se abre
-/// acompanhado pelos hooks (ADR-036).
+/// acompanhado pelos hooks (ADR-037).
 /// </summary>
 public sealed record AgentCliStatus(
     string ProviderId,

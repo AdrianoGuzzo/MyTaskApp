@@ -13,7 +13,7 @@ using MyTaskApp.Domain.Tasks;
 namespace MyTaskApp.Desktop.Tests.ViewModels;
 
 /// <summary>
-/// O que o usuário vê quando o agente para esperando por ele (ADR-036): o
+/// O que o usuário vê quando o agente para esperando por ele (ADR-037): o
 /// aviso no canto, o selo da linha e o status do card.
 /// </summary>
 public class AgentAttentionTests

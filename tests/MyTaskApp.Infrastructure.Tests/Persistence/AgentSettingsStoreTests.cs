@@ -56,7 +56,7 @@ public class AgentSettingsStoreTests
     }
 
     /// <summary>
-    /// A linha pode nascer só pelo acompanhamento (ADR-036): os parâmetros
+    /// A linha pode nascer só pelo acompanhamento (ADR-037): os parâmetros
     /// continuam "nunca salvos", e o padrão do agente continua valendo.
     /// </summary>
     [Fact]

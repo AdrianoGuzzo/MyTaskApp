@@ -4,7 +4,7 @@ using MyTaskApp.Application.Agents;
 namespace MyTaskApp.Infrastructure.Agents.ClaudeCode;
 
 /// <summary>
-/// O JSON de um hook do Claude Code → <see cref="AgentEvent"/> (ADR-036). É o
+/// O JSON de um hook do Claude Code → <see cref="AgentEvent"/> (ADR-037). É o
 /// único lugar do app que conhece nome de evento do Claude.
 /// </summary>
 /// <remarks>

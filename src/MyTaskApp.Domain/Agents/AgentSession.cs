@@ -25,7 +25,7 @@ public enum AgentSessionStatus
 
 /// <summary>
 /// O que o agente está fazendo <b>dentro</b> do processo, segundo os hooks dele
-/// (ADR-036). É outra dimensão do <see cref="AgentSessionStatus"/>: o status diz
+/// (ADR-037). É outra dimensão do <see cref="AgentSessionStatus"/>: o status diz
 /// se o processo existe; a atividade diz se ele está trabalhando ou esperando
 /// alguém. Os números são gravados no banco; não reordenar.
 /// </summary>
@@ -137,7 +137,7 @@ public sealed class AgentSession
     public bool IsActive => Status is AgentSessionStatus.Starting or AgentSessionStatus.Running;
 
     /// <summary>
-    /// O hash do segredo que só o processo desta sessão conhece (ADR-036).
+    /// O hash do segredo que só o processo desta sessão conhece (ADR-037).
     /// <c>null</c> = sessão aberta sem acompanhamento: nenhum aviso é aceito.
     /// </summary>
     public string? HookTokenHash { get; private set; }

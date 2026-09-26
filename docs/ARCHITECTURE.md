@@ -2048,7 +2048,7 @@ instruções. Remover o worktree com o agente aberto é recusado
 **Limites aceitos:**
 
 - só o Claude Code, e sem escolher agente pela UI;
-- sem terminal embutido e sem ler o que se passa na sessão (o ADR-036
+- sem terminal embutido e sem ler o que se passa na sessão (o ADR-037
   acompanha a atividade pelos hooks, sem ler o terminal);
 - sem "Parar" (não há status `Stopped`): quem encerra é o usuário, no terminal;
 - a aba do Windows Terminal pode não ser a selecionada (ver acima);
@@ -2355,7 +2355,32 @@ porque veio de outro repositório. A padrão foi cadastrada para este.
 
 ---
 
-## ADR-036 — Acompanhar o Claude Code pelos hooks dele
+## ADR-036 — "Abrir Claude Code" no menu da linha
+
+**Decisão:** o menu "⋯" da linha da tela Hoje ganha "Abrir Claude Code", que
+abre o agente (ADR-030) num ambiente da tarefa sem abrir a tarefa. É o mesmo
+caso de uso do card da aba Desenvolvimento (`StartAgentSession`), com os
+parâmetros salvos.
+
+**Só com ambiente pronto.** O item só aparece quando a tarefa tem worktree
+`Ready`, os mesmos que o quadro já traz para a bolinha (ADR-034). Sem
+ambiente não há onde abrir, e um item que só serve para dar erro não vale o
+espaço no menu.
+
+**Mais de um ambiente, a view pergunta qual.** Com um só, abre direto. Com
+mais de um, abre um segundo menu com um item por ambiente
+(`repositório · branch`), no molde do selo de vários agentes (ADR-031). Por
+isso o item é um clique de code-behind, e não um comando: perguntar é
+trabalho da view.
+
+**Ambiente com agente já aberto traz o terminal.** São um agente por
+ambiente, e o caso de uso recusaria o segundo. Quem clica quer o agente
+daquele ambiente, então o item, marcado "(aberto)", faz o mesmo que o selo:
+traz o terminal para a frente.
+
+---
+
+## ADR-037 — Acompanhar o Claude Code pelos hooks dele
 
 **Contexto:** o ADR-030 liga a tarefa ao **processo** do Claude: o app sabe se
 ele está aberto, mas não o que ele está fazendo. Quem deixa o Claude

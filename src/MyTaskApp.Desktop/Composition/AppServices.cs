@@ -59,7 +59,7 @@ internal static class AppServices
             .AddSingleton<AlertPresenter>()
             .AddSingleton<IAlertPresenter>(services => services.GetRequiredService<AlertPresenter>())
 
-            // O aviso do agente de IA (ADR-036) sai pela mesma pilha de janelas.
+            // O aviso do agente de IA (ADR-037) sai pela mesma pilha de janelas.
             .AddSingleton<IAgentAttentionPresenter>(services => services.GetRequiredService<AlertPresenter>())
             .AddTransient<AgentAlertViewModel>()
             .AddSingleton<ISoundPlayer, WindowsSoundPlayer>()

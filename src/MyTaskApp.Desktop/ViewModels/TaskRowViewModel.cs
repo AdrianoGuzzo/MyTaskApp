@@ -50,6 +50,8 @@ public sealed class TaskRowViewModel : ObservableObject
         Agents = (task.ActiveAgents ?? []).Select(agent => new TaskAgentViewModel(this, agent)).ToList();
 
         Worktree = new TaskWorktreeViewModel(task.Worktrees, isCompleted);
+
+        WorktreeChoices = Worktree.Worktrees.Select(worktree => new TaskWorktreeChoice(this, worktree)).ToList();
     }
 
     /// <summary>
@@ -73,11 +75,17 @@ public sealed class TaskRowViewModel : ObservableObject
 
     public bool HasActiveAgent => Agents.Count > 0;
 
+    /// <summary>
+    /// Os ambientes prontos onde "Abrir Claude Code" pode abrir o agente
+    /// (ADR-036). Vazio, o item nem aparece no menu.
+    /// </summary>
+    public IReadOnlyList<TaskWorktreeChoice> WorktreeChoices { get; }
+
     /// <summary>A bolinha de worktree e o que o balão diz dele (ADR-034).</summary>
     public TaskWorktreeViewModel Worktree { get; }
 
     /// <summary>
-    /// O que o selo resume (ADR-036): com vários agentes, o que mais pede o
+    /// O que o selo resume (ADR-037): com vários agentes, o que mais pede o
     /// usuário — uma pergunta vence uma resposta pronta, que vence "trabalhando".
     /// </summary>
     /// <summary>
@@ -278,7 +286,7 @@ public sealed class TaskAgentViewModel(TaskRowViewModel row, ActiveAgent agent)
         ? agent.Branch is { } branch ? $"{repository} · {branch}" : repository
         : agent.AgentName;
 
-    /// <summary>O que os hooks disseram por último (ADR-036).</summary>
+    /// <summary>O que os hooks disseram por último (ADR-037).</summary>
     public AgentActivity Activity { get; } = agent.Activity;
 
     /// <summary>Quando <see cref="Activity"/> mudou: separa a pendência nova da já vista.</summary>
@@ -296,7 +304,7 @@ public sealed class TaskAgentViewModel(TaskRowViewModel row, ActiveAgent agent)
 }
 
 /// <summary>
-/// Uma pendência de agente, identificada pelo momento em que surgiu (ADR-036).
+/// Uma pendência de agente, identificada pelo momento em que surgiu (ADR-037).
 /// A atividade entra junto porque um hook sem horário ainda assim muda o que se pede.
 /// </summary>
 public readonly record struct AgentAlertKey(
@@ -304,3 +312,23 @@ public readonly record struct AgentAlertKey(
     Guid? DevelopmentId,
     AgentActivity Activity,
     DateTimeOffset? ChangedAt);
+
+/// <summary>
+/// Um ambiente da linha onde abrir o agente — o item do menu "Abrir Claude
+/// Code" quando a tarefa tem mais de um (ADR-036).
+/// </summary>
+public sealed class TaskWorktreeChoice(TaskRowViewModel row, TaskWorktree worktree)
+{
+    public TaskRowViewModel Row { get; } = row;
+
+    public TaskWorktree Worktree { get; } = worktree;
+
+    /// <summary>O agente já aberto neste ambiente, se houver: aí a escolha só traz o terminal para a frente.</summary>
+    public TaskAgentViewModel? RunningAgent { get; } =
+        row.Agents.FirstOrDefault(agent => agent.DevelopmentId == worktree.DevelopmentId);
+
+    /// <summary>"ecossistema-core · feature/x", com "(aberto)" quando já tem agente.</summary>
+    public string Label => RunningAgent is null
+        ? $"{Worktree.RepositoryName} · {Worktree.Branch}"
+        : $"{Worktree.RepositoryName} · {Worktree.Branch} (aberto)";
+}

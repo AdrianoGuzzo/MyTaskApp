@@ -123,6 +123,15 @@
         -->
         <Border.ContextFlyout>
           <MenuFlyout Placement="BottomEdgeAlignedRight">
+            <!--
+              Só com ambiente pronto (ADR-036). Clique de code-behind, e não
+              comando: com mais de um ambiente a view pergunta qual.
+            -->
+            <MenuItem Classes="startAgent"
+                      Header="Abrir Claude Code"
+                      IsVisible="{Binding Worktree.HasWorktree}"
+                      Click="OnStartAgentClick" />
+            <Separator IsVisible="{Binding Worktree.HasWorktree}" />
             <MenuItem Header="Arquivar"
                       Command="{Binding #Root.((vm:TodayViewModel)DataContext).ArchiveCommand}"
                       CommandParameter="{Binding}" />
@@ -136,7 +145,7 @@
         <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto,Auto,Auto,Auto">
 
           <!--
-            Um agente parou esperando o usuário (ADR-036): uma moldura âmbar
+            Um agente parou esperando o usuário (ADR-037): uma moldura âmbar
             em volta da linha, que respira até o clique no selo e depois fica
             parada e fraca enquanto a pendência durar. Primeiro filho da grade,
             atrás de tudo, e sem hit test: não muda o tamanho da linha nem
@@ -459,7 +468,7 @@
           <Button Grid.Column="8"
                   Classes="rowMenu"
                   Content="⋯"
-                  ToolTip.Tip="Arquivar ou excluir este checklist"
+                  ToolTip.Tip="Mais ações deste checklist"
                   Click="OnRowMenuClick" />
 
           <TextBlock Grid.Column="9"
@@ -541,7 +550,7 @@
       <Setter Property="TextTrimming" Value="CharacterEllipsis" />
     </Style>
 
-    <!-- O agente parou esperando o usuário (ADR-036): a cor do ⚠ do lembrete. -->
+    <!-- O agente parou esperando o usuário (ADR-037): a cor do ⚠ do lembrete. -->
     <Style Selector="TextBlock.agentBadge.attention">
       <Setter Property="Foreground" Value="{DynamicResource WidgetCautionBrush}" />
       <Setter Property="FontWeight" Value="SemiBold" />

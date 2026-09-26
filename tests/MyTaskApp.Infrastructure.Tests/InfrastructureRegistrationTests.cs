@@ -94,7 +94,7 @@ public class InfrastructureRegistrationTests : IDisposable
     }
 
     /// <summary>
-    /// A porta dos hooks (ADR-036) é uma só, e montar o contêiner não abre
+    /// A porta dos hooks (ADR-037) é uma só, e montar o contêiner não abre
     /// socket nenhum: quem manda ouvir é a App, com <c>Start()</c>.
     /// </summary>
     [Fact]

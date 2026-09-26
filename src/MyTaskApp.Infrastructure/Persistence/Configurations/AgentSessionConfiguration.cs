@@ -73,7 +73,7 @@ internal sealed class AgentSessionConfiguration : IEntityTypeConfiguration<Agent
         builder.Property(session => session.FailureReason)
             .HasMaxLength(AgentSession.MaxFailureLength);
 
-        // O acompanhamento pelos hooks do agente (ADR-036). Só o hash do
+        // O acompanhamento pelos hooks do agente (ADR-037). Só o hash do
         // segredo: o segredo mesmo vive no ambiente do processo.
         builder.Property(session => session.HookTokenHash)
             .HasMaxLength(AgentSession.HookTokenHashLength);

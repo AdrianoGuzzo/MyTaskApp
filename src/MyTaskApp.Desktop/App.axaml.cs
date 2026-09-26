@@ -251,7 +251,7 @@ public sealed partial class App : Avalonia.Application
 
         monitor.Start();
 
-        // A porta local dos hooks (ADR-036). Antes de qualquer "Iniciar": sem
+        // A porta local dos hooks (ADR-037). Antes de qualquer "Iniciar": sem
         // ela, o agente abre sem acompanhamento. Os Claude que ficaram abertos
         // com o app fechado voltam a ser ouvidos a partir daqui.
         services.GetRequiredService<IAgentEventEndpoint>().Start();

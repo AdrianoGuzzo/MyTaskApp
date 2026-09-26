@@ -48,7 +48,7 @@ public sealed record TaskWorktree(
 /// <summary>
 /// Um agente aberto: o nome ("Claude Code") e o ambiente em que roda — o que o
 /// menu do selo mostra quando a tarefa tem mais de um — e o que ele está
-/// fazendo, segundo os hooks (ADR-036). <see cref="ActivityChangedAt"/> é o
+/// fazendo, segundo os hooks (ADR-037). <see cref="ActivityChangedAt"/> é o
 /// que distingue uma pendência nova de uma que o usuário já viu.
 /// </summary>
 public sealed record ActiveAgent(

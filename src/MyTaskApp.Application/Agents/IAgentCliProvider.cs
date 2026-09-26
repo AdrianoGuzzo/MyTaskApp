@@ -43,14 +43,14 @@ public interface IAgentCliProvider
     /// <summary>
     /// O que o terminal deve executar para abrir o agente em <paramref name="context"/>.
     /// Com <see cref="AgentCliStartContext.Monitoring"/>, o agente também sai
-    /// ligado aos avisos do app (ADR-036).
+    /// ligado aos avisos do app (ADR-037).
     /// </summary>
     TerminalLaunchOptions CreateLaunch(AgentCliStartContext context, CliDetectionResult detection);
 
     /// <summary>
     /// Por que o agente não conseguiria avisar o app ao abrir em
     /// <paramref name="workingDirectory"/>, com os avisos indo para
-    /// <paramref name="endpoint"/> (ADR-036): o agente não tem hooks, ou
+    /// <paramref name="endpoint"/> (ADR-037): o agente não tem hooks, ou
     /// a configuração do usuário os desliga. <c>null</c> = consegue.
     /// </summary>
     string? MonitoringUnavailableReason(string workingDirectory, Uri endpoint);
@@ -80,7 +80,7 @@ public sealed record CliDetectionResult
 /// </param>
 /// <param name="Monitoring">
 /// Para onde o agente manda os avisos e o que ele recebe no ambiente para se
-/// identificar; <c>null</c> = abrir sem acompanhamento (ADR-036).
+/// identificar; <c>null</c> = abrir sem acompanhamento (ADR-037).
 /// </param>
 public sealed record AgentCliStartContext(
     Guid TaskId,

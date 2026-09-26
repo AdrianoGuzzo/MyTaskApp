@@ -288,7 +288,7 @@ public class AgentSessionPersistenceTests
     }
 
     /// <summary>
-    /// O que os hooks disseram sobrevive ao app fechar (ADR-036): reabrir mostra
+    /// O que os hooks disseram sobrevive ao app fechar (ADR-037): reabrir mostra
     /// "aguardando você", e não "em execução" sem mais nada.
     /// </summary>
     [Fact]

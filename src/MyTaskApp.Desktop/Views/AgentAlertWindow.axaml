@@ -15,7 +15,7 @@
         TransparencyLevelHint="Transparent">
 
   <!--
-    O aviso do agente (ADR-036). Mesmo cartão do lembrete, no mesmo canto, mas
+    O aviso do agente (ADR-037). Mesmo cartão do lembrete, no mesmo canto, mas
     nunca rouba o foco: quem está digitando em outro lugar continua digitando.
   -->
   <Window.Styles>

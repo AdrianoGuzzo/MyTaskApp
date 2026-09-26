@@ -79,7 +79,7 @@ internal sealed partial class WindowsTerminalWindowManager(ILogger<WindowsTermin
     }
 
     /// <summary>
-    /// Compara a janela do terminal com a que está em primeiro plano (ADR-036).
+    /// Compara a janela do terminal com a que está em primeiro plano (ADR-037).
     /// Com vários consoles como abas da mesma janela do Windows Terminal, basta
     /// a janela estar na frente — a aba não se descobre (a mesma limitação do foco).
     /// </summary>

@@ -21,7 +21,7 @@ public class ClaudeCodeCliProviderTests : IDisposable
 
     private readonly RecordingProcessRunner _runner = new();
 
-    /// <summary>Onde o arquivo de hooks é gravado (ADR-036): uma pasta por teste.</summary>
+    /// <summary>Onde o arquivo de hooks é gravado (ADR-037): uma pasta por teste.</summary>
     private readonly string _state = Path.Combine(Path.GetTempPath(), "mytaskapp-tests", Guid.NewGuid().ToString("N"));
 
     public void Dispose()
@@ -191,7 +191,7 @@ public class ClaudeCodeCliProviderTests : IDisposable
 
     private static readonly string Worktree = @"C:\Projects\eco core-feature-123";
 
-    // --- Acompanhamento (ADR-036) ------------------------------------------
+    // --- Acompanhamento (ADR-037) ------------------------------------------
 
     private static readonly AgentMonitoring Monitoring = new(
         new Uri("http://127.0.0.1:47831/api/claude/events"),
