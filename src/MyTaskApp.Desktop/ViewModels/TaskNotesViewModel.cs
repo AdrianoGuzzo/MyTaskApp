@@ -9,6 +9,19 @@ using MyTaskApp.Domain.Tasks;
 
 namespace MyTaskApp.Desktop.ViewModels;
 
+/// <summary>Como a anotação aparece enquanto é escrita.</summary>
+public enum NotesViewMode
+{
+    /// <summary>Só a caixa de texto, com o Markdown cru.</summary>
+    Write,
+
+    /// <summary>Só o texto formatado, como vai ficar depois de concluída.</summary>
+    Preview,
+
+    /// <summary>Os dois lado a lado, o formatado acompanhando cada tecla.</summary>
+    Split,
+}
+
 /// <summary>
 /// A anotação livre de um item do checklist (§12): texto em Markdown que o
 /// usuário escreve enquanto a tarefa está em aberto e só lê depois que ela é
@@ -73,7 +86,22 @@ public sealed partial class TaskNotesViewModel(
     /// <summary>A aba aberta: <see cref="NotesTab"/> ou <see cref="DevelopmentTab"/>.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsNotesTab))]
+    [NotifyPropertyChangedFor(nameof(IsWide))]
     private int _selectedTabIndex;
+
+    /// <summary>
+    /// Escrever, visualizar ou os dois lado a lado — os modos do VS Code. Só vale
+    /// com a tarefa em aberto: concluída, a anotação é sempre lida formatada.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowsEditor))]
+    [NotifyPropertyChangedFor(nameof(ShowsPreview))]
+    [NotifyPropertyChangedFor(nameof(IsSplit))]
+    [NotifyPropertyChangedFor(nameof(IsWide))]
+    [NotifyPropertyChangedFor(nameof(IsWriteMode))]
+    [NotifyPropertyChangedFor(nameof(IsPreviewMode))]
+    [NotifyPropertyChangedFor(nameof(IsSplitMode))]
+    private NotesViewMode _viewMode;
 
     /// <summary>
     /// Concluída, a anotação vira histórico: dá para ler e copiar, não para
@@ -84,6 +112,11 @@ public sealed partial class TaskNotesViewModel(
     [NotifyPropertyChangedFor(nameof(IsEditable))]
     [NotifyPropertyChangedFor(nameof(HasUnsavedChanges))]
     [NotifyPropertyChangedFor(nameof(TitleError))]
+    [NotifyPropertyChangedFor(nameof(ShowsEditor))]
+    [NotifyPropertyChangedFor(nameof(ShowsPreview))]
+    [NotifyPropertyChangedFor(nameof(IsSplit))]
+    [NotifyPropertyChangedFor(nameof(IsWide))]
+    [NotifyPropertyChangedFor(nameof(PreviewPlaceholder))]
     [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
     private bool _isReadOnly;
 
@@ -112,6 +145,29 @@ public sealed partial class TaskNotesViewModel(
     public string DismissLabel => HasUnsavedChanges ? "Cancelar" : "Fechar";
 
     public bool IsEditable => !IsReadOnly;
+
+    public bool ShowsEditor => IsEditable && ViewMode != NotesViewMode.Preview;
+
+    public bool ShowsPreview => IsReadOnly || ViewMode != NotesViewMode.Write;
+
+    public bool IsSplit => IsEditable && ViewMode == NotesViewMode.Split;
+
+    /// <summary>
+    /// Lado a lado, cada metade na coluna de leitura normal ficaria estreita
+    /// demais; a janela alarga só enquanto a aba da anotação está à vista.
+    /// </summary>
+    public bool IsWide => IsSplit && IsNotesTab;
+
+    public bool IsWriteMode => ViewMode == NotesViewMode.Write;
+
+    public bool IsPreviewMode => ViewMode == NotesViewMode.Preview;
+
+    public bool IsSplitMode => ViewMode == NotesViewMode.Split;
+
+    /// <summary>O que a pré-visualização mostra quando ainda não há texto.</summary>
+    public string PreviewPlaceholder => IsReadOnly
+        ? "Esta tarefa foi concluída sem nenhuma anotação."
+        : "Nada escrito ainda. O que for escrito aparece aqui já formatado.";
 
     public bool HasUnsavedChanges =>
         IsEditable
@@ -175,6 +231,13 @@ public sealed partial class TaskNotesViewModel(
             _ = Developments.ActivateAsync(CancellationToken.None);
         }
     }
+
+    [RelayCommand]
+    private void SetViewMode(NotesViewMode mode) => ViewMode = mode;
+
+    /// <summary>Ctrl+Shift+V, como no VS Code: vai e volta entre escrever e ver.</summary>
+    public void TogglePreview() =>
+        ViewMode = ViewMode == NotesViewMode.Preview ? NotesViewMode.Write : NotesViewMode.Preview;
 
     [RelayCommand(CanExecute = nameof(CanSave))]
     public async Task SaveAsync(CancellationToken cancellationToken)

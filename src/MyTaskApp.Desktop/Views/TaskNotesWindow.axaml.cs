@@ -1,8 +1,10 @@
+using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using MyTaskApp.Desktop.Notes;
 using MyTaskApp.Desktop.ViewModels;
@@ -86,6 +88,7 @@ public sealed partial class TaskNotesWindow : Window
 
         DataContext = viewModel;
         viewModel.CloseRequested += Close;
+        viewModel.PropertyChanged += OnViewModelPropertyChanged;
     }
 
     private TaskNotesViewModel? ViewModel => DataContext as TaskNotesViewModel;
@@ -197,6 +200,20 @@ public sealed partial class TaskNotesWindow : Window
         Editor.CaretIndex = Editor.Text?.Length ?? 0;
     }
 
+    /// <summary>
+    /// Voltando a ver a caixa de texto, o cursor volta para ela: quem trocou de
+    /// modo foi para continuar escrevendo.
+    /// </summary>
+    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(TaskNotesViewModel.ViewMode) && ViewModel is { ShowsEditor: true })
+        {
+            // Depois do layout: o editor acabou de ficar visível, e um controle
+            // escondido não aceita foco.
+            Dispatcher.UIThread.Post(() => Editor.Focus());
+        }
+    }
+
     private void OnFormatClick(object? sender, RoutedEventArgs e)
     {
         if (sender is Control { Tag: string tag }
@@ -227,6 +244,15 @@ public sealed partial class TaskNotesWindow : Window
 
         if (!e.KeyModifiers.HasFlag(KeyModifiers.Control))
         {
+            return;
+        }
+
+        if (e.Key is Key.V
+            && e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift)
+            && ViewModel is { IsEditable: true, IsNotesTab: true } viewModel)
+        {
+            e.Handled = true;
+            viewModel.TogglePreview();
             return;
         }
 
