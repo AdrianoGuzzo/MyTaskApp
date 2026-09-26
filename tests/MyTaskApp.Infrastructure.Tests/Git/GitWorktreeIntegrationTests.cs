@@ -261,6 +261,26 @@ public sealed class GitWorktreeIntegrationTests : IAsyncLifetime
         }
     }
 
+    /// <summary>
+    /// A lista do <c>@</c> no texto do agente (ADR-039): o que está commitado e
+    /// o que é novo entram; o que o <c>.gitignore</c> esconde, não.
+    /// </summary>
+    [Fact]
+    public async Task ListFiles_TrackedAndNew_WithoutTheIgnored()
+    {
+        Assert.SkipWhen(_executable is null, "Git não instalado nesta máquina.");
+
+        await File.WriteAllTextAsync(Path.Combine(Repository, ".gitignore"), "bin/\n", Ct);
+        Directory.CreateDirectory(Path.Combine(Repository, "bin"));
+        Directory.CreateDirectory(Path.Combine(Repository, "src", "Visões"));
+        await File.WriteAllTextAsync(Path.Combine(Repository, "bin", "App.dll"), "x", Ct);
+        await File.WriteAllTextAsync(Path.Combine(Repository, "src", "Visões", "Hoje.cs"), "x", Ct);
+
+        var files = await _git.ListFilesAsync(Repository, Ct);
+
+        files.Should().BeEquivalentTo(["README.md", ".gitignore", "src/Visões/Hoje.cs"]);
+    }
+
     [Fact]
     public async Task LocalChanges_BlockTheUpdateOfTheCheckedOutSource_AndAreKept()
     {

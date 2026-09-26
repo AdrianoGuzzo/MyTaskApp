@@ -435,15 +435,22 @@ public sealed partial class TaskDevelopmentViewModel(
     /// <summary>
     /// A tarefa que esta aba prepara. Chamado uma vez, quando a aba do
     /// repositório nasce. O <paramref name="completion"/> é o dos aliases da
-    /// tarefa, o mesmo para todos os ambientes.
+    /// tarefa, o mesmo para todos os ambientes; o <paramref name="references"/>,
+    /// o do <c>@</c> no texto do agente (ADR-039).
     /// </summary>
-    public void Load(Guid taskId, string taskTitle, bool isReadOnly, AliasCompletionViewModel? completion = null)
+    public void Load(
+        Guid taskId,
+        string taskTitle,
+        bool isReadOnly,
+        AliasCompletionViewModel? completion = null,
+        ReferenceCompletionViewModel? references = null)
     {
         _taskId = taskId;
         _taskTitle = taskTitle;
         IsReadOnly = isReadOnly;
         DirectoryCompletion = completion ?? DirectoryCompletion;
         DirectoryCompletion.IsEnabled = !isReadOnly;
+        Agent.References = references;
         NewBranchName = GitBranchName.Suggest(taskTitle);
         State = DevelopmentPanelState.Loading;
         Agent.PropertyChanged += (_, args) =>

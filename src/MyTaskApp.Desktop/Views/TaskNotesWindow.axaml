@@ -472,6 +472,29 @@
       </Border>
     </DataTemplate>
 
+    <!--
+      Um item do "@" no texto do agente (ADR-039): um ambiente da tarefa, uma
+      pasta ou um arquivo dele. Mesmo desenho da lista de diretórios.
+    -->
+    <DataTemplate x:Key="ReferenceSuggestionTemplate" x:DataType="vm:ReferenceSuggestionViewModel">
+      <Border Classes="aliasItem"
+              Classes.selected="{Binding IsSelected}"
+              ToolTip.Tip="{Binding FullPath}"
+              PointerPressed="OnReferencePressed">
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+          <StackPanel Grid.Column="0" Spacing="1">
+            <TextBlock Classes="aliasName" Text="{Binding Title}" />
+            <TextBlock Classes="aliasPath" Text="{Binding Detail}" />
+          </StackPanel>
+          <TextBlock Grid.Column="1"
+                     Classes="aliasTag"
+                     VerticalAlignment="Top"
+                     Text="{Binding Badge}"
+                     IsVisible="{Binding HasBadge}" />
+        </Grid>
+      </Border>
+    </DataTemplate>
+
   </Window.Resources>
 
   <!--
@@ -1333,7 +1356,34 @@
                            MinHeight="80"
                            MaxHeight="220"
                            VerticalContentAlignment="Top"
-                           PlaceholderText="O que o agente deve fazer ao abrir…" />
+                           PlaceholderText="O que o agente deve fazer ao abrir… Use @ para citar um ambiente ou arquivo desta tarefa." />
+
+                  <!--
+                    O "@" cita os ambientes desta tarefa e os arquivos deles
+                    (ADR-039): Enter insere o caminho, Tab entra na pasta.
+                  -->
+                  <Popup x:Name="AgentPromptPopup"
+                         PlacementTarget="{Binding #AgentPromptBox}"
+                         Placement="Bottom"
+                         IsLightDismissEnabled="True"
+                         IsOpen="{Binding References.IsCompletionOpen, Mode=TwoWay, FallbackValue=False}">
+                    <Border Classes="aliasList" MaxWidth="640">
+                      <DockPanel>
+                        <StackPanel DockPanel.Dock="Bottom" Spacing="2" Margin="10,6,10,4">
+                          <TextBlock Classes="footNote"
+                                     x:Name="AgentPromptReferenceStatus"
+                                     Text="{Binding References.StatusText}"
+                                     IsVisible="{Binding References.HasStatus, FallbackValue=False}" />
+                          <TextBlock Classes="footNote" Text="Enter insere o caminho · Tab entra na pasta · Esc fecha" />
+                        </StackPanel>
+                        <ScrollViewer MaxHeight="320" HorizontalScrollBarVisibility="Disabled">
+                          <ItemsControl x:Name="AgentPromptReferenceList"
+                                        ItemsSource="{Binding References.Suggestions}"
+                                        ItemTemplate="{StaticResource ReferenceSuggestionTemplate}" />
+                        </ScrollViewer>
+                      </DockPanel>
+                    </Border>
+                  </Popup>
                   <CheckBox x:Name="AgentRunDirectly"
                             Content="Executar direto"
                             IsEnabled="{Binding HasPrompt}"

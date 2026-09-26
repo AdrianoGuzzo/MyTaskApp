@@ -359,6 +359,74 @@ public class TaskNotesDevelopmentRenderingTests
         viewModel.Developments.Selected!.Agent.RunDirectly.Should().BeTrue();
     }
 
+    /// <summary>
+    /// O <c>@</c> no texto do agente (ADR-039), com teclado de verdade: Tab
+    /// entra no outro ambiente da tarefa, a busca acha o arquivo e o Enter
+    /// insere o caminho — sem quebrar a linha.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task TheAtInTheAgentText_GoesIntoAnotherEnvironment_AndInsertsTheFilePath()
+    {
+        var app = ReadyDevelopment();
+        var api = ReadyDevelopment() with
+        {
+            Id = Guid.CreateVersion7(),
+            RepositoryPath = @"C:\Projects\eco-api",
+            WorktreePath = @"C:\Projects\eco-api-feature-x",
+        };
+
+        var (window, viewModel, runner) = await ShowAsync(developments: TestDevelopment.List(app, api));
+        runner.Enqueue<GetTaskAgentSessionHandler>([null]);
+        runner.ResultsByHandler[typeof(DetectAgentCliHandler)] = new AgentCliStatus(
+            "claude-code", "Claude Code", "claude",
+            new CliDetectionResult { IsInstalled = true, ExecutablePath = @"C:\claude.exe", Version = "2.1.4" },
+            null);
+        runner.ResultsByHandler[typeof(ListEnvironmentFilesHandler)] =
+            new EnvironmentFiles(["README.md", "src/Api/Program.cs"]);
+
+        await OpenDevelopmentTabAsync(window, viewModel);
+        await viewModel.Developments.Selected!.Agent.RefreshAsync(CancellationToken.None);
+        Settle(window);
+
+        var prompt = Named<TextBox>(window, "AgentPromptBox");
+        var popup = Named<Popup>(window, "AgentPromptPopup");
+        var references = viewModel.Developments.PromptReferences;
+        prompt.Focus();
+
+        Write(window, "Compare com @eco-a");
+
+        popup.IsOpen.Should().BeTrue();
+        references.SelectedSuggestion!.Title.Should().Be("@eco-api");
+        Texts((Control)popup.Child!).Should().Contain("@ecossistema-core");
+
+        Press(window, Key.Tab, PhysicalKey.Tab);
+
+        prompt.Text.Should().Be("Compare com @eco-api/");
+        popup.IsOpen.Should().BeTrue();
+        references.Suggestions.Select(item => item.Title).Should().Equal("src/", "README.md");
+        prompt.IsFocused.Should().BeTrue("o Tab não pode tirar o foco da caixa");
+
+        Write(window, "prog");
+        Press(window, Key.Enter, PhysicalKey.Enter);
+
+        prompt.Text.Should().Be(@"Compare com C:\Projects\eco-api-feature-x\src\Api\Program.cs");
+        popup.IsOpen.Should().BeFalse();
+        viewModel.Developments.Selected!.Agent.Prompt.Should().Be(prompt.Text);
+    }
+
+    private static void Press(Window window, Key key, PhysicalKey physical)
+    {
+        window.KeyPress(key, RawInputModifiers.None, physical, null);
+        window.KeyRelease(key, RawInputModifiers.None, physical, null);
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    private static void Write(Window window, string text)
+    {
+        window.KeyTextInput(text);
+        Dispatcher.UIThread.RunJobs();
+    }
+
     [AvaloniaFact]
     public async Task ATaskNotReady_HidesTheAgentCard()
     {

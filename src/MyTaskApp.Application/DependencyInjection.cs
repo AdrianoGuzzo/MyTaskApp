@@ -66,6 +66,7 @@ public static class DependencyInjection
 
         // Ambiente de desenvolvimento: Git e worktree da tarefa (ADR-027).
         services.AddScoped<GetTaskDevelopmentsHandler>();
+        services.AddScoped<ListEnvironmentFilesHandler>();
         services.AddScoped<ForgetDevelopmentHandler>();
         services.AddScoped<DetectGitHandler>();
         services.AddScoped<InspectDirectoryHandler>();
