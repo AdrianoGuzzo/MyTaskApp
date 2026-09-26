@@ -118,6 +118,25 @@ public class RecordAgentEventHandlerTests
         _presenter.Dismissed.Should().Equal(_session.Id);
     }
 
+    /// <summary>O aviso do canto pode ser dispensado; a barra de tarefas continua apontando o terminal.</summary>
+    [Fact]
+    public async Task WaitingForTheUser_FlashesTheTerminal()
+    {
+        await SendAsync(Event(AgentEventType.NeedsUserInput));
+
+        _windows.Flashing.Should().Equal(ProcessId);
+    }
+
+    [Fact]
+    public async Task BackToWork_StopsFlashingTheTerminal()
+    {
+        await SendAsync(Event(AgentEventType.NeedsUserInput));
+
+        await SendAsync(Event(AgentEventType.Working));
+
+        _windows.Flashing.Should().BeEmpty();
+    }
+
     [Fact]
     public async Task TheSameEventTwice_TellsTheUserOnce()
     {
@@ -139,6 +158,7 @@ public class RecordAgentEventHandlerTests
 
         _session.Activity.Should().Be(AgentActivity.WaitingReview);
         _presenter.Presented.Should().BeEmpty();
+        _windows.Flashing.Should().BeEmpty();
     }
 
     [Theory]

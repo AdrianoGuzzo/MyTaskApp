@@ -152,6 +152,25 @@ internal sealed class FakeTerminalWindowManager : ITerminalWindowManager
     }
 
     public Task<bool> IsInForegroundAsync(int processId) => Task.FromResult(InFront.Contains(processId));
+
+    /// <summary>Os processos cujo terminal está piscando na barra de tarefas.</summary>
+    public HashSet<int> Flashing { get; } = [];
+
+    public Task<bool> FlashAsync(int processId)
+    {
+        if (Finds)
+        {
+            Flashing.Add(processId);
+        }
+
+        return Task.FromResult(Finds);
+    }
+
+    public Task StopFlashingAsync(int processId)
+    {
+        Flashing.Remove(processId);
+        return Task.CompletedTask;
+    }
 }
 
 /// <summary>A porta local de mentira: ouvindo ou não, conforme o teste.</summary>

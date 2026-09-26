@@ -2496,6 +2496,16 @@ mesma janela que o foco usa), o usuário está conversando com ele. Aí o estado
 muda, mas nenhum aviso aparece por cima da conversa. Voltou a trabalhar ou o
 processo saiu: o aviso sai da tela.
 
+**O terminal pisca na barra de tarefas.** Junto com o aviso, a janela do
+terminal do agente pisca (`FlashWindowEx` com `FLASHW_ALL | FLASHW_TIMERNOFG`,
+via `ITerminalWindowManager.FlashAsync`, achada pela mesma janela do foco). O
+aviso do canto pode ser dispensado ou nem caber na pilha; o botão laranja na
+barra continua apontando onde está a pendência. Quem para de piscar é o
+próprio Windows, quando o terminal vem para a frente, sem o app vigiar o foco.
+Se o agente voltar a trabalhar antes, `StopFlashingAsync` (`FLASHW_STOP`)
+apaga. Com várias abas na mesma janela do Windows Terminal, pisca a janela, não
+a aba.
+
 **O aviso é o do lembrete, com outra cara.** O `AlertPresenter` também
 implementa `IAgentAttentionPresenter`. É a mesma pilha no mesmo canto, na tela
 do painel, porque dois apresentadores empilhariam janelas uma sobre a outra.

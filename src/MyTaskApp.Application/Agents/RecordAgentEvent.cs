@@ -164,6 +164,12 @@ public sealed class RecordAgentEventHandler(
         if (!session.NeedsAttention)
         {
             await presenter.DismissAsync(session.Id, cancellationToken);
+
+            if (session.ProcessId is { } working)
+            {
+                await windows.StopFlashingAsync(working);
+            }
+
             return;
         }
 
@@ -174,6 +180,13 @@ public sealed class RecordAgentEventHandler(
                 session.TaskItemId,
                 session.Id);
             return;
+        }
+
+        // O aviso do canto pode ser dispensado ou nem caber na pilha; o terminal
+        // piscando na barra continua dizendo onde está a pendência.
+        if (session.ProcessId is { } waiting)
+        {
+            await windows.FlashAsync(waiting);
         }
 
         var task = await tasks.FindByIdAsync(session.TaskItemId, cancellationToken);
