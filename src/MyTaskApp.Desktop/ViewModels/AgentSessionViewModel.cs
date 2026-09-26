@@ -130,6 +130,12 @@ public sealed partial class AgentSessionViewModel(
 
     public bool HasPrompt => !string.IsNullOrWhiteSpace(Prompt);
 
+    /// <summary>
+    /// O <c>@</c> do texto: os ambientes da tarefa e os arquivos deles
+    /// (ADR-039). Da aba inteira, e não deste card — <c>null</c> fora dela.
+    /// </summary>
+    public ReferenceCompletionViewModel? References { get; set; }
+
     public int MaxPromptLength => TaskDevelopment.MaxAgentPromptLength;
 
     public string AgentName => Cli?.Name ?? Session?.ProviderName ?? "Agente de IA";

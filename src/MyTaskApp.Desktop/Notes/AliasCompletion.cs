@@ -24,7 +24,14 @@ public static class AliasCompletion
     /// vir depois de espaço ou pontuação: em "fulano@empresa.com" o <c>@</c> é
     /// de um e-mail, e abrir a lista ali seria atrapalhar.
     /// </summary>
-    public static AliasToken? FindToken(string? text, int caretIndex)
+    public static AliasToken? FindToken(string? text, int caretIndex) =>
+        FindToken(text, caretIndex, IsAliasChar);
+
+    /// <summary>
+    /// Como <see cref="FindToken(string?, int)"/>, com outros caracteres depois
+    /// do <c>@</c> — a referência a arquivo (ADR-039) aceita também a barra.
+    /// </summary>
+    public static AliasToken? FindToken(string? text, int caretIndex, Func<char, bool> isTokenChar)
     {
         text ??= string.Empty;
 
@@ -35,7 +42,7 @@ public static class AliasCompletion
 
         var start = caretIndex;
 
-        while (start > 0 && IsAliasChar(text[start - 1]))
+        while (start > 0 && isTokenChar(text[start - 1]))
         {
             start--;
         }
@@ -87,13 +94,22 @@ public static class AliasCompletion
     /// Troca o <c>@query</c> pelo path. Leva junto o resto do alias depois do
     /// cursor, para quem voltou ao meio de um "@eco-co" não ficar com "co" solto.
     /// </summary>
-    public static AliasEdit Accept(string? text, AliasToken token, int caretIndex, string path)
+    public static AliasEdit Accept(string? text, AliasToken token, int caretIndex, string path) =>
+        Accept(text, token, caretIndex, path, IsAliasChar);
+
+    /// <summary>Como <see cref="Accept(string?, AliasToken, int, string)"/>, com os caracteres do token de quem chama.</summary>
+    public static AliasEdit Accept(
+        string? text,
+        AliasToken token,
+        int caretIndex,
+        string path,
+        Func<char, bool> isTokenChar)
     {
         text ??= string.Empty;
 
         var end = Math.Clamp(caretIndex, token.Start, text.Length);
 
-        while (end < text.Length && IsAliasChar(text[end]))
+        while (end < text.Length && isTokenChar(text[end]))
         {
             end++;
         }

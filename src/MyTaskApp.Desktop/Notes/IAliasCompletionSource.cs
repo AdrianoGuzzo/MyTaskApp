@@ -30,4 +30,13 @@ public interface IAliasCompletionSource
     /// <c>@texto</c>, ou <c>null</c> se ela não é desta lista.
     /// </summary>
     string? ReplacementFor(object? suggestion);
+
+    /// <summary>
+    /// O que o Tab põe no lugar do <c>@texto</c> para a busca <b>continuar</b>
+    /// — entrar numa pasta (ADR-039). <c>null</c> = o Tab aceita, como o Enter.
+    /// </summary>
+    string? ContinuationFor(object? suggestion) => null;
+
+    /// <summary>Os caracteres do <c>@texto</c>: o que aceitar troca, até o fim dele.</summary>
+    bool IsTokenChar(char c) => AliasCompletion.IsAliasChar(c);
 }

@@ -164,6 +164,14 @@ public interface IGitClient
     Task<GitStatus> GetStatusAsync(string workingTree, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// <c>git ls-files --cached --others --exclude-standard</c>: os arquivos do
+    /// working tree que o Git conhece ou que o <c>.gitignore</c> não esconde, em
+    /// caminho relativo com <c>/</c>. É a lista da referência por <c>@</c> no
+    /// texto do agente (ADR-039) — sem <c>bin</c>, <c>obj</c> nem <c>node_modules</c>.
+    /// </summary>
+    Task<IReadOnlyList<string>> ListFilesAsync(string workingTree, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// <c>git status --porcelain=v2 --branch</c> no working tree: alterações e
     /// commits por enviar numa ida só. É o que acende a bolinha da lista.
     /// </summary>
