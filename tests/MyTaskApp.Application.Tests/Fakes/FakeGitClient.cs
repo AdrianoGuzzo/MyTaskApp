@@ -134,6 +134,17 @@ internal sealed class FakeGitClient : IGitClient
         return Task.FromResult(key is null ? GitStatus.Clean : Statuses[key]);
     }
 
+    /// <summary>Arquivos por pasta; o que não estiver aqui não tem nenhum.</summary>
+    public Dictionary<string, IReadOnlyList<string>> Files { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    public Task<IReadOnlyList<string>> ListFilesAsync(string workingTree, CancellationToken cancellationToken = default)
+    {
+        Throw(nameof(ListFilesAsync));
+
+        var key = Files.Keys.FirstOrDefault(path => WorktreePathPlanner.SamePath(path, workingTree));
+        return Task.FromResult(key is null ? (IReadOnlyList<string>)[] : Files[key]);
+    }
+
     public Task<GitBranchStatus> GetBranchStatusAsync(string workingTree, CancellationToken cancellationToken = default)
     {
         Throw(nameof(GetBranchStatusAsync));

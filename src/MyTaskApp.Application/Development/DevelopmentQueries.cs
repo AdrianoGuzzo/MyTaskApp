@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Domain.Tasks;
 
 namespace MyTaskApp.Application.Development;
 
@@ -18,6 +19,54 @@ public sealed class GetTaskDevelopmentsHandler(ITaskItemRepository tasks)
         var task = await tasks.GetByIdAsync(query.TaskId, cancellationToken);
 
         return task.Developments.Select(TaskDevelopmentView.From).ToList();
+    }
+}
+
+/// <summary>
+/// Os arquivos de um ambiente da tarefa, para referenciá-los por <c>@</c> no
+/// texto do agente (ADR-039). Só os da própria tarefa: quem pede diz a tarefa,
+/// e o ambiente sai dela.
+/// </summary>
+public sealed record ListEnvironmentFiles(Guid TaskId, Guid DevelopmentId);
+
+/// <summary>
+/// Caminhos relativos ao worktree, com <c>/</c>. <see cref="IsTruncated"/> diz
+/// que o repositório passou do teto e a lista parou nele.
+/// </summary>
+public sealed record EnvironmentFiles(IReadOnlyList<string> Files, bool IsTruncated = false)
+{
+    public static readonly EnvironmentFiles Empty = new([]);
+}
+
+public sealed class ListEnvironmentFilesHandler(
+    ITaskItemRepository tasks,
+    IGitClient git,
+    IDirectoryProbe directories)
+{
+    /// <summary>
+    /// O teto da lista. O filtro roda a cada tecla, na thread da tela; um
+    /// monorepo inteiro na memória não ajuda ninguém a achar um arquivo.
+    /// </summary>
+    public const int MaxFiles = 50_000;
+
+    public async Task<EnvironmentFiles> HandleAsync(
+        ListEnvironmentFiles query,
+        CancellationToken cancellationToken = default)
+    {
+        var task = await tasks.GetByIdAsync(query.TaskId, cancellationToken);
+        var development = task.GetDevelopment(query.DevelopmentId);
+
+        if (development.Status is not TaskDevelopmentStatus.Ready
+            || !await directories.ExistsAsync(development.WorktreePath, cancellationToken))
+        {
+            return EnvironmentFiles.Empty;
+        }
+
+        var files = await git.ListFilesAsync(development.WorktreePath, cancellationToken);
+
+        return files.Count > MaxFiles
+            ? new EnvironmentFiles([.. files.Take(MaxFiles)], IsTruncated: true)
+            : new EnvironmentFiles(files);
     }
 }
 

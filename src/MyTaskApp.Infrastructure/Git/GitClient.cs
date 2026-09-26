@@ -165,6 +165,17 @@ internal sealed class GitClient(
         return new GitStatus(GitOutputParser.ParseStatus(result.StandardOutput));
     }
 
+    public async Task<IReadOnlyList<string>> ListFilesAsync(string workingTree, CancellationToken cancellationToken = default)
+    {
+        var result = await RequireAsync(
+            workingTree,
+            ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+            DefaultTimeout,
+            cancellationToken);
+
+        return GitOutputParser.ParseFileList(result.StandardOutput);
+    }
+
     public async Task<GitBranchStatus> GetBranchStatusAsync(string workingTree, CancellationToken cancellationToken = default)
     {
         var result = await RequireAsync(

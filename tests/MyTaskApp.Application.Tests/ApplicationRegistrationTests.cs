@@ -71,6 +71,7 @@ public class ApplicationRegistrationTests
     [InlineData(typeof(UpdateTagDirectoryHandler))]
     [InlineData(typeof(RemoveTagDirectoryHandler))]
     [InlineData(typeof(GetTaskDevelopmentsHandler))]
+    [InlineData(typeof(ListEnvironmentFilesHandler))]
     [InlineData(typeof(ForgetDevelopmentHandler))]
     [InlineData(typeof(DetectGitHandler))]
     [InlineData(typeof(InspectDirectoryHandler))]
