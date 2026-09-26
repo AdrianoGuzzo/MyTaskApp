@@ -1,4 +1,9 @@
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
+using Avalonia.Headless;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -95,6 +100,53 @@ public partial class SpellCheckRenderingTests
 
         model.Text.Should().Be("Estou testando este aplicativo agora");
         binder.Squiggles!.Underlines().Should().BeEmpty();
+
+        window.Close();
+    }
+
+    /// <summary>
+    /// O clique direito fora da primeira linha: o <c>HitTestPoint</c> do
+    /// layout diz que o ponto está fora do texto, e o menu das sugestões não
+    /// abria na anotação — só o Recortar/Copiar/Colar padrão.
+    /// </summary>
+    [AvaloniaFact]
+    public void RightClick_OnAMisspelledWord_BelowTheFirstLine_OpensTheSuggestions()
+    {
+        const string text = "Linha um\nLinha dois\n\nEstou testando este aplicativoo agora";
+        var (window, box, _, binder) = Show(new FakeSpellChecker("aplicativoo"), text);
+        binder.CheckNow();
+
+        var presenter = box.GetVisualDescendants().OfType<TextPresenter>().Single();
+        var word = presenter.TextLayout.HitTestTextPosition(text.IndexOf("aplicativoo", StringComparison.Ordinal) + 3);
+
+        // No túnel, um passo abaixo da caixa: só o binder marca o pedido como
+        // tratado até ali. O flyout padrão vem depois, na volta (bubble).
+        var handledBySpellCheck = false;
+        presenter.AddHandler(
+            Control.ContextRequestedEvent,
+            (_, e) => handledBySpellCheck = e.Handled,
+            RoutingStrategies.Tunnel,
+            handledEventsToo: true);
+
+        var point = presenter.TranslatePoint(word.Center, window)!.Value;
+        window.MouseDown(point, MouseButton.Right);
+        window.MouseUp(point, MouseButton.Right);
+        Dispatcher.UIThread.RunJobs();
+
+        handledBySpellCheck.Should().BeTrue("o clique caiu numa palavra errada, e o menu é o das sugestões");
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void RightClick_OnACorrectWord_KeepsTheDefaultMenu()
+    {
+        var (window, box, _, binder) = Show(new FakeSpellChecker("aplicativoo"), "Linha um\nEstou testando este aplicativoo");
+        binder.CheckNow();
+
+        var presenter = box.GetVisualDescendants().OfType<TextPresenter>().Single();
+
+        binder.WordAt(presenter.TextLayout.HitTestTextPosition(12).Center).Should().BeNull();
 
         window.Close();
     }
