@@ -286,4 +286,51 @@ public class AgentSessionPersistenceTests
         var task = await new TaskItemRepository(read).FindByIdAsync(taskId, Ct);
         task!.Developments.Should().ContainSingle().Which.Id.Should().Be(developmentId);
     }
+
+    /// <summary>
+    /// O que os hooks disseram sobrevive ao app fechar (ADR-037): reabrir mostra
+    /// "aguardando você", e não "em execução" sem mais nada.
+    /// </summary>
+    [Fact]
+    public async Task TheAgentsActivity_SurvivesAReopen_AndReachesTheBadge()
+    {
+        await using var db = await new TempSqliteDatabase().MigrateAsync(Ct);
+        var task = await SeedTaskAsync(db);
+        var hash = new string('B', AgentSession.HookTokenHashLength);
+
+        var session = AgentSession.Create(task.Id, task.Developments[0].Id, "claude-code", Claude, Worktree, Now);
+        session.EnableMonitoring(hash);
+        session.MarkRunning(15432, Now);
+        session.RecordExternalSession("7f3c-claude");
+        session.RecordActivity(AgentActivity.WaitingForUser, "Redis ou MemoryCache?", Now.AddMinutes(9));
+        await AddAsync(db, session);
+
+        await using var read = db.CreateContext();
+        var stored = await new AgentSessionRepository(read).FindByIdAsync(session.Id, Ct);
+
+        stored!.HookTokenHash.Should().Be(hash);
+        stored.ExternalSessionId.Should().Be("7f3c-claude");
+        stored.Activity.Should().Be(AgentActivity.WaitingForUser);
+        stored.ActivityMessage.Should().Be("Redis ou MemoryCache?");
+        stored.ActivityChangedAt.Should().Be(Now.AddMinutes(9));
+
+        var rows = await new TodayQuery(read).GetCandidatesAsync(Today, Ct);
+        rows.Single().ActiveAgents!.Single().Activity.Should().Be(AgentActivity.WaitingForUser);
+    }
+
+    [Fact]
+    public async Task ASessionWithoutMonitoring_KeepsNoSecret_AndNoActivity()
+    {
+        await using var db = await new TempSqliteDatabase().MigrateAsync(Ct);
+        var task = await SeedTaskAsync(db);
+        var session = Running(task, 15432);
+        await AddAsync(db, session);
+
+        await using var read = db.CreateContext();
+        var stored = await new AgentSessionRepository(read).FindByIdAsync(session.Id, Ct);
+
+        stored!.IsMonitored.Should().BeFalse();
+        stored.Activity.Should().Be(AgentActivity.Unknown);
+        stored.ActivityChangedAt.Should().BeNull();
+    }
 }

@@ -360,6 +360,7 @@ public class AgentSessionViewModelTests
         var (task, developmentId) = ReadyTask();
         var provider = Substitute.For<IAgentCliProvider>();
         AgentCliStartContext? received = null;
+        provider.Id.Returns("claude-code");
         provider.Name.Returns("Claude Code");
         provider.DetectAsync(Arg.Any<CancellationToken>())
             .Returns(new CliDetectionResult { IsInstalled = true, ExecutablePath = @"C:\claude.exe" });
@@ -409,6 +410,7 @@ public class AgentSessionViewModelTests
             Substitute.For<IAgentSessionWatcher>(),
             directories,
             Substitute.For<IAgentSettingsStore>(),
+            Substitute.For<IAgentEventEndpoint>(),
             TimeProvider.System,
             NullLogger<StartAgentSessionHandler>.Instance);
     }

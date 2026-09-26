@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Desktop.ViewModels;
 using MyTaskApp.Desktop.Views;
@@ -13,14 +14,19 @@ namespace MyTaskApp.Desktop.Reminders;
 /// referencia Avalonia — o que torna a regra do pulo de thread verificável por
 /// inspeção, em vez de por disciplina.
 /// </summary>
+/// <remarks>
+/// Também põe o aviso do agente de IA (ADR-037): a mesma pilha no mesmo canto,
+/// na tela do painel — dois apresentadores empilhariam janelas uma por cima da
+/// outra. A chave é a ocorrência (lembrete) ou a sessão (agente).
+/// </remarks>
 internal sealed class AlertPresenter(
     IServiceProvider services,
-    ILogger<AlertPresenter> logger) : IAlertPresenter
+    ILogger<AlertPresenter> logger) : IAlertPresenter, IAgentAttentionPresenter
 {
     /// <summary>Acima disto a tela vira um mural; o despacho já agrega antes.</summary>
     private const int MaxVisible = 3;
 
-    private readonly Dictionary<Guid, AlertWindow> _open = [];
+    private readonly Dictionary<Guid, Window> _open = [];
 
     /// <summary>Avisa a aplicação de que o usuário reagiu, para o quadro recarregar.</summary>
     public event Action? Acted;
@@ -39,6 +45,46 @@ internal sealed class AlertPresenter(
 
     public Task DismissAsync(Guid occurrenceId, CancellationToken cancellationToken = default) =>
         Dispatcher.UIThread.InvokeAsync(() => Close(occurrenceId)).GetTask();
+
+    // IAgentAttentionPresenter.DismissAsync tem a mesma assinatura: a chave é a
+    // sessão, e fechar é o mesmo gesto.
+
+    public Task PresentAsync(AgentAttention attention, CancellationToken cancellationToken = default) =>
+        // O aviso chega da fila da porta local, fora da thread de UI.
+        Dispatcher.UIThread.InvokeAsync(() => Present(attention)).GetTask();
+
+    /// <summary>
+    /// Um aviso por sessão, atualizado no lugar: a pergunta seguinte do mesmo
+    /// agente troca o texto, não empilha outra janela.
+    /// </summary>
+    private void Present(AgentAttention attention)
+    {
+        if (_open.TryGetValue(attention.SessionId, out var existing))
+        {
+            ((AgentAlertViewModel)existing.DataContext!).Show(attention);
+            return;
+        }
+
+        if (_open.Count >= MaxVisible)
+        {
+            logger.LogDebug("AgentAlertSuppressed {SessionId}", attention.SessionId);
+            return;
+        }
+
+        var viewModel = services.GetRequiredService<AgentAlertViewModel>();
+        viewModel.Show(attention);
+
+        var window = new AgentAlertWindow { DataContext = viewModel };
+
+        viewModel.Closed += _ => Close(attention.SessionId);
+
+        _open[attention.SessionId] = window;
+
+        // Sem ativar: aparece por cima, mas o teclado fica onde estava.
+        window.Show();
+
+        Position(window);
+    }
 
     private void Present(ReminderAlert alert)
     {
@@ -105,7 +151,7 @@ internal sealed class AlertPresenter(
     /// Empilha do canto inferior direito para cima. Depois do <c>Show()</c>
     /// porque <c>Screens</c> precisa de um handle de janela.
     /// </summary>
-    private void Position(AlertWindow window)
+    private void Position(Window window)
     {
         // Na tela onde o painel esta, e nao sempre na primaria: com dois
         // monitores o aviso aparecia do outro lado da mesa.

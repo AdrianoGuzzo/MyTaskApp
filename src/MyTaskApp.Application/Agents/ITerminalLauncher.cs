@@ -21,10 +21,15 @@ public interface ITerminalLauncher
 /// O que executar. Programa e argumentos separados — nunca uma linha de shell
 /// montada à mão, para caminho com espaço não virar dois argumentos.
 /// </summary>
+/// <param name="Environment">
+/// Variáveis acrescentadas ao ambiente herdado do app — é por elas que o
+/// agente sabe de qual tarefa é (ADR-037). <c>null</c> = só o herdado.
+/// </param>
 public sealed record TerminalLaunchOptions(
     string Executable,
     IReadOnlyList<string> Arguments,
-    string WorkingDirectory);
+    string WorkingDirectory,
+    IReadOnlyDictionary<string, string>? Environment = null);
 
 public sealed record TerminalLaunchResult
 {
@@ -46,6 +51,23 @@ public interface ITerminalWindowManager
 {
     /// <summary><c>false</c> quando o processo não tem janela que se ache.</summary>
     Task<bool> FocusAsync(int processId);
+
+    /// <summary>
+    /// A janela do terminal do processo é a que está em primeiro plano? Serve
+    /// para não avisar quem já está olhando para o agente (ADR-037). Na dúvida,
+    /// <c>false</c>: avisar à toa é melhor que calar quando precisava.
+    /// </summary>
+    Task<bool> IsInForegroundAsync(int processId);
+
+    /// <summary>
+    /// Faz a janela do terminal piscar na barra de tarefas até o usuário ir até
+    /// ela (ADR-037). O aviso no canto some quando dispensado; a pendência
+    /// continua visível onde ela de fato está. <c>false</c> quando não há janela.
+    /// </summary>
+    Task<bool> FlashAsync(int processId);
+
+    /// <summary>Para de piscar: o agente voltou a trabalhar antes de o usuário olhar.</summary>
+    Task StopFlashingAsync(int processId);
 }
 
 /// <summary>Os processos das sessões: vivos? E avisar quando acabarem.</summary>
