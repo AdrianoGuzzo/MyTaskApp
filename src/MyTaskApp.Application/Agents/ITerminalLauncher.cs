@@ -58,6 +58,16 @@ public interface ITerminalWindowManager
     /// <c>false</c>: avisar à toa é melhor que calar quando precisava.
     /// </summary>
     Task<bool> IsInForegroundAsync(int processId);
+
+    /// <summary>
+    /// Faz a janela do terminal piscar na barra de tarefas até o usuário ir até
+    /// ela (ADR-036). O aviso no canto some quando dispensado; a pendência
+    /// continua visível onde ela de fato está. <c>false</c> quando não há janela.
+    /// </summary>
+    Task<bool> FlashAsync(int processId);
+
+    /// <summary>Para de piscar: o agente voltou a trabalhar antes de o usuário olhar.</summary>
+    Task StopFlashingAsync(int processId);
 }
 
 /// <summary>Os processos das sessões: vivos? E avisar quando acabarem.</summary>
