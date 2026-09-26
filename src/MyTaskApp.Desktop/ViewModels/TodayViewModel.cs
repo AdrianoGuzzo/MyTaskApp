@@ -489,6 +489,56 @@ public sealed partial class TodayViewModel(
     }
 
     /// <summary>
+    /// "Abrir Claude Code" do menu da linha, com um ambiente só (ADR-036). Com
+    /// mais de um, a view pergunta qual e chama <see cref="StartAgentInAsync"/>.
+    /// </summary>
+    [RelayCommand]
+    public Task StartAgentAsync(TaskRowViewModel row) =>
+        row.WorktreeChoices.Count == 1 ? StartAgentInAsync(row.WorktreeChoices[0]) : Task.CompletedTask;
+
+    /// <summary>
+    /// Abre o agente no ambiente escolhido — o mesmo caso de uso do card da aba
+    /// Desenvolvimento, com os parâmetros salvos. Se o ambiente já tem agente,
+    /// traz o terminal dele: abrir outro seria recusado (um por ambiente).
+    /// </summary>
+    [RelayCommand]
+    public async Task StartAgentInAsync(TaskWorktreeChoice choice)
+    {
+        var row = choice.Row;
+        var worktree = choice.Worktree;
+
+        if (choice.RunningAgent is { } running)
+        {
+            await FocusAsync(row.TaskId, running.DevelopmentId, running.AgentName);
+            return;
+        }
+
+        AgentSessionView? session = null;
+
+        var started = await TryAsync(
+            async () => session = await runner.RunAsync<StartAgentSessionHandler, AgentSessionView>(
+                (handler, token) => handler.HandleAsync(new StartAgentSession(row.TaskId, worktree.DevelopmentId), token),
+                CancellationToken.None),
+            "Não foi possível abrir o Claude Code.");
+
+        if (!started)
+        {
+            return;
+        }
+
+        if (!session!.IsActive)
+        {
+            ErrorMessage = session.FailureReason
+                ?? $"O {session.ProviderName} encerrou logo ao abrir.";
+            return;
+        }
+
+        // A recarga acende o selo; a mensagem vem depois, senão ela a apagaria.
+        await LoadAsync(CancellationToken.None);
+        StatusMessage = $"{session.ProviderName} aberto em {worktree.RepositoryName} · {worktree.Branch}.";
+    }
+
+    /// <summary>
     /// Arquiva o checklist da linha (§1). Sem caixa de confirmacao de
     /// proposito: arquivar nao perde nada e e desfeito em dois cliques na area
     /// de arquivados — perguntar aqui so treinaria o usuario a confirmar sem ler,

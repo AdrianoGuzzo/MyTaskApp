@@ -45,6 +45,8 @@ public sealed class TaskRowViewModel
         Agents = (task.ActiveAgents ?? []).Select(agent => new TaskAgentViewModel(this, agent)).ToList();
 
         Worktree = new TaskWorktreeViewModel(task.Worktrees, isCompleted);
+
+        WorktreeChoices = Worktree.Worktrees.Select(worktree => new TaskWorktreeChoice(this, worktree)).ToList();
     }
 
     /// <summary>
@@ -67,6 +69,12 @@ public sealed class TaskRowViewModel
     public string? AgentName => Agents.Count > 0 ? Agents[0].AgentName : null;
 
     public bool HasActiveAgent => Agents.Count > 0;
+
+    /// <summary>
+    /// Os ambientes prontos onde "Abrir Claude Code" pode abrir o agente
+    /// (ADR-036). Vazio, o item nem aparece no menu.
+    /// </summary>
+    public IReadOnlyList<TaskWorktreeChoice> WorktreeChoices { get; }
 
     /// <summary>A bolinha de worktree e o que o balão diz dele (ADR-034).</summary>
     public TaskWorktreeViewModel Worktree { get; }
@@ -193,4 +201,24 @@ public sealed class TaskAgentViewModel(TaskRowViewModel row, ActiveAgent agent)
     public string Label { get; } = agent.RepositoryName is { } repository
         ? agent.Branch is { } branch ? $"{repository} · {branch}" : repository
         : agent.AgentName;
+}
+
+/// <summary>
+/// Um ambiente da linha onde abrir o agente — o item do menu "Abrir Claude
+/// Code" quando a tarefa tem mais de um (ADR-036).
+/// </summary>
+public sealed class TaskWorktreeChoice(TaskRowViewModel row, TaskWorktree worktree)
+{
+    public TaskRowViewModel Row { get; } = row;
+
+    public TaskWorktree Worktree { get; } = worktree;
+
+    /// <summary>O agente já aberto neste ambiente, se houver: aí a escolha só traz o terminal para a frente.</summary>
+    public TaskAgentViewModel? RunningAgent { get; } =
+        row.Agents.FirstOrDefault(agent => agent.DevelopmentId == worktree.DevelopmentId);
+
+    /// <summary>"ecossistema-core · feature/x", com "(aberto)" quando já tem agente.</summary>
+    public string Label => RunningAgent is null
+        ? $"{Worktree.RepositoryName} · {Worktree.Branch}"
+        : $"{Worktree.RepositoryName} · {Worktree.Branch} (aberto)";
 }
