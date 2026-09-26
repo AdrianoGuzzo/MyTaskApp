@@ -10,7 +10,7 @@ using MyTaskApp.Domain.Agents;
 namespace MyTaskApp.Desktop.ViewModels;
 
 /// <summary>
-/// O aviso de que um agente parou esperando o usuário (ADR-036): uma pergunta,
+/// O aviso de que um agente parou esperando o usuário (ADR-037): uma pergunta,
 /// uma permissão, um plano para aprovar, uma resposta pronta para revisar.
 /// </summary>
 /// <remarks>

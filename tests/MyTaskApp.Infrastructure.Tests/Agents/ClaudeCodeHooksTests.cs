@@ -7,7 +7,7 @@ using MyTaskApp.Infrastructure.Agents.ClaudeCode;
 namespace MyTaskApp.Infrastructure.Tests.Agents;
 
 /// <summary>
-/// Os hooks do Claude Code (ADR-036): o arquivo passado com <c>--settings</c>,
+/// Os hooks do Claude Code (ADR-037): o arquivo passado com <c>--settings</c>,
 /// a leitura da configuração do usuário e a tradução de cada evento.
 /// </summary>
 public sealed class ClaudeCodeHooksTests : IDisposable

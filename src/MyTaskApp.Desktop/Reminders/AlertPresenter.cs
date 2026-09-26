@@ -15,7 +15,7 @@ namespace MyTaskApp.Desktop.Reminders;
 /// inspeção, em vez de por disciplina.
 /// </summary>
 /// <remarks>
-/// Também põe o aviso do agente de IA (ADR-036): a mesma pilha no mesmo canto,
+/// Também põe o aviso do agente de IA (ADR-037): a mesma pilha no mesmo canto,
 /// na tela do painel — dois apresentadores empilhariam janelas uma por cima da
 /// outra. A chave é a ocorrência (lembrete) ou a sessão (agente).
 /// </remarks>

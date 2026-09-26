@@ -18,7 +18,7 @@ public interface IAgentSettingsStore
     Task SaveArgumentsAsync(string providerId, string arguments, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Acompanhar o agente pelos hooks dele (ADR-036)? <c>null</c> se nunca foi
+    /// Acompanhar o agente pelos hooks dele (ADR-037)? <c>null</c> se nunca foi
     /// escolhido — aí vale ligado.
     /// </summary>
     Task<bool?> GetMonitoringAsync(string providerId, CancellationToken cancellationToken = default);

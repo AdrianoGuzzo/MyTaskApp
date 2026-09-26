@@ -9,7 +9,7 @@ using MyTaskApp.Infrastructure.Agents;
 namespace MyTaskApp.Infrastructure.Tests.Agents;
 
 /// <summary>
-/// A porta local dos hooks (ADR-036), com HTTP de verdade em 127.0.0.1: o que
+/// A porta local dos hooks (ADR-037), com HTTP de verdade em 127.0.0.1: o que
 /// ela aceita, o que recusa antes de ler, e a ordem de entrega.
 /// </summary>
 public sealed class AgentEventListenerTests : IAsyncDisposable

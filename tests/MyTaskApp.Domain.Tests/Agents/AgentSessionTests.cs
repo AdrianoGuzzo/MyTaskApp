@@ -139,7 +139,7 @@ public class AgentSessionTests
         session.IsActive.Should().BeFalse();
     }
 
-    // --- Acompanhamento pelos hooks (ADR-036) -------------------------------
+    // --- Acompanhamento pelos hooks (ADR-037) -------------------------------
 
     private static readonly string TokenHash = new('a', AgentSession.HookTokenHashLength);
 

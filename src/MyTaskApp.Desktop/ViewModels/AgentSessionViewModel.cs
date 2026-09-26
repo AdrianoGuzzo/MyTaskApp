@@ -100,7 +100,7 @@ public sealed partial class AgentSessionViewModel(
 
     /// <summary>
     /// "Avisar quando precisar de mim": abre o agente com os hooks do app
-    /// (ADR-036). Como os parâmetros, o valor usado ao iniciar vira o padrão.
+    /// (ADR-037). Como os parâmetros, o valor usado ao iniciar vira o padrão.
     /// </summary>
     [ObservableProperty]
     private bool _monitor = true;
@@ -173,7 +173,7 @@ public sealed partial class AgentSessionViewModel(
         _ => "Nenhuma sessão ativa.",
     };
 
-    /// <summary>"● Trabalhando", "⚠ Aguardando você"… — o que os hooks disseram por último (ADR-036).</summary>
+    /// <summary>"● Trabalhando", "⚠ Aguardando você"… — o que os hooks disseram por último (ADR-037).</summary>
     public static string RunningText(AgentActivity activity) => activity switch
     {
         AgentActivity.Working => "● Trabalhando",

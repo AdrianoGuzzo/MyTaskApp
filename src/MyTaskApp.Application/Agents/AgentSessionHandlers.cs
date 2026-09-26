@@ -100,7 +100,7 @@ public sealed class GetTaskAgentSessionHandler(
 /// <param name="Prompt">O texto livre com que o agente abre; fica gravado no ambiente.</param>
 /// <param name="RunDirectly">Com texto: executar direto, em vez de só planejar.</param>
 /// <param name="Monitor">
-/// Acompanhar pelos hooks do agente (ADR-036). Informado, vira o padrão das
+/// Acompanhar pelos hooks do agente (ADR-037). Informado, vira o padrão das
 /// próximas aberturas; <c>null</c> usa o salvo.
 /// </param>
 public sealed record StartAgentSession(
@@ -115,7 +115,7 @@ public sealed record StartAgentSession(
 /// <summary>
 /// O fluxo da ADR-030: worktree pronto → agente instalado → sessão gravada como
 /// "iniciando" → terminal aberto → PID gravado → monitor vigiando. Com o
-/// acompanhamento ligado (ADR-036), a sessão ganha um segredo antes de ser
+/// acompanhamento ligado (ADR-037), a sessão ganha um segredo antes de ser
 /// gravada, e o processo nasce sabendo a tarefa, a sessão e o segredo.
 /// </summary>
 /// <remarks>
@@ -262,7 +262,7 @@ public sealed class StartAgentSessionHandler(
     }
 
     /// <summary>
-    /// Liga o acompanhamento quando dá (ADR-036). Quando não dá — desligado
+    /// Liga o acompanhamento quando dá (ADR-037). Quando não dá — desligado
     /// pelo usuário, porta local fechada, hooks desligados na configuração do
     /// agente —, o agente abre do mesmo jeito, sem avisos, e o motivo volta
     /// para a tela. Acompanhar é um extra: nunca impede de abrir.

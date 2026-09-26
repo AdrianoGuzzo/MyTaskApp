@@ -91,7 +91,7 @@ public static class DependencyInjection
         services.AddSingleton<IAgentCliProvider, ClaudeCodeCliProvider>();
         services.AddSingleton<IAgentProcessTracker, AgentProcessTracker>();
 
-        // Os avisos do agente (ADR-036): o arquivo de hooks mora com os dados
+        // Os avisos do agente (ADR-037): o arquivo de hooks mora com os dados
         // do usuário, e a porta local é uma só para o app inteiro.
         services.AddSingleton(provider => ClaudeCodeHooks.ForCurrentSystem(
             Path.Combine(UserDataLocation.Current.State, "agents"),

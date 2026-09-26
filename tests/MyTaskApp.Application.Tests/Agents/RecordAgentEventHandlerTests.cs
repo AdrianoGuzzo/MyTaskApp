@@ -7,7 +7,7 @@ using MyTaskApp.Domain.Tasks;
 namespace MyTaskApp.Application.Tests.Agents;
 
 /// <summary>
-/// O aviso do agente chega à sessão que o abriu (ADR-036): associação
+/// O aviso do agente chega à sessão que o abriu (ADR-037): associação
 /// conferida pelo segredo, atividade mudada, e o usuário avisado quando o
 /// agente para esperando por ele.
 /// </summary>

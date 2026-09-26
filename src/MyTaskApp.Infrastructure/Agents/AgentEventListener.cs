@@ -13,7 +13,7 @@ using MyTaskApp.Infrastructure.Agents.ClaudeCode;
 
 namespace MyTaskApp.Infrastructure.Agents;
 
-/// <summary>Os cabeçalhos que o hook manda com o id da sessão e da tarefa (ADR-036).</summary>
+/// <summary>Os cabeçalhos que o hook manda com o id da sessão e da tarefa (ADR-037).</summary>
 internal static class AgentEventHeaders
 {
     public const string Session = "X-MyTaskApp-Session";
@@ -22,7 +22,7 @@ internal static class AgentEventHeaders
 }
 
 /// <summary>
-/// A porta local por onde os agentes avisam o que estão fazendo (ADR-036):
+/// A porta local por onde os agentes avisam o que estão fazendo (ADR-037):
 /// <c>POST http://127.0.0.1:{porta}/api/claude/events</c>.
 /// </summary>
 /// <remarks>

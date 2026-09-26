@@ -5,7 +5,7 @@ using MyTaskApp.Domain.Agents;
 namespace MyTaskApp.Application.Agents;
 
 /// <summary>
-/// O que aconteceu dentro do agente, já traduzido do formato dele (ADR-036).
+/// O que aconteceu dentro do agente, já traduzido do formato dele (ADR-037).
 /// Quem traduz é a borda (o hook do Claude vira um destes); daqui para dentro
 /// ninguém sabe o nome de evento de agente nenhum.
 /// </summary>
@@ -74,7 +74,7 @@ public sealed record AgentEvent(
 }
 
 /// <summary>
-/// O endereço local em que o app recebe os avisos dos agentes (ADR-036).
+/// O endereço local em que o app recebe os avisos dos agentes (ADR-037).
 /// </summary>
 public interface IAgentEventEndpoint
 {
@@ -90,7 +90,7 @@ public interface IAgentEventEndpoint
 
 /// <summary>
 /// O que o processo do agente recebe no ambiente para se identificar
-/// (ADR-036): a sessão, a tarefa, o ambiente e o segredo.
+/// (ADR-037): a sessão, a tarefa, o ambiente e o segredo.
 /// </summary>
 public static class AgentMonitoringEnvironment
 {
@@ -131,7 +131,7 @@ public static class AgentMonitoringEnvironment
 }
 
 /// <summary>
-/// O segredo por sessão (ADR-036). O processo recebe o segredo; o banco guarda
+/// O segredo por sessão (ADR-037). O processo recebe o segredo; o banco guarda
 /// só o hash. A porta local aceita qualquer processo do computador, e é o
 /// segredo que separa o Claude que o app abriu de quem só sabe o endereço.
 /// </summary>
@@ -174,7 +174,7 @@ public sealed record AgentAttention(
     DateTimeOffset At);
 
 /// <summary>
-/// Põe na tela o aviso de que um agente precisa do usuário (ADR-036). A
+/// Põe na tela o aviso de que um agente precisa do usuário (ADR-037). A
 /// implementação é da borda (Desktop), como a dos lembretes.
 /// </summary>
 public interface IAgentAttentionPresenter

@@ -6,7 +6,7 @@ using MyTaskApp.Domain.Agents;
 
 namespace MyTaskApp.Application.Agents;
 
-/// <summary>Um aviso do agente chegou pela porta local (ADR-036).</summary>
+/// <summary>Um aviso do agente chegou pela porta local (ADR-037).</summary>
 /// <param name="Token">O segredo que veio junto: só o processo que o app abriu o conhece.</param>
 public sealed record RecordAgentEvent(AgentEvent Event, string? Token);
 

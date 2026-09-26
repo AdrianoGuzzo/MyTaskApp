@@ -37,7 +37,7 @@ public sealed class ApplicationOptions
 
     /// <summary>
     /// A porta local (só 127.0.0.1) em que os hooks do agente avisam o app
-    /// (ADR-036). Fixa de propósito: o Claude que ficou aberto com o app
+    /// (ADR-037). Fixa de propósito: o Claude que ficou aberto com o app
     /// fechado guarda esta URL e volta a ser ouvido quando o app reabre. Ocupada,
     /// vale qualquer livre; <c>0</c> = sempre qualquer livre.
     /// </summary>

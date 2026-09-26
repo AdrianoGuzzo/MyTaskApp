@@ -83,7 +83,7 @@ internal sealed partial class ClaudeCodeCliProvider(
     /// o texto na quebra de linha e interpreta <c>%</c> e <c>"</c>. Ali as quebras
     /// viram espaço, e o que o <c>cmd.exe</c> estragaria é recusado com o motivo.
     /// <para>
-    /// Com acompanhamento (ADR-036), <c>--settings &lt;arquivo de hooks&gt;</c> vem
+    /// Com acompanhamento (ADR-037), <c>--settings &lt;arquivo de hooks&gt;</c> vem
     /// antes de tudo, e o ambiente leva a sessão e o segredo. Antes dos
     /// parâmetros do usuário de propósito: se ele passar o próprio
     /// <c>--settings</c>, o dele vale — perde-se o acompanhamento, e não a

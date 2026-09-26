@@ -8,7 +8,7 @@ using MyTaskApp.Application.Agents;
 namespace MyTaskApp.Infrastructure.Agents.ClaudeCode;
 
 /// <summary>
-/// Os hooks com que o Claude Code avisa o app do que está fazendo (ADR-036).
+/// Os hooks com que o Claude Code avisa o app do que está fazendo (ADR-037).
 /// </summary>
 /// <remarks>
 /// <para>

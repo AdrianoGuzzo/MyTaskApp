@@ -66,7 +66,7 @@ internal sealed class WindowsTerminalLauncher(
         }
 
         // Por cima do ambiente herdado do app: é assim que o agente sabe de
-        // qual tarefa e de qual sessão é (ADR-036).
+        // qual tarefa e de qual sessão é (ADR-037).
         foreach (var (name, value) in options.Environment ?? new Dictionary<string, string>())
         {
             startInfo.Environment[name] = value;
