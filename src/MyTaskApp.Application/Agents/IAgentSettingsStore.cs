@@ -16,6 +16,15 @@ public interface IAgentSettingsStore
 
     /// <summary>Só prepara a gravação: quem chama confirma com o <c>IUnitOfWork</c>.</summary>
     Task SaveArgumentsAsync(string providerId, string arguments, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Acompanhar o agente pelos hooks dele (ADR-036)? <c>null</c> se nunca foi
+    /// escolhido — aí vale ligado.
+    /// </summary>
+    Task<bool?> GetMonitoringAsync(string providerId, CancellationToken cancellationToken = default);
+
+    /// <summary>Só prepara a gravação, como <see cref="SaveArgumentsAsync"/>.</summary>
+    Task SaveMonitoringAsync(string providerId, bool enabled, CancellationToken cancellationToken = default);
 }
 
 internal static class AgentSettingsStoreExtensions
@@ -26,4 +35,11 @@ internal static class AgentSettingsStoreExtensions
         IAgentCliProvider provider,
         CancellationToken cancellationToken) =>
         await settings.GetArgumentsAsync(provider.Id, cancellationToken) ?? provider.DefaultArguments;
+
+    /// <summary>O escolhido, ou ligado quando nada foi escolhido.</summary>
+    public static async Task<bool> MonitoringForAsync(
+        this IAgentSettingsStore settings,
+        IAgentCliProvider provider,
+        CancellationToken cancellationToken) =>
+        await settings.GetMonitoringAsync(provider.Id, cancellationToken) ?? true;
 }

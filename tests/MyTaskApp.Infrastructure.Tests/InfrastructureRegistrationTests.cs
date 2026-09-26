@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using MyTaskApp.Application;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Development;
@@ -90,6 +91,46 @@ public class InfrastructureRegistrationTests : IDisposable
         using var scope = provider.CreateScope();
 
         scope.ServiceProvider.GetRequiredService(serviceType).Should().NotBeNull();
+    }
+
+    /// <summary>
+    /// A porta dos hooks (ADR-036) é uma só, e montar o contêiner não abre
+    /// socket nenhum: quem manda ouvir é a App, com <c>Start()</c>.
+    /// </summary>
+    [Fact]
+    public void TheAgentEventPort_IsASingleton_ThatDoesNotListenUntilStarted()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["Database:Directory"] = _directory })
+            .Build();
+
+        using var provider = new ServiceCollection()
+            .AddSingleton(typeof(ILogger<>), typeof(NullLogger<>))
+            .AddSingleton<IUseCaseRunner>(UnusedRunner.Instance)
+            .AddApplication(configuration)
+            .AddInfrastructure(configuration)
+            .BuildServiceProvider(validateScopes: true);
+
+        var endpoint = provider.GetRequiredService<IAgentEventEndpoint>();
+
+        endpoint.Should().BeSameAs(provider.GetRequiredService<IAgentEventEndpoint>());
+        endpoint.Address.Should().BeNull();
+    }
+
+    /// <summary>Nunca chamado: o teste só monta o contêiner.</summary>
+    private sealed class UnusedRunner : IUseCaseRunner
+    {
+        public static readonly UnusedRunner Instance = new();
+
+        public Task<TResult> RunAsync<THandler, TResult>(
+            Func<THandler, CancellationToken, Task<TResult>> operation,
+            CancellationToken cancellationToken = default)
+            where THandler : notnull => throw new NotSupportedException();
+
+        public Task RunAsync<THandler>(
+            Func<THandler, CancellationToken, Task> operation,
+            CancellationToken cancellationToken = default)
+            where THandler : notnull => throw new NotSupportedException();
     }
 
     /// <summary>Hoje o único agente é o Claude Code (ADR-030).</summary>

@@ -59,10 +59,14 @@ public sealed partial class AgentSessionViewModel(
     /// <summary>O último valor vindo do banco: se o campo ainda o mostra, o usuário não mexeu.</summary>
     private string _loadedArguments = string.Empty;
 
+    /// <summary>Como <see cref="_loadedArguments"/>, para a caixa do acompanhamento.</summary>
+    private bool _loadedMonitor = true;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(
         nameof(IsChecking), nameof(IsNotInstalled), nameof(IsIdle), nameof(IsStarting), nameof(IsRunning),
-        nameof(IsFinished), nameof(IsFailed), nameof(HasSession), nameof(ShowStart), nameof(StatusText))]
+        nameof(IsFinished), nameof(IsFailed), nameof(HasSession), nameof(ShowStart), nameof(StatusText),
+        nameof(NeedsAttention), nameof(ActivityText), nameof(MonitoringText), nameof(IsRunningQuietly), nameof(ShowsWarning))]
     [NotifyCanExecuteChangedFor(nameof(StartCommand), nameof(FocusCommand))]
     private AgentPanelState _state = AgentPanelState.Checking;
 
@@ -90,8 +94,16 @@ public sealed partial class AgentSessionViewModel(
     [ObservableProperty]
     [NotifyPropertyChangedFor(
         nameof(AgentName), nameof(StartLabel), nameof(ProcessText), nameof(StartedText), nameof(RangeText),
-        nameof(WorkingDirectory), nameof(FailureReason), nameof(HasSession), nameof(StatusText))]
+        nameof(WorkingDirectory), nameof(FailureReason), nameof(HasSession), nameof(StatusText),
+        nameof(NeedsAttention), nameof(ActivityText), nameof(MonitoringText), nameof(IsRunningQuietly), nameof(ShowsWarning))]
     private AgentSessionView? _session;
+
+    /// <summary>
+    /// "Avisar quando precisar de mim": abre o agente com os hooks do app
+    /// (ADR-036). Como os parâmetros, o valor usado ao iniciar vira o padrão.
+    /// </summary>
+    [ObservableProperty]
+    private bool _monitor = true;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartCommand), nameof(FocusCommand))]
@@ -154,12 +166,47 @@ public sealed partial class AgentSessionViewModel(
     {
         AgentPanelState.Checking => $"Verificando o {AgentName}…",
         AgentPanelState.Starting => $"Abrindo o {AgentName}…",
-        AgentPanelState.Running => "● Em execução",
+        AgentPanelState.Running => RunningText(Session?.Activity ?? AgentActivity.Unknown),
         AgentPanelState.Finished => "○ Finalizado",
         AgentPanelState.Failed => "✗ O terminal não abriu",
         AgentPanelState.NotInstalled => NotFoundText,
         _ => "Nenhuma sessão ativa.",
     };
+
+    /// <summary>"● Trabalhando", "⚠ Aguardando você"… — o que os hooks disseram por último (ADR-036).</summary>
+    public static string RunningText(AgentActivity activity) => activity switch
+    {
+        AgentActivity.Working => "● Trabalhando",
+        AgentActivity.WaitingForUser => "⚠ Aguardando você",
+        AgentActivity.WaitingReview => "✓ Terminou — aguardando sua revisão",
+        AgentActivity.Failed => "✗ A última resposta terminou em erro",
+        _ => "● Em execução",
+    };
+
+    /// <summary>Aberto e parado esperando o usuário: o status ganha a cor de atenção.</summary>
+    public bool NeedsAttention =>
+        State is AgentPanelState.Running
+        && Session?.Activity is AgentActivity.WaitingForUser or AgentActivity.WaitingReview or AgentActivity.Failed;
+
+    /// <summary>Verde só quando está aberto e ninguém precisa fazer nada.</summary>
+    public bool IsRunningQuietly => IsRunning && !NeedsAttention;
+
+    /// <summary>Âmbar: o terminal não abriu, ou o agente está esperando.</summary>
+    public bool ShowsWarning => IsFailed || NeedsAttention;
+
+    /// <summary>"Às 18:55 · Preciso saber se uso Redis ou MemoryCache."</summary>
+    public string? ActivityText => State is AgentPanelState.Running && Session?.ActivityChangedAt is { } at
+        ? AgentAlertViewModel.Excerpt(Session.ActivityMessage) is { } message
+            ? $"Às {Clock(at)} · {message}"
+            : $"Desde {Clock(at)}"
+        : null;
+
+    /// <summary>Com o agente aberto: se ele avisa o app, ou por que não.</summary>
+    public string? MonitoringText => State is AgentPanelState.Running && Session is { } session
+        ? session.IsMonitored
+            ? "O MyTaskApp avisa quando o agente precisar de você ou terminar."
+            : "Sem acompanhamento: esta sessão não avisa o MyTaskApp."
+        : null;
 
     public bool IsChecking => State is AgentPanelState.Checking;
 
@@ -257,20 +304,27 @@ public sealed partial class AgentSessionViewModel(
             Session = await runner.RunAsync<StartAgentSessionHandler, AgentSessionView>(
                 (handler, token) => handler.HandleAsync(
                     new StartAgentSession(
-                        _taskId, _developmentId, Cli?.ProviderId, ArgumentsToSend(), Prompt, RunDirectly),
+                        _taskId,
+                        _developmentId,
+                        Cli?.ProviderId,
+                        ArgumentsToSend(),
+                        Prompt,
+                        RunDirectly,
+                        Cli is null ? null : Monitor),
                     token),
                 CancellationToken.None);
 
             if (Cli is not null)
             {
                 _loadedArguments = Arguments = Arguments.Trim();
+                _loadedMonitor = Monitor;
             }
 
             State = StateFor(Session);
 
             Message = Session.Status is AgentSessionStatus.Exited
                 ? $"O {AgentName} encerrou logo ao abrir."
-                : null;
+                : Session.MonitoringNote;
         }
         catch (DomainException exception)
         {
@@ -386,6 +440,11 @@ public sealed partial class AgentSessionViewModel(
             if (Arguments == _loadedArguments)
             {
                 _loadedArguments = Arguments = cli.Arguments;
+            }
+
+            if (Monitor == _loadedMonitor)
+            {
+                _loadedMonitor = Monitor = cli.Monitor;
             }
         }
         catch (Exception exception) when (exception is not OperationCanceledException)

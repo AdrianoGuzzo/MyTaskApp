@@ -30,6 +30,8 @@ public class AgentSessionHandlerTests
     private readonly RecordingAgentSessionWatcher _watcher = new();
     private readonly FakeDirectoryProbe _disk = new();
     private readonly FakeAgentSettingsStore _settings = new();
+    private readonly FakeAgentEventEndpoint _events = new();
+    private readonly RecordingAgentAttentionPresenter _presenter = new();
     private readonly AgentCliProviders _providers;
     private readonly TaskItem _task;
 
@@ -63,6 +65,7 @@ public class AgentSessionHandlerTests
             _watcher,
             _disk,
             _settings,
+            _events,
             _time,
             NullLogger<StartAgentSessionHandler>.Instance);
 
@@ -73,7 +76,7 @@ public class AgentSessionHandlerTests
         new(_sessions, _tasks, _providers, _processes, _windows, _watcher, _time, NullLogger<FocusAgentSessionHandler>.Instance);
 
     private EndAgentSessionHandler End() =>
-        new(_sessions, _tasks, _watcher, _time, NullLogger<EndAgentSessionHandler>.Instance);
+        new(_sessions, _tasks, _watcher, _presenter, _time, NullLogger<EndAgentSessionHandler>.Instance);
 
     private ReconcileAgentSessionsHandler Reconcile() =>
         new(_sessions, _tasks, _processes, _watcher, _time, NullLogger<ReconcileAgentSessionsHandler>.Instance);
@@ -608,5 +611,113 @@ public class AgentSessionHandlerTests
         await Reconcile().HandleAsync(new ReconcileAgentSessions(), Ct);
 
         session.Status.Should().Be(AgentSessionStatus.Exited);
+    }
+
+    // --- Acompanhamento pelos hooks (ADR-036) -------------------------------
+
+    /// <summary>
+    /// A associação é explícita: o processo nasce sabendo a tarefa, o ambiente,
+    /// a sessão e o segredo — o banco guarda só o hash do segredo.
+    /// </summary>
+    [Fact]
+    public async Task Start_WithMonitoring_GivesTheProcessItsIdentity_AndKeepsOnlyTheHash()
+    {
+        Ready();
+
+        var view = await StartAsync();
+
+        var session = _sessions.Sessions.Should().ContainSingle().Subject;
+        var environment = _launcher.Launched.Should().ContainSingle().Subject.Environment!;
+
+        environment[AgentMonitoringEnvironment.TaskId].Should().Be(_task.Id.ToString());
+        environment[AgentMonitoringEnvironment.DevelopmentId].Should().Be(_task.Developments[0].Id.ToString());
+        environment[AgentMonitoringEnvironment.AgentSessionId].Should().Be(session.Id.ToString());
+        environment[AgentMonitoringEnvironment.WorktreePath].Should().Be(Worktree);
+        environment[AgentMonitoringEnvironment.Branch].Should().Be("feature/123");
+        environment[AgentMonitoringEnvironment.EventsUrl].Should().Be(FakeAgentEventEndpoint.Listening.ToString());
+
+        var token = environment[AgentMonitoringEnvironment.HookToken];
+        session.IsMonitored.Should().BeTrue();
+        session.HookTokenHash.Should().NotBe(token);
+        AgentHookToken.Matches(token, session.HookTokenHash).Should().BeTrue();
+
+        _claude.LastContext!.Monitoring!.Endpoint.Should().Be(FakeAgentEventEndpoint.Listening);
+        view.IsMonitored.Should().BeTrue();
+        view.MonitoringNote.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task EverySession_HasItsOwnSecret()
+    {
+        Ready();
+        await StartAsync();
+        _processes.Exit(_sessions.Sessions[0].ProcessId!.Value);
+        await StartAsync();
+
+        _launcher.Launched.Select(launch => launch.Environment![AgentMonitoringEnvironment.HookToken])
+            .Should().OnlyHaveUniqueItems();
+    }
+
+    [Fact]
+    public async Task Start_WithMonitoringTurnedOff_OpensWithoutIt_AndRemembersTheChoice()
+    {
+        Ready();
+
+        var view = await Start().HandleAsync(
+            new StartAgentSession(_task.Id, _task.Developments[0].Id, Monitor: false), Ct);
+
+        view.IsMonitored.Should().BeFalse();
+        view.MonitoringNote.Should().BeNull();
+        _launcher.Launched[0].Environment.Should().BeNull();
+        _claude.LastContext!.Monitoring.Should().BeNull();
+        _settings.Monitoring["claude-code"].Should().BeFalse();
+    }
+
+    /// <summary>Acompanhar é um extra: sem porta local, o agente abre do mesmo jeito.</summary>
+    [Fact]
+    public async Task Start_WithoutTheLocalPort_OpensAnyway_AndSaysWhy()
+    {
+        Ready();
+        _events.Address = null;
+
+        var view = await StartAsync();
+
+        view.Status.Should().Be(AgentSessionStatus.Running);
+        view.IsMonitored.Should().BeFalse();
+        view.MonitoringNote.Should().Contain("porta local");
+    }
+
+    [Fact]
+    public async Task Start_WhenTheAgentsConfigurationBlocksHooks_OpensAnyway_AndSaysWhy()
+    {
+        Ready();
+        _claude.MonitoringBlockedBy = "os hooks do Claude Code estão desligados.";
+
+        var view = await StartAsync();
+
+        view.Status.Should().Be(AgentSessionStatus.Running);
+        view.IsMonitored.Should().BeFalse();
+        view.MonitoringNote.Should().Contain("hooks do Claude Code estão desligados");
+    }
+
+    [Fact]
+    public async Task Detect_BringsTheMonitoringChoice_OnByDefault()
+    {
+        var status = await new DetectAgentCliHandler(_providers, _settings).HandleAsync(new DetectAgentCli(), Ct);
+        status.Monitor.Should().BeTrue();
+
+        _settings.Monitoring["claude-code"] = false;
+        status = await new DetectAgentCliHandler(_providers, _settings).HandleAsync(new DetectAgentCli(), Ct);
+        status.Monitor.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task TheProcessEnding_TakesItsWarningOffTheScreen()
+    {
+        var session = Persisted(15432, alive: false);
+
+        await End().HandleAsync(new EndAgentSession(session.Id), Ct);
+
+        _presenter.Dismissed.Should().Equal(session.Id);
     }
 }

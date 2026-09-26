@@ -72,5 +72,21 @@ internal sealed class AgentSessionConfiguration : IEntityTypeConfiguration<Agent
 
         builder.Property(session => session.FailureReason)
             .HasMaxLength(AgentSession.MaxFailureLength);
+
+        // O acompanhamento pelos hooks do agente (ADR-036). Só o hash do
+        // segredo: o segredo mesmo vive no ambiente do processo.
+        builder.Property(session => session.HookTokenHash)
+            .HasMaxLength(AgentSession.HookTokenHashLength);
+
+        builder.Property(session => session.ExternalSessionId)
+            .HasMaxLength(AgentSession.MaxExternalSessionIdLength);
+
+        builder.Property(session => session.Activity).HasConversion<int>();
+
+        builder.Property(session => session.ActivityMessage)
+            .HasMaxLength(AgentSession.MaxActivityMessageLength);
+
+        builder.Property(session => session.ActivityChangedAt)
+            .HasConversion(UtcInstantConverter.Instance);
     }
 }

@@ -19,4 +19,6 @@ internal sealed class UnsupportedTerminalLauncher : ITerminalLauncher
 internal sealed class UnsupportedTerminalWindowManager : ITerminalWindowManager
 {
     public Task<bool> FocusAsync(int processId) => Task.FromResult(false);
+
+    public Task<bool> IsInForegroundAsync(int processId) => Task.FromResult(false);
 }

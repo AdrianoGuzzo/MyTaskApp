@@ -65,6 +65,13 @@ internal sealed class WindowsTerminalLauncher(
             startInfo.ArgumentList.Add(argument);
         }
 
+        // Por cima do ambiente herdado do app: é assim que o agente sabe de
+        // qual tarefa e de qual sessão é (ADR-036).
+        foreach (var (name, value) in options.Environment ?? new Dictionary<string, string>())
+        {
+            startInfo.Environment[name] = value;
+        }
+
         try
         {
             // Descartar o Process só solta o handle — não encerra o agente, que

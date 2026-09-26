@@ -76,6 +76,13 @@ public sealed partial class TodayViewModel(
     /// </summary>
     private readonly Dictionary<Guid, WorktreeSync> _worktreeSync = [];
 
+    /// <summary>
+    /// As pendências de agente em que o usuário já clicou (ADR-036). Só em
+    /// memória: a borda pulsa de novo ao reabrir o app, e isso é aceitável —
+    /// o agente continua esperando.
+    /// </summary>
+    private readonly HashSet<AgentAlertKey> _seenAgentAlerts = [];
+
     /// <summary>Descarta a resposta de uma conferência que outra mais nova já superou.</summary>
     private int _worktreeProbe;
 
@@ -454,6 +461,13 @@ public sealed partial class TodayViewModel(
     [RelayCommand]
     public Task FocusAgentAsync(TaskRowViewModel row) =>
         FocusAsync(row.TaskId, row.Agents.Count == 1 ? row.Agents[0].DevelopmentId : null, row.AgentName);
+
+    /// <summary>
+    /// O clique no selo, antes de qualquer terminal: a borda da linha para de
+    /// pulsar. Vale também para o selo de vários, que só abre o menu — o
+    /// usuário já olhou para a pendência.
+    /// </summary>
+    public void SeeAgentAlerts(TaskRowViewModel row) => _seenAgentAlerts.UnionWith(row.SeeAgentAlerts());
 
     /// <summary>Um item do menu do selo: o terminal do agente daquele repositório.</summary>
     [RelayCommand]
@@ -884,6 +898,15 @@ public sealed partial class TodayViewModel(
 
         IsEmpty = Sections.Count == 0;
 
+        // Pendência que sumiu do quadro (respondida, sessão fechada) não
+        // precisa mais ser lembrada. Do quadro, e não das seções: esconder as
+        // concluídas não pode fazer a borda delas voltar a pulsar.
+        _seenAgentAlerts.IntersectWith(
+            new[] { board.Overdue, board.Now, board.Today, board.Unscheduled, board.Completed }
+                .SelectMany(tasks => tasks)
+                .SelectMany(task => (task.ActiveAgents ?? []).Select(agent => new AgentAlertKey(
+                    task.TaskId, agent.DevelopmentId, agent.Activity, agent.ActivityChangedAt))));
+
         // Sem as concluídas, terminar o dia esvazia a lista — e painel em
         // branco parece defeito, não dever cumprido.
         EmptyMessage = board.Completed.Count > 0 ? EverythingDone : NothingForToday;
@@ -948,6 +971,7 @@ public sealed partial class TodayViewModel(
             {
                 var row = new TaskRowViewModel(task, isCompleted);
                 row.Worktree.Apply(_worktreeSync);
+                row.ApplySeenAgentAlerts(_seenAgentAlerts);
                 return row;
             }),
 

@@ -48,23 +48,11 @@ internal sealed partial class WindowsTerminalWindowManager(ILogger<WindowsTermin
     {
         try
         {
-            var window = ConsoleWindowOf(processId);
-
-            if (window == 0)
-            {
-                window = MainWindowOf(processId);
-            }
-
-            if (window == 0)
-            {
-                return Task.FromResult(false);
-            }
-
-            var target = GetAncestor(window, GaRootOwner);
+            var target = VisibleWindowOf(processId);
 
             if (target == 0)
             {
-                target = window;
+                return Task.FromResult(false);
             }
 
             if (IsIconic(target))
@@ -85,6 +73,49 @@ internal sealed partial class WindowsTerminalWindowManager(ILogger<WindowsTermin
             logger.LogWarning(exception, "TerminalFocusUnavailable {ProcessId}", processId);
             return Task.FromResult(false);
         }
+    }
+
+    /// <summary>
+    /// Compara a janela do terminal com a que está em primeiro plano (ADR-036).
+    /// Com vários consoles como abas da mesma janela do Windows Terminal, basta
+    /// a janela estar na frente — a aba não se descobre (a mesma limitação do foco).
+    /// </summary>
+    public Task<bool> IsInForegroundAsync(int processId)
+    {
+        try
+        {
+            var target = VisibleWindowOf(processId);
+
+            return Task.FromResult(target != 0 && target == GetForegroundWindow());
+        }
+        catch (Exception exception) when (exception is DllNotFoundException or EntryPointNotFoundException)
+        {
+            logger.LogWarning(exception, "TerminalForegroundUnavailable {ProcessId}", processId);
+            return Task.FromResult(false);
+        }
+    }
+
+    /// <summary>
+    /// A janela que o usuário vê: a do console (ou a principal do processo) e,
+    /// no Windows Terminal, a dona dela. <c>0</c> quando não há.
+    /// </summary>
+    private static nint VisibleWindowOf(int processId)
+    {
+        var window = ConsoleWindowOf(processId);
+
+        if (window == 0)
+        {
+            window = MainWindowOf(processId);
+        }
+
+        if (window == 0)
+        {
+            return 0;
+        }
+
+        var owner = GetAncestor(window, GaRootOwner);
+
+        return owner == 0 ? window : owner;
     }
 
     /// <summary>
