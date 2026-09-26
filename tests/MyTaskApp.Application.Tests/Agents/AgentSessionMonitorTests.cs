@@ -41,7 +41,7 @@ public class AgentSessionMonitorTests
         _runner.Register(() => new ReconcileAgentSessionsHandler(
             _sessions, _tasks, _processes, _monitor, _time, NullLogger<ReconcileAgentSessionsHandler>.Instance));
         _runner.Register(() => new EndAgentSessionHandler(
-            _sessions, _tasks, _monitor, _time, NullLogger<EndAgentSessionHandler>.Instance));
+            _sessions, _tasks, _monitor, new NoAgentAttentionPresenter(), _time, NullLogger<EndAgentSessionHandler>.Instance));
 
         _monitor.SessionsChanged += _changed.Add;
     }

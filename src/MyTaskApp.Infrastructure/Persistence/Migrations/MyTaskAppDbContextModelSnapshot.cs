@@ -22,6 +22,16 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("Activity")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ActivityChangedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ActivityMessage")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Command")
                         .IsRequired()
                         .HasMaxLength(1024)
@@ -30,8 +40,16 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                     b.Property<long?>("EndedAt")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("ExternalSessionId")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("FailureReason")
                         .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("HookTokenHash")
+                        .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
                     b.Property<int?>("ProcessId")
@@ -404,9 +422,11 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Arguments")
-                        .IsRequired()
                         .HasMaxLength(2000)
                         .HasColumnType("TEXT");
+
+                    b.Property<bool?>("MonitorActivity")
+                        .HasColumnType("INTEGER");
 
                     b.HasKey("ProviderId");
 

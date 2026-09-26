@@ -142,10 +142,47 @@ internal sealed class FakeTerminalWindowManager : ITerminalWindowManager
 
     public bool Finds { get; set; } = true;
 
+    /// <summary>Os processos cujo terminal o usuário está olhando agora.</summary>
+    public HashSet<int> InFront { get; } = [];
+
     public Task<bool> FocusAsync(int processId)
     {
         Focused.Add(processId);
         return Task.FromResult(Finds);
+    }
+
+    public Task<bool> IsInForegroundAsync(int processId) => Task.FromResult(InFront.Contains(processId));
+}
+
+/// <summary>A porta local de mentira: ouvindo ou não, conforme o teste.</summary>
+internal sealed class FakeAgentEventEndpoint : IAgentEventEndpoint
+{
+    public static readonly Uri Listening = new("http://127.0.0.1:47831/api/claude/events");
+
+    public Uri? Address { get; set; } = Listening;
+
+    public void Start()
+    {
+    }
+}
+
+/// <summary>Anota os avisos que iriam para a tela e os que sairiam dela.</summary>
+internal sealed class RecordingAgentAttentionPresenter : IAgentAttentionPresenter
+{
+    public List<AgentAttention> Presented { get; } = [];
+
+    public List<Guid> Dismissed { get; } = [];
+
+    public Task PresentAsync(AgentAttention attention, CancellationToken cancellationToken = default)
+    {
+        Presented.Add(attention);
+        return Task.CompletedTask;
+    }
+
+    public Task DismissAsync(Guid sessionId, CancellationToken cancellationToken = default)
+    {
+        Dismissed.Add(sessionId);
+        return Task.CompletedTask;
     }
 }
 
@@ -188,8 +225,13 @@ internal sealed class FakeAgentCliProvider : IAgentCliProvider
     public TerminalLaunchOptions CreateLaunch(AgentCliStartContext context, CliDetectionResult detection)
     {
         LastContext = context;
-        return new(detection.ExecutablePath!, context.Arguments, context.WorkingDirectory);
+        return new(detection.ExecutablePath!, context.Arguments, context.WorkingDirectory, context.Monitoring?.Environment);
     }
+
+    /// <summary>O motivo que o agente daria para não conseguir avisar; <c>null</c> = consegue.</summary>
+    public string? MonitoringBlockedBy { get; set; }
+
+    public string? MonitoringUnavailableReason(string workingDirectory, Uri endpoint) => MonitoringBlockedBy;
 }
 
 /// <summary>Anota quem pediu para vigiar e quem avisou mudança.</summary>
