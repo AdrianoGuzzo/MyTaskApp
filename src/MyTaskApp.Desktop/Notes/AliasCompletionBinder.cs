@@ -62,6 +62,9 @@ internal sealed class AliasCompletionBinder
             case Key.Up:
                 viewModel.MoveSelection(-1);
                 return true;
+            case Key.Tab when viewModel.ContinuationFor(viewModel.SelectedItem) is { } continuation:
+                Continue(viewModel, continuation);
+                return true;
             case Key.Enter or Key.Tab:
                 Accept(viewModel.SelectedItem);
                 return true;
@@ -90,7 +93,7 @@ internal sealed class AliasCompletionBinder
             return;
         }
 
-        var edit = AliasCompletion.Accept(_box.Text, token, _box.CaretIndex, replacement);
+        var edit = AliasCompletion.Accept(_box.Text, token, _box.CaretIndex, replacement, viewModel.IsTokenChar);
 
         _box.Text = edit.Text;
         _box.CaretIndex = edit.CaretIndex;
@@ -101,6 +104,24 @@ internal sealed class AliasCompletionBinder
         viewModel.DismissCompletion();
 
         _box.Focus();
+    }
+
+    /// <summary>
+    /// O Tab numa pasta (ADR-039): troca o <c>@texto</c> por outro
+    /// <c>@texto</c>, e a lista continua aberta, agora com o que há dentro dela.
+    /// </summary>
+    private void Continue(IAliasCompletionSource viewModel, string continuation)
+    {
+        if (viewModel.CompletionToken is not { } token)
+        {
+            return;
+        }
+
+        var edit = AliasCompletion.Accept(_box.Text, token, _box.CaretIndex, continuation, viewModel.IsTokenChar);
+
+        _box.Text = edit.Text;
+        _box.CaretIndex = edit.CaretIndex;
+        viewModel.UpdateCompletion(_box.Text, _box.CaretIndex);
     }
 
     private void OnBoxPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)

@@ -89,6 +89,14 @@ public class GitOutputParserTests
     public void Status_Clean() => GitOutputParser.ParseStatus(string.Empty).Should().BeEmpty();
 
     [Fact]
+    public void FileList_OneEntryPerFile_EvenInConflict()
+    {
+        const string output = "README.md\0src/ação.cs\0src/conflito.cs\0src/conflito.cs\0";
+
+        GitOutputParser.ParseFileList(output).Should().Equal("README.md", "src/ação.cs", "src/conflito.cs");
+    }
+
+    [Fact]
     public void BranchStatus_WithUpstream_ReadsDistanceAndChanges()
     {
         const string output =

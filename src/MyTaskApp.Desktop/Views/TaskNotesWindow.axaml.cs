@@ -33,7 +33,8 @@ namespace MyTaskApp.Desktop.Views;
 /// <para>
 /// Desde o ADR-027 a janela tem a aba Desenvolvimento. O autocomplete de
 /// <c>@alias</c> serve às duas caixas — a anotação e o campo Diretório — por
-/// um <see cref="AliasCompletionBinder"/> cada.
+/// um <see cref="AliasCompletionBinder"/> cada. O texto do agente tem um
+/// terceiro, com os ambientes e arquivos da tarefa (ADR-039).
 /// </para>
 /// </remarks>
 public sealed partial class TaskNotesWindow : Window
@@ -43,6 +44,8 @@ public sealed partial class TaskNotesWindow : Window
     private readonly AliasCompletionBinder _notesCompletion;
 
     private readonly AliasCompletionBinder _directoryCompletion;
+
+    private readonly AliasCompletionBinder _promptReferences;
 
     /// <summary>
     /// Liga depois de o usuário confirmar o descarte: sem isto, o
@@ -68,6 +71,12 @@ public sealed partial class TaskNotesWindow : Window
             DirectoryBox,
             DirectoryPopup,
             () => ViewModel?.Developments.DirectoryCompletion);
+
+        // O "@" no texto do agente cita os ambientes da tarefa (ADR-039).
+        _promptReferences = new AliasCompletionBinder(
+            AgentPromptBox,
+            AgentPromptPopup,
+            () => ViewModel?.Developments.PromptReferences);
 
         // A cada ativação, e não só na abertura: etiquetas e diretórios podem ter
         // mudado em outra janela enquanto esta estava aberta.
@@ -229,6 +238,7 @@ public sealed partial class TaskNotesWindow : Window
         // Escape que fecha a janela e do Enter que quebraria a linha.
         if (_notesCompletion.HandleKey(e)
             || _directoryCompletion.HandleKey(e)
+            || _promptReferences.HandleKey(e)
             || ((e.Source as Visual)?.FindAncestorOfType<CommandInputBox>(includeSelf: true)?.HandleKey(e) ?? false))
         {
             e.Handled = true;
@@ -289,6 +299,15 @@ public sealed partial class TaskNotesWindow : Window
         else
         {
             _notesCompletion.Accept(suggestion);
+        }
+    }
+
+    private void OnReferencePressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is Control { DataContext: ReferenceSuggestionViewModel suggestion })
+        {
+            e.Handled = true;
+            _promptReferences.Accept(suggestion);
         }
     }
 

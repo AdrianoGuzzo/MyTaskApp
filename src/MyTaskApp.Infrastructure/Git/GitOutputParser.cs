@@ -111,6 +111,13 @@ internal static partial class GitOutputParser
     }
 
     /// <summary>
+    /// Registros de <c>git ls-files -z</c>. Um arquivo em conflito aparece uma
+    /// vez por estágio, e sai uma vez só.
+    /// </summary>
+    public static IReadOnlyList<string> ParseFileList(string output) =>
+        [.. output.Split('\0', StringSplitOptions.RemoveEmptyEntries).Distinct(StringComparer.Ordinal)];
+
+    /// <summary>
     /// Registros de <c>git status --porcelain=v1 -z</c>. Renomeação e cópia
     /// trazem um registro extra com o nome antigo, que é pulado.
     /// </summary>

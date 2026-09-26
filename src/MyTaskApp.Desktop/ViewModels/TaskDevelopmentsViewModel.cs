@@ -40,6 +40,9 @@ public sealed partial class TaskDevelopmentsViewModel(
     /// <summary>Os aliases da tarefa, os mesmos para todos os ambientes.</summary>
     public AliasCompletionViewModel DirectoryCompletion { get; } = new();
 
+    /// <summary>O <c>@</c> no texto do agente: os ambientes desta tarefa e os arquivos deles (ADR-039).</summary>
+    public ReferenceCompletionViewModel PromptReferences { get; } = new(runner, logger);
+
     /// <summary>As abas só aparecem com algum ambiente gravado: o primeiro repositório é só o formulário.</summary>
     public bool ShowStrip => Items.Any(item => !item.IsDraft);
 
@@ -59,6 +62,7 @@ public sealed partial class TaskDevelopmentsViewModel(
         _isReadOnly = isReadOnly;
         _views = [];
         DirectoryCompletion.IsEnabled = !isReadOnly;
+        PromptReferences.Load(taskId, isReadOnly);
 
         foreach (var item in Items.ToList())
         {
@@ -145,6 +149,8 @@ public sealed partial class TaskDevelopmentsViewModel(
             return;
         }
 
+        PromptReferences.SetCurrent(newValue?.DevelopmentId);
+
         if (newValue is not null && oldValue is not null && newValue != oldValue)
         {
             _ = ActivateSelectedAsync(CancellationToken.None);
@@ -206,13 +212,14 @@ public sealed partial class TaskDevelopmentsViewModel(
                 ?? Items[0];
         }
 
+        PromptReferences.SetEnvironments(_views, Selected?.DevelopmentId);
         NotifyItemsChanged();
     }
 
     private TaskDevelopmentViewModel AddEnvironment()
     {
         var item = createEnvironment();
-        item.Load(_taskId, _taskTitle, _isReadOnly, DirectoryCompletion);
+        item.Load(_taskId, _taskTitle, _isReadOnly, DirectoryCompletion, PromptReferences);
         item.Changed += OnEnvironmentChanged;
         item.CommandsRequested += OnCommandsRequested;
         item.PropertyChanged += OnEnvironmentPropertyChanged;
