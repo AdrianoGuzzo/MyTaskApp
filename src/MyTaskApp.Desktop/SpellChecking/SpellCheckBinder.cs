@@ -245,9 +245,7 @@ internal sealed class SpellCheckBinder : IDisposable
 
     private void OnContextRequested(object? sender, ContextRequestedEventArgs e)
     {
-        if (!_checker.IsAvailable
-            || IndexAt(e) is not { } index
-            || _session.MisspelledAt(index) is not { } word)
+        if (!_checker.IsAvailable || WordAt(e) is not { } word)
         {
             return;
         }
@@ -257,10 +255,10 @@ internal sealed class SpellCheckBinder : IDisposable
     }
 
     /// <summary>
-    /// Onde no texto o menu foi pedido: o ponto do clique, ou o cursor quando
-    /// veio do teclado (tecla de menu, Shift+F10).
+    /// A palavra errada onde o menu foi pedido: sob o clique, ou sob o cursor
+    /// quando veio do teclado (tecla de menu, Shift+F10).
     /// </summary>
-    private int? IndexAt(ContextRequestedEventArgs e)
+    private WordSpan? WordAt(ContextRequestedEventArgs e)
     {
         if (_presenter is null)
         {
@@ -269,12 +267,37 @@ internal sealed class SpellCheckBinder : IDisposable
 
         if (!e.TryGetPosition(_presenter, out var point))
         {
-            return _box.CaretIndex;
+            return _session.MisspelledAt(_box.CaretIndex);
         }
 
-        return _presenter.TextLayout.HitTestPoint(point) is { IsInside: true } hit
-            ? hit.TextPosition
-            : null;
+        return WordAt(point);
+    }
+
+    /// <summary>
+    /// A palavra errada cujo desenho contém o ponto, em coordenadas do
+    /// presenter. Pelos mesmos retângulos do sublinhado, e não pelo
+    /// <c>HitTestPoint</c>: ele responde <c>IsInside = false</c> fora da
+    /// primeira linha, e o menu só abria na primeira linha da anotação.
+    /// </summary>
+    internal WordSpan? WordAt(Point point)
+    {
+        if (_presenter is null)
+        {
+            return null;
+        }
+
+        var length = _presenter.Text?.Length ?? 0;
+
+        foreach (var word in _session.Misspelled)
+        {
+            if (word.End <= length
+                && _presenter.TextLayout.HitTestTextRange(word.Start, word.Length).Any(rect => rect.Contains(point)))
+            {
+                return word;
+            }
+        }
+
+        return null;
     }
 
     internal MenuFlyout BuildMenu(WordSpan word)
