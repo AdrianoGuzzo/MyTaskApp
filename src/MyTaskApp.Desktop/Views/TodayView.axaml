@@ -123,6 +123,15 @@
         -->
         <Border.ContextFlyout>
           <MenuFlyout Placement="BottomEdgeAlignedRight">
+            <!--
+              Só com ambiente pronto (ADR-036). Clique de code-behind, e não
+              comando: com mais de um ambiente a view pergunta qual.
+            -->
+            <MenuItem Classes="startAgent"
+                      Header="Abrir Claude Code"
+                      IsVisible="{Binding Worktree.HasWorktree}"
+                      Click="OnStartAgentClick" />
+            <Separator IsVisible="{Binding Worktree.HasWorktree}" />
             <MenuItem Header="Arquivar"
                       Command="{Binding #Root.((vm:TodayViewModel)DataContext).ArchiveCommand}"
                       CommandParameter="{Binding}" />
@@ -444,7 +453,7 @@
           <Button Grid.Column="8"
                   Classes="rowMenu"
                   Content="⋯"
-                  ToolTip.Tip="Arquivar ou excluir este checklist"
+                  ToolTip.Tip="Mais ações deste checklist"
                   Click="OnRowMenuClick" />
 
           <TextBlock Grid.Column="9"
