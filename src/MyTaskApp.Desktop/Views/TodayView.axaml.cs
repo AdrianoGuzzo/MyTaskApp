@@ -155,6 +155,55 @@ public sealed partial class TodayView : UserControl
     }
 
     /// <summary>
+    /// "Abrir Claude Code" do menu da linha (ADR-036). Com um ambiente, abre
+    /// direto; com mais de um, pergunta qual — o mesmo molde do selo de vários
+    /// agentes, ancorado na linha, já que o menu de origem fecha no clique.
+    /// </summary>
+    private void OnStartAgentClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Control { DataContext: TaskRowViewModel row }
+            || DataContext is not TodayViewModel viewModel)
+        {
+            return;
+        }
+
+        e.Handled = true;
+
+        if (row.WorktreeChoices.Count > 1)
+        {
+            var anchor = this.GetVisualDescendants()
+                .OfType<Border>()
+                .FirstOrDefault(border => border.ContextFlyout is not null && border.DataContext == row);
+
+            WorktreeMenu(row, viewModel).ShowAt((Control?)anchor ?? this);
+            return;
+        }
+
+        if (viewModel.StartAgentCommand.CanExecute(row))
+        {
+            viewModel.StartAgentCommand.Execute(row);
+        }
+    }
+
+    /// <summary>Um item por ambiente da linha, cada um abrindo o agente nele.</summary>
+    internal static MenuFlyout WorktreeMenu(TaskRowViewModel row, TodayViewModel viewModel)
+    {
+        var menu = new MenuFlyout { Placement = PlacementMode.BottomEdgeAlignedRight };
+
+        foreach (var choice in row.WorktreeChoices)
+        {
+            menu.Items.Add(new MenuItem
+            {
+                Header = $"Abrir Claude Code: {choice.Label}",
+                Command = viewModel.StartAgentInCommand,
+                CommandParameter = choice,
+            });
+        }
+
+        return menu;
+    }
+
+    /// <summary>
     /// O botão "⋯" abre o <c>ContextFlyout</c> da própria linha, em vez de ter
     /// um menu só dele. Assim clique direito e botão são literalmente o mesmo
     /// menu — duas cópias em XAML acabariam divergindo no primeiro item novo.
