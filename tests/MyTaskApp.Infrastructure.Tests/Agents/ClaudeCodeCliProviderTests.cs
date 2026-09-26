@@ -11,7 +11,7 @@ namespace MyTaskApp.Infrastructure.Tests.Agents;
 /// O Claude Code como agente (ADR-030), sem Claude nenhum: onde ele é
 /// procurado, como a versão é lida e o que o terminal vai executar.
 /// </summary>
-public class ClaudeCodeCliProviderTests
+public class ClaudeCodeCliProviderTests : IDisposable
 {
     private const string Home = @"C:\Users\dev";
     private const string Native = @"C:\Users\dev\.local\bin\claude.exe";
@@ -20,6 +20,22 @@ public class ClaudeCodeCliProviderTests
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private readonly RecordingProcessRunner _runner = new();
+
+    /// <summary>Onde o arquivo de hooks é gravado (ADR-037): uma pasta por teste.</summary>
+    private readonly string _state = Path.Combine(Path.GetTempPath(), "mytaskapp-tests", Guid.NewGuid().ToString("N"));
+
+    public void Dispose()
+    {
+        if (Directory.Exists(_state))
+        {
+            Directory.Delete(_state, recursive: true);
+        }
+
+        GC.SuppressFinalize(this);
+    }
+
+    private ClaudeCodeHooks Hooks() =>
+        new(_state, Path.Combine(_state, "home"), [], NullLogger<ClaudeCodeHooks>.Instance);
 
     private ClaudeCodeCliProvider Provider(
         Func<string, bool> fileExists,
@@ -38,6 +54,7 @@ public class ClaudeCodeCliProviderTests
                 fileExists,
                 isWindows),
             _runner,
+            Hooks(),
             NullLogger<ClaudeCodeCliProvider>.Instance);
 
     [Fact]
@@ -173,6 +190,43 @@ public class ClaudeCodeCliProviderTests
     }
 
     private static readonly string Worktree = @"C:\Projects\eco core-feature-123";
+
+    // --- Acompanhamento (ADR-037) ------------------------------------------
+
+    private static readonly AgentMonitoring Monitoring = new(
+        new Uri("http://127.0.0.1:47831/api/claude/events"),
+        new Dictionary<string, string> { ["MYTASKAPP_AGENT_SESSION_ID"] = "s-1", ["MYTASKAPP_HOOK_TOKEN"] = "segredo" });
+
+    /// <summary>
+    /// <c>--settings</c> antes de tudo: se o usuário passar o próprio, o dele
+    /// vale — perde-se o acompanhamento, não a configuração dele.
+    /// </summary>
+    [Theory]
+    [InlineData(false, new[] { "--dangerously-skip-permissions", "--permission-mode", "plan", "Implemente" })]
+    [InlineData(true, new[] { "--dangerously-skip-permissions", "Implemente" })]
+    public void WithMonitoring_TheHookSettingsComeFirst_AndTheProcessGetsItsIdentity(bool runDirectly, string[] rest)
+    {
+        var launch = Provider(_ => false).CreateLaunch(
+            new AgentCliStartContext(
+                Guid.NewGuid(), Worktree, ["--dangerously-skip-permissions"], "Implemente", runDirectly, Monitoring),
+            new CliDetectionResult { IsInstalled = true, ExecutablePath = Native });
+
+        var settingsFile = Path.Combine(_state, ClaudeCodeHooks.SettingsFileName);
+
+        launch.Arguments.Should().Equal(["--settings", settingsFile, .. rest]);
+        launch.Environment.Should().BeSameAs(Monitoring.Environment);
+        File.ReadAllText(settingsFile).Should().Contain("http://127.0.0.1:47831/api/claude/events");
+    }
+
+    [Fact]
+    public void WithoutMonitoring_NoHooksAndNoEnvironment()
+    {
+        var launch = Launch(Native, prompt: null, runDirectly: false);
+
+        launch.Arguments.Should().NotContain("--settings");
+        launch.Environment.Should().BeNull();
+        Directory.Exists(_state).Should().BeFalse();
+    }
 
     private TerminalLaunchOptions Launch(string executable, string? prompt, bool runDirectly) =>
         Provider(_ => false).CreateLaunch(

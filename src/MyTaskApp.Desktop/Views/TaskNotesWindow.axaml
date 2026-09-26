@@ -1218,11 +1218,20 @@
 
                 <TextBlock x:Name="AgentStatus"
                            Classes="body"
-                           Classes.ok="{Binding IsRunning}"
+                           Classes.ok="{Binding IsRunningQuietly}"
                            Classes.bad="{Binding IsNotInstalled}"
-                           Classes.warn="{Binding IsFailed}"
+                           Classes.warn="{Binding ShowsWarning}"
                            Classes.hint="{Binding IsChecking}"
                            Text="{Binding StatusText}" />
+
+                <!-- O que os hooks disseram por último (ADR-037): a pergunta, o erro. -->
+                <TextBlock x:Name="AgentActivity"
+                           Classes="hint"
+                           TextWrapping="Wrap"
+                           MaxLines="3"
+                           TextTrimming="CharacterEllipsis"
+                           Text="{Binding ActivityText}"
+                           IsVisible="{Binding ActivityText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
                 <!-- Em execução / finalizado: o que liga a tarefa ao terminal. -->
                 <StackPanel Spacing="10" IsVisible="{Binding HasSession}">
@@ -1245,6 +1254,12 @@
 
                   <TextBlock Classes="fieldLabel" Text="Pasta" />
                   <SelectableTextBlock Classes="code" Text="{Binding WorkingDirectory, FallbackValue=''}" />
+
+                  <TextBlock x:Name="AgentMonitoring"
+                             Classes="hint"
+                             TextWrapping="Wrap"
+                             Text="{Binding MonitoringText}"
+                             IsVisible="{Binding MonitoringText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                 </StackPanel>
 
                 <TextBlock Classes="hint"
@@ -1343,6 +1358,21 @@
                              Text="{Binding CommandPreview}" />
                   <TextBlock Classes="hint"
                              Text="O valor usado ao iniciar vira o padrão das próximas aberturas." />
+                </StackPanel>
+
+                <!--
+                  Acompanhamento pelos hooks do agente (ADR-037). Só este app
+                  recebe os hooks, e só nos agentes que ele abre: nenhum arquivo
+                  de configuração do usuário é alterado.
+                -->
+                <StackPanel Spacing="4" IsVisible="{Binding ShowStart}">
+                  <CheckBox x:Name="AgentMonitorBox"
+                            Content="Avisar quando o agente precisar de mim ou terminar"
+                            IsEnabled="{Binding !IsBusy}"
+                            IsChecked="{Binding Monitor}" />
+                  <TextBlock Classes="hint"
+                             TextWrapping="Wrap"
+                             Text="Usa os hooks do agente, só nas sessões abertas por aqui. Sua configuração do Claude Code não é alterada." />
                 </StackPanel>
 
                 <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">

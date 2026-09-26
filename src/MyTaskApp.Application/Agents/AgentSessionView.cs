@@ -14,9 +14,19 @@ public sealed record AgentSessionView(
     DateTimeOffset StartedAt,
     DateTimeOffset? EndedAt,
     AgentSessionStatus Status,
-    string? FailureReason)
+    string? FailureReason,
+    bool IsMonitored = false,
+    AgentActivity Activity = AgentActivity.Unknown,
+    string? ActivityMessage = null,
+    DateTimeOffset? ActivityChangedAt = null)
 {
     public bool IsActive => Status is AgentSessionStatus.Starting or AgentSessionStatus.Running;
+
+    /// <summary>
+    /// Por que a sessão que acabou de abrir ficou sem acompanhamento (ADR-037).
+    /// Só na resposta do "Iniciar": não é gravado.
+    /// </summary>
+    public string? MonitoringNote { get; init; }
 
     public static AgentSessionView From(AgentSession session, IAgentCliProviders providers) =>
         new(
@@ -30,12 +40,17 @@ public sealed record AgentSessionView(
             session.StartedAt,
             session.EndedAt,
             session.Status,
-            session.FailureReason);
+            session.FailureReason,
+            session.IsMonitored,
+            session.Activity,
+            session.ActivityMessage,
+            session.ActivityChangedAt);
 }
 
 /// <summary>
 /// O agente, se está instalado, como instalar quando não está, e os parâmetros
-/// com que ele abre agora (o salvo, ou o padrão do agente).
+/// com que ele abre agora (o salvo, ou o padrão do agente) — e se abre
+/// acompanhado pelos hooks (ADR-037).
 /// </summary>
 public sealed record AgentCliStatus(
     string ProviderId,
@@ -43,7 +58,8 @@ public sealed record AgentCliStatus(
     string Command,
     CliDetectionResult Detection,
     AgentCliInstallGuide? InstallGuide,
-    string Arguments = "");
+    string Arguments = "",
+    bool Monitor = true);
 
 /// <summary>O que "Abrir terminal" conseguiu.</summary>
 public sealed record AgentFocusResult(AgentSessionView Session, bool Focused);

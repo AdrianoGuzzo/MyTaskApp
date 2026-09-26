@@ -1,0 +1,113 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
+        x:Class="MyTaskApp.Desktop.Views.AgentAlertWindow"
+        x:DataType="vm:AgentAlertViewModel"
+        Title="Agente de IA"
+        Width="336"
+        SizeToContent="Height"
+        CanResize="False"
+        ShowInTaskbar="False"
+        ShowActivated="False"
+        Topmost="True"
+        WindowDecorations="None"
+        Background="Transparent"
+        TransparencyLevelHint="Transparent">
+
+  <!--
+    O aviso do agente (ADR-037). Mesmo cartão do lembrete, no mesmo canto, mas
+    nunca rouba o foco: quem está digitando em outro lugar continua digitando.
+  -->
+  <Window.Styles>
+    <Style Selector="Border.card">
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetShellRadius}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Padding" Value="14,12" />
+      <Setter Property="Margin" Value="8" />
+      <Setter Property="Background" Value="{DynamicResource WidgetSurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetStrokeBrush}" />
+      <Setter Property="BoxShadow" Value="0 8 24 -6 #7A000000" />
+    </Style>
+
+    <!-- Pergunta ou permissão: o agente está parado até alguém responder. -->
+    <Style Selector="Border.card.question">
+      <Setter Property="BorderThickness" Value="2" />
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetCautionBrush}" />
+    </Style>
+
+    <Style Selector="Border.card.failure">
+      <Setter Property="BorderThickness" Value="2" />
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetDangerBrush}" />
+    </Style>
+  </Window.Styles>
+
+  <Border Classes="card"
+          Classes.question="{Binding IsQuestion}"
+          Classes.failure="{Binding IsFailure}">
+    <StackPanel Spacing="8">
+
+      <StackPanel Orientation="Horizontal" Spacing="7">
+        <TextBlock Text="●"
+                   FontSize="11"
+                   VerticalAlignment="Center"
+                   Foreground="{DynamicResource WidgetAccentHoverBrush}" />
+        <TextBlock x:Name="AgentAlertHeading"
+                   Text="{Binding Heading}"
+                   FontSize="10"
+                   FontWeight="SemiBold"
+                   LetterSpacing="0.6"
+                   Foreground="{DynamicResource WidgetTextLowBrush}"
+                   VerticalAlignment="Center" />
+        <TextBlock Text="{Binding TimeLabel}"
+                   FontFamily="Consolas, Menlo, monospace"
+                   FontSize="10"
+                   Foreground="{DynamicResource WidgetTextLowBrush}"
+                   VerticalAlignment="Center" />
+      </StackPanel>
+
+      <TextBlock Text="{Binding Title}"
+                 FontSize="14"
+                 FontWeight="SemiBold"
+                 Foreground="{DynamicResource WidgetTextHighBrush}"
+                 TextWrapping="Wrap" />
+
+      <TextBlock Text="{Binding Context}"
+                 FontFamily="Consolas, Menlo, monospace"
+                 FontSize="10"
+                 Foreground="{DynamicResource WidgetTextMidBrush}"
+                 TextTrimming="CharacterEllipsis"
+                 IsVisible="{Binding Context, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+      <TextBlock x:Name="AgentAlertMessage"
+                 Text="{Binding MessageText}"
+                 FontSize="11"
+                 MaxLines="4"
+                 TextTrimming="CharacterEllipsis"
+                 Foreground="{DynamicResource WidgetTextMidBrush}"
+                 TextWrapping="Wrap"
+                 IsVisible="{Binding MessageText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+      <Border Padding="9,6"
+              CornerRadius="{StaticResource WidgetPillRadius}"
+              Background="{DynamicResource WidgetDangerSoftBrush}"
+              IsVisible="{Binding ErrorMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
+        <TextBlock Text="{Binding ErrorMessage}"
+                   FontSize="11"
+                   Foreground="{DynamicResource WidgetDangerBrush}"
+                   TextWrapping="Wrap" />
+      </Border>
+
+      <StackPanel Orientation="Horizontal" Spacing="7">
+        <Button x:Name="AgentAlertOpenTerminal"
+                Content="Abrir terminal"
+                Classes="accent"
+                Command="{Binding OpenTerminalCommand}" />
+        <Button x:Name="AgentAlertDismiss"
+                Content="Dispensar"
+                Command="{Binding DismissCommand}" />
+      </StackPanel>
+
+    </StackPanel>
+  </Border>
+
+</Window>

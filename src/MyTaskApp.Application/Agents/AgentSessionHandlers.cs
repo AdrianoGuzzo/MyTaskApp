@@ -46,7 +46,8 @@ public sealed class DetectAgentCliHandler(IAgentCliProviders providers, IAgentSe
             provider.Command,
             detection,
             detection.IsInstalled ? null : provider.InstallGuideFor(CurrentPlatform()),
-            await settings.ArgumentsForAsync(provider, cancellationToken));
+            await settings.ArgumentsForAsync(provider, cancellationToken),
+            await settings.MonitoringForAsync(provider, cancellationToken));
     }
 
     internal static OSPlatform CurrentPlatform() =>
@@ -98,17 +99,24 @@ public sealed class GetTaskAgentSessionHandler(
 /// </param>
 /// <param name="Prompt">O texto livre com que o agente abre; fica gravado no ambiente.</param>
 /// <param name="RunDirectly">Com texto: executar direto, em vez de só planejar.</param>
+/// <param name="Monitor">
+/// Acompanhar pelos hooks do agente (ADR-037). Informado, vira o padrão das
+/// próximas aberturas; <c>null</c> usa o salvo.
+/// </param>
 public sealed record StartAgentSession(
     Guid TaskId,
     Guid DevelopmentId,
     string? ProviderId = null,
     string? Arguments = null,
     string? Prompt = null,
-    bool RunDirectly = false);
+    bool RunDirectly = false,
+    bool? Monitor = null);
 
 /// <summary>
 /// O fluxo da ADR-030: worktree pronto → agente instalado → sessão gravada como
-/// "iniciando" → terminal aberto → PID gravado → monitor vigiando.
+/// "iniciando" → terminal aberto → PID gravado → monitor vigiando. Com o
+/// acompanhamento ligado (ADR-037), a sessão ganha um segredo antes de ser
+/// gravada, e o processo nasce sabendo a tarefa, a sessão e o segredo.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -132,6 +140,7 @@ public sealed class StartAgentSessionHandler(
     IAgentSessionWatcher watcher,
     IDirectoryProbe directories,
     IAgentSettingsStore settings,
+    IAgentEventEndpoint events,
     TimeProvider timeProvider,
     ILogger<StartAgentSessionHandler> logger)
 {
@@ -171,22 +180,27 @@ public sealed class StartAgentSessionHandler(
         // "iniciar novamente" e ao reabrir a tarefa.
         task.SetDevelopmentAgentPrompt(development.Id, command.Prompt);
 
+        // A sessão nasce antes do comando: o id dela vai no ambiente do processo.
+        var session = AgentSession.Create(
+            task.Id,
+            development.Id,
+            provider.Id,
+            detection.ExecutablePath,
+            development.WorktreePath,
+            timeProvider.GetUtcNow());
+
+        var (monitoring, monitoringNote) = await PrepareMonitoringAsync(
+            provider, session, development, command.Monitor, cancellationToken);
+
         var launch = provider.CreateLaunch(
             new AgentCliStartContext(
                 task.Id,
                 development.WorktreePath,
                 AgentArguments.Parse(argumentsText),
                 development.AgentPrompt,
-                command.RunDirectly),
+                command.RunDirectly,
+                monitoring),
             detection);
-
-        var session = AgentSession.Create(
-            task.Id,
-            development.Id,
-            provider.Id,
-            launch.Executable,
-            launch.WorkingDirectory,
-            timeProvider.GetUtcNow());
 
         await sessions.AddAsync(session, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -214,7 +228,7 @@ public sealed class StartAgentSessionHandler(
                 provider.Id,
                 session.FailureReason);
 
-            return AgentSessionView.From(session, providers);
+            return AgentSessionView.From(session, providers) with { MonitoringNote = monitoringNote };
         }
 
         session.MarkRunning(result.ProcessId, result.ProcessStartedAt);
@@ -234,16 +248,74 @@ public sealed class StartAgentSessionHandler(
         }
 
         logger.LogInformation(
-            "AgentSessionStarted {TaskId} {SessionId} {ProviderId} {ProcessId} {Status} {WorkingDirectory} {Arguments}",
+            "AgentSessionStarted {TaskId} {SessionId} {ProviderId} {ProcessId} {Status} {WorkingDirectory} {Arguments} {Monitored}",
             task.Id,
             session.Id,
             provider.Id,
             session.ProcessId,
             session.Status,
             session.WorkingDirectory,
-            argumentsText);
+            argumentsText,
+            session.IsMonitored);
 
-        return AgentSessionView.From(session, providers);
+        return AgentSessionView.From(session, providers) with { MonitoringNote = monitoringNote };
+    }
+
+    /// <summary>
+    /// Liga o acompanhamento quando dá (ADR-037). Quando não dá — desligado
+    /// pelo usuário, porta local fechada, hooks desligados na configuração do
+    /// agente —, o agente abre do mesmo jeito, sem avisos, e o motivo volta
+    /// para a tela. Acompanhar é um extra: nunca impede de abrir.
+    /// </summary>
+    private async Task<(AgentMonitoring? Monitoring, string? Note)> PrepareMonitoringAsync(
+        IAgentCliProvider provider,
+        AgentSession session,
+        TaskDevelopment development,
+        bool? requested,
+        CancellationToken cancellationToken)
+    {
+        var enabled = await settings.MonitoringForAsync(provider, cancellationToken);
+
+        if (requested is { } choice && choice != enabled)
+        {
+            await settings.SaveMonitoringAsync(provider.Id, choice, cancellationToken);
+            enabled = choice;
+        }
+
+        if (!enabled)
+        {
+            return (null, null);
+        }
+
+        if (events.Address is not { } endpoint)
+        {
+            logger.LogWarning(
+                "AgentMonitoringEndpointUnavailable {TaskId} {ProviderId}",
+                session.TaskItemId,
+                provider.Id);
+
+            return (null, "Aberto sem acompanhamento: o MyTaskApp não conseguiu abrir a porta local de avisos.");
+        }
+
+        if (provider.MonitoringUnavailableReason(development.WorktreePath, endpoint) is { } reason)
+        {
+            logger.LogWarning(
+                "AgentMonitoringUnavailable {TaskId} {ProviderId} {Reason}",
+                session.TaskItemId,
+                provider.Id,
+                reason);
+
+            return (null, $"Aberto sem acompanhamento: {reason}");
+        }
+
+        var (token, hash) = AgentHookToken.Create();
+        session.EnableMonitoring(hash);
+
+        return (
+            new AgentMonitoring(
+                endpoint,
+                AgentMonitoringEnvironment.For(session, development.WorktreePath, development.Branch, token, endpoint)),
+            null);
     }
 
     /// <summary>
@@ -385,6 +457,7 @@ public sealed class EndAgentSessionHandler(
     IAgentSessionRepository sessions,
     IUnitOfWork unitOfWork,
     IAgentSessionWatcher watcher,
+    IAgentAttentionPresenter presenter,
     TimeProvider timeProvider,
     ILogger<EndAgentSessionHandler> logger)
 {
@@ -407,6 +480,9 @@ public sealed class EndAgentSessionHandler(
             session.ProcessId);
 
         watcher.NotifyChanged(session.TaskItemId);
+
+        // Fechou o agente: o "aguardando você" dele não tem mais a quem levar.
+        await presenter.DismissAsync(session.Id, cancellationToken);
     }
 }
 
