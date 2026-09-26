@@ -40,8 +40,20 @@ public interface IAgentCliProvider
     /// <summary>Como instalar neste sistema; <c>null</c> se não houver guia para ele.</summary>
     AgentCliInstallGuide? InstallGuideFor(OSPlatform platform);
 
-    /// <summary>O que o terminal deve executar para abrir o agente em <paramref name="context"/>.</summary>
+    /// <summary>
+    /// O que o terminal deve executar para abrir o agente em <paramref name="context"/>.
+    /// Com <see cref="AgentCliStartContext.Monitoring"/>, o agente também sai
+    /// ligado aos avisos do app (ADR-037).
+    /// </summary>
     TerminalLaunchOptions CreateLaunch(AgentCliStartContext context, CliDetectionResult detection);
+
+    /// <summary>
+    /// Por que o agente não conseguiria avisar o app ao abrir em
+    /// <paramref name="workingDirectory"/>, com os avisos indo para
+    /// <paramref name="endpoint"/> (ADR-037): o agente não tem hooks, ou
+    /// a configuração do usuário os desliga. <c>null</c> = consegue.
+    /// </summary>
+    string? MonitoringUnavailableReason(string workingDirectory, Uri endpoint);
 }
 
 /// <summary>O agente está instalado? Onde, e em qual versão?</summary>
@@ -66,12 +78,20 @@ public sealed record CliDetectionResult
 /// <param name="RunDirectly">
 /// Com texto: <c>true</c> já executa; <c>false</c> só planeja e espera aprovação.
 /// </param>
+/// <param name="Monitoring">
+/// Para onde o agente manda os avisos e o que ele recebe no ambiente para se
+/// identificar; <c>null</c> = abrir sem acompanhamento (ADR-037).
+/// </param>
 public sealed record AgentCliStartContext(
     Guid TaskId,
     string WorkingDirectory,
     IReadOnlyList<string> Arguments,
     string? Prompt = null,
-    bool RunDirectly = false);
+    bool RunDirectly = false,
+    AgentMonitoring? Monitoring = null);
+
+/// <summary>O acompanhamento de uma sessão: o endereço dos avisos e o ambiente do processo.</summary>
+public sealed record AgentMonitoring(Uri Endpoint, IReadOnlyDictionary<string, string> Environment);
 
 /// <summary>Instruções de instalação de um agente para um sistema.</summary>
 public sealed record AgentCliInstallGuide(

@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using MyTaskApp.Application;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Desktop.Reminders;
 using MyTaskApp.Desktop.SpellChecking;
@@ -57,6 +58,10 @@ internal static class AppServices
             // Application, como o ScopedUseCaseRunner ja fazia.
             .AddSingleton<AlertPresenter>()
             .AddSingleton<IAlertPresenter>(services => services.GetRequiredService<AlertPresenter>())
+
+            // O aviso do agente de IA (ADR-037) sai pela mesma pilha de janelas.
+            .AddSingleton<IAgentAttentionPresenter>(services => services.GetRequiredService<AlertPresenter>())
+            .AddTransient<AgentAlertViewModel>()
             .AddSingleton<ISoundPlayer, WindowsSoundPlayer>()
             .AddTransient<ReminderAlertViewModel>()
             .AddSingleton<TrayIconHost>()

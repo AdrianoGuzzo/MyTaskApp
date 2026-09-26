@@ -1,3 +1,4 @@
+using MyTaskApp.Domain.Agents;
 using MyTaskApp.Domain.Reminders;
 using MyTaskApp.Domain.Tasks;
 
@@ -37,7 +38,9 @@ public sealed record ActiveAgentRow(
     Guid? DevelopmentId,
     string ProviderId,
     string? RepositoryPath = null,
-    string? Branch = null);
+    string? Branch = null,
+    AgentActivity Activity = AgentActivity.Unknown,
+    DateTimeOffset? ActivityChangedAt = null);
 
 /// <summary>
 /// Um worktree pronto da tarefa. Só caminhos e nomes: se tem alteração ou

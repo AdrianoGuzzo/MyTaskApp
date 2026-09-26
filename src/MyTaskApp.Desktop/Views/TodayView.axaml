@@ -145,6 +145,20 @@
         <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto,Auto,Auto,Auto">
 
           <!--
+            Um agente parou esperando o usuário (ADR-037): uma moldura âmbar
+            em volta da linha, que respira até o clique no selo e depois fica
+            parada e fraca enquanto a pendência durar. Primeiro filho da grade,
+            atrás de tudo, e sem hit test: não muda o tamanho da linha nem
+            rouba clique. A margem negativa desfaz o Padding da linha.
+          -->
+          <Border Grid.ColumnSpan="10"
+                  Classes="agentFrame"
+                  Classes.alerting="{Binding IsAgentAlerting}"
+                  Classes.seen="{Binding IsAgentAlertSeen}"
+                  Margin="-6,-4"
+                  IsHitTestVisible="False" />
+
+          <!--
             A alça. Border e não Button de propósito: botão por linha herdaria
             foco e estado :pressed que atrapalham o gesto, e há testes headless
             que contam botões por janela. ElementRole="User" declarado aqui, e
@@ -307,6 +321,7 @@
             -->
             <TextBlock x:Name="AgentBadge"
                        Classes="agentBadge"
+                       Classes.attention="{Binding AgentNeedsAttention}"
                        Text="{Binding AgentLabel}"
                        IsVisible="{Binding HasActiveAgent}"
                        HorizontalAlignment="Left"
@@ -533,6 +548,50 @@
       <Setter Property="FontSize" Value="10" />
       <Setter Property="Foreground" Value="{DynamicResource WidgetAccentHoverBrush}" />
       <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <!-- O agente parou esperando o usuário (ADR-037): a cor do ⚠ do lembrete. -->
+    <Style Selector="TextBlock.agentBadge.attention">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetCautionBrush}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <!--
+      A moldura da pendência. Opacidade, e não cor, é o que anima: o pincel
+      continua vindo dos tokens, e o tema claro/escuro não precisa de outra
+      cópia do âmbar. Respira devagar (1,4 s, seno): chama o olho sem virar
+      sirene numa lista que fica aberta o dia inteiro.
+    -->
+    <Style Selector="Border.agentFrame">
+      <Setter Property="IsVisible" Value="False" />
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetPillRadius}" />
+      <Setter Property="BorderThickness" Value="1.5" />
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetCautionBrush}" />
+      <Setter Property="Background" Value="{DynamicResource WidgetCautionSoftBrush}" />
+    </Style>
+
+    <Style Selector="Border.agentFrame.alerting">
+      <Setter Property="IsVisible" Value="True" />
+      <Style.Animations>
+        <Animation Duration="0:0:1.4"
+                   IterationCount="Infinite"
+                   PlaybackDirection="Alternate"
+                   Easing="SineEaseInOut">
+          <KeyFrame Cue="0%">
+            <Setter Property="Opacity" Value="0.3" />
+          </KeyFrame>
+          <KeyFrame Cue="100%">
+            <Setter Property="Opacity" Value="1" />
+          </KeyFrame>
+        </Animation>
+      </Style.Animations>
+    </Style>
+
+    <!-- Já vista: a moldura fica, parada, só para achar a linha de relance. -->
+    <Style Selector="Border.agentFrame.seen">
+      <Setter Property="IsVisible" Value="True" />
+      <Setter Property="Opacity" Value="0.4" />
+      <Setter Property="Background" Value="Transparent" />
     </Style>
 
     <Style Selector="TextBlock.agentBadge:pointerover">

@@ -44,6 +44,7 @@ public class ApplicationRegistrationTests
             .AddSingleton<ITerminalLauncher>(new FakeTerminalLauncher(new FakeAgentProcessTracker(), DateTimeOffset.UnixEpoch))
             .AddSingleton<IAgentCliProvider>(new FakeAgentCliProvider())
             .AddSingleton<IAgentSettingsStore>(new FakeAgentSettingsStore())
+            .AddSingleton<IAgentEventEndpoint>(new FakeAgentEventEndpoint())
             .AddSingleton<IDirectoryRemover>(new FakeDirectoryRemover())
             // Normalmente vem do composition root do Desktop (ADR-012).
             .AddSingleton<IUseCaseRunner>(new CountingUseCaseRunner())
@@ -81,6 +82,7 @@ public class ApplicationRegistrationTests
     [InlineData(typeof(DetectAgentCliHandler))]
     [InlineData(typeof(GetTaskAgentSessionHandler))]
     [InlineData(typeof(StartAgentSessionHandler))]
+    [InlineData(typeof(RecordAgentEventHandler))]
     [InlineData(typeof(FocusAgentSessionHandler))]
     [InlineData(typeof(EndAgentSessionHandler))]
     [InlineData(typeof(ReconcileAgentSessionsHandler))]

@@ -17,4 +17,15 @@ internal sealed class FakeAgentSettingsStore : IAgentSettingsStore
         SaveCount++;
         return Task.CompletedTask;
     }
+
+    public Dictionary<string, bool> Monitoring { get; } = [];
+
+    public Task<bool?> GetMonitoringAsync(string providerId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Monitoring.TryGetValue(providerId, out var enabled) ? enabled : (bool?)null);
+
+    public Task SaveMonitoringAsync(string providerId, bool enabled, CancellationToken cancellationToken = default)
+    {
+        Monitoring[providerId] = enabled;
+        return Task.CompletedTask;
+    }
 }

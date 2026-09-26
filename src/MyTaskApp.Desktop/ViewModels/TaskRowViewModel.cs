@@ -1,13 +1,18 @@
 using System.Globalization;
+using CommunityToolkit.Mvvm.ComponentModel;
 using MyTaskApp.Application.Planning;
+using MyTaskApp.Domain.Agents;
 using MyTaskApp.Domain.Reminders;
 using MyTaskApp.Domain.Tasks;
 
 namespace MyTaskApp.Desktop.ViewModels;
 
 /// <summary>Uma linha da lista. Só carrega o que a tela precisa desenhar.</summary>
-public sealed class TaskRowViewModel
+public sealed class TaskRowViewModel : ObservableObject
 {
+    /// <summary>O usuário já clicou no selo desde a última pendência: a borda para de pulsar.</summary>
+    private bool _agentAlertSeen;
+
     public TaskRowViewModel(TodayTask task, bool isCompleted)
     {
         Source = task;
@@ -79,19 +84,98 @@ public sealed class TaskRowViewModel
     /// <summary>A bolinha de worktree e o que o balão diz dele (ADR-034).</summary>
     public TaskWorktreeViewModel Worktree { get; }
 
-    /// <summary>"● Claude Code", ou "● Claude Code ×2" com um por repositório: o selo da linha.</summary>
+    /// <summary>
+    /// O que o selo resume (ADR-037): com vários agentes, o que mais pede o
+    /// usuário — uma pergunta vence uma resposta pronta, que vence "trabalhando".
+    /// </summary>
+    /// <summary>
+    /// As pendências da linha, cada uma com o momento em que surgiu. É o que
+    /// o quadro lembra como "já vista": uma pergunta nova do mesmo agente tem
+    /// outro horário e volta a pulsar.
+    /// </summary>
+    public IReadOnlyList<AgentAlertKey> AgentAlerts => Agents
+        .Where(agent => NeedsAttention(agent.Activity))
+        .Select(agent => new AgentAlertKey(TaskId, agent.DevelopmentId, agent.Activity, agent.ActivityChangedAt))
+        .ToList();
+
+    /// <summary>Pendência que o usuário ainda não viu: a borda âmbar pulsa em volta da linha.</summary>
+    public bool IsAgentAlerting => AgentNeedsAttention && !_agentAlertSeen;
+
+    /// <summary>Já vista, mas o agente segue esperando: a borda fica, parada e mais fraca.</summary>
+    public bool IsAgentAlertSeen => AgentNeedsAttention && _agentAlertSeen;
+
+    /// <summary>A linha nasce sabendo o que já foi visto — o refresh não pode reacender a borda.</summary>
+    public void ApplySeenAgentAlerts(IReadOnlySet<AgentAlertKey> seen) =>
+        SetAgentAlertSeen(AgentAlerts is { Count: > 0 } alerts && alerts.All(seen.Contains));
+
+    /// <summary>O clique no selo: para de pulsar e diz ao quadro o que foi visto.</summary>
+    public IReadOnlyList<AgentAlertKey> SeeAgentAlerts()
+    {
+        SetAgentAlertSeen(true);
+        return AgentAlerts;
+    }
+
+    private void SetAgentAlertSeen(bool seen)
+    {
+        if (_agentAlertSeen == seen)
+        {
+            return;
+        }
+
+        _agentAlertSeen = seen;
+        OnPropertyChanged(nameof(IsAgentAlerting));
+        OnPropertyChanged(nameof(IsAgentAlertSeen));
+    }
+
+    public AgentActivity AgentActivity => Agents.Count == 0
+        ? AgentActivity.Unknown
+        : Agents.Select(agent => agent.Activity).MaxBy(Urgency);
+
+    /// <summary>Um agente parou esperando o usuário: o selo ganha a cor de atenção.</summary>
+    public bool AgentNeedsAttention => NeedsAttention(AgentActivity);
+
+    private static bool NeedsAttention(AgentActivity activity) =>
+        activity is AgentActivity.WaitingForUser or AgentActivity.WaitingReview or AgentActivity.Failed;
+
+    /// <summary>
+    /// "● Claude Code", "● Claude Code ×2", e com os hooks: "⚠ Claude Code ·
+    /// aguardando você", "✓ Claude Code · revisar". O selo da linha.
+    /// </summary>
     public string AgentLabel => Agents.Count switch
     {
         0 => string.Empty,
-        1 => $"● {AgentName}",
-        var count => $"● {AgentName} ×{count}",
+        var count => $"{AgentMark(AgentActivity)} {AgentName}{(count > 1 ? $" ×{count}" : string.Empty)}{AgentSuffix(AgentActivity)}",
     };
 
     public string AgentTip => Agents.Count switch
     {
         0 => string.Empty,
-        1 => $"{AgentName} em execução para esta tarefa. Clique para ir ao terminal.",
-        _ => $"Em execução: {string.Join(", ", Agents.Select(agent => agent.Label))}. Clique para escolher o terminal.",
+        1 => $"{AgentName} {Agents[0].StatusText} nesta tarefa. Clique para ir ao terminal.",
+        _ => $"{string.Join(", ", Agents.Select(agent => $"{agent.Label}: {agent.StatusText}"))}. Clique para escolher o terminal.",
+    };
+
+    private static int Urgency(AgentActivity activity) => activity switch
+    {
+        AgentActivity.WaitingForUser => 4,
+        AgentActivity.Failed => 3,
+        AgentActivity.WaitingReview => 2,
+        AgentActivity.Working => 1,
+        _ => 0,
+    };
+
+    private static string AgentMark(AgentActivity activity) => activity switch
+    {
+        AgentActivity.WaitingForUser or AgentActivity.Failed => "⚠",
+        AgentActivity.WaitingReview => "✓",
+        _ => "●",
+    };
+
+    private static string AgentSuffix(AgentActivity activity) => activity switch
+    {
+        AgentActivity.WaitingForUser => " · aguardando você",
+        AgentActivity.WaitingReview => " · revisar",
+        AgentActivity.Failed => " · erro",
+        _ => string.Empty,
     };
 
     public string TimeLabel { get; }
@@ -201,7 +285,33 @@ public sealed class TaskAgentViewModel(TaskRowViewModel row, ActiveAgent agent)
     public string Label { get; } = agent.RepositoryName is { } repository
         ? agent.Branch is { } branch ? $"{repository} · {branch}" : repository
         : agent.AgentName;
+
+    /// <summary>O que os hooks disseram por último (ADR-037).</summary>
+    public AgentActivity Activity { get; } = agent.Activity;
+
+    /// <summary>Quando <see cref="Activity"/> mudou: separa a pendência nova da já vista.</summary>
+    public DateTimeOffset? ActivityChangedAt { get; } = agent.ActivityChangedAt;
+
+    /// <summary>"aguardando você", "trabalhando"… — para o balão e o menu do selo.</summary>
+    public string StatusText => Activity switch
+    {
+        AgentActivity.Working => "trabalhando",
+        AgentActivity.WaitingForUser => "aguardando você",
+        AgentActivity.WaitingReview => "terminou, aguardando revisão",
+        AgentActivity.Failed => "última resposta com erro",
+        _ => "em execução",
+    };
 }
+
+/// <summary>
+/// Uma pendência de agente, identificada pelo momento em que surgiu (ADR-037).
+/// A atividade entra junto porque um hook sem horário ainda assim muda o que se pede.
+/// </summary>
+public readonly record struct AgentAlertKey(
+    Guid TaskId,
+    Guid? DevelopmentId,
+    AgentActivity Activity,
+    DateTimeOffset? ChangedAt);
 
 /// <summary>
 /// Um ambiente da linha onde abrir o agente — o item do menu "Abrir Claude

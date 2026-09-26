@@ -139,6 +139,139 @@ public class AgentSessionTests
         session.IsActive.Should().BeFalse();
     }
 
+    // --- Acompanhamento pelos hooks (ADR-037) -------------------------------
+
+    private static readonly string TokenHash = new('a', AgentSession.HookTokenHashLength);
+
+    private static AgentSession Monitored()
+    {
+        var session = NewSession();
+        session.EnableMonitoring(TokenHash);
+        session.MarkRunning(15432, Now);
+        return session;
+    }
+
+    [Fact]
+    public void ANewSession_IsNotMonitored_AndKnowsNothingYet()
+    {
+        var session = NewSession();
+
+        session.IsMonitored.Should().BeFalse();
+        session.Activity.Should().Be(AgentActivity.Unknown);
+        session.NeedsAttention.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Monitoring_KeepsOnlyTheHash_InUpperCase()
+    {
+        var session = NewSession();
+
+        session.EnableMonitoring(TokenHash);
+
+        session.IsMonitored.Should().BeTrue();
+        session.HookTokenHash.Should().Be(TokenHash.ToUpperInvariant());
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("abc")]
+    [InlineData("zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz")]
+    public void AnInvalidHash_IsRefused(string hash)
+    {
+        var enable = () => NewSession().EnableMonitoring(hash);
+
+        enable.Should().Throw<DomainException>();
+    }
+
+    /// <summary>O segredo vai no ambiente do processo: depois de aberto, é tarde.</summary>
+    [Fact]
+    public void Monitoring_IsOnlyEnabledBeforeTheAgentOpens()
+    {
+        var session = NewSession();
+        session.MarkRunning(15432, Now);
+
+        var enable = () => session.EnableMonitoring(TokenHash);
+
+        enable.Should().Throw<DomainException>();
+    }
+
+    [Fact]
+    public void AChangeOfActivity_IsRecorded_WithTheMessageAndTheTime()
+    {
+        var session = Monitored();
+
+        var changed = session.RecordActivity(AgentActivity.WaitingForUser, "  Redis ou MemoryCache?  ", Now.AddMinutes(5));
+
+        changed.Should().BeTrue();
+        session.Activity.Should().Be(AgentActivity.WaitingForUser);
+        session.ActivityMessage.Should().Be("Redis ou MemoryCache?");
+        session.ActivityChangedAt.Should().Be(Now.AddMinutes(5));
+        session.NeedsAttention.Should().BeTrue();
+    }
+
+    /// <summary>O mesmo aviso duas vezes não avisa o usuário duas vezes.</summary>
+    [Fact]
+    public void TheSameActivityAgain_IsNotAChange_ButKeepsTheNewText()
+    {
+        var session = Monitored();
+        session.RecordActivity(AgentActivity.WaitingForUser, "Primeira pergunta", Now);
+
+        var changed = session.RecordActivity(AgentActivity.WaitingForUser, "Segunda pergunta", Now.AddMinutes(1));
+
+        changed.Should().BeFalse();
+        session.ActivityMessage.Should().Be("Segunda pergunta");
+        session.ActivityChangedAt.Should().Be(Now);
+    }
+
+    [Fact]
+    public void BackToWork_ClearsTheQuestion()
+    {
+        var session = Monitored();
+        session.RecordActivity(AgentActivity.WaitingForUser, "Pergunta", Now);
+
+        session.RecordActivity(AgentActivity.Working, null, Now.AddMinutes(1)).Should().BeTrue();
+
+        session.ActivityMessage.Should().BeNull();
+        session.NeedsAttention.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ALongMessage_IsCut()
+    {
+        var session = Monitored();
+
+        session.RecordActivity(AgentActivity.WaitingReview, new string('x', 2000), Now);
+
+        session.ActivityMessage.Should().HaveLength(AgentSession.MaxActivityMessageLength);
+    }
+
+    /// <summary>O aviso atrasado de um processo que já saiu não reacende nada.</summary>
+    [Fact]
+    public void AnEndedSession_IgnoresActivity_AndNeedsNoAttention()
+    {
+        var session = Monitored();
+        session.RecordActivity(AgentActivity.WaitingReview, null, Now);
+        session.MarkExited(Now.AddMinutes(1));
+
+        session.RecordActivity(AgentActivity.WaitingForUser, "tarde demais", Now.AddMinutes(2)).Should().BeFalse();
+
+        session.Activity.Should().Be(AgentActivity.WaitingReview);
+        session.NeedsAttention.Should().BeFalse();
+    }
+
+    [Fact]
+    public void TheAgentsOwnSessionId_IsKept_AndReplacedAfterAClear()
+    {
+        var session = Monitored();
+
+        session.RecordExternalSession("abc-1");
+        session.RecordExternalSession("  ");
+        session.ExternalSessionId.Should().Be("abc-1");
+
+        session.RecordExternalSession("abc-2");
+        session.ExternalSessionId.Should().Be("abc-2");
+    }
+
     [Fact]
     public void ARunningSession_CannotFailToOpen()
     {

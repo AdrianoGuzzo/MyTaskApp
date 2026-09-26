@@ -28,6 +28,7 @@ namespace MyTaskApp.Infrastructure.Agents.ClaudeCode;
 internal sealed partial class ClaudeCodeCliProvider(
     ExecutableLocator locator,
     IProcessRunner runner,
+    ClaudeCodeHooks hooks,
     ILogger<ClaudeCodeCliProvider> logger) : IAgentCliProvider
 {
     public const string ProviderId = "claude-code";
@@ -81,25 +82,43 @@ internal sealed partial class ClaudeCodeCliProvider(
     /// <c>claude.cmd</c> do npm: o Windows o roda pelo <c>cmd.exe</c>, que corta
     /// o texto na quebra de linha e interpreta <c>%</c> e <c>"</c>. Ali as quebras
     /// viram espaço, e o que o <c>cmd.exe</c> estragaria é recusado com o motivo.
+    /// <para>
+    /// Com acompanhamento (ADR-037), <c>--settings &lt;arquivo de hooks&gt;</c> vem
+    /// antes de tudo, e o ambiente leva a sessão e o segredo. Antes dos
+    /// parâmetros do usuário de propósito: se ele passar o próprio
+    /// <c>--settings</c>, o dele vale — perde-se o acompanhamento, e não a
+    /// configuração dele.
+    /// </para>
     /// </remarks>
     public TerminalLaunchOptions CreateLaunch(AgentCliStartContext context, CliDetectionResult detection)
     {
         var executable = detection.ExecutablePath
             ?? throw new InvalidOperationException("O Claude Code não foi encontrado.");
 
+        IReadOnlyList<string> monitoring = context.Monitoring is { } settings
+            ? ["--settings", hooks.EnsureSettingsFile(settings.Endpoint)]
+            : [];
+
         if (string.IsNullOrWhiteSpace(context.Prompt))
         {
-            return new TerminalLaunchOptions(executable, context.Arguments, context.WorkingDirectory);
+            return new TerminalLaunchOptions(
+                executable,
+                [.. monitoring, .. context.Arguments],
+                context.WorkingDirectory,
+                context.Monitoring?.Environment);
         }
 
         var prompt = RunsThroughCmd(executable) ? ForCmd(context.Prompt) : context.Prompt;
 
         string[] arguments = context.RunDirectly
-            ? [.. context.Arguments, prompt]
-            : [.. context.Arguments, "--permission-mode", "plan", prompt];
+            ? [.. monitoring, .. context.Arguments, prompt]
+            : [.. monitoring, .. context.Arguments, "--permission-mode", "plan", prompt];
 
-        return new TerminalLaunchOptions(executable, arguments, context.WorkingDirectory);
+        return new TerminalLaunchOptions(executable, arguments, context.WorkingDirectory, context.Monitoring?.Environment);
     }
+
+    public string? MonitoringUnavailableReason(string workingDirectory, Uri endpoint) =>
+        hooks.UnavailableReason(workingDirectory, endpoint);
 
     private static bool RunsThroughCmd(string executable) =>
         Path.GetExtension(executable).ToUpperInvariant() is ".CMD" or ".BAT";

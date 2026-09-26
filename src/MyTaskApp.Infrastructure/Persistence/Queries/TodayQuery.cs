@@ -98,6 +98,8 @@ internal sealed class TodayQuery(MyTaskAppDbContext context) : ITodayQuery
                     session.TaskDevelopmentId,
                     session.ProviderId,
                     session.StartedAt,
+                    session.Activity,
+                    session.ActivityChangedAt,
                     RepositoryPath = development == null ? null : development.RepositoryPath,
                     Branch = development == null ? null : development.Branch,
                 })
@@ -110,7 +112,12 @@ internal sealed class TodayQuery(MyTaskAppDbContext context) : ITodayQuery
                 group => (IReadOnlyList<ActiveAgentRow>)group
                     .OrderBy(row => row.StartedAt)
                     .Select(row => new ActiveAgentRow(
-                        row.TaskDevelopmentId, row.ProviderId, row.RepositoryPath, row.Branch))
+                        row.TaskDevelopmentId,
+                        row.ProviderId,
+                        row.RepositoryPath,
+                        row.Branch,
+                        row.Activity,
+                        row.ActivityChangedAt))
                     .ToList());
 
         // A bolinha de worktree (ADR-034): só os prontos. Criando, com erro ou
