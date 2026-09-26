@@ -22,8 +22,12 @@ public class TodayRowMenuRenderingTests
 {
     private static readonly DateOnly Date = new(2026, 9, 21);
 
-    private static TodayTask Row(string title) =>
-        new(Guid.CreateVersion7(), Guid.CreateVersion7(), title, TaskPriority.Normal, Date, null, false);
+    private static TodayTask Row(string title, params TaskWorktree[] worktrees) =>
+        new(Guid.CreateVersion7(), Guid.CreateVersion7(), title, TaskPriority.Normal, Date, null, false,
+            Worktrees: worktrees.Length == 0 ? null : worktrees);
+
+    private static TaskWorktree Worktree(string repository = "eco-core") =>
+        new(Guid.CreateVersion7(), repository, "feature/x", "origin/main", $@"C:\Projects\{repository}-feature-x");
 
     private static async Task<MainWindow> ShowAsync(TodayBoard board)
     {
@@ -74,7 +78,29 @@ public class TodayRowMenuRenderingTests
 
         var items = RowMenuOf(window).Menu.Items.OfType<MenuItem>().ToList();
 
-        items.Select(item => item.Header).Should().Equal("Arquivar", "Mover para a lixeira…");
+        items.Select(item => item.Header).Should().Equal("Abrir Claude Code", "Arquivar", "Mover para a lixeira…");
+    }
+
+    /// <summary>
+    /// "Abrir Claude Code" só existe para quem tem onde abrir: sem ambiente
+    /// pronto, o item e o separador dele somem (ADR-036).
+    /// </summary>
+    [AvaloniaFact]
+    public async Task StartAgent_OnlyShowsUpWhenTheTaskHasAnEnvironment()
+    {
+        var window = await ShowAsync(new TodayBoard(Date, [], [], [Row("Fechar o mês")], [], []));
+
+        var menu = OpenRowMenu(window);
+
+        menu.Items.OfType<MenuItem>().Single(item => item.Classes.Contains("startAgent")).IsVisible.Should().BeFalse();
+        menu.Items.OfType<Separator>().First().IsVisible.Should().BeFalse();
+
+        window = await ShowAsync(new TodayBoard(Date, [], [], [Row("Corrigir animais", Worktree())], [], []));
+
+        menu = OpenRowMenu(window);
+
+        menu.Items.OfType<MenuItem>().Single(item => item.Classes.Contains("startAgent")).IsVisible.Should().BeTrue();
+        menu.Items.OfType<Separator>().First().IsVisible.Should().BeTrue();
     }
 
     [AvaloniaFact]
@@ -82,9 +108,12 @@ public class TodayRowMenuRenderingTests
     {
         var window = await ShowAsync(new TodayBoard(Date, [], [], [Row("Fechar o mês")], [], []));
 
-        var items = OpenRowMenu(window).Items.OfType<MenuItem>().ToList();
+        // "Abrir Claude Code" é clique de code-behind: pode precisar perguntar o ambiente.
+        var items = OpenRowMenu(window).Items.OfType<MenuItem>()
+            .Where(item => !item.Classes.Contains("startAgent"))
+            .ToList();
 
-        items.Should().AllSatisfy(item =>
+        items.Should().NotBeEmpty().And.AllSatisfy(item =>
         {
             item.Command.Should().NotBeNull();
             item.CommandParameter.Should().BeOfType<TaskRowViewModel>();
