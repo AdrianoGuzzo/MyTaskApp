@@ -102,13 +102,11 @@ public sealed partial class App : Avalonia.Application
         var installed = _tray.TryInstall(this, new TrayActions(
             Open: () => OnUiThread(() => Reveal(window)),
             Settings: () => OnUiThread(() => ShowSettings(services, window)),
-            Exit: () => OnUiThread(() => Exit(desktop)),
+            Exit: () => OnUiThread(() => Exit(services, desktop)),
             ToggleTopmost: () => OnUiThread(window.Chrome.ToggleTopmost),
             ToggleGhost: () => OnUiThread(window.Chrome.ToggleGhost),
             UseCompact: () => OnUiThread(() => window.Chrome.UseMode("compact")),
             Hide: () => OnUiThread(window.HideAndRemember)));
-
-        desktop.ShutdownRequested += (_, _) => Shutdown(services);
 
         if (!installed)
         {
@@ -400,9 +398,10 @@ public sealed partial class App : Avalonia.Application
 
     private static void OnUiThread(Action action) => Dispatcher.UIThread.Post(action);
 
-    private void Exit(IClassicDesktopStyleApplicationLifetime desktop)
+    private void Exit(IServiceProvider services, IClassicDesktopStyleApplicationLifetime desktop)
     {
         _exiting = true;
+        _ = Task.Run(() => Shutdown(services));
         desktop.Shutdown();
     }
 
@@ -412,20 +411,13 @@ public sealed partial class App : Avalonia.Application
         _window?.PersistNow();
 
         services.GetRequiredService<ReminderScheduler>().Dispose();
-
-        // Também aqui: um tique de manutenção em voo precisa terminar antes de
-        // o banco ser solto, senão um lote pela metade seria interrompido.
         services.GetRequiredService<LifecycleMaintenanceScheduler>().Dispose();
-
-        // Só para de vigiar: o Claude continua aberto no terminal, e a próxima
-        // abertura o reencontra pelo PID (ADR-030).
         services.GetRequiredService<AgentSessionMonitor>().Dispose();
-
-        // Para de ouvir antes de o banco ser solto: um aviso em voo termina ou
-        // é descartado, nunca gravado pela metade.
         (services.GetRequiredService<IAgentEventEndpoint>() as IDisposable)?.Dispose();
 
         _tray?.Dispose();
         _tray = null;
+
+        Services = null;
     }
 }

@@ -17,48 +17,59 @@ internal static class Program
         // Antes de tudo, e antes até do log: dois processos no mesmo SQLite é o
         // tipo de problema que não dá para consertar depois de acontecer. O
         // segundo lançamento não abre nada — pede para o primeiro aparecer e sai.
-        using var instance = SingleInstance.Acquire();
-
-        if (!instance.IsOwner)
-        {
-            // Salvo quando quem lançou foi o login do Windows: aí ninguém
-            // clicou em nada, e revelar a janela seria um susto (ADR-023).
-            if (launch.ShouldSignalExistingInstance)
-            {
-                instance.SignalOwner();
-            }
-
-            return 0;
-        }
-
-        LoggingSetup.ConfigureBootstrap();
+        var instance = SingleInstance.Acquire();
 
         try
         {
-            // Dentro do try de propósito: appsettings.json é obrigatório, e uma
-            // instalação incompleta precisa deixar rastro em vez de sumir.
-            var configuration = AppServices.BuildConfiguration();
+            if (!instance.IsOwner)
+            {
+                // Salvo quando quem lançou foi o login do Windows: aí ninguém
+                // clicou em nada, e revelar a janela seria um susto (ADR-023).
+                if (launch.ShouldSignalExistingInstance)
+                {
+                    instance.SignalOwner();
+                }
 
-            LoggingSetup.Configure(configuration);
+                return 0;
+            }
 
-            using var services = AppServices.Build(configuration, instance, launch);
+            LoggingSetup.ConfigureBootstrap();
 
-            PrepareDatabase(services);
+            try
+            {
+                // Dentro do try de propósito: appsettings.json é obrigatório, e uma
+                // instalação incompleta precisa deixar rastro em vez de sumir.
+                var configuration = AppServices.BuildConfiguration();
 
-            Log.Information("ApplicationStarted {Version}", Version);
+                LoggingSetup.Configure(configuration);
 
-            App.Services = services;
-            return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
-        }
-        catch (Exception exception)
-        {
-            // Nada de stack trace na cara do usuário (§25): vai inteiro para o log.
-            Log.Fatal(exception, "UnhandledException");
-            return 1;
+                using var services = AppServices.Build(configuration, instance, launch);
+
+                PrepareDatabase(services);
+
+                Log.Information("ApplicationStarted {Version}", Version);
+
+                App.Services = services;
+                var exitCode = BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+
+                App.Services = null;
+                return exitCode;
+            }
+            catch (Exception exception)
+            {
+                // Nada de stack trace na cara do usuário (§25): vai inteiro para o log.
+                Log.Fatal(exception, "UnhandledException");
+                return 1;
+            }
+            finally
+            {
+                Log.CloseAndFlush();
+            }
         }
         finally
         {
-            Log.CloseAndFlush();
+            // Libera o mutex explicitamente APÓS tudo estar fechado.
+            instance.Dispose();
         }
     }
 
