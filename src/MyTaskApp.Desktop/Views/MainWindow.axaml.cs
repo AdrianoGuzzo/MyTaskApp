@@ -327,6 +327,12 @@ public partial class MainWindow : Window
     private IReadOnlyList<PixelRect> WorkingAreas() =>
         [.. Screens.All.Select(screen => screen.WorkingArea)];
 
+    protected override void OnClosed(EventArgs args)
+    {
+        _save.Stop();
+        base.OnClosed(args);
+    }
+
     private void ScheduleSave()
     {
         // Enquanto a posição não foi restaurada, o que a janela reporta é onde
