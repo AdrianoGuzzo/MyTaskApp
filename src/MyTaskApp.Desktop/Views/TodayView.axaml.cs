@@ -64,6 +64,21 @@ public sealed partial class TodayView : UserControl
         CaptureBox.Focus();
     }
 
+    protected override void OnUnloaded(RoutedEventArgs e)
+    {
+        base.OnUnloaded(e);
+
+        if (_autoScroll is { } timer)
+        {
+            timer.Stop();
+            timer.Tick -= OnAutoScrollTick;
+            _autoScroll = null;
+        }
+
+        _escape?.Dispose();
+        _escape = null;
+    }
+
     /// <summary>
     /// Traz o cursor para a caixa. Chamado pela janela quando o "+" do modo
     /// discreto a revela: aparecer sem foco custaria um clique a mais logo
