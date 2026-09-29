@@ -226,6 +226,18 @@ internal sealed class FakeAgentCliProvider : IAgentCliProvider
 
     public string DefaultArguments => "--dangerously-skip-permissions";
 
+    public IReadOnlyList<AgentCliOption> Models { get; } =
+    [
+        new("opus", "Opus", ["--model", "opus"]),
+        new("sonnet", "Sonnet", ["--model", "sonnet"]),
+    ];
+
+    public IReadOnlyList<AgentCliOption> Efforts { get; } =
+    [
+        new("low", "Baixo", ["--effort", "low"]),
+        new("high", "Alto", ["--effort", "high"]),
+    ];
+
     public Task<CliDetectionResult> DetectAsync(CancellationToken cancellationToken = default)
     {
         Detections++;

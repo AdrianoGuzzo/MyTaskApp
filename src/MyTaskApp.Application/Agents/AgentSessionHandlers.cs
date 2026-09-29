@@ -47,7 +47,13 @@ public sealed class DetectAgentCliHandler(IAgentCliProviders providers, IAgentSe
             detection,
             detection.IsInstalled ? null : provider.InstallGuideFor(CurrentPlatform()),
             await settings.ArgumentsForAsync(provider, cancellationToken),
-            await settings.MonitoringForAsync(provider, cancellationToken));
+            await settings.MonitoringForAsync(provider, cancellationToken),
+            await settings.ModelForAsync(provider, cancellationToken),
+            await settings.EffortForAsync(provider, cancellationToken))
+        {
+            Models = provider.Models,
+            Efforts = provider.Efforts,
+        };
     }
 
     internal static OSPlatform CurrentPlatform() =>
@@ -103,6 +109,12 @@ public sealed class GetTaskAgentSessionHandler(
 /// Acompanhar pelos hooks do agente (ADR-037). Informado, vira o padrão das
 /// próximas aberturas; <c>null</c> usa o salvo.
 /// </param>
+/// <param name="Model">
+/// O modelo (ADR-040), um <see cref="AgentCliOption.Value"/> do agente; vazio
+/// é o padrão do agente. Como os parâmetros: informado, vira o padrão;
+/// <c>null</c> usa o salvo.
+/// </param>
+/// <param name="Effort">O nível de esforço, como <paramref name="Model"/>.</param>
 public sealed record StartAgentSession(
     Guid TaskId,
     Guid DevelopmentId,
@@ -110,7 +122,9 @@ public sealed record StartAgentSession(
     string? Arguments = null,
     string? Prompt = null,
     bool RunDirectly = false,
-    bool? Monitor = null);
+    bool? Monitor = null,
+    string? Model = null,
+    string? Effort = null);
 
 /// <summary>
 /// O fluxo da ADR-030: worktree pronto → agente instalado → sessão gravada como
@@ -174,7 +188,13 @@ public sealed class StartAgentSessionHandler(
             throw new DomainException($"{provider.Name} não encontrado.");
         }
 
+        // Modelo e esforço são conferidos antes dos parâmetros, e gravados
+        // depois deles: qualquer um recusado não deixa os outros salvos.
+        var model = await ChooseAsync(provider, AgentChoiceKind.Model, command.Model, cancellationToken);
+        var effort = await ChooseAsync(provider, AgentChoiceKind.Effort, command.Effort, cancellationToken);
         var argumentsText = await ResolveArgumentsAsync(provider, command.Arguments, cancellationToken);
+        await RememberAsync(provider, model, cancellationToken);
+        await RememberAsync(provider, effort, cancellationToken);
 
         // O texto vai junto com a sessão, no mesmo SaveChanges: reaparece no
         // "iniciar novamente" e ao reabrir a tarefa.
@@ -196,7 +216,7 @@ public sealed class StartAgentSessionHandler(
             new AgentCliStartContext(
                 task.Id,
                 development.WorktreePath,
-                AgentArguments.Parse(argumentsText),
+                [.. AgentArguments.Parse(argumentsText), .. model.Option.Arguments, .. effort.Option.Arguments],
                 development.AgentPrompt,
                 command.RunDirectly,
                 monitoring),
@@ -248,7 +268,7 @@ public sealed class StartAgentSessionHandler(
         }
 
         logger.LogInformation(
-            "AgentSessionStarted {TaskId} {SessionId} {ProviderId} {ProcessId} {Status} {WorkingDirectory} {Arguments} {Monitored}",
+            "AgentSessionStarted {TaskId} {SessionId} {ProviderId} {ProcessId} {Status} {WorkingDirectory} {Arguments} {Model} {Effort} {Monitored}",
             task.Id,
             session.Id,
             provider.Id,
@@ -256,6 +276,8 @@ public sealed class StartAgentSessionHandler(
             session.Status,
             session.WorkingDirectory,
             argumentsText,
+            model.Option.Value,
+            effort.Option.Value,
             session.IsMonitored);
 
         return AgentSessionView.From(session, providers) with { MonitoringNote = monitoringNote };
@@ -347,6 +369,46 @@ public sealed class StartAgentSessionHandler(
 
         return text;
     }
+
+    private enum AgentChoiceKind
+    {
+        Model,
+        Effort,
+    }
+
+    /// <summary>Uma escolha de lista já conferida, e se ela muda o padrão salvo.</summary>
+    private sealed record AgentChoice(AgentChoiceKind Kind, AgentCliOption Option, bool Changed);
+
+    /// <summary>
+    /// O modelo ou o esforço que a tela mandou, ou o salvo (ADR-040). Valor
+    /// fora da lista do agente é recusado. Só confere: quem grava é
+    /// <see cref="RememberAsync"/>, depois de tudo conferido.
+    /// </summary>
+    private async Task<AgentChoice> ChooseAsync(
+        IAgentCliProvider provider,
+        AgentChoiceKind kind,
+        string? requested,
+        CancellationToken cancellationToken)
+    {
+        var (options, current, name) = kind is AgentChoiceKind.Model
+            ? (provider.Models, await settings.ModelForAsync(provider, cancellationToken), "Modelo")
+            : (provider.Efforts, await settings.EffortForAsync(provider, cancellationToken), "Nível de esforço");
+
+        var value = (requested ?? current).Trim();
+
+        var option = value.Length == 0
+            ? AgentCliOption.Default("Padrão")
+            : AgentCliOption.Find(options, value)
+                ?? throw new DomainException($"{name} desconhecido para o {provider.Name}: {value}.");
+
+        return new AgentChoice(kind, option, requested is not null && option.Value != current);
+    }
+
+    /// <summary>Como os parâmetros: o que a tela mandou vira o padrão, no mesmo <c>SaveChanges</c> da sessão.</summary>
+    private Task RememberAsync(IAgentCliProvider provider, AgentChoice choice, CancellationToken cancellationToken) =>
+        !choice.Changed ? Task.CompletedTask
+        : choice.Kind is AgentChoiceKind.Model ? settings.SaveModelAsync(provider.Id, choice.Option.Value, cancellationToken)
+        : settings.SaveEffortAsync(provider.Id, choice.Option.Value, cancellationToken);
 
     /// <summary>
     /// Uma sessão ativa por ambiente (ADR-031): abrir outra no mesmo worktree

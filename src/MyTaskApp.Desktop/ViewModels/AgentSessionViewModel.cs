@@ -62,6 +62,12 @@ public sealed partial class AgentSessionViewModel(
     /// <summary>Como <see cref="_loadedArguments"/>, para a caixa do acompanhamento.</summary>
     private bool _loadedMonitor = true;
 
+    /// <summary>Como <see cref="_loadedArguments"/>, para a lista de modelos (ADR-040).</summary>
+    private string _loadedModel = string.Empty;
+
+    /// <summary>Como <see cref="_loadedArguments"/>, para a lista de esforço.</summary>
+    private string _loadedEffort = string.Empty;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(
         nameof(IsChecking), nameof(IsNotInstalled), nameof(IsIdle), nameof(IsStarting), nameof(IsRunning),
@@ -90,6 +96,28 @@ public sealed partial class AgentSessionViewModel(
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CommandPreview))]
     private string _arguments = string.Empty;
+
+    /// <summary>
+    /// As opções da lista "Modelo" (ADR-040), com "Padrão" na frente. Vazia
+    /// quando o agente não oferece a escolha — aí a lista some.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasChoices))]
+    private IReadOnlyList<AgentCliOption> _modelOptions = [];
+
+    /// <summary>Como os parâmetros: vem com o padrão salvo, e o usado ao iniciar vira o padrão.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CommandPreview))]
+    private AgentCliOption? _selectedModel;
+
+    /// <summary>As opções da lista "Esforço", como <see cref="ModelOptions"/>.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasChoices))]
+    private IReadOnlyList<AgentCliOption> _effortOptions = [];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CommandPreview))]
+    private AgentCliOption? _selectedEffort;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(
@@ -148,8 +176,11 @@ public sealed partial class AgentSessionViewModel(
 
     public string? ExecutablePath => Cli?.Detection.ExecutablePath;
 
-    /// <summary>"Roda: claude --dangerously-skip-permissions".</summary>
-    public string CommandPreview => $"Roda: {$"{Cli?.Command ?? "claude"} {Arguments}".Trim()}";
+    /// <summary>"Roda: claude --dangerously-skip-permissions --model opus --effort high".</summary>
+    public string CommandPreview => $"Roda: {string.Join(' ', CommandParts())}";
+
+    /// <summary>O agente oferece modelo ou esforço: o card mostra as listas.</summary>
+    public bool HasChoices => ModelOptions.Count > 1 || EffortOptions.Count > 1;
 
     public AgentCliInstallGuide? InstallGuide => Cli?.InstallGuide;
 
@@ -316,7 +347,9 @@ public sealed partial class AgentSessionViewModel(
                         ArgumentsToSend(),
                         Prompt,
                         RunDirectly,
-                        Cli is null ? null : Monitor),
+                        Cli is null ? null : Monitor,
+                        Cli is null ? null : ChosenModel,
+                        Cli is null ? null : ChosenEffort),
                     token),
                 CancellationToken.None);
 
@@ -324,6 +357,8 @@ public sealed partial class AgentSessionViewModel(
             {
                 _loadedArguments = Arguments = Arguments.Trim();
                 _loadedMonitor = Monitor;
+                _loadedModel = ChosenModel;
+                _loadedEffort = ChosenEffort;
             }
 
             State = StateFor(Session);
@@ -452,6 +487,27 @@ public sealed partial class AgentSessionViewModel(
             {
                 _loadedMonitor = Monitor = cli.Monitor;
             }
+
+            // Lido antes de trocar as listas: a caixa limpa a seleção quando a
+            // lista dela muda.
+            var model = ChosenModel;
+            var effort = ChosenEffort;
+
+            if (model == _loadedModel)
+            {
+                _loadedModel = model = cli.Model;
+            }
+
+            if (effort == _loadedEffort)
+            {
+                _loadedEffort = effort = cli.Effort;
+            }
+
+            ModelOptions = OptionsFor(cli.Models, ModelOptions);
+            SelectedModel = Pick(ModelOptions, model);
+
+            EffortOptions = OptionsFor(cli.Efforts, EffortOptions);
+            SelectedEffort = Pick(EffortOptions, effort);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -464,6 +520,49 @@ public sealed partial class AgentSessionViewModel(
     /// do usuário — mandar <c>null</c> faz o caso de uso usar o salvo.
     /// </summary>
     private string? ArgumentsToSend() => Cli is null ? null : Arguments;
+
+    /// <summary>O valor da lista "Modelo"; vazio é o padrão do agente.</summary>
+    private string ChosenModel => SelectedModel?.Value ?? string.Empty;
+
+    private string ChosenEffort => SelectedEffort?.Value ?? string.Empty;
+
+    /// <summary>O comando, os parâmetros do campo e os das listas, na ordem em que vão.</summary>
+    private IEnumerable<string> CommandParts()
+    {
+        yield return Cli?.Command ?? "claude";
+
+        if (!string.IsNullOrWhiteSpace(Arguments))
+        {
+            yield return Arguments.Trim();
+        }
+
+        foreach (var argument in (SelectedModel?.Arguments ?? []).Concat(SelectedEffort?.Arguments ?? []))
+        {
+            yield return argument;
+        }
+    }
+
+    /// <summary>
+    /// "Padrão" e as opções do agente. Se nada mudou desde a última detecção,
+    /// a mesma lista — trocá-la faria a caixa perder a seleção a cada olhada.
+    /// </summary>
+    private static IReadOnlyList<AgentCliOption> OptionsFor(
+        IReadOnlyList<AgentCliOption> offered,
+        IReadOnlyList<AgentCliOption> current)
+    {
+        if (offered.Count == 0)
+        {
+            return [];
+        }
+
+        return current.Skip(1).Select(option => option.Value).SequenceEqual(offered.Select(option => option.Value))
+            ? current
+            : [AgentCliOption.Default("Padrão"), .. offered];
+    }
+
+    /// <summary>A opção com o valor, ou "Padrão" quando ele não está mais na lista.</summary>
+    private static AgentCliOption? Pick(IReadOnlyList<AgentCliOption> options, string value) =>
+        AgentCliOption.Find(options, value) ?? options.FirstOrDefault();
 
     private AgentPanelState StateFor(AgentSessionView? session) => session?.Status switch
     {
