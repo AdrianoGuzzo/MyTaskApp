@@ -23,6 +23,24 @@ internal sealed class AgentSettingsStore(MyTaskAppDbContext context) : IAgentSet
         CancellationToken cancellationToken = default) =>
         (await TrackedAsync(providerId, cancellationToken)).MonitorActivity = enabled;
 
+    public async Task<string?> GetModelAsync(string providerId, CancellationToken cancellationToken = default) =>
+        (await FindAsync(providerId, cancellationToken))?.Model;
+
+    public async Task SaveModelAsync(
+        string providerId,
+        string model,
+        CancellationToken cancellationToken = default) =>
+        (await TrackedAsync(providerId, cancellationToken)).Model = model;
+
+    public async Task<string?> GetEffortAsync(string providerId, CancellationToken cancellationToken = default) =>
+        (await FindAsync(providerId, cancellationToken))?.Effort;
+
+    public async Task SaveEffortAsync(
+        string providerId,
+        string effort,
+        CancellationToken cancellationToken = default) =>
+        (await TrackedAsync(providerId, cancellationToken)).Effort = effort;
+
     private Task<AgentSettingsRow?> FindAsync(string providerId, CancellationToken cancellationToken) =>
         context.AgentSettings
             .AsNoTracking()

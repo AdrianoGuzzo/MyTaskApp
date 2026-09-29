@@ -307,6 +307,41 @@ public class TaskNotesDevelopmentRenderingTests
         Named<Button>(window, "StartAgentButton").IsEffectivelyVisible.Should().BeTrue();
     }
 
+    /// <summary>ADR-040: modelo e esforço em listas, com o salvo marcado e o comando atualizado.</summary>
+    [AvaloniaFact]
+    public async Task TheModelAndEffortLists_ShowTheSavedChoice_AndChangeTheCommand()
+    {
+        var (window, viewModel, runner) = await ShowAsync(development: ReadyDevelopment());
+        runner.Enqueue<GetTaskAgentSessionHandler>([null]);
+        runner.ResultsByHandler[typeof(DetectAgentCliHandler)] = new AgentCliStatus(
+            "claude-code", "Claude Code", "claude",
+            new CliDetectionResult { IsInstalled = true, ExecutablePath = @"C:\claude.exe", Version = "2.1.4" },
+            null,
+            "--dangerously-skip-permissions",
+            Model: "opus")
+        {
+            Models = [new("opus", "Opus", ["--model", "opus"]), new("sonnet", "Sonnet", ["--model", "sonnet"])],
+            Efforts = [new("low", "Baixo", ["--effort", "low"]), new("max", "Máximo", ["--effort", "max"])],
+        };
+
+        await OpenDevelopmentTabAsync(window, viewModel);
+        await viewModel.Developments.Selected!.Agent.RefreshAsync(CancellationToken.None);
+        Settle(window);
+
+        Named<Grid>(window, "AgentChoicesPanel").IsEffectivelyVisible.Should().BeTrue();
+        var model = Named<ComboBox>(window, "AgentModelBox");
+        model.ItemCount.Should().Be(3);
+        model.SelectedIndex.Should().Be(1);
+        var effort = Named<ComboBox>(window, "AgentEffortBox");
+        effort.SelectedIndex.Should().Be(0);
+
+        effort.SelectedIndex = 2;
+        Settle(window);
+
+        Named<TextBlock>(window, "AgentCommandPreview").Text
+            .Should().Be("Roda: claude --dangerously-skip-permissions --model opus --effort max");
+    }
+
     [AvaloniaFact]
     public async Task WithoutTheAgentInstalled_TheCardShowsTheInstallCommand()
     {

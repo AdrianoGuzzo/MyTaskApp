@@ -17,5 +17,9 @@ internal sealed class AgentSettingsConfiguration : IEntityTypeConfiguration<Agen
         // Anulável desde o ADR-037: a linha pode existir só pelo acompanhamento,
         // e aí os parâmetros continuam "nunca salvos".
         builder.Property(row => row.Arguments).HasMaxLength(AgentArguments.MaxLength);
+
+        builder.Property(row => row.Model).HasMaxLength(64);
+
+        builder.Property(row => row.Effort).HasMaxLength(32);
     }
 }
