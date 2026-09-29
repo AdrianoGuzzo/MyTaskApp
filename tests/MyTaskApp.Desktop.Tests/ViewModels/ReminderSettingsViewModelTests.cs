@@ -138,12 +138,8 @@ public class ReminderSettingsViewModelTests
         return viewModel;
     }
 
-    private ReminderSettingsViewModel ViewModel()
-    {
-        var themeManager = new FakeThemeManager();
-        var themeSelectorVm = new ThemeSelectorViewModel(themeManager);
-        return new(_runner, NullLogger<ReminderSettingsViewModel>.Instance, themeSelectorVm);
-    }
+    private ReminderSettingsViewModel ViewModel() =>
+        new(_runner, NullLogger<ReminderSettingsViewModel>.Instance);
 }
 
 public class ReminderEditorViewModelTests

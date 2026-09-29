@@ -13,7 +13,7 @@
   <StackPanel Margin="28,24" Spacing="28">
 
     <!-- Seção de Temas -->
-    <StackPanel Spacing="12">
+    <StackPanel Spacing="12" IsVisible="{Binding ThemeSelector, Converter={x:Static ObjectConverters.IsNotNull}}">
       <StackPanel Spacing="4">
         <TextBlock Text="Aparência" FontSize="18" FontWeight="SemiBold" />
         <TextBlock FontSize="12"

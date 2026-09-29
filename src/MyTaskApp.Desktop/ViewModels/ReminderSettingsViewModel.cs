@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Reminders;
@@ -15,7 +16,7 @@ namespace MyTaskApp.Desktop.ViewModels;
 public sealed partial class ReminderSettingsViewModel(
     IUseCaseRunner runner,
     ILogger<ReminderSettingsViewModel> logger,
-    ThemeSelectorViewModel themeSelector) : ObservableObject
+    IServiceProvider? services = null) : ObservableObject
 {
     [ObservableProperty]
     private bool _isBusy;
@@ -32,8 +33,21 @@ public sealed partial class ReminderSettingsViewModel(
     [ObservableProperty]
     private string? _pausedLabel;
 
+    private ThemeSelectorViewModel? _themeSelector;
+
     public ReminderEditorViewModel Editor { get; } = new();
-    public ThemeSelectorViewModel ThemeSelector { get; } = themeSelector;
+
+    public ThemeSelectorViewModel? ThemeSelector
+    {
+        get
+        {
+            if (_themeSelector is null && services is not null)
+            {
+                _themeSelector = services.GetService(typeof(ThemeSelectorViewModel)) as ThemeSelectorViewModel;
+            }
+            return _themeSelector;
+        }
+    }
 
     /// <summary>Avisa a janela de que pode fechar.</summary>
     public event Action? Saved;
