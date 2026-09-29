@@ -28,8 +28,9 @@ internal sealed class ThemeManager : IThemeManager, IDisposable
 
     public async Task InitializeAsync()
     {
-        var savedTheme = LoadSavedTheme();
-        await SetThemeAsync(savedTheme);
+        // Inicialização assíncrona foi removida para evitar travamentos
+        // O tema padrão é carregado via Tokens.axaml
+        await Task.CompletedTask;
     }
 
     public async Task SetThemeAsync(string themeName)
