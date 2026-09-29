@@ -1,0 +1,180 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
+        xmlns:sounds="using:MyTaskApp.Application.Sounds"
+        x:Class="MyTaskApp.Desktop.Views.AgentAlertSoundsWindow"
+        x:DataType="vm:AgentAlertSoundsViewModel"
+        x:Name="Root"
+        Title="Sons do Claude Code"
+        Width="520"
+        SizeToContent="Height"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner">
+
+  <!--
+    O som de cada estado do agente que avisa (ADR-042). Tudo vale na hora:
+    marcar, escolher, adicionar e excluir já gravam.
+  -->
+
+  <Window.Styles>
+
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="{DynamicResource WidgetSurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetStrokeSoftBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetCardRadius}" />
+      <Setter Property="Padding" Value="12,10" />
+    </Style>
+
+    <Style Selector="TextBlock.sectionTitle">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.meta">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style Selector="Button.rowAction">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Padding" Value="8,3" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+  </Window.Styles>
+
+  <StackPanel Margin="16,14" Spacing="12">
+
+    <StackPanel Spacing="4">
+      <TextBlock Text="Sons dos avisos" FontSize="18" FontWeight="SemiBold" />
+      <TextBlock Classes="meta"
+                 Text="Tocam junto com o aviso do canto quando o Claude Code muda para um destes estados. Com o terminal dele em primeiro plano, nada toca: você já está olhando." />
+    </StackPanel>
+
+    <!-- ============================ ESTADOS ============================ -->
+    <ItemsControl ItemsSource="{Binding Alerts}">
+      <ItemsControl.ItemTemplate>
+        <DataTemplate x:DataType="vm:AgentAlertSoundItemViewModel">
+          <Border Classes="card" Margin="0,0,0,6">
+            <Grid ColumnDefinitions="*,Auto,Auto" RowDefinitions="Auto,Auto">
+
+              <CheckBox Grid.Row="0"
+                        Grid.Column="0"
+                        VerticalAlignment="Center"
+                        IsChecked="{Binding IsEnabled}">
+                <TextBlock Text="{Binding Title}" FontSize="12.5" FontWeight="SemiBold" />
+              </CheckBox>
+
+              <ComboBox Grid.Row="0"
+                        Grid.Column="1"
+                        Width="170"
+                        Margin="8,0,6,0"
+                        FontSize="12"
+                        Padding="10,4"
+                        MinHeight="0"
+                        VerticalAlignment="Center"
+                        ItemsSource="{Binding Owner.Sounds}"
+                        SelectedItem="{Binding SelectedSound}"
+                        IsEnabled="{Binding IsEnabled}">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="sounds:SoundOption">
+                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+
+              <Button Grid.Row="0"
+                      Grid.Column="2"
+                      Classes="rowAction"
+                      Content="▶ Ouvir"
+                      ToolTip.Tip="Tocar este som"
+                      Command="{Binding Owner.PreviewCommand}"
+                      CommandParameter="{Binding SelectedSound}" />
+
+              <TextBlock Grid.Row="1"
+                         Grid.Column="0"
+                         Grid.ColumnSpan="3"
+                         Classes="meta"
+                         Margin="28,2,0,0"
+                         Text="{Binding Description}" />
+            </Grid>
+          </Border>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+
+    <!-- ========================= PERSONALIZADOS ========================= -->
+    <Border Classes="card">
+      <StackPanel Spacing="8">
+
+        <Grid ColumnDefinitions="*,Auto">
+          <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+            <TextBlock Classes="sectionTitle" Text="Seus sons" />
+            <TextBlock Classes="meta" Text="WAV ou MP3, até 10 MB. O arquivo é copiado para o app." />
+          </StackPanel>
+          <Button Grid.Column="1"
+                  VerticalAlignment="Center"
+                  Content="Adicionar som…"
+                  IsEnabled="{Binding !IsBusy}"
+                  Click="OnAddSoundClick" />
+        </Grid>
+
+        <TextBlock Classes="meta"
+                   IsVisible="{Binding !HasCustomSounds}"
+                   Text="Nenhum som adicionado ainda. Os que vêm com o app estão sempre na lista." />
+
+        <ItemsControl ItemsSource="{Binding CustomSounds}" IsVisible="{Binding HasCustomSounds}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="sounds:SoundOption">
+              <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,2">
+                <TextBlock Grid.Column="0"
+                           VerticalAlignment="Center"
+                           FontSize="12"
+                           TextTrimming="CharacterEllipsis"
+                           Text="{Binding Name}" />
+                <Button Grid.Column="1"
+                        Classes="rowAction"
+                        Margin="6,0"
+                        Content="▶ Ouvir"
+                        Command="{Binding #Root.((vm:AgentAlertSoundsViewModel)DataContext).PreviewCommand}"
+                        CommandParameter="{Binding}" />
+                <Button Grid.Column="2"
+                        Classes="rowAction danger"
+                        Content="Excluir"
+                        Command="{Binding #Root.((vm:AgentAlertSoundsViewModel)DataContext).DeleteCommand}"
+                        CommandParameter="{Binding}" />
+              </Grid>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+      </StackPanel>
+    </Border>
+
+    <Border Padding="10,7"
+            CornerRadius="6"
+            Background="{DynamicResource SystemFillColorCriticalBackgroundBrush}"
+            IsVisible="{Binding ErrorMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <TextBlock Text="{Binding ErrorMessage}"
+                 FontSize="12"
+                 Foreground="{DynamicResource WidgetDangerBrush}"
+                 TextWrapping="Wrap" />
+    </Border>
+
+    <Border Padding="10,7"
+            CornerRadius="6"
+            Background="{DynamicResource WidgetAccentSoftBrush}"
+            IsVisible="{Binding StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <TextBlock Text="{Binding StatusMessage}" FontSize="12" TextWrapping="Wrap" />
+    </Border>
+
+    <Button HorizontalAlignment="Left"
+            Content="Restaurar padrão"
+            Command="{Binding RestoreDefaultsCommand}" />
+
+  </StackPanel>
+
+</Window>

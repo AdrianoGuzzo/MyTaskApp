@@ -54,6 +54,7 @@ public sealed class RecordAgentEventHandler(
     IAgentSessionWatcher watcher,
     IAgentAttentionPresenter presenter,
     ITerminalWindowManager windows,
+    AgentAlertSoundPlayer sounds,
     ILogger<RecordAgentEventHandler> logger)
 {
     public async Task<AgentEventOutcome> HandleAsync(
@@ -156,8 +157,8 @@ public sealed class RecordAgentEventHandler(
         path.Replace('\\', '/').TrimEnd('/').ToUpperInvariant();
 
     /// <summary>
-    /// Parou esperando o usuário: aviso na tela, a menos que ele já esteja no
-    /// terminal. Voltou a trabalhar: o aviso que estava na tela sai.
+    /// Parou esperando o usuário: aviso na tela e som, a menos que ele já esteja
+    /// no terminal. Voltou a trabalhar: o aviso que estava na tela sai.
     /// </summary>
     private async Task TellTheUserAsync(AgentSession session, CancellationToken cancellationToken)
     {
@@ -188,6 +189,10 @@ public sealed class RecordAgentEventHandler(
         {
             await windows.FlashAsync(waiting);
         }
+
+        // Um som por estado (ADR-042): dá para saber, sem olhar, se é uma
+        // pergunta ou só o fim da resposta.
+        await sounds.PlayAsync(session.Activity, cancellationToken);
 
         var task = await tasks.FindByIdAsync(session.TaskItemId, cancellationToken);
         var development = task?.Developments.FirstOrDefault(item => item.Id == session.TaskDevelopmentId);

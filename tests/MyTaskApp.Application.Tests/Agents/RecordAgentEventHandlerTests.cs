@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using MyTaskApp.Application.Agents;
+using MyTaskApp.Application.Sounds;
 using MyTaskApp.Application.Tests.Fakes;
 using MyTaskApp.Domain.Agents;
 using MyTaskApp.Domain.Tasks;
@@ -26,6 +27,9 @@ public class RecordAgentEventHandlerTests
     private readonly RecordingAgentSessionWatcher _watcher = new();
     private readonly RecordingAgentAttentionPresenter _presenter = new();
     private readonly FakeTerminalWindowManager _windows = new();
+    private readonly FakeAgentAlertSoundStore _sounds = new();
+    private readonly FakeSoundLibrary _library = new();
+    private readonly RecordingAudioPlayer _player = new();
     private readonly TaskItem _task;
     private readonly AgentSession _session;
     private readonly string _token;
@@ -54,6 +58,7 @@ public class RecordAgentEventHandlerTests
             _watcher,
             _presenter,
             _windows,
+            new AgentAlertSoundPlayer(_sounds, _library, _player, NullLogger<AgentAlertSoundPlayer>.Instance),
             NullLogger<RecordAgentEventHandler>.Instance);
 
     private AgentEvent Event(
@@ -159,6 +164,78 @@ public class RecordAgentEventHandlerTests
         _session.Activity.Should().Be(AgentActivity.WaitingReview);
         _presenter.Presented.Should().BeEmpty();
         _windows.Flashing.Should().BeEmpty();
+    }
+
+    /// <summary>Um som por estado (ADR-042): a pergunta não soa igual ao fim da resposta.</summary>
+    [Theory]
+    [InlineData(AgentEventType.NeedsUserInput, BuiltInSounds.Call)]
+    [InlineData(AgentEventType.ResponseCompleted, BuiltInSounds.Done)]
+    [InlineData(AgentEventType.SessionFailed, BuiltInSounds.Warning)]
+    public async Task EachWarning_PlaysTheSoundOfItsState(AgentEventType type, string sound)
+    {
+        await SendAsync(Event(type));
+
+        _player.Played.Should().Equal(_library.Resolve(sound));
+    }
+
+    [Fact]
+    public async Task TheChosenSound_IsTheOneThatPlays()
+    {
+        var mine = _library.Add("sino da escola");
+        await _sounds.SaveAsync(new AgentAlertSound(AgentActivity.WaitingForUser, true, mine.Id), Ct);
+
+        await SendAsync(Event(AgentEventType.NeedsUserInput));
+
+        _player.Played.Should().Equal(_library.Resolve(mine.Id));
+    }
+
+    [Fact]
+    public async Task ASilencedState_WarnsWithoutSound()
+    {
+        await _sounds.SaveAsync(new AgentAlertSound(AgentActivity.WaitingReview, false, BuiltInSounds.Done), Ct);
+
+        await SendAsync(Event(AgentEventType.ResponseCompleted));
+
+        _presenter.Presented.Should().ContainSingle();
+        _player.Played.Should().BeEmpty();
+    }
+
+    /// <summary>O som personalizado sumiu da pasta: toca o de fábrica, e não o silêncio.</summary>
+    [Fact]
+    public async Task AMissingCustomSound_FallsBackToTheDefault()
+    {
+        await _sounds.SaveAsync(new AgentAlertSound(AgentActivity.WaitingForUser, true, "custom:apagado.wav"), Ct);
+
+        await SendAsync(Event(AgentEventType.NeedsUserInput));
+
+        _player.Played.Should().Equal(_library.Resolve(BuiltInSounds.Call));
+    }
+
+    [Fact]
+    public async Task WithTheTerminalInFront_NothingPlays()
+    {
+        _windows.InFront.Add(ProcessId);
+
+        await SendAsync(Event(AgentEventType.NeedsUserInput));
+
+        _player.Played.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task BackToWork_PlaysNothing()
+    {
+        await SendAsync(Event(AgentEventType.Working));
+
+        _player.Played.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task TheSameEventTwice_PlaysOnce()
+    {
+        await SendAsync(Event(AgentEventType.ResponseCompleted));
+        await SendAsync(Event(AgentEventType.ResponseCompleted));
+
+        _player.Played.Should().ContainSingle();
     }
 
     [Theory]
