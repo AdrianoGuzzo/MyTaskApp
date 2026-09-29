@@ -62,7 +62,7 @@
     </Style>
 
     <Style Selector="TextBlock.terminalFooter.ok">
-      <Setter Property="Foreground" Value="{DynamicResource WidgetAccentBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetAccentTextBrush}" />
     </Style>
 
     <Style Selector="TextBlock.terminalFooter.bad">

@@ -22,7 +22,7 @@
       <Setter Property="Margin" Value="8" />
       <Setter Property="Background" Value="{DynamicResource WidgetSurfaceBrush}" />
       <Setter Property="BorderBrush" Value="{DynamicResource WidgetStrokeBrush}" />
-      <Setter Property="BoxShadow" Value="0 8 24 -6 #7A000000" />
+      <Setter Property="BoxShadow" Value="{DynamicResource WidgetPopupShadow}" />
     </Style>
 
     <!-- Degrau 4 em diante: o mesmo aviso, impossível de ignorar de relance. -->

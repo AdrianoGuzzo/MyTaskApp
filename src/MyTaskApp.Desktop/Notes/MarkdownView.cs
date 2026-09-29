@@ -48,6 +48,10 @@ public sealed class MarkdownView : UserControl
     public static readonly StyledProperty<IBrush?> AccentBrushProperty =
         AvaloniaProperty.Register<MarkdownView, IBrush?>(nameof(AccentBrush));
 
+    /// <summary>O visto da tarefa marcada, sobre o destaque. Branco não serve a todo tema.</summary>
+    public static readonly StyledProperty<IBrush?> OnAccentBrushProperty =
+        AvaloniaProperty.Register<MarkdownView, IBrush?>(nameof(OnAccentBrush));
+
     private const double BodySize = 13.5;
 
     private const double LineRatio = 1.55;
@@ -91,6 +95,12 @@ public sealed class MarkdownView : UserControl
         set => SetValue(AccentBrushProperty, value);
     }
 
+    public IBrush? OnAccentBrush
+    {
+        get => GetValue(OnAccentBrushProperty);
+        set => SetValue(OnAccentBrushProperty, value);
+    }
+
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
@@ -101,7 +111,8 @@ public sealed class MarkdownView : UserControl
             || change.Property == PlaceholderProperty
             || change.Property == ForegroundProperty
             || change.Property == LinkForegroundProperty
-            || change.Property == AccentBrushProperty)
+            || change.Property == AccentBrushProperty
+            || change.Property == OnAccentBrushProperty)
         {
             Rebuild();
         }
@@ -283,7 +294,7 @@ public sealed class MarkdownView : UserControl
                 ? new Avalonia.Controls.Shapes.Path
                 {
                     Data = Geometry.Parse("M 2.5,7 L 5.5,10 L 11,3.5"),
-                    Stroke = Brushes.White,
+                    Stroke = OnAccentBrush ?? Brushes.White,
                     StrokeThickness = 1.6,
                 }
                 : null,
