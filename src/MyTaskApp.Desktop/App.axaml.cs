@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Application.Reminders;
+using MyTaskApp.Application.Sounds;
 using MyTaskApp.Desktop.Composition;
 using MyTaskApp.Desktop.Reminders;
 using MyTaskApp.Desktop.SpellChecking;
@@ -210,6 +211,7 @@ public sealed partial class App : Avalonia.Application
     {
         todayViewModel.TagsRequested += () => ShowTags(services, window);
         todayViewModel.CommandsRequested += () => ShowDevelopmentCommands(services, window);
+        todayViewModel.SoundsRequested += () => ShowAgentAlertSounds(services, window);
 
         // Renomear, recolorir ou excluir muda as bolinhas de todo o painel; sem
         // isto a mudança só apareceria no refresh de 60 s.
@@ -271,6 +273,16 @@ public sealed partial class App : Avalonia.Application
     private static void ShowDevelopmentCommands(IServiceProvider services, Window owner)
     {
         var window = services.GetRequiredService<DevelopmentCommandsWindow>();
+
+        window.Show(owner);
+        window.Activate();
+        window.Reveal();
+    }
+
+    /// <summary>A janela de sons dos avisos do agente (ADR-042), aberta pelo menu.</summary>
+    private static void ShowAgentAlertSounds(IServiceProvider services, Window owner)
+    {
+        var window = services.GetRequiredService<AgentAlertSoundsWindow>();
 
         window.Show(owner);
         window.Activate();
@@ -414,6 +426,7 @@ public sealed partial class App : Avalonia.Application
         services.GetRequiredService<LifecycleMaintenanceScheduler>().Dispose();
         services.GetRequiredService<AgentSessionMonitor>().Dispose();
         (services.GetRequiredService<IAgentEventEndpoint>() as IDisposable)?.Dispose();
+        (services.GetRequiredService<IAudioPlayer>() as IDisposable)?.Dispose();
 
         _tray?.Dispose();
         _tray = null;
