@@ -156,7 +156,7 @@
         <TextBlock x:Name="DetectedParametersText"
                    Classes="code"
                    TextWrapping="Wrap"
-                   Foreground="{DynamicResource WidgetAccentBrush}"
+                   Foreground="{DynamicResource WidgetAccentTextBrush}"
                    Text="{Binding DetectedParameters}"
                    IsVisible="{Binding HasDetectedParameters}" />
 
@@ -215,7 +215,7 @@
                                TextTrimming="CharacterEllipsis"
                                ToolTip.Tip="{Binding Command}" />
                     <TextBlock Classes="code"
-                               Foreground="{DynamicResource WidgetAccentBrush}"
+                               Foreground="{DynamicResource WidgetAccentTextBrush}"
                                Text="{Binding Usage}"
                                TextWrapping="Wrap"
                                IsVisible="{Binding HasParameters}" />

@@ -1,3 +1,4 @@
+using MyTaskApp.Desktop.Theming;
 using Microsoft.Extensions.Logging.Abstractions;
 using MyTaskApp.Desktop.Widget;
 
@@ -93,4 +94,37 @@ public class WidgetStateStoreTests : IDisposable
 
         NewStore().Load().Mode.Should().Be(WidgetMode.Expanded);
     }
+
+    [Fact]
+    public void TheChosenThemeComesBack()
+    {
+        NewStore().Save(WidgetState.Default with { Theme = "sepia" });
+
+        NewStore().Load().Theme.Should().Be("sepia");
+    }
+
+    [Fact]
+    public void AFileFromBeforeThemes_FollowsWindows()
+    {
+        // Quem atualiza o app tem um widget.json sem "Theme". Seguir o sistema
+        // é o padrão novo — e no Windows escuro dá o mesmo Carvão de antes.
+        Directory.CreateDirectory(_directory);
+        File.WriteAllText(
+            Path.Combine(_directory, "widget.json"),
+            """{ "Mode": "Expanded", "Width": 360, "Height": 560 }""");
+
+        NewStore().Load().Theme.Should().Be(ThemeCatalog.SystemId);
+    }
+
+    [Theory]
+    [InlineData("""{ "Theme": "tema-removido" }""")]
+    [InlineData("""{ "Theme": null }""")]
+    public void AThemeThatNoLongerExists_FollowsWindows(string json)
+    {
+        Directory.CreateDirectory(_directory);
+        File.WriteAllText(Path.Combine(_directory, "widget.json"), json);
+
+        NewStore().Load().Theme.Should().Be(ThemeCatalog.SystemId);
+    }
 }
+
