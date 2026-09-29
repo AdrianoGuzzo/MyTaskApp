@@ -137,7 +137,7 @@
                     <Separator />
 
                     <!--
-                      Tema (ADR-040). Cada item traz uma amostra nas cores do
+                      Tema (ADR-041). Cada item traz uma amostra nas cores do
                       próprio tema: escolher vendo, e não lembrando nome. O
                       menu fica aberto no clique para dar para passar por
                       todos e ver cada um aplicado no painel ali atrás.

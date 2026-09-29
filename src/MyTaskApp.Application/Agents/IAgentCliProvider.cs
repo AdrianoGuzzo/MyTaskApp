@@ -32,6 +32,16 @@ public interface IAgentCliProvider
     string DefaultArguments { get; }
 
     /// <summary>
+    /// Os modelos que a tela oferece, cada um com os parâmetros que o escolhem
+    /// (ex.: <c>--model opus</c>). Vazio = o agente não tem essa escolha, e a
+    /// tela não mostra a lista (ADR-040).
+    /// </summary>
+    IReadOnlyList<AgentCliOption> Models => [];
+
+    /// <summary>Os níveis de esforço, no mesmo formato de <see cref="Models"/>.</summary>
+    IReadOnlyList<AgentCliOption> Efforts => [];
+
+    /// <summary>
     /// Procura o executável e, se achar, a versão — sem abrir sessão interativa.
     /// Nunca lança: o que der errado vai em <see cref="CliDetectionResult.Error"/>.
     /// </summary>
@@ -73,7 +83,10 @@ public sealed record CliDetectionResult
 }
 
 /// <summary>Para qual tarefa, em qual pasta e com quais parâmetros o agente vai abrir — e com qual texto.</summary>
-/// <param name="Arguments">Os parâmetros do card, já separados, antes do texto.</param>
+/// <param name="Arguments">
+/// Os parâmetros do card, já separados, seguidos dos do modelo e do esforço
+/// escolhidos (ADR-040) — tudo antes do texto.
+/// </param>
 /// <param name="Prompt">O texto livre da tela; <c>null</c> = o agente abre vazio.</param>
 /// <param name="RunDirectly">
 /// Com texto: <c>true</c> já executa; <c>false</c> só planeja e espera aprovação.
@@ -89,6 +102,20 @@ public sealed record AgentCliStartContext(
     string? Prompt = null,
     bool RunDirectly = false,
     AgentMonitoring? Monitoring = null);
+
+/// <summary>
+/// Uma escolha de lista do card (modelo, esforço): o valor gravado, o nome para
+/// a tela e os parâmetros que ela acrescenta ao comando.
+/// </summary>
+public sealed record AgentCliOption(string Value, string Label, IReadOnlyList<string> Arguments)
+{
+    /// <summary>"Padrão": não acrescenta nada, e o agente decide.</summary>
+    public static AgentCliOption Default(string label) => new(string.Empty, label, []);
+
+    /// <summary>A opção com este valor, sem diferenciar maiúsculas; <c>null</c> se não há.</summary>
+    public static AgentCliOption? Find(IEnumerable<AgentCliOption> options, string? value) =>
+        options.FirstOrDefault(option => string.Equals(option.Value, value, StringComparison.OrdinalIgnoreCase));
+}
 
 /// <summary>O acompanhamento de uma sessão: o endereço dos avisos e o ambiente do processo.</summary>
 public sealed record AgentMonitoring(Uri Endpoint, IReadOnlyDictionary<string, string> Environment);

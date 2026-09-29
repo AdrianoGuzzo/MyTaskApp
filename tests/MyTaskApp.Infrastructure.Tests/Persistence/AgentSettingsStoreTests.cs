@@ -98,4 +98,29 @@ public class AgentSettingsStoreTests
         (await new AgentSettingsStore(read).GetArgumentsAsync("claude-code", Ct)).Should().Be("--model opus");
         (await new AgentSettingsStore(read).GetMonitoringAsync("claude-code", Ct)).Should().BeTrue();
     }
+
+    /// <summary>Modelo e esforço (ADR-040) na mesma linha, sem congelar os parâmetros.</summary>
+    [Fact]
+    public async Task ModelAndEffort_AreSaved_WithoutFreezingTheArguments()
+    {
+        await using var db = await new TempSqliteDatabase().MigrateAsync(Ct);
+
+        await using (var write = db.CreateContext())
+        {
+            var store = new AgentSettingsStore(write);
+            (await store.GetModelAsync("claude-code", Ct)).Should().BeNull();
+            await store.SaveModelAsync("claude-code", "opus", Ct);
+            await store.SaveEffortAsync("claude-code", "high", Ct);
+            await write.SaveChangesAsync(Ct);
+        }
+
+        await using var read = db.CreateContext();
+        var saved = new AgentSettingsStore(read);
+
+        (await read.AgentSettings.CountAsync(Ct)).Should().Be(1);
+        (await saved.GetModelAsync("claude-code", Ct)).Should().Be("opus");
+        (await saved.GetEffortAsync("claude-code", Ct)).Should().Be("high");
+        (await saved.GetArgumentsAsync("claude-code", Ct)).Should().BeNull();
+        (await saved.GetEffortAsync("codex", Ct)).Should().BeNull();
+    }
 }

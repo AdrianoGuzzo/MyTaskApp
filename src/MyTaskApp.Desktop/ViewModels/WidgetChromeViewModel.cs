@@ -54,7 +54,7 @@ public sealed partial class WidgetChromeViewModel : ObservableObject
     private bool _startHidden;
 
     /// <summary>
-    /// O tema escolhido, ou "seguir o Windows" (ADR-040). A moldura só guarda
+    /// O tema escolhido, ou "seguir o Windows" (ADR-041). A moldura só guarda
     /// a escolha; quem pinta é o <see cref="ThemeController"/>, que o App liga
     /// a esta propriedade.
     /// </summary>

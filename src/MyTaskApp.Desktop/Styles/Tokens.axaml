@@ -4,7 +4,7 @@
   <!--
     O que não muda de um tema para outro: geometria, fonte de ícones e as
     transparências de propósito. As cores moram em Theming/ThemeCatalog.cs e
-    chegam por ThemeController (ADR-040) — por isso toda tela as pede com
+    chegam por ThemeController (ADR-041) — por isso toda tela as pede com
     DynamicResource, e nenhuma repete hex.
   -->
 

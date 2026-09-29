@@ -6,7 +6,7 @@ using Avalonia.Threading;
 namespace MyTaskApp.Desktop.Theming;
 
 /// <summary>
-/// Põe um tema na tela e o mantém lá (ADR-040). Com "seguir o Windows", trocar
+/// Põe um tema na tela e o mantém lá (ADR-041). Com "seguir o Windows", trocar
 /// o modo do sistema troca o app na hora, sem reiniciar.
 /// </summary>
 /// <remarks>

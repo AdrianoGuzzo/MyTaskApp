@@ -4,7 +4,7 @@ using MyTaskApp.Desktop.Theming;
 namespace MyTaskApp.Desktop.Tests.Theming;
 
 /// <summary>
-/// Todo tema do catálogo tem que ser legível (ADR-040). Os mínimos são os da
+/// Todo tema do catálogo tem que ser legível (ADR-041). Os mínimos são os da
 /// WCAG 2.2: 4,5:1 para texto (1.4.3), 3:1 para o que é só forma — ícone,
 /// barra de progresso, bolinha (1.4.11). O texto principal pede 7:1 (1.4.6,
 /// AAA): é ele que o usuário lê o dia inteiro.

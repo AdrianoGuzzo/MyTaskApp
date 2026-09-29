@@ -3,7 +3,7 @@ using Avalonia.Media;
 namespace MyTaskApp.Desktop.Theming;
 
 /// <summary>
-/// Os temas do app (ADR-040). Toda paleta aqui passa pelo teste de contraste
+/// Os temas do app (ADR-041). Toda paleta aqui passa pelo teste de contraste
 /// (<c>ThemeContrastTests</c>): texto principal em 7:1, todo texto de leitura
 /// em 4,5:1 e o que é só forma — ícone, barra, bolinha — em 3:1.
 /// </summary>

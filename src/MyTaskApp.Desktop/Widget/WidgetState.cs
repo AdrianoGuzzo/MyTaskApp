@@ -36,7 +36,7 @@ public sealed record WidgetState
     public bool StartHidden { get; init; }
 
     /// <summary>
-    /// O id do tema escolhido, ou "seguir o Windows" (ADR-040). Texto, e não
+    /// O id do tema escolhido, ou "seguir o Windows" (ADR-041). Texto, e não
     /// enum: um tema a mais no catálogo não pode exigir migrar o arquivo.
     /// </summary>
     public string Theme { get; init; } = ThemeCatalog.SystemId;

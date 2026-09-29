@@ -25,6 +25,21 @@ public interface IAgentSettingsStore
 
     /// <summary>Só prepara a gravação, como <see cref="SaveArgumentsAsync"/>.</summary>
     Task SaveMonitoringAsync(string providerId, bool enabled, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// O modelo escolhido (ADR-040): o <see cref="AgentCliOption.Value"/>, ou
+    /// <c>null</c>/vazio para o padrão do agente.
+    /// </summary>
+    Task<string?> GetModelAsync(string providerId, CancellationToken cancellationToken = default);
+
+    /// <summary>Só prepara a gravação, como <see cref="SaveArgumentsAsync"/>.</summary>
+    Task SaveModelAsync(string providerId, string model, CancellationToken cancellationToken = default);
+
+    /// <summary>O esforço escolhido, como <see cref="GetModelAsync"/>.</summary>
+    Task<string?> GetEffortAsync(string providerId, CancellationToken cancellationToken = default);
+
+    /// <summary>Só prepara a gravação, como <see cref="SaveArgumentsAsync"/>.</summary>
+    Task SaveEffortAsync(string providerId, string effort, CancellationToken cancellationToken = default);
 }
 
 internal static class AgentSettingsStoreExtensions
@@ -42,4 +57,23 @@ internal static class AgentSettingsStoreExtensions
         IAgentCliProvider provider,
         CancellationToken cancellationToken) =>
         await settings.GetMonitoringAsync(provider.Id, cancellationToken) ?? true;
+
+    /// <summary>
+    /// O modelo salvo, se o agente ainda o oferece; senão o padrão (vazio). Um
+    /// modelo que saiu da lista não trava a abertura.
+    /// </summary>
+    public static async Task<string> ModelForAsync(
+        this IAgentSettingsStore settings,
+        IAgentCliProvider provider,
+        CancellationToken cancellationToken) =>
+        AgentCliOption.Find(provider.Models, await settings.GetModelAsync(provider.Id, cancellationToken))?.Value
+            ?? string.Empty;
+
+    /// <summary>O esforço salvo, como <see cref="ModelForAsync"/>.</summary>
+    public static async Task<string> EffortForAsync(
+        this IAgentSettingsStore settings,
+        IAgentCliProvider provider,
+        CancellationToken cancellationToken) =>
+        AgentCliOption.Find(provider.Efforts, await settings.GetEffortAsync(provider.Id, cancellationToken))?.Value
+            ?? string.Empty;
 }

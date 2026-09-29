@@ -226,6 +226,117 @@ public class AgentSessionHandlerTests
         _settings.SaveCount.Should().Be(0);
     }
 
+    // --- Modelo e esforço (ADR-040) ------------------------------------------
+
+    private Task<AgentSessionView> StartWithAsync(string? model, string? effort, string? arguments = null) =>
+        Start().HandleAsync(
+            new StartAgentSession(_task.Id, _task.Developments[0].Id, Arguments: arguments, Model: model, Effort: effort),
+            Ct);
+
+    [Fact]
+    public async Task Detect_BringsTheOptions_AndTheAgentDefault_WhileNothingWasChosen()
+    {
+        var status = await new DetectAgentCliHandler(_providers, _settings).HandleAsync(new DetectAgentCli(), Ct);
+
+        status.Models.Select(option => option.Value).Should().Equal("opus", "sonnet");
+        status.Efforts.Select(option => option.Value).Should().Equal("low", "high");
+        status.Model.Should().BeEmpty();
+        status.Effort.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Detect_BringsTheSavedChoice_OnlyWhileTheAgentStillOffersIt()
+    {
+        _settings.Models["claude-code"] = "opus";
+        _settings.Efforts["claude-code"] = "ultra";
+
+        var status = await new DetectAgentCliHandler(_providers, _settings).HandleAsync(new DetectAgentCli(), Ct);
+
+        status.Model.Should().Be("opus");
+        status.Effort.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Start_WithoutChoosing_AddsNothing()
+    {
+        Ready();
+
+        await StartAsync();
+
+        _launcher.Launched.Should().ContainSingle()
+            .Which.Arguments.Should().Equal("--dangerously-skip-permissions");
+        _settings.Models.Should().BeEmpty();
+        _settings.Efforts.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Start_WithModelAndEffort_AddsThemAfterTheArguments_AndMakesThemTheDefault()
+    {
+        Ready();
+
+        await StartWithAsync(" OPUS ", "high");
+
+        _launcher.Launched.Should().ContainSingle().Which.Arguments.Should().Equal(
+            "--dangerously-skip-permissions", "--model", "opus", "--effort", "high");
+        _settings.Models["claude-code"].Should().Be("opus");
+        _settings.Efforts["claude-code"].Should().Be("high");
+    }
+
+    [Fact]
+    public async Task Start_WithoutChoosing_UsesTheSavedChoice()
+    {
+        Ready();
+        _settings.Models["claude-code"] = "sonnet";
+        _settings.Efforts["claude-code"] = "low";
+
+        await StartAsync();
+
+        _launcher.Launched.Should().ContainSingle().Which.Arguments.Should().Equal(
+            "--dangerously-skip-permissions", "--model", "sonnet", "--effort", "low");
+    }
+
+    [Fact]
+    public async Task Start_WithTheDefaultChosen_DropsTheSavedChoice()
+    {
+        Ready();
+        _settings.Models["claude-code"] = "sonnet";
+        _settings.Efforts["claude-code"] = "low";
+
+        await StartWithAsync("", "");
+
+        _launcher.Launched.Should().ContainSingle()
+            .Which.Arguments.Should().Equal("--dangerously-skip-permissions");
+        _settings.Models["claude-code"].Should().BeEmpty();
+        _settings.Efforts["claude-code"].Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Start_WithAnUnknownModel_IsRefused_BeforeAnythingIsRecorded()
+    {
+        Ready();
+
+        await FluentActions.Awaiting(() => StartWithAsync("gpt", null, arguments: "--verbose"))
+            .Should().ThrowAsync<DomainException>()
+            .WithMessage("Modelo desconhecido para o Claude Code: gpt.");
+
+        _launcher.Launched.Should().BeEmpty();
+        _sessions.Sessions.Should().BeEmpty();
+        _settings.Models.Should().BeEmpty();
+        _settings.SaveCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Start_WithInvalidArguments_DoesNotKeepTheNewChoice()
+    {
+        Ready();
+
+        await FluentActions.Awaiting(() => StartWithAsync("opus", "high", arguments: "\"sem fim"))
+            .Should().ThrowAsync<DomainException>();
+
+        _settings.Models.Should().BeEmpty();
+        _settings.Efforts.Should().BeEmpty();
+    }
+
     // --- Iniciar -----------------------------------------------------------
 
     [Fact]

@@ -5,7 +5,7 @@ using MyTaskApp.Desktop.Theming;
 namespace MyTaskApp.Desktop.Tests.Theming;
 
 /// <summary>
-/// O dicionário que cada tema põe na tela (ADR-040). A guarda que importa é a
+/// O dicionário que cada tema põe na tela (ADR-041). A guarda que importa é a
 /// última: uma tela que pede uma chave que tema nenhum define compila, abre, e
 /// desenha sem cor — em silêncio.
 /// </summary>
