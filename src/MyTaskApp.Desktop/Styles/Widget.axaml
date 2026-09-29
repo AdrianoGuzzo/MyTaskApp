@@ -80,7 +80,7 @@
 
   <Style Selector="Button.danger:pointerover /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource WidgetDangerBrush}" />
-    <Setter Property="Foreground" Value="#17181C" />
+    <Setter Property="Foreground" Value="{DynamicResource WidgetCanvasBrush}" />
   </Style>
 
   <!-- Casca: o painel inteiro. A borda é o que separa do fundo da área de trabalho. -->
@@ -92,7 +92,7 @@
 
     <!-- No estilo, e não no elemento: valor inline ganha de setter, e o modo
          discreto precisa poder apagar a sombra. -->
-    <Setter Property="BoxShadow" Value="0 8 28 -6 #7A000000" />
+    <Setter Property="BoxShadow" Value="{DynamicResource WidgetShellShadow}" />
   </Style>
 
   <!--
@@ -205,7 +205,7 @@
   </Style>
 
   <Style Selector="Button.ghostChrome /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="#A6000000" />
+    <Setter Property="Background" Value="{DynamicResource WidgetGhostChromeBrush}" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="CornerRadius" Value="14" />
   </Style>
@@ -216,7 +216,7 @@
   </Style>
 
   <Style Selector="Button.ghostChrome:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="#D9000000" />
+    <Setter Property="Background" Value="{DynamicResource WidgetGhostChromeHoverBrush}" />
   </Style>
 
   <!-- Fixado: mesma cor de destaque do alfinete no cabeçalho, e menos apagado
@@ -224,6 +224,20 @@
   <Style Selector="Button.ghostChrome.on">
     <Setter Property="Foreground" Value="{DynamicResource WidgetAccentBrush}" />
     <Setter Property="Opacity" Value="0.85" />
+  </Style>
+
+  <!--
+    A amostra do menu "Tema": fundo à esquerda, cartão à direita, destaque no
+    meio. A borda é a do tema atual, e não a da amostra — senão um tema claro
+    listado dentro de um menu claro sumiria no fundo.
+  -->
+  <Style Selector="Border.themeSwatch">
+    <Setter Property="Width" Value="18" />
+    <Setter Property="Height" Value="18" />
+    <Setter Property="CornerRadius" Value="5" />
+    <Setter Property="ClipToBounds" Value="True" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource WidgetStrokeBrush}" />
   </Style>
 
   <!-- Barra de progresso fina: informação periférica, não um elemento de tela. -->

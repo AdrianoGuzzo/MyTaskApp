@@ -1,12 +1,11 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             x:Class="MyTaskApp.Desktop.App"
-             RequestedThemeVariant="Dark">
+             x:Class="MyTaskApp.Desktop.App">
 
   <!--
-    Escuro por decisão, não por herança. Antes era "Default", então o app
-    seguia o Windows e virava uma chapa preta de 900x700 na área de trabalho.
-    Agora a variante é fixa e a paleta é nossa: carvão, não preto.
+    Sem RequestedThemeVariant aqui: quem escolhe a variante é o ThemeController
+    (ADR-041), junto com a paleta. O tema é do usuário — um de seis, ou "seguir
+    o Windows" — e a variante do Fluent só acompanha se ele é claro ou escuro.
   -->
 
   <Application.Resources>

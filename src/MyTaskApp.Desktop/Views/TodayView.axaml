@@ -992,7 +992,7 @@
     -->
     <Style Selector="ContentControl#DragGhost Border.row">
       <Setter Property="Background" Value="{DynamicResource WidgetSurfaceHoverBrush}" />
-      <Setter Property="BoxShadow" Value="{StaticResource WidgetLiftShadow}" />
+      <Setter Property="BoxShadow" Value="{DynamicResource WidgetLiftShadow}" />
       <Setter Property="Transitions" Value="{x:Null}" />
     </Style>
 

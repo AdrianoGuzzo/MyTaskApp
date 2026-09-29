@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MyTaskApp.Desktop.Composition;
+using MyTaskApp.Desktop.Theming;
 using MyTaskApp.Desktop.Widget;
 
 namespace MyTaskApp.Desktop.ViewModels;
@@ -53,6 +54,14 @@ public sealed partial class WidgetChromeViewModel : ObservableObject
     private bool _startHidden;
 
     /// <summary>
+    /// O tema escolhido, ou "seguir o Windows" (ADR-041). A moldura só guarda
+    /// a escolha; quem pinta é o <see cref="ThemeController"/>, que o App liga
+    /// a esta propriedade.
+    /// </summary>
+    [ObservableProperty]
+    private string _themeId = ThemeCatalog.SystemId;
+
+    /// <summary>
     /// Espelho do registro, não preferência da moldura: <b>não</b> entra no
     /// <c>widget.json</c>. A verdade sobre iniciar com o Windows mora na chave
     /// <c>Run</c> (ADR-023), e uma segunda cópia é como uma delas acaba
@@ -67,6 +76,20 @@ public sealed partial class WidgetChromeViewModel : ObservableObject
     /// o designer precisam.
     /// </summary>
     private IStartupRegistration _startup = UnsupportedStartupRegistration.Instance;
+
+    public WidgetChromeViewModel()
+    {
+        Themes =
+        [
+            ThemeOptionViewModel.ForSystem(UseTheme),
+            .. ThemeCatalog.All.Select(theme => ThemeOptionViewModel.For(theme, UseTheme)),
+        ];
+
+        MarkSelectedTheme();
+    }
+
+    /// <summary>"Automático" primeiro: é o padrão, e o que a maioria quer.</summary>
+    public IReadOnlyList<ThemeOptionViewModel> Themes { get; }
 
     public bool IsExpanded => Mode == WidgetMode.Expanded;
 
@@ -182,6 +205,19 @@ public sealed partial class WidgetChromeViewModel : ObservableObject
     [RelayCommand]
     public void Hide() => HideRequested?.Invoke();
 
+    /// <summary>Um id desconhecido vira "seguir o Windows", nunca um tema qualquer.</summary>
+    public void UseTheme(string? id) => ThemeId = ThemeCatalog.Normalize(id);
+
+    partial void OnThemeIdChanged(string value) => MarkSelectedTheme();
+
+    private void MarkSelectedTheme()
+    {
+        foreach (var option in Themes)
+        {
+            option.IsSelected = option.Id == ThemeId;
+        }
+    }
+
     /// <summary>
     /// Liga a moldura ao registro do Windows. Só o composition root chama —
     /// mesmo desenho do <c>Attach</c> da janela: sem isto tudo funciona igual,
@@ -224,6 +260,7 @@ public sealed partial class WidgetChromeViewModel : ObservableObject
         IsTopmost = state.Topmost;
         IsGhost = state.Ghost;
         StartHidden = state.StartHidden;
+        UseTheme(state.Theme);
     }
 
     /// <summary>Carimba as preferências atuais no estado que vai para o disco.</summary>
@@ -233,5 +270,6 @@ public sealed partial class WidgetChromeViewModel : ObservableObject
         Topmost = IsTopmost,
         Ghost = IsGhost,
         StartHidden = StartHidden,
+        Theme = ThemeId,
     };
 }
