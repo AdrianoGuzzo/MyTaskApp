@@ -13,4 +13,10 @@ internal sealed class AgentSettingsRow
 
     /// <summary><c>null</c> = nunca escolhido: o acompanhamento nasce ligado (ADR-037).</summary>
     public bool? MonitorActivity { get; set; }
+
+    /// <summary><c>null</c> ou vazio = o modelo padrão do agente (ADR-040).</summary>
+    public string? Model { get; set; }
+
+    /// <summary><c>null</c> ou vazio = o esforço padrão do agente (ADR-040).</summary>
+    public string? Effort { get; set; }
 }

@@ -380,6 +380,105 @@ public class AgentSessionViewModelTests
         task.GetDevelopment(developmentId).AgentPrompt.Should().Be("Implemente a tarefa");
     }
 
+    // --- Modelo e esforço (ADR-040) ------------------------------------------
+
+    private static readonly AgentCliOption[] Models =
+    [
+        new("opus", "Opus", ["--model", "opus"]),
+        new("sonnet", "Sonnet", ["--model", "sonnet"]),
+    ];
+
+    private static readonly AgentCliOption[] Efforts =
+    [
+        new("low", "Baixo", ["--effort", "low"]),
+        new("high", "Alto", ["--effort", "high"]),
+    ];
+
+    private static AgentCliStatus WithChoices(string model = "", string effort = "") =>
+        Installed() with { Model = model, Effort = effort, Models = Models, Efforts = Efforts };
+
+    [Fact]
+    public async Task TheChoices_OfferTheDefaultFirst_AndComeWithTheSavedOnes()
+    {
+        _runner.Enqueue<GetTaskAgentSessionHandler>([null]);
+        _runner.ResultsByHandler[typeof(DetectAgentCliHandler)] = WithChoices(model: "opus");
+        var viewModel = Create();
+
+        await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
+
+        viewModel.HasChoices.Should().BeTrue();
+        viewModel.ModelOptions.Select(option => option.Label).Should().Equal("Padrão", "Opus", "Sonnet");
+        viewModel.EffortOptions.Select(option => option.Label).Should().Equal("Padrão", "Baixo", "Alto");
+        viewModel.SelectedModel!.Value.Should().Be("opus");
+        viewModel.SelectedEffort!.Value.Should().BeEmpty();
+        viewModel.CommandPreview.Should().Be("Roda: claude --dangerously-skip-permissions --model opus");
+
+        viewModel.SelectedEffort = viewModel.EffortOptions[2];
+
+        viewModel.CommandPreview.Should().Be("Roda: claude --dangerously-skip-permissions --model opus --effort high");
+    }
+
+    [Fact]
+    public async Task AnAgentWithoutChoices_HidesTheLists()
+    {
+        _runner.Enqueue<GetTaskAgentSessionHandler>([null]);
+        _runner.ResultsByHandler[typeof(DetectAgentCliHandler)] = Installed();
+        var viewModel = Create();
+
+        await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
+
+        viewModel.HasChoices.Should().BeFalse();
+        viewModel.ModelOptions.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ARefresh_KeepsWhatTheUserChose_AndBringsANewDefaultOtherwise()
+    {
+        _runner.Enqueue<GetTaskAgentSessionHandler>([null]);
+        _runner.ResultsByHandler[typeof(DetectAgentCliHandler)] = WithChoices();
+        var viewModel = Create();
+        await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
+        var options = viewModel.ModelOptions;
+
+        viewModel.SelectedModel = viewModel.ModelOptions[2];
+        _runner.ResultsByHandler[typeof(DetectAgentCliHandler)] = WithChoices(model: "opus", effort: "low");
+        await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
+
+        viewModel.ModelOptions.Should().BeSameAs(options);
+        viewModel.SelectedModel!.Value.Should().Be("sonnet");
+        viewModel.SelectedEffort!.Value.Should().Be("low");
+    }
+
+    [Fact]
+    public async Task Start_HandsTheChosenModelAndEffort_ToTheCommand()
+    {
+        var (task, developmentId) = ReadyTask();
+        var provider = Substitute.For<IAgentCliProvider>();
+        AgentCliStartContext? received = null;
+        provider.Id.Returns("claude-code");
+        provider.Name.Returns("Claude Code");
+        provider.Models.Returns(Models);
+        provider.Efforts.Returns(Efforts);
+        provider.DetectAsync(Arg.Any<CancellationToken>())
+            .Returns(new CliDetectionResult { IsInstalled = true, ExecutablePath = @"C:\claude.exe" });
+        provider.CreateLaunch(Arg.Do<AgentCliStartContext>(context => received = context), Arg.Any<CliDetectionResult>())
+            .Returns(_ => throw new DomainException("parou aqui"));
+        UseRealStart(task, provider);
+
+        _runner.Enqueue<GetTaskAgentSessionHandler>([null]);
+        _runner.ResultsByHandler[typeof(DetectAgentCliHandler)] = WithChoices();
+        var viewModel = new AgentSessionViewModel(_runner, _clipboard, _shell, NullLogger<AgentSessionViewModel>.Instance);
+        viewModel.Load(task.Id, developmentId, isReadOnly: false);
+        await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
+        viewModel.SelectedModel = viewModel.ModelOptions[1];
+        viewModel.SelectedEffort = viewModel.EffortOptions[2];
+
+        await viewModel.StartCommand.ExecuteAsync(null);
+
+        received!.Arguments.Should().Equal(
+            "--dangerously-skip-permissions", "--model", "opus", "--effort", "high");
+    }
+
     private static (TaskItem Task, Guid DevelopmentId) ReadyTask()
     {
         var task = TaskItem.Create("Corrigir cálculo", Started);
