@@ -323,6 +323,12 @@ public sealed partial class TodayViewModel(
     [RelayCommand]
     public void OpenCommands() => CommandsRequested?.Invoke();
 
+    /// <summary>Pede a janela de sons dos avisos do agente (ADR-042).</summary>
+    public event Action? SoundsRequested;
+
+    [RelayCommand]
+    public void OpenSounds() => SoundsRequested?.Invoke();
+
     /// <summary>
     /// Prepara o seletor de etiquetas da linha. A lista é lida a cada abertura,
     /// e não junto com o quadro: ela só interessa a quem abriu o seletor, e
