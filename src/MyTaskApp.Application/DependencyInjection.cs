@@ -10,6 +10,7 @@ using MyTaskApp.Application.Development;
 using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Reminders;
+using MyTaskApp.Application.Sounds;
 using MyTaskApp.Application.Tags;
 using MyTaskApp.Application.Tasks;
 
@@ -102,6 +103,16 @@ public static class DependencyInjection
         // chamada, ele ganha do objeto nulo.
         services.AddScoped<RecordAgentEventHandler>();
         services.TryAddSingleton<IAgentAttentionPresenter, NoAgentAttentionPresenter>();
+
+        // O som de cada estado do agente (ADR-042). A biblioteca de sons vem da
+        // Infrastructure; quem toca, do Desktop — sem ele, silêncio.
+        services.AddScoped<AgentAlertSoundPlayer>();
+        services.AddScoped<GetAgentAlertSoundsHandler>();
+        services.AddScoped<UpdateAgentAlertSoundHandler>();
+        services.AddScoped<ImportSoundHandler>();
+        services.AddScoped<DeleteSoundHandler>();
+        services.AddScoped<PreviewSoundHandler>();
+        services.TryAddSingleton<IAudioPlayer, NoAudioPlayer>();
 
         // Ciclo de vida do checklist: arquivar, lixeira, exclusao definitiva e
         // auditoria (§1 a §8).
