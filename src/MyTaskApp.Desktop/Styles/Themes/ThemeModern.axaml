@@ -1,0 +1,33 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- Tema Moderno: Cores vibrantes e energéticas -->
+
+  <!-- Superfícies -->
+  <Color x:Key="WidgetCanvasColor">#0F172A</Color>
+  <Color x:Key="WidgetSurfaceColor">#1E293B</Color>
+  <Color x:Key="WidgetSurfaceHoverColor">#334155</Color>
+  <Color x:Key="WidgetStrokeColor">#475569</Color>
+  <Color x:Key="WidgetStrokeSoftColor">#1E293B</Color>
+
+  <!-- Texto -->
+  <Color x:Key="WidgetTextHighColor">#F1F5F9</Color>
+  <Color x:Key="WidgetTextMidColor">#CBD5E1</Color>
+  <Color x:Key="WidgetTextLowColor">#94A3B8</Color>
+
+  <!-- Destaque: Roxo vibrante -->
+  <Color x:Key="WidgetAccentColor">#A78BFA</Color>
+  <Color x:Key="WidgetAccentHoverColor">#C4B5FD</Color>
+  <Color x:Key="WidgetAccentPressedColor">#9333EA</Color>
+  <Color x:Key="WidgetAccentSoftColor">#2D1B4E</Color>
+  <Color x:Key="WidgetAccentLineColor">#7C3AED</Color>
+
+  <!-- Sinalização -->
+  <Color x:Key="WidgetDangerColor">#FF6B6B</Color>
+  <Color x:Key="WidgetDangerSoftColor">#3A1818</Color>
+  <Color x:Key="WidgetCautionColor">#FFD93D</Color>
+  <Color x:Key="WidgetCautionSoftColor">#3D3416</Color>
+  <Color x:Key="WidgetInfoColor">#6DD5FA</Color>
+  <Color x:Key="WidgetSuccessColor">#6BCF7F</Color>
+
+</ResourceDictionary>

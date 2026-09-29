@@ -1,0 +1,62 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
+             mc:Ignorable="d"
+             x:DataType="vm:ThemeSelectorViewModel"
+             d:DesignWidth="400"
+             d:DesignHeight="200">
+
+  <StackPanel Spacing="16" Margin="0">
+    <TextBlock Text="Tema da Interface"
+               FontSize="14"
+               Foreground="{StaticResource WidgetTextHighBrush}"
+               FontWeight="Bold" />
+
+    <ItemsControl ItemsSource="{Binding AvailableThemes}">
+      <ItemsControl.ItemsPanel>
+        <ItemsPanelTemplate>
+          <StackPanel Spacing="8" />
+        </ItemsPanelTemplate>
+      </ItemsControl.ItemsPanel>
+      <ItemsControl.ItemTemplate>
+        <DataTemplate>
+          <Button Command="{Binding $parent[UserControl].DataContext.SelectThemeCommand}"
+                  CommandParameter="{Binding .}"
+                  Background="{StaticResource WidgetSurfaceBrush}"
+                  Foreground="{StaticResource WidgetTextHighBrush}"
+                  BorderBrush="{StaticResource WidgetStrokeBrush}"
+                  BorderThickness="1"
+                  Padding="12,8"
+                  HorizontalContentAlignment="Left">
+            <Panel>
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Text="{Binding DisplayName}"
+                           VerticalAlignment="Center" />
+                <Border Grid.Column="1"
+                        IsVisible="{Binding $parent[UserControl].DataContext.SelectedTheme, Converter={StaticResource ObjectEqualsConverter}, ConverterParameter=.}"
+                        Background="{StaticResource WidgetAccentBrush}"
+                        CornerRadius="2"
+                        Padding="6,2">
+                  <TextBlock Text="✓"
+                             FontSize="12"
+                             Foreground="White" />
+                </Border>
+              </Grid>
+            </Panel>
+          </Button>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+
+    <Button Content="Usar Preferência do Sistema"
+            Command="{Binding DetectSystemPreferenceCommand}"
+            Background="{StaticResource WidgetAccentSoftBrush}"
+            Foreground="{StaticResource WidgetAccentBrush}"
+            BorderBrush="{StaticResource WidgetAccentLineBrush}"
+            BorderThickness="1"
+            Padding="12,8" />
+  </StackPanel>
+
+</UserControl>

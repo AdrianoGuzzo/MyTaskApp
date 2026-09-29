@@ -1,0 +1,33 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- Tema Retro: Tons quentinhos dos anos 70/80 -->
+
+  <!-- Superfícies -->
+  <Color x:Key="WidgetCanvasColor">#2A2420</Color>
+  <Color x:Key="WidgetSurfaceColor">#3E3835</Color>
+  <Color x:Key="WidgetSurfaceHoverColor">#4A4540</Color>
+  <Color x:Key="WidgetStrokeColor">#6B6560</Color>
+  <Color x:Key="WidgetStrokeSoftColor">#524D45</Color>
+
+  <!-- Texto -->
+  <Color x:Key="WidgetTextHighColor">#FFFAF0</Color>
+  <Color x:Key="WidgetTextMidColor">#D9CCBF</Color>
+  <Color x:Key="WidgetTextLowColor">#A89A8B</Color>
+
+  <!-- Destaque: Laranja/ocre retro -->
+  <Color x:Key="WidgetAccentColor">#D97706</Color>
+  <Color x:Key="WidgetAccentHoverColor">#F59E0B</Color>
+  <Color x:Key="WidgetAccentPressedColor">#B45309</Color>
+  <Color x:Key="WidgetAccentSoftColor">#3F2A15</Color>
+  <Color x:Key="WidgetAccentLineColor">#92400E</Color>
+
+  <!-- Sinalização -->
+  <Color x:Key="WidgetDangerColor">#DC2626</Color>
+  <Color x:Key="WidgetDangerSoftColor">#4A2020</Color>
+  <Color x:Key="WidgetCautionColor">#FBBF24</Color>
+  <Color x:Key="WidgetCautionSoftColor">#4A3D20</Color>
+  <Color x:Key="WidgetInfoColor">#3B82F6</Color>
+  <Color x:Key="WidgetSuccessColor">#84CC16</Color>
+
+</ResourceDictionary>

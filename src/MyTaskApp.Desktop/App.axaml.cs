@@ -10,6 +10,7 @@ using MyTaskApp.Application.Reminders;
 using MyTaskApp.Desktop.Composition;
 using MyTaskApp.Desktop.Reminders;
 using MyTaskApp.Desktop.SpellChecking;
+using MyTaskApp.Desktop.Themes;
 using MyTaskApp.Desktop.ViewModels;
 using MyTaskApp.Desktop.Views;
 using MyTaskApp.Desktop.Widget;
@@ -48,6 +49,10 @@ public sealed partial class App : Avalonia.Application
             if (Services is not null)
             {
                 SpellCheck.Checker = Services.GetRequiredService<ISpellChecker>();
+
+                // Inicializar sistema de temas: carrega tema salvo ou detecta do Windows.
+                var themeManager = Services.GetRequiredService<IThemeManager>();
+                _ = themeManager.InitializeAsync();
             }
 
             var window = new MainWindow();

@@ -14,7 +14,8 @@ namespace MyTaskApp.Desktop.ViewModels;
 /// </summary>
 public sealed partial class ReminderSettingsViewModel(
     IUseCaseRunner runner,
-    ILogger<ReminderSettingsViewModel> logger) : ObservableObject
+    ILogger<ReminderSettingsViewModel> logger,
+    ThemeSelectorViewModel themeSelector) : ObservableObject
 {
     [ObservableProperty]
     private bool _isBusy;
@@ -32,6 +33,7 @@ public sealed partial class ReminderSettingsViewModel(
     private string? _pausedLabel;
 
     public ReminderEditorViewModel Editor { get; } = new();
+    public ThemeSelectorViewModel ThemeSelector { get; } = themeSelector;
 
     /// <summary>Avisa a janela de que pode fechar.</summary>
     public event Action? Saved;

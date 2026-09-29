@@ -6,6 +6,7 @@ using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Desktop.Reminders;
 using MyTaskApp.Desktop.SpellChecking;
+using MyTaskApp.Desktop.Themes;
 using MyTaskApp.Desktop.ViewModels;
 using MyTaskApp.Desktop.Views;
 using MyTaskApp.Desktop.Widget;
@@ -92,6 +93,10 @@ internal static class AppServices
             // WindowsSoundPlayer: a guarda de plataforma mora dentro dele, e
             // fora do Windows a resposta e "nao da" em vez de excecao.
             .AddSingleton<IStartupRegistration, WindowsStartupRegistration>()
+
+            // Gerenciador de temas: detecta preferência do Windows e permite trocar em runtime.
+            .AddSingleton<IThemeManager, ThemeManager>()
+            .AddSingleton<ThemeSelectorViewModel>()
 
             // Singletons: a janela de ajustes e a bandeja sao uma so por app.
             .AddSingleton<ReminderSettingsViewModel>()

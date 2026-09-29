@@ -3,6 +3,7 @@ using MyTaskApp.Application.Reminders;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.Reminders;
 using MyTaskApp.Desktop.ViewModels;
+using MyTaskApp.Desktop.Themes;
 
 namespace MyTaskApp.Desktop.Tests.ViewModels;
 
@@ -137,8 +138,12 @@ public class ReminderSettingsViewModelTests
         return viewModel;
     }
 
-    private ReminderSettingsViewModel ViewModel() =>
-        new(_runner, NullLogger<ReminderSettingsViewModel>.Instance);
+    private ReminderSettingsViewModel ViewModel()
+    {
+        var themeManager = new FakeThemeManager();
+        var themeSelectorVm = new ThemeSelectorViewModel(themeManager);
+        return new(_runner, NullLogger<ReminderSettingsViewModel>.Instance, themeSelectorVm);
+    }
 }
 
 public class ReminderEditorViewModelTests

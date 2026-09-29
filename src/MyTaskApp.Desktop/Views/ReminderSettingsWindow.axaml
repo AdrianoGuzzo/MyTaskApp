@@ -10,8 +10,24 @@
         CanResize="False"
         WindowStartupLocation="CenterOwner">
 
-  <StackPanel Margin="28,24" Spacing="16">
+  <StackPanel Margin="28,24" Spacing="28">
 
+    <!-- Seção de Temas -->
+    <StackPanel Spacing="12">
+      <StackPanel Spacing="4">
+        <TextBlock Text="Aparência" FontSize="18" FontWeight="SemiBold" />
+        <TextBlock FontSize="12"
+                   Opacity="0.6"
+                   TextWrapping="Wrap"
+                   Text="Escolha o tema visual da interface ou use a preferência do Windows." />
+      </StackPanel>
+      <views:ThemeSelectorView DataContext="{Binding ThemeSelector}" />
+    </StackPanel>
+
+    <!-- Separador -->
+    <Border Height="1" Background="{StaticResource WidgetStrokeBrush}" />
+
+    <!-- Seção de Lembretes -->
     <StackPanel Spacing="4">
       <TextBlock Text="Configuração padrão" FontSize="18" FontWeight="SemiBold" />
       <TextBlock FontSize="12"

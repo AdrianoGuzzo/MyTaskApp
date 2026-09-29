@@ -1,0 +1,33 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- Tema Claro: Branco/cinza claro com acento indigo -->
+
+  <!-- Superfícies -->
+  <Color x:Key="WidgetCanvasColor">#F8F9FA</Color>
+  <Color x:Key="WidgetSurfaceColor">#FFFFFF</Color>
+  <Color x:Key="WidgetSurfaceHoverColor">#F0F1F3</Color>
+  <Color x:Key="WidgetStrokeColor">#E5E7EB</Color>
+  <Color x:Key="WidgetStrokeSoftColor">#EEF0F3</Color>
+
+  <!-- Texto -->
+  <Color x:Key="WidgetTextHighColor">#1F2937</Color>
+  <Color x:Key="WidgetTextMidColor">#6B7280</Color>
+  <Color x:Key="WidgetTextLowColor">#9CA3AF</Color>
+
+  <!-- Destaque -->
+  <Color x:Key="WidgetAccentColor">#6366F1</Color>
+  <Color x:Key="WidgetAccentHoverColor">#7C7FF3</Color>
+  <Color x:Key="WidgetAccentPressedColor">#5558E3</Color>
+  <Color x:Key="WidgetAccentSoftColor">#EEF0FF</Color>
+  <Color x:Key="WidgetAccentLineColor">#A5A7F6</Color>
+
+  <!-- Sinalização -->
+  <Color x:Key="WidgetDangerColor">#DC2626</Color>
+  <Color x:Key="WidgetDangerSoftColor">#FEE2E2</Color>
+  <Color x:Key="WidgetCautionColor">#D97706</Color>
+  <Color x:Key="WidgetCautionSoftColor">#FEF3C7</Color>
+  <Color x:Key="WidgetInfoColor">#2563EB</Color>
+  <Color x:Key="WidgetSuccessColor">#059669</Color>
+
+</ResourceDictionary>
