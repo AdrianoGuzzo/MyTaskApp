@@ -1,3 +1,5 @@
+using MyTaskApp.Desktop.Theming;
+
 namespace MyTaskApp.Desktop.Widget;
 
 /// <summary>
@@ -34,6 +36,12 @@ public sealed record WidgetState
     public bool StartHidden { get; init; }
 
     /// <summary>
+    /// O id do tema escolhido, ou "seguir o Windows" (ADR-041). Texto, e não
+    /// enum: um tema a mais no catálogo não pode exigir migrar o arquivo.
+    /// </summary>
+    public string Theme { get; init; } = ThemeCatalog.SystemId;
+
+    /// <summary>
     /// Um arquivo corrompido ou editado à mão não pode deixar o painel com
     /// tamanho zero, nem recolhido para sempre sem forma de voltar.
     /// </summary>
@@ -48,5 +56,6 @@ public sealed record WidgetState
             WidgetMetrics.MinExpandedHeight,
             4000),
         Mode = Enum.IsDefined(Mode) ? Mode : WidgetMode.Expanded,
+        Theme = ThemeCatalog.Normalize(Theme),
     };
 }

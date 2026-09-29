@@ -1,3 +1,4 @@
+using MyTaskApp.Desktop.Theming;
 using MyTaskApp.Desktop.ViewModels;
 using MyTaskApp.Desktop.Widget;
 
@@ -181,4 +182,71 @@ public class WidgetChromeViewModelTests
         chrome.IsTopmost.Should().BeTrue();
         changed.Should().NotContain(nameof(WidgetChromeViewModel.IsTopmost));
     }
+
+    [Fact]
+    public void ItStartsFollowingWindows_WithAutomaticFirstAndChecked()
+    {
+        var chrome = new WidgetChromeViewModel();
+
+        chrome.ThemeId.Should().Be(ThemeCatalog.SystemId);
+        chrome.Themes[0].Id.Should().Be(ThemeCatalog.SystemId);
+        chrome.Themes.Where(option => option.IsSelected).Select(option => option.Id)
+            .Should().Equal(ThemeCatalog.SystemId);
+    }
+
+    [Fact]
+    public void TheMenuOffersEveryThemeOfTheCatalog()
+    {
+        new WidgetChromeViewModel().Themes.Skip(1).Select(option => option.Id)
+            .Should().Equal(ThemeCatalog.All.Select(theme => theme.Id));
+    }
+
+    [Fact]
+    public void PickingAThemeFromTheMenu_ChecksOnlyThatOne()
+    {
+        var chrome = new WidgetChromeViewModel();
+        var nordic = chrome.Themes.Single(option => option.Id == "nordic");
+
+        nordic.SelectCommand.Execute(null);
+
+        chrome.ThemeId.Should().Be("nordic");
+        chrome.Themes.Where(option => option.IsSelected).Should().ContainSingle().Which.Should().BeSameAs(nordic);
+    }
+
+    [Fact]
+    public void AnUnknownTheme_FallsBackToFollowingWindows()
+    {
+        var chrome = new WidgetChromeViewModel();
+        chrome.UseTheme("plum");
+
+        chrome.UseTheme("não-existe");
+
+        chrome.ThemeId.Should().Be(ThemeCatalog.SystemId);
+    }
+
+    [Fact]
+    public void TheThemeTravelsToAndFromTheDisk()
+    {
+        var chrome = new WidgetChromeViewModel();
+
+        chrome.Restore(WidgetState.Default with { Theme = "high-contrast" });
+
+        chrome.ThemeId.Should().Be("high-contrast");
+        chrome.CaptureInto(WidgetState.Default).Theme.Should().Be("high-contrast");
+    }
+
+    [Fact]
+    public void ChangingTheTheme_DoesNotTouchTheGeometry()
+    {
+        // A janela só reposiciona quando Mode muda. Trocar de tema não pode
+        // mexer no painel — só na cor dele.
+        var chrome = new WidgetChromeViewModel();
+        var changed = new List<string?>();
+        chrome.PropertyChanged += (_, args) => changed.Add(args.PropertyName);
+
+        chrome.UseTheme("paper");
+
+        changed.Should().Equal(nameof(WidgetChromeViewModel.ThemeId));
+    }
 }
+

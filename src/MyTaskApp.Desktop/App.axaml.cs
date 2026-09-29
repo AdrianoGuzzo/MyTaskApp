@@ -11,6 +11,7 @@ using MyTaskApp.Application.Sounds;
 using MyTaskApp.Desktop.Composition;
 using MyTaskApp.Desktop.Reminders;
 using MyTaskApp.Desktop.SpellChecking;
+using MyTaskApp.Desktop.Theming;
 using MyTaskApp.Desktop.ViewModels;
 using MyTaskApp.Desktop.Views;
 using MyTaskApp.Desktop.Widget;
@@ -34,14 +35,23 @@ public sealed partial class App : Avalonia.Application
     /// </summary>
     private readonly Dictionary<Guid, TaskNotesWindow> _notes = [];
 
+    private ThemeController? _themes;
     private TrayIconHost? _tray;
     private MainWindow? _window;
     private bool _exiting;
+
+    /// <summary>Quem pinta o app. Exposto para os testes headless trocarem o tema.</summary>
+    internal ThemeController? Themes => _themes;
 
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
     public override void OnFrameworkInitializationCompleted()
     {
+        // Antes de qualquer janela e em qualquer lifetime: as cores só existem
+        // depois disto, e o host headless dos testes também precisa delas.
+        _themes = new ThemeController(this);
+        _themes.Use(ThemeCatalog.SystemId);
+
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             // Antes da primeira janela: cada caixa com SpellCheck.IsEnabled
@@ -82,10 +92,30 @@ public sealed partial class App : Avalonia.Application
                 StartHiddenIfAsked(window, Services.GetRequiredService<LaunchOptions>());
             }
 
+            FollowTheme(window.Chrome);
+
             desktop.MainWindow = window;
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    /// <summary>
+    /// A escolha mora na moldura, que a lê do <c>widget.json</c> e a grava de
+    /// volta; aqui ela só vira cor. Antes de a janela aparecer, para o painel
+    /// não abrir num tema e piscar para outro.
+    /// </summary>
+    private void FollowTheme(WidgetChromeViewModel chrome)
+    {
+        _themes?.Use(chrome.ThemeId);
+
+        chrome.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName == nameof(WidgetChromeViewModel.ThemeId))
+            {
+                _themes?.Use(chrome.ThemeId);
+            }
+        };
     }
 
     /// <summary>
