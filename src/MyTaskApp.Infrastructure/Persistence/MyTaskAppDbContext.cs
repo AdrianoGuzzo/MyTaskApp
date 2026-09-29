@@ -49,6 +49,9 @@ public sealed class MyTaskAppDbContext(DbContextOptions<MyTaskAppDbContext> opti
     /// <summary>Os parâmetros com que cada agente abre (ADR-030).</summary>
     internal DbSet<AgentSettingsRow> AgentSettings => Set<AgentSettingsRow>();
 
+    /// <summary>O som de cada estado do agente que avisa (ADR-042).</summary>
+    internal DbSet<AgentAlertSoundRow> AgentAlertSounds => Set<AgentAlertSoundRow>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder) =>
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(MyTaskAppDbContext).Assembly);
 }

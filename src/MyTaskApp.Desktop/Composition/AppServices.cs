@@ -4,6 +4,7 @@ using MyTaskApp.Application;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Reminders;
+using MyTaskApp.Application.Sounds;
 using MyTaskApp.Desktop.Reminders;
 using MyTaskApp.Desktop.SpellChecking;
 using MyTaskApp.Desktop.ViewModels;
@@ -63,6 +64,10 @@ internal static class AppServices
             .AddSingleton<IAgentAttentionPresenter>(services => services.GetRequiredService<AlertPresenter>())
             .AddTransient<AgentAlertViewModel>()
             .AddSingleton<ISoundPlayer, WindowsSoundPlayer>()
+
+            // Os sons dos avisos do agente (ADR-042): arquivo, e não bipe.
+            // Registrado antes de AddApplication, ganha do objeto nulo.
+            .AddSingleton<IAudioPlayer, WindowsAudioPlayer>()
             .AddTransient<ReminderAlertViewModel>()
             .AddSingleton<TrayIconHost>()
 
@@ -114,6 +119,10 @@ internal static class AppServices
             // Comandos globais (ADR-028): janela única, como a de etiquetas.
             .AddSingleton<DevelopmentCommandsViewModel>()
             .AddSingleton<DevelopmentCommandsWindow>()
+
+            // Sons dos avisos do agente (ADR-042): janela única, como as outras.
+            .AddSingleton<AgentAlertSoundsViewModel>()
+            .AddSingleton<AgentAlertSoundsWindow>()
 
             // A anotacao de um item (§12). Transient, e nao singleton como as
             // duas acima: sao duas telas diferentes para dois checklists

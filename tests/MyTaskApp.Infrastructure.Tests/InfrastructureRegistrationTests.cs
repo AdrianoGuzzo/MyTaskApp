@@ -8,6 +8,7 @@ using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Development;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Reminders;
+using MyTaskApp.Application.Sounds;
 using MyTaskApp.Application.Tags;
 using MyTaskApp.Infrastructure;
 using MyTaskApp.Infrastructure.Persistence;
@@ -82,6 +83,8 @@ public class InfrastructureRegistrationTests : IDisposable
     [InlineData(typeof(IAgentSessionRepository))]
     [InlineData(typeof(IAgentCliProvider))]
     [InlineData(typeof(IAgentSettingsStore))]
+    [InlineData(typeof(IAgentAlertSoundStore))]
+    [InlineData(typeof(ISoundLibrary))]
     [InlineData(typeof(IAgentProcessTracker))]
     [InlineData(typeof(ITerminalLauncher))]
     [InlineData(typeof(ITerminalWindowManager))]

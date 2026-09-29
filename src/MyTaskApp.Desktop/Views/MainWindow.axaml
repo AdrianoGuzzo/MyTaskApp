@@ -143,6 +143,8 @@
                               Command="{Binding OpenTagsCommand}" />
                     <MenuItem Header="Comandos globais…"
                               Command="{Binding OpenCommandsCommand}" />
+                    <MenuItem Header="Sons do Claude Code…"
+                              Command="{Binding OpenSoundsCommand}" />
                     <MenuItem Header="Gerenciamento de dados…"
                               Command="{Binding OpenDataManagementCommand}" />
                   </MenuFlyout>
