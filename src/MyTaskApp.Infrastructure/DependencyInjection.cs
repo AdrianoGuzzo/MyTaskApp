@@ -10,6 +10,7 @@ using MyTaskApp.Application.Development;
 using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Reminders;
+using MyTaskApp.Application.Sounds;
 using MyTaskApp.Application.Tags;
 using MyTaskApp.Infrastructure.Agents;
 using MyTaskApp.Infrastructure.Agents.ClaudeCode;
@@ -19,6 +20,7 @@ using MyTaskApp.Infrastructure.Persistence;
 using MyTaskApp.Infrastructure.Persistence.Queries;
 using MyTaskApp.Infrastructure.Persistence.Repositories;
 using MyTaskApp.Infrastructure.Processes;
+using MyTaskApp.Infrastructure.Sounds;
 using MyTaskApp.Infrastructure.Storage;
 using MyTaskApp.Infrastructure.Terminals;
 using MyTaskApp.Infrastructure.Terminals.Windows;
@@ -55,6 +57,14 @@ public static class DependencyInjection
         services.AddScoped<IDevelopmentCommandRepository, DevelopmentCommandRepository>();
         services.AddScoped<IAgentSessionRepository, AgentSessionRepository>();
         services.AddScoped<IAgentSettingsStore, AgentSettingsStore>();
+        services.AddScoped<IAgentAlertSoundStore, AgentAlertSoundStore>();
+
+        // Os sons dos avisos (ADR-042): os personalizados ficam com os dados do
+        // usuário; os do app são renderizados numa pasta descartável.
+        services.AddSingleton<ISoundLibrary>(provider => new SoundLibrary(
+            Path.Combine(UserDataLocation.Current.Root, "sounds"),
+            Path.Combine(UserDataLocation.Current.Temp, "sounds"),
+            provider.GetRequiredService<ILogger<SoundLibrary>>()));
 
         // Ciclo de vida: auditoria, configuracao de retencao e as consultas das
         // areas de arquivados/lixeira e da varredura automatica.

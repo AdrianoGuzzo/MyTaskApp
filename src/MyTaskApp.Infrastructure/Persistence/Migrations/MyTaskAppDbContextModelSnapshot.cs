@@ -415,6 +415,24 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                     b.ToTable("TaskOccurrences", (string)null);
                 });
 
+            modelBuilder.Entity("MyTaskApp.Infrastructure.Persistence.AgentAlertSoundRow", b =>
+                {
+                    b.Property<int>("Activity")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SoundId")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Activity");
+
+                    b.ToTable("AgentAlertSounds", (string)null);
+                });
+
             modelBuilder.Entity("MyTaskApp.Infrastructure.Persistence.AgentSettingsRow", b =>
                 {
                     b.Property<string>("ProviderId")

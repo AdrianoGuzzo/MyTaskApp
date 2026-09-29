@@ -9,6 +9,7 @@ using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Application.Tasks;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Reminders;
+using MyTaskApp.Application.Sounds;
 using MyTaskApp.Application.Tags;
 using MyTaskApp.Application.Tests.Fakes;
 
@@ -44,6 +45,8 @@ public class ApplicationRegistrationTests
             .AddSingleton<ITerminalLauncher>(new FakeTerminalLauncher(new FakeAgentProcessTracker(), DateTimeOffset.UnixEpoch))
             .AddSingleton<IAgentCliProvider>(new FakeAgentCliProvider())
             .AddSingleton<IAgentSettingsStore>(new FakeAgentSettingsStore())
+            .AddSingleton<IAgentAlertSoundStore>(new FakeAgentAlertSoundStore())
+            .AddSingleton<ISoundLibrary>(new FakeSoundLibrary())
             .AddSingleton<IAgentEventEndpoint>(new FakeAgentEventEndpoint())
             .AddSingleton<IDirectoryRemover>(new FakeDirectoryRemover())
             // Normalmente vem do composition root do Desktop (ADR-012).
@@ -87,6 +90,12 @@ public class ApplicationRegistrationTests
     [InlineData(typeof(FocusAgentSessionHandler))]
     [InlineData(typeof(EndAgentSessionHandler))]
     [InlineData(typeof(ReconcileAgentSessionsHandler))]
+    [InlineData(typeof(GetAgentAlertSoundsHandler))]
+    [InlineData(typeof(UpdateAgentAlertSoundHandler))]
+    [InlineData(typeof(ImportSoundHandler))]
+    [InlineData(typeof(DeleteSoundHandler))]
+    [InlineData(typeof(PreviewSoundHandler))]
+    [InlineData(typeof(IAudioPlayer))]
     [InlineData(typeof(AgentSessionMonitor))]
     [InlineData(typeof(IAgentSessionWatcher))]
     [InlineData(typeof(IAgentCliProviders))]
