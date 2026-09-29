@@ -1394,6 +1394,50 @@
                              Text="Desmarcado, o agente só monta um plano e espera sua aprovação antes de alterar arquivos." />
                 </StackPanel>
 
+                <!--
+                  Modelo e esforço (ADR-040): viram parâmetros do comando, depois
+                  dos do campo abaixo. "Padrão" deixa o agente decidir. Como os
+                  parâmetros, o usado ao iniciar vira o padrão.
+                -->
+                <Grid ColumnDefinitions="*,12,*"
+                      RowDefinitions="Auto,Auto"
+                      RowSpacing="4"
+                      x:Name="AgentChoicesPanel">
+                  <Grid.IsVisible>
+                    <MultiBinding Converter="{x:Static BoolConverters.And}">
+                      <Binding Path="ShowStart" />
+                      <Binding Path="HasChoices" />
+                    </MultiBinding>
+                  </Grid.IsVisible>
+                  <TextBlock Classes="fieldLabel" Text="Modelo" />
+                  <TextBlock Classes="fieldLabel" Grid.Column="2" Text="Esforço" />
+                  <ComboBox Grid.Row="1"
+                            x:Name="AgentModelBox"
+                            HorizontalAlignment="Stretch"
+                            ItemsSource="{Binding ModelOptions}"
+                            SelectedItem="{Binding SelectedModel}"
+                            IsEnabled="{Binding !IsBusy}">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate x:DataType="agents:AgentCliOption">
+                        <TextBlock Text="{Binding Label}" />
+                      </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
+                  <ComboBox Grid.Row="1"
+                            Grid.Column="2"
+                            x:Name="AgentEffortBox"
+                            HorizontalAlignment="Stretch"
+                            ItemsSource="{Binding EffortOptions}"
+                            SelectedItem="{Binding SelectedEffort}"
+                            IsEnabled="{Binding !IsBusy}">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate x:DataType="agents:AgentCliOption">
+                        <TextBlock Text="{Binding Label}" />
+                      </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
+                </Grid>
+
                 <!-- Parâmetros do agente: o que for usado ao iniciar vira o padrão. -->
                 <StackPanel Spacing="4" IsVisible="{Binding ShowStart}">
                   <TextBlock Classes="fieldLabel" Text="Parâmetros" />

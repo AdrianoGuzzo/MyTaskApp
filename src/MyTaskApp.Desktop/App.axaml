@@ -4,7 +4,7 @@
 
   <!--
     Sem RequestedThemeVariant aqui: quem escolhe a variante é o ThemeController
-    (ADR-040), junto com a paleta. O tema é do usuário — um de seis, ou "seguir
+    (ADR-041), junto com a paleta. O tema é do usuário — um de seis, ou "seguir
     o Windows" — e a variante do Fluent só acompanha se ele é claro ou escuro.
   -->
 

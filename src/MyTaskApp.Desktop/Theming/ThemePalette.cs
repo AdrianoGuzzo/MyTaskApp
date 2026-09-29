@@ -4,7 +4,7 @@ namespace MyTaskApp.Desktop.Theming;
 
 /// <summary>
 /// As cores de um tema, e só elas. Cada propriedade vira um par de recursos
-/// <c>Widget{Nome}Color</c> / <c>Widget{Nome}Brush</c> (ADR-040): as telas
+/// <c>Widget{Nome}Color</c> / <c>Widget{Nome}Brush</c> (ADR-041): as telas
 /// pedem o papel da cor ("texto de apoio", "perigo"), nunca o hex.
 /// </summary>
 /// <remarks>

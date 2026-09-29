@@ -9,7 +9,7 @@ using MyTaskApp.Desktop.Views;
 namespace MyTaskApp.Desktop.Tests.Theming;
 
 /// <summary>
-/// A troca de tema com o app de pé (ADR-040): a janela aberta muda de cor sem
+/// A troca de tema com o app de pé (ADR-041): a janela aberta muda de cor sem
 /// reabrir, e a variante do Fluent acompanha. Cada teste devolve o app a
 /// "seguir o sistema", porque o App é um só para toda a suíte.
 /// </summary>

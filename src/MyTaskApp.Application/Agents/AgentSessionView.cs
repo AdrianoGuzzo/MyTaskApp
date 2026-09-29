@@ -50,7 +50,8 @@ public sealed record AgentSessionView(
 /// <summary>
 /// O agente, se está instalado, como instalar quando não está, e os parâmetros
 /// com que ele abre agora (o salvo, ou o padrão do agente) — e se abre
-/// acompanhado pelos hooks (ADR-037).
+/// acompanhado pelos hooks (ADR-037). Também o modelo e o esforço com que abre,
+/// e as opções de cada um (ADR-040): vazio é o padrão do agente.
 /// </summary>
 public sealed record AgentCliStatus(
     string ProviderId,
@@ -59,7 +60,14 @@ public sealed record AgentCliStatus(
     CliDetectionResult Detection,
     AgentCliInstallGuide? InstallGuide,
     string Arguments = "",
-    bool Monitor = true);
+    bool Monitor = true,
+    string Model = "",
+    string Effort = "")
+{
+    public IReadOnlyList<AgentCliOption> Models { get; init; } = [];
+
+    public IReadOnlyList<AgentCliOption> Efforts { get; init; } = [];
+}
 
 /// <summary>O que "Abrir terminal" conseguiu.</summary>
 public sealed record AgentFocusResult(AgentSessionView Session, bool Focused);

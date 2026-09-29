@@ -67,6 +67,21 @@ public class ClaudeCodeCliProviderTests : IDisposable
         provider.Command.Should().Be("claude");
     }
 
+    /// <summary>ADR-040: apelidos do <c>--model</c> e níveis do <c>--effort</c>, cada um com o seu parâmetro.</summary>
+    [Fact]
+    public void ItOffersTheModelAliases_AndTheEffortLevels()
+    {
+        var provider = Provider(_ => false);
+
+        provider.Models.Select(option => option.Value).Should().Equal("fable", "opus", "sonnet", "haiku");
+        provider.Models.Should().AllSatisfy(
+            option => option.Arguments.Should().Equal("--model", option.Value));
+
+        provider.Efforts.Select(option => option.Value).Should().Equal("low", "medium", "high", "xhigh", "max");
+        provider.Efforts.Should().AllSatisfy(
+            option => option.Arguments.Should().Equal("--effort", option.Value));
+    }
+
     [Fact]
     public async Task Installed_ByTheNativeInstaller_IsFound_WithItsVersion()
     {

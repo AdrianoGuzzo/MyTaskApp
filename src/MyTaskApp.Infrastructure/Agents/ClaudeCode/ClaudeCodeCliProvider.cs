@@ -48,6 +48,29 @@ internal sealed partial class ClaudeCodeCliProvider(
     /// </summary>
     public string DefaultArguments => "--dangerously-skip-permissions";
 
+    /// <summary>
+    /// Os apelidos do <c>--model</c>: cada um aponta para a versão mais nova
+    /// daquela família, então a lista não envelhece a cada modelo novo
+    /// (ADR-040).
+    /// </summary>
+    public IReadOnlyList<AgentCliOption> Models { get; } =
+    [
+        Model("fable", "Fable"),
+        Model("opus", "Opus"),
+        Model("sonnet", "Sonnet"),
+        Model("haiku", "Haiku"),
+    ];
+
+    /// <summary>Os níveis do <c>--effort</c>, do mais rápido ao mais caprichado.</summary>
+    public IReadOnlyList<AgentCliOption> Efforts { get; } =
+    [
+        Effort("low", "Baixo"),
+        Effort("medium", "Médio"),
+        Effort("high", "Alto"),
+        Effort("xhigh", "Muito alto"),
+        Effort("max", "Máximo"),
+    ];
+
     public async Task<CliDetectionResult> DetectAsync(CancellationToken cancellationToken = default)
     {
         var executable = Locate();
@@ -119,6 +142,10 @@ internal sealed partial class ClaudeCodeCliProvider(
 
     public string? MonitoringUnavailableReason(string workingDirectory, Uri endpoint) =>
         hooks.UnavailableReason(workingDirectory, endpoint);
+
+    private static AgentCliOption Model(string alias, string label) => new(alias, label, ["--model", alias]);
+
+    private static AgentCliOption Effort(string level, string label) => new(level, label, ["--effort", level]);
 
     private static bool RunsThroughCmd(string executable) =>
         Path.GetExtension(executable).ToUpperInvariant() is ".CMD" or ".BAT";

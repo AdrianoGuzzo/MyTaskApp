@@ -3,7 +3,7 @@ using MyTaskApp.Desktop.Theming;
 namespace MyTaskApp.Desktop.Tests.Theming;
 
 /// <summary>
-/// Quais temas existem e qual deles vai para a tela (ADR-040). Sem janela: a
+/// Quais temas existem e qual deles vai para a tela (ADR-041). Sem janela: a
 /// decisão é pura, só a aplicação precisa do Avalonia.
 /// </summary>
 public class ThemeCatalogTests
