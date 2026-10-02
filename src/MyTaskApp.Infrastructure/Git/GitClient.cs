@@ -112,6 +112,19 @@ internal sealed class GitClient(
         return GitOutputParser.ParseBranches(result.StandardOutput);
     }
 
+    public async Task<IReadOnlyList<GitTag>> ListTagsAsync(
+        string repository,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await RequireAsync(
+            repository,
+            ["for-each-ref", "--sort=-v:refname", "--format=%(refname)", "refs/tags"],
+            DefaultTimeout,
+            cancellationToken);
+
+        return GitOutputParser.ParseTags(result.StandardOutput);
+    }
+
     public async Task<string?> GetRemoteDefaultBranchAsync(
         string repository,
         string remote,

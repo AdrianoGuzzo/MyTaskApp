@@ -151,8 +151,14 @@ public sealed class InspectDirectoryHandler(IGitClient git, IDirectoryProbe dire
     }
 }
 
-/// <summary>As branches do repositório e qual delas sugerir como origem.</summary>
-public sealed record BranchList(IReadOnlyList<GitBranch> Branches, GitBranch? Suggested);
+/// <summary>
+/// As branches do repositório, qual delas sugerir como origem, e as tags —
+/// a versão opcional de onde partir (ADR-043).
+/// </summary>
+public sealed record BranchList(IReadOnlyList<GitBranch> Branches, GitBranch? Suggested, IReadOnlyList<GitTag>? Tags = null)
+{
+    public IReadOnlyList<GitTag> Tags { get; init; } = Tags ?? [];
+}
 
 public sealed record ListBranches(string RepositoryPath);
 
@@ -162,8 +168,9 @@ public sealed class ListBranchesHandler(IGitClient git)
     {
         var branches = await git.ListBranchesAsync(query.RepositoryPath, cancellationToken);
         var remoteDefault = await git.GetRemoteDefaultBranchAsync(query.RepositoryPath, "origin", cancellationToken);
+        var tags = await git.ListTagsAsync(query.RepositoryPath, cancellationToken);
 
-        return new BranchList(branches, Suggest(branches, remoteDefault));
+        return new BranchList(branches, Suggest(branches, remoteDefault), tags);
     }
 
     /// <summary>

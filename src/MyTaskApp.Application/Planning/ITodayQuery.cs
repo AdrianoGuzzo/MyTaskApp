@@ -46,6 +46,10 @@ public sealed record ActiveAgentRow(
 /// Um worktree pronto da tarefa. Só caminhos e nomes: se tem alteração ou
 /// commit por enviar é pergunta para o Git, nunca para o banco (ADR-034).
 /// </summary>
+/// <param name="SourceBranch">
+/// De onde a branch saiu, para contar os commits dela: a branch de origem ou,
+/// se nasceu de uma tag, <c>refs/tags/{tag}</c> (ADR-043).
+/// </param>
 public sealed record WorktreeRow(
     Guid DevelopmentId,
     string RepositoryPath,

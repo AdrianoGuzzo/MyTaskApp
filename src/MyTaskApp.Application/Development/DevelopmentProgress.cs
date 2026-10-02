@@ -88,6 +88,10 @@ public sealed record WorktreeConflict(string Path, GitWorktree? Registered, stri
 /// A branch com esse nome que já existe: a local, para checkout, ou a remota,
 /// para a local nascer acompanhando-a. <c>null</c> cria a partir da origem.
 /// </param>
+/// <param name="SourceTag">
+/// A versão de onde a branch nova parte, no lugar da ponta de <paramref name="Source"/>
+/// (ADR-043). <c>null</c> = a ponta da branch, como sempre foi.
+/// </param>
 public sealed record DevelopmentPlan(
     Guid TaskId,
     string RepositoryPath,
@@ -98,7 +102,12 @@ public sealed record DevelopmentPlan(
     WorktreeConflict? Conflict,
     GitBranch? ExistingBranch = null,
     /// <summary>O ambiente que tenta de novo; <c>null</c> = um repositório novo na tarefa (ADR-031).</summary>
-    Guid? DevelopmentId = null);
+    Guid? DevelopmentId = null,
+    GitTag? SourceTag = null)
+{
+    /// <summary>O commit de onde a branch nova nasce: a tag, se houver, senão a branch de origem.</summary>
+    public string StartRef => SourceTag?.FullRef ?? Source.FullRef;
+}
 
 /// <summary>Um ambiente da tarefa, como a tela o mostra.</summary>
 public sealed record TaskDevelopmentView(
@@ -112,8 +121,12 @@ public sealed record TaskDevelopmentView(
     DateTimeOffset CreatedAt,
     string? FailureReason,
     IReadOnlyList<string>? Commands = null,
-    string? AgentPrompt = null)
+    string? AgentPrompt = null,
+    /// <summary>A tag de onde a branch partiu (ADR-043); <c>null</c> = a ponta de <see cref="SourceBranch"/>.</summary>
+    string? SourceTag = null)
 {
+    public bool HasSourceTag => SourceTag is not null;
+
     public static TaskDevelopmentView From(TaskDevelopment development) =>
         new(
             development.Id,
@@ -126,7 +139,8 @@ public sealed record TaskDevelopmentView(
             development.CreatedAt,
             development.FailureReason,
             development.Commands.Select(command => command.Command).ToList(),
-            development.AgentPrompt);
+            development.AgentPrompt,
+            development.SourceTag);
 }
 
 internal static class ProgressExtensions

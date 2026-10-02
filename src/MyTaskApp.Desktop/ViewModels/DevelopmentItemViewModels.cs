@@ -122,6 +122,30 @@ public sealed class BranchOptionViewModel
 }
 
 /// <summary>
+/// Um item da lista de tags (ADR-043): uma versão, ou "nenhuma", que é partir
+/// da ponta da branch. O "nenhuma" é um item, e não a seleção vazia, porque o
+/// combo não tem como o usuário desmarcar.
+/// </summary>
+public sealed class GitTagOptionViewModel
+{
+    public static readonly GitTagOptionViewModel None = new(null, "Nenhuma — a ponta da branch");
+
+    private GitTagOptionViewModel(GitTag? tag, string label)
+    {
+        Tag = tag;
+        Label = label;
+    }
+
+    public GitTag? Tag { get; }
+
+    public string Label { get; }
+
+    public static GitTagOptionViewModel For(GitTag tag) => new(tag, tag.Name);
+
+    public override string ToString() => Label;
+}
+
+/// <summary>
 /// O que deu errado, para a tela: a mensagem amigável na frente, e o que o Git
 /// disse de verdade em "Ver detalhes".
 /// </summary>

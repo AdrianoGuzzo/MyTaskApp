@@ -53,6 +53,17 @@ internal static partial class GitOutputParser
         return branches;
     }
 
+    /// <summary>
+    /// <c>for-each-ref --format=%(refname) refs/tags</c>, na ordem do Git. A ref
+    /// completa, e não <c>refname:short</c>: o Git encurta para <c>tags/v1</c>
+    /// quando há uma branch <c>v1</c>, e o nome viraria outro.
+    /// </summary>
+    public static IReadOnlyList<GitTag> ParseTags(string output) =>
+        output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(line => line.StartsWith(GitTag.Prefix, StringComparison.Ordinal) && line.Length > GitTag.Prefix.Length)
+            .Select(line => new GitTag(line[GitTag.Prefix.Length..]))
+            .ToList();
+
     /// <summary>Os blocos de <c>git worktree list --porcelain</c>, na ordem — o primeiro é o principal.</summary>
     public static IReadOnlyList<GitWorktree> ParseWorktrees(string output)
     {
