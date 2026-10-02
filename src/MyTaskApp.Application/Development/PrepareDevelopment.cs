@@ -8,13 +8,18 @@ namespace MyTaskApp.Application.Development;
 /// atualiza a origem e calcula a pasta do worktree (ADR-027).
 /// </summary>
 /// <param name="SourceRef">A ref completa da origem: <c>refs/heads/develop</c> ou <c>refs/remotes/origin/develop</c>.</param>
+/// <param name="SourceTag">
+/// O nome da tag de onde a branch nova parte, no lugar da ponta da origem
+/// (ADR-043). <c>null</c> = a ponta da branch.
+/// </param>
 public sealed record PrepareDevelopment(
     Guid TaskId,
     string DirectoryPath,
     string SourceRef,
     string NewBranch,
     /// <summary>O ambiente que tenta de novo; <c>null</c> = um repositório novo na tarefa (ADR-031).</summary>
-    Guid? DevelopmentId = null);
+    Guid? DevelopmentId = null,
+    string? SourceTag = null);
 
 /// <summary>
 /// Não grava nada no banco e pode ser cancelado a qualquer momento: a única
@@ -80,7 +85,8 @@ public sealed class PrepareDevelopmentHandler(
                 ?? throw new DevelopmentStepException(
                     step,
                     $"A branch de origem {ShortName(command.SourceRef)} não existe no repositório.");
-            progress.Report(step, DevelopmentStepState.Done, source.ShortName);
+            var tag = await ValidateTagAsync(repository, command.SourceTag, cancellationToken);
+            progress.Report(step, DevelopmentStepState.Done, tag is null ? source.ShortName : $"tag {tag.Name}");
 
             step = DevelopmentStep.CheckChanges;
             progress.Report(step, DevelopmentStepState.Running);
@@ -95,7 +101,16 @@ public sealed class PrepareDevelopmentHandler(
 
             step = DevelopmentStep.UpdateSource;
             progress.Report(step, DevelopmentStepState.Running);
-            await UpdateSourceAsync(repository, source, branches, worktrees, changes, progress, cancellationToken);
+            if (tag is null)
+            {
+                await UpdateSourceAsync(repository, source, branches, worktrees, changes, progress, cancellationToken);
+            }
+            else
+            {
+                // Uma tag é uma versão publicada: não anda, e a ponta da branch não
+                // entra no worktree. Atualizar a branch só arriscaria recusar por nada.
+                progress.Report(step, DevelopmentStepState.Skipped, $"O worktree parte da tag {tag.Name}, que não muda.");
+            }
 
             step = DevelopmentStep.ValidateBranchName;
             progress.Report(step, DevelopmentStepState.Running);
@@ -106,12 +121,15 @@ public sealed class PrepareDevelopmentHandler(
                 branches,
                 worktrees,
                 cancellationToken);
+            // A branch que já existe tem o código dela: com tag, avisar que a
+            // versão escolhida não é o que vai para o worktree.
+            var ignoredTag = tag is null ? string.Empty : $", e não a tag {tag.Name}";
             progress.Report(
                 step,
                 existing is null ? DevelopmentStepState.Done : DevelopmentStepState.Warning,
                 existing is null ? newBranch
-                    : existing.IsRemote ? $"A branch {newBranch} só existe em {existing.ShortName}; o worktree vai acompanhá-la."
-                    : $"A branch {newBranch} já existe; o worktree vai usá-la.");
+                    : existing.IsRemote ? $"A branch {newBranch} só existe em {existing.ShortName}; o worktree vai acompanhá-la{ignoredTag}."
+                    : $"A branch {newBranch} já existe; o worktree vai usá-la{ignoredTag}.");
 
             step = DevelopmentStep.PlanWorktreePath;
             progress.Report(step, DevelopmentStepState.Running);
@@ -123,15 +141,16 @@ public sealed class PrepareDevelopmentHandler(
                 conflict is null ? path : $"Já existe algo em {path}.");
 
             logger.LogInformation(
-                "DevelopmentPrepared {TaskId} {Source} {Branch} {ExistingBranch} {HasConflict}",
+                "DevelopmentPrepared {TaskId} {Source} {Tag} {Branch} {ExistingBranch} {HasConflict}",
                 task.Id,
                 source.FullRef,
+                tag?.FullRef,
                 newBranch,
                 existing?.FullRef,
                 conflict is not null);
 
             return new DevelopmentPlan(
-                task.Id, repository, source, newBranch, path, changes.Entries, conflict, existing, command.DevelopmentId);
+                task.Id, repository, source, newBranch, path, changes.Entries, conflict, existing, command.DevelopmentId, tag);
         }
         catch (GitCommandFailedException exception)
         {
@@ -395,6 +414,30 @@ public sealed class PrepareDevelopmentHandler(
         return remote is null ? (name, null) : (remote.ShortName[(remote.Remote!.Length + 1)..], remote);
     }
 
+    /// <summary>
+    /// A tag escolhida, conferida depois do fetch. Sem tag, <c>null</c>: o
+    /// worktree parte da ponta da branch.
+    /// </summary>
+    private async Task<GitTag?> ValidateTagAsync(
+        string repository,
+        string? requested,
+        CancellationToken cancellationToken)
+    {
+        var name = requested?.Trim();
+
+        if (string.IsNullOrEmpty(name))
+        {
+            return null;
+        }
+
+        var tags = await git.ListTagsAsync(repository, cancellationToken);
+
+        return tags.FirstOrDefault(tag => tag.Name == name)
+            ?? throw new DevelopmentStepException(
+                DevelopmentStep.ValidateSource,
+                $"A tag {name} não existe no repositório.");
+    }
+
     private async Task<WorktreeConflict?> FindConflictAsync(
         string path,
         IReadOnlyList<GitWorktree> worktrees,
@@ -416,7 +459,7 @@ public sealed class PrepareDevelopmentHandler(
     private static string FailureMessage(DevelopmentStep step) => step switch
     {
         DevelopmentStep.ValidateRepository => "Não foi possível consultar o repositório.",
-        DevelopmentStep.ValidateSource => "Não foi possível listar as branches do repositório.",
+        DevelopmentStep.ValidateSource => "Não foi possível listar as branches e as tags do repositório.",
         DevelopmentStep.CheckChanges => "Não foi possível verificar as alterações locais.",
         DevelopmentStep.UpdateSource => "Não foi possível comparar a origem com a branch remota.",
         _ => "O Git recusou esta etapa.",

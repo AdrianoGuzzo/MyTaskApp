@@ -68,6 +68,12 @@ public sealed class TaskDevelopment
     /// <summary>A origem como o usuário escolheu: <c>develop</c> ou <c>origin/develop</c>.</summary>
     public string SourceBranch { get; private set; } = string.Empty;
 
+    /// <summary>
+    /// A tag de onde a branch partiu, no lugar da ponta de <see cref="SourceBranch"/>:
+    /// a versão de um cliente, para depurar (ADR-043). <c>null</c> = a ponta da branch.
+    /// </summary>
+    public string? SourceTag { get; private set; }
+
     /// <summary>A branch da tarefa.</summary>
     public string Branch { get; private set; } = string.Empty;
 
@@ -102,10 +108,11 @@ public sealed class TaskDevelopment
         string sourceBranch,
         string branch,
         string worktreePath,
-        DateTimeOffset at)
+        DateTimeOffset at,
+        string? sourceTag = null)
     {
         var development = new TaskDevelopment(Guid.CreateVersion7(at), taskItemId);
-        development.Restart(repositoryPath, sourceBranch, branch, worktreePath, at);
+        development.Restart(repositoryPath, sourceBranch, branch, worktreePath, at, sourceTag);
         return development;
     }
 
@@ -119,15 +126,18 @@ public sealed class TaskDevelopment
         string sourceBranch,
         string branch,
         string worktreePath,
-        DateTimeOffset at)
+        DateTimeOffset at,
+        string? sourceTag = null)
     {
         var normalizedRepository = NormalizePath(repositoryPath, "do repositório");
         var normalizedSource = NormalizeBranch(sourceBranch, "A branch de origem");
+        var normalizedTag = string.IsNullOrWhiteSpace(sourceTag) ? null : NormalizeBranch(sourceTag, "A tag de origem");
         var normalizedBranch = NormalizeBranch(branch, "A branch da tarefa");
         var normalizedWorktree = NormalizePath(worktreePath, "do worktree");
 
         RepositoryPath = normalizedRepository;
         SourceBranch = normalizedSource;
+        SourceTag = normalizedTag;
         Branch = normalizedBranch;
         WorktreePath = normalizedWorktree;
         Status = TaskDevelopmentStatus.Creating;

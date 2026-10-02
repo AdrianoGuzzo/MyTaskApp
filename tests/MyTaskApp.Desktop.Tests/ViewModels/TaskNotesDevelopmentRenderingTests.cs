@@ -27,7 +27,8 @@ public class TaskNotesDevelopmentRenderingTests
     private static async Task<(TaskNotesWindow Window, TaskNotesViewModel ViewModel, FakeUseCaseRunner Runner)> ShowAsync(
         GitInstallation? git = null,
         TaskDevelopmentView? development = null,
-        IReadOnlyList<TaskDevelopmentView>? developments = null)
+        IReadOnlyList<TaskDevelopmentView>? developments = null,
+        IReadOnlyList<GitTag>? tags = null)
     {
         var runner = new FakeUseCaseRunner();
         runner.ResultsByHandler[typeof(GetTaskDirectoriesHandler)] = TaskNotesAliasTests.Directories;
@@ -36,7 +37,8 @@ public class TaskNotesDevelopmentRenderingTests
         runner.ResultsByHandler[typeof(InspectDirectoryHandler)] = new DirectoryInspection(true, true, Repository);
         runner.ResultsByHandler[typeof(ListBranchesHandler)] = new BranchList(
             [GitBranch.Local("main"), GitBranch.RemoteTracking("origin", "main")],
-            GitBranch.Local("main"));
+            GitBranch.Local("main"),
+            tags);
 
         var viewModel = new TaskNotesViewModel(
             runner,
@@ -231,6 +233,66 @@ public class TaskNotesDevelopmentRenderingTests
 
         Named<StackPanel>(window, "FailureDetails").IsEffectivelyVisible.Should().BeTrue();
         Named<SelectableTextBlock>(window, "StandardErrorText").Text.Should().Contain("Could not resolve host");
+    }
+
+    /// <summary>ADR-043: o campo de tag só aparece quando o repositório tem tags.</summary>
+    [AvaloniaFact]
+    public async Task TheTagField_ShowsTheVersions_StartingAtNone()
+    {
+        var (window, viewModel, _) = await ShowAsync(tags: [new GitTag("v2.0.0"), new GitTag("v1.4.2")]);
+        await OpenDevelopmentTabAsync(window, viewModel);
+
+        viewModel.Developments.Selected!.DirectoryText = Repository;
+        await viewModel.Developments.Selected!.InspectDirectoryAsync(CancellationToken.None);
+        Settle(window);
+
+        var box = Named<ComboBox>(window, "SourceTagBox");
+        box.IsEffectivelyVisible.Should().BeTrue();
+        box.SelectedItem.Should().BeSameAs(GitTagOptionViewModel.None);
+        Named<TextBlock>(window, "SourceTagHint").IsEffectivelyVisible.Should().BeFalse();
+
+        box.SelectedIndex = 2;
+        Settle(window);
+
+        viewModel.Developments.Selected!.SelectedTagOption!.Tag.Should().Be(new GitTag("v1.4.2"));
+        Named<TextBlock>(window, "SourceTagHint").IsEffectivelyVisible.Should().BeTrue();
+        Named<TextBlock>(window, "SourceTagHint").Text.Should().Contain("v1.4.2");
+    }
+
+    [AvaloniaFact]
+    public async Task WithoutTags_TheTagFieldStaysHidden()
+    {
+        var (window, viewModel, _) = await ShowAsync();
+        await OpenDevelopmentTabAsync(window, viewModel);
+
+        viewModel.Developments.Selected!.DirectoryText = Repository;
+        await viewModel.Developments.Selected!.InspectDirectoryAsync(CancellationToken.None);
+        Settle(window);
+
+        Named<ComboBox>(window, "SourceTagBox").IsEffectivelyVisible.Should().BeFalse();
+    }
+
+    [AvaloniaFact]
+    public async Task AReadyTaskFromATag_ShowsTheTag()
+    {
+        var (window, viewModel, _) = await ShowAsync(development: ReadyDevelopment() with { SourceTag = "v1.4.2" });
+
+        await OpenDevelopmentTabAsync(window, viewModel);
+
+        var tag = Named<SelectableTextBlock>(window, "ReadySourceTag");
+        tag.IsEffectivelyVisible.Should().BeTrue();
+        tag.Text.Should().Be("v1.4.2");
+        Texts(Named<Border>(window, "ReadyCard")).Should().Contain("Tag de origem");
+    }
+
+    [AvaloniaFact]
+    public async Task AReadyTaskFromTheBranchTip_HidesTheTag()
+    {
+        var (window, viewModel, _) = await ShowAsync(development: ReadyDevelopment());
+
+        await OpenDevelopmentTabAsync(window, viewModel);
+
+        Named<SelectableTextBlock>(window, "ReadySourceTag").IsEffectivelyVisible.Should().BeFalse();
     }
 
     [AvaloniaFact]

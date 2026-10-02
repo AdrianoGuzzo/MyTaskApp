@@ -92,6 +92,9 @@ public sealed partial class TaskDevelopmentViewModel(
     /// <summary>A origem a escolher quando as branches chegarem (a da tentativa anterior).</summary>
     private string? _preferredSource;
 
+    /// <summary>A tag da tentativa anterior, para escolher quando as tags chegarem (ADR-043).</summary>
+    private string? _preferredTag;
+
     /// <summary>
     /// A origem dos outros ambientes da tarefa. Vem depois da branch padrão do
     /// diretório: aquela é de outro repositório, esta foi escolhida para este.
@@ -199,6 +202,23 @@ public sealed partial class TaskDevelopmentViewModel(
     /// <summary>A branch padrão do diretório não existe no repositório: a escolha caiu na sugestão.</summary>
     [ObservableProperty]
     private string? _branchesNotice;
+
+    // --- Tag (ADR-043) -------------------------------------------------------
+
+    /// <summary>"Nenhuma" primeiro, depois as tags da mais nova para a mais velha.</summary>
+    public ObservableCollection<GitTagOptionViewModel> TagOptions { get; } = [];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSelectedTag), nameof(TagHint))]
+    private GitTagOptionViewModel? _selectedTagOption;
+
+    public bool HasTags => TagOptions.Count > 1;
+
+    public bool HasSelectedTag => SelectedTagOption?.Tag is not null;
+
+    public string? TagHint => SelectedTagOption?.Tag is { } tag
+        ? $"A branch nova parte da tag {tag.Name}, e não da ponta da branch de origem."
+        : null;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(BranchNameError), nameof(HasBranchNameError), nameof(WorktreePreview), nameof(ChipBranch))]
@@ -618,6 +638,7 @@ public sealed partial class TaskDevelopmentViewModel(
         RepositoryPath = null;
         BranchOptions.Clear();
         SelectedBranchOption = null;
+        ClearTags();
         BranchesError = null;
         BranchesNotice = null;
 
@@ -724,6 +745,8 @@ public sealed partial class TaskDevelopmentViewModel(
                 ?? selectable.FirstOrDefault(option => option.Branch == list.Suggested)
                 ?? selectable.FirstOrDefault();
 
+            LoadTags(list.Tags);
+
             if (configuredName is not null && configured is null && list.Branches.Count > 0)
             {
                 BranchesNotice = $"A branch padrão do diretório ({configuredName}) não existe neste repositório.";
@@ -743,6 +766,39 @@ public sealed partial class TaskDevelopmentViewModel(
         {
             IsLoadingBranches = false;
         }
+    }
+
+    /// <summary>
+    /// As tags do repositório, mantendo a escolhida numa recarga da mesma pasta.
+    /// Sem escolha, só a da tentativa anterior: tag é exceção, e cada repositório
+    /// tem as suas versões — por isso nem a padrão do diretório nem a dos outros
+    /// ambientes valem aqui.
+    /// </summary>
+    private void LoadTags(IReadOnlyList<GitTag> tags)
+    {
+        var previous = SelectedTagOption?.Tag?.Name;
+
+        TagOptions.Clear();
+        TagOptions.Add(GitTagOptionViewModel.None);
+
+        foreach (var tag in tags)
+        {
+            TagOptions.Add(GitTagOptionViewModel.For(tag));
+        }
+
+        SelectedTagOption =
+            TagOptions.FirstOrDefault(option => previous is not null && option.Tag?.Name == previous)
+            ?? TagOptions.FirstOrDefault(option => _preferredTag is not null && option.Tag?.Name == _preferredTag)
+            ?? GitTagOptionViewModel.None;
+
+        OnPropertyChanged(nameof(HasTags));
+    }
+
+    private void ClearTags()
+    {
+        TagOptions.Clear();
+        SelectedTagOption = null;
+        OnPropertyChanged(nameof(HasTags));
     }
 
     /// <summary>
@@ -801,7 +857,7 @@ public sealed partial class TaskDevelopmentViewModel(
         try
         {
             var command = new PrepareDevelopment(
-                _taskId, DirectoryText, source.FullRef, NewBranchName.Trim(), Development?.Id);
+                _taskId, DirectoryText, source.FullRef, NewBranchName.Trim(), Development?.Id, SelectedTagOption?.Tag?.Name);
 
             plan = await runner.RunAsync<PrepareDevelopmentHandler, DevelopmentPlan>(
                 (handler, token) => handler.HandleAsync(command, progress, token),
@@ -1478,6 +1534,7 @@ public sealed partial class TaskDevelopmentViewModel(
         };
 
         _preferredSource = development.SourceBranch;
+        _preferredTag = development.SourceTag;
 
         if (DirectoryText.Length == 0)
         {

@@ -39,8 +39,9 @@ public class PrepareDevelopmentHandlerTests
     private Task<DevelopmentPlan> PrepareAsync(
         string source = OriginDevelop,
         string branch = "feature/123-corrigir-animais",
-        string directory = FakeGitClient.Repository) =>
-        Handler().HandleAsync(new PrepareDevelopment(_task.Id, directory, source, branch), _progress, Ct);
+        string directory = FakeGitClient.Repository,
+        string? tag = null) =>
+        Handler().HandleAsync(new PrepareDevelopment(_task.Id, directory, source, branch, SourceTag: tag), _progress, Ct);
 
     private async Task<DevelopmentStepException> FailsAt(DevelopmentStep step, Func<Task> act)
     {
@@ -239,6 +240,70 @@ public class PrepareDevelopmentHandlerTests
 
         failure.Message.Should().Contain("divergiram");
         _git.Calls.Should().NotContain(call => call.StartsWith("fetch .", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task WithoutATag_TheBranchTipIsTheStart()
+    {
+        var plan = await PrepareAsync(source: OriginDevelop);
+
+        plan.SourceTag.Should().BeNull();
+        plan.StartRef.Should().Be(OriginDevelop);
+    }
+
+    /// <summary>ADR-043: depurar a versão de um cliente parte da tag, e não da ponta.</summary>
+    [Fact]
+    public async Task ATag_BecomesTheStartOfTheNewBranch()
+    {
+        var plan = await PrepareAsync(source: OriginDevelop, tag: "v1.4.2");
+
+        plan.SourceTag.Should().Be(new GitTag("v1.4.2"));
+        plan.StartRef.Should().Be("refs/tags/v1.4.2");
+        plan.Source.FullRef.Should().Be(OriginDevelop);
+        _progress.Last(DevelopmentStep.ValidateSource)!.Note.Should().Be("tag v1.4.2");
+    }
+
+    [Fact]
+    public async Task ATag_LeavesTheSourceBranchAlone_EvenWhenItDiverged()
+    {
+        _git.Divergence = new GitDivergence(1, 4);
+
+        await PrepareAsync(source: Develop, tag: "v1.4.2");
+
+        var report = _progress.Last(DevelopmentStep.UpdateSource)!;
+        report.State.Should().Be(DevelopmentStepState.Skipped);
+        report.Note.Should().Contain("v1.4.2");
+        _git.Calls.Should().NotContain(call => call.StartsWith("fetch .", StringComparison.Ordinal));
+        _git.Calls.Should().NotContain(call => call.StartsWith("merge", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task AMissingTag_IsRefused_AfterTheFetch()
+    {
+        var failure = await FailsAt(DevelopmentStep.ValidateSource, () => PrepareAsync(tag: "v9.9.9"));
+
+        failure.Message.Should().Contain("v9.9.9");
+        _git.Calls.Should().Contain("fetch");
+    }
+
+    [Fact]
+    public async Task ABlankTag_IsTheBranchTip()
+    {
+        var plan = await PrepareAsync(source: OriginDevelop, tag: "  ");
+
+        plan.SourceTag.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task ATag_WithAnExistingBranch_WarnsThatTheBranchWins()
+    {
+        _git.Branches.Add(GitBranch.Local("feature/123-corrigir-animais"));
+
+        await PrepareAsync(tag: "v1.4.2");
+
+        var report = _progress.Last(DevelopmentStep.ValidateBranchName)!;
+        report.State.Should().Be(DevelopmentStepState.Warning);
+        report.Note.Should().Contain("e não a tag v1.4.2");
     }
 
     [Fact]

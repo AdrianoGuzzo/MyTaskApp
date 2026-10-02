@@ -413,6 +413,66 @@ public sealed class GitWorktreeIntegrationTests : IAsyncLifetime
             sync.State == WorktreeSyncState.Pushed && sync.Unpushed == 0 && sync.IsPublished);
     }
 
+    /// <summary>
+    /// ADR-043: a versão de um cliente, com o Git de verdade. A tag chega pelo
+    /// fetch, o worktree nasce nela — mesmo com uma branch de mesmo nome — e a
+    /// bolinha conta os commits a partir dela, e não da ponta da main.
+    /// </summary>
+    [Fact]
+    public async Task ATag_FromTheRemote_IsWhereTheWorktreeStarts()
+    {
+        Assert.SkipWhen(_executable is null, "Git não instalado nesta máquina.");
+
+        await File.WriteAllTextAsync(Path.Combine(Other, "versao.txt"), "1.0\n", Ct);
+        await CommitAsync(Other, "versão 1.0");
+        await GitAsync(Other, "tag", "v1.0.0");
+        await File.WriteAllTextAsync(Path.Combine(Other, "versao.txt"), "2.0\n", Ct);
+        await CommitAsync(Other, "versão 2.0");
+        await GitAsync(Other, "push", "-q", "origin", "main", "v1.0.0");
+
+        // Uma branch com o nome da tag: "v1.0.0" sozinho seria ambíguo.
+        await GitAsync(Repository, "branch", "v1.0.0");
+        var task = await SeedTaskAsync();
+        var progress = new List<DevelopmentProgress>();
+
+        var plan = await PrepareAsync(task, "refs/remotes/origin/main", progress, tag: "v1.0.0");
+        var view = await StartAsync(plan);
+
+        plan.StartRef.Should().Be("refs/tags/v1.0.0");
+        progress.Should().Contain(report => report.Step == DevelopmentStep.UpdateSource && report.State == DevelopmentStepState.Skipped);
+        view.Status.Should().Be(TaskDevelopmentStatus.Ready);
+        view.SourceTag.Should().Be("v1.0.0");
+        (await File.ReadAllTextAsync(Path.Combine(ExpectedWorktree, "versao.txt"), Ct)).Trim().Should().Be("1.0");
+        (await _git.GetCurrentBranchAsync(ExpectedWorktree, Ct)).Should().Be("feature/123-corrigir-animais");
+
+        var upstream = await GitAsync(Repository, "for-each-ref", "--format=%(upstream)", "refs/heads/feature/123-corrigir-animais");
+        upstream.StandardOutput.Trim().Should().BeEmpty();
+
+        var worktree = new MyTaskApp.Application.Planning.TaskWorktree(
+            view.Id, "eco-core", view.Branch, "refs/tags/v1.0.0", view.WorktreePath);
+        var probe = new ProbeWorktreesHandler(_git, new FileSystemDirectoryProbe(), NullLogger<ProbeWorktreesHandler>.Instance);
+
+        var sync = (await probe.HandleAsync(new ProbeWorktrees([worktree]), Ct)).Single();
+
+        sync.State.Should().Be(WorktreeSyncState.Clean);
+        sync.Commits.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Tags_AreListedNewestVersionFirst()
+    {
+        Assert.SkipWhen(_executable is null, "Git não instalado nesta máquina.");
+
+        foreach (var tag in (string[])["v1.9.0", "v1.10.0", "v1.2.0"])
+        {
+            await GitAsync(Repository, "tag", tag);
+        }
+
+        var tags = await _git.ListTagsAsync(Repository, Ct);
+
+        tags.Select(tag => tag.Name).Should().Equal("v1.10.0", "v1.9.0", "v1.2.0");
+    }
+
     private async Task<TaskItem> SeedTaskAsync()
     {
         var task = TaskItem.Create("Corrigir cálculo de animais", Now);
@@ -424,7 +484,11 @@ public sealed class GitWorktreeIntegrationTests : IAsyncLifetime
         return task;
     }
 
-    private async Task<DevelopmentPlan> PrepareAsync(TaskItem task, string source, List<DevelopmentProgress> progress)
+    private async Task<DevelopmentPlan> PrepareAsync(
+        TaskItem task,
+        string source,
+        List<DevelopmentProgress> progress,
+        string? tag = null)
     {
         await using var context = _database!.CreateContext();
 
@@ -435,7 +499,7 @@ public sealed class GitWorktreeIntegrationTests : IAsyncLifetime
             NullLogger<PrepareDevelopmentHandler>.Instance);
 
         return await handler.HandleAsync(
-            new PrepareDevelopment(task.Id, Repository, source, "feature/123-corrigir-animais"),
+            new PrepareDevelopment(task.Id, Repository, source, "feature/123-corrigir-animais", SourceTag: tag),
             new ListProgress(progress),
             Ct);
     }

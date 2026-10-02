@@ -992,6 +992,27 @@
                              IsVisible="{Binding BranchesNotice, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                 </StackPanel>
 
+                <!-- Opcional (ADR-043): a branch nova parte de uma versão, e não da ponta. -->
+                <StackPanel Spacing="4" IsVisible="{Binding HasTags}">
+                  <TextBlock Classes="fieldLabel" Text="Tag (opcional)" />
+                  <ComboBox x:Name="SourceTagBox"
+                            HorizontalAlignment="Stretch"
+                            MaxDropDownHeight="320"
+                            ItemsSource="{Binding TagOptions}"
+                            SelectedItem="{Binding SelectedTagOption}"
+                            IsEnabled="{Binding IsFormEnabled}">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate x:DataType="vm:GitTagOptionViewModel">
+                        <TextBlock Text="{Binding Label}" />
+                      </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
+                  <TextBlock Classes="hint"
+                             x:Name="SourceTagHint"
+                             Text="{Binding TagHint}"
+                             IsVisible="{Binding HasSelectedTag}" />
+                </StackPanel>
+
                 <StackPanel Spacing="4">
                   <TextBlock Classes="fieldLabel" Text="Nova branch" />
                   <TextBox x:Name="NewBranchBox"
@@ -1153,6 +1174,12 @@
 
                 <TextBlock Classes="fieldLabel" Text="Branch de origem" />
                 <SelectableTextBlock Classes="code" Text="{Binding Development.SourceBranch, FallbackValue=''}" />
+
+                <TextBlock Classes="fieldLabel" Text="Tag de origem" IsVisible="{Binding Development.HasSourceTag, FallbackValue=False}" />
+                <SelectableTextBlock Classes="code"
+                                     x:Name="ReadySourceTag"
+                                     Text="{Binding Development.SourceTag, FallbackValue=''}"
+                                     IsVisible="{Binding Development.HasSourceTag, FallbackValue=False}" />
 
                 <TextBlock Classes="fieldLabel" Text="Branch da tarefa" />
                 <SelectableTextBlock Classes="code" Text="{Binding Development.Branch, FallbackValue=''}" />

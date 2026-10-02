@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using MyTaskApp.Application.Development;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Domain.Agents;
 using MyTaskApp.Domain.Tasks;
@@ -133,6 +134,7 @@ internal sealed class TodayQuery(MyTaskAppDbContext context) : ITodayQuery
                 development.RepositoryPath,
                 development.Branch,
                 development.SourceBranch,
+                development.SourceTag,
                 development.WorktreePath,
                 development.CreatedAt,
             })
@@ -144,8 +146,14 @@ internal sealed class TodayQuery(MyTaskAppDbContext context) : ITodayQuery
                 group => group.Key,
                 group => (IReadOnlyList<WorktreeRow>)group
                     .OrderBy(row => row.CreatedAt)
+                    // Nascida de uma tag, a branch conta os commits a partir dela
+                    // (ADR-043): a ponta da branch de origem pode estar anos à frente.
                     .Select(row => new WorktreeRow(
-                        row.Id, row.RepositoryPath, row.Branch, row.SourceBranch, row.WorktreePath))
+                        row.Id,
+                        row.RepositoryPath,
+                        row.Branch,
+                        row.SourceTag is null ? row.SourceBranch : GitTag.Prefix + row.SourceTag,
+                        row.WorktreePath))
                     .ToList());
 
         return occurrences

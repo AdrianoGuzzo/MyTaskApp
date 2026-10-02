@@ -34,6 +34,9 @@ internal sealed class FakeGitClient : IGitClient
         GitBranch.RemoteTracking("origin", "develop"),
     ];
 
+    /// <summary>As tags, já na ordem do Git (a versão mais nova primeiro).</summary>
+    public List<GitTag> Tags { get; } = [new("v2.0.0"), new("v1.4.2")];
+
     public string? RemoteDefault { get; set; } = "origin/main";
 
     public GitCommandResult FetchResult { get; set; } = Ok("git fetch --all --prune");
@@ -102,6 +105,12 @@ internal sealed class FakeGitClient : IGitClient
         return Task.FromResult<IReadOnlyList<GitBranch>>([.. Branches]);
     }
 
+    public Task<IReadOnlyList<GitTag>> ListTagsAsync(string repository, CancellationToken cancellationToken = default)
+    {
+        Throw(nameof(ListTagsAsync));
+        return Task.FromResult<IReadOnlyList<GitTag>>([.. Tags]);
+    }
+
     public Task<string?> GetRemoteDefaultBranchAsync(string repository, string remote, CancellationToken cancellationToken = default) =>
         Task.FromResult(RemoteDefault);
 
@@ -114,7 +123,7 @@ internal sealed class FakeGitClient : IGitClient
     }
 
     public Task<bool> CommitExistsAsync(string repository, string revision, CancellationToken cancellationToken = default) =>
-        Task.FromResult(Branches.Any(branch => branch.FullRef == revision));
+        Task.FromResult(Branches.Any(branch => branch.FullRef == revision) || Tags.Any(tag => tag.FullRef == revision));
 
     public Task<GitDivergence> CompareAsync(
         string repository,

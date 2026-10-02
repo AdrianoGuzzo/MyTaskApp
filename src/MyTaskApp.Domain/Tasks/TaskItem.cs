@@ -183,7 +183,8 @@ public sealed class TaskItem
         string sourceBranch,
         string branch,
         string worktreePath,
-        DateTimeOffset at)
+        DateTimeOffset at,
+        string? sourceTag = null)
     {
         EnsureDevelopmentCanBegin(developmentId, repositoryPath);
 
@@ -193,12 +194,12 @@ public sealed class TaskItem
 
         if (development is null)
         {
-            development = TaskDevelopment.Begin(Id, repositoryPath, sourceBranch, branch, worktreePath, at);
+            development = TaskDevelopment.Begin(Id, repositoryPath, sourceBranch, branch, worktreePath, at, sourceTag);
             _developments.Add(development);
         }
         else
         {
-            development.Restart(repositoryPath, sourceBranch, branch, worktreePath, at);
+            development.Restart(repositoryPath, sourceBranch, branch, worktreePath, at, sourceTag);
         }
 
         return development;
