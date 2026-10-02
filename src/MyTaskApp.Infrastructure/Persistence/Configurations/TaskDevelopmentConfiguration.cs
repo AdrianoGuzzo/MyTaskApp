@@ -30,6 +30,9 @@ internal sealed class TaskDevelopmentConfiguration : IEntityTypeConfiguration<Ta
             .IsRequired()
             .HasMaxLength(TaskDevelopment.MaxBranchLength);
 
+        builder.Property(development => development.SourceTag)
+            .HasMaxLength(TaskDevelopment.MaxBranchLength);
+
         builder.Property(development => development.Branch)
             .IsRequired()
             .HasMaxLength(TaskDevelopment.MaxBranchLength);

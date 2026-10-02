@@ -156,4 +156,22 @@ public class TodayQueryTests
             .Which.Should().Be(new WorktreeRow(
                 ready.Id, @"C:\Projects\eco-core", "feature/x", "origin/main", @"C:\Projects\eco-core-feature-x"));
     }
+
+    /// <summary>ADR-043: nascida de uma tag, a branch conta os commits a partir da tag.</summary>
+    [Fact]
+    public async Task AWorktreeFromATag_IsComparedWithTheTag()
+    {
+        await using var db = await new TempSqliteDatabase().MigrateAsync(Ct);
+        var task = TaskItem.Create("Depurar cliente", NowUtc, schedule: TaskSchedule.On(Today));
+
+        var ready = task.BeginDevelopment(
+            null, @"C:\Projects\eco-core", "origin/main", "debug/x", @"C:\Projects\eco-core-debug-x", NowUtc, sourceTag: "v1.4.2");
+        task.MarkDevelopmentReady(ready.Id, NowUtc);
+        await SeedAsync(db, task);
+
+        await using var context = db.CreateContext();
+        var rows = await new TodayQuery(context).GetCandidatesAsync(Today, Ct);
+
+        rows.Single().Worktrees.Should().ContainSingle().Which.SourceBranch.Should().Be("refs/tags/v1.4.2");
+    }
 }

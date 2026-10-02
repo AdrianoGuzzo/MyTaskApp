@@ -31,7 +31,7 @@ public class StartDevelopmentHandlerTests
     private StartDevelopmentHandler Handler() =>
         new(_tasks, _tasks, _git, _disk, new FakeTimeProvider(Now), NullLogger<StartDevelopmentHandler>.Instance);
 
-    private DevelopmentPlan Plan(WorktreeConflict? conflict = null, GitBranch? existing = null) =>
+    private DevelopmentPlan Plan(WorktreeConflict? conflict = null, GitBranch? existing = null, GitTag? tag = null) =>
         new(
             _task.Id,
             FakeGitClient.Repository,
@@ -40,10 +40,56 @@ public class StartDevelopmentHandlerTests
             Path,
             [],
             conflict,
-            existing);
+            existing,
+            SourceTag: tag);
 
-    private Task<TaskDevelopmentView> StartAsync(string path = Path, bool adopt = false, GitBranch? existing = null) =>
-        Handler().HandleAsync(new StartDevelopment(Plan(existing: existing), path, adopt), _progress, Ct);
+    private Task<TaskDevelopmentView> StartAsync(
+        string path = Path,
+        bool adopt = false,
+        GitBranch? existing = null,
+        GitTag? tag = null) =>
+        Handler().HandleAsync(new StartDevelopment(Plan(existing: existing, tag: tag), path, adopt), _progress, Ct);
+
+    /// <summary>ADR-043: a branch nasce da tag, e o ambiente lembra de qual.</summary>
+    [Fact]
+    public async Task ATag_IsWhereTheNewBranchStarts_AndIsRecorded()
+    {
+        var view = await StartAsync(tag: new GitTag("v1.4.2"));
+
+        _git.Calls.Should().Contain(
+            $"worktree add --no-track -b feature/123-corrigir-animais {Path} refs/tags/v1.4.2");
+        view.Status.Should().Be(TaskDevelopmentStatus.Ready);
+        view.SourceBranch.Should().Be("origin/develop");
+        view.SourceTag.Should().Be("v1.4.2");
+        _task.Developments[0].SourceTag.Should().Be("v1.4.2");
+    }
+
+    [Fact]
+    public async Task WithoutATag_NoTagIsRecorded()
+    {
+        var view = await StartAsync();
+
+        view.SourceTag.Should().BeNull();
+        view.HasSourceTag.Should().BeFalse();
+    }
+
+    /// <summary>A branch que já existe tem o código dela: gravar a tag diria uma origem que não é.</summary>
+    [Fact]
+    public async Task ATag_WithAnExistingBranch_IsNotRecorded()
+    {
+        var view = await StartAsync(existing: GitBranch.Local("feature/123-corrigir-animais"), tag: new GitTag("v1.4.2"));
+
+        _git.Calls.Should().Contain($"worktree add {Path} feature/123-corrigir-animais");
+        view.SourceTag.Should().BeNull();
+    }
+
+    [Fact]
+    public void AMissingTag_IsNamedInTheFailure() =>
+        StartDevelopmentHandler.CreateFailureMessage(
+                FakeGitClient.Failed("git worktree add", "fatal: invalid reference: refs/tags/v1.4.2"),
+                Plan(tag: new GitTag("v1.4.2")),
+                Path)
+            .Should().Be("A tag v1.4.2 não foi encontrada.");
 
     [Fact]
     public async Task AnExistingLocalBranch_IsCheckedOut_WithoutCreatingAnother()

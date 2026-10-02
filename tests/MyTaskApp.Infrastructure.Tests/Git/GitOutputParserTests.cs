@@ -38,6 +38,14 @@ public class GitOutputParserTests
     }
 
     [Fact]
+    public void Tags_KeepGitsOrder_AndTheFullName()
+    {
+        const string output = "refs/tags/v2.0.0\nrefs/tags/release/1.4.2\n\nrefs/heads/intrusa\nrefs/tags/\n";
+
+        GitOutputParser.ParseTags(output).Should().Equal(new GitTag("v2.0.0"), new GitTag("release/1.4.2"));
+    }
+
+    [Fact]
     public void Worktrees_InOrder_WithTheirFlags()
     {
         const string output = """

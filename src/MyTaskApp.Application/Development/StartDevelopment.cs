@@ -88,8 +88,15 @@ public sealed class StartDevelopmentHandler(
                 $"O caminho {path} já existe. Escolha outro.");
         }
 
+        // A tag só vale quando a branch nasce dela: a que já existe tem o código dela.
         var development = task.BeginDevelopment(
-            plan.DevelopmentId, plan.RepositoryPath, plan.Source.ShortName, plan.NewBranch, path, timeProvider.GetUtcNow());
+            plan.DevelopmentId,
+            plan.RepositoryPath,
+            plan.Source.ShortName,
+            plan.NewBranch,
+            path,
+            timeProvider.GetUtcNow(),
+            plan.ExistingBranch is null ? plan.SourceTag?.Name : null);
         SetCommands(task, development, commands);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -100,7 +107,7 @@ public sealed class StartDevelopmentHandler(
 
         var result = plan.ExistingBranch switch
         {
-            null => await git.AddWorktreeAsync(plan.RepositoryPath, path, plan.NewBranch, plan.Source.FullRef, none),
+            null => await git.AddWorktreeAsync(plan.RepositoryPath, path, plan.NewBranch, plan.StartRef, none),
             { IsRemote: true } remote =>
                 await git.AddWorktreeTrackingAsync(plan.RepositoryPath, path, plan.NewBranch, remote.FullRef, none),
             _ => await git.AddWorktreeForBranchAsync(plan.RepositoryPath, path, plan.NewBranch, none),
@@ -123,12 +130,13 @@ public sealed class StartDevelopmentHandler(
         progress.Report(DevelopmentStep.SaveTask, DevelopmentStepState.Done);
 
         logger.LogInformation(
-            "DevelopmentStarted {TaskId} {DevelopmentId} {Branch} {WorktreePath} {ExistingBranch}",
+            "DevelopmentStarted {TaskId} {DevelopmentId} {Branch} {WorktreePath} {ExistingBranch} {SourceTag}",
             task.Id,
             development.Id,
             plan.NewBranch,
             path,
-            plan.ExistingBranch?.FullRef);
+            plan.ExistingBranch?.FullRef,
+            development.SourceTag);
 
         return TaskDevelopmentView.From(development);
     }
@@ -267,7 +275,9 @@ public sealed class StartDevelopmentHandler(
 
         if (error.Contains("invalid reference", StringComparison.OrdinalIgnoreCase))
         {
-            return $"A branch de origem {plan.Source.ShortName} não foi encontrada.";
+            return plan.SourceTag is { } tag
+                ? $"A tag {tag.Name} não foi encontrada."
+                : $"A branch de origem {plan.Source.ShortName} não foi encontrada.";
         }
 
         return "O Git não conseguiu criar o worktree.";
