@@ -18,6 +18,11 @@ public class VersioningAndBuildTests
     private static readonly string LinuxBuild =
         RepositoryFiles.Read(RepositoryFiles.LinuxBuildScript);
 
+    /// <summary>
+    /// Um arquivo — e quem o edita é o Release Please, não uma pessoa. O
+    /// manifest dele guarda o mesmo número; <see cref="ReleaseProcessTests"/>
+    /// cobra que os dois andem juntos.
+    /// </summary>
     [Fact]
     public void TheVersionLivesInExactlyOneFile()
     {

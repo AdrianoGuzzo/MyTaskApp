@@ -4,7 +4,7 @@
 ; publicado. Nao compile a mao sem definir os dois:
 ;
 ;   ISCC.exe MyTaskApp.iss /DAppVersion=1.0.0 /DAppVersionFull=1.0.0.0 ^
-;            /DPublishDir=..\..\artifacts\publish\win-x64
+;            /DAppRuntime=win-x64 /DPublishDir=..\..\artifacts\publish\win-x64
 ;
 ; Regra que nao se negocia: este arquivo NAO conhece o banco de dados.
 ; O instalador copia binarios; quem cria e evolui o schema e a aplicacao, via
@@ -18,6 +18,10 @@
   #define AppVersionFull AppVersion + ".0"
 #endif
 
+#ifndef AppRuntime
+  #define AppRuntime "win-x64"
+#endif
+
 #ifndef PublishDir
   #define PublishDir "..\..\artifacts\publish\win-x64"
 #endif
@@ -25,7 +29,7 @@
 #define AppName        "MyTaskApp"
 #define AppPublisher   "MyTaskApp"
 #define AppExeName     "MyTaskApp.exe"
-#define AppUrl         "https://github.com/mytaskapp/mytaskapp"
+#define AppUrl         "https://github.com/AdrianoGuzzo/MyTaskApp"
 
 ; O mesmo nome que src/MyTaskApp.Desktop/Composition/SingleInstance.cs cria.
 ; Ha teste de packaging cobrando os dois lados: se um mudar sem o outro, a
@@ -77,7 +81,9 @@ ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
 
 OutputDir=..\..\artifacts\installer
-OutputBaseFilename=MyTaskAppSetup-{#AppVersion}
+; Nome previsivel, igual nas duas plataformas: produto-versao-rid. O "-setup"
+; diz que e instalador, nao binario solto (ADR-044).
+OutputBaseFilename=MyTaskApp-{#AppVersion}-{#AppRuntime}-setup
 Compression=lzma2/max
 SolidCompression=yes
 InternalCompressLevel=max

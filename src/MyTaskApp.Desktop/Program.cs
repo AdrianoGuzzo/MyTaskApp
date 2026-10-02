@@ -1,4 +1,3 @@
-using System.Reflection;
 using Avalonia;
 using Microsoft.Extensions.DependencyInjection;
 using MyTaskApp.Desktop.Composition;
@@ -47,7 +46,11 @@ internal static class Program
 
                 PrepareDatabase(services);
 
-                Log.Information("ApplicationStarted {Version}", Version);
+                Log.Information(
+                    "ApplicationStarted {Version} {Commit} {BuildDate}",
+                    AppVersion.Current.Version,
+                    AppVersion.Current.FullCommit,
+                    AppVersion.Current.BuildDate);
 
                 App.Services = services;
                 var exitCode = BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
@@ -72,15 +75,6 @@ internal static class Program
             instance.Dispose();
         }
     }
-
-    /// <summary>
-    /// A versão que o instalador gravou, vinda do assembly — a mesma que aparece
-    /// em "Aplicativos Instalados". Primeira pergunta de todo diagnóstico.
-    /// </summary>
-    public static string Version =>
-        typeof(Program).Assembly
-            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
-        ?? "desconhecida";
 
     /// <summary>
     /// O banco nasce (ou evolui) antes da primeira tela aparecer, para que
