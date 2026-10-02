@@ -39,6 +39,24 @@ public class TaskDevelopmentTests
         task.Developments.Should().ContainSingle().Which.Should().BeSameAs(development);
     }
 
+    /// <summary>ADR-043: a tag é opcional; em branco é a ponta da branch.</summary>
+    [Theory]
+    [InlineData(" v1.4.2 ", "v1.4.2")]
+    [InlineData("   ", null)]
+    [InlineData(null, null)]
+    public void Begin_RecordsTheSourceTag_WhenThereIsOne(string? tag, string? expected)
+    {
+        var development = Task().BeginDevelopment(null, Repository, "main", "feature/x", Worktree, Now, tag);
+
+        development.SourceTag.Should().Be(expected);
+    }
+
+    [Fact]
+    public void ATagLongerThanABranch_IsRefused() =>
+        FluentActions.Invoking(() => Task().BeginDevelopment(
+                null, Repository, "main", "feature/x", Worktree, Now, new string('v', TaskDevelopment.MaxBranchLength + 1)))
+            .Should().Throw<DomainException>().WithMessage("*tag de origem*");
+
     [Fact]
     public void Ready_Failed_Removed_AreRecorded()
     {

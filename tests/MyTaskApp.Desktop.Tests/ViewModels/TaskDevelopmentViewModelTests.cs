@@ -31,6 +31,8 @@ public class TaskDevelopmentViewModelTests
         GitBranch.RemoteTracking("origin", "develop"),
     ];
 
+    private static readonly IReadOnlyList<GitTag> Tags = [new("v2.0.0"), new("v1.4.2")];
+
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private readonly FakeUseCaseRunner _runner = new();
@@ -56,7 +58,7 @@ public class TaskDevelopmentViewModelTests
         }
 
         _runner.ResultsByHandler[typeof(InspectDirectoryHandler)] = new DirectoryInspection(true, true, Repository);
-        _runner.ResultsByHandler[typeof(ListBranchesHandler)] = new BranchList(Branches, Branches[0]);
+        _runner.ResultsByHandler[typeof(ListBranchesHandler)] = new BranchList(Branches, Branches[0], Tags);
 
         var viewModel = TestDevelopment.Environment(_runner, _clipboard, _shell, _confirmation, _time);
         viewModel.Load(TaskId, "Corrigir cálculo de animais", isReadOnly);
@@ -292,6 +294,72 @@ public class TaskDevelopmentViewModelTests
 
         viewModel.CanStart.Should().BeFalse();
         viewModel.IsFormEnabled.Should().BeFalse();
+    }
+
+    // --- Tag (ADR-043) ---------------------------------------------------------
+
+    [Fact]
+    public async Task TheTags_ComeWithTheBranches_AndNoneIsChosen()
+    {
+        var viewModel = await ActivatedAsync();
+
+        await ChooseRepositoryAsync(viewModel);
+
+        viewModel.HasTags.Should().BeTrue();
+        viewModel.TagOptions.Select(option => option.Label).Should().Equal("Nenhuma — a ponta da branch", "v2.0.0", "v1.4.2");
+        viewModel.SelectedTagOption.Should().BeSameAs(GitTagOptionViewModel.None);
+        viewModel.HasSelectedTag.Should().BeFalse();
+        viewModel.TagHint.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task ChoosingATag_SaysWhereTheBranchStarts()
+    {
+        var viewModel = await ActivatedAsync();
+        await ChooseRepositoryAsync(viewModel);
+
+        viewModel.SelectedTagOption = viewModel.TagOptions.Single(option => option.Label == "v1.4.2");
+
+        viewModel.HasSelectedTag.Should().BeTrue();
+        viewModel.TagHint.Should().Contain("v1.4.2");
+        viewModel.CanStart.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ARepositoryWithoutTags_HidesTheField()
+    {
+        var viewModel = await ActivatedAsync();
+        _runner.ResultsByHandler[typeof(ListBranchesHandler)] = new BranchList(Branches, Branches[0]);
+
+        await ChooseRepositoryAsync(viewModel);
+
+        viewModel.HasTags.Should().BeFalse();
+        viewModel.SelectedTagOption.Should().BeSameAs(GitTagOptionViewModel.None);
+    }
+
+    [Fact]
+    public async Task AnotherFolder_ForgetsTheTagsOfThePreviousOne()
+    {
+        var viewModel = await ActivatedAsync();
+        await ChooseRepositoryAsync(viewModel);
+        viewModel.SelectedTagOption = viewModel.TagOptions[1];
+
+        viewModel.DirectoryText = @"C:\Projects\outro";
+
+        viewModel.TagOptions.Should().BeEmpty();
+        viewModel.SelectedTagOption.Should().BeNull();
+        viewModel.HasTags.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task AFailedAttemptFromATag_ComesBackWithTheTagChosen()
+    {
+        var failed = View(TaskDevelopmentStatus.Error, "falhou") with { SourceTag = "v1.4.2" };
+
+        var viewModel = await ActivatedAsync(development: failed);
+
+        viewModel.SelectedTagOption!.Tag.Should().Be(new GitTag("v1.4.2"));
+        viewModel.SelectedBranchOption!.Label.Should().Be("origin/develop");
     }
 
     // --- Iniciar implementação ------------------------------------------------

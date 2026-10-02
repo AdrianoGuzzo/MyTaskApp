@@ -184,6 +184,17 @@ public class GitClientTests
     }
 
     [Fact]
+    public async Task Tags_AreReadFromForEachRef_NewestVersionFirst()
+    {
+        _runner.Respond("for-each-ref", new ProcessResult(0, "refs/tags/v1.10.0\nrefs/tags/v1.9.0\n", "", false));
+
+        var tags = await Client().ListTagsAsync(Repository, Ct);
+
+        tags.Select(tag => tag.Name).Should().Equal("v1.10.0", "v1.9.0");
+        _runner.Requests.Single().Arguments.Should().ContainInOrder("--sort=-v:refname", "--format=%(refname)", "refs/tags");
+    }
+
+    [Fact]
     public async Task ADataCommandThatFails_ThrowsWithTheWholeResult()
     {
         _runner.Respond("status", new ProcessResult(128, "", "fatal: bad", false));

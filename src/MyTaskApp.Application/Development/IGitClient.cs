@@ -48,6 +48,18 @@ public sealed record GitBranch(
         new($"{RemotePrefix}{remote}/{name}", $"{remote}/{name}", true, remote, null, false);
 }
 
+/// <summary>
+/// Uma tag (<c>refs/tags/…</c>): uma versão publicada. Como origem, ela fixa o
+/// commit de onde o worktree parte (ADR-043).
+/// </summary>
+public sealed record GitTag(string Name)
+{
+    public const string Prefix = "refs/tags/";
+
+    /// <summary>A ref completa: <c>v1.2.0</c> sozinho perderia para uma branch de mesmo nome.</summary>
+    public string FullRef => Prefix + Name;
+}
+
 /// <summary>Uma entrada de <c>git worktree list --porcelain</c>.</summary>
 public sealed record GitWorktree(
     string Path,
@@ -140,6 +152,13 @@ public interface IGitClient
 
     /// <summary>Branches locais e remotas, sem os <c>origin/HEAD</c> simbólicos.</summary>
     Task<IReadOnlyList<GitBranch>> ListBranchesAsync(string repository, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// As tags do repositório, da versão mais nova para a mais velha
+    /// (<c>--sort=-v:refname</c>): quem procura a versão de um cliente procura
+    /// pelo número.
+    /// </summary>
+    Task<IReadOnlyList<GitTag>> ListTagsAsync(string repository, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// A branch para a qual <c>refs/remotes/{remote}/HEAD</c> aponta, ou <c>null</c>.

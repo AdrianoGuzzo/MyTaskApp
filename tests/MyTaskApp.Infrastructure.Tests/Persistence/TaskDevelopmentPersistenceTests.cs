@@ -69,6 +69,37 @@ public class TaskDevelopmentPersistenceTests
     }
 
     [Fact]
+    public async Task TheSourceTag_GoesAndComesBack_AndARetryWithoutItClearsIt()
+    {
+        await using var db = await new TempSqliteDatabase().MigrateAsync(Ct);
+        var seeded = await SeedAsync(db);
+
+        await using (var write = db.CreateContext())
+        {
+            var task = await new TaskItemRepository(write).FindByIdAsync(seeded.Id, Ct);
+            task!.BeginDevelopment(null, Repository, "origin/main", "debug/x", Worktree, Now, sourceTag: "v1.4.2");
+            await write.SaveChangesAsync(Ct);
+        }
+
+        await using (var read = db.CreateContext())
+        {
+            var stored = await new TaskItemRepository(read).FindByIdAsync(seeded.Id, Ct);
+            stored!.Developments.Single().SourceTag.Should().Be("v1.4.2");
+        }
+
+        await using (var write = db.CreateContext())
+        {
+            var task = await new TaskItemRepository(write).FindByIdAsync(seeded.Id, Ct);
+            task!.MarkDevelopmentFailed(task.Developments[0].Id, "falhou", Now);
+            task.BeginDevelopment(task.Developments[0].Id, Repository, "origin/main", "debug/x", Worktree, Now);
+            await write.SaveChangesAsync(Ct);
+        }
+
+        await using var again = db.CreateContext();
+        (await again.TaskDevelopments.SingleAsync(Ct)).SourceTag.Should().BeNull();
+    }
+
+    [Fact]
     public async Task StartingAgainAfterRemoval_ReusesTheRow()
     {
         await using var db = await new TempSqliteDatabase().MigrateAsync(Ct);
