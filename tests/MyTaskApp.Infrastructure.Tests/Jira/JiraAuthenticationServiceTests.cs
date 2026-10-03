@@ -326,6 +326,70 @@ public sealed class JiraAuthenticationServiceTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task OAuth_ARenewalCancelledByAKeystroke_StillKeepsTheRotatedToken()
+    {
+        // A Atlassian mata o refresh antigo quando entrega o novo: descartar a
+        // resposta porque o autocomplete cancelou a busca derrubaria a conexão.
+        await ConnectWithOAuthAsync();
+        _jira.Server.On("/oauth/token", _ =>
+        {
+            Thread.Sleep(TimeSpan.FromMilliseconds(400));
+            return FakeJiraServer.Json(HttpStatusCode.OK,
+                """{"access_token":"access-2","refresh_token":"refresh-token-secreto-2","expires_in":3600}""");
+        });
+        _jira.Time.Advance(TimeSpan.FromHours(2));
+
+        using var keystroke = CancellationTokenSource.CreateLinkedTokenSource(Ct);
+        var access = _jira.Auth.GetAccessAsync(keystroke.Token);
+        keystroke.CancelAfter(TimeSpan.FromMilliseconds(50));
+
+        try
+        {
+            await access;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+
+        _jira.Secrets.Secrets[JiraAuthenticationService.SecretName].Should().Contain("refresh-token-secreto-2");
+        (await _jira.Auth.GetAccessAsync(Ct)).Authorization.ToString().Should().Be("Bearer access-2");
+    }
+
+    [Fact]
+    public async Task OAuth_FailingOverAnExistingConnection_LeavesItIntact()
+    {
+        await _jira.ConnectWithApiTokenAsync(Ct);
+        var before = (await _jira.Auth.GetAccessAsync(Ct)).Authorization.ToString();
+
+        // A conta autoriza, mas o Jira recusa o /myself no site (sem licença).
+        _jira.Server.On($"/ex/jira/{JiraHarness.CloudId}/rest/api/3/myself", HttpStatusCode.Forbidden);
+        var authorization = await _jira.Auth.BeginAuthorizationAsync(Ct);
+        await BrowserReturnsAsync($"code=x&state={Uri.EscapeDataString(ParseQuery(authorization.AuthorizeUrl)["state"])}");
+
+        var wait = () => authorization.Completion.WaitAsync(TimeSpan.FromSeconds(10), Ct);
+        await wait.Should().ThrowAsync<DomainException>();
+
+        var connection = await _jira.Auth.GetConnectionAsync(Ct);
+        connection.Method.Should().Be(JiraAuthMethod.ApiToken);
+        (await _jira.Auth.GetAccessAsync(Ct)).Authorization.ToString().Should().Be(before);
+        _jira.Secrets.Secrets[JiraAuthenticationService.SecretName].Should().Contain(JiraHarness.ApiToken);
+    }
+
+    [Fact]
+    public async Task OAuth_ANewAttempt_TakesThePortFromTheOldOne()
+    {
+        var first = await _jira.Auth.BeginAuthorizationAsync(Ct);
+
+        var second = await _jira.Auth.BeginAuthorizationAsync(Ct);
+
+        var abandoned = () => first.Completion.WaitAsync(TimeSpan.FromSeconds(10), Ct);
+        await abandoned.Should().ThrowAsync<DomainException>().WithMessage("*substituída*");
+
+        await BrowserReturnsAsync($"code=x&state={Uri.EscapeDataString(ParseQuery(second.AuthorizeUrl)["state"])}");
+        (await second.Completion.WaitAsync(TimeSpan.FromSeconds(10), Ct)).IsConnected.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task NoSecret_EverReachesTheLog()
     {
         await ConnectWithOAuthAsync();

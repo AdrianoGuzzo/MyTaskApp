@@ -60,6 +60,12 @@ public sealed class ExternalTaskSearch(
 
     private readonly LinkedList<string> _order = [];
 
+    /// <summary>
+    /// Sobe a cada <see cref="Invalidate"/>. Uma busca que começou antes de a
+    /// conta ou o projeto mudarem não grava a resposta dela no cache novo.
+    /// </summary>
+    private int _generation;
+
     public async Task<ExternalTaskSearchResult> SearchAsync(string? query, CancellationToken cancellationToken = default)
     {
         var trimmed = Collapse(query);
@@ -81,11 +87,12 @@ public sealed class ExternalTaskSearch(
             return new ExternalTaskSearchResult([], ExternalTaskFailure.NotConnected);
         }
 
+        var generation = Volatile.Read(ref _generation);
         var result = await LookUpAsync(trimmed, cancellationToken);
 
         if (result.Failure is null)
         {
-            Remember(cacheKey, result);
+            Remember(cacheKey, result, generation);
         }
 
         return result;
@@ -110,6 +117,7 @@ public sealed class ExternalTaskSearch(
     {
         lock (_lock)
         {
+            _generation++;
             _cache.Clear();
             _order.Clear();
         }
@@ -188,10 +196,15 @@ public sealed class ExternalTaskSearch(
         }
     }
 
-    private void Remember(string key, ExternalTaskSearchResult result)
+    private void Remember(string key, ExternalTaskSearchResult result, int generation)
     {
         lock (_lock)
         {
+            if (generation != _generation)
+            {
+                return;
+            }
+
             if (_cache.Remove(key))
             {
                 _order.Remove(key);

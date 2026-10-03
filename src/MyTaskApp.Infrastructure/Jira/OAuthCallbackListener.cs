@@ -122,14 +122,22 @@ internal sealed class OAuthCallbackListener : IAsyncDisposable
         }
     }
 
-    public async ValueTask DisposeAsync()
+    /// <summary>
+    /// Solta a porta na hora, de forma síncrona. Uma autorização nova precisa
+    /// dela, e não pode esperar a anterior terminar de se desfazer.
+    /// </summary>
+    public void StopListening()
     {
-        await _stopping.CancelAsync();
-
         foreach (var listener in _listeners)
         {
             listener.Stop();
         }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        StopListening();
+        await _stopping.CancelAsync();
 
         _connections.Writer.TryComplete();
         _stopping.Dispose();

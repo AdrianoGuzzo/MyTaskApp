@@ -68,6 +68,9 @@ internal sealed class JiraAuthenticationService(
 
     private CancellationTokenSource? _pendingAuthorization;
 
+    /// <summary>A porta da volta da autorização em curso.</summary>
+    private OAuthCallbackListener? _listener;
+
     public async Task<JiraConnection> GetConnectionAsync(CancellationToken cancellationToken = default)
     {
         await _gate.WaitAsync(cancellationToken);
@@ -91,16 +94,26 @@ internal sealed class JiraAuthenticationService(
                 "Esta versão do MyTaskApp não tem o login do Jira configurado. Use \"Conectar com API token\".");
         }
 
-        // Um clique novo desiste do anterior: a porta é uma só.
-        if (_pendingAuthorization is { } previous)
+        // Um clique novo desiste do anterior: a porta é uma só, e é solta aqui,
+        // na hora — esperar a anterior se desfazer sozinha daria "porta ocupada".
+        // Deixa de ser a atual antes de cancelar: o catch dela roda dentro do
+        // CancelAsync, e é assim que ele sabe que foi substituída, e não que
+        // venceu o prazo.
+        var previous = _pendingAuthorization;
+        _pendingAuthorization = null;
+
+        if (previous is not null)
         {
             await previous.CancelAsync();
         }
+
+        _listener?.StopListening();
 
         var pending = new CancellationTokenSource(options.AuthorizationTimeout);
         _pendingAuthorization = pending;
 
         var listener = OAuthCallbackListener.Start(options.CallbackPort, logger);
+        _listener = listener;
         var state = JiraOAuthClient.NewSecret();
         var verifier = JiraOAuthClient.NewSecret();
 
@@ -123,8 +136,14 @@ internal sealed class JiraAuthenticationService(
                 ?? throw new DomainException("Esse site não está entre os que você autorizou. Conecte de novo.");
 
             var token = await AccessTokenLockedAsync(cancellationToken);
-            await ConnectSiteLockedAsync(site, token, cancellationToken);
+            var me = await MyselfOnSiteAsync(site, token, cancellationToken);
 
+            // O segredo já é deste OAuth: só o jira.json muda.
+            var state = SiteState(site, me);
+            await file.SaveAsync(state, CancellationToken.None);
+            _state = state;
+
+            logger.LogInformation("JiraConnected {Method} {Site}", state.Method, state.SiteName);
             return Describe();
         }
         finally
@@ -174,7 +193,7 @@ internal sealed class JiraAuthenticationService(
                 DefaultProject = SameSite(site) ? _state?.DefaultProject : null,
             };
 
-            await SaveLockedAsync(state, new JiraSecret(ApiToken: trimmedToken, Email: trimmedEmail), cancellationToken);
+            await SaveLockedAsync(state, new JiraSecret(ApiToken: trimmedToken, Email: trimmedEmail));
             _access = null;
 
             logger.LogInformation("JiraConnected {Method} {Site}", state.Method, state.SiteName);
@@ -318,7 +337,11 @@ internal sealed class JiraAuthenticationService(
 
             if (state.Method == JiraAuthMethod.ApiToken)
             {
-                return new JiraAccess(site, Basic(_secret.Email!, _secret.ApiToken!), site, state.DefaultProject);
+                // O segredo é de outro método (um OAuth que não terminou de
+                // gravar, por exemplo): sem e-mail e token, o Basic iria vazio.
+                return _secret is { Email: { } email, ApiToken: { } apiToken }
+                    ? new JiraAccess(site, Basic(email, apiToken), site, state.DefaultProject)
+                    : throw new ExternalTaskUnavailableException(ExternalTaskFailure.Unauthorized);
             }
 
             var token = await AccessTokenLockedAsync(cancellationToken);
@@ -341,6 +364,7 @@ internal sealed class JiraAuthenticationService(
     {
         // Fechar o app desiste de uma autorização em andamento e solta a porta.
         _pendingAuthorization?.Cancel();
+        _listener?.StopListening();
         _gate.Dispose();
     }
 
@@ -399,26 +423,26 @@ internal sealed class JiraAuthenticationService(
                 throw new DomainException("Sua conta não tem acesso a nenhum site do Jira.");
             }
 
+            // Tudo o que pode falhar acontece antes de gravar: uma recusa do
+            // /myself, a rede ou a janela fechada no meio não podem deixar o
+            // segredo novo ao lado do jira.json da conexão anterior.
+            (string? Name, string? Email)? me = sites.Count == 1
+                ? await MyselfOnSiteAsync(sites[0], tokens.AccessToken, linked.Token)
+                : null;
+
             await _gate.WaitAsync(linked.Token);
 
             try
             {
                 await EnsureLoadedAsync(linked.Token);
-                _access = tokens;
 
-                if (sites.Count == 1)
-                {
-                    _secret = new JiraSecret(RefreshToken: tokens.RefreshToken);
-                    await secrets.WriteAsync(SecretName, JsonSerializer.Serialize(_secret, JiraHttp.Json), linked.Token);
-                    await ConnectSiteLockedAsync(sites[0], tokens.AccessToken, linked.Token);
-                }
-                else
-                {
-                    await SaveLockedAsync(
-                        new StoredJiraConnection { Method = JiraAuthMethod.OAuth, PendingSites = sites },
-                        new JiraSecret(RefreshToken: tokens.RefreshToken),
-                        linked.Token);
-                }
+                var connection = me is { } account
+                    ? SiteState(sites[0], account)
+                    : new StoredJiraConnection { Method = JiraAuthMethod.OAuth, PendingSites = sites };
+
+                // Daqui em diante não se cancela: segredo e jira.json vão juntos.
+                await SaveLockedAsync(connection, new JiraSecret(RefreshToken: tokens.RefreshToken));
+                _access = tokens;
 
                 logger.LogInformation("JiraAuthorized {Sites}", sites.Count);
                 return Describe();
@@ -446,20 +470,29 @@ internal sealed class JiraAuthenticationService(
                 _pendingAuthorization = null;
             }
 
+            if (_listener == listener)
+            {
+                _listener = null;
+            }
+
             pending.Dispose();
         }
     }
 
-    /// <summary>Com o site escolhido: quem é o usuário ali, e a conexão gravada.</summary>
-    private async Task ConnectSiteLockedAsync(JiraSite site, string accessToken, CancellationToken cancellationToken)
-    {
-        var me = await MyselfAsync(
+    /// <summary>Quem é o usuário no site escolhido. Só pergunta; não grava nada.</summary>
+    private Task<(string? Name, string? Email)> MyselfOnSiteAsync(
+        JiraSite site,
+        string accessToken,
+        CancellationToken cancellationToken) =>
+        MyselfAsync(
             JiraOAuthClient.ApiBaseFor(site.Id),
             JiraOAuthClient.Bearer(accessToken),
             onUnauthorized: "O Jira recusou o acesso a esse site. Confira as permissões da sua conta.",
             cancellationToken);
 
-        var state = new StoredJiraConnection
+    /// <summary>A conexão OAuth com o site escolhido. O projeto padrão sobrevive a reconectar o mesmo site.</summary>
+    private StoredJiraConnection SiteState(JiraSite site, (string? Name, string? Email) me) =>
+        new()
         {
             Method = JiraAuthMethod.OAuth,
             SiteId = site.Id,
@@ -469,12 +502,6 @@ internal sealed class JiraAuthenticationService(
             AccountEmail = me.Email,
             DefaultProject = _state is { SiteId: { } previous } && previous == site.Id ? _state.DefaultProject : null,
         };
-
-        await file.SaveAsync(state, cancellationToken);
-        _state = state;
-
-        logger.LogInformation("JiraConnected {Method} {Site}", state.Method, state.SiteName);
-    }
 
     /// <summary>O access token do OAuth, renovado se precisar. Chamado com o portão fechado.</summary>
     private async Task<string> AccessTokenLockedAsync(CancellationToken cancellationToken)
@@ -497,9 +524,14 @@ internal sealed class JiraAuthenticationService(
 
         JiraTokens tokens;
 
+        // Sem o cancelamento de quem pediu, de propósito: a Atlassian mata o
+        // refresh antigo quando entrega o novo. Uma tecla no autocomplete que
+        // cancelasse a busca no meio da renovação jogaria fora o único token
+        // que ainda vale, e a conexão "expiraria" sozinha. O timeout por
+        // chamada do JiraHttp continua limitando a espera.
         try
         {
-            tokens = await oauth.RefreshAsync(refreshToken, cancellationToken);
+            tokens = await oauth.RefreshAsync(refreshToken, CancellationToken.None);
         }
         catch (JiraHttpException exception) when (exception.Failure is JiraHttpFailure.BadRequest
             or JiraHttpFailure.Unauthorized or JiraHttpFailure.Forbidden)
@@ -514,7 +546,7 @@ internal sealed class JiraAuthenticationService(
 
         // Gravado antes de usar: o refresh antigo já morreu do lado da Atlassian.
         _secret = _secret with { RefreshToken = tokens.RefreshToken ?? refreshToken };
-        await secrets.WriteAsync(SecretName, JsonSerializer.Serialize(_secret, JiraHttp.Json), cancellationToken);
+        await secrets.WriteAsync(SecretName, JsonSerializer.Serialize(_secret, JiraHttp.Json), CancellationToken.None);
         _access = tokens;
 
         return tokens.AccessToken;
@@ -554,12 +586,16 @@ internal sealed class JiraAuthenticationService(
         }
     }
 
-    private async Task SaveLockedAsync(StoredJiraConnection state, JiraSecret secret, CancellationToken cancellationToken)
+    /// <summary>
+    /// Grava segredo e conexão como um par, sem cancelamento: parar entre os
+    /// dois deixaria o segredo de uma conexão ao lado do jira.json de outra.
+    /// </summary>
+    private async Task SaveLockedAsync(StoredJiraConnection state, JiraSecret secret)
     {
         // O segredo primeiro: um jira.json sem segredo é "conecte de novo"; um
         // segredo sem jira.json é lixo inofensivo que a próxima conexão sobrescreve.
-        await secrets.WriteAsync(SecretName, JsonSerializer.Serialize(secret, JiraHttp.Json), cancellationToken);
-        await file.SaveAsync(state, cancellationToken);
+        await secrets.WriteAsync(SecretName, JsonSerializer.Serialize(secret, JiraHttp.Json), CancellationToken.None);
+        await file.SaveAsync(state, CancellationToken.None);
 
         _secret = secret;
         _state = state;

@@ -82,6 +82,24 @@ public class ExternalTaskSearchTests
     }
 
     [Fact]
+    public async Task ASearchStartedBeforeTheConnectionChanged_IsNotCached()
+    {
+        // A resposta é da conta (ou do projeto) de antes: não pode valer depois.
+        var search = Search();
+        _jira.Gate = new TaskCompletionSource();
+        var pending = search.SearchAsync("corrigir erro", Ct);
+
+        search.Invalidate();
+        _jira.Gate.SetResult();
+        await pending;
+
+        _jira.Gate = null;
+        await search.SearchAsync("corrigir erro", Ct);
+
+        _jira.Searches.Should().HaveCount(2);
+    }
+
+    [Fact]
     public async Task TheCache_IsBounded()
     {
         var search = Search();

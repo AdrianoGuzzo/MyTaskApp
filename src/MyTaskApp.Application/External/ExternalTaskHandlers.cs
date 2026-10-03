@@ -136,7 +136,7 @@ public sealed class GetBranchConventionsHandler(IBranchConventionStore conventio
 /// <summary>Texto em branco devolve as convenções de fábrica.</summary>
 public sealed record UpdateBranchConventions(string? Text);
 
-public sealed class UpdateBranchConventionsHandler(IBranchConventionStore conventions)
+public sealed class UpdateBranchConventionsHandler(IBranchConventionStore conventions, IUnitOfWork unitOfWork)
 {
     public async Task HandleAsync(UpdateBranchConventions command, CancellationToken cancellationToken = default)
     {
@@ -145,5 +145,6 @@ public sealed class UpdateBranchConventionsHandler(IBranchConventionStore conven
             : BranchConventions.Parse(command.Text);
 
         await conventions.SaveAsync(parsed, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
     }
 }

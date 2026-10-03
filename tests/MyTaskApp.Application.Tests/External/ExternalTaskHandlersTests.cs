@@ -153,8 +153,11 @@ public class ExternalTaskHandlersTests
     [Fact]
     public async Task Conventions_RoundTripAsText()
     {
-        await new UpdateBranchConventionsHandler(_conventions)
+        await new UpdateBranchConventionsHandler(_conventions, _tasks)
             .HandleAsync(new UpdateBranchConventions("Bug = fix/{id}"), Ct);
+
+        // Sem o SaveChanges, o store só mexe na linha rastreada e nada chega ao banco.
+        _tasks.SaveCount.Should().Be(1);
 
         var text = await new GetBranchConventionsHandler(_conventions).HandleAsync(new GetBranchConventions(), Ct);
 
@@ -166,7 +169,7 @@ public class ExternalTaskHandlersTests
     {
         _conventions.Conventions = BranchConventions.Parse("Bug = fix/{id}");
 
-        await new UpdateBranchConventionsHandler(_conventions).HandleAsync(new UpdateBranchConventions("  "), Ct);
+        await new UpdateBranchConventionsHandler(_conventions, _tasks).HandleAsync(new UpdateBranchConventions("  "), Ct);
 
         _conventions.Conventions.Should().Be(BranchConventions.Default);
     }
@@ -174,11 +177,12 @@ public class ExternalTaskHandlersTests
     [Fact]
     public async Task Conventions_AnInvalidLine_IsRefusedBeforeSaving()
     {
-        var update = () => new UpdateBranchConventionsHandler(_conventions)
+        var update = () => new UpdateBranchConventionsHandler(_conventions, _tasks)
             .HandleAsync(new UpdateBranchConventions("Bug = fix/"), Ct);
 
         await update.Should().ThrowAsync<DomainException>();
         _conventions.SaveCount.Should().Be(0);
+        _tasks.SaveCount.Should().Be(0);
     }
 
     [Fact]
