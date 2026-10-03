@@ -18,7 +18,9 @@ namespace MyTaskApp.Infrastructure.GitHub;
 /// <para>
 /// As respostas ficam guardadas por <see cref="CacheDuration"/>: a lista Hoje
 /// recarrega a cada mudança, e cada recarga não pode virar uma rajada de idas
-/// ao GitHub. "Verificar novamente" chama <see cref="Reset"/>.
+/// ao GitHub. "Verificar novamente" chama <see cref="Reset"/>. A falha fica
+/// guardada por bem menos (<see cref="FailureCacheDuration"/>): a rede volta, e
+/// a PR não pode continuar sumida até o cache vencer.
 /// </para>
 /// </remarks>
 internal sealed class GhCliPullRequestClient(
@@ -27,9 +29,16 @@ internal sealed class GhCliPullRequestClient(
     TimeProvider timeProvider,
     ILogger<GhCliPullRequestClient> logger) : IPullRequestClient
 {
-    internal static readonly TimeSpan Timeout = TimeSpan.FromSeconds(15);
+    /// <summary>A resposta normal vem em menos de um segundo; é só um aviso, e quem espera está digitando.</summary>
+    internal static readonly TimeSpan Timeout = TimeSpan.FromSeconds(8);
 
     internal static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(2);
+
+    /// <summary>
+    /// O bastante para a recarga seguinte da lista Hoje não abrir outra leva de
+    /// <c>gh</c> presos, e pouco para a PR voltar logo depois da rede.
+    /// </summary>
+    internal static readonly TimeSpan FailureCacheDuration = TimeSpan.FromSeconds(20);
 
     /// <summary>O código de saída do <c>gh</c> quando falta autenticação.</summary>
     internal const int AuthenticationRequiredExitCode = 4;
@@ -97,7 +106,7 @@ internal sealed class GhCliPullRequestClient(
 
     /// <summary>
     /// "Não achei o <c>gh</c>" não fica guardado: procurar é barato, e quem
-    /// acabou de instalar não pode esperar o cache vencer.
+    /// acabou de instalar não pode esperar o cache vencer. A falha fica pouco.
     /// </summary>
     private async Task<PullRequestLookup> CachedAsync(string key, Func<Task<PullRequestLookup>> load)
     {
@@ -110,9 +119,16 @@ internal sealed class GhCliPullRequestClient(
 
         var lookup = await load();
 
-        if (lookup.Support is not PullRequestSupport.CliMissing)
+        TimeSpan? duration = lookup.Support switch
         {
-            _cache[key] = (lookup, now + CacheDuration);
+            PullRequestSupport.CliMissing => null,
+            PullRequestSupport.Failed => FailureCacheDuration,
+            _ => CacheDuration,
+        };
+
+        if (duration is { } keep)
+        {
+            _cache[key] = (lookup, now + keep);
         }
 
         return lookup;

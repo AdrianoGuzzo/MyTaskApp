@@ -143,6 +143,25 @@ public class GhCliPullRequestClientTests
         _runner.Requests.Should().HaveCount(3);
     }
 
+    /// <summary>Um timeout não pode esconder a PR por dois minutos: a falha vence logo.</summary>
+    [Fact]
+    public async Task Failures_AreCachedOnlyBriefly()
+    {
+        _runner.Respond("pr", new ProcessResult(-1, "", "", true));
+        var client = Client();
+
+        await client.FindOpenAsync(Repository, "feature/x", Ct);
+        await client.FindOpenAsync(Repository, "feature/x", Ct);
+        _runner.Requests.Should().HaveCount(1, "a recarga seguinte não abre outra leva de gh presos");
+
+        _time.Advance(GhCliPullRequestClient.FailureCacheDuration + TimeSpan.FromSeconds(1));
+        _runner.Respond("pr", new ProcessResult(0, "[]", "", false));
+
+        (await client.FindOpenAsync(Repository, "feature/x", Ct)).Support.Should().Be(PullRequestSupport.Ready);
+        _runner.Requests.Should().HaveCount(2);
+        GhCliPullRequestClient.FailureCacheDuration.Should().BeLessThan(GhCliPullRequestClient.CacheDuration);
+    }
+
     [Fact]
     public async Task Reset_ForgetsTheCache()
     {

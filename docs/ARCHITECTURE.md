@@ -3384,9 +3384,17 @@ gh pr list --repo github.com/{dono}/{nome} --head {branch} --state open \
   precisar.
 - **Cache de 2 minutos** no cliente, que é singleton. A lista Hoje recarrega a
   cada minuto, e cada recarga não pode virar uma rajada de idas ao GitHub.
-  "Verificar novamente" limpa o cache.
+  "Verificar novamente" limpa o cache. Falha (erro ou timeout) fica só **20
+  segundos**: o bastante para a recarga seguinte não abrir outra leva de `gh`
+  presos, e pouco para a PR voltar logo que a rede voltar.
+- **Timeout de 8 segundos.** A resposta normal vem em menos de um segundo. Em
+  03/10/2026 o `gh` chegou a ficar preso esperando o `api.github.com` por vários
+  minutos seguidos, enquanto outras chamadas passavam, e cada consulta ocupava
+  os 15 segundos de antes.
 - **Nunca bloqueia nem lança.** Sem remoto do GitHub, sem rede ou com o `gh` em
-  erro, a PR simplesmente não aparece. Criar o worktree nunca depende disso.
+  erro, criar o worktree nunca depende disso. Quando a consulta da branch falha,
+  o formulário diz "Não foi possível consultar o GitHub…" com **"Tentar de
+  novo"**: sem o aviso, a falta do link parecia "a branch não tem PR".
 
 **Tutorial do `gh`:** se o repositório é do GitHub e o `gh` falta (ou está
 instalado sem login), o formulário avisa e oferece **"Como instalar o gh"**. O

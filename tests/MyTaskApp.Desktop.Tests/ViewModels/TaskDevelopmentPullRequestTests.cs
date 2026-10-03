@@ -181,6 +181,58 @@ public class TaskDevelopmentPullRequestTests
         viewModel.ChipTip.Should().NotContain("PR #12");
     }
 
+    /// <summary>Sem resposta do GitHub, a tela diz — "sem link" não pode parecer "sem PR".</summary>
+    [Fact]
+    public async Task AFailedLookup_SaysSo_AndRetryingFindsThePullRequest()
+    {
+        _github.FindOpenAsync(Arg.Any<GitHubRepository>(), "bug/GAECO-1234", Arg.Any<CancellationToken>())
+            .Returns(
+                new PullRequestLookup(PullRequestSupport.Failed),
+                new PullRequestLookup(PullRequestSupport.Ready, Open));
+
+        var viewModel = await WithRepositoryAsync();
+        viewModel.NewBranchName = "bug/GAECO-1234";
+        await SettleAsync(viewModel);
+
+        viewModel.IsPullRequestUnavailable.Should().BeTrue();
+        viewModel.HasPullRequest.Should().BeFalse();
+        viewModel.ShowGhGuide.Should().BeFalse("o gh existe; quem falhou foi a consulta");
+
+        await viewModel.RecheckGhCommand.ExecuteAsync(null);
+
+        viewModel.IsPullRequestUnavailable.Should().BeFalse();
+        viewModel.PullRequest.Should().Be(Open);
+        _github.Received(1).Reset();
+    }
+
+    /// <summary>A conferência do <c>gh</c>, sem branch, não tem PR para dizer que faltou.</summary>
+    [Fact]
+    public async Task AFailedCheck_WithoutABranch_SaysNothing()
+    {
+        _github.CheckAsync(Arg.Any<GitHubRepository>(), Arg.Any<CancellationToken>())
+            .Returns(PullRequestSupport.Failed);
+
+        var viewModel = await WithRepositoryAsync();
+        await SettleAsync(viewModel);
+
+        viewModel.IsPullRequestUnavailable.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ChangingTheBranch_ClearsTheFailure()
+    {
+        _github.FindOpenAsync(Arg.Any<GitHubRepository>(), "bug/GAECO-1234", Arg.Any<CancellationToken>())
+            .Returns(new PullRequestLookup(PullRequestSupport.Failed));
+
+        var viewModel = await WithRepositoryAsync();
+        viewModel.NewBranchName = "bug/GAECO-1234";
+        await SettleAsync(viewModel);
+
+        viewModel.NewBranchName = "task/GAECO-1400";
+
+        viewModel.IsPullRequestUnavailable.Should().BeFalse();
+    }
+
     [Fact]
     public async Task WithoutGh_TheTutorialIsOffered()
     {

@@ -238,6 +238,30 @@ public class TaskNotesDevelopmentRenderingTests
         Named<StackPanel>(window, "GhGuideHint").IsEffectivelyVisible.Should().BeFalse();
     }
 
+    /// <summary>A consulta da branch falhou: o aviso e o "Tentar de novo", no lugar do link.</summary>
+    [AvaloniaFact]
+    public async Task AFailedPullRequestLookup_ShowsTheNoticeAndTheRetry()
+    {
+        var time = new FakeTimeProvider();
+        var (window, viewModel, runner) = await ShowAsync(time: time);
+        runner.ResultsByHandler[typeof(FindPullRequestHandler)] = new PullRequestLookup(PullRequestSupport.Failed);
+        await OpenDevelopmentTabAsync(window, viewModel);
+
+        var environment = viewModel.Developments.Selected!;
+        environment.DirectoryText = Repository;
+        await environment.InspectDirectoryAsync(CancellationToken.None);
+        environment.NewBranchName = "main";
+        time.Advance(TaskDevelopmentViewModel.InspectionDelay);
+        await environment.PendingPullRequest;
+        Settle(window);
+
+        var notice = Named<StackPanel>(window, "PullRequestUnavailable");
+        notice.IsEffectivelyVisible.Should().BeTrue();
+        Texts(notice).Should().Contain(text => text != null && text.Contains("Não foi possível consultar o GitHub"));
+        Named<Button>(window, "RetryPullRequestButton").Command.Should().BeSameAs(environment.RecheckGhCommand);
+        Named<StackPanel>(window, "PullRequestRow").IsEffectivelyVisible.Should().BeFalse();
+    }
+
     /// <summary>Repositório do GitHub sem o gh: o aviso, e o tutorial só depois do clique.</summary>
     [AvaloniaFact]
     public async Task WithoutGh_TheTutorialOpensOnRequest()

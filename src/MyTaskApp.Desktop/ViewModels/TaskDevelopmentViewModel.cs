@@ -305,6 +305,13 @@ public sealed partial class TaskDevelopmentViewModel(
     [ObservableProperty]
     private bool _isCheckingPullRequest;
 
+    /// <summary>
+    /// A pergunta pela branch não teve resposta — rede, GitHub ou <c>gh</c> em
+    /// erro. Sem o aviso, "sem link" parece "sem PR".
+    /// </summary>
+    [ObservableProperty]
+    private bool _isPullRequestUnavailable;
+
     [ObservableProperty]
     private bool _isGhGuideOpen;
 
@@ -1021,6 +1028,7 @@ public sealed partial class TaskDevelopmentViewModel(
         _pullRequestLookup = null;
         PullRequest = null;
         IsCheckingPullRequest = false;
+        IsPullRequestUnavailable = false;
 
         if (query is not { } next)
         {
@@ -1063,6 +1071,7 @@ public sealed partial class TaskDevelopmentViewModel(
 
             GitHubSupport = lookup.Support;
             PullRequest = lookup.PullRequest;
+            IsPullRequestUnavailable = branch is not null && lookup.Support is PullRequestSupport.Failed;
         }
         catch (OperationCanceledException)
         {
@@ -1538,7 +1547,10 @@ public sealed partial class TaskDevelopmentViewModel(
         }
     }
 
-    /// <summary>"Verificar novamente" do tutorial: pergunta ao <c>gh</c> de novo, sem o que estava guardado.</summary>
+    /// <summary>
+    /// "Verificar novamente" do tutorial e "Tentar de novo" da consulta que
+    /// falhou: pergunta ao <c>gh</c> de novo, sem o que estava guardado.
+    /// </summary>
     [RelayCommand]
     public Task RecheckGhAsync() => SchedulePullRequestLookup(refresh: true);
 
