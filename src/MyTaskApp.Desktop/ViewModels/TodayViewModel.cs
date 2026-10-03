@@ -39,7 +39,8 @@ public sealed partial class TodayViewModel(
     IConfirmationDialog confirmation,
     IClipboardWriter clipboard,
     TimeProvider timeProvider,
-    ILogger<TodayViewModel> logger) : ObservableObject, IDisposable
+    ILogger<TodayViewModel> logger,
+    IShellLauncher? shell = null) : ObservableObject, IDisposable
 {
     /// <summary>
     /// O rótulo "aguardando há N minutos" envelhece sozinho, então o quadro
@@ -573,6 +574,96 @@ public sealed partial class TodayViewModel(
         }
 
         await SaveTagsAsync(owner, owner.Toggled(chip.Id), cancellationToken);
+    }
+
+    // ---------------------------------------------------------------------
+    // Ações rápidas da linha (ADR-045): o Jira e o ambiente a um clique do
+    // menu, sem abrir a tarefa — é o que torna a troca de contexto barata.
+    // ---------------------------------------------------------------------
+
+    /// <summary>"Abrir no Jira": o link do retrato, sem consultar nada.</summary>
+    [RelayCommand]
+    public async Task OpenIssueAsync(TaskRowViewModel row)
+    {
+        if (row.External is not { } link || shell is null || !Uri.TryCreate(link.Url, UriKind.Absolute, out var uri))
+        {
+            return;
+        }
+
+        if (!await shell.OpenUriAsync(uri))
+        {
+            ErrorMessage = "Não foi possível abrir o navegador.";
+        }
+    }
+
+    [RelayCommand]
+    public Task CopyIssueKeyAsync(TaskRowViewModel row) => CopyAsync(row.External?.Id, "Chave copiada.");
+
+    [RelayCommand]
+    public Task CopyIssueUrlAsync(TaskRowViewModel row) => CopyAsync(row.External?.Url, "Link do Jira copiado.");
+
+    /// <summary>
+    /// O nome da branch: a do worktree, se a tarefa já tem um; senão, a que a
+    /// convenção dá para a issue (<c>bug/GAECO-1234</c>).
+    /// </summary>
+    [RelayCommand]
+    public async Task CopyBranchNameAsync(TaskRowViewModel row)
+    {
+        var branch = row.Worktree.Worktrees.FirstOrDefault()?.Branch;
+
+        if (branch is null && row.HasIssue)
+        {
+            try
+            {
+                var context = await runner.RunAsync<GetTaskExternalContextHandler, TaskExternalContext>(
+                    (handler, token) => handler.HandleAsync(new GetTaskExternalContext(row.TaskId), token));
+
+                branch = context.SuggestedBranch;
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                logger.LogWarning(exception, "BranchNameLookupFailed {TaskId}", row.TaskId);
+                ErrorMessage = "Não foi possível calcular o nome da branch.";
+                return;
+            }
+        }
+
+        await CopyAsync(branch, "Nome da branch copiado.");
+    }
+
+    /// <summary>"Abrir terminal": o terminal do sistema na pasta do worktree.</summary>
+    [RelayCommand]
+    public void OpenWorktreeTerminal(TaskWorktreeChoice choice)
+    {
+        if (shell is not null && !shell.OpenTerminal(choice.Worktree.WorktreePath))
+        {
+            ErrorMessage = "Não foi possível abrir o terminal nesta pasta.";
+        }
+    }
+
+    /// <summary>"Abrir pasta do worktree": o gerenciador de arquivos do sistema.</summary>
+    [RelayCommand]
+    public async Task OpenWorktreeFolderAsync(TaskWorktreeChoice choice)
+    {
+        if (shell is not null && !await shell.OpenFolderAsync(choice.Worktree.WorktreePath))
+        {
+            ErrorMessage = $"A pasta {choice.Worktree.WorktreePath} não foi encontrada.";
+        }
+    }
+
+    private async Task CopyAsync(string? text, string done)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return;
+        }
+
+        var copied = await TryAsync(() => clipboard.WriteAsync(text), "Não foi possível copiar.");
+
+        if (copied)
+        {
+            StatusMessage = done;
+        }
     }
 
     /// <summary>

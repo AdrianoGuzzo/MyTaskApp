@@ -127,10 +127,39 @@
               Só com ambiente pronto (ADR-036). Clique de code-behind, e não
               comando: com mais de um ambiente a view pergunta qual.
             -->
+            <!--
+              A issue do Jira (ADR-045): abrir e copiar sem abrir a tarefa. Do
+              retrato que veio com a linha — funciona sem rede, menos o abrir.
+            -->
+            <MenuItem Header="Abrir no Jira ↗"
+                      IsVisible="{Binding HasIssue}"
+                      Command="{Binding #Root.((vm:TodayViewModel)DataContext).OpenIssueCommand}"
+                      CommandParameter="{Binding}" />
+            <MenuItem Header="Copiar chave do Jira"
+                      IsVisible="{Binding HasIssue}"
+                      Command="{Binding #Root.((vm:TodayViewModel)DataContext).CopyIssueKeyCommand}"
+                      CommandParameter="{Binding}" />
+            <MenuItem Header="Copiar link do Jira"
+                      IsVisible="{Binding HasIssue}"
+                      Command="{Binding #Root.((vm:TodayViewModel)DataContext).CopyIssueUrlCommand}"
+                      CommandParameter="{Binding}" />
+            <MenuItem Header="Copiar nome da branch"
+                      IsVisible="{Binding HasBranchName}"
+                      Command="{Binding #Root.((vm:TodayViewModel)DataContext).CopyBranchNameCommand}"
+                      CommandParameter="{Binding}" />
+            <Separator IsVisible="{Binding HasBranchName}" />
             <MenuItem Classes="startAgent"
                       Header="Abrir Claude Code"
                       IsVisible="{Binding Worktree.HasWorktree}"
                       Click="OnStartAgentClick" />
+            <MenuItem Classes="worktreeAction"
+                      Header="Abrir terminal no worktree"
+                      IsVisible="{Binding Worktree.HasWorktree}"
+                      Click="OnOpenTerminalClick" />
+            <MenuItem Classes="worktreeAction"
+                      Header="Abrir pasta do worktree"
+                      IsVisible="{Binding Worktree.HasWorktree}"
+                      Click="OnOpenFolderClick" />
             <Separator IsVisible="{Binding Worktree.HasWorktree}" />
             <MenuItem Header="Arquivar"
                       Command="{Binding #Root.((vm:TodayViewModel)DataContext).ArchiveCommand}"
@@ -205,6 +234,31 @@
                     CommandParameter="{Binding}" />
 
           <StackPanel Grid.Column="3" Spacing="1" VerticalAlignment="Center">
+            <!--
+              A issue do Jira (ADR-045), acima do título e com a chave em
+              destaque: é ela que o usuário reconhece entre dez tarefas abertas.
+              Um clique abre a issue; o balão diz o que ela é sem abrir nada.
+            -->
+            <StackPanel x:Name="IssueLine"
+                        Orientation="Horizontal"
+                        Spacing="5"
+                        HorizontalAlignment="Left"
+                        IsVisible="{Binding HasIssue}">
+              <Border Classes="rowIssueType"
+                      Classes.bug="{Binding IsBugIssue}"
+                      Classes.story="{Binding IsStoryIssue}"
+                      Classes.task="{Binding IsTaskIssue}">
+                <TextBlock Text="{Binding IssueTypeLabel}" />
+              </Border>
+              <TextBlock x:Name="IssueKeyText"
+                         Classes="rowIssueKey"
+                         Text="{Binding IssueKey}"
+                         Background="Transparent"
+                         Cursor="Hand"
+                         Tapped="OnIssueKeyTapped"
+                         ToolTip.Tip="{Binding IssueTip}" />
+            </StackPanel>
+
             <!--
               Um clique no texto copia o título (ver OnTitleTapped),
               e o balão devolve o que o "…" levou.
@@ -1048,6 +1102,48 @@
 
     <Style Selector="Border.captureCard:focus-within">
       <Setter Property="BorderBrush" Value="{DynamicResource WidgetAccentLineBrush}" />
+    </Style>
+
+    <!-- ===== A issue na linha (ADR-045) ===== -->
+
+    <Style Selector="Border.rowIssueType">
+      <Setter Property="Padding" Value="3,0" />
+      <Setter Property="CornerRadius" Value="3" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Background" Value="{DynamicResource WidgetStrokeSoftBrush}" />
+    </Style>
+
+    <Style Selector="Border.rowIssueType > TextBlock">
+      <Setter Property="FontSize" Value="8.5" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextMidBrush}" />
+    </Style>
+
+    <Style Selector="Border.rowIssueType.bug">
+      <Setter Property="Background" Value="{DynamicResource WidgetDangerSoftBrush}" />
+    </Style>
+
+    <Style Selector="Border.rowIssueType.bug > TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetDangerBrush}" />
+    </Style>
+
+    <Style Selector="Border.rowIssueType.story > TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetSuccessBrush}" />
+    </Style>
+
+    <Style Selector="Border.rowIssueType.task > TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetInfoBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.rowIssueKey">
+      <Setter Property="FontSize" Value="10.5" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetAccentBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.rowIssueKey:pointerover">
+      <Setter Property="TextDecorations" Value="Underline" />
     </Style>
 
     <!-- ===== Autocomplete do Jira na captura (ADR-045) ===== -->

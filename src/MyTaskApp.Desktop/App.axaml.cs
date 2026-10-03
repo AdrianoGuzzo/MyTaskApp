@@ -388,6 +388,13 @@ public sealed partial class App : Avalonia.Application
 
         viewModel.Developments.CommandsRequested += () => ShowDevelopmentCommands(services, notes);
 
+        // Vincular, atualizar ou desvincular muda a chave que a linha desenha.
+        if (viewModel.Issue is { } issue)
+        {
+            issue.Changed += () => Dispatcher.UIThread.Post(
+                () => _ = todayViewModel.LoadAsync(CancellationToken.None));
+        }
+
         _notes[row.TaskId] = notes;
         notes.Closed += (_, _) => _notes.Remove(row.TaskId);
 

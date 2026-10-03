@@ -224,6 +224,71 @@ public sealed partial class TodayView : UserControl
         return menu;
     }
 
+    /// <summary>"Abrir terminal no worktree" (ADR-045): direto com um ambiente, perguntando com vários.</summary>
+    private void OnOpenTerminalClick(object? sender, RoutedEventArgs e) =>
+        ForEachWorktree(sender, e, "Abrir terminal", viewModel => viewModel.OpenWorktreeTerminalCommand);
+
+    /// <summary>"Abrir pasta do worktree" (ADR-045), com a mesma escolha de ambiente.</summary>
+    private void OnOpenFolderClick(object? sender, RoutedEventArgs e) =>
+        ForEachWorktree(sender, e, "Abrir pasta", viewModel => viewModel.OpenWorktreeFolderCommand);
+
+    /// <summary>
+    /// Uma ação num worktree da linha. Com um só, executa; com vários, abre um
+    /// menu com um item por ambiente, no molde do "Abrir Claude Code" (ADR-036).
+    /// </summary>
+    private void ForEachWorktree(
+        object? sender,
+        RoutedEventArgs e,
+        string verb,
+        Func<TodayViewModel, System.Windows.Input.ICommand> command)
+    {
+        if (sender is not Control { DataContext: TaskRowViewModel row }
+            || DataContext is not TodayViewModel viewModel
+            || row.WorktreeChoices.Count == 0)
+        {
+            return;
+        }
+
+        e.Handled = true;
+
+        if (row.WorktreeChoices.Count == 1)
+        {
+            command(viewModel).Execute(row.WorktreeChoices[0]);
+            return;
+        }
+
+        var menu = new MenuFlyout { Placement = PlacementMode.BottomEdgeAlignedRight };
+
+        foreach (var choice in row.WorktreeChoices)
+        {
+            menu.Items.Add(new MenuItem
+            {
+                Header = $"{verb}: {choice.Worktree.RepositoryName} · {choice.Worktree.Branch}",
+                Command = command(viewModel),
+                CommandParameter = choice,
+            });
+        }
+
+        var anchor = this.GetVisualDescendants()
+            .OfType<Border>()
+            .FirstOrDefault(border => border.ContextFlyout is not null && border.DataContext == row);
+
+        menu.ShowAt((Control?)anchor ?? this);
+    }
+
+    /// <summary>
+    /// Um clique na chave abre a issue no navegador (ADR-045). Tapped, como o
+    /// título: arrastar o painel por cima da linha não pode abrir o Jira.
+    /// </summary>
+    private void OnIssueKeyTapped(object? sender, TappedEventArgs e)
+    {
+        if (sender is Control { DataContext: TaskRowViewModel row } && DataContext is TodayViewModel viewModel)
+        {
+            e.Handled = true;
+            viewModel.OpenIssueCommand.Execute(row);
+        }
+    }
+
     /// <summary>
     /// O botão "⋯" abre o <c>ContextFlyout</c> da própria linha, em vez de ter
     /// um menu só dele. Assim clique direito e botão são literalmente o mesmo

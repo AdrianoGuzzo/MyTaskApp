@@ -134,6 +134,9 @@ internal static class AppServices
             // quem tem uma instancia so.
             .AddTransient<TaskNotesViewModel>()
 
+            // O cartão da issue do Jira na janela da tarefa (ADR-045): um por janela.
+            .AddTransient<TaskIssueViewModel>()
+
             // A aba Desenvolvimento de cada anotação (ADR-027): uma por janela,
             // como a própria anotação, com um ambiente por repositório (ADR-031).
             .AddTransient<TaskDevelopmentsViewModel>()

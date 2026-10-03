@@ -51,7 +51,8 @@ public sealed partial class TaskNotesViewModel(
     IUseCaseRunner runner,
     IDirectoryProbe directoryProbe,
     TaskDevelopmentsViewModel developments,
-    ILogger<TaskNotesViewModel> logger) : ObservableObject
+    ILogger<TaskNotesViewModel> logger,
+    TaskIssueViewModel? issue = null) : ObservableObject
 {
     public const int NotesTab = 0;
 
@@ -132,6 +133,12 @@ public sealed partial class TaskNotesViewModel(
 
     /// <summary>A aba Desenvolvimento (ADR-027), com um ambiente por repositório (ADR-031).</summary>
     public TaskDevelopmentsViewModel Developments { get; } = developments;
+
+    /// <summary>
+    /// O cartão da issue do Jira (ADR-045). Opcional só para os testes que
+    /// montam a janela sem ele; no app, vem do contêiner.
+    /// </summary>
+    public TaskIssueViewModel? Issue { get; } = issue;
 
     public bool IsNotesTab => SelectedTabIndex == NotesTab;
 
@@ -221,6 +228,16 @@ public sealed partial class TaskNotesViewModel(
         SelectedTabIndex = NotesTab;
 
         Developments.Load(row.TaskId, row.Title, row.IsCompleted);
+
+        if (Issue is { } card)
+        {
+            // O retrato da linha desenha o cartão na hora; a consulta traz a
+            // branch da convenção, que a aba Desenvolvimento passa a sugerir.
+            card.Load(row.TaskId, row.External, row.IsCompleted);
+            card.BranchSuggested -= Developments.SuggestBranch;
+            card.BranchSuggested += Developments.SuggestBranch;
+            _ = card.ActivateAsync(CancellationToken.None);
+        }
     }
 
     /// <summary>A aba Desenvolvimento se atualiza a cada vez que aparece.</summary>

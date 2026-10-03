@@ -32,6 +32,9 @@ public sealed partial class TaskDevelopmentsViewModel(
 
     private IReadOnlyList<TaskDevelopmentView> _views = [];
 
+    /// <summary>A branch da convenção da issue vinculada (ADR-045); <c>null</c> = a de sempre.</summary>
+    private string? _suggestedBranch;
+
     public ObservableCollection<TaskDevelopmentViewModel> Items { get; } = [];
 
     [ObservableProperty]
@@ -61,6 +64,7 @@ public sealed partial class TaskDevelopmentsViewModel(
         _taskTitle = taskTitle;
         _isReadOnly = isReadOnly;
         _views = [];
+        _suggestedBranch = null;
         DirectoryCompletion.IsEnabled = !isReadOnly;
         PromptReferences.Load(taskId, isReadOnly);
 
@@ -102,6 +106,20 @@ public sealed partial class TaskDevelopmentsViewModel(
         Reconcile();
         await ActivateSelectedAsync(cancellationToken);
         await RefreshAgentsAsync(except: Selected);
+    }
+
+    /// <summary>
+    /// A tarefa está vinculada a uma issue: as abas que ainda não têm nome
+    /// escolhido passam a sugerir a branch da convenção (<c>bug/GAECO-1234</c>).
+    /// </summary>
+    public void SuggestBranch(string? branch)
+    {
+        _suggestedBranch = branch;
+
+        foreach (var item in Items)
+        {
+            item.SuggestBranch(branch);
+        }
     }
 
     /// <summary>"+ Adicionar repositório": uma aba nova, já com a branch dos outros ambientes.</summary>
@@ -220,6 +238,12 @@ public sealed partial class TaskDevelopmentsViewModel(
     {
         var item = createEnvironment();
         item.Load(_taskId, _taskTitle, _isReadOnly, DirectoryCompletion, PromptReferences);
+
+        if (_suggestedBranch is not null)
+        {
+            item.SuggestBranch(_suggestedBranch);
+        }
+
         item.Changed += OnEnvironmentChanged;
         item.CommandsRequested += OnCommandsRequested;
         item.PropertyChanged += OnEnvironmentPropertyChanged;
