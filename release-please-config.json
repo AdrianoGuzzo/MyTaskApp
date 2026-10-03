@@ -1,0 +1,30 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "bootstrap-sha": "69f6183721a0aa32a338823358e2f04bd4b4c961",
+  "include-v-in-tag": true,
+  "include-component-in-tag": false,
+  "draft": true,
+  "force-tag-creation": true,
+  "pull-request-header": "Release gerada pelo Release Please a partir dos Conventional Commits. Mesclar este PR cria a tag e dispara o build do instalador (docs/release-process.md).",
+  "changelog-sections": [
+    { "type": "feat", "section": "Added" },
+    { "type": "fix", "section": "Fixed" },
+    { "type": "perf", "section": "Performance" },
+    { "type": "refactor", "section": "Changed" },
+    { "type": "revert", "section": "Reverted" },
+    { "type": "docs", "section": "Documentation", "hidden": true },
+    { "type": "test", "section": "Tests", "hidden": true },
+    { "type": "build", "section": "Build", "hidden": true },
+    { "type": "ci", "section": "CI", "hidden": true },
+    { "type": "chore", "section": "Chores", "hidden": true },
+    { "type": "style", "section": "Style", "hidden": true }
+  ],
+  "packages": {
+    ".": {
+      "release-type": "simple",
+      "package-name": "MyTaskApp",
+      "changelog-path": "CHANGELOG.md",
+      "extra-files": ["Directory.Build.props"]
+    }
+  }
+}

@@ -192,6 +192,16 @@
                               Command="{Binding OpenSoundsCommand}" />
                     <MenuItem Header="Gerenciamento de dados…"
                               Command="{Binding OpenDataManagementCommand}" />
+
+                    <!--
+                      Versão, commit e data da build (ADR-044): o fim do menu,
+                      sem janela "Sobre" própria. O clique copia o SHA inteiro
+                      para colar num relato de problema.
+                    -->
+                    <Separator />
+                    <MenuItem Header="{Binding VersionLabel}"
+                              ToolTip.Tip="Copiar versão e commit"
+                              Command="{Binding CopyVersionCommand}" />
                   </MenuFlyout>
                 </Button.Flyout>
               </Button>

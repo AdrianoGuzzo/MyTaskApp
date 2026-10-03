@@ -47,6 +47,15 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!--
+      Data da build, ao lado da versao e do commit que o SDK ja grava no
+      InformationalVersion (ADR-044). Lida por Composition/AppVersion.cs e
+      mostrada no fim do menu do painel.
+    -->
+    <AssemblyMetadata Include="BuildDate" Value="$([System.DateTime]::UtcNow.ToString('yyyy-MM-dd'))" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Update="appsettings.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

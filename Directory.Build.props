@@ -12,13 +12,22 @@
   </PropertyGroup>
 
   <!--
-    Fonte unica da versao e da identidade do produto (ADR-018).
+    Fonte unica da versao e da identidade do produto (ADR-018, ADR-044).
     O instalador NAO repete estes valores: installer/windows/build.ps1 os le com
     `dotnet msbuild -getProperty:Version` e passa para o ISCC via /DAppVersion.
-    Subir de versao e editar VersionPrefix aqui, e mais nada.
+
+    NINGUEM edita VersionPrefix a mao. Quem sobe e o Release Please, no PR de
+    release, a partir dos Conventional Commits; a anotacao no fim da linha e o
+    que ele procura. O manifest (.release-please-manifest.json) guarda o mesmo
+    numero, e ReleaseProcessTests quebra a build se os dois divergirem.
+    Processo completo: docs/release-process.md.
+
+    AssemblyVersion e FileVersion ficam como o SDK deriva (M.m.p.0): o exe nao
+    tem consumidor externo nem strong name. InformationalVersion ganha o SHA do
+    commit sozinho (M.m.p+sha), e e ele que o app mostra e loga.
   -->
   <PropertyGroup Label="Product">
-    <VersionPrefix>1.0.0</VersionPrefix>
+    <VersionPrefix>1.0.0</VersionPrefix><!-- x-release-please-version -->
     <Product>MyTaskApp</Product>
     <Company>MyTaskApp</Company>
     <Authors>MyTaskApp</Authors>

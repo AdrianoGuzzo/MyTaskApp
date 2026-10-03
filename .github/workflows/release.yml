@@ -1,19 +1,101 @@
 name: Release
 
+# Gera os instaladores de UMA tag e os anexa à release em rascunho que o
+# Release Please criou para ela (ADR-044). Não cria tag nem release, e nunca
+# substitui nada: se a release já foi publicada ou já tem artefatos, para.
+#
+# Chamado pelo release-please.yml logo depois de a tag nascer. O disparo manual
+# existe para refazer o build de um rascunho que falhou — não para criar
+# versão: versão nova é sempre um PR de release mesclado.
+
 on:
-  push:
-    tags: ["v*"]
+  workflow_call:
+    inputs:
+      tag:
+        description: Tag criada pelo Release Please (vX.Y.Z)
+        required: true
+        type: string
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag de um rascunho já criado pelo Release Please (ex. v1.5.0)
+        required: true
+        type: string
 
 permissions:
   contents: write
 
+env:
+  TAG: ${{ inputs.tag }}
+
 jobs:
+  verify:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      sha: ${{ steps.version.outputs.sha }}
+
+    steps:
+      - name: Conferir o formato da tag
+        run: |
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::'$TAG' não é vMAJOR.MINOR.PATCH."
+            exit 1
+          fi
+
+      # refs/tags/ explícito: um branch com o mesmo nome não pode ser pego no
+      # lugar da tag.
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      # A tag e o código precisam dizer o mesmo número. Se divergirem, o
+      # instalador sairia com uma versão e a release com outra.
+      - name: A versão do código é a da tag
+        id: version
+        run: |
+          version="$(dotnet msbuild src/MyTaskApp.Desktop/MyTaskApp.Desktop.csproj -getProperty:Version -v:q --nologo | tr -d '[:space:]')"
+          if [ "$version" != "${TAG#v}" ]; then
+            echo "::error::A tag é $TAG, mas Directory.Build.props diz $version."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "Versão $version, commit $(git rev-parse HEAD)"
+
+      # Release publicada é imutável: um cliente pode já ter baixado aquele
+      # instalador. Refazer só vale para rascunho, e sem artefatos — apagar os
+      # que estiverem lá é uma decisão de alguém, não deste script.
+      - name: A release existe, é rascunho e está vazia
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! release="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,assets)"; then
+            echo "::error::Não há release para $TAG. Versões nascem do PR de release do Release Please."
+            exit 1
+          fi
+          if [ "$(jq -r '.isDraft' <<<"$release")" != "true" ]; then
+            echo "::error::$TAG já foi publicada. Versão publicada não se refaz: corrija e gere a próxima."
+            exit 1
+          fi
+          assets="$(jq '.assets | length' <<<"$release")"
+          if [ "$assets" != "0" ]; then
+            echo "::error::O rascunho de $TAG já tem $assets artefato(s). Apague-os no GitHub para refazer de propósito."
+            exit 1
+          fi
+
   windows:
+    needs: verify
     runs-on: windows-latest
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ inputs.tag }}
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -26,9 +108,10 @@ jobs:
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
 
-      # build.ps1 le a versao do MSBuild, roda os testes, publica e chama o
-      # ISCC. Mesmo caminho da geracao local -- nada especifico de CI aqui.
-      - name: Gerar o instalador
+      # build.ps1 lê a versão do MSBuild, roda os testes, publica e chama o
+      # ISCC. Mesmo caminho da geração local — nada específico de CI aqui.
+      # Teste vermelho = nenhum instalador.
+      - name: Testar e gerar o instalador
         shell: pwsh
         run: .\installer\windows\build.ps1
 
@@ -36,12 +119,16 @@ jobs:
         with:
           name: windows-installer
           path: artifacts/installer/*.exe
+          if-no-files-found: error
 
   linux:
+    needs: verify
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ inputs.tag }}
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -56,24 +143,76 @@ jobs:
         with:
           name: linux-package
           path: artifacts/installer/*.tar.gz
+          if-no-files-found: error
 
   publish:
-    needs: [windows, linux]
+    needs: [verify, windows, linux]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
 
     steps:
       - uses: actions/download-artifact@v4
         with:
-          path: artifacts
+          path: dist
           merge-multiple: true
 
-      # Rascunho de proposito: alguem confere o teste de fumaca manual de
-      # installer/README.md antes de o mundo baixar.
-      - uses: softprops/action-gh-release@v2
-        with:
-          draft: true
-          generate_release_notes: true
-          files: |
-            artifacts/*.exe
-            artifacts/*.tar.gz
+      # Os nomes são o contrato com quem baixa: produto-versão-rid.
+      - name: Conferir os artefatos
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          for expected in "MyTaskApp-$VERSION-win-x64-setup.exe" "MyTaskApp-$VERSION-linux-x64.tar.gz"; do
+            test -f "dist/$expected" || { echo "::error::Faltou dist/$expected"; ls -la dist; exit 1; }
+          done
+
+      - name: Gerar SHA256SUMS
+        working-directory: dist
+        run: |
+          sha256sum -- * > SHA256SUMS
+          sha256sum -c SHA256SUMS
+          cat SHA256SUMS
+
+      # Sem --clobber de propósito: um artefato com o mesmo nome já lá faz o
+      # upload falhar, em vez de trocar um instalador em silêncio.
+      - name: Anexar à release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" dist/* --repo "$GITHUB_REPOSITORY"
+
+      # As notas vêm do CHANGELOG.md (Release Please). Aqui só entra o que
+      # liga o instalador ao código: o commit e os hashes.
+      - name: Completar as notas
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ needs.verify.outputs.sha }}
+        run: |
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body --jq .body > notes.md
+          {
+            echo
+            echo "## Rastreabilidade"
+            echo
+            echo "- Commit: [\`${SHA:0:7}\`]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$SHA) (\`$SHA\`)"
+            echo "- Build: [execução $GITHUB_RUN_ID]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)"
+            echo
+            echo "## SHA-256"
+            echo
+            echo '```text'
+            cat dist/SHA256SUMS
+            echo '```'
+            echo
+            echo 'Conferir: `sha256sum -c SHA256SUMS` (Linux) ou `Get-FileHash <arquivo>` (Windows).'
+          } >> notes.md
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file notes.md
+
+      - name: Resumo
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          {
+            echo "### $TAG pronta em rascunho"
+            echo
+            echo "Rode o teste de fumaça de installer/README.md e publique em Releases."
+            echo
+            echo '```text'
+            cat dist/SHA256SUMS
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

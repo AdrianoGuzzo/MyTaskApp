@@ -28,6 +28,16 @@ internal static class RepositoryFiles
     public static string DesktopProject =>
         At("src", "MyTaskApp.Desktop", "MyTaskApp.Desktop.csproj");
 
+    public static string ReleasePleaseConfig => At("release-please-config.json");
+
+    public static string ReleasePleaseManifest => At(".release-please-manifest.json");
+
+    public static string ReleaseWorkflow => At(".github", "workflows", "release.yml");
+
+    public static string ReleasePleaseWorkflow => At(".github", "workflows", "release-please.yml");
+
+    public static string PullRequestTitleWorkflow => At(".github", "workflows", "pr-title.yml");
+
     public static string At(params string[] segments) =>
         Path.Combine([Root, .. segments]);
 

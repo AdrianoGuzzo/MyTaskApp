@@ -1,0 +1,41 @@
+name: PR title
+
+# O merge é squash: o título do PR vira o único commit no master, e é ele que
+# o Release Please lê para decidir a próxima versão e escrever o changelog.
+# Um título fora do padrão some do changelog sem ninguém perceber, então ele
+# reprova aqui. Os commits dentro do PR continuam livres.
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  conventional-commit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # feat → MINOR, fix/perf/refactor/revert → PATCH, "!" ou
+          # BREAKING CHANGE → MAJOR. O resto não gera versão sozinho.
+          types: |
+            feat
+            fix
+            perf
+            refactor
+            revert
+            docs
+            test
+            build
+            ci
+            chore
+            style
+          requireScope: false
+          # A descrição é em português e começa como quiser — "adiciona",
+          # "Corrige", "@ no texto do agente".
+          subjectPattern: ^.+$

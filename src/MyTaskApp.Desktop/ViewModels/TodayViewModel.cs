@@ -330,6 +330,32 @@ public sealed partial class TodayViewModel(
     public void OpenSounds() => SoundsRequested?.Invoke();
 
     /// <summary>
+    /// O código que está rodando (ADR-044). Configurável só para o teste: em
+    /// produção é sempre o do próprio assembly.
+    /// </summary>
+    public AppVersion Version { get; init; } = AppVersion.Current;
+
+    /// <summary>A última linha do menu ☰: <c>MyTaskApp 1.1.0 · a82f91c · 2026-10-02</c>.</summary>
+    public string VersionLabel => $"MyTaskApp {Version.Display}";
+
+    /// <summary>
+    /// "Qual versão você tem?" é a primeira pergunta de todo relato de problema.
+    /// Copiar leva o SHA inteiro, que aponta o commit sem margem de dúvida.
+    /// </summary>
+    [RelayCommand]
+    public async Task CopyVersionAsync()
+    {
+        var copied = await TryAsync(
+            () => clipboard.WriteAsync(Version.Details),
+            "Não foi possível copiar a versão.");
+
+        if (copied)
+        {
+            StatusMessage = "Versão copiada.";
+        }
+    }
+
+    /// <summary>
     /// Prepara o seletor de etiquetas da linha. A lista é lida a cada abertura,
     /// e não junto com o quadro: ela só interessa a quem abriu o seletor, e
     /// assim uma etiqueta criada agora mesmo já aparece.

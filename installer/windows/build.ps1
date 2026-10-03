@@ -196,6 +196,7 @@ New-Item -ItemType Directory -Force -Path $installerDir | Out-Null
 $isccArgs = @(
     "/DAppVersion=$version",
     "/DAppVersionFull=$versionFull",
+    "/DAppRuntime=$Runtime",
     "/DPublishDir=$publishDir",
     '/Qp'
 )
@@ -206,7 +207,8 @@ $isccArgs += $issFile
 
 Invoke-Checked 'ISCC' { & $iscc @isccArgs }
 
-$setup = Join-Path $installerDir "MyTaskAppSetup-$version.exe"
+$setupName = "MyTaskApp-$version-$Runtime-setup.exe"
+$setup = Join-Path $installerDir $setupName
 if (-not (Test-Path $setup)) { throw "ISCC terminou sem erro, mas $setup nao existe." }
 
 $setupSize = [math]::Round((Get-Item $setup).Length / 1MB, 1)
@@ -215,4 +217,4 @@ Write-Host ''
 Write-Host "Instalador pronto: $setup ($setupSize MB)" -ForegroundColor Green
 Write-Host ''
 Write-Host 'Instalacao silenciosa:'
-Write-Host "    MyTaskAppSetup-$version.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART"
+Write-Host "    $setupName /VERYSILENT /SUPPRESSMSGBOXES /NORESTART"
