@@ -156,10 +156,10 @@
 
         <!-- Conectado -->
         <StackPanel Spacing="8" IsVisible="{Binding IsConnected}">
-          <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto">
-            <TextBlock Grid.Row="0" Classes="field" Text="Conta" Margin="0,0,12,4" />
+          <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="4">
+            <TextBlock Grid.Row="0" Classes="field" Text="Conta" VerticalAlignment="Center" />
             <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding AccountLabel}" TextWrapping="Wrap" />
-            <TextBlock Grid.Row="1" Classes="field" Text="Site" Margin="0,0,12,4" />
+            <TextBlock Grid.Row="1" Classes="field" Text="Site" VerticalAlignment="Center" />
             <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SiteLabel}" />
             <TextBlock Grid.Row="2" Grid.Column="1" Classes="meta" Text="{Binding MethodLabel}" />
           </Grid>

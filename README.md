@@ -132,6 +132,37 @@ A janela da tarefa tem a aba **Desenvolvimento**:
 - **Abrir Claude Code** também fica no menu `⋯` da linha, sem precisar abrir a
   tarefa.
 
+### Jira: a issue vira o contexto da tarefa
+
+O Jira continua sendo onde a issue mora. O MyTaskApp busca a issue enquanto
+você escreve, guarda a chave, o título e o link na tarefa e dá o nome da
+branch. Detalhes em [ADR-045](docs/ARCHITECTURE.md).
+
+- **Conectar com um clique** em *☰ → Integrações…*: o navegador abre na
+  Atlassian, você autoriza e volta conectado. E-mail + API token fica como
+  caminho avançado.
+- **Buscar ao digitar o título.** Escreva parte do título na caixa de captura,
+  e as issues parecidas aparecem embaixo: tipo, chave, título e status. ↓/↑ e
+  Enter escolhem, Tab pega a primeira, Esc fecha e Ctrl+Espaço busca na hora.
+  Digitar a chave (`GAECO-1234`) também funciona, e com projeto padrão basta o
+  número. A lista nunca vem escolhida: Enter sem escolha continua criando a
+  tarefa sem vínculo.
+- **A linha vira `GAECO-1234 título`** e a tarefa nasce vinculada. Apagar a
+  chave desfaz o vínculo.
+- **Na lista**, o tipo e a chave aparecem em destaque acima do título. Um
+  clique abre a issue. O menu `⋯` copia a chave, o link e o nome da branch, e
+  abre o terminal e a pasta do worktree.
+- **Na tarefa**, um cartão com tipo, chave, status, título, branch e "lido do
+  Jira há…", mais **Atualizar do Jira**, **Copiar** e **Desvincular**. Uma
+  tarefa sem issue ganha **Vincular ao Jira…**.
+- **Branch pela convenção do tipo:** `Bug → bug/GAECO-1234`,
+  `Story → feature/…`, `Task → task/…`, `Improvement → improvement/…`,
+  `Hotfix → hotfix/…`. É editável em Integrações, e "História", "Tarefa" e
+  "Melhoria" seguem as mesmas linhas. A aba Desenvolvimento avisa quando a
+  branch já existe, local ou no remoto, e a usa em vez de criar outra.
+- **Funciona sem rede.** A chave, o título e o link ficam no banco. Sem Jira, só
+  a busca e o "Atualizar" ficam indisponíveis.
+
 ---
 
 ## Instalação
@@ -210,6 +241,8 @@ app **nunca** apaga suas tarefas.
 | Estado da janela | `%APPDATA%\MyTaskApp\widget.json` | `~/.config/MyTaskApp/widget.json` |
 | Config do usuário | `%APPDATA%\MyTaskApp\appsettings.user.json` | `~/.config/MyTaskApp/appsettings.user.json` |
 | Logs | `%APPDATA%\MyTaskApp\logs` | `~/.config/MyTaskApp/logs` |
+| Conexão com o Jira | `%APPDATA%\MyTaskApp\jira.json` (sem segredo) | — |
+| Token do Jira | `%APPDATA%\MyTaskApp\secrets\jira.bin` (DPAPI) | — |
 
 O banco é criado e atualizado pela própria aplicação na inicialização (migrations
 do EF Core). O instalador não mexe nele. Para fazer backup, copie o
@@ -237,6 +270,10 @@ mudar algum deles sem editar o diretório de instalação, crie um
     "LifecycleSweepMinutes": 360,
     "AgentSessionReconcileSeconds": 60,
     "AgentEventsPort": 47831
+  },
+  "Jira": {
+    "CallbackPort": 47832,
+    "RequestTimeoutSeconds": 8
   }
 }
 ```
@@ -249,6 +286,9 @@ mudar algum deles sem editar o diretório de instalação, crie um
 | `LifecycleSweepMinutes` | 360 | intervalo da varredura de arquivamento e lixeira |
 | `AgentSessionReconcileSeconds` | 60 | intervalo da conferência de processos do agente |
 | `AgentEventsPort` | 47831 | porta local (`127.0.0.1`) que recebe os hooks do Claude Code |
+| `Jira:CallbackPort` | 47832 | porta da volta do login do Jira; precisa ser a registrada no app OAuth |
+| `Jira:RequestTimeoutSeconds` | 8 | quanto uma chamada ao Jira espera antes de desistir |
+| `Jira:ClientId` / `ClientSecret` | do build | o app OAuth da Atlassian ([como registrar](docs/jira-oauth-app.md)) |
 
 Linha de comando: `MyTaskApp.exe --startup` abre direto na bandeja. É o
 argumento que o instalador grava na chave `Run` do Windows.
@@ -497,7 +537,8 @@ fica em [`CHANGELOG.md`](CHANGELOG.md).
 
 | Documento | Conteúdo |
 |---|---|
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | decisões de arquitetura (ADR-001 a ADR-044), com o motivo de cada uma |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | decisões de arquitetura (ADR-001 a ADR-045), com o motivo de cada uma |
+| [`docs/jira-oauth-app.md`](docs/jira-oauth-app.md) | registrar o app OAuth do Jira e pôr as credenciais no build |
 | [`docs/release-process.md`](docs/release-process.md) | Conventional Commits, SemVer, pipeline de release, hotfix, verificação de versão |
 | [`installer/README.md`](installer/README.md) | instaladores Windows e Linux, parâmetros, atualização, teste de fumaça |
 | [`installer/macos/README.md`](installer/macos/README.md) | roteiro para o empacotamento macOS |

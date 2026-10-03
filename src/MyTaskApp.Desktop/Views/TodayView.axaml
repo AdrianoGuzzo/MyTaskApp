@@ -1107,7 +1107,7 @@
     <!-- ===== A issue na linha (ADR-045) ===== -->
 
     <Style Selector="Border.rowIssueType">
-      <Setter Property="Padding" Value="3,0" />
+      <Setter Property="Padding" Value="3,1,3,0" />
       <Setter Property="CornerRadius" Value="3" />
       <Setter Property="VerticalAlignment" Value="Center" />
       <Setter Property="Background" Value="{DynamicResource WidgetStrokeSoftBrush}" />
