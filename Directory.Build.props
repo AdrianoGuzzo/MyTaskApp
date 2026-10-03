@@ -27,7 +27,7 @@
     commit sozinho (M.m.p+sha), e e ele que o app mostra e loga.
   -->
   <PropertyGroup Label="Product">
-    <VersionPrefix>1.2.0</VersionPrefix><!-- x-release-please-version -->
+    <VersionPrefix>1.2.1</VersionPrefix><!-- x-release-please-version -->
     <Product>MyTaskApp</Product>
     <Company>MyTaskApp</Company>
     <Authors>MyTaskApp</Authors>
