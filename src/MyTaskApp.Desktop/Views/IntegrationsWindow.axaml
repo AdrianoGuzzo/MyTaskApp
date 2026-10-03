@@ -1,0 +1,225 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
+        xmlns:jira="using:MyTaskApp.Application.External.Jira"
+        x:Class="MyTaskApp.Desktop.Views.IntegrationsWindow"
+        x:DataType="vm:IntegrationsViewModel"
+        x:Name="Root"
+        Title="Integrações"
+        Width="520"
+        SizeToContent="Height"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner">
+
+  <!--
+    Integrações (ADR-045). Hoje, o Jira: conectar com um clique, o projeto
+    padrão da busca e as convenções de branch das tarefas vinculadas.
+  -->
+
+  <Window.Styles>
+
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="{DynamicResource WidgetSurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetStrokeSoftBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetCardRadius}" />
+      <Setter Property="Padding" Value="14,12" />
+    </Style>
+
+    <Style Selector="TextBlock.sectionTitle">
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.meta">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style Selector="TextBlock.field">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextMidBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.connected">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetSuccessBrush}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <Style Selector="Button.link">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetAccentBrush}" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+  </Window.Styles>
+
+  <StackPanel Margin="16,14" Spacing="12">
+
+    <StackPanel Spacing="4">
+      <TextBlock Text="Integrações" FontSize="18" FontWeight="SemiBold" />
+      <TextBlock Classes="meta"
+                 Text="O MyTaskApp não substitui o Jira: ele busca a issue enquanto você digita o título, guarda a chave, o título e o link na tarefa, e dá o nome da branch." />
+    </StackPanel>
+
+    <!-- ============================ JIRA ============================ -->
+    <Border Classes="card">
+      <StackPanel Spacing="10">
+
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBlock Classes="sectionTitle" Text="Jira" VerticalAlignment="Center" />
+          <TextBlock Grid.Column="1"
+                     Classes="connected"
+                     Text="● Conectado"
+                     IsVisible="{Binding IsConnected}" />
+        </Grid>
+
+        <!-- Desconectado -->
+        <StackPanel Spacing="10" IsVisible="{Binding IsDisconnected}">
+          <TextBlock Classes="meta"
+                     Text="Conecte seu Jira para buscar issues pelo título ao criar uma tarefa e recuperar o contexto delas em segundos." />
+
+          <Button x:Name="ConnectButton"
+                  Classes="accent"
+                  HorizontalAlignment="Center"
+                  Padding="20,8"
+                  Content="Conectar ao Jira"
+                  IsVisible="{Binding ShowConnectButton}"
+                  Command="{Binding ConnectCommand}" />
+
+          <StackPanel Spacing="6" IsVisible="{Binding IsAuthorizing}" HorizontalAlignment="Center">
+            <ProgressBar IsIndeterminate="True" Width="200" />
+            <Button Classes="link"
+                    HorizontalAlignment="Center"
+                    Content="Cancelar"
+                    Command="{Binding CancelAuthorizationCommand}" />
+          </StackPanel>
+
+          <Button Classes="link"
+                  HorizontalAlignment="Center"
+                  Content="Conectar com API token (avançado)"
+                  IsVisible="{Binding IsOAuthAvailable}"
+                  Command="{Binding ToggleApiTokenFormCommand}" />
+
+          <!-- O caminho avançado: site, e-mail e API token. -->
+          <StackPanel Spacing="8" IsVisible="{Binding IsApiTokenFormOpen}">
+            <StackPanel Spacing="3">
+              <TextBlock Classes="field" Text="Endereço do Jira" />
+              <TextBox x:Name="SiteBox" PlaceholderText="empresa.atlassian.net" Text="{Binding SiteUrl}" />
+            </StackPanel>
+            <StackPanel Spacing="3">
+              <TextBlock Classes="field" Text="E-mail da conta Atlassian" />
+              <TextBox x:Name="EmailBox" PlaceholderText="voce@empresa.com" Text="{Binding Email}" />
+            </StackPanel>
+            <StackPanel Spacing="3">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Classes="field" Text="API token" />
+                <Button Grid.Column="1"
+                        Classes="link"
+                        Content="Criar um token ↗"
+                        Command="{Binding OpenApiTokenPageCommand}" />
+              </Grid>
+              <TextBox x:Name="TokenBox" PasswordChar="●" Text="{Binding ApiToken}" />
+            </StackPanel>
+            <Button HorizontalAlignment="Right"
+                    Content="Conectar"
+                    IsEnabled="{Binding !IsBusy}"
+                    Command="{Binding ConnectWithApiTokenCommand}" />
+          </StackPanel>
+        </StackPanel>
+
+        <!-- Autorizou, com mais de um site -->
+        <StackPanel Spacing="6" IsVisible="{Binding IsChoosingSite}">
+          <TextBlock Classes="meta" Text="Sua conta enxerga mais de um Jira. Qual é o do seu trabalho?" />
+          <ItemsControl ItemsSource="{Binding Sites}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="jira:JiraSite">
+                <Button Margin="0,2"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Command="{Binding #Root.((vm:IntegrationsViewModel)DataContext).ChooseSiteCommand}"
+                        CommandParameter="{Binding}">
+                  <StackPanel>
+                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                    <TextBlock Classes="meta" Text="{Binding Url}" />
+                  </StackPanel>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+
+        <!-- Conectado -->
+        <StackPanel Spacing="8" IsVisible="{Binding IsConnected}">
+          <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="4">
+            <TextBlock Grid.Row="0" Classes="field" Text="Conta" VerticalAlignment="Center" />
+            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding AccountLabel}" TextWrapping="Wrap" />
+            <TextBlock Grid.Row="1" Classes="field" Text="Site" VerticalAlignment="Center" />
+            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SiteLabel}" />
+            <TextBlock Grid.Row="2" Grid.Column="1" Classes="meta" Text="{Binding MethodLabel}" />
+          </Grid>
+
+          <StackPanel Spacing="3">
+            <TextBlock Classes="field" Text="Projeto padrão da busca" />
+            <ComboBox x:Name="ProjectBox"
+                      HorizontalAlignment="Stretch"
+                      ItemsSource="{Binding Projects}"
+                      SelectedItem="{Binding SelectedProject}" />
+          </StackPanel>
+
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button Content="Testar conexão" IsEnabled="{Binding !IsBusy}" Command="{Binding TestCommand}" />
+            <Button Content="Desconectar" IsEnabled="{Binding !IsBusy}" Command="{Binding DisconnectCommand}" />
+          </StackPanel>
+        </StackPanel>
+
+      </StackPanel>
+    </Border>
+
+    <!-- ===================== CONVENÇÕES DE BRANCH ===================== -->
+    <Border Classes="card">
+      <StackPanel Spacing="8">
+        <TextBlock Classes="sectionTitle" Text="Convenção de branch" />
+        <TextBlock Classes="meta"
+                   Text="Uma linha por tipo de issue. {id} é a chave (obrigatória); {slug} é o título sem acento; {type} é o tipo. História, Tarefa e Melhoria seguem Story, Task e Improvement." />
+        <TextBox x:Name="ConventionsBox"
+                 AcceptsReturn="True"
+                 FontFamily="Cascadia Mono, Consolas, monospace"
+                 FontSize="12"
+                 MinHeight="96"
+                 TextWrapping="NoWrap"
+                 Text="{Binding ConventionsText}" />
+        <TextBlock Classes="meta"
+                   FontFamily="Cascadia Mono, Consolas, monospace"
+                   Text="{Binding ConventionsPreview}" />
+        <TextBlock Foreground="{DynamicResource WidgetDangerBrush}"
+                   FontSize="12"
+                   TextWrapping="Wrap"
+                   Text="{Binding ConventionsError}"
+                   IsVisible="{Binding ConventionsError, Converter={x:Static ObjectConverters.IsNotNull}}" />
+        <Grid ColumnDefinitions="Auto,*,Auto">
+          <Button Content="Restaurar padrão" Command="{Binding RestoreDefaultConventionsCommand}" />
+          <Button Grid.Column="2" Content="Salvar convenção" Command="{Binding SaveConventionsCommand}" />
+        </Grid>
+      </StackPanel>
+    </Border>
+
+    <Border Padding="12,9"
+            CornerRadius="6"
+            Background="{DynamicResource SystemFillColorCriticalBackgroundBrush}"
+            IsVisible="{Binding ErrorMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <TextBlock Text="{Binding ErrorMessage}" TextWrapping="Wrap" />
+    </Border>
+
+    <TextBlock Classes="meta"
+               Text="{Binding StatusMessage}"
+               IsVisible="{Binding StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+  </StackPanel>
+
+</Window>

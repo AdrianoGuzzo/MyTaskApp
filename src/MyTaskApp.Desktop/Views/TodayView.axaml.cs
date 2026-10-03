@@ -53,6 +53,11 @@ public sealed partial class TodayView : UserControl
         // de mensagem. Precisa ser túnel: com AcceptsReturn o próprio TextBox marca
         // o Enter como tratado, e um KeyBinding no controle nunca chegaria a ver.
         CaptureBox.AddHandler(KeyDownEvent, OnCaptureKeyDown, RoutingStrategies.Tunnel);
+
+        // O autocomplete do Jira (ADR-045) acompanha a linha onde está o cursor:
+        // texto e cursor mudam juntos ao digitar, e só o cursor ao andar com as setas.
+        CaptureBox.PropertyChanged += OnCaptureBoxPropertyChanged;
+        CaptureBox.LostFocus += OnCaptureBoxLostFocus;
     }
 
     protected override void OnLoaded(RoutedEventArgs e)
@@ -219,6 +224,71 @@ public sealed partial class TodayView : UserControl
         return menu;
     }
 
+    /// <summary>"Abrir terminal no worktree" (ADR-045): direto com um ambiente, perguntando com vários.</summary>
+    private void OnOpenTerminalClick(object? sender, RoutedEventArgs e) =>
+        ForEachWorktree(sender, e, "Abrir terminal", viewModel => viewModel.OpenWorktreeTerminalCommand);
+
+    /// <summary>"Abrir pasta do worktree" (ADR-045), com a mesma escolha de ambiente.</summary>
+    private void OnOpenFolderClick(object? sender, RoutedEventArgs e) =>
+        ForEachWorktree(sender, e, "Abrir pasta", viewModel => viewModel.OpenWorktreeFolderCommand);
+
+    /// <summary>
+    /// Uma ação num worktree da linha. Com um só, executa; com vários, abre um
+    /// menu com um item por ambiente, no molde do "Abrir Claude Code" (ADR-036).
+    /// </summary>
+    private void ForEachWorktree(
+        object? sender,
+        RoutedEventArgs e,
+        string verb,
+        Func<TodayViewModel, System.Windows.Input.ICommand> command)
+    {
+        if (sender is not Control { DataContext: TaskRowViewModel row }
+            || DataContext is not TodayViewModel viewModel
+            || row.WorktreeChoices.Count == 0)
+        {
+            return;
+        }
+
+        e.Handled = true;
+
+        if (row.WorktreeChoices.Count == 1)
+        {
+            command(viewModel).Execute(row.WorktreeChoices[0]);
+            return;
+        }
+
+        var menu = new MenuFlyout { Placement = PlacementMode.BottomEdgeAlignedRight };
+
+        foreach (var choice in row.WorktreeChoices)
+        {
+            menu.Items.Add(new MenuItem
+            {
+                Header = $"{verb}: {choice.Worktree.RepositoryName} · {choice.Worktree.Branch}",
+                Command = command(viewModel),
+                CommandParameter = choice,
+            });
+        }
+
+        var anchor = this.GetVisualDescendants()
+            .OfType<Border>()
+            .FirstOrDefault(border => border.ContextFlyout is not null && border.DataContext == row);
+
+        menu.ShowAt((Control?)anchor ?? this);
+    }
+
+    /// <summary>
+    /// Um clique na chave abre a issue no navegador (ADR-045). Tapped, como o
+    /// título: arrastar o painel por cima da linha não pode abrir o Jira.
+    /// </summary>
+    private void OnIssueKeyTapped(object? sender, TappedEventArgs e)
+    {
+        if (sender is Control { DataContext: TaskRowViewModel row } && DataContext is TodayViewModel viewModel)
+        {
+            e.Handled = true;
+            viewModel.OpenIssueCommand.Execute(row);
+        }
+    }
+
     /// <summary>
     /// O botão "⋯" abre o <c>ContextFlyout</c> da própria linha, em vez de ter
     /// um menu só dele. Assim clique direito e botão são literalmente o mesmo
@@ -265,6 +335,12 @@ public sealed partial class TodayView : UserControl
 
     private void OnCaptureKeyDown(object? sender, KeyEventArgs e)
     {
+        if (HandleIssueSuggestionKey(e))
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key is not Key.Enter || e.KeyModifiers.HasFlag(KeyModifiers.Shift))
         {
             return;
@@ -278,6 +354,134 @@ public sealed partial class TodayView : UserControl
         {
             viewModel.CaptureCommand.Execute(null);
         }
+    }
+
+    // ---------------------------------------------------------------------
+    // Autocomplete do Jira na captura (ADR-045)
+    //
+    // A decisão — quando buscar, o que mostrar, o que o Enter faz — mora em
+    // IssueSuggestionsViewModel, testável sem tela. Aqui fica o que só a view
+    // sabe: em que linha está o cursor e para onde ele vai depois de escolher.
+    // ---------------------------------------------------------------------
+
+    /// <summary>
+    /// O teclado com a lista do Jira. Ctrl+Espaço busca na hora. Com a lista
+    /// aberta: ↑/↓ andam, Tab escolhe (a primeira, se nada estiver marcado),
+    /// Enter escolhe só o que foi marcado — sem marca, continua capturando — e
+    /// Esc fecha.
+    /// </summary>
+    private bool HandleIssueSuggestionKey(KeyEventArgs e)
+    {
+        if (DataContext is not TodayViewModel viewModel)
+        {
+            return false;
+        }
+
+        var suggestions = viewModel.CaptureSuggestions;
+
+        if (e.Key == Key.Space && e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        {
+            suggestions.SearchNow(CurrentCaptureLine());
+            return true;
+        }
+
+        if (!suggestions.IsOpen)
+        {
+            return false;
+        }
+
+        var hasItems = suggestions.Items.Count > 0;
+
+        return e.Key switch
+        {
+            Key.Down when hasItems => Run(() => suggestions.Move(+1)),
+            Key.Up when hasItems => Run(() => suggestions.Move(-1)),
+            Key.Escape => Run(suggestions.Dismiss),
+            Key.Tab when hasItems && !e.KeyModifiers.HasFlag(KeyModifiers.Shift) => AcceptIssue(viewModel, orFirst: true),
+            Key.Enter when !e.KeyModifiers.HasFlag(KeyModifiers.Shift) => AcceptIssue(viewModel, orFirst: false),
+            _ => false,
+        };
+
+        static bool Run(Action action)
+        {
+            action();
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// A escolhida vira a linha do cursor (<c>GAECO-1234 título</c>) e o cursor
+    /// vai para o fim dela, pronto para seguir escrevendo ou apertar Enter.
+    /// </summary>
+    private bool AcceptIssue(TodayViewModel viewModel, bool orFirst)
+    {
+        if (viewModel.CaptureSuggestions.Accept(orFirst) is not { } issue)
+        {
+            return false;
+        }
+
+        var caret = viewModel.LinkCaptureLine(CaptureLineIndex(), issue);
+
+        CaptureBox.CaretIndex = Math.Min(caret, CaptureBox.Text?.Length ?? 0);
+        CaptureBox.Focus();
+        return true;
+    }
+
+    /// <summary>
+    /// O clique escolhe no <c>PointerPressed</c>, e não no solto: os itens não
+    /// recebem foco, e o cursor precisa continuar na caixa.
+    /// </summary>
+    private void OnIssueSuggestionPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is Control { DataContext: IssueSuggestionViewModel item } && DataContext is TodayViewModel viewModel)
+        {
+            viewModel.CaptureSuggestions.Select(item);
+            AcceptIssue(viewModel, orFirst: false);
+            e.Handled = true;
+        }
+    }
+
+    private void OnCaptureBoxPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        if ((e.Property == TextBox.TextProperty || e.Property == TextBox.CaretIndexProperty)
+            && CaptureBox.IsFocused
+            && DataContext is TodayViewModel viewModel)
+        {
+            viewModel.CaptureSuggestions.UpdateQuery(CurrentCaptureLine());
+        }
+    }
+
+    /// <summary>
+    /// Saiu da caixa: a lista fecha. Postado, para um clique numa sugestão —
+    /// que chega antes da troca de foco — ser atendido primeiro.
+    /// </summary>
+    private void OnCaptureBoxLostFocus(object? sender, RoutedEventArgs e) =>
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                if (!CaptureBox.IsFocused && DataContext is TodayViewModel { CaptureSuggestions.IsOpen: true } viewModel)
+                {
+                    viewModel.CaptureSuggestions.Dismiss();
+                }
+            },
+            DispatcherPriority.Background);
+
+    /// <summary>Em que linha da caixa está o cursor, contando de zero.</summary>
+    private int CaptureLineIndex()
+    {
+        var text = CaptureBox.Text ?? string.Empty;
+        var caret = Math.Clamp(CaptureBox.CaretIndex, 0, text.Length);
+
+        return text.AsSpan(0, caret).Count('\n');
+    }
+
+    /// <summary>O texto da linha onde está o cursor — é ela que o autocomplete procura.</summary>
+    private string CurrentCaptureLine()
+    {
+        var lines = (CaptureBox.Text ?? string.Empty).Split('\n');
+        var index = Math.Clamp(CaptureLineIndex(), 0, lines.Length - 1);
+
+        return lines[index].TrimEnd('\r');
     }
 
     // ---------------------------------------------------------------------

@@ -245,6 +245,125 @@
       <Setter Property="Cursor" Value="Hand" />
     </Style>
 
+    <!-- ===== A issue do Jira (ADR-045) ===== -->
+
+    <Style Selector="Border.issueCard">
+      <Setter Property="Background" Value="{DynamicResource WidgetSurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetStrokeSoftBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetCardRadius}" />
+      <Setter Property="Padding" Value="12,10" />
+    </Style>
+
+    <Style Selector="Border.issueType">
+      <Setter Property="Margin" Value="0,0,8,0" />
+      <Setter Property="Padding" Value="5,1" />
+      <Setter Property="CornerRadius" Value="3" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Background" Value="{DynamicResource WidgetStrokeSoftBrush}" />
+    </Style>
+
+    <Style Selector="Border.issueType > TextBlock">
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+    </Style>
+
+    <Style Selector="Border.issueType.bug">
+      <Setter Property="Background" Value="{DynamicResource WidgetDangerSoftBrush}" />
+    </Style>
+
+    <Style Selector="Border.issueType.bug > TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetDangerBrush}" />
+    </Style>
+
+    <Style Selector="Border.issueType.story > TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetSuccessBrush}" />
+    </Style>
+
+    <Style Selector="Border.issueType.task > TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetInfoBrush}" />
+    </Style>
+
+    <!-- A chave é o destaque: é ela que se reconhece entre dez tarefas. -->
+    <Style Selector="Button.issueKey">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="FontSize" Value="15" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetAccentBrush}" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style Selector="TextBlock.issueStatus">
+      <Setter Property="Margin" Value="10,0,0,0" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextMidBrush}" />
+    </Style>
+
+    <Style Selector="SelectableTextBlock.issueTitle">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.issueField">
+      <Setter Property="Margin" Value="0,0,10,0" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+    </Style>
+
+    <Style Selector="SelectableTextBlock.issueBranch">
+      <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, monospace" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+    </Style>
+
+    <Style Selector="Button.issueAction">
+      <Setter Property="Margin" Value="0,0,6,4" />
+      <Setter Property="Padding" Value="8,3" />
+      <Setter Property="FontSize" Value="11" />
+    </Style>
+
+    <Style Selector="TextBlock.issueMeta">
+      <Setter Property="FontSize" Value="10.5" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+    </Style>
+
+    <Style Selector="Border.issueSuggestion">
+      <Setter Property="Padding" Value="8,5" />
+      <Setter Property="CornerRadius" Value="5" />
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="Border.issueSuggestion:pointerover">
+      <Setter Property="Background" Value="{DynamicResource WidgetSurfaceHoverBrush}" />
+    </Style>
+
+    <Style Selector="Border.issueSuggestion.selected">
+      <Setter Property="Background" Value="{DynamicResource WidgetAccentSoftBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.suggestionKey">
+      <Setter Property="FontSize" Value="11.5" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetAccentBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.suggestionTitle">
+      <Setter Property="Margin" Value="0,2,0,0" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+    </Style>
+
     <Style Selector="Border.aliasItem:pointerover">
       <Setter Property="Background" Value="{DynamicResource WidgetSurfaceHoverBrush}" />
     </Style>
@@ -546,6 +665,134 @@
 
       </Grid>
     </Border>
+
+    <!--
+      A issue do Jira (ADR-045): o que é esta tarefa, sem abrir o Jira — tipo,
+      chave em destaque, título, status e a branch da convenção. Desenhado do
+      retrato guardado, então aparece igual sem rede; só "Atualizar" vai até lá.
+    -->
+    <ContentControl DockPanel.Dock="Top"
+                    x:Name="IssueSection"
+                    Margin="24,0,24,10"
+                    Content="{Binding Issue}"
+                    IsVisible="{Binding Issue, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <ContentControl.ContentTemplate>
+        <DataTemplate x:DataType="vm:TaskIssueViewModel">
+      <StackPanel Spacing="6">
+
+        <!-- Vinculada -->
+        <Border x:Name="IssueCard" Classes="issueCard" IsVisible="{Binding HasLink}">
+          <StackPanel Spacing="6">
+            <Grid ColumnDefinitions="Auto,Auto,*,Auto">
+              <Border Grid.Column="0"
+                      Classes="issueType"
+                      Classes.bug="{Binding IsBug}"
+                      Classes.story="{Binding IsStory}"
+                      Classes.task="{Binding IsTask}">
+                <TextBlock Text="{Binding TypeLabel}" />
+              </Border>
+              <Button Grid.Column="1"
+                      x:Name="IssueKeyLink"
+                      Classes="issueKey"
+                      Content="{Binding Key}"
+                      ToolTip.Tip="Abrir no Jira"
+                      Command="{Binding OpenInJiraCommand}" />
+              <TextBlock Grid.Column="2"
+                         Classes="issueStatus"
+                         Text="{Binding Status}"
+                         IsVisible="{Binding HasStatus}" />
+              <Button Grid.Column="3"
+                      Classes="issueAction"
+                      Content="{Binding OpenLabel}"
+                      Command="{Binding OpenInJiraCommand}" />
+            </Grid>
+
+            <SelectableTextBlock Classes="issueTitle" Text="{Binding IssueTitle}" />
+
+            <Grid ColumnDefinitions="Auto,*" IsVisible="{Binding HasSuggestedBranch}">
+              <TextBlock Classes="issueField" Text="Branch" />
+              <SelectableTextBlock Grid.Column="1" Classes="issueBranch" Text="{Binding SuggestedBranch}" />
+            </Grid>
+
+            <WrapPanel>
+              <Button Classes="issueAction" Content="Copiar chave" Command="{Binding CopyKeyCommand}" />
+              <Button Classes="issueAction" Content="Copiar link" Command="{Binding CopyUrlCommand}" />
+              <Button Classes="issueAction"
+                      Content="Copiar branch"
+                      IsVisible="{Binding HasSuggestedBranch}"
+                      Command="{Binding CopyBranchCommand}" />
+              <Button Classes="issueAction"
+                      Content="Atualizar do Jira"
+                      IsEnabled="{Binding !IsBusy}"
+                      IsVisible="{Binding CanEdit}"
+                      Command="{Binding RefreshCommand}" />
+              <Button Classes="issueAction"
+                      Content="Desvincular"
+                      IsVisible="{Binding CanEdit}"
+                      Command="{Binding UnlinkCommand}" />
+            </WrapPanel>
+
+            <TextBlock Classes="issueMeta" Text="{Binding SyncedLabel}" />
+          </StackPanel>
+        </Border>
+
+        <!-- Sem issue: vincular é opcional, e fica à mão. -->
+        <Button x:Name="LinkIssueButton"
+                Classes="issueAction"
+                HorizontalAlignment="Left"
+                Content="Vincular ao Jira…"
+                IsVisible="{Binding CanLink}"
+                Command="{Binding StartLinkingCommand}" />
+
+        <!-- A busca do vínculo: a mesma do autocomplete da captura. -->
+        <Border Classes="issueCard" IsVisible="{Binding IsLinking}">
+          <StackPanel Spacing="4">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+              <TextBox x:Name="IssueSearchBox"
+                       PlaceholderText="Parte do título ou a chave da issue (GAECO-1234)"
+                       Text="{Binding SearchText}" />
+              <Button Grid.Column="1" Content="Cancelar" Command="{Binding CancelLinkingCommand}" />
+            </Grid>
+            <ItemsControl ItemsSource="{Binding Suggestions.Items}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:IssueSuggestionViewModel">
+                  <Border Classes="issueSuggestion"
+                          Classes.selected="{Binding IsSelected}"
+                          Cursor="Hand"
+                          PointerPressed="OnIssueSuggestionPressed">
+                    <Grid ColumnDefinitions="Auto,Auto,*" RowDefinitions="Auto,Auto">
+                      <Border Classes="issueType"
+                              Classes.bug="{Binding IsBug}"
+                              Classes.story="{Binding IsStory}"
+                              Classes.task="{Binding IsTask}">
+                        <TextBlock Text="{Binding TypeLabel}" />
+                      </Border>
+                      <TextBlock Grid.Column="1" Classes="suggestionKey" Text="{Binding Key}" />
+                      <TextBlock Grid.Column="2" Classes="issueStatus" Text="{Binding Status}" IsVisible="{Binding HasStatus}" />
+                      <TextBlock Grid.Row="1" Grid.ColumnSpan="3" Classes="suggestionTitle" Text="{Binding Title}" />
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Classes="issueMeta" Text="Buscando no Jira…" IsVisible="{Binding Suggestions.IsLoading}" />
+            <TextBlock Classes="issueMeta"
+                       Text="{Binding Suggestions.Notice}"
+                       IsVisible="{Binding Suggestions.Notice, Converter={x:Static ObjectConverters.IsNotNull}}" />
+          </StackPanel>
+        </Border>
+
+        <TextBlock Classes="issueMeta"
+                   Foreground="{DynamicResource WidgetDangerBrush}"
+                   Text="{Binding ErrorMessage}"
+                   IsVisible="{Binding ErrorMessage, Converter={x:Static ObjectConverters.IsNotNull}}" />
+        <TextBlock Classes="issueMeta"
+                   Text="{Binding StatusMessage}"
+                   IsVisible="{Binding StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}" />
+      </StackPanel>
+        </DataTemplate>
+      </ContentControl.ContentTemplate>
+    </ContentControl>
 
     <!-- Rodapé: o que foi escrito à esquerda, o que fazer com isso à direita. -->
     <Border DockPanel.Dock="Bottom" Padding="24,12,24,18" IsVisible="{Binding IsNotesTab}">
@@ -1023,6 +1270,11 @@
                              x:Name="BranchNameError"
                              Text="{Binding BranchNameError}"
                              IsVisible="{Binding HasBranchNameError}" />
+                  <!-- Já existe: a criação usa a existente, e nunca duplica (ADR-045). -->
+                  <TextBlock Classes="hint"
+                             x:Name="ExistingBranchNotice"
+                             Text="{Binding ExistingBranchNotice}"
+                             IsVisible="{Binding ExistingBranchNotice, Converter={x:Static ObjectConverters.IsNotNull}}" />
                 </StackPanel>
 
                 <StackPanel Spacing="4">

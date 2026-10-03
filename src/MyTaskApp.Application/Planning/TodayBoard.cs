@@ -1,4 +1,5 @@
 using MyTaskApp.Domain.Agents;
+using MyTaskApp.Domain.External;
 using MyTaskApp.Domain.Reminders;
 using MyTaskApp.Domain.Tasks;
 
@@ -35,7 +36,12 @@ public sealed record TodayTask(
     /// Os worktrees prontos da tarefa; <c>null</c> = nenhum (ADR-034). É o que
     /// acende a bolinha — a cor vem depois, do Git.
     /// </summary>
-    IReadOnlyList<TaskWorktree>? Worktrees = null);
+    IReadOnlyList<TaskWorktree>? Worktrees = null,
+    /// <summary>
+    /// A issue vinculada, como estava na última leitura (ADR-045). Vem do
+    /// banco, nunca da rede: a lista desenha a chave e o tipo mesmo sem Jira.
+    /// </summary>
+    ExternalLink? External = null);
 
 /// <summary>Um worktree da tarefa, com o nome do repositório para a linha e o balão.</summary>
 public sealed record TaskWorktree(

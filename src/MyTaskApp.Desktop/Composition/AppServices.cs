@@ -120,6 +120,10 @@ internal static class AppServices
             .AddSingleton<DevelopmentCommandsViewModel>()
             .AddSingleton<DevelopmentCommandsWindow>()
 
+            // Integrações — o Jira (ADR-045): janela única, como as outras do menu.
+            .AddSingleton<IntegrationsViewModel>()
+            .AddSingleton<IntegrationsWindow>()
+
             // Sons dos avisos do agente (ADR-042): janela única, como as outras.
             .AddSingleton<AgentAlertSoundsViewModel>()
             .AddSingleton<AgentAlertSoundsWindow>()
@@ -129,6 +133,9 @@ internal static class AppServices
             // diferentes, e o truque do "X que esconde" so faz sentido para
             // quem tem uma instancia so.
             .AddTransient<TaskNotesViewModel>()
+
+            // O cartão da issue do Jira na janela da tarefa (ADR-045): um por janela.
+            .AddTransient<TaskIssueViewModel>()
 
             // A aba Desenvolvimento de cada anotação (ADR-027): uma por janela,
             // como a própria anotação, com um ambiente por repositório (ADR-031).

@@ -178,7 +178,7 @@ public class WidgetGhostTests
 
         texts.Should().Contain("Deploy");
         texts.Should().NotContain("Checklist");
-        texts.Should().NotContain("Enter adiciona · Shift+Enter quebra linha");
+        texts.Should().NotContain("Enter adiciona · Shift+Enter quebra linha · Ctrl+Espaço: Jira");
     }
 
     [AvaloniaFact]

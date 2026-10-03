@@ -7,6 +7,8 @@ using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Development;
+using MyTaskApp.Application.External;
+using MyTaskApp.Application.External.Jira;
 using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Reminders;
@@ -15,6 +17,7 @@ using MyTaskApp.Application.Tasks;
 using MyTaskApp.Desktop.Composition;
 using MyTaskApp.Desktop.Views;
 using MyTaskApp.Domain;
+using MyTaskApp.Domain.External;
 using MyTaskApp.Domain.Lifecycle;
 using MyTaskApp.Domain.Planning;
 
@@ -36,7 +39,8 @@ public sealed partial class TodayViewModel(
     IConfirmationDialog confirmation,
     IClipboardWriter clipboard,
     TimeProvider timeProvider,
-    ILogger<TodayViewModel> logger) : ObservableObject, IDisposable
+    ILogger<TodayViewModel> logger,
+    IShellLauncher? shell = null) : ObservableObject, IDisposable
 {
     /// <summary>
     /// O rótulo "aguardando há N minutos" envelhece sozinho, então o quadro
@@ -125,7 +129,15 @@ public sealed partial class TodayViewModel(
     /// <summary>Texto da captura rápida: uma tarefa por linha.</summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(CaptureCommand))]
+    [NotifyPropertyChangedFor(nameof(CaptureLinkLabel))]
     private string _captureText = string.Empty;
+
+    /// <summary>
+    /// As issues escolhidas no autocomplete, pela chave (ADR-045). Só valem as
+    /// que ainda abrem uma linha na hora de capturar: apagar a chave da caixa é
+    /// desfazer o vínculo.
+    /// </summary>
+    private readonly Dictionary<IssueKey, ExternalTask> _captureLinks = [];
 
     /// <summary>
     /// Progresso do dia. Vive aqui, e não na view, porque o cabeçalho, a
@@ -197,6 +209,100 @@ public sealed partial class TodayViewModel(
     /// </summary>
     public TaskTagsViewModel CaptureTags { get; } = TaskTagsViewModel.Draft();
 
+    /// <summary>O autocomplete do Jira embaixo da caixa de captura (ADR-045).</summary>
+    public IssueSuggestionsViewModel CaptureSuggestions { get; } = new(runner, timeProvider, logger);
+
+    /// <summary>
+    /// "GAECO-1234 · BUG — será vinculada ao Jira": a confirmação, embaixo da
+    /// caixa, de que a linha vai nascer ligada à issue. <c>null</c> = nenhuma.
+    /// </summary>
+    public string? CaptureLinkLabel
+    {
+        get
+        {
+            var linked = LinkedCaptureIssues();
+
+            return linked.Count switch
+            {
+                0 => null,
+                1 => $"{linked[0].Id} · {IssueTypes.Label(linked[0].IssueType)} — será vinculada ao Jira",
+                _ => $"{string.Join(", ", linked.Select(issue => issue.Id))} — serão vinculadas ao Jira",
+            };
+        }
+    }
+
+    /// <summary>
+    /// O usuário escolheu uma issue para a linha <paramref name="lineIndex"/>.
+    /// A linha vira <c>CHAVE título</c>: o título da issue, ou o que já vinha
+    /// depois de uma chave digitada à mão. Devolve onde o cursor deve ficar —
+    /// no fim da linha, para continuar escrevendo.
+    /// </summary>
+    public int LinkCaptureLine(int lineIndex, ExternalTask issue)
+    {
+        var lines = CaptureText.Split('\n');
+        var index = Math.Clamp(lineIndex, 0, lines.Length - 1);
+        var line = lines[index];
+        var carriage = line.EndsWith('\r') ? "\r" : string.Empty;
+
+        var title = IssueKey.TryParsePrefix(line, out _, out var rest) && rest.Length > 0
+            ? rest
+            : ExternalLink.TaskTitleFor(issue.Title);
+
+        lines[index] = $"{issue.Id} {title}{carriage}";
+
+        if (IssueKey.TryParse(issue.Id, out var key))
+        {
+            _captureLinks[key] = issue;
+        }
+
+        CaptureText = string.Join('\n', lines);
+
+        return lines.Take(index + 1).Sum(text => text.Length + 1) - 1 - carriage.Length;
+    }
+
+    /// <summary>
+    /// Pergunta se há Jira conectado: sem ele, a caixa não sugere nada. Chamado
+    /// ao abrir o app e quando a janela de Integrações conecta ou desconecta.
+    /// </summary>
+    public async Task RefreshIssueSearchAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var connection = await runner.RunAsync<GetJiraConnectionHandler, JiraConnection>(
+                (handler, token) => handler.HandleAsync(new GetJiraConnection(), token),
+                cancellationToken);
+
+            CaptureSuggestions.IsAvailable = connection.IsConnected;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // Sem saber, não sugere: a captura funciona igual sem Jira.
+            logger.LogWarning(exception, "IssueSearchAvailabilityFailed");
+            CaptureSuggestions.IsAvailable = false;
+        }
+    }
+
+    /// <summary>O que a captura vai vincular agora. Para o teste conferir sem gravar.</summary>
+    internal IReadOnlyList<ExternalTask> CaptureLinks => LinkedCaptureIssues();
+
+    /// <summary>As issues escolhidas cuja chave ainda abre uma linha da caixa.</summary>
+    private List<ExternalTask> LinkedCaptureIssues()
+    {
+        if (_captureLinks.Count == 0)
+        {
+            return [];
+        }
+
+        return CaptureText
+            .Split('\n')
+            .Select(line => IssueKey.TryParsePrefix(line, out var key, out _) ? key : (IssueKey?)null)
+            .OfType<IssueKey>()
+            .Distinct()
+            .Select(key => _captureLinks.GetValueOrDefault(key))
+            .OfType<ExternalTask>()
+            .ToList();
+    }
+
     [RelayCommand]
     public async Task LoadAsync(CancellationToken cancellationToken)
     {
@@ -232,10 +338,11 @@ public sealed partial class TodayViewModel(
     {
         var text = CaptureText;
         var tagIds = CaptureTags.SelectedIds;
+        var links = LinkedCaptureIssues();
 
         var captured = await TryAsync(
             () => runner.RunAsync<QuickCaptureHandler>(
-                (handler, token) => handler.HandleAsync(new QuickCapture(text, tagIds), token),
+                (handler, token) => handler.HandleAsync(new QuickCapture(text, tagIds, links), token),
                 cancellationToken),
             "Não foi possível salvar o que você escreveu.");
 
@@ -247,7 +354,10 @@ public sealed partial class TodayViewModel(
         }
 
         // As etiquetas ficam: quem registra uma leva de "Financeiro" costuma
-        // registrar a próxima com a mesma etiqueta.
+        // registrar a próxima com a mesma etiqueta. Os vínculos, não: eram
+        // destas linhas.
+        _captureLinks.Clear();
+        CaptureSuggestions.Reset();
         CaptureText = string.Empty;
         await LoadAsync(cancellationToken);
     }
@@ -322,6 +432,12 @@ public sealed partial class TodayViewModel(
 
     [RelayCommand]
     public void OpenCommands() => CommandsRequested?.Invoke();
+
+    /// <summary>Pede a janela de integrações — o Jira (ADR-045).</summary>
+    public event Action? IntegrationsRequested;
+
+    [RelayCommand]
+    public void OpenIntegrations() => IntegrationsRequested?.Invoke();
 
     /// <summary>Pede a janela de sons dos avisos do agente (ADR-042).</summary>
     public event Action? SoundsRequested;
@@ -458,6 +574,96 @@ public sealed partial class TodayViewModel(
         }
 
         await SaveTagsAsync(owner, owner.Toggled(chip.Id), cancellationToken);
+    }
+
+    // ---------------------------------------------------------------------
+    // Ações rápidas da linha (ADR-045): o Jira e o ambiente a um clique do
+    // menu, sem abrir a tarefa — é o que torna a troca de contexto barata.
+    // ---------------------------------------------------------------------
+
+    /// <summary>"Abrir no Jira": o link do retrato, sem consultar nada.</summary>
+    [RelayCommand]
+    public async Task OpenIssueAsync(TaskRowViewModel row)
+    {
+        if (row.External is not { } link || shell is null || !Uri.TryCreate(link.Url, UriKind.Absolute, out var uri))
+        {
+            return;
+        }
+
+        if (!await shell.OpenUriAsync(uri))
+        {
+            ErrorMessage = "Não foi possível abrir o navegador.";
+        }
+    }
+
+    [RelayCommand]
+    public Task CopyIssueKeyAsync(TaskRowViewModel row) => CopyAsync(row.External?.Id, "Chave copiada.");
+
+    [RelayCommand]
+    public Task CopyIssueUrlAsync(TaskRowViewModel row) => CopyAsync(row.External?.Url, "Link do Jira copiado.");
+
+    /// <summary>
+    /// O nome da branch: a do worktree, se a tarefa já tem um; senão, a que a
+    /// convenção dá para a issue (<c>bug/GAECO-1234</c>).
+    /// </summary>
+    [RelayCommand]
+    public async Task CopyBranchNameAsync(TaskRowViewModel row)
+    {
+        var branch = row.Worktree.Worktrees.FirstOrDefault()?.Branch;
+
+        if (branch is null && row.HasIssue)
+        {
+            try
+            {
+                var context = await runner.RunAsync<GetTaskExternalContextHandler, TaskExternalContext>(
+                    (handler, token) => handler.HandleAsync(new GetTaskExternalContext(row.TaskId), token));
+
+                branch = context.SuggestedBranch;
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                logger.LogWarning(exception, "BranchNameLookupFailed {TaskId}", row.TaskId);
+                ErrorMessage = "Não foi possível calcular o nome da branch.";
+                return;
+            }
+        }
+
+        await CopyAsync(branch, "Nome da branch copiado.");
+    }
+
+    /// <summary>"Abrir terminal": o terminal do sistema na pasta do worktree.</summary>
+    [RelayCommand]
+    public void OpenWorktreeTerminal(TaskWorktreeChoice choice)
+    {
+        if (shell is not null && !shell.OpenTerminal(choice.Worktree.WorktreePath))
+        {
+            ErrorMessage = "Não foi possível abrir o terminal nesta pasta.";
+        }
+    }
+
+    /// <summary>"Abrir pasta do worktree": o gerenciador de arquivos do sistema.</summary>
+    [RelayCommand]
+    public async Task OpenWorktreeFolderAsync(TaskWorktreeChoice choice)
+    {
+        if (shell is not null && !await shell.OpenFolderAsync(choice.Worktree.WorktreePath))
+        {
+            ErrorMessage = $"A pasta {choice.Worktree.WorktreePath} não foi encontrada.";
+        }
+    }
+
+    private async Task CopyAsync(string? text, string done)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return;
+        }
+
+        var copied = await TryAsync(() => clipboard.WriteAsync(text), "Não foi possível copiar.");
+
+        if (copied)
+        {
+            StatusMessage = done;
+        }
     }
 
     /// <summary>
