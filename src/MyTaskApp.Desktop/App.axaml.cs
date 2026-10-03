@@ -38,7 +38,9 @@ public sealed partial class App : Avalonia.Application
     private ThemeController? _themes;
     private TrayIconHost? _tray;
     private MainWindow? _window;
-    private bool _exiting;
+
+    /// <summary>"Janela e comportamento" (ADR-047): uma só, recriada se fechada.</summary>
+    private WindowSettingsWindow? _windowSettings;
 
     /// <summary>Quem pinta o app. Exposto para os testes headless trocarem o tema.</summary>
     internal ThemeController? Themes => _themes;
@@ -71,7 +73,15 @@ public sealed partial class App : Avalonia.Application
 
                 // Antes de aparecer: senão o painel pisca no meio da tela com
                 // o tamanho padrão e só depois pula para onde o usuário o deixou.
-                window.Attach(Services.GetRequiredService<IWidgetStateStore>());
+                window.Attach(
+                    Services.GetRequiredService<IWidgetStateStore>(),
+                    Services.GetRequiredService<IWindowBehaviorService>(),
+                    Services.GetRequiredService<IGlobalHotkeyService>());
+
+                // "Sair" de dentro da janela (o X com "fechar o aplicativo", o
+                // menu do HUD) passa pelo mesmo encerramento da bandeja.
+                window.ExitHandler = () => Exit(Services, desktop);
+                window.Chrome.WindowSettingsRequested += () => ShowWindowSettings(window);
 
                 // Primeira carga dispara fora do caminho de inicialização da UI,
                 // para a janela aparecer sem esperar o banco.
@@ -120,9 +130,10 @@ public sealed partial class App : Avalonia.Application
     }
 
     /// <summary>
-    /// Fechar a janela esconde o app em vez de encerrá-lo — é o que permite ele
-    /// continuar lembrando. Se a bandeja não subir, o comportamento volta ao
-    /// normal: senão não sobraria nenhuma forma de sair do app.
+    /// A bandeja é o que permite fechar a janela sem encerrar o app — e o que
+    /// o X faz é escolha do usuário (ADR-047), decidida pela própria janela.
+    /// Se a bandeja não subir, a moldura fica sabendo: "ocultar" sem ícone
+    /// não teria volta, e vira sair.
     /// </summary>
     private void SetUpTray(
         IServiceProvider services,
@@ -136,9 +147,16 @@ public sealed partial class App : Avalonia.Application
             Settings: () => OnUiThread(() => ShowSettings(services, window)),
             Exit: () => OnUiThread(() => Exit(services, desktop)),
             ToggleTopmost: () => OnUiThread(window.Chrome.ToggleTopmost),
-            ToggleGhost: () => OnUiThread(window.Chrome.ToggleGhost),
+            ToggleHud: () => OnUiThread(() =>
+            {
+                Reveal(window);
+                window.Chrome.ToggleHud();
+            }),
+            WindowSettings: () => OnUiThread(() => ShowWindowSettings(window)),
             UseCompact: () => OnUiThread(() => window.Chrome.UseMode("compact")),
             Hide: () => OnUiThread(window.HideAndRemember)));
+
+        window.Chrome.TrayAvailable = installed;
 
         if (!installed)
         {
@@ -150,7 +168,7 @@ public sealed partial class App : Avalonia.Application
 
         // O menu da bandeja e o menu do painel mostram o mesmo estado.
         _tray.ShowTopmost(window.Chrome.IsTopmost);
-        _tray.ShowGhost(window.Chrome.IsGhost);
+        _tray.ShowHud(window.Chrome.IsHud);
 
         window.Chrome.PropertyChanged += (_, args) =>
         {
@@ -159,24 +177,32 @@ public sealed partial class App : Avalonia.Application
                 _tray?.ShowTopmost(window.Chrome.IsTopmost);
             }
 
-            // O pino liga o modo discreto junto, então um visto muda sem que
-            // ninguém tenha clicado no outro.
-            if (args.PropertyName == nameof(WidgetChromeViewModel.IsGhost))
+            if (args.PropertyName == nameof(WidgetChromeViewModel.WindowMode))
             {
-                _tray?.ShowGhost(window.Chrome.IsGhost);
+                _tray?.ShowHud(window.Chrome.IsHud);
             }
         };
+    }
 
-        window.Closing += (_, args) =>
+    /// <summary>
+    /// "Janela e comportamento…", aberta pelo menu do painel, do HUD e da
+    /// bandeja. Liga direto na moldura: nada a carregar, nada a salvar.
+    /// </summary>
+    private void ShowWindowSettings(MainWindow owner)
+    {
+        if (_windowSettings is null)
         {
-            if (_exiting)
-            {
-                return;
-            }
+            _windowSettings = new WindowSettingsWindow(owner.Chrome);
+            _windowSettings.Closed += (_, _) => _windowSettings = null;
+        }
 
-            args.Cancel = true;
-            window.HideAndRemember();
-        };
+        if (!owner.IsVisible)
+        {
+            Reveal(owner);
+        }
+
+        _windowSettings.Show(owner);
+        _windowSettings.Activate();
     }
 
     private void StartReminders(
@@ -426,11 +452,15 @@ public sealed partial class App : Avalonia.Application
     /// Duas origens, e nenhuma manda na outra: a preferência do menu ("abrir
     /// recolhido da próxima vez") e o login do Windows, que sobe o app com
     /// <c>--startup</c> justamente para ele não aparecer na frente de ninguém
-    /// no boot (ADR-023).
+    /// no boot (ADR-023). A exceção é "iniciar no HUD": quem pediu o painel
+    /// permanente no canto quer vê-lo depois do login, e o HUD é justamente a
+    /// forma que não aparece na frente de ninguém (ADR-047).
     /// </remarks>
     private static void StartHiddenIfAsked(MainWindow window, LaunchOptions launch)
     {
-        if (!window.Chrome.StartHidden && !launch.StartedByWindows)
+        var hiddenByLogin = launch.StartedByWindows && !window.Chrome.StartInHud;
+
+        if (!window.Chrome.StartHidden && !hiddenByLogin)
         {
             return;
         }
@@ -474,7 +504,10 @@ public sealed partial class App : Avalonia.Application
 
     private void Exit(IServiceProvider services, IClassicDesktopStyleApplicationLifetime desktop)
     {
-        _exiting = true;
+        // Aqui, e não dentro do Task.Run: ler o tamanho da janela fora da
+        // thread da UI lança, e o encerramento pararia antes de soltar a bandeja.
+        _window?.PersistNow();
+
         _ = Task.Run(() => Shutdown(services));
         desktop.Shutdown();
     }
@@ -482,8 +515,6 @@ public sealed partial class App : Avalonia.Application
     /// <summary>Para o agendador e solta o ícone antes de o processo morrer.</summary>
     private void Shutdown(IServiceProvider services)
     {
-        _window?.PersistNow();
-
         services.GetRequiredService<ReminderScheduler>().Dispose();
         services.GetRequiredService<LifecycleMaintenanceScheduler>().Dispose();
         services.GetRequiredService<AgentSessionMonitor>().Dispose();

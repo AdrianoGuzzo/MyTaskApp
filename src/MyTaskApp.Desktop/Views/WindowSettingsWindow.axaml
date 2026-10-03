@@ -1,0 +1,189 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
+        x:Class="MyTaskApp.Desktop.Views.WindowSettingsWindow"
+        x:DataType="vm:WidgetChromeViewModel"
+        Title="Janela e comportamento"
+        Width="460"
+        SizeToContent="Height"
+        MaxHeight="720"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner">
+
+  <!--
+    Janela e comportamento (ADR-047). Liga direto na moldura do painel: cada
+    mudança vale na hora e vai para o widget.json pelo mesmo caminho do resto
+    — sem botão "Salvar", porque não há nada para conferir antes.
+  -->
+
+  <Window.Styles>
+
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="{DynamicResource WidgetSurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetStrokeSoftBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetCardRadius}" />
+      <Setter Property="Padding" Value="14,12" />
+    </Style>
+
+    <Style Selector="TextBlock.sectionTitle">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.meta">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style Selector="TextBlock.label">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+    </Style>
+
+    <!-- A explicação embaixo de cada opção, recuada até o texto do rádio. -->
+    <Style Selector="TextBlock.hint">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Margin" Value="28,-4,0,4" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+  </Window.Styles>
+
+  <!-- Rolagem com teto: inteira, a tela não cabe num notebook de 768px. -->
+  <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+    <StackPanel Margin="24,20" Spacing="14">
+
+      <StackPanel Spacing="4">
+        <TextBlock Text="Janela e comportamento" FontSize="18" FontWeight="SemiBold" />
+        <TextBlock Classes="meta"
+                   Text="O HUD é um cartão pequeno, sempre à vista num canto da tela, com o que falta fazer hoje. Fora dele o clique vai para o app de trás." />
+      </StackPanel>
+
+      <Border Classes="card">
+        <StackPanel Spacing="6">
+          <TextBlock Classes="sectionTitle" Text="Ao fechar a janela" />
+
+          <RadioButton GroupName="close"
+                       Content="Fechar o aplicativo"
+                       IsChecked="{Binding CloseExits, Mode=TwoWay}" />
+          <TextBlock Classes="hint"
+                     Text="Encerra o MyTaskApp. Os lembretes param até você abrir de novo." />
+
+          <RadioButton GroupName="close"
+                       Content="Minimizar para a bandeja"
+                       IsChecked="{Binding CloseHides, Mode=TwoWay}" />
+          <TextBlock Classes="hint"
+                     Text="A janela some e o app continua rodando, com os lembretes. Volta pelo ícone da bandeja." />
+
+          <RadioButton GroupName="close"
+                       Content="Entrar no modo HUD"
+                       IsChecked="{Binding CloseEntersHud, Mode=TwoWay}" />
+          <TextBlock Classes="hint"
+                     Text="O X transforma a janela no HUD. No HUD, o X pergunta se é para ocultar ou sair." />
+        </StackPanel>
+      </Border>
+
+      <Border Classes="card">
+        <StackPanel Spacing="10">
+          <TextBlock Classes="sectionTitle" Text="Modo HUD" />
+
+          <CheckBox Content="Manter o HUD sempre visível sobre as outras janelas"
+                    IsChecked="{Binding HudAlwaysOnTop, Mode=TwoWay}" />
+
+          <Grid ColumnDefinitions="120,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="10">
+            <TextBlock Grid.Row="0" Grid.Column="0" Classes="label" Text="Posição" />
+            <ComboBox Grid.Row="0"
+                      Grid.Column="1"
+                      HorizontalAlignment="Stretch"
+                      ItemsSource="{Binding HudPositionChoices}"
+                      SelectedIndex="{Binding HudPositionIndex, Mode=TwoWay}" />
+
+            <TextBlock Grid.Row="1" Grid.Column="0" Classes="label" Text="Tamanho" />
+            <ComboBox Grid.Row="1"
+                      Grid.Column="1"
+                      HorizontalAlignment="Stretch"
+                      ItemsSource="{Binding HudSizeChoices}"
+                      SelectedIndex="{Binding HudSizeIndex, Mode=TwoWay}" />
+
+            <TextBlock Grid.Row="2" Grid.Column="0" Classes="label" Text="Opacidade do fundo" />
+            <Grid Grid.Row="2" Grid.Column="1" ColumnDefinitions="*,Auto">
+              <Slider Grid.Column="0"
+                      Minimum="0.7"
+                      Maximum="1"
+                      SmallChange="0.01"
+                      LargeChange="0.05"
+                      TickFrequency="0.05"
+                      IsSnapToTickEnabled="False"
+                      Value="{Binding HudOpacity, Mode=TwoWay}" />
+              <TextBlock Grid.Column="1"
+                         Classes="label"
+                         MinWidth="36"
+                         Margin="10,0,0,0"
+                         TextAlignment="Right"
+                         Text="{Binding HudOpacityLabel}" />
+            </Grid>
+          </Grid>
+
+          <TextBlock Classes="meta"
+                     Text="Só o fundo fica translúcido; o texto continua inteiro. O mínimo é 70%, para o HUD não sumir sobre fundos claros." />
+
+          <CheckBox Content="Usar HUD recolhido"
+                    IsChecked="{Binding HudUseCollapsed, Mode=TwoWay}" />
+          <TextBlock Classes="hint"
+                     Text="O HUD vira uma pílula quando o mouse sai dele, e abre ao passar o mouse por cima." />
+
+          <CheckBox Content="Iniciar o MyTaskApp no modo HUD"
+                    IsChecked="{Binding StartInHud, Mode=TwoWay}" />
+          <TextBlock Classes="hint"
+                     Text="Inclusive ao iniciar com o Windows: o HUD aparece no canto, em vez de o app ficar só na bandeja." />
+        </StackPanel>
+      </Border>
+
+      <Border Classes="card">
+        <StackPanel Spacing="10">
+          <TextBlock Classes="sectionTitle" Text="Janela normal" />
+
+          <CheckBox Content="Sempre no topo"
+                    IsChecked="{Binding IsTopmost, Mode=TwoWay}" />
+          <TextBlock Classes="hint"
+                     Text="Vale só para a janela normal. O HUD tem a opção dele, acima." />
+
+          <StackPanel Spacing="4" IsVisible="{Binding CanUseGlobalHotkey}">
+            <CheckBox Content="Ctrl+Shift+Espaço alterna entre a janela e o HUD"
+                      IsChecked="{Binding UseGlobalHotkey, Mode=TwoWay}" />
+            <TextBlock Classes="hint"
+                       Text="Funciona com o app em segundo plano. No Visual Studio e no VS Code essa combinação mostra os parâmetros da função: ligado, o atalho passa a ser do MyTaskApp." />
+            <TextBlock Classes="hint"
+                       Foreground="{DynamicResource WidgetDangerBrush}"
+                       Text="{Binding HotkeyMessage}"
+                       IsVisible="{Binding HotkeyMessage, Converter={x:Static ObjectConverters.IsNotNull}}" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <Grid ColumnDefinitions="*,Auto">
+        <Button Grid.Column="0"
+                HorizontalAlignment="Left"
+                Content="Entrar no modo HUD agora"
+                IsVisible="{Binding IsNormal}"
+                Command="{Binding EnterHudCommand}" />
+        <Button Grid.Column="0"
+                HorizontalAlignment="Left"
+                Content="Sair do modo HUD"
+                IsVisible="{Binding IsHud}"
+                Command="{Binding ExitHudCommand}" />
+        <Button Grid.Column="1"
+                Classes="accent"
+                Content="Fechar"
+                Click="OnCloseClick" />
+      </Grid>
+
+    </StackPanel>
+  </ScrollViewer>
+
+</Window>

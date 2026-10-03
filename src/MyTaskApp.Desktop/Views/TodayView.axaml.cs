@@ -85,8 +85,8 @@ public sealed partial class TodayView : UserControl
     }
 
     /// <summary>
-    /// Traz o cursor para a caixa. Chamado pela janela quando o "+" do modo
-    /// discreto a revela: aparecer sem foco custaria um clique a mais logo
+    /// Traz o cursor para a caixa. Chamado pela janela quando o "+" do HUD
+    /// a revela: aparecer sem foco custaria um clique a mais logo
     /// depois do clique que a abriu.
     /// </summary>
     public void FocusCapture() => CaptureBox.Focus();
@@ -543,7 +543,7 @@ public sealed partial class TodayView : UserControl
         // a captura cai junto. Esta view nunca se move.
         e.Pointer.Capture(this);
 
-        // Sem isto o pressionar sobe até a casca e, no modo discreto, vira
+        // Sem isto o pressionar sobe até a casca e, numa área de arrasto, vira
         // BeginMoveDrag — arrastar o item empurraria a janela.
         e.Handled = true;
     }

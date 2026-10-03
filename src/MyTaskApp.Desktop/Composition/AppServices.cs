@@ -74,6 +74,16 @@ internal static class AppServices
             // Posicao e tamanho do painel: arquivo proprio, sem migracao.
             .AddSingleton<IWidgetStateStore, WidgetStateStore>()
 
+            // O que só o sistema faz com a janela do HUD (ADR-047): recortar a
+            // região clicável e o atalho global. Fora do Windows, objetos
+            // nulos — o HUD funciona igual, sem o recorte dos cantos e sem atalho.
+            .AddSingleton<IWindowBehaviorService>(services => OperatingSystem.IsWindows()
+                ? ActivatorUtilities.CreateInstance<WindowsWindowBehavior>(services)
+                : PortableWindowBehavior.Instance)
+            .AddSingleton<IGlobalHotkeyService>(services => OperatingSystem.IsWindows()
+                ? ActivatorUtilities.CreateInstance<WindowsGlobalHotkey>(services)
+                : UnsupportedGlobalHotkey.Instance)
+
             // Quem o app consegue identificar como autor das operacoes (§5, §8).
             // Registrado aqui, antes de AddApplication, porque o nome da conta
             // do sistema e conhecimento do host, nao da camada de aplicacao.

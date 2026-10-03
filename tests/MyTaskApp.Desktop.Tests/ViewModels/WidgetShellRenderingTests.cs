@@ -160,8 +160,11 @@ public class WidgetShellRenderingTests
             .Where(button => button.Classes.Contains("chrome"))
             .ToList();
 
-        buttons.Should().HaveCount(3);
-        buttons.Where(button => button.Command is not null).Should().HaveCount(2);
+        // Quatro na janela normal (HUD, recolher, menu, fechar) e quatro no
+        // cabeçalho do HUD (nova tarefa, sair do HUD, menu, fechar). Só os
+        // dois menus abrem flyout em vez de comando.
+        buttons.Should().HaveCount(8);
+        buttons.Where(button => button.Command is not null).Should().HaveCount(6);
     }
 
     [AvaloniaFact]
@@ -182,7 +185,7 @@ public class WidgetShellRenderingTests
             .Where(button => button.Classes.Contains("chrome"))
             .ToList();
 
-        buttons.Should().HaveCount(3);
+        buttons.Should().HaveCount(8);
         buttons.Should().OnlyContain(button =>
             WindowDecorationProperties.GetElementRole(button)
                 == WindowDecorationsElementRole.User);

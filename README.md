@@ -64,10 +64,19 @@ primeiro para Windows. Também roda no Linux, com algumas funções a menos.
 - Painel de 360×560 sem moldura, arrastável e redimensionável, com três modos:
   **Painel completo**, **Modo compacto** e **Recolher**. A posição e o tamanho
   ficam salvos.
-- **Sempre no topo** liga também o **modo discreto** e esconde as concluídas,
-  para o painel ocupar pouco espaço no canto da tela.
-- **Bandeja.** Fechar a janela só a esconde, e os lembretes continuam rodando.
-  Para sair, use o menu da bandeja.
+- **Modo HUD** (o alfinete do cabeçalho). O painel vira um cartão compacto,
+  sempre visível sobre as outras janelas num canto da tela, só com o que falta
+  fazer. Fora do cartão, o clique vai para o app de trás. Posição (seis cantos ou
+  onde você arrastar), tamanho (Compacto, Normal, Expandido), opacidade do fundo
+  e "HUD recolhido" (uma pílula que abre ao passar o mouse) ficam em
+  *☰ → Janela e comportamento…*. Para voltar, clique no alfinete aceso.
+- **Sempre no topo** (no menu) vale para a janela normal e não muda posição nem
+  tamanho.
+- **Ao fechar a janela:** fechar o aplicativo, minimizar para a bandeja (o
+  padrão; os lembretes continuam rodando) ou entrar no modo HUD. Dá para
+  **iniciar no modo HUD** e, no Windows, ligar **Ctrl+Shift+Espaço** para
+  alternar entre janela e HUD. O atalho vem desligado porque o Visual Studio usa
+  a mesma combinação.
 - **Instância única.** Abrir o atalho de novo traz a janela que já existe e não
   cria um segundo processo.
 - **Iniciar com o Windows** (ligado por padrão no instalador). O app sobe

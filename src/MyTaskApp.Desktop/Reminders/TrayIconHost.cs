@@ -16,7 +16,8 @@ internal sealed record TrayActions(
     Action Settings,
     Action Exit,
     Action ToggleTopmost,
-    Action ToggleGhost,
+    Action ToggleHud,
+    Action WindowSettings,
     Action UseCompact,
     Action Hide);
 
@@ -37,7 +38,7 @@ internal sealed class TrayIconHost(
     private TrayIcons? _icons;
     private TrayIcon? _icon;
     private NativeMenuItem? _topmost;
-    private NativeMenuItem? _ghost;
+    private NativeMenuItem? _hud;
 
     /// <summary>
     /// Instala o ícone. Devolve <c>false</c> se não deu — e aí quem chama
@@ -101,14 +102,14 @@ internal sealed class TrayIconHost(
     }
 
     /// <summary>
-    /// Sem cabeçalho o modo discreto não tem botão próprio na janela: a bandeja
-    /// é a rota de volta, e precisa mostrar o estado certo.
+    /// O HUD também se liga e desliga por aqui (ADR-047): uma rota de volta que
+    /// não depende de achar o alfinete num cartão de canto de tela.
     /// </summary>
-    public void ShowGhost(bool isGhost)
+    public void ShowHud(bool isHud)
     {
-        if (_ghost is not null)
+        if (_hud is not null)
         {
-            _ghost.IsChecked = isGhost;
+            _hud.IsChecked = isHud;
         }
     }
 
@@ -120,7 +121,7 @@ internal sealed class TrayIconHost(
         _icon = null;
         _icons = null;
         _topmost = null;
-        _ghost = null;
+        _hud = null;
     }
 
     private NativeMenu BuildMenu(TrayActions actions)
@@ -137,11 +138,14 @@ internal sealed class TrayIconHost(
         };
         _topmost.Click += (_, _) => actions.ToggleTopmost();
 
-        _ghost = new NativeMenuItem("Modo discreto")
+        _hud = new NativeMenuItem("Modo HUD")
         {
             ToggleType = MenuItemToggleType.CheckBox,
         };
-        _ghost.Click += (_, _) => actions.ToggleGhost();
+        _hud.Click += (_, _) => actions.ToggleHud();
+
+        var window = new NativeMenuItem("Janela e comportamento…");
+        window.Click += (_, _) => actions.WindowSettings();
 
         var hide = new NativeMenuItem("Ocultar");
         hide.Click += (_, _) => actions.Hide();
@@ -158,11 +162,12 @@ internal sealed class TrayIconHost(
         return
         [
             open,
+            _hud,
             compact,
             _topmost,
-            _ghost,
             hide,
             new NativeMenuItemSeparator(),
+            window,
             pause,
             settings,
             new NativeMenuItemSeparator(),

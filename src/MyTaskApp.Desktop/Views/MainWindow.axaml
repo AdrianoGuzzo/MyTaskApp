@@ -15,7 +15,7 @@
         ExtendClientAreaToDecorationsHint="True"
         Background="Transparent"
         TransparencyLevelHint="Transparent"
-        Topmost="{Binding #Shell.Chrome.IsTopmost}">
+        Topmost="{Binding #Shell.Chrome.IsWindowTopmost}">
 
   <!--
     Sem decoração do sistema: a barra de título nativa sozinha já custava 32px
@@ -23,15 +23,47 @@
     arrastar e redimensionar — e no Avalonia 12 isso é declarativo, via
     ElementRole, então quem move a janela continua sendo o sistema.
 
-    O Topmost acima é só isso: o pino fixa o painel sobre as outras janelas e
-    não congela posição nem tamanho (ADR-017).
+    Duas formas, uma janela (ADR-047): a normal, com o cabeçalho de sempre, e
+    o HUD — um cartão do tamanho exato do conteúdo, sem margem transparente,
+    para nada em volta dele bloquear o clique de quem está atrás. O Topmost
+    acima é o efetivo: o "sempre no topo" da janela normal ou o "manter o HUD
+    sempre visível", conforme o modo.
   -->
 
-  <Panel>
+  <Window.Resources>
+    <!-- Os rádios de tamanho e posição do menu do HUD. -->
+    <ControlTheme x:Key="HudChoiceItem"
+                  TargetType="MenuItem"
+                  BasedOn="{StaticResource {x:Type MenuItem}}"
+                  x:DataType="vm:HudChoiceViewModel">
+      <Setter Property="Header" Value="{Binding Label}" />
+      <Setter Property="ToggleType" Value="Radio" />
+      <Setter Property="IsChecked" Value="{Binding IsSelected, Mode=OneWay}" />
+      <Setter Property="Command" Value="{Binding SelectCommand}" />
+    </ControlTheme>
+  </Window.Resources>
+
+  <Panel x:Name="Root">
+
+    <Panel.Transitions>
+      <Transitions>
+        <DoubleTransition Property="Opacity" Duration="0:0:0.15" />
+      </Transitions>
+    </Panel.Transitions>
+
+    <!--
+      O fundo do HUD numa camada própria: a opacidade escolhida pelo usuário
+      vale para o fundo, e o texto em cima continua 100% opaco. Opacidade no
+      cartão inteiro era o que fazia o painel antigo sumir.
+    -->
+    <Border Classes="hudBackdrop"
+            Classes.collapsed="{Binding #Shell.Chrome.IsHudCollapsed}"
+            IsVisible="{Binding #Shell.Chrome.IsHud}"
+            Opacity="{Binding #Shell.Chrome.HudOpacity}" />
 
     <Border Classes="widgetShell"
-            Classes.ghost="{Binding #Shell.Chrome.IsGhostActive}"
-            Margin="10">
+            Classes.hud="{Binding #Shell.Chrome.IsHud}"
+            IsVisible="{Binding !#Shell.Chrome.IsHudCollapsed}">
 
       <DockPanel>
 
@@ -43,22 +75,11 @@
 
           <StackPanel Spacing="8">
 
-            <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto">
+            <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto">
 
               <!-- A marca: o único bloco de cor de destaque sempre visível. -->
-              <Border Grid.Column="0"
-                      Width="16"
-                      Height="16"
-                      Margin="0,0,8,0"
-                      CornerRadius="5"
-                      VerticalAlignment="Center"
-                      Background="{DynamicResource WidgetAccentBrush}">
-                <TextBlock Text="&#x2713;"
-                           FontSize="10"
-                           FontWeight="Bold"
-                           Foreground="{DynamicResource WidgetOnAccentBrush}"
-                           HorizontalAlignment="Center"
-                           VerticalAlignment="Center" />
+              <Border Grid.Column="0" Classes="brandMark">
+                <TextBlock Text="&#x2713;" />
               </Border>
 
               <TextBlock Grid.Column="1"
@@ -80,13 +101,18 @@
                          Text="{Binding CountLabel}"
                          IsVisible="{Binding #Shell.Chrome.IsCompact}" />
 
+              <!--
+                O pino agora é "fixar como HUD": manter o app visível sobre as
+                outras janelas, num cartão que não atrapalha (ADR-047). O
+                "sempre no topo" da janela normal continua no menu.
+              -->
               <Button Grid.Column="3"
+                      x:Name="HudButton"
                       Classes="chrome"
-                      Classes.on="{Binding #Shell.Chrome.IsTopmost}"
-                      Content="{Binding #Shell.Chrome.TopmostGlyph}"
+                      Content="&#xE718;"
                       chrome:WindowDecorationProperties.ElementRole="User"
-                      ToolTip.Tip="{Binding #Shell.Chrome.TopmostTip}"
-                      Command="{Binding #Shell.Chrome.ToggleTopmostCommand}" />
+                      ToolTip.Tip="Fixar como HUD — fica visível sobre as outras janelas"
+                      Command="{Binding #Shell.Chrome.EnterHudCommand}" />
 
               <Button Grid.Column="4"
                       Classes="chrome"
@@ -118,14 +144,14 @@
                               Command="{Binding #Shell.Chrome.UseModeCommand}"
                               CommandParameter="collapsed" />
                     <Separator />
+                    <MenuItem Header="Fixar como HUD"
+                              Command="{Binding #Shell.Chrome.EnterHudCommand}" />
                     <MenuItem Header="Sempre no topo"
                               ToggleType="CheckBox"
                               IsChecked="{Binding #Shell.Chrome.IsTopmost, Mode=OneWay}"
                               Command="{Binding #Shell.Chrome.ToggleTopmostCommand}" />
-                    <MenuItem Header="Modo discreto"
-                              ToggleType="CheckBox"
-                              IsChecked="{Binding #Shell.Chrome.IsGhost, Mode=OneWay}"
-                              Command="{Binding #Shell.Chrome.ToggleGhostCommand}" />
+                    <MenuItem Header="Janela e comportamento…"
+                              Command="{Binding #Shell.Chrome.OpenWindowSettingsCommand}" />
                     <MenuItem Header="Abrir recolhido da próxima vez"
                               ToggleType="CheckBox"
                               IsChecked="{Binding #Shell.Chrome.StartHidden, Mode=TwoWay}" />
@@ -180,8 +206,13 @@
                     </MenuItem>
 
                     <Separator />
+                    <!-- Sem ícone na bandeja, ocultar não teria volta. -->
                     <MenuItem Header="Ocultar na bandeja"
+                              IsVisible="{Binding #Shell.Chrome.TrayAvailable}"
                               Command="{Binding #Shell.Chrome.HideCommand}" />
+                    <MenuItem Header="Sair do MyTaskApp"
+                              Command="{Binding #Shell.Chrome.RequestExitCommand}" />
+                    <Separator />
                     <MenuItem Header="Configuração de lembretes…"
                               Command="{Binding OpenSettingsCommand}" />
                     <MenuItem Header="Etiquetas…"
@@ -207,6 +238,14 @@
                   </MenuFlyout>
                 </Button.Flyout>
               </Button>
+
+              <!-- O X faz o que "Ao fechar a janela" mandar (ADR-047). -->
+              <Button Grid.Column="6"
+                      Classes="chrome"
+                      Content="&#xE711;"
+                      chrome:WindowDecorationProperties.ElementRole="User"
+                      ToolTip.Tip="Fechar"
+                      Command="{Binding #Shell.Chrome.RequestCloseCommand}" />
 
             </Grid>
 
@@ -234,54 +273,186 @@
           </StackPanel>
         </Border>
 
+        <!--
+          O cabeçalho do HUD. Sem papel de TitleBar de propósito: o arrasto é
+          iniciado pelo próprio painel (BeginMoveDrag) para a janela saber que
+          foi o usuário quem moveu — e só então guardar a posição como
+          "personalizada". Um movimento do sistema (troca de DPI, monitor
+          desligado) não pode virar escolha do usuário.
+        -->
+        <Border DockPanel.Dock="Top"
+                Classes="hudBar"
+                IsVisible="{Binding #Shell.Chrome.IsHudExpanded}"
+                PointerPressed="OnHudBarPointerPressed">
+
+          <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto">
+
+            <Border Grid.Column="0" Classes="brandMark">
+              <TextBlock Text="&#x2713;" />
+            </Border>
+
+            <TextBlock Grid.Column="1" Classes="brand" Text="MyTaskApp" />
+
+            <TextBlock Grid.Column="2"
+                       Classes="metric"
+                       Margin="8,0,0,0"
+                       Text="{Binding CountLabel}" />
+
+            <Button Grid.Column="3"
+                    Classes="chrome"
+                    Classes.on="{Binding #Shell.Chrome.IsCaptureOpen}"
+                    Content="{Binding #Shell.Chrome.CaptureGlyph}"
+                    chrome:WindowDecorationProperties.ElementRole="User"
+                    ToolTip.Tip="{Binding #Shell.Chrome.CaptureTip}"
+                    Command="{Binding #Shell.Chrome.ToggleCaptureCommand}" />
+
+            <!-- Aceso: o HUD está ligado. O clique é a porta de volta. -->
+            <Button Grid.Column="4"
+                    x:Name="HudExitButton"
+                    Classes="chrome on"
+                    Content="&#xE840;"
+                    chrome:WindowDecorationProperties.ElementRole="User"
+                    ToolTip.Tip="HUD ativo — clique para voltar à janela normal"
+                    Command="{Binding #Shell.Chrome.ExitHudCommand}" />
+
+            <Button Grid.Column="5"
+                    Classes="chrome"
+                    Content="&#xE712;"
+                    chrome:WindowDecorationProperties.ElementRole="User"
+                    ToolTip.Tip="Opções do HUD">
+              <Button.Flyout>
+                <MenuFlyout Placement="BottomEdgeAlignedRight">
+                  <MenuItem Header="Tamanho"
+                            ItemsSource="{Binding #Shell.Chrome.HudSizeOptions}"
+                            ItemContainerTheme="{StaticResource HudChoiceItem}" />
+                  <MenuItem Header="Posição"
+                            ItemsSource="{Binding #Shell.Chrome.HudPositionOptions}"
+                            ItemContainerTheme="{StaticResource HudChoiceItem}" />
+                  <MenuItem Header="Manter o HUD sempre visível"
+                            ToggleType="CheckBox"
+                            IsChecked="{Binding #Shell.Chrome.HudAlwaysOnTop, Mode=TwoWay}" />
+                  <MenuItem Header="Recolher o HUD"
+                            Command="{Binding #Shell.Chrome.CollapseHudCommand}" />
+                  <Separator />
+                  <MenuItem Header="Janela e comportamento…"
+                            Command="{Binding #Shell.Chrome.OpenWindowSettingsCommand}" />
+                  <MenuItem Header="Configuração de lembretes…"
+                            Command="{Binding OpenSettingsCommand}" />
+                  <Separator />
+                  <MenuItem Header="Sair do modo HUD"
+                            Command="{Binding #Shell.Chrome.ExitHudCommand}" />
+                  <MenuItem Header="Ocultar na bandeja"
+                            IsVisible="{Binding #Shell.Chrome.TrayAvailable}"
+                            Command="{Binding #Shell.Chrome.HideCommand}" />
+                  <MenuItem Header="Sair do MyTaskApp"
+                            Command="{Binding #Shell.Chrome.RequestExitCommand}" />
+                </MenuFlyout>
+              </Button.Flyout>
+            </Button>
+
+            <!--
+              O X do HUD também obedece a "Ao fechar a janela". Quando a
+              escolha é "entrar no HUD" e ele já está no HUD, repetir o gesto
+              não faria nada: a janela abre estas opções em vez de ignorar o
+              clique.
+            -->
+            <Button Grid.Column="6"
+                    x:Name="HudCloseButton"
+                    Classes="chrome"
+                    Content="&#xE711;"
+                    chrome:WindowDecorationProperties.ElementRole="User"
+                    ToolTip.Tip="Fechar"
+                    Command="{Binding #Shell.Chrome.RequestCloseCommand}">
+              <FlyoutBase.AttachedFlyout>
+                <MenuFlyout Placement="BottomEdgeAlignedRight">
+                  <MenuItem Header="Voltar à janela normal"
+                            Command="{Binding #Shell.Chrome.ExitHudCommand}" />
+                  <MenuItem Header="Ocultar na bandeja"
+                            IsVisible="{Binding #Shell.Chrome.TrayAvailable}"
+                            Command="{Binding #Shell.Chrome.HideCommand}" />
+                  <MenuItem Header="Sair do MyTaskApp"
+                            Command="{Binding #Shell.Chrome.RequestExitCommand}" />
+                </MenuFlyout>
+              </FlyoutBase.AttachedFlyout>
+            </Button>
+
+          </Grid>
+        </Border>
+
+        <!--
+          A explicação da primeira vez. Dentro do HUD, e não numa janela por
+          cima: quem acabou de fixar o app quer ver onde ele foi parar.
+        -->
+        <Border DockPanel.Dock="Top"
+                Classes="hudIntro"
+                IsVisible="{Binding #Shell.Chrome.IsHudIntroVisible}">
+          <StackPanel Spacing="4">
+            <TextBlock Classes="hudIntroTitle" Text="Modo HUD" />
+            <TextBlock Classes="hudIntroText"
+                       Text="Fica visível sobre as outras janelas. Fora do cartão, o clique vai para o app de trás." />
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Grid.Column="0"
+                         Classes="hudIntroText"
+                         VerticalAlignment="Center"
+                         Text="Ajustes em ⋯ → Janela e comportamento." />
+              <Button Grid.Column="1"
+                      Classes="accent"
+                      Margin="8,0,0,0"
+                      Padding="12,3"
+                      FontSize="11"
+                      Content="Entendi"
+                      Command="{Binding #Shell.Chrome.DismissHudIntroCommand}" />
+            </Grid>
+          </StackPanel>
+        </Border>
+
+        <Button DockPanel.Dock="Bottom"
+                Classes="hudFooter"
+                Content="+ Nova tarefa"
+                IsVisible="{Binding #Shell.Chrome.IsHudFooterVisible}"
+                Command="{Binding #Shell.Chrome.ToggleCaptureCommand}" />
+
         <views:TodayView IsVisible="{Binding #Shell.Chrome.IsPanelVisible}"
                          Classes.compact="{Binding #Shell.Chrome.IsCompact}"
-                         Classes.ghost="{Binding #Shell.Chrome.IsGhostActive}"
+                         Classes.hud="{Binding #Shell.Chrome.IsHud}"
+                         Classes.hudCompact="{Binding #Shell.Chrome.IsHudCompact}"
                          Classes.captureOpen="{Binding #Shell.Chrome.IsCaptureOpen}" />
 
       </DockPanel>
     </Border>
 
     <!--
-      Os dois controles do modo discreto. Fora do DockPanel de propósito: eles
-      flutuam sobre a lista, no canto, porque sem cabeçalho não sobrou lugar
-      onde pousar. Saem da área de arrasto com ElementRole="User", senão o
-      clique viraria um empurrão na janela.
-
-      O alfinete ao lado do "+" é a porta de volta: sem ele, desfazer o modo
-      discreto só pela bandeja — um caminho que ninguém encontra sozinho.
+      HUD recolhido: uma pílula com a marca e o que falta. Passar o mouse (com
+      uma pausa, para atravessar não abrir nada) ou clicar devolve o cartão.
     -->
-    <StackPanel Orientation="Horizontal"
-                Spacing="6"
-                HorizontalAlignment="Right"
-                VerticalAlignment="Bottom"
-                Margin="0,0,18,16"
-                IsVisible="{Binding #Shell.Chrome.IsGhostActive}">
-
-      <Button Classes="ghostChrome"
-              Classes.on="{Binding #Shell.Chrome.IsTopmost}"
-              Content="{Binding #Shell.Chrome.TopmostGlyph}"
-              chrome:WindowDecorationProperties.ElementRole="User"
-              ToolTip.Tip="{Binding #Shell.Chrome.GhostPinTip}"
-              Command="{Binding #Shell.Chrome.ToggleTopmostCommand}" />
-
-      <Button Classes="ghostChrome ghostAdd"
-              Content="{Binding #Shell.Chrome.CaptureGlyph}"
-              chrome:WindowDecorationProperties.ElementRole="User"
-              ToolTip.Tip="{Binding #Shell.Chrome.CaptureTip}"
-              Command="{Binding #Shell.Chrome.ToggleCaptureCommand}" />
-
-    </StackPanel>
+    <Button Classes="hudPill"
+            IsVisible="{Binding #Shell.Chrome.IsHudCollapsed}"
+            chrome:WindowDecorationProperties.ElementRole="User"
+            ToolTip.Tip="{Binding PendingLabel}"
+            Command="{Binding #Shell.Chrome.ExpandHudCommand}"
+            PointerEntered="OnPillPointerEntered"
+            PointerExited="OnPillPointerExited">
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <Border Classes="brandMark">
+          <TextBlock Text="&#x2713;" />
+        </Border>
+        <TextBlock Classes="brand" Text="MyTaskApp" />
+        <Border Classes="countBadge" IsVisible="{Binding HasPending}">
+          <TextBlock Text="{Binding PendingCount}" />
+        </Border>
+      </StackPanel>
+    </Button>
 
     <!--
       Alças de redimensionamento sobre o anel da sombra, onde não há conteúdo
       para roubar clique. Os papéis fazem o sistema redimensionar; o
       PointerPressed é a rede de segurança se a plataforma ignorar o papel.
+      O HUD não tem: o tamanho dele é escolha de preset.
     -->
     <Grid Margin="2"
           RowDefinitions="8,*,8"
           ColumnDefinitions="8,*,8"
-          IsVisible="{Binding #Shell.Chrome.IsPanelVisible}">
+          IsVisible="{Binding #Shell.Chrome.AreGripsVisible}">
 
       <Border Grid.Row="0" Grid.Column="0" Background="Transparent" Cursor="TopLeftCorner"
               Tag="NorthWest" chrome:WindowDecorationProperties.ElementRole="ResizeNW"
