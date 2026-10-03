@@ -52,6 +52,9 @@ public sealed class MyTaskAppDbContext(DbContextOptions<MyTaskAppDbContext> opti
     /// <summary>O som de cada estado do agente que avisa (ADR-042).</summary>
     internal DbSet<AgentAlertSoundRow> AgentAlertSounds => Set<AgentAlertSoundRow>();
 
+    /// <summary>As convenções de nome de branch das tarefas vinculadas (ADR-045).</summary>
+    internal DbSet<BranchSettingsRow> BranchSettings => Set<BranchSettingsRow>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder) =>
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(MyTaskAppDbContext).Assembly);
 }

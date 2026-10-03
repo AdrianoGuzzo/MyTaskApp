@@ -232,6 +232,46 @@ public sealed partial class TaskNotesWindow : Window
         }
     }
 
+    /// <summary>
+    /// A busca do "Vincular ao Jira" (ADR-045): ↑/↓ andam, Enter vincula a
+    /// marcada (ou a primeira) e Esc fecha a busca, e não a janela.
+    /// </summary>
+    private bool HandleIssueSearchKey(KeyEventArgs e)
+    {
+        if (e.Source is not TextBox { Name: "IssueSearchBox" } || ViewModel?.Issue is not { IsLinking: true } issue)
+        {
+            return false;
+        }
+
+        switch (e.Key)
+        {
+            case Key.Down:
+                issue.Suggestions.Move(+1);
+                return true;
+            case Key.Up:
+                issue.Suggestions.Move(-1);
+                return true;
+            case Key.Escape:
+                issue.CancelLinking();
+                return true;
+            case Key.Enter:
+                _ = issue.AcceptSuggestionAsync();
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>Clique numa issue da busca: vincula. No pressionar, como as outras listas.</summary>
+    private void OnIssueSuggestionPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is Control { DataContext: IssueSuggestionViewModel item } && ViewModel?.Issue is { } issue)
+        {
+            e.Handled = true;
+            _ = issue.LinkAsync(item.Issue);
+        }
+    }
+
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
         // Com uma lista aberta, as teclas dela vêm antes de tudo — inclusive do
@@ -239,7 +279,8 @@ public sealed partial class TaskNotesWindow : Window
         if (_notesCompletion.HandleKey(e)
             || _directoryCompletion.HandleKey(e)
             || _promptReferences.HandleKey(e)
-            || ((e.Source as Visual)?.FindAncestorOfType<CommandInputBox>(includeSelf: true)?.HandleKey(e) ?? false))
+            || ((e.Source as Visual)?.FindAncestorOfType<CommandInputBox>(includeSelf: true)?.HandleKey(e) ?? false)
+            || HandleIssueSearchKey(e))
         {
             e.Handled = true;
             return;

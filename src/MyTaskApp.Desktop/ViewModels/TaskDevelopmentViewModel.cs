@@ -221,11 +221,48 @@ public sealed partial class TaskDevelopmentViewModel(
         : null;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(BranchNameError), nameof(HasBranchNameError), nameof(WorktreePreview), nameof(ChipBranch))]
+    [NotifyPropertyChangedFor(nameof(BranchNameError), nameof(HasBranchNameError), nameof(WorktreePreview), nameof(ChipBranch), nameof(ExistingBranchNotice))]
     [NotifyCanExecuteChangedFor(nameof(StartCommand))]
     private string _newBranchName = string.Empty;
 
+    /// <summary>
+    /// O nome que o app sugeriu: <c>feature/{slug}</c>, ou o da convenção
+    /// quando a tarefa tem issue (<c>bug/GAECO-1234</c>, ADR-045). Enquanto o
+    /// campo tiver este valor, o usuário não escreveu nada nele, e uma sugestão
+    /// melhor pode trocá-lo.
+    /// </summary>
+    private string _suggestedBranch = string.Empty;
+
+    /// <summary>As branches do repositório escolhido, para o aviso de branch existente.</summary>
+    private IReadOnlyList<GitBranch> _branches = [];
+
     public string? BranchNameError => GitBranchName.Validate(NewBranchName?.Trim());
+
+    /// <summary>
+    /// A branch já existe? A criação a reaproveita em vez de duplicar (ADR-027)
+    /// — o aviso só conta antes do clique o que vai acontecer.
+    /// </summary>
+    public string? ExistingBranchNotice
+    {
+        get
+        {
+            if (BranchNameError is not null || _branches.Count == 0)
+            {
+                return null;
+            }
+
+            var (kind, branch) = ExistingBranches.Find(_branches, NewBranchName, SelectedBranchOption?.Branch?.Remote);
+
+            return kind switch
+            {
+                ExistingBranchKind.Local =>
+                    $"A branch {branch!.ShortName} já existe neste repositório. O worktree vai usá-la, sem criar outra.",
+                ExistingBranchKind.Remote =>
+                    $"A branch foi encontrada em {branch!.Remote}. O worktree faz checkout dela, acompanhando o remoto.",
+                _ => null,
+            };
+        }
+    }
 
     public bool HasBranchNameError => BranchNameError is not null && !string.IsNullOrEmpty(NewBranchName);
 
@@ -471,7 +508,8 @@ public sealed partial class TaskDevelopmentViewModel(
         DirectoryCompletion = completion ?? DirectoryCompletion;
         DirectoryCompletion.IsEnabled = !isReadOnly;
         Agent.References = references;
-        NewBranchName = GitBranchName.Suggest(taskTitle);
+        _suggestedBranch = GitBranchName.Suggest(taskTitle);
+        NewBranchName = _suggestedBranch;
         State = DevelopmentPanelState.Loading;
         Agent.PropertyChanged += (_, args) =>
         {
@@ -495,6 +533,24 @@ public sealed partial class TaskDevelopmentViewModel(
         {
             Agent.Load(_taskId, value.Id, IsReadOnly, value.AgentPrompt);
         }
+    }
+
+    /// <summary>
+    /// A tarefa tem issue: a branch sugerida passa a ser a da convenção
+    /// (<c>bug/GAECO-1234</c>, ADR-045). Só troca o campo se o usuário não
+    /// escreveu nada nele — o nome digitado é escolha dele. <c>null</c> volta
+    /// para <c>feature/{slug}</c>.
+    /// </summary>
+    public void SuggestBranch(string? branch)
+    {
+        var suggestion = string.IsNullOrWhiteSpace(branch) ? GitBranchName.Suggest(_taskTitle) : branch.Trim();
+
+        if (NewBranchName == _suggestedBranch)
+        {
+            NewBranchName = suggestion;
+        }
+
+        _suggestedBranch = suggestion;
     }
 
     /// <summary>
@@ -641,6 +697,8 @@ public sealed partial class TaskDevelopmentViewModel(
         ClearTags();
         BranchesError = null;
         BranchesNotice = null;
+        _branches = [];
+        OnPropertyChanged(nameof(ExistingBranchNotice));
 
         _inspection?.Cancel();
         _inspection = new CancellationTokenSource();
@@ -723,6 +781,9 @@ public sealed partial class TaskDevelopmentViewModel(
                 cancellationToken);
 
             var previous = SelectedBranchOption?.Branch?.FullRef;
+
+            _branches = list.Branches;
+            OnPropertyChanged(nameof(ExistingBranchNotice));
 
             BranchOptions.Clear();
 
@@ -826,6 +887,9 @@ public sealed partial class TaskDevelopmentViewModel(
         {
             SelectedBranchOption = oldValue is { IsSelectable: true } ? oldValue : null;
         }
+
+        // O remoto da origem decide qual remota vale, quando há mais de um.
+        OnPropertyChanged(nameof(ExistingBranchNotice));
     }
 
     // --- Iniciar implementação ---------------------------------------------
@@ -1542,7 +1606,7 @@ public sealed partial class TaskDevelopmentViewModel(
         }
 
         if (development.Status is TaskDevelopmentStatus.Creating or TaskDevelopmentStatus.Error
-            && NewBranchName == GitBranchName.Suggest(_taskTitle))
+            && NewBranchName == _suggestedBranch)
         {
             NewBranchName = development.Branch;
         }

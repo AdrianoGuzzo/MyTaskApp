@@ -78,7 +78,16 @@ public class TodayRowMenuRenderingTests
 
         var items = RowMenuOf(window).Menu.Items.OfType<MenuItem>().ToList();
 
-        items.Select(item => item.Header).Should().Equal("Abrir Claude Code", "Arquivar", "Mover para a lixeira…");
+        items.Select(item => item.Header).Should().Equal(
+            "Abrir no Jira ↗",
+            "Copiar chave do Jira",
+            "Copiar link do Jira",
+            "Copiar nome da branch",
+            "Abrir Claude Code",
+            "Abrir terminal no worktree",
+            "Abrir pasta do worktree",
+            "Arquivar",
+            "Mover para a lixeira…");
     }
 
     /// <summary>
@@ -108,9 +117,10 @@ public class TodayRowMenuRenderingTests
     {
         var window = await ShowAsync(new TodayBoard(Date, [], [], [Row("Fechar o mês")], [], []));
 
-        // "Abrir Claude Code" é clique de code-behind: pode precisar perguntar o ambiente.
+        // "Abrir Claude Code", o terminal e a pasta são clique de code-behind:
+        // podem precisar perguntar o ambiente (ADR-036, ADR-045).
         var items = OpenRowMenu(window).Items.OfType<MenuItem>()
-            .Where(item => !item.Classes.Contains("startAgent"))
+            .Where(item => !item.Classes.Contains("startAgent") && !item.Classes.Contains("worktreeAction"))
             .ToList();
 
         items.Should().NotBeEmpty().And.AllSatisfy(item =>

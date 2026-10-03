@@ -6,6 +6,8 @@ using MyTaskApp.Application;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Development;
+using MyTaskApp.Application.External;
+using MyTaskApp.Application.External.Jira;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Application.Sounds;
@@ -78,6 +80,10 @@ public class InfrastructureRegistrationTests : IDisposable
     [InlineData(typeof(ITagRepository))]
     [InlineData(typeof(ITagQuery))]
     [InlineData(typeof(IDirectoryProbe))]
+    [InlineData(typeof(IJiraAuthenticationService))]
+    [InlineData(typeof(IExternalTaskProvider))]
+    [InlineData(typeof(IExternalTaskSearchProvider))]
+    [InlineData(typeof(IBranchConventionStore))]
     [InlineData(typeof(IDirectoryRemover))]
     [InlineData(typeof(IGitClient))]
     [InlineData(typeof(IAgentSessionRepository))]

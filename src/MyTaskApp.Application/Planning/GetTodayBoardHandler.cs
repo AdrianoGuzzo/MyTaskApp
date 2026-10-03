@@ -39,6 +39,7 @@ public sealed class GetTodayBoardHandler(
             {
                 ActiveAgents = Agents(entry.Row.ActiveAgents),
                 Worktrees = Worktrees(entry.Row.Worktrees),
+                External = entry.Row.External,
             };
 
         IEnumerable<(TodayOccurrenceRow Row, TodayPlacement? Placement)> InSection(TodaySection section) =>

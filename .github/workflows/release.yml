@@ -111,8 +111,16 @@ jobs:
       # build.ps1 lê a versão do MSBuild, roda os testes, publica e chama o
       # ISCC. Mesmo caminho da geração local — nada específico de CI aqui.
       # Teste vermelho = nenhum instalador.
+      # O app OAuth do Jira (ADR-045): o MSBuild lê variáveis de ambiente como
+      # propriedades, e o Infrastructure.csproj grava as duas como metadado do
+      # assembly. Sem os secrets no repositório do GitHub, o instalador sai sem
+      # o login de um clique — só com o caminho do API token. Só no Windows: no
+      # Linux ainda não há cofre para o token, e o secret não iria para nada.
       - name: Testar e gerar o instalador
         shell: pwsh
+        env:
+          JiraClientId: ${{ secrets.JIRA_CLIENT_ID }}
+          JiraClientSecret: ${{ secrets.JIRA_CLIENT_SECRET }}
         run: .\installer\windows\build.ps1
 
       - uses: actions/upload-artifact@v4

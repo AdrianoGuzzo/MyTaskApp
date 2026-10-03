@@ -1,9 +1,11 @@
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.External;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.Auditing;
+using MyTaskApp.Domain.External;
 using MyTaskApp.Domain.Tasks;
 
 namespace MyTaskApp.Application.Tasks;
@@ -18,7 +20,17 @@ namespace MyTaskApp.Application.Tasks;
 /// linhas (ADR-025). Escolha na tela, e não "#etiqueta" no texto: seria sintaxe
 /// a decorar, e um "#1" num título viraria etiqueta sem ninguém pedir.
 /// </param>
-public sealed record QuickCapture(string Text, IReadOnlyCollection<Guid>? TagIds = null);
+/// <param name="Links">
+/// As issues escolhidas no autocomplete do Jira (ADR-045). A linha que começa
+/// com a chave de uma delas — <c>GAECO-1234 Corrigir erro</c> — nasce
+/// vinculada, e a chave sai do título. A chave fica visível na caixa enquanto
+/// se escreve, então apagá-la é desfazer o vínculo, sem botão nenhum. Uma
+/// chave que ninguém escolheu continua texto: a captura não vai à rede.
+/// </param>
+public sealed record QuickCapture(
+    string Text,
+    IReadOnlyCollection<Guid>? TagIds = null,
+    IReadOnlyCollection<ExternalTask>? Links = null);
 
 public sealed record QuickCaptureResult(IReadOnlyList<Guid> TaskIds)
 {
@@ -71,7 +83,7 @@ public sealed class QuickCaptureHandler(
         var reminder = (await settings.GetAsync(cancellationToken)).DefaultPolicy;
 
         var created = titles
-            .Select(title => TaskItem.Create(title, createdAt, schedule: today, reminder: reminder))
+            .Select(line => Create(line, command.Links, createdAt, today, reminder))
             .ToList();
 
         foreach (var task in created)
@@ -96,6 +108,37 @@ public sealed class QuickCaptureHandler(
         logger.LogInformation("QuickCaptured {Count} {Date}", created.Count, clock.Today);
 
         return new QuickCaptureResult([.. created.Select(task => task.Id)]);
+    }
+
+    /// <summary>
+    /// A tarefa da linha, vinculada se ela começar com a chave de uma issue
+    /// escolhida. O título é o que vem depois da chave; sem nada depois, o da
+    /// issue.
+    /// </summary>
+    private static TaskItem Create(
+        string line,
+        IReadOnlyCollection<ExternalTask>? links,
+        DateTimeOffset createdAt,
+        TaskSchedule today,
+        Domain.Reminders.ReminderPolicy reminder)
+    {
+        if (links is not { Count: > 0 } || !IssueKey.TryParsePrefix(line, out var key, out var rest))
+        {
+            return TaskItem.Create(line, createdAt, schedule: today, reminder: reminder);
+        }
+
+        var issue = links.FirstOrDefault(link => IssueKey.TryParse(link.Id, out var linkKey) && linkKey == key);
+
+        if (issue is null)
+        {
+            return TaskItem.Create(line, createdAt, schedule: today, reminder: reminder);
+        }
+
+        var title = rest.Length > 0 ? rest : ExternalLink.TaskTitleFor(issue.Title);
+        var task = TaskItem.Create(title, createdAt, schedule: today, reminder: reminder);
+        task.LinkExternal(issue.ToLink(createdAt));
+
+        return task;
     }
 
     /// <summary>

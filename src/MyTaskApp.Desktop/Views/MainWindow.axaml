@@ -190,6 +190,8 @@
                               Command="{Binding OpenCommandsCommand}" />
                     <MenuItem Header="Sons do Claude Code…"
                               Command="{Binding OpenSoundsCommand}" />
+                    <MenuItem Header="Integrações…"
+                              Command="{Binding OpenIntegrationsCommand}" />
                     <MenuItem Header="Gerenciamento de dados…"
                               Command="{Binding OpenDataManagementCommand}" />
 

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using MyTaskApp.Domain.External;
 using MyTaskApp.Domain.Tasks;
 
 namespace MyTaskApp.Infrastructure.Persistence.Configurations;
@@ -94,6 +95,45 @@ internal sealed class TaskItemConfiguration : IEntityTypeConfiguration<TaskItem>
 
         // Sem isto o EF não distingue "owned ausente" de "todas as colunas nulas".
         builder.Navigation(task => task.Reminder).IsRequired();
+
+        // O retrato da issue de fora (ADR-045). Owned e opcional: sete colunas
+        // em Tasks, nulas na tarefa só local. Quem diz "existe" é o Provider,
+        // obrigatório no objeto — tudo nulo é ausência, e não um vínculo vazio.
+        builder.OwnsOne(task => task.External, link =>
+        {
+            link.Property(external => external.Provider)
+                .HasColumnName("External_Provider")
+                .HasMaxLength(ExternalLink.MaxProviderLength)
+                .IsRequired();
+
+            link.Property(external => external.Id)
+                .HasColumnName("External_Id")
+                .HasMaxLength(ExternalLink.MaxIdLength)
+                .IsRequired();
+
+            link.Property(external => external.Title)
+                .HasColumnName("External_Title")
+                .HasMaxLength(ExternalLink.MaxTitleLength)
+                .IsRequired();
+
+            link.Property(external => external.Url)
+                .HasColumnName("External_Url")
+                .HasMaxLength(ExternalLink.MaxUrlLength)
+                .IsRequired();
+
+            link.Property(external => external.IssueType)
+                .HasColumnName("External_IssueType")
+                .HasMaxLength(ExternalLink.MaxTypeLength);
+
+            link.Property(external => external.Status)
+                .HasColumnName("External_Status")
+                .HasMaxLength(ExternalLink.MaxTypeLength);
+
+            link.Property(external => external.SyncedAt)
+                .HasColumnName("External_SyncedAt")
+                .HasConversion(UtcInstantConverter.Instance)
+                .IsRequired();
+        });
 
         builder.HasMany(task => task.Occurrences)
             .WithOne()

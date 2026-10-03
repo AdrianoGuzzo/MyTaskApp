@@ -463,6 +463,23 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                     b.ToTable("AgentSettings", (string)null);
                 });
 
+            modelBuilder.Entity("MyTaskApp.Infrastructure.Persistence.BranchSettingsRow", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Conventions")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("BranchSettings", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_BranchSettings_SingleRow", "Id = 1");
+                        });
+                });
+
             modelBuilder.Entity("MyTaskApp.Infrastructure.Persistence.DataRetentionSettingsRow", b =>
                 {
                     b.Property<int>("Id")
@@ -562,6 +579,57 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("MyTaskApp.Domain.Tasks.TaskItem", b =>
                 {
+                    b.OwnsOne("MyTaskApp.Domain.External.ExternalLink", "External", b1 =>
+                        {
+                            b1.Property<Guid>("TaskItemId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("Id")
+                                .IsRequired()
+                                .HasMaxLength(100)
+                                .HasColumnType("TEXT")
+                                .HasColumnName("External_Id");
+
+                            b1.Property<string>("IssueType")
+                                .HasMaxLength(100)
+                                .HasColumnType("TEXT")
+                                .HasColumnName("External_IssueType");
+
+                            b1.Property<string>("Provider")
+                                .IsRequired()
+                                .HasMaxLength(40)
+                                .HasColumnType("TEXT")
+                                .HasColumnName("External_Provider");
+
+                            b1.Property<string>("Status")
+                                .HasMaxLength(100)
+                                .HasColumnType("TEXT")
+                                .HasColumnName("External_Status");
+
+                            b1.Property<long>("SyncedAt")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("External_SyncedAt");
+
+                            b1.Property<string>("Title")
+                                .IsRequired()
+                                .HasMaxLength(255)
+                                .HasColumnType("TEXT")
+                                .HasColumnName("External_Title");
+
+                            b1.Property<string>("Url")
+                                .IsRequired()
+                                .HasMaxLength(2000)
+                                .HasColumnType("TEXT")
+                                .HasColumnName("External_Url");
+
+                            b1.HasKey("TaskItemId");
+
+                            b1.ToTable("Tasks");
+
+                            b1.WithOwner()
+                                .HasForeignKey("TaskItemId");
+                        });
+
                     b.OwnsOne("MyTaskApp.Domain.Reminders.ReminderPolicy", "Reminder", b1 =>
                         {
                             b1.Property<Guid>("TaskItemId")
@@ -598,6 +666,8 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                             b1.WithOwner()
                                 .HasForeignKey("TaskItemId");
                         });
+
+                    b.Navigation("External");
 
                     b.Navigation("Reminder")
                         .IsRequired();

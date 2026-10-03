@@ -1,3 +1,4 @@
+using MyTaskApp.Domain.External;
 using MyTaskApp.Domain.Lifecycle;
 using MyTaskApp.Domain.Reminders;
 
@@ -60,6 +61,12 @@ public sealed class TaskItem
     /// </summary>
     public IReadOnlyList<TaskDevelopment> Developments =>
         _developments.AsReadOnly();
+
+    /// <summary>
+    /// A issue de fora a que esta tarefa está ligada — hoje, o Jira (ADR-045).
+    /// <c>null</c> = tarefa só local, que é o caso comum e continua sendo.
+    /// </summary>
+    public ExternalLink? External { get; private set; }
 
     /// <summary>Quando foi arquivado. <c>null</c> = está na lista principal.</summary>
     public DateTimeOffset? ArchivedAt { get; private set; }
@@ -159,6 +166,60 @@ public sealed class TaskItem
         {
             _tags.Add(new TaskItemTag(Id, tagId));
         }
+    }
+
+    // ---------------------------------------------------------------------
+    // Vínculo com issue de fora (ADR-045)
+    //
+    // O vínculo é opcional e nunca impede nada: a tarefa vive igual sem ele.
+    // Vincular, atualizar e desvincular passam pela guarda da lista principal,
+    // como qualquer edição — arquivado é somente leitura.
+    // ---------------------------------------------------------------------
+
+    /// <summary>Liga a tarefa à issue. Um vínculo anterior é trocado.</summary>
+    public void LinkExternal(ExternalLink link)
+    {
+        ArgumentNullException.ThrowIfNull(link);
+        RefuseWhenOutOfTheMainList("vincular");
+
+        External = link;
+    }
+
+    /// <summary>Esquece a issue. A tarefa, o título e os worktrees ficam.</summary>
+    public void UnlinkExternal()
+    {
+        RefuseWhenOutOfTheMainList("desvincular");
+
+        External = null;
+    }
+
+    /// <summary>
+    /// Troca o retrato pelo que o sistema de fora devolveu agora. O título da
+    /// tarefa acompanha o da issue só enquanto o usuário não o tiver mudado: o
+    /// título local é escolha dele, e o "Atualizar" não pode apagá-la.
+    /// </summary>
+    public void RefreshExternal(ExternalLink fresh)
+    {
+        ArgumentNullException.ThrowIfNull(fresh);
+        RefuseWhenOutOfTheMainList("atualizar o vínculo de");
+
+        if (External is null)
+        {
+            throw new DomainException("Esta tarefa não está vinculada a nenhuma issue.");
+        }
+
+        if (!External.IsSameAs(fresh))
+        {
+            throw new DomainException(
+                $"A tarefa está vinculada a {External.Id}, e não a {fresh.Id}.");
+        }
+
+        if (Title == ExternalLink.TaskTitleFor(External.Title))
+        {
+            Title = NormalizeTitle(ExternalLink.TaskTitleFor(fresh.Title));
+        }
+
+        External = fresh;
     }
 
     // ---------------------------------------------------------------------

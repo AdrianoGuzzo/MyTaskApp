@@ -2,11 +2,14 @@ using System.Runtime.Versioning;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Development;
+using MyTaskApp.Application.External;
+using MyTaskApp.Application.External.Jira;
 using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Reminders;
@@ -16,10 +19,12 @@ using MyTaskApp.Infrastructure.Agents;
 using MyTaskApp.Infrastructure.Agents.ClaudeCode;
 using MyTaskApp.Infrastructure.FileSystem;
 using MyTaskApp.Infrastructure.Git;
+using MyTaskApp.Infrastructure.Jira;
 using MyTaskApp.Infrastructure.Persistence;
 using MyTaskApp.Infrastructure.Persistence.Queries;
 using MyTaskApp.Infrastructure.Persistence.Repositories;
 using MyTaskApp.Infrastructure.Processes;
+using MyTaskApp.Infrastructure.Secrets;
 using MyTaskApp.Infrastructure.Sounds;
 using MyTaskApp.Infrastructure.Storage;
 using MyTaskApp.Infrastructure.Terminals;
@@ -109,6 +114,8 @@ public static class DependencyInjection
         services.AddSingleton<AgentEventListener>();
         services.AddSingleton<IAgentEventEndpoint>(provider => provider.GetRequiredService<AgentEventListener>());
 
+        AddJira(services, configuration);
+
         if (OperatingSystem.IsWindows())
         {
             AddWindowsTerminal(services);
@@ -121,6 +128,72 @@ public static class DependencyInjection
 
         return services;
     }
+
+    /// <summary>
+    /// A integração com o Jira (ADR-045). Tudo singleton: o cache do access
+    /// token e o portão da renovação valem para o app inteiro, e o
+    /// <c>HttpClient</c> é um só, como manda o .NET.
+    /// </summary>
+    private static void AddJira(IServiceCollection services, IConfiguration configuration)
+    {
+        // O que veio do build (o app OAuth) e, por cima, a seção Jira da configuração.
+        var options = JiraOptions.FromBuild();
+        configuration.GetSection(JiraOptions.SectionName).Bind(options);
+        services.AddSingleton(options);
+
+        // O relógio vem da Application; TryAdd para a Infrastructure subir sozinha nos testes.
+        services.TryAddSingleton(TimeProvider.System);
+
+        services.AddSingleton(provider => new JiraHttp(
+            CreateJiraHttpClient(),
+            options,
+            provider.GetRequiredService<ILogger<JiraHttp>>()));
+
+        services.AddSingleton<JiraOAuthClient>();
+        services.AddSingleton(provider => new JiraConnectionFile(
+            Path.Combine(UserDataLocation.Current.State, "jira.json"),
+            provider.GetRequiredService<ILogger<JiraConnectionFile>>()));
+
+        if (OperatingSystem.IsWindows())
+        {
+            AddWindowsSecrets(services);
+        }
+        else
+        {
+            services.AddSingleton<ISecretStore, UnsupportedSecretStore>();
+        }
+
+        services.AddSingleton<JiraAuthenticationService>();
+        services.AddSingleton<IJiraAuthenticationService>(provider => provider.GetRequiredService<JiraAuthenticationService>());
+        services.AddSingleton<IJiraAccess>(provider => provider.GetRequiredService<JiraAuthenticationService>());
+        services.AddSingleton<IJiraClient, JiraClient>();
+        services.AddSingleton<IExternalTaskProvider, JiraTaskProvider>();
+        services.AddSingleton<IExternalTaskSearchProvider, JiraTaskSearchProvider>();
+
+        // As convenções de branch são dado do usuário: no banco (ADR-014).
+        services.AddScoped<IBranchConventionStore, BranchConventionStore>();
+    }
+
+    private static HttpClient CreateJiraHttpClient()
+    {
+        var client = new HttpClient(new SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.FromMinutes(5) })
+        {
+            // O limite é por chamada, em JiraHttp, e distingue timeout de cancelamento.
+            Timeout = Timeout.InfiniteTimeSpan,
+        };
+
+        client.DefaultRequestHeaders.UserAgent.Add(new System.Net.Http.Headers.ProductInfoHeaderValue(
+            "MyTaskApp",
+            typeof(DependencyInjection).Assembly.GetName().Version?.ToString(3)));
+
+        return client;
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static void AddWindowsSecrets(IServiceCollection services) =>
+        services.AddSingleton<ISecretStore>(provider => new DpapiSecretStore(
+            Path.Combine(UserDataLocation.Current.State, "secrets"),
+            provider.GetRequiredService<ILogger<DpapiSecretStore>>()));
 
     [SupportedOSPlatform("windows")]
     private static void AddWindowsTerminal(IServiceCollection services)

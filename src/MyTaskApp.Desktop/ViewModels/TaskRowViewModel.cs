@@ -2,6 +2,7 @@ using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Domain.Agents;
+using MyTaskApp.Domain.External;
 using MyTaskApp.Domain.Reminders;
 using MyTaskApp.Domain.Tasks;
 
@@ -51,6 +52,8 @@ public sealed class TaskRowViewModel : ObservableObject
 
         Worktree = new TaskWorktreeViewModel(task.Worktrees, isCompleted);
 
+        External = task.External;
+
         WorktreeChoices = Worktree.Worktrees.Select(worktree => new TaskWorktreeChoice(this, worktree)).ToList();
     }
 
@@ -66,6 +69,41 @@ public sealed class TaskRowViewModel : ObservableObject
     public Guid TaskId { get; }
 
     public string Title { get; }
+
+    /// <summary>
+    /// A issue vinculada, como estava na última leitura (ADR-045). Vem do
+    /// banco: a chave aparece na linha mesmo sem rede.
+    /// </summary>
+    public ExternalLink? External { get; }
+
+    public bool HasIssue => External is not null;
+
+    /// <summary>"Copiar nome da branch" faz sentido com issue (a da convenção) ou com worktree (a dele).</summary>
+    public bool HasBranchName => HasIssue || Worktree.HasWorktree;
+
+    /// <summary>"GAECO-1234" — o destaque da linha.</summary>
+    public string IssueKey => External?.Id ?? string.Empty;
+
+    /// <summary>"BUG" — o selo do tipo, o mesmo da sugestão.</summary>
+    public string IssueTypeLabel => IssueTypes.Label(External?.IssueType);
+
+    public bool IsBugIssue => IssueTypes.KindOf(External?.IssueType) == IssueKind.Bug;
+
+    public bool IsStoryIssue => IssueTypes.KindOf(External?.IssueType) == IssueKind.Story;
+
+    public bool IsTaskIssue => IssueTypes.KindOf(External?.IssueType) == IssueKind.Task;
+
+    /// <summary>O balão da chave: o que a issue é, sem abrir o Jira.</summary>
+    public string IssueTip => External is not { } link
+        ? string.Empty
+        : string.Join(
+            Environment.NewLine,
+            new[]
+            {
+                $"{link.Id} · {link.IssueType ?? "Issue"}{(link.Status is null ? string.Empty : " · " + link.Status)}",
+                link.Title,
+                $"Clique para abrir no {link.Provider}",
+            });
 
     /// <summary>Os agentes de IA abertos para a tarefa, um por ambiente (ADR-030, ADR-031).</summary>
     public IReadOnlyList<TaskAgentViewModel> Agents { get; }

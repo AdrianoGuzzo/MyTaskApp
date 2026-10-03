@@ -371,9 +371,8 @@ public sealed class PrepareDevelopmentHandler(
 
         // Sem distinguir maiúsculas: no Windows as refs soltas são arquivos, e
         // "Feature/X" e "feature/x" são a mesma. Por isso a existente vale na
-        // grafia dela.
-        var local = branches.FirstOrDefault(branch =>
-            !branch.IsRemote && string.Equals(branch.ShortName, name, StringComparison.OrdinalIgnoreCase));
+        // grafia dela. A tela avisa com a mesma regra (ExistingBranches).
+        var local = ExistingBranches.Local(branches, name);
 
         if (local is not null)
         {
@@ -405,11 +404,7 @@ public sealed class PrepareDevelopmentHandler(
         }
 
         // Com mais de um remoto: o da origem, depois origin, depois o primeiro.
-        var remote = branches
-            .Where(branch => branch.IsRemote
-                && string.Equals(branch.ShortName, $"{branch.Remote}/{name}", StringComparison.OrdinalIgnoreCase))
-            .OrderBy(branch => branch.Remote == source.Remote ? 0 : branch.Remote == "origin" ? 1 : 2)
-            .FirstOrDefault();
+        var remote = ExistingBranches.Remote(branches, name, source.Remote);
 
         return remote is null ? (name, null) : (remote.ShortName[(remote.Remote!.Length + 1)..], remote);
     }

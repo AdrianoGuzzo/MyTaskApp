@@ -7,6 +7,8 @@ using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Commands;
 using MyTaskApp.Application.Configuration;
 using MyTaskApp.Application.Development;
+using MyTaskApp.Application.External;
+using MyTaskApp.Application.External.Jira;
 using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Reminders;
@@ -113,6 +115,26 @@ public static class DependencyInjection
         services.AddScoped<DeleteSoundHandler>();
         services.AddScoped<PreviewSoundHandler>();
         services.TryAddSingleton<IAudioPlayer, NoAudioPlayer>();
+
+        // Vínculo com issue de fora — hoje, o Jira (ADR-045). Os provedores e a
+        // autenticação vêm da Infrastructure; a busca é singleton porque o cache
+        // do autocomplete vale para o app inteiro.
+        services.TryAddSingleton<ExternalTaskSearch>();
+        services.AddScoped<SearchExternalTasksHandler>();
+        services.AddScoped<GetTaskExternalContextHandler>();
+        services.AddScoped<LinkTaskToExternalHandler>();
+        services.AddScoped<UnlinkTaskFromExternalHandler>();
+        services.AddScoped<RefreshExternalTaskHandler>();
+        services.AddScoped<GetBranchConventionsHandler>();
+        services.AddScoped<UpdateBranchConventionsHandler>();
+        services.AddScoped<GetJiraConnectionHandler>();
+        services.AddScoped<BeginJiraAuthorizationHandler>();
+        services.AddScoped<ChooseJiraSiteHandler>();
+        services.AddScoped<ConnectJiraWithApiTokenHandler>();
+        services.AddScoped<TestJiraConnectionHandler>();
+        services.AddScoped<ListJiraProjectsHandler>();
+        services.AddScoped<SetJiraDefaultProjectHandler>();
+        services.AddScoped<DisconnectJiraHandler>();
 
         // Ciclo de vida do checklist: arquivar, lixeira, exclusao definitiva e
         // auditoria (§1 a §8).

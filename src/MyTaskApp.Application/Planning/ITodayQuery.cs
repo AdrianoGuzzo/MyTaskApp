@@ -1,4 +1,5 @@
 using MyTaskApp.Domain.Agents;
+using MyTaskApp.Domain.External;
 using MyTaskApp.Domain.Reminders;
 using MyTaskApp.Domain.Tasks;
 
@@ -28,7 +29,9 @@ public sealed record TodayOccurrenceRow(
     /// <summary>Os agentes de IA em execução para a tarefa, um por ambiente (ADR-030, ADR-031).</summary>
     IReadOnlyList<ActiveAgentRow>? ActiveAgents = null,
     /// <summary>Os worktrees prontos da tarefa, um por ambiente (ADR-031, ADR-034).</summary>
-    IReadOnlyList<WorktreeRow>? Worktrees = null);
+    IReadOnlyList<WorktreeRow>? Worktrees = null,
+    /// <summary>O retrato da issue vinculada; <c>null</c> = tarefa só local (ADR-045).</summary>
+    ExternalLink? External = null);
 
 /// <summary>
 /// Um agente em execução: em qual ambiente e de qual repositório. Ambiente
