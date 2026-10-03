@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/AdrianoGuzzo/MyTaskApp/actions/workflows/ci.yml/badge.svg)](https://github.com/AdrianoGuzzo/MyTaskApp/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/AdrianoGuzzo/MyTaskApp)](https://github.com/AdrianoGuzzo/MyTaskApp/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 **Widget de tarefas que não deixa você esquecer.**
 
@@ -28,6 +29,7 @@ primeiro para Windows. Também roda no Linux, com algumas funções a menos.
 - [Contribuindo](#contribuindo)
 - [Releases e versionamento](#releases-e-versionamento)
 - [Documentação](#documentação)
+- [Licença](#licença)
 
 ---
 
@@ -502,3 +504,9 @@ fica em [`CHANGELOG.md`](CHANGELOG.md).
 | [`installer/README.md`](installer/README.md) | instaladores Windows e Linux, parâmetros, atualização, teste de fumaça |
 | [`installer/macos/README.md`](installer/macos/README.md) | roteiro para o empacotamento macOS |
 | [`CHANGELOG.md`](CHANGELOG.md) | o que mudou em cada versão |
+
+---
+
+## Licença
+
+Distribuído sob a licença MIT. O texto completo está em [`LICENSE`](LICENSE).
