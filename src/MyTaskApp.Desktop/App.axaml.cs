@@ -82,6 +82,7 @@ public sealed partial class App : Avalonia.Application
                 SetUpDataManagement(Services, window, todayViewModel);
                 SetUpNotes(Services, window, todayViewModel);
                 SetUpTags(Services, window, todayViewModel);
+                SetUpIntegrations(Services, todayViewModel);
                 SetUpAgentSessions(Services, todayViewModel);
                 ListenForSecondLaunch(Services, window);
 
@@ -253,6 +254,19 @@ public sealed partial class App : Avalonia.Application
                     _ = todayViewModel.LoadAsync(CancellationToken.None);
                     _ = todayViewModel.RefreshCaptureTagsAsync(CancellationToken.None);
                 });
+    }
+
+    /// <summary>
+    /// O autocomplete do Jira na captura (ADR-045) só pergunta com o Jira
+    /// conectado. A primeira conferência é sem esperar, como a carga do quadro;
+    /// depois, a janela de Integrações avisa quando a conexão muda.
+    /// </summary>
+    private static void SetUpIntegrations(IServiceProvider services, TodayViewModel todayViewModel)
+    {
+        _ = todayViewModel.RefreshIssueSearchAsync(CancellationToken.None);
+
+        services.GetRequiredService<IntegrationsViewModel>().ConnectionChanged +=
+            () => Dispatcher.UIThread.Post(() => _ = todayViewModel.RefreshIssueSearchAsync(CancellationToken.None));
     }
 
     /// <summary>

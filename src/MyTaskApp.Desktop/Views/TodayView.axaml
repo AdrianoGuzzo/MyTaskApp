@@ -1050,6 +1050,104 @@
       <Setter Property="BorderBrush" Value="{DynamicResource WidgetAccentLineBrush}" />
     </Style>
 
+    <!-- ===== Autocomplete do Jira na captura (ADR-045) ===== -->
+
+    <Style Selector="TextBlock.captureLink">
+      <Setter Property="Margin" Value="0,4,0,0" />
+      <Setter Property="FontSize" Value="10.5" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetAccentBrush}" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <Style Selector="Border.issueSuggestions">
+      <Setter Property="Margin" Value="-4,6,-4,0" />
+      <Setter Property="Padding" Value="0,4,0,2" />
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetStrokeSoftBrush}" />
+      <Setter Property="BorderThickness" Value="0,1,0,0" />
+    </Style>
+
+    <Style Selector="TextBlock.issueSuggestionsHeader">
+      <Setter Property="Margin" Value="6,0,0,2" />
+      <Setter Property="FontSize" Value="9.5" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="LetterSpacing" Value="0.8" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+    </Style>
+
+    <Style Selector="Border.issueSuggestion">
+      <Setter Property="Padding" Value="6,4" />
+      <Setter Property="CornerRadius" Value="5" />
+      <Setter Property="Background" Value="{DynamicResource WidgetTransparentBrush}" />
+    </Style>
+
+    <Style Selector="Border.issueSuggestion:pointerover">
+      <Setter Property="Background" Value="{DynamicResource WidgetSurfaceHoverBrush}" />
+    </Style>
+
+    <Style Selector="Border.issueSuggestion.selected">
+      <Setter Property="Background" Value="{DynamicResource WidgetAccentSoftBrush}" />
+    </Style>
+
+    <Style Selector="Border.issueType">
+      <Setter Property="Margin" Value="0,0,6,0" />
+      <Setter Property="Padding" Value="4,0" />
+      <Setter Property="CornerRadius" Value="3" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Background" Value="{DynamicResource WidgetStrokeSoftBrush}" />
+    </Style>
+
+    <Style Selector="Border.issueType > TextBlock">
+      <Setter Property="FontSize" Value="9" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+    </Style>
+
+    <Style Selector="Border.issueType.bug">
+      <Setter Property="Background" Value="{DynamicResource WidgetDangerSoftBrush}" />
+    </Style>
+
+    <Style Selector="Border.issueType.bug > TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetDangerBrush}" />
+    </Style>
+
+    <Style Selector="Border.issueType.story > TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetSuccessBrush}" />
+    </Style>
+
+    <Style Selector="Border.issueType.task > TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetInfoBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.issueKey">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetAccentBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.issueStatus">
+      <Setter Property="Margin" Value="8,0,0,0" />
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="HorizontalAlignment" Value="Right" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.issueTitle">
+      <Setter Property="Margin" Value="0,2,0,0" />
+      <Setter Property="FontSize" Value="11.5" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.issueNotice">
+      <Setter Property="Margin" Value="6,3,0,0" />
+      <Setter Property="FontSize" Value="10.5" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+    </Style>
+
     <!--
       Modo compacto: a captura sai de cena. Continua no ar (e no foco dos
       testes), só não ocupa mais a altura que a lista quer.
@@ -1117,6 +1215,7 @@
               Classes="captureCard"
               chrome:WindowDecorationProperties.ElementRole="User"
               Margin="12,2,12,0">
+        <StackPanel>
         <Grid ColumnDefinitions="*,Auto,Auto">
 
           <TextBox x:Name="CaptureBox"
@@ -1199,6 +1298,68 @@
                   Command="{Binding CaptureCommand}" />
 
         </Grid>
+
+        <!--
+          A linha que vai nascer vinculada ao Jira (ADR-045). A chave fica no
+          texto, visível; isto só confirma que ela foi reconhecida.
+        -->
+        <TextBlock x:Name="CaptureLinkLabel"
+                   Classes="captureLink"
+                   Text="{Binding CaptureLinkLabel}"
+                   IsVisible="{Binding CaptureLinkLabel, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+        <!--
+          O autocomplete do Jira (ADR-045): dentro do cartão, embaixo da caixa,
+          e não num popup — não cobre a lista, não rouba o foco e some junto com
+          a captura nos modos compacto e discreto. Os itens não recebem foco: o
+          cursor continua no texto, e o teclado é tratado no túnel da caixa.
+        -->
+        <Border x:Name="IssueSuggestions"
+                Classes="issueSuggestions"
+                IsVisible="{Binding CaptureSuggestions.IsOpen}">
+          <StackPanel Spacing="1">
+            <TextBlock Classes="issueSuggestionsHeader" Text="JIRA" />
+            <ItemsControl ItemsSource="{Binding CaptureSuggestions.Items}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:IssueSuggestionViewModel">
+                  <Border Classes="issueSuggestion"
+                          Classes.selected="{Binding IsSelected}"
+                          Focusable="False"
+                          Cursor="Hand"
+                          PointerPressed="OnIssueSuggestionPressed"
+                          ToolTip.Tip="{Binding Status}">
+                    <Grid ColumnDefinitions="Auto,Auto,*" RowDefinitions="Auto,Auto">
+                      <Border Grid.Column="0"
+                              Classes="issueType"
+                              Classes.bug="{Binding IsBug}"
+                              Classes.story="{Binding IsStory}"
+                              Classes.task="{Binding IsTask}">
+                        <TextBlock Text="{Binding TypeLabel}" />
+                      </Border>
+                      <TextBlock Grid.Column="1" Classes="issueKey" Text="{Binding Key}" />
+                      <TextBlock Grid.Column="2"
+                                 Classes="issueStatus"
+                                 Text="{Binding Status}"
+                                 IsVisible="{Binding HasStatus}" />
+                      <TextBlock Grid.Row="1"
+                                 Grid.ColumnSpan="3"
+                                 Classes="issueTitle"
+                                 Text="{Binding Title}" />
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Classes="issueNotice"
+                       Text="{Binding CaptureSuggestions.Notice}"
+                       IsVisible="{Binding CaptureSuggestions.Notice, Converter={x:Static ObjectConverters.IsNotNull}}" />
+          </StackPanel>
+        </Border>
+
+        <TextBlock Classes="issueNotice"
+                   Text="Buscando no Jira…"
+                   IsVisible="{Binding CaptureSuggestions.IsLoading}" />
+        </StackPanel>
       </Border>
 
       <TextBlock x:Name="CaptureHint"
@@ -1206,7 +1367,7 @@
                  Margin="14,5,0,0"
                  FontSize="10"
                  Foreground="{DynamicResource WidgetTextLowBrush}"
-                 Text="Enter adiciona · Shift+Enter quebra linha" />
+                 Text="Enter adiciona · Shift+Enter quebra linha · Ctrl+Espaço: Jira" />
 
       <Border DockPanel.Dock="Top"
               Margin="12,8,12,0"
