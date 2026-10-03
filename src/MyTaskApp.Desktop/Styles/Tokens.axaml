@@ -11,11 +11,13 @@
   <SolidColorBrush x:Key="WidgetTransparentBrush" Color="Transparent" />
 
   <!--
-    Icones monocromaticos do Windows: herdam Foreground, ao contrario de emoji,
-    que vem com cor propria e briga com a paleta. O app ja e WinExe (P/Invoke
-    em user32), entao a fonte e uma dependencia que ele ja tinha.
+    Icones monocromaticos: herdam Foreground, ao contrario de emoji, que vem
+    com cor propria e briga com a paleta. No Windows quem responde e a Segoe.
+    Fora dele a Segoe nao existe e o glifo sumia — o cabecalho ficava sem
+    alfinete, sem recolher e sem menu. A ultima da lista e a fonte embutida,
+    que responde pelos mesmos codigos (scripts/generate-icon-font.py).
   -->
-  <FontFamily x:Key="WidgetIconFont">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
+  <FontFamily x:Key="WidgetIconFont">Segoe Fluent Icons, Segoe MDL2 Assets, avares://MyTaskApp/Assets/Fonts#MyTaskApp Icons</FontFamily>
 
   <!-- Geometria: um raio só para o painel, outro para o que vive dentro dele. -->
   <CornerRadius x:Key="WidgetShellRadius">12</CornerRadius>

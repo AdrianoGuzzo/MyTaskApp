@@ -464,7 +464,9 @@ Management).
 │   ├── windows/                     Inno Setup 6 (MyTaskApp.iss, build.ps1)
 │   ├── linux/                       tarball + install.sh/uninstall.sh
 │   └── macos/                       roteiro (não implementado)
-├── scripts/coverage.ps1             testes + cobertura + portão mínimo
+├── scripts/
+│   ├── coverage.ps1                 testes + cobertura + portão mínimo
+│   └── generate-icon-font.py        fonte de ícones embutida (ADR-046)
 ├── docs/
 │   ├── ARCHITECTURE.md              ADRs
 │   └── release-process.md           versionamento e release
@@ -551,3 +553,7 @@ fica em [`CHANGELOG.md`](CHANGELOG.md).
 ## Licença
 
 Distribuído sob a licença MIT. O texto completo está em [`LICENSE`](LICENSE).
+
+Os ícones da fonte embutida (`src/MyTaskApp.Desktop/Assets/Fonts/MyTaskAppIcons.ttf`)
+são do [Fluent UI System Icons](https://github.com/microsoft/fluentui-system-icons),
+© Microsoft Corporation, também sob licença MIT.
