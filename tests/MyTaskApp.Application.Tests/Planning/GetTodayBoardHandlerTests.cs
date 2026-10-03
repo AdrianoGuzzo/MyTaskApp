@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using MyTaskApp.Application.Configuration;
 using MyTaskApp.Application.Planning;
+using MyTaskApp.Domain.External;
 using MyTaskApp.Domain.Tasks;
 
 namespace MyTaskApp.Application.Tests.Planning;
@@ -63,6 +64,20 @@ public class GetTodayBoardHandlerTests
         board.Today.Select(item => item.Title).Should().Equal("Deploy");
         board.Unscheduled.Select(item => item.Title).Should().Equal("Organizar documentação");
         board.Completed.Select(item => item.Title).Should().Equal("Revisar PR");
+    }
+
+    [Fact]
+    public async Task ALinkedTask_CarriesTheIssueSnapshotToTheRow()
+    {
+        // A chave e o tipo vêm do banco: a lista desenha a issue sem rede (ADR-045).
+        var link = ExternalLink.Create(
+            "Jira", "GAECO-1234", "Corrigir erro", "https://x.atlassian.net/browse/GAECO-1234", "Bug", null, NowUtc);
+        _query.Rows = [Row("Corrigir erro", Today) with { External = link }, Row("Comprar pão", Today)];
+
+        var board = await Handler().HandleAsync(Ct);
+
+        board.Unscheduled.Single(item => item.Title == "Corrigir erro").External.Should().Be(link);
+        board.Unscheduled.Single(item => item.Title == "Comprar pão").External.Should().BeNull();
     }
 
     [Fact]

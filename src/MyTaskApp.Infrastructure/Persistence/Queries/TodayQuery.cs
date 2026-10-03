@@ -57,6 +57,7 @@ internal sealed class TodayQuery(MyTaskAppDbContext context) : ITodayQuery
                 task.Priority,
                 task.Description,
                 Reminder = task.Reminder,
+                task.External,
             })
             .ToListAsync(cancellationToken);
 
@@ -179,7 +180,8 @@ internal sealed class TodayQuery(MyTaskAppDbContext context) : ITodayQuery
                     occurrence.Position,
                     tagsByTask.GetValueOrDefault(definition.Id),
                     agentsByTask.GetValueOrDefault(definition.Id),
-                    worktreesByTask.GetValueOrDefault(definition.Id));
+                    worktreesByTask.GetValueOrDefault(definition.Id),
+                    definition.External);
             })
             .ToList();
     }
