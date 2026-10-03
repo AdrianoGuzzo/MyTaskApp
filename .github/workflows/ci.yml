@@ -2,7 +2,8 @@ name: CI
 
 on:
   push:
-    branches: [master, main]
+    # release/v* são os branches de manutenção de hotfix (docs/release-process.md).
+    branches: [master, main, "release/v*"]
   pull_request:
 
 permissions:

@@ -4,6 +4,10 @@ Empacotamento e distribuição. Nada aqui contém regra de negócio: o instalado
 copia binários e vai embora — quem cria e evolui o banco é a aplicação, no
 primeiro start, via migrations do EF Core (ADR-005 e ADR-018).
 
+Versão, tag, changelog e publicação ficam em
+[`docs/release-process.md`](../docs/release-process.md) (ADR-044). Aqui está
+só o que cada instalador faz.
+
 ```
 installer/
 ├── assets/generate-brand-assets.ps1   arte a partir de Tokens.axaml
@@ -54,7 +58,7 @@ Nenhuma linha de código escolhe esses caminhos duas vezes — todos saem de
 ```
 
 Faz `versão → testes → publish → instalador` e escreve
-`artifacts/installer/MyTaskAppSetup-<versão>.exe` (~53 MB).
+`artifacts/installer/MyTaskApp-<versão>-win-x64-setup.exe` (~53 MB).
 
 | Parâmetro | Para quê |
 |---|---|
@@ -81,7 +85,7 @@ ninguém. Dá para mudar de ideia depois pelo menu ☰ do painel, sem reinstalar
 ### Instalação silenciosa
 
 ```bat
-MyTaskAppSetup-1.0.0.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+MyTaskApp-1.0.0-win-x64-setup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
 ```
 
 | Parâmetro | Efeito |
@@ -195,7 +199,8 @@ Não implementado. `installer/macos/README.md` tem o roteiro.
 
 ## Teste de fumaça manual
 
-O que os testes automatizados **não** alcançam. Vale rodar antes de publicar:
+O que os testes automatizados **não** alcançam. Roda-se com o instalador do
+rascunho da release, antes de publicá-la:
 
 1. Instalar numa máquina limpa; conferir publisher, versão e ícone em
    *Aplicativos Instalados*.

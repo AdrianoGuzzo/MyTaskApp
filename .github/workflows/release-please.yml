@@ -1,0 +1,53 @@
+name: Release Please
+
+# A cada push no master (ou num branch de manutenção release/v*), o Release
+# Please lê os Conventional Commits desde a última release e mantém aberto um
+# PR "chore(master): release X.Y.Z" com o CHANGELOG.md e a versão novos.
+# Mesclar esse PR cria a tag e a release em rascunho, e este mesmo workflow
+# chama o release.yml para gerar e anexar os instaladores. Processo completo em
+# docs/release-process.md.
+
+on:
+  push:
+    branches:
+      - master
+      - "release/v*"
+
+# Dois pushes seguidos não podem abrir dois PRs de release nem criar a mesma
+# tag duas vezes: o segundo espera o primeiro.
+concurrency:
+  group: release-please-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write # labels "autorelease: pending/tagged"
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+
+    steps:
+      # RELEASE_PLEASE_TOKEN é opcional. Com o GITHUB_TOKEN, o PR de release
+      # nasce sem CI (eventos desse token não disparam workflows). Isso não
+      # deixa passar nada: o release.yml refaz build e testes na tag antes de
+      # anexar qualquer artefato.
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          target-branch: ${{ github.ref_name }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  build:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.release-please.outputs.tag_name }}
+    secrets: inherit
