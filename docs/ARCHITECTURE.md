@@ -680,8 +680,8 @@ impede painel de tamanho zero.
 **Ícone é fonte, não emoji.** `📌` e `🔔` vêm com cor própria e ignoram
 `Foreground`, o que estoura uma paleta contida. Os glifos vêm de
 `Segoe Fluent Icons, Segoe MDL2 Assets` (`WidgetIconFont`), que são
-monocromáticos e herdam a cor do botão. É uma dependência do Windows — o app já
-era `WinExe` com P/Invoke em `user32`.
+monocromáticos e herdam a cor do botão. A Segoe só existe no Windows; fora dele
+quem responde é a fonte embutida do ADR-046.
 
 **Alerta ficou discreto, e do lado certo.** O `AlertWindow` encolheu para 336 e
 recebeu a mesma casca do painel. O `AlertPresenter` passou a empilhar na tela
@@ -3304,3 +3304,52 @@ de `AliasRule` e `GitBranchName` (interface só quando agrega valor, §24).
   óbvio, e pede um método a mais no provedor;
 - sem polling: o status na lista é o da última leitura, e o cartão diz há
   quanto tempo foi.
+
+## ADR-046 — Fonte de ícones embutida: o cabeçalho também tem ícones no Linux
+
+**Contexto:** instalado no Linux, o cabeçalho do painel aparecia sem o
+alfinete, sem o "recolher" e sem o "⋯" do menu — e, na lista, sem os ícones de
+etiqueta, anotação e lembrete. Os botões estavam lá e respondiam ao clique; o
+que faltava era o desenho. Os glifos são caracteres da área de uso privado da
+`Segoe Fluent Icons`/`Segoe MDL2 Assets` (`U+E712` é o "⋯", por exemplo), e
+essas fontes só existem no Windows. Sem a fonte, o caractere não tem quem o
+desenhe e o botão fica vazio. Os testes não pegavam porque rodam no Windows.
+
+**Decisão:** o app embute `Assets/Fonts/MyTaskAppIcons.ttf`, uma fonte pequena
+(10 glifos, menos de 3 KB) que responde pelos **mesmos códigos** da Segoe, com
+os contornos do Fluent UI System Icons (MIT, Microsoft). Ela entra no fim do
+`WidgetIconFont`:
+
+```
+Segoe Fluent Icons, Segoe MDL2 Assets, avares://MyTaskApp/Assets/Fonts#MyTaskApp Icons
+```
+
+No Avalonia 12 a lista vira uma família composta, e tanto a escolha da fonte
+quanto o fallback por caractere percorrem as entradas na ordem. No Windows a
+Segoe responde primeiro e nada muda na tela; no Linux (e no macOS) quem desenha
+é a embutida. Nenhuma tela, view model ou teste de glifo precisou mudar.
+
+**Por que não trocar tudo por `PathIcon`:** seria o caminho "sem fonte", mas
+mexe em toda tela que usa ícone, troca as propriedades `…Glyph` de texto por
+geometria e muda a aparência no Windows, que é onde o app vive. A fonte de
+reserva resolve o Linux sem tocar no Windows. A Segoe não pode ir junto: a
+licença dela não permite redistribuir.
+
+**A fonte é gerada, não desenhada:** `scripts/generate-icon-font.py`
+(`pip install fonttools`) baixa os SVGs de 20px num commit fixo do repositório
+de origem e monta a TTF. As métricas copiam as da Segoe (em de 2048,
+ascendente 2048, descendente 0, avanço de 1 em) para o glifo ocupar a mesma
+caixa nos dois sistemas. Rodar duas vezes gera o mesmo binário.
+
+**A guarda:** `IconFontTests` varre `src/MyTaskApp.Desktop` atrás de todo
+código da área de uso privado — literal, `` ou `&#xE712;` — e exige um
+glifo para cada um na fonte embutida, lida pelo `avares://` de verdade. Ícone
+novo sem passar pelo script quebra o teste no Windows, em vez de sumir só no
+Linux.
+
+**Limites aceitos:**
+
+- fora do Windows o traço é o do Fluent UI System Icons, parecido mas não
+  idêntico ao da Segoe;
+- o alfinete solto (`U+E718`) e o fixado (`U+E840`) usam o contorno vazado e o
+  cheio; na Segoe Fluent os dois são o mesmo desenho e quem diferencia é a cor.
