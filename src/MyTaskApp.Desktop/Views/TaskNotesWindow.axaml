@@ -296,6 +296,12 @@
       <Setter Property="Cursor" Value="Hand" />
     </Style>
 
+    <!-- O link da PR aberta (ADR-047): o mesmo jeito de link, no tamanho do formulário. -->
+    <Style Selector="Button.issueKey.prLink">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
     <Style Selector="TextBlock.issueStatus">
       <Setter Property="Margin" Value="10,0,0,0" />
       <Setter Property="FontSize" Value="11" />
@@ -1038,7 +1044,7 @@
               <ListBox.ItemTemplate>
                 <DataTemplate x:DataType="vm:TaskDevelopmentViewModel">
                   <StackPanel Orientation="Horizontal" Spacing="6"
-                              ToolTip.Tip="{Binding Development.RepositoryPath, FallbackValue='Novo repositório'}">
+                              ToolTip.Tip="{Binding ChipTip}">
                     <TextBlock Classes="chipMeta" Text="{Binding ChipGlyph}" />
                     <TextBlock Classes="chipTitle" Text="{Binding ChipTitle}" />
                     <TextBlock Classes="chipMeta" Text="·"
@@ -1275,6 +1281,117 @@
                              x:Name="ExistingBranchNotice"
                              Text="{Binding ExistingBranchNotice}"
                              IsVisible="{Binding ExistingBranchNotice, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+                  <!-- ADR-047: a branch existente já tem PR aberta? O link leva até ela. -->
+                  <TextBlock Classes="hint" Text="Conferindo PR…" IsVisible="{Binding IsCheckingPullRequest}" />
+                  <StackPanel x:Name="PullRequestRow"
+                              Orientation="Horizontal"
+                              Spacing="8"
+                              IsVisible="{Binding HasPullRequest}">
+                    <Button x:Name="PullRequestLink"
+                            Classes="issueKey prLink"
+                            Content="{Binding PullRequest.Label, StringFormat='{}{0} ↗', FallbackValue=''}"
+                            ToolTip.Tip="{Binding PullRequestTip}"
+                            Command="{Binding OpenPullRequestCommand}" />
+                    <TextBlock Classes="hint"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis"
+                               Text="{Binding PullRequest.Title, FallbackValue=''}" />
+                  </StackPanel>
+
+                  <!-- Repositório do GitHub sem o gh pronto: o tutorial, fechado até alguém pedir. -->
+                  <StackPanel x:Name="GhGuideHint" Orientation="Horizontal" Spacing="8" IsVisible="{Binding ShowGhGuide}">
+                    <TextBlock Classes="hint"
+                               VerticalAlignment="Center"
+                               TextWrapping="Wrap"
+                               MaxWidth="420"
+                               Text="{Binding GhGuideHint}" />
+                    <Button x:Name="ToggleGhGuideButton"
+                            Content="Como instalar o gh"
+                            VerticalAlignment="Center"
+                            Command="{Binding ToggleGhGuideCommand}" />
+                  </StackPanel>
+
+                  <Border Classes="codeBox" x:Name="GhGuidePanel">
+                    <Border.IsVisible>
+                      <MultiBinding Converter="{x:Static BoolConverters.And}">
+                        <Binding Path="ShowGhGuide" />
+                        <Binding Path="IsGhGuideOpen" />
+                      </MultiBinding>
+                    </Border.IsVisible>
+                    <StackPanel Spacing="10">
+                      <TextBlock Classes="fieldLabel" Text="GitHub CLI (gh)" />
+                      <TextBlock Classes="hint"
+                                 TextWrapping="Wrap"
+                                 Text="O MyTaskApp pergunta ao GitHub pelo gh, com a sua conta, se a branch já tem PR aberta. Nenhum token é guardado no app, e o app não instala nada sozinho." />
+
+                      <StackPanel Spacing="8" IsVisible="{Binding IsGhMissing}">
+                        <TextBlock Classes="fieldLabel" Text="{Binding GhInstructions.SystemName}" />
+                        <TextBlock Classes="hint" TextWrapping="Wrap" Text="{Binding GhInstructions.Explanation}" />
+                        <ItemsControl x:Name="GhInstallCommands" ItemsSource="{Binding GhInstructions.Commands}">
+                          <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                              <StackPanel Spacing="8" />
+                            </ItemsPanelTemplate>
+                          </ItemsControl.ItemsPanel>
+                          <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="dev:InstallCommand">
+                              <StackPanel Spacing="3">
+                                <TextBlock Classes="hint" Text="{Binding Label}" />
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                  <Border Grid.Column="0" Classes="codeBox">
+                                    <SelectableTextBlock Classes="code installCommand" Text="{Binding Command}" />
+                                  </Border>
+                                  <Button Grid.Column="1"
+                                          Classes="copyCommand"
+                                          Content="Copiar comando"
+                                          VerticalAlignment="Center"
+                                          Command="{Binding #DevelopmentPanel.((vm:TaskDevelopmentViewModel)DataContext).CopyCommand}"
+                                          CommandParameter="{Binding Command}" />
+                                </Grid>
+                              </StackPanel>
+                            </DataTemplate>
+                          </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                      </StackPanel>
+
+                      <StackPanel Spacing="3">
+                        <TextBlock Classes="hint" Text="{Binding GhInstructions.Login.Label}" />
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                          <Border Grid.Column="0" Classes="codeBox">
+                            <SelectableTextBlock Classes="code" x:Name="GhLoginCommand" Text="{Binding GhInstructions.Login.Command}" />
+                          </Border>
+                          <Button Grid.Column="1"
+                                  Content="Copiar comando"
+                                  VerticalAlignment="Center"
+                                  Command="{Binding CopyCommand}"
+                                  CommandParameter="{Binding GhInstructions.Login.Command}" />
+                        </Grid>
+                      </StackPanel>
+
+                      <StackPanel Spacing="3">
+                        <TextBlock Classes="hint" Text="{Binding GhInstructions.Verify.Label}" />
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                          <Border Grid.Column="0" Classes="codeBox">
+                            <SelectableTextBlock Classes="code" Text="{Binding GhInstructions.Verify.Command}" />
+                          </Border>
+                          <Button Grid.Column="1"
+                                  Content="Copiar comando"
+                                  VerticalAlignment="Center"
+                                  Command="{Binding CopyCommand}"
+                                  CommandParameter="{Binding GhInstructions.Verify.Command}" />
+                        </Grid>
+                      </StackPanel>
+
+                      <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Content="Site oficial (cli.github.com)" Command="{Binding OpenGhInstallPageCommand}" />
+                        <Button Classes="accent"
+                                x:Name="RecheckGhButton"
+                                Content="Verificar novamente"
+                                Command="{Binding RecheckGhCommand}" />
+                      </StackPanel>
+                    </StackPanel>
+                  </Border>
                 </StackPanel>
 
                 <StackPanel Spacing="4">

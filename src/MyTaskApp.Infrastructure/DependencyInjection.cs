@@ -19,6 +19,7 @@ using MyTaskApp.Infrastructure.Agents;
 using MyTaskApp.Infrastructure.Agents.ClaudeCode;
 using MyTaskApp.Infrastructure.FileSystem;
 using MyTaskApp.Infrastructure.Git;
+using MyTaskApp.Infrastructure.GitHub;
 using MyTaskApp.Infrastructure.Jira;
 using MyTaskApp.Infrastructure.Persistence;
 using MyTaskApp.Infrastructure.Persistence.Queries;
@@ -84,6 +85,11 @@ public static class DependencyInjection
         services.AddSingleton<IProcessRunner, ProcessRunner>();
         services.AddSingleton(_ => GitLocator.ForCurrentSystem());
         services.AddSingleton<IGitClient, GitClient>();
+
+        // A PR aberta da branch, pelo GitHub CLI (ADR-047). Singleton por
+        // causa do cache: a lista Hoje pergunta a cada recarga.
+        services.AddSingleton(_ => GhLocator.ForCurrentSystem());
+        services.AddSingleton<IPullRequestClient, GhCliPullRequestClient>();
 
         // O que sobra do worktree quando algo segura a pasta (ADR-029).
         if (OperatingSystem.IsWindows())

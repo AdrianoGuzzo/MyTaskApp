@@ -163,7 +163,7 @@ public sealed partial class TaskDevelopmentViewModel(
 
     /// <summary>O worktree principal: de onde sai o nome do projeto e a pasta irmã.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(WorktreePreview), nameof(ChipTitle))]
+    [NotifyPropertyChangedFor(nameof(WorktreePreview), nameof(ChipTitle), nameof(ChipTip))]
     private string? _repositoryPath;
 
     [ObservableProperty]
@@ -287,6 +287,59 @@ public sealed partial class TaskDevelopmentViewModel(
         }
     }
 
+    // --- PR aberta (ADR-047) -------------------------------------------------
+
+    /// <summary>
+    /// A PR aberta da branch: a existente, no formulário; a do ambiente, quando
+    /// pronto — é o que o balão da aba do repositório mostra.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasPullRequest), nameof(PullRequestTip), nameof(ChipTip))]
+    private PullRequestInfo? _pullRequest;
+
+    /// <summary>Se dá para perguntar ao GitHub; <c>null</c> enquanto ninguém perguntou.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowGhGuide), nameof(IsGhMissing), nameof(GhGuideHint))]
+    private PullRequestSupport? _gitHubSupport;
+
+    [ObservableProperty]
+    private bool _isCheckingPullRequest;
+
+    [ObservableProperty]
+    private bool _isGhGuideOpen;
+
+    /// <summary>A pergunta da vez: <c>"{repositório}|{branch}"</c>. Resposta de outra é descartada.</summary>
+    private string? _pullRequestTarget;
+
+    private CancellationTokenSource? _pullRequestLookup;
+
+    /// <summary>A consulta da PR agendada ou em curso. Para o teste esperar sem dormir.</summary>
+    internal Task PendingPullRequest { get; private set; } = Task.CompletedTask;
+
+    public GhInstallInstructions GhInstructions { get; } = GhInstallGuide.ForCurrentSystem();
+
+    public bool HasPullRequest => PullRequest is not null;
+
+    /// <summary>O balão do link: o título da PR e o endereço que o clique abre.</summary>
+    public string? PullRequestTip => PullRequest is { } pullRequest
+        ? $"{pullRequest.Label}: {pullRequest.Title}{Environment.NewLine}{pullRequest.Url}"
+        : null;
+
+    /// <summary>Repositório do GitHub sem o <c>gh</c> pronto: o tutorial é oferecido.</summary>
+    public bool ShowGhGuide => GitHubSupport is PullRequestSupport.CliMissing or PullRequestSupport.NotAuthenticated;
+
+    /// <summary>Sem o <c>gh</c>, o tutorial começa pela instalação; instalado, só falta entrar na conta.</summary>
+    public bool IsGhMissing => GitHubSupport is PullRequestSupport.CliMissing;
+
+    public string? GhGuideHint => GitHubSupport switch
+    {
+        PullRequestSupport.CliMissing =>
+            "Instale o GitHub CLI (gh) para ver aqui se a branch já tem PR aberta.",
+        PullRequestSupport.NotAuthenticated =>
+            "O GitHub CLI (gh) não está conectado à sua conta. Entre com gh auth login para ver aqui se a branch já tem PR aberta.",
+        _ => null,
+    };
+
     // --- Execução ----------------------------------------------------------
 
     public ObservableCollection<DevelopmentStepViewModel> Steps { get; } = [];
@@ -348,7 +401,7 @@ public sealed partial class TaskDevelopmentViewModel(
     [ObservableProperty]
     [NotifyPropertyChangedFor(
         nameof(HasPreviousAttempt), nameof(DevelopmentId), nameof(IsDraft),
-        nameof(ChipTitle), nameof(ChipBranch), nameof(ChipGlyph), nameof(CanForget))]
+        nameof(ChipTitle), nameof(ChipBranch), nameof(ChipGlyph), nameof(ChipTip), nameof(CanForget))]
     private TaskDevelopmentView? _development;
 
     /// <summary>O ambiente gravado que esta aba mostra; <c>null</c> = um repositório novo, ainda no formulário.</summary>
@@ -372,6 +425,19 @@ public sealed partial class TaskDevelopmentViewModel(
         FolderName(Development?.RepositoryPath ?? RepositoryPath) ?? "Novo repositório";
 
     public string ChipBranch => Development?.Branch ?? NewBranchName.Trim();
+
+    /// <summary>O balão da aba: o caminho do repositório e, se houver, a PR aberta da branch.</summary>
+    public string ChipTip
+    {
+        get
+        {
+            var path = Development?.RepositoryPath ?? RepositoryPath ?? "Novo repositório";
+
+            return PullRequest is { } pullRequest
+                ? $"{path}{Environment.NewLine}{pullRequest.Label} · {pullRequest.Title}"
+                : path;
+        }
+    }
 
     public string ChipGlyph => State switch
     {
@@ -533,6 +599,9 @@ public sealed partial class TaskDevelopmentViewModel(
         {
             Agent.Load(_taskId, value.Id, IsReadOnly, value.AgentPrompt);
         }
+
+        // Pronto, a PR que o balão da aba mostra é a da branch do ambiente.
+        _ = SchedulePullRequestLookup();
     }
 
     /// <summary>
@@ -699,6 +768,7 @@ public sealed partial class TaskDevelopmentViewModel(
         BranchesNotice = null;
         _branches = [];
         OnPropertyChanged(nameof(ExistingBranchNotice));
+        _ = SchedulePullRequestLookup();
 
         _inspection?.Cancel();
         _inspection = new CancellationTokenSource();
@@ -784,6 +854,7 @@ public sealed partial class TaskDevelopmentViewModel(
 
             _branches = list.Branches;
             OnPropertyChanged(nameof(ExistingBranchNotice));
+            _ = SchedulePullRequestLookup();
 
             BranchOptions.Clear();
 
@@ -890,6 +961,123 @@ public sealed partial class TaskDevelopmentViewModel(
 
         // O remoto da origem decide qual remota vale, quando há mais de um.
         OnPropertyChanged(nameof(ExistingBranchNotice));
+        _ = SchedulePullRequestLookup();
+    }
+
+    partial void OnNewBranchNameChanged(string value) => _ = SchedulePullRequestLookup();
+
+    // --- PR aberta (ADR-047) -------------------------------------------------
+
+    /// <summary>
+    /// O que perguntar ao GitHub agora. Pronto: a branch do ambiente. No
+    /// formulário: a branch digitada só se ela já existe — branch nova não tem
+    /// PR —; sem ela, só se o <c>gh</c> está pronto, para oferecer o tutorial
+    /// antes de o usuário precisar dele.
+    /// </summary>
+    private (string Repository, string? Branch)? PullRequestQuery()
+    {
+        if (Development is { Status: TaskDevelopmentStatus.Ready } ready)
+        {
+            return (ready.RepositoryPath, ready.Branch);
+        }
+
+        if (RepositoryPath is not { } repository || _branches.Count == 0)
+        {
+            return null;
+        }
+
+        if (BranchNameError is not null)
+        {
+            return (repository, null);
+        }
+
+        var (kind, branch) = ExistingBranches.Find(_branches, NewBranchName, SelectedBranchOption?.Branch?.Remote);
+
+        // Na grafia da existente: para o GitHub, maiúscula é outra branch.
+        return kind switch
+        {
+            ExistingBranchKind.Local => (repository, branch!.ShortName),
+            ExistingBranchKind.Remote => (repository, branch!.ShortName[(branch.Remote!.Length + 1)..]),
+            _ => (repository, null),
+        };
+    }
+
+    /// <summary>
+    /// Pergunta de novo só quando o alvo muda, e depois de uma pausa: quem
+    /// digita o nome da branch não dispara uma ida ao GitHub por tecla.
+    /// </summary>
+    private Task SchedulePullRequestLookup(bool refresh = false)
+    {
+        var query = PullRequestQuery();
+        var target = query is { } current ? $"{current.Repository}|{current.Branch}" : null;
+
+        if (!refresh && target == _pullRequestTarget)
+        {
+            return Task.CompletedTask;
+        }
+
+        _pullRequestTarget = target;
+        _pullRequestLookup?.Cancel();
+        _pullRequestLookup = null;
+        PullRequest = null;
+        IsCheckingPullRequest = false;
+
+        if (query is not { } next)
+        {
+            GitHubSupport = null;
+            PendingPullRequest = Task.CompletedTask;
+            return PendingPullRequest;
+        }
+
+        _pullRequestLookup = new CancellationTokenSource();
+        PendingPullRequest = LookUpPullRequestAsync(next.Repository, next.Branch, target!, refresh, _pullRequestLookup.Token);
+
+        return PendingPullRequest;
+    }
+
+    /// <summary>Nunca lança: a PR é um aviso, e o GitHub fora do ar não atrapalha criar o worktree.</summary>
+    private async Task LookUpPullRequestAsync(
+        string repository,
+        string? branch,
+        string target,
+        bool refresh,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (!refresh)
+            {
+                await Task.Delay(InspectionDelay, timeProvider, cancellationToken);
+            }
+
+            IsCheckingPullRequest = branch is not null;
+
+            var lookup = await runner.RunAsync<FindPullRequestHandler, PullRequestLookup>(
+                (handler, token) => handler.HandleAsync(new FindPullRequest(repository, branch, refresh), token),
+                cancellationToken);
+
+            if (cancellationToken.IsCancellationRequested || target != _pullRequestTarget)
+            {
+                return;
+            }
+
+            GitHubSupport = lookup.Support;
+            PullRequest = lookup.PullRequest;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "PullRequestLookupFailed {Repository} {Branch}", repository, branch);
+        }
+        finally
+        {
+            if (target == _pullRequestTarget)
+            {
+                IsCheckingPullRequest = false;
+            }
+        }
     }
 
     // --- Iniciar implementação ---------------------------------------------
@@ -1327,6 +1515,32 @@ public sealed partial class TaskDevelopmentViewModel(
             Message = $"Não foi possível abrir o navegador. O endereço é {Instructions.OfficialSite}";
         }
     }
+
+    /// <summary>O link "PR #123 aberta ↗": a PR no navegador (ADR-047).</summary>
+    [RelayCommand]
+    public async Task OpenPullRequestAsync()
+    {
+        if (PullRequest is { } pullRequest && !await shell.OpenUriAsync(pullRequest.Url))
+        {
+            Message = $"Não foi possível abrir o navegador. O endereço é {pullRequest.Url}";
+        }
+    }
+
+    [RelayCommand]
+    public void ToggleGhGuide() => IsGhGuideOpen = !IsGhGuideOpen;
+
+    [RelayCommand]
+    public async Task OpenGhInstallPageAsync()
+    {
+        if (!await shell.OpenUriAsync(GhInstructions.OfficialSite))
+        {
+            Message = $"Não foi possível abrir o navegador. O endereço é {GhInstructions.OfficialSite}";
+        }
+    }
+
+    /// <summary>"Verificar novamente" do tutorial: pergunta ao <c>gh</c> de novo, sem o que estava guardado.</summary>
+    [RelayCommand]
+    public Task RecheckGhAsync() => SchedulePullRequestLookup(refresh: true);
 
     [RelayCommand]
     public async Task OpenFolderAsync()
