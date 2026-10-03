@@ -323,6 +323,12 @@ public sealed partial class TodayViewModel(
     [RelayCommand]
     public void OpenCommands() => CommandsRequested?.Invoke();
 
+    /// <summary>Pede a janela de integrações — o Jira (ADR-045).</summary>
+    public event Action? IntegrationsRequested;
+
+    [RelayCommand]
+    public void OpenIntegrations() => IntegrationsRequested?.Invoke();
+
     /// <summary>Pede a janela de sons dos avisos do agente (ADR-042).</summary>
     public event Action? SoundsRequested;
 

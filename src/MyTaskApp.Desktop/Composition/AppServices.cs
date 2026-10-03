@@ -120,6 +120,10 @@ internal static class AppServices
             .AddSingleton<DevelopmentCommandsViewModel>()
             .AddSingleton<DevelopmentCommandsWindow>()
 
+            // Integrações — o Jira (ADR-045): janela única, como as outras do menu.
+            .AddSingleton<IntegrationsViewModel>()
+            .AddSingleton<IntegrationsWindow>()
+
             // Sons dos avisos do agente (ADR-042): janela única, como as outras.
             .AddSingleton<AgentAlertSoundsViewModel>()
             .AddSingleton<AgentAlertSoundsWindow>()

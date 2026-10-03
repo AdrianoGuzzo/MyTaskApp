@@ -242,6 +242,7 @@ public sealed partial class App : Avalonia.Application
         todayViewModel.TagsRequested += () => ShowTags(services, window);
         todayViewModel.CommandsRequested += () => ShowDevelopmentCommands(services, window);
         todayViewModel.SoundsRequested += () => ShowAgentAlertSounds(services, window);
+        todayViewModel.IntegrationsRequested += () => ShowIntegrations(services, window);
 
         // Renomear, recolorir ou excluir muda as bolinhas de todo o painel; sem
         // isto a mudança só apareceria no refresh de 60 s.
@@ -303,6 +304,16 @@ public sealed partial class App : Avalonia.Application
     private static void ShowDevelopmentCommands(IServiceProvider services, Window owner)
     {
         var window = services.GetRequiredService<DevelopmentCommandsWindow>();
+
+        window.Show(owner);
+        window.Activate();
+        window.Reveal();
+    }
+
+    /// <summary>A janela de integrações — o Jira (ADR-045), aberta pelo menu.</summary>
+    private static void ShowIntegrations(IServiceProvider services, Window owner)
+    {
+        var window = services.GetRequiredService<IntegrationsWindow>();
 
         window.Show(owner);
         window.Activate();

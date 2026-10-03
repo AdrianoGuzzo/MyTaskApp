@@ -5,6 +5,8 @@ using MyTaskApp.Application;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Development;
+using MyTaskApp.Application.External;
+using MyTaskApp.Application.External.Jira;
 using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Application.Tasks;
 using MyTaskApp.Application.Planning;
@@ -49,6 +51,8 @@ public class ApplicationRegistrationTests
             .AddSingleton<ISoundLibrary>(new FakeSoundLibrary())
             .AddSingleton<IAgentEventEndpoint>(new FakeAgentEventEndpoint())
             .AddSingleton<IDirectoryRemover>(new FakeDirectoryRemover())
+            .AddSingleton<IBranchConventionStore>(new FakeBranchConventionStore())
+            .AddSingleton<IJiraAuthenticationService>(new StubJiraAuthentication())
             // Normalmente vem do composition root do Desktop (ADR-012).
             .AddSingleton<IUseCaseRunner>(new CountingUseCaseRunner())
             .AddApplication()
@@ -122,6 +126,22 @@ public class ApplicationRegistrationTests
     [InlineData(typeof(DispatchDueRemindersHandler))]
     [InlineData(typeof(ReminderScheduler))]
     [InlineData(typeof(IUserClock))]
+    [InlineData(typeof(ExternalTaskSearch))]
+    [InlineData(typeof(SearchExternalTasksHandler))]
+    [InlineData(typeof(GetTaskExternalContextHandler))]
+    [InlineData(typeof(LinkTaskToExternalHandler))]
+    [InlineData(typeof(UnlinkTaskFromExternalHandler))]
+    [InlineData(typeof(RefreshExternalTaskHandler))]
+    [InlineData(typeof(GetBranchConventionsHandler))]
+    [InlineData(typeof(UpdateBranchConventionsHandler))]
+    [InlineData(typeof(GetJiraConnectionHandler))]
+    [InlineData(typeof(BeginJiraAuthorizationHandler))]
+    [InlineData(typeof(ChooseJiraSiteHandler))]
+    [InlineData(typeof(ConnectJiraWithApiTokenHandler))]
+    [InlineData(typeof(TestJiraConnectionHandler))]
+    [InlineData(typeof(ListJiraProjectsHandler))]
+    [InlineData(typeof(SetJiraDefaultProjectHandler))]
+    [InlineData(typeof(DisconnectJiraHandler))]
     public void EveryUseCase_CanBeResolved(Type handlerType)
     {
         using var provider = BuildProvider();
@@ -150,6 +170,38 @@ public class ApplicationRegistrationTests
 
         provider.GetRequiredService<IUserClock>()
             .Should().BeSameAs(provider.GetRequiredService<IUserClock>());
+    }
+
+    private sealed class StubJiraAuthentication : IJiraAuthenticationService
+    {
+        private static readonly JiraConnection Disconnected = JiraConnection.Disconnected(isOAuthAvailable: false);
+
+        public Task<JiraConnection> GetConnectionAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(Disconnected);
+
+        public Task<JiraAuthorization> BeginAuthorizationAsync(CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<JiraConnection> ChooseSiteAsync(string siteId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(Disconnected);
+
+        public Task<JiraConnection> ConnectWithApiTokenAsync(
+            string siteUrl,
+            string email,
+            string apiToken,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(Disconnected);
+
+        public Task<JiraConnection> TestAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(Disconnected);
+
+        public Task<IReadOnlyList<JiraProject>> ListProjectsAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<JiraProject>>([]);
+
+        public Task<JiraConnection> SetDefaultProjectAsync(string? projectKey, CancellationToken cancellationToken = default) =>
+            Task.FromResult(Disconnected);
+
+        public Task DisconnectAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 
     private sealed class StubTagQuery : ITagQuery

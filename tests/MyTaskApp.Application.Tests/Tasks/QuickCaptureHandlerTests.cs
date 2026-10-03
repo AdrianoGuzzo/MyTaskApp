@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using MyTaskApp.Application.Configuration;
+using MyTaskApp.Application.External;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Tasks;
 using MyTaskApp.Application.Tests.Fakes;
@@ -242,5 +243,84 @@ public class QuickCaptureHandlerTests
         await Handler().HandleAsync(new QuickCapture("comprar pão"), Ct);
 
         _repository.Tasks.Single().CreatedAt.Should().Be(NowUtc);
+    }
+    // -----------------------------------------------------------------
+    // Vínculo com o Jira (ADR-045): a linha que começa com a chave de uma
+    // issue escolhida no autocomplete vira tarefa vinculada.
+    // -----------------------------------------------------------------
+
+    private static ExternalTask Issue(string id = "GAECO-1234", string title = "Corrigir erro de sincronização") =>
+        FakeExternalTasks.Issue(id, title);
+
+    [Fact]
+    public async Task ALineWithTheChosenIssueKey_IsLinked_AndTheKeyLeavesTheTitle()
+    {
+        await Handler().HandleAsync(
+            new QuickCapture("GAECO-1234 Corrigir erro de sincronização", Links: [Issue()]),
+            Ct);
+
+        var task = _repository.Tasks.Single();
+        task.Title.Should().Be("Corrigir erro de sincronização");
+        task.External!.Id.Should().Be("GAECO-1234");
+        task.External.Provider.Should().Be("Jira");
+        task.External.IssueType.Should().Be("Bug");
+        task.External.Url.Should().Be("https://empresa.atlassian.net/browse/GAECO-1234");
+        task.External.SyncedAt.Should().Be(NowUtc);
+    }
+
+    [Fact]
+    public async Task TheUserMayRewriteTheTitle_AndTheLinkStays()
+    {
+        await Handler().HandleAsync(new QuickCapture("GAECO-1234 olhar o retry do sync", Links: [Issue()]), Ct);
+
+        var task = _repository.Tasks.Single();
+        task.Title.Should().Be("olhar o retry do sync");
+        task.External!.Title.Should().Be("Corrigir erro de sincronização");
+    }
+
+    [Fact]
+    public async Task AKeyAlone_TakesTheIssueTitle()
+    {
+        await Handler().HandleAsync(new QuickCapture("gaeco-1234", Links: [Issue()]), Ct);
+
+        _repository.Tasks.Single().Title.Should().Be("Corrigir erro de sincronização");
+    }
+
+    [Fact]
+    public async Task AKeyNobodyChose_StaysPlainText()
+    {
+        // A captura não vai à rede: sem a issue em mãos, a linha é só um título.
+        await Handler().HandleAsync(new QuickCapture("GAECO-77 revisar", Links: [Issue()]), Ct);
+
+        var task = _repository.Tasks.Single();
+        task.Title.Should().Be("GAECO-77 revisar");
+        task.External.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task OnlyTheLinesWithAKey_AreLinked()
+    {
+        await Handler().HandleAsync(
+            new QuickCapture(
+                "GAECO-1234 Corrigir sync\ncomprar pão\nGAECO-1300 Melhorar cadastro",
+                Links: [Issue(), Issue("GAECO-1300", "Melhorar o cadastro")]),
+            Ct);
+
+        _repository.Tasks.Single(task => task.Title == "comprar pão").External.Should().BeNull();
+        _repository.Tasks.Single(task => task.Title == "Corrigir sync").External!.Id.Should().Be("GAECO-1234");
+        _repository.Tasks.Single(task => task.Title == "Melhorar cadastro").External!.Id.Should().Be("GAECO-1300");
+    }
+
+    [Fact]
+    public async Task AnUnusableIssue_RefusesTheWholeCapture()
+    {
+        var broken = new ExternalTask { Id = "GAECO-1", Title = "x", Url = "file:///C:/x", Provider = "Jira" };
+
+        var handle = async () => await Handler().HandleAsync(
+            new QuickCapture("comprar pão\nGAECO-1 x", Links: [broken]),
+            Ct);
+
+        await handle.Should().ThrowAsync<DomainException>();
+        _repository.SaveCount.Should().Be(0);
     }
 }
