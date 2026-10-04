@@ -195,6 +195,47 @@ public static class ThemeCatalog
         });
 
     /// <summary>
+    /// Escuro na identidade verde da Ponta: fundo petróleo, cartão e hover
+    /// subindo pelo teal, e o verde-limão só onde há ação. É o único tema com
+    /// destaque na matiz do sucesso — a marca é verde —, então o sucesso vira
+    /// menta, longe do limão.
+    /// </summary>
+    public static readonly AppTheme Ponta = new(
+        "ponta",
+        "Ponta",
+        "Escuro em verde-petróleo profundo, com destaque verde-limão.",
+        IsDark: true,
+        new ThemePalette
+        {
+            Canvas = C("#104544"),
+            Surface = C("#154E44"),
+            SurfaceHover = C("#1E5B45"),
+            Stroke = C("#2D6F44"),
+            StrokeSoft = C("#1E5B45"),
+            TextHigh = C("#FFFFFF"),
+            TextMid = C("#C5DBD1"),
+            TextLow = C("#A3C2B5"),
+            Accent = C("#7CBB3B"),
+            AccentHover = C("#A2D152"),
+            AccentPressed = C("#5EA341"),
+
+            // Não o teal #1E5B45: o limão como texto daria 4,47:1 sobre ele.
+            AccentSoft = C("#24573A"),
+            AccentLine = C("#4F9543"),
+            AccentText = C("#A2D152"),
+
+            // Mais fundo que o fundo do painel: com #104544 o botão
+            // pressionado (#5EA341) ficava em 3,5:1.
+            OnAccent = C("#0A2F2E"),
+            Danger = C("#FF9999"),
+            DangerSoft = C("#3B2630"),
+            Caution = C("#F6CC5E"),
+            CautionSoft = C("#3A3424"),
+            Info = C("#8CC8FF"),
+            Success = C("#6EE7B7"),
+        });
+
+    /// <summary>
     /// Para baixa visão e luz forte. Preto de verdade aqui é o ponto, e as
     /// bordas passam de 3:1 — no resto dos temas elas são só sugestão.
     /// Destaque amarelo, o mesmo recurso do alto contraste do Windows.
@@ -231,7 +272,7 @@ public static class ThemeCatalog
 
     /// <summary>Claros primeiro, depois escuros, e o de acessibilidade por último.</summary>
     public static IReadOnlyList<AppTheme> All { get; } =
-        [Paper, Sepia, Charcoal, Nordic, Plum, HighContrast];
+        [Paper, Sepia, Charcoal, Nordic, Plum, Ponta, HighContrast];
 
     /// <summary>
     /// Um id que não existe mais — tema removido, arquivo editado à mão —

@@ -37,6 +37,12 @@ public class ThemeControllerTests
 
             Themes().Use(ThemeCatalog.Nordic.Id);
             Background(shell).Should().Be(ThemeCatalog.Nordic.Palette.Canvas);
+
+            Themes().Use(ThemeCatalog.Ponta.Id);
+            Background(shell).Should().Be(ThemeCatalog.Ponta.Palette.Canvas);
+
+            Themes().Use(ThemeCatalog.Paper.Id);
+            Background(shell).Should().Be(ThemeCatalog.Paper.Palette.Canvas);
         }
         finally
         {
@@ -97,6 +103,31 @@ public class ThemeControllerTests
         }
         finally
         {
+            Themes().Use(ThemeCatalog.SystemId);
+        }
+    }
+
+    [AvaloniaFact]
+    public void SelectedText_UsesTheLetterOfTheAccent()
+    {
+        // A seleção é pintada com o destaque. Com a letra branca do Fluent, o
+        // texto selecionado sumia no limão do Ponta e no gelo do Nórdico.
+        var box = new TextBox { Text = "Pagar boleto" };
+        var window = new Window { Content = box };
+        window.Show();
+
+        try
+        {
+            foreach (var theme in new[] { ThemeCatalog.Ponta, ThemeCatalog.Nordic, ThemeCatalog.Charcoal })
+            {
+                Themes().Use(theme.Id);
+
+                ((ISolidColorBrush)box.SelectionForegroundBrush!).Color.Should().Be(theme.Palette.OnAccent, theme.Id);
+            }
+        }
+        finally
+        {
+            window.Close();
             Themes().Use(ThemeCatalog.SystemId);
         }
     }
