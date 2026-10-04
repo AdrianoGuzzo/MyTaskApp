@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Time.Testing;
 using MyTaskApp.Application.Development;
+using MyTaskApp.Application.Tags;
 using MyTaskApp.Desktop.ViewModels;
 using MyTaskApp.Domain.Tasks;
 
@@ -206,5 +207,120 @@ public class TaskDevelopmentsViewModelTests
 
         viewModel.Selected!.Message.Should().Contain("Não foi possível carregar");
         viewModel.Selected.State.Should().Be(DevelopmentPanelState.Setup);
+    }
+
+    // --- O repositório único das etiquetas --------------------------------------
+
+    private static TagDirectoryRow TagDirectory(string path, string tag = "ECO CORE") =>
+        new(Guid.NewGuid(), Guid.NewGuid(), tag, "#22C55E", "@eco", path, null, null);
+
+    private static void Directories(TaskDevelopmentsViewModel viewModel, params TagDirectoryRow[] directories) =>
+        viewModel.DirectoryCompletion.SetDirectories(directories, new Dictionary<Guid, bool>());
+
+    /// <summary>Os diretórios chegam na ativação da janela, antes de a aba aparecer.</summary>
+    [Fact]
+    public async Task OneDirectoryInTheTags_ComesFilledIn_AndTheBranchesLoad()
+    {
+        _runner.Enqueue<GetTaskDevelopmentsHandler>(TestDevelopment.List());
+        var viewModel = TestDevelopment.For(_runner, timeProvider: new FakeTimeProvider());
+        viewModel.Load(TaskId, "Fluxo de cadastro de animais", isReadOnly: false);
+        Directories(viewModel, TagDirectory(Core));
+
+        await viewModel.ActivateAsync(Ct);
+
+        var draft = viewModel.Selected!;
+        draft.DirectoryText.Should().Be(Core);
+        draft.RepositoryPath.Should().Be(Core);
+        draft.SelectedBranchOption!.Branch.Should().Be(Branches[0]);
+    }
+
+    [Fact]
+    public async Task DirectoriesArrivingAfterTheTab_StillFillTheEmptyForm()
+    {
+        var viewModel = await ActivatedAsync(TestDevelopment.List());
+
+        Directories(viewModel, TagDirectory(Core));
+
+        viewModel.Selected!.DirectoryText.Should().Be(Core);
+    }
+
+    [Fact]
+    public async Task TwoRepositoriesInTheTags_LeaveTheChoiceToTheUser()
+    {
+        var viewModel = await ActivatedAsync(TestDevelopment.List());
+
+        Directories(viewModel, TagDirectory(Core), TagDirectory(Api));
+
+        viewModel.Selected!.DirectoryText.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task TheSameFolderInTwoTags_CountsOnce()
+    {
+        var viewModel = await ActivatedAsync(TestDevelopment.List());
+
+        Directories(viewModel, TagDirectory(Core), TagDirectory(Core + @"\", "ECO API"));
+
+        viewModel.Selected!.DirectoryText.Should().Be(Core);
+    }
+
+    [Fact]
+    public async Task AnotherRepository_DoesNotGetTheOneAlreadyInTheTask()
+    {
+        var viewModel = await ActivatedAsync(TestDevelopment.List(View(TaskDevelopmentStatus.Ready, Core)));
+        Directories(viewModel, TagDirectory(Core));
+
+        viewModel.AddRepository();
+
+        viewModel.Selected!.IsDraft.Should().BeTrue();
+        viewModel.Selected.DirectoryText.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task AnotherRepository_GetsTheTagOne_WhenTheTaskIsInAnother()
+    {
+        var viewModel = await ActivatedAsync(TestDevelopment.List(View(TaskDevelopmentStatus.Ready, Api)));
+        Directories(viewModel, TagDirectory(Core));
+
+        viewModel.AddRepository();
+
+        viewModel.Selected!.DirectoryText.Should().Be(Core);
+    }
+
+    [Fact]
+    public async Task APreviousAttempt_KeepsItsOwnRepository()
+    {
+        var failed = View(TaskDevelopmentStatus.Error, Api) with { FailureReason = "falhou" };
+        var viewModel = await ActivatedAsync(TestDevelopment.List(failed));
+
+        Directories(viewModel, TagDirectory(Core));
+
+        viewModel.Selected!.DirectoryText.Should().Be(Api);
+    }
+
+    /// <summary>A cada ativação da janela os diretórios chegam de novo; o apagado fica apagado.</summary>
+    [Fact]
+    public async Task AFieldTheUserCleared_StaysEmpty()
+    {
+        var viewModel = await ActivatedAsync(TestDevelopment.List());
+        Directories(viewModel, TagDirectory(Core));
+
+        viewModel.Selected!.DirectoryText = string.Empty;
+        Directories(viewModel, TagDirectory(Core));
+
+        viewModel.Selected.DirectoryText.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ACompletedTask_DoesNotFillTheDirectory()
+    {
+        _runner.Enqueue<GetTaskDevelopmentsHandler>(TestDevelopment.List());
+        var viewModel = TestDevelopment.For(_runner, timeProvider: new FakeTimeProvider());
+        viewModel.Load(TaskId, "Fluxo", isReadOnly: true);
+        await viewModel.ActivateAsync(Ct);
+
+        Directories(viewModel, TagDirectory(Core));
+
+        viewModel.Selected!.DirectoryText.Should().BeEmpty();
     }
 }

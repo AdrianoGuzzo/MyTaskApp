@@ -108,6 +108,9 @@ public sealed partial class TaskDevelopmentViewModel(
     /// <summary>Mudança de texto vinda do próprio ViewModel, que não deve agendar inspeção.</summary>
     private bool _settingDirectory;
 
+    /// <summary>O diretório único das etiquetas já veio uma vez: apagado pelo usuário, fica apagado.</summary>
+    private bool _directorySuggested;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(
         nameof(IsLoading), nameof(IsGitMissing), nameof(ShowForm), nameof(IsFormEnabled),
@@ -648,6 +651,23 @@ public sealed partial class TaskDevelopmentViewModel(
 
         NewBranchName = sibling.Branch;
         _siblingSource = sibling.SourceBranch;
+    }
+
+    /// <summary>
+    /// As etiquetas da tarefa têm um repositório só: o campo já vem com ele. Só
+    /// num rascunho ainda vazio, e uma vez — a tentativa anterior e o que o
+    /// usuário escreveu (ou apagou) valem mais. Pelo caminho da digitação, para
+    /// a pasta ser conferida e as branches carregadas.
+    /// </summary>
+    public void SuggestDirectory(string path)
+    {
+        if (IsReadOnly || _directorySuggested || Development is not null || DirectoryText.Length > 0)
+        {
+            return;
+        }
+
+        _directorySuggested = true;
+        DirectoryText = path;
     }
 
     /// <summary>
