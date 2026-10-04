@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.2.1...v1.3.0) (2026-10-04)
+
+
+### Added
+
+* modo HUD substitui o pino transparente, com comportamento da janela configurável ([#49](https://github.com/AdrianoGuzzo/MyTaskApp/issues/49)) ([9a1be6a](https://github.com/AdrianoGuzzo/MyTaskApp/commit/9a1be6a0a14063868d2ed9a5d6f872ccc5e45cdf))
+* mostra a PR aberta da branch na aba Desenvolvimento ([#48](https://github.com/AdrianoGuzzo/MyTaskApp/issues/48)) ([6198054](https://github.com/AdrianoGuzzo/MyTaskApp/commit/6198054e1643589124a8a77126efb2c878a5585a))
+
 ## [1.2.1](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.2.0...v1.2.1) (2026-10-03)
 
 
