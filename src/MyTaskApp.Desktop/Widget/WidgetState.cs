@@ -21,16 +21,39 @@ public sealed record WidgetState
 
     public double Height { get; init; } = WidgetMetrics.DefaultHeight;
 
+    /// <summary>
+    /// "Sempre no topo" da janela <b>normal</b>. O HUD tem o seu
+    /// (<see cref="HudSettings.AlwaysOnTop"/>): fixar o HUD num canto não pode
+    /// deixar a janela grande presa na frente de tudo ao sair dele (ADR-048).
+    /// </summary>
     public bool Topmost { get; init; }
 
     /// <summary>
-    /// Modo discreto: sem moldura, sem cabeçalho, só as tarefas sobre a área de
-    /// trabalho. Preferência, e não geometria — por isso mora aqui e não vira
-    /// um quarto <see cref="WidgetMode"/>.
+    /// Legado: o modo discreto, que o pino ligava junto com o "sempre no topo"
+    /// até o ADR-048. Só é lido — <see cref="Sanitized"/> converte o pino
+    /// antigo em HUD e apaga o campo, que nunca mais é gravado.
     /// </summary>
-    public bool Ghost { get; init; }
+    public bool? Ghost { get; init; }
 
     public WidgetMode Mode { get; init; } = WidgetMode.Expanded;
+
+    /// <summary>Como a janela estava ao fechar — reaberto, o app volta assim.</summary>
+    public WindowMode WindowMode { get; init; } = WindowMode.Normal;
+
+    /// <summary>Esconder na bandeja continua sendo o padrão: é o que o X sempre fez (ADR-016).</summary>
+    public CloseBehavior CloseBehavior { get; init; } = CloseBehavior.Tray;
+
+    /// <summary>Abrir sempre como HUD, independentemente de como fechou.</summary>
+    public bool StartInHud { get; init; }
+
+    public HudSettings Hud { get; init; } = HudSettings.Default;
+
+    /// <summary>
+    /// Ctrl+Shift+Espaço alterna janela e HUD. Desligado por padrão: no Visual
+    /// Studio e no VS Code a mesma combinação é "informações de parâmetro", e
+    /// um atalho global a roubaria sem aviso.
+    /// </summary>
+    public bool GlobalHotkey { get; init; }
 
     /// <summary>Abrir direto na bandeja, sem mostrar o painel.</summary>
     public bool StartHidden { get; init; }
@@ -45,7 +68,21 @@ public sealed record WidgetState
     /// Um arquivo corrompido ou editado à mão não pode deixar o painel com
     /// tamanho zero, nem recolhido para sempre sem forma de voltar.
     /// </summary>
-    public WidgetState Sanitized() => this with
+    public WidgetState Sanitized() => Clamped().MigrateGhost();
+
+    /// <summary>
+    /// O pino antigo era "fica no canto, por cima, sem me atrapalhar" — que é
+    /// o HUD. Quem atualiza com o painel fixado reabre no HUD, e não numa
+    /// janela grande presa na frente de tudo.
+    /// </summary>
+    private WidgetState MigrateGhost() => Ghost switch
+    {
+        true when Topmost => this with { Ghost = null, Topmost = false, WindowMode = WindowMode.Hud },
+        null => this,
+        _ => this with { Ghost = null },
+    };
+
+    private WidgetState Clamped() => this with
     {
         Width = Math.Clamp(
             double.IsFinite(Width) ? Width : WidgetMetrics.DefaultWidth,
@@ -56,6 +93,9 @@ public sealed record WidgetState
             WidgetMetrics.MinExpandedHeight,
             4000),
         Mode = Enum.IsDefined(Mode) ? Mode : WidgetMode.Expanded,
+        WindowMode = Enum.IsDefined(WindowMode) ? WindowMode : WindowMode.Normal,
+        CloseBehavior = Enum.IsDefined(CloseBehavior) ? CloseBehavior : CloseBehavior.Tray,
+        Hud = (Hud ?? HudSettings.Default).Sanitized(),
         Theme = ThemeCatalog.Normalize(Theme),
     };
 }
