@@ -53,6 +53,12 @@ public sealed partial class TaskNotesWindow : Window
     /// </summary>
     private bool _discarding;
 
+    /// <summary>
+    /// Como a janela estava antes de minimizar. Começa maximizada porque é
+    /// assim que ela abre.
+    /// </summary>
+    private WindowState _restoreState = WindowState.Maximized;
+
     public TaskNotesWindow()
     {
         InitializeComponent();
@@ -115,6 +121,42 @@ public sealed partial class TaskNotesWindow : Window
         // e começar com o texto todo selecionado convidaria a apagá-lo.
         Editor.Focus();
         Editor.CaretIndex = Editor.Text?.Length ?? 0;
+    }
+
+    /// <summary>
+    /// Traz de volta a janela já aberta quando a tarefa é aberta de novo. Volta
+    /// como estava antes de minimizar, e não em <see cref="WindowState.Normal"/>
+    /// fixo: ela abre maximizada, e o usuário pode tê-la restaurado.
+    /// </summary>
+    public void Reveal()
+    {
+        Show();
+
+        // Ordem importa: Show() numa janela minimizada a deixa minimizada, e
+        // Activate() também não a restaura.
+        if (WindowState is WindowState.Minimized)
+        {
+            WindowState = _restoreState;
+        }
+
+        Activate();
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+
+        if (change.Property != WindowStateProperty)
+        {
+            return;
+        }
+
+        var state = change.GetNewValue<WindowState>();
+
+        if (state is not WindowState.Minimized)
+        {
+            _restoreState = state;
+        }
     }
 
     /// <summary>

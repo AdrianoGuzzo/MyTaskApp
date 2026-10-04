@@ -382,9 +382,10 @@ public sealed partial class App : Avalonia.Application
     }
 
     /// <summary>
-    /// Abre — ou traz de volta — a anotação de um checklist. O ViewModel é
-    /// resolvido por item, e não reaproveitado: ele carrega o texto de uma
-    /// linha só, e reusá-lo obrigaria a lembrar de limpar tudo a cada abertura.
+    /// Abre — ou traz de volta, mesmo minimizada — a anotação de um checklist.
+    /// O ViewModel é resolvido por item, e não reaproveitado: ele carrega o
+    /// texto de uma linha só, e reusá-lo obrigaria a lembrar de limpar tudo a
+    /// cada abertura.
     /// </summary>
     private void ShowNotes(
         IServiceProvider services,
@@ -394,8 +395,7 @@ public sealed partial class App : Avalonia.Application
     {
         if (_notes.TryGetValue(row.TaskId, out var opened))
         {
-            opened.Show();
-            opened.Activate();
+            opened.Reveal();
             return;
         }
 
