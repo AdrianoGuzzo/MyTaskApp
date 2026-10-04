@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.4.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.3.0...v1.4.0) (2026-10-04)
+
+
+### Added
+
+* aba Desenvolvimento já vem com o repositório quando a etiqueta tem um só ([#52](https://github.com/AdrianoGuzzo/MyTaskApp/issues/52)) ([29f010d](https://github.com/AdrianoGuzzo/MyTaskApp/commit/29f010d09c76e97140711daaef0af5395ee5a0db))
+* instalador avisa e fecha o MyTaskApp aberto antes de instalar ([#54](https://github.com/AdrianoGuzzo/MyTaskApp/issues/54)) ([f6c6983](https://github.com/AdrianoGuzzo/MyTaskApp/commit/f6c6983394882d65ad9b044036c66af58ec49b65))
+* tema Ponta, escuro na identidade verde da Ponta ([#55](https://github.com/AdrianoGuzzo/MyTaskApp/issues/55)) ([a587b25](https://github.com/AdrianoGuzzo/MyTaskApp/commit/a587b255f020e161e256c7a2d35895680b01afb6))
+
+
+### Fixed
+
+* abrir a tarefa já aberta traz a janela de volta, mesmo minimizada ([#51](https://github.com/AdrianoGuzzo/MyTaskApp/issues/51)) ([bc73ef9](https://github.com/AdrianoGuzzo/MyTaskApp/commit/bc73ef9548a7ad8dc2be8153f30fb0adc5a3b73e))
+
 ## [1.3.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.2.1...v1.3.0) (2026-10-04)
 
 
