@@ -8,10 +8,10 @@ namespace MyTaskApp.Desktop.Composition;
 /// mesma posição de janela.
 /// </summary>
 /// <remarks>
-/// O nome do mutex é contrato com o instalador: o Inno Setup usa exatamente
-/// <see cref="MutexName"/> em <c>AppMutex</c> para descobrir que o app está
-/// aberto antes de trocar os binários. Há teste de packaging cobrando os dois
-/// lados desse acordo.
+/// O nome do mutex é contrato com o instalador: o Inno Setup consulta
+/// exatamente <see cref="MutexName"/> (<c>CheckForMutexes</c>) para saber que o
+/// app está aberto quando não consegue listar os processos da pasta (ADR-049).
+/// Há teste de packaging cobrando os dois lados desse acordo.
 /// </remarks>
 internal sealed class SingleInstance : IDisposable
 {
