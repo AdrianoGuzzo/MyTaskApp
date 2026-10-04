@@ -1,3 +1,4 @@
+using MyTaskApp.Domain.Deadlines;
 using MyTaskApp.Domain.Reminders;
 
 namespace MyTaskApp.Domain.Tasks;
@@ -49,6 +50,25 @@ public sealed class TaskOccurrence
     public ReminderState Reminder { get; private set; } = new();
 
     public TaskSchedule Schedule => new(ScheduledDate, ScheduledTime);
+
+    /// <summary>
+    /// Até quando esta ocorrência precisa estar pronta. Independente do
+    /// agendamento: <see cref="Reschedule"/> não mexe nele, e ele não mexe no
+    /// lembrete (ADR-050). Sobrevive à conclusão — é o que permite dizer depois
+    /// se a entrega foi no prazo.
+    /// </summary>
+    public DateOnly? DeadlineDate { get; private set; }
+
+    public TimeOnly? DeadlineTime { get; private set; }
+
+    public TaskDeadline? Deadline =>
+        DeadlineDate is { } date && DeadlineTime is { } time ? new TaskDeadline(date, time) : null;
+
+    /// <summary>
+    /// O que já foi avisado sobre o prazo. Nasce vazio, como o lembrete; quem
+    /// decide avisar é a Application, que tem a política e o relógio.
+    /// </summary>
+    public DeadlineAlertState DeadlineAlert { get; private set; } = new();
 
     public void Complete(DateTimeOffset completedAt)
     {
@@ -220,5 +240,69 @@ public sealed class TaskOccurrence
         }
 
         Reminder.Snooze(untilUtc);
+    }
+
+    /// <summary>
+    /// Define ou troca o prazo. A contagem de avisos recomeça a partir de
+    /// <paramref name="initialStage"/> — o degrau em que o prazo já nasce —, para
+    /// quem acabou de marcar "daqui a uma hora" não ser avisado disso na mesma hora.
+    /// </summary>
+    internal void SetDeadline(TaskDeadline deadline, DeadlineAlertStage initialStage)
+    {
+        ArgumentNullException.ThrowIfNull(deadline);
+        EnsureDeadlineCanChange();
+
+        DeadlineDate = deadline.Date;
+        DeadlineTime = deadline.Time;
+        DeadlineAlert.Reset(initialStage);
+    }
+
+    internal void ClearDeadline()
+    {
+        EnsureDeadlineCanChange();
+
+        if (Deadline is null)
+        {
+            throw new DomainException("Esta tarefa não tem prazo.");
+        }
+
+        DeadlineDate = null;
+        DeadlineTime = null;
+        DeadlineAlert.Reset(DeadlineAlertStage.None);
+    }
+
+    /// <summary>
+    /// O aviso do prazo saiu. Tolerante como <see cref="MarkReminderFired"/>:
+    /// vem do despacho em lote, e uma recusa aqui derrubaria o tique inteiro.
+    /// </summary>
+    internal void MarkDeadlineAlerted(DeadlineAlertStage stage, DateTimeOffset atUtc) =>
+        DeadlineAlert.MarkAlerted(stage, atUtc);
+
+    /// <summary>Silencia o aviso do prazo até lá. O prazo continua o mesmo (§21).</summary>
+    internal void SnoozeDeadlineAlert(DateTimeOffset untilUtc)
+    {
+        if (Status is not TaskItemStatus.Pending)
+        {
+            throw new DomainException("Só é possível adiar o aviso de uma tarefa pendente.");
+        }
+
+        if (Deadline is null)
+        {
+            throw new DomainException("Esta tarefa não tem prazo.");
+        }
+
+        DeadlineAlert.Snooze(untilUtc);
+    }
+
+    /// <summary>
+    /// O prazo de uma ocorrência concluída é histórico: trocá-lo depois
+    /// reescreveria se a entrega foi ou não no prazo (§22).
+    /// </summary>
+    private void EnsureDeadlineCanChange()
+    {
+        if (Status is not TaskItemStatus.Pending)
+        {
+            throw new DomainException("Só é possível mudar o prazo de uma tarefa pendente.");
+        }
     }
 }
