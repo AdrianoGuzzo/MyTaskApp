@@ -176,6 +176,34 @@ public class TaskNotesRenderingTests
     private static TaskRowViewModel Row(string? notes = null, bool isCompleted = false) =>
         new(Task("Fechar o mês", notes), isCompleted);
 
+    /// <summary>
+    /// Abrir de novo a tarefa cuja janela está minimizada precisa trazê-la de
+    /// volta. Só <c>Show()</c> + <c>Activate()</c> a deixavam na barra de
+    /// tarefas, e o clique parecia não fazer nada.
+    /// </summary>
+    [AvaloniaFact]
+    public void AMinimizedWindow_ComesBackMaximizedOnReveal()
+    {
+        var window = ShowNotes(Row());
+
+        window.WindowState = WindowState.Minimized;
+        window.Reveal();
+
+        window.WindowState.Should().Be(WindowState.Maximized);
+    }
+
+    [AvaloniaFact]
+    public void AWindowTheUserRestored_ComesBackAsItWas()
+    {
+        var window = ShowNotes(Row());
+
+        window.WindowState = WindowState.Normal;
+        window.WindowState = WindowState.Minimized;
+        window.Reveal();
+
+        window.WindowState.Should().Be(WindowState.Normal);
+    }
+
     [AvaloniaFact]
     public void AnOpenTask_GetsTheEditorAndTheToolbar()
     {
