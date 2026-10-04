@@ -55,6 +55,20 @@
     <Setter Property="TextWrapping" Value="NoWrap" />
   </Style>
 
+  <!--
+    Texto selecionado. O Fluent pinta a seleção com o destaque e deixa a letra
+    na cor do texto: branca sobre o limão do Ponta, o gelo do Nórdico ou o
+    amarelo do Alto contraste — 2:1. A letra sobre o destaque já tem token, e
+    nos temas de letra branca nada muda.
+  -->
+  <Style Selector="TextBox">
+    <Setter Property="SelectionForegroundBrush" Value="{DynamicResource WidgetOnAccentBrush}" />
+  </Style>
+
+  <Style Selector="SelectableTextBlock">
+    <Setter Property="SelectionForegroundBrush" Value="{DynamicResource WidgetOnAccentBrush}" />
+  </Style>
+
   <Style Selector="Button">
     <Setter Property="CornerRadius" Value="{StaticResource WidgetPillRadius}" />
     <Setter Property="Padding" Value="10,5" />

@@ -1,3 +1,4 @@
+using Avalonia.Media;
 using MyTaskApp.Desktop.Theming;
 
 namespace MyTaskApp.Desktop.Tests.Theming;
@@ -59,6 +60,39 @@ public class ThemeCatalogTests
         ThemeCatalog.Resolve("sepia", DarkWindows).Should().BeSameAs(ThemeCatalog.Sepia);
         ThemeCatalog.Resolve("nordic", LightWindows).Should().BeSameAs(ThemeCatalog.Nordic);
         ThemeCatalog.Resolve("paper", ContrastWindows).Should().BeSameAs(ThemeCatalog.Paper);
+        ThemeCatalog.Resolve("ponta", LightWindows).Should().BeSameAs(ThemeCatalog.Ponta);
+        ThemeCatalog.Resolve("ponta", ContrastWindows).Should().BeSameAs(ThemeCatalog.Ponta);
+    }
+
+    [Fact]
+    public void ThePontaTheme_IsBuiltOnTheBrandPalette()
+    {
+        // As cores da marca, na hierarquia combinada: petróleo no fundo, teal
+        // subindo nas superfícies, limão só na ação. O que for ajuste de
+        // contraste fica fora daqui, no ThemeContrastTests.
+        var p = ThemeCatalog.Ponta.Palette;
+
+        ThemeCatalog.Ponta.IsDark.Should().BeTrue();
+        p.Canvas.Should().Be(Color.Parse("#104544"));
+        p.Surface.Should().Be(Color.Parse("#154E44"));
+        p.SurfaceHover.Should().Be(Color.Parse("#1E5B45"));
+        p.Stroke.Should().Be(Color.Parse("#2D6F44"));
+        p.Accent.Should().Be(Color.Parse("#7CBB3B"));
+        p.AccentHover.Should().Be(Color.Parse("#A2D152"));
+        p.AccentPressed.Should().Be(Color.Parse("#5EA341"));
+        p.AccentText.Should().Be(Color.Parse("#A2D152"));
+        p.TextHigh.Should().Be(Colors.White);
+    }
+
+    [Fact]
+    public void ThePontaSuccess_IsNotTheBrandGreen()
+    {
+        // Destaque e sucesso dividem a matiz só neste tema. "Enviada" e a
+        // história do Jira não podem parecer o botão de ação.
+        var p = ThemeCatalog.Ponta.Palette;
+        var distance = Math.Abs(p.Success.ToHsl().H - p.Accent.ToHsl().H);
+
+        distance.Should().BeGreaterThanOrEqualTo(40);
     }
 
     [Theory]
@@ -76,6 +110,7 @@ public class ThemeCatalogTests
     public void AKnownChoice_IsKept()
     {
         ThemeCatalog.Normalize("plum").Should().Be("plum");
+        ThemeCatalog.Normalize("ponta").Should().Be("ponta");
         ThemeCatalog.Normalize(ThemeCatalog.SystemId).Should().Be(ThemeCatalog.SystemId);
     }
 }
