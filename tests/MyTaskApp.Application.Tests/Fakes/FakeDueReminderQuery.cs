@@ -1,4 +1,5 @@
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Deadlines;
 using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Domain.Tasks;
@@ -49,9 +50,18 @@ internal sealed class FakeDueReminderQuery(FakeTaskItemRepository repository) : 
 /// </summary>
 internal sealed class CountingUseCaseRunner : IUseCaseRunner
 {
+    /// <summary>
+    /// Tiques: cada chamada, menos a dos prazos, que vai junto no mesmo tique
+    /// dos lembretes (ADR-050) e é contada à parte em <see cref="DeadlineInvocations"/>.
+    /// </summary>
     public int Invocations { get; private set; }
 
+    public int DeadlineInvocations { get; private set; }
+
     public Exception? Failure { get; set; }
+
+    /// <summary>Quando definido, só este handler falha — os outros seguem.</summary>
+    public Type? FailingHandler { get; set; }
 
     /// <summary>Segura um tique aberto, para testar sobreposição.</summary>
     public TaskCompletionSource? Gate { get; set; }
@@ -61,24 +71,35 @@ internal sealed class CountingUseCaseRunner : IUseCaseRunner
         CancellationToken cancellationToken = default)
         where THandler : notnull
     {
-        Invocations++;
+        var isDeadlines = typeof(THandler) == typeof(DispatchDeadlineAlertsHandler);
 
-        if (Gate is not null)
+        if (isDeadlines)
         {
-            await Gate.Task;
+            DeadlineInvocations++;
+        }
+        else
+        {
+            Invocations++;
+
+            if (Gate is not null)
+            {
+                await Gate.Task;
+            }
         }
 
-        if (Failure is not null)
+        if (Failure is not null && (FailingHandler is null || FailingHandler == typeof(THandler)))
         {
             throw Failure;
         }
 
-        // Serve aos dois agendadores: o de lembretes e o do ciclo de vida.
+        // Serve aos dois agendadores: o de lembretes (com os prazos) e o do ciclo de vida.
         return DispatchDueRemindersResult.Nothing is TResult dispatched
             ? dispatched
-            : LifecycleMaintenanceResult.Nothing is TResult swept
-                ? swept
-                : default!;
+            : DispatchDeadlineAlertsResult.Nothing is TResult deadlines
+                ? deadlines
+                : LifecycleMaintenanceResult.Nothing is TResult swept
+                    ? swept
+                    : default!;
     }
 
     public async Task RunAsync<THandler>(
