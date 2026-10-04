@@ -82,7 +82,8 @@ internal static class GitInstallGuide
             new Uri("https://git-scm.com/downloads/linux"));
     }
 
-    private static (string? Name, HashSet<string> Family) ParseOsRelease(string? osRelease)
+    /// <summary>O nome da distribuição e a família (<c>ID</c> + <c>ID_LIKE</c>). Também é do <see cref="GhInstallGuide"/>.</summary>
+    internal static (string? Name, HashSet<string> Family) ParseOsRelease(string? osRelease)
     {
         string? name = null;
         var family = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -116,7 +117,7 @@ internal static class GitInstallGuide
         return (name, family);
     }
 
-    private static string? ReadOsRelease()
+    internal static string? ReadOsRelease()
     {
         foreach (var path in (string[])["/etc/os-release", "/usr/lib/os-release"])
         {

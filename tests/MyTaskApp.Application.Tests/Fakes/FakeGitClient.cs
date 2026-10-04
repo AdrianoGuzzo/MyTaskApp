@@ -39,6 +39,9 @@ internal sealed class FakeGitClient : IGitClient
 
     public string? RemoteDefault { get; set; } = "origin/main";
 
+    /// <summary>A URL de cada remoto, por <c>"{repositório}|{remoto}"</c>; o que não estiver aqui não existe.</summary>
+    public Dictionary<string, string> RemoteUrls { get; } = new(StringComparer.OrdinalIgnoreCase);
+
     public GitCommandResult FetchResult { get; set; } = Ok("git fetch --all --prune");
 
     public GitDivergence Divergence { get; set; } = new(0, 0);
@@ -113,6 +116,12 @@ internal sealed class FakeGitClient : IGitClient
 
     public Task<string?> GetRemoteDefaultBranchAsync(string repository, string remote, CancellationToken cancellationToken = default) =>
         Task.FromResult(RemoteDefault);
+
+    public Task<string?> GetRemoteUrlAsync(string repository, string remote, CancellationToken cancellationToken = default)
+    {
+        Throw(nameof(GetRemoteUrlAsync));
+        return Task.FromResult(RemoteUrls.GetValueOrDefault($"{repository}|{remote}"));
+    }
 
     public Task<GitCommandResult> FetchAsync(string repository, CancellationToken cancellationToken = default)
     {

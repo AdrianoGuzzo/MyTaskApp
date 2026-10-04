@@ -166,6 +166,12 @@ public interface IGitClient
     /// </summary>
     Task<string?> GetRemoteDefaultBranchAsync(string repository, string remote, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// <c>git remote get-url {remote}</c>, ou <c>null</c> quando o remoto não
+    /// existe. É de onde sai o repositório do GitHub da PR aberta (ADR-047).
+    /// </summary>
+    Task<string?> GetRemoteUrlAsync(string repository, string remote, CancellationToken cancellationToken = default);
+
     /// <summary><c>git fetch --all --prune</c>. Só atualiza referências remotas.</summary>
     Task<GitCommandResult> FetchAsync(string repository, CancellationToken cancellationToken = default);
 

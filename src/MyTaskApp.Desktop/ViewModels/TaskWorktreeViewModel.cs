@@ -18,6 +18,10 @@ public sealed partial class TaskWorktreeViewModel : ObservableObject
 {
     private readonly bool _isCompleted;
 
+    private IReadOnlyDictionary<Guid, WorktreeSync> _syncs = new Dictionary<Guid, WorktreeSync>();
+
+    private IReadOnlyDictionary<Guid, PullRequestInfo> _pullRequests = new Dictionary<Guid, PullRequestInfo>();
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(
         nameof(IsDirty),
@@ -90,21 +94,51 @@ public sealed partial class TaskWorktreeViewModel : ObservableObject
             return;
         }
 
-        var lines = Worktrees
-            .Select(worktree => new WorktreeLineViewModel(worktree, syncs.GetValueOrDefault(worktree.DevelopmentId)))
-            .ToList();
+        _syncs = syncs;
+
+        var lines = BuildLines();
 
         Lines = lines;
         State = lines.Max(line => line.State);
     }
+
+    /// <summary>
+    /// As PRs abertas, que chegam depois das cores (ADR-047): o GitHub é mais
+    /// lento que o Git, e a bolinha não espera por ele.
+    /// </summary>
+    public void ApplyPullRequests(IReadOnlyDictionary<Guid, PullRequestInfo> pullRequests)
+    {
+        if (!HasWorktree)
+        {
+            return;
+        }
+
+        _pullRequests = pullRequests;
+        Lines = BuildLines();
+    }
+
+    private List<WorktreeLineViewModel> BuildLines() =>
+        Worktrees
+            .Select(worktree => new WorktreeLineViewModel(
+                worktree,
+                _syncs.GetValueOrDefault(worktree.DevelopmentId),
+                _pullRequests.GetValueOrDefault(worktree.DevelopmentId)))
+            .ToList();
 }
 
-/// <summary>Um worktree no balão do título: onde está e como está.</summary>
-public sealed class WorktreeLineViewModel(TaskWorktree worktree, WorktreeSync? sync)
+/// <summary>Um worktree no balão do título: onde está, como está e se tem PR aberta.</summary>
+public sealed class WorktreeLineViewModel(TaskWorktree worktree, WorktreeSync? sync, PullRequestInfo? pullRequest = null)
 {
     public TaskWorktree Worktree { get; } = worktree;
 
     public WorktreeSyncState State { get; } = sync?.State ?? WorktreeSyncState.Unknown;
+
+    public PullRequestInfo? PullRequest { get; } = pullRequest;
+
+    /// <summary>"PR #123 aberta · Título da PR" — <c>null</c> sem PR.</summary>
+    public string? PullRequestText { get; } = pullRequest is null ? null : $"{pullRequest.Label} · {pullRequest.Title}";
+
+    public bool HasPullRequest => PullRequest is not null;
 
     public bool IsDirty => State == WorktreeSyncState.Dirty;
 

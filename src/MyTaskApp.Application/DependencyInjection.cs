@@ -80,6 +80,10 @@ public static class DependencyInjection
         services.AddScoped<RemoveWorktreeHandler>();
         services.AddScoped<ProbeWorktreesHandler>();
 
+        // A PR aberta da branch, pelo GitHub CLI (ADR-047).
+        services.AddScoped<FindPullRequestHandler>();
+        services.AddScoped<FindWorktreePullRequestsHandler>();
+
         // Comandos pós-Worktree e comandos globais por @alias (ADR-028).
         services.AddScoped<GetDevelopmentCommandsHandler>();
         services.AddScoped<CreateDevelopmentCommandHandler>();

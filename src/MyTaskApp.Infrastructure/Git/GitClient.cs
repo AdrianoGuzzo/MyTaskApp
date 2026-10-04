@@ -140,6 +140,17 @@ internal sealed class GitClient(
         return result.Succeeded && name.Length > 0 ? name : null;
     }
 
+    public async Task<string?> GetRemoteUrlAsync(
+        string repository,
+        string remote,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await RunAsync(repository, ["remote", "get-url", remote], DefaultTimeout, cancellationToken);
+
+        var url = result.StandardOutput.Trim();
+        return result.Succeeded && url.Length > 0 ? url : null;
+    }
+
     public Task<GitCommandResult> FetchAsync(string repository, CancellationToken cancellationToken = default) =>
         RunAsync(repository, ["fetch", "--all", "--prune"], NetworkTimeout, cancellationToken);
 

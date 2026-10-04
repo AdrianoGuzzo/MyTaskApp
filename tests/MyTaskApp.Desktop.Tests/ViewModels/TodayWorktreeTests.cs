@@ -133,6 +133,59 @@ public class TodayWorktreeTests
         viewModel.Sections.Single().Items.Single().Worktree.IsUnknown.Should().BeTrue();
     }
 
+    /// <summary>O balão do título conta a PR aberta do worktree, depois das cores (ADR-047).</summary>
+    [Fact]
+    public async Task TheOpenPullRequest_ReachesTheTooltip()
+    {
+        var worktree = Worktree();
+        var pullRequest = new PullRequestInfo(12, "Corrige animais", new Uri("https://github.com/acme/eco-core/pull/12"), IsDraft: false);
+        _runner.Result = new TodayBoard(Date, [], [], [Listed(worktree)], [], []);
+        _runner.ResultsByHandler[typeof(ProbeWorktreesHandler)] =
+            new List<WorktreeSync> { Sync(worktree, WorktreeSyncState.Pushed, commits: 1) };
+        _runner.ResultsByHandler[typeof(FindWorktreePullRequestsHandler)] =
+            new Dictionary<Guid, PullRequestInfo> { [worktree.DevelopmentId] = pullRequest };
+        var viewModel = ViewModel();
+
+        await viewModel.LoadAsync(TestContext.Current.CancellationToken);
+
+        var line = viewModel.Sections.Single().Items.Single().Worktree.Lines.Should().ContainSingle().Subject;
+        line.HasPullRequest.Should().BeTrue();
+        line.PullRequestText.Should().Be("PR #12 aberta · Corrige animais");
+        line.IsPushed.Should().BeTrue("a PR não apaga a cor que o Git deu");
+    }
+
+    [Fact]
+    public async Task GitHubFailing_LeavesTheTooltipWithoutPullRequest()
+    {
+        var worktree = Worktree();
+        _runner.Result = new TodayBoard(Date, [], [], [Listed(worktree)], [], []);
+        _runner.ResultsByHandler[typeof(ProbeWorktreesHandler)] =
+            new List<WorktreeSync> { Sync(worktree, WorktreeSyncState.Clean) };
+        _runner.FailuresByHandler[typeof(FindWorktreePullRequestsHandler)] = new InvalidOperationException("gh");
+        var viewModel = ViewModel();
+
+        await viewModel.LoadAsync(TestContext.Current.CancellationToken);
+
+        viewModel.ErrorMessage.Should().BeNull();
+        var line = viewModel.Sections.Single().Items.Single().Worktree.Lines.Single();
+        line.HasPullRequest.Should().BeFalse();
+        line.IsClean.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ADraft_IsToldAsDraft()
+    {
+        var worktree = Worktree();
+        var row = new TaskRowViewModel(Listed(worktree), false);
+
+        row.Worktree.ApplyPullRequests(new Dictionary<Guid, PullRequestInfo>
+        {
+            [worktree.DevelopmentId] = new(3, "wip", new Uri("https://github.com/a/b/pull/3"), IsDraft: true),
+        });
+
+        row.Worktree.Lines.Single().PullRequestText.Should().Be("PR #3 em rascunho · wip");
+    }
+
     [Fact]
     public async Task CompletingATaskWithoutWorktree_AsksNothing()
     {
