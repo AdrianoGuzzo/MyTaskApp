@@ -66,6 +66,8 @@ public sealed partial class TaskDevelopmentsViewModel(
         _views = [];
         _suggestedBranch = null;
         DirectoryCompletion.IsEnabled = !isReadOnly;
+        DirectoryCompletion.PropertyChanged -= OnDirectoriesChanged;
+        DirectoryCompletion.PropertyChanged += OnDirectoriesChanged;
         PromptReferences.Load(taskId, isReadOnly);
 
         foreach (var item in Items.ToList())
@@ -137,6 +139,7 @@ public sealed partial class TaskDevelopmentsViewModel(
         {
             draft = AddEnvironment();
             draft.SuggestFrom(_views);
+            SuggestSoleDirectory();
             NotifyItemsChanged();
         }
 
@@ -231,7 +234,45 @@ public sealed partial class TaskDevelopmentsViewModel(
         }
 
         PromptReferences.SetEnvironments(_views, Selected?.DevelopmentId);
+        SuggestSoleDirectory();
         NotifyItemsChanged();
+    }
+
+    /// <summary>Os diretórios das etiquetas chegaram (a cada ativação da janela).</summary>
+    private void OnDirectoriesChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs args)
+    {
+        if (args.PropertyName is nameof(AliasCompletionViewModel.HasDirectories))
+        {
+            SuggestSoleDirectory();
+        }
+    }
+
+    /// <summary>
+    /// Um repositório só nas etiquetas da tarefa, e nenhum ambiente nele ainda:
+    /// o rascunho já vem com ele. A mesma pasta em duas etiquetas conta uma vez.
+    /// </summary>
+    private void SuggestSoleDirectory()
+    {
+        var paths = new List<string>();
+
+        foreach (var directory in DirectoryCompletion.Directories)
+        {
+            if (!paths.Any(path => WorktreePathPlanner.SamePath(path, directory.Path)))
+            {
+                paths.Add(directory.Path);
+            }
+        }
+
+        if (paths is not [var sole]
+            || _views.Any(view => WorktreePathPlanner.SamePath(view.RepositoryPath, sole)))
+        {
+            return;
+        }
+
+        foreach (var draft in Items.Where(item => item.IsDraft))
+        {
+            draft.SuggestDirectory(sole);
+        }
     }
 
     private TaskDevelopmentViewModel AddEnvironment()
