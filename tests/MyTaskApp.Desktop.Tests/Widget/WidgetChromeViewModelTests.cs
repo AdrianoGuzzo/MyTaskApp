@@ -94,15 +94,14 @@ public class WidgetChromeViewModelTests
     }
 
     [Fact]
-    public void TheTopmostToggle_FlipsAndDescribesItself()
+    public void TheTopmostToggle_FlipsAndReachesTheWindowInNormalMode()
     {
         var chrome = new WidgetChromeViewModel();
 
         chrome.ToggleTopmost();
 
         chrome.IsTopmost.Should().BeTrue();
-        chrome.TopmostTip.Should().Be("Sempre no topo: ligado");
-        chrome.TopmostGlyph.Should().Be("\uE840");
+        chrome.IsWindowTopmost.Should().BeTrue();
     }
 
     [Fact]
@@ -144,27 +143,19 @@ public class WidgetChromeViewModelTests
     [Fact]
     public void TheTopmostToggle_NotifiesNothingButItself()
     {
-        // Item 8 da especificação: o pino controla só "ficar sobre as outras
-        // janelas". Se ele notificasse Mode — ou qualquer coisa derivada dela —
-        // a janela rodaria ApplyMode(), que redimensiona e reposiciona o painel.
+        // "Sempre no topo" controla só a ordem Z da janela normal. Se ele
+        // notificasse Mode ou WindowMode — ou qualquer coisa derivada delas —
+        // a janela rodaria ApplyMode() ou viraria HUD (ADR-017, ADR-048).
         var chrome = new WidgetChromeViewModel();
         var changed = new List<string?>();
         chrome.PropertyChanged += (_, args) => changed.Add(args.PropertyName);
 
         chrome.ToggleTopmost();
 
-        // O pino leva o modo discreto junto, e nada mais: nenhuma dessas
-        // propriedades passa por ApplyMode().
         changed.Should().BeEquivalentTo(new string?[]
         {
             nameof(WidgetChromeViewModel.IsTopmost),
-            nameof(WidgetChromeViewModel.TopmostTip),
-            nameof(WidgetChromeViewModel.TopmostGlyph),
-            nameof(WidgetChromeViewModel.GhostPinTip),
-            nameof(WidgetChromeViewModel.IsGhost),
-            nameof(WidgetChromeViewModel.IsGhostActive),
-            nameof(WidgetChromeViewModel.IsHeaderVisible),
-            nameof(WidgetChromeViewModel.GhostTip),
+            nameof(WidgetChromeViewModel.IsWindowTopmost),
         });
     }
 

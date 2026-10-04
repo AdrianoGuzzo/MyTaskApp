@@ -17,11 +17,12 @@ using MyTaskApp.Domain.Tasks;
 namespace MyTaskApp.Desktop.Tests.ViewModels;
 
 /// <summary>
-/// O pino fixa o painel sobre as outras janelas e liga o modo discreto — e
+/// "Sempre no topo" da janela normal fixa o painel sobre as outras janelas — e
 /// nada além disso. O que estes testes guardam é o "nada além disso": é fácil
 /// alguém ler "fixar" como "prender" e transformá-lo numa trava de posição, e
 /// um widget que o usuário não consegue tirar da frente é pior do que um que
-/// não fica no topo.
+/// não fica no topo. O alfinete do cabeçalho virou "fixar como HUD" no
+/// ADR-048 — esse, que muda a geometria de propósito, está em WidgetHudTests.
 /// </summary>
 public class WidgetPinTests
 {
@@ -63,37 +64,6 @@ public class WidgetPinTests
 
         return (window, runner);
     }
-
-    /// <summary>
-    /// Um quadro com as duas metades: o que falta e o que já foi feito. O
-    /// <c>ShowAsync</c> acima só conhece pendências.
-    /// </summary>
-    private static async Task<MainWindow> ShowAsync(
-        IReadOnlyList<TodayTask> pending,
-        IReadOnlyList<TodayTask> completed)
-    {
-        var viewModel = new TodayViewModel(
-            new FakeUseCaseRunner { Result = new TodayBoard(Date, [], [], pending, [], completed) },
-            new FakeConfirmationDialog(),
-            new FakeClipboardWriter(),
-            TimeProvider.System,
-            NullLogger<TodayViewModel>.Instance);
-
-        await viewModel.LoadAsync(CancellationToken.None);
-
-        var window = new MainWindow { DataContext = viewModel };
-        window.Show();
-        Settle(window);
-
-        return window;
-    }
-
-    private static IReadOnlyList<string> VisibleTexts(Visual window) =>
-        window.GetVisualDescendants()
-            .OfType<TextBlock>()
-            .Where(block => block.IsEffectivelyVisible && !string.IsNullOrWhiteSpace(block.Text))
-            .Select(block => block.Text!)
-            .ToList();
 
     /// <summary>
     /// Os três passos são necessários. Redimensionar no headless é postado no
@@ -236,43 +206,15 @@ public class WidgetPinTests
     }
 
     [AvaloniaFact]
-    public async Task Pinned_TheDragAreaMovesToThePanelItself()
+    public async Task Pinned_TheTitleBarIsStillTheDragHandle()
     {
-        // Fixar liga o modo discreto, e o modo discreto tira o cabeçalho. A
-        // janela não pode ficar sem forma de ser arrastada por causa disso: o
-        // painel inteiro assume o papel que era da barra.
+        // Ficar no topo não esconde o cabeçalho nem tira dele o arrasto.
         var (window, _) = await ShowAsync(Row("Deploy"));
 
         window.Chrome.ToggleTopmost();
-        Settle(window);
-
-        TitleBar(window).IsEffectivelyVisible.Should().BeFalse();
-
-        var shell = Shell(window);
-
-        WindowDecorationProperties.GetElementRole(shell)
-            .Should().Be(WindowDecorationsElementRole.TitleBar);
-
-        // E a área vazia arrasta de verdade: o clique pode cair num
-        // ScrollViewer sem papel, mas a subida resolve em TitleBar. Com fundo
-        // nulo no painel ela não receberia ponteiro nenhum e o arrasto por
-        // espaço vazio simplesmente não existiria.
-        RoleAt(window, new Point(window.Width / 2, window.Height - 90))
-            .Should().Be(WindowDecorationsElementRole.TitleBar);
-    }
-
-    [AvaloniaFact]
-    public async Task PinnedWithoutGhost_TheTitleBarIsStillTheDragHandle()
-    {
-        // Os dois são separáveis: devolver a moldura não pode soltar o pino.
-        var (window, _) = await ShowAsync(Row("Deploy"));
-
-        window.Chrome.ToggleTopmost();
-        window.Chrome.ToggleGhost();
         Settle(window);
 
         window.Topmost.Should().BeTrue();
-        window.Chrome.IsGhost.Should().BeFalse();
 
         var titleBar = TitleBar(window);
 
@@ -391,7 +333,7 @@ public class WidgetPinTests
     }
 
     [AvaloniaFact]
-    public void ThePinChangesNothingOnDiskButItselfAndTheGhost()
+    public void ThePinChangesNothingOnDiskButItself()
     {
         // WidgetState é record, então a igualdade compara campo a campo: se ligar
         // o pino mexesse em X, Y, Width, Height ou Mode, este teste quebraria
@@ -414,7 +356,7 @@ public class WidgetPinTests
         window.Chrome.ToggleTopmost();
         window.PersistNow();
 
-        store.Saved.Should().Be(placed with { Topmost = true, Ghost = true });
+        store.Saved.Should().Be(placed with { Topmost = true });
     }
 
     [AvaloniaFact]
@@ -443,82 +385,6 @@ public class WidgetPinTests
 
         store.Saved.Width.Should().Be(380);
         store.Saved.Height.Should().Be(600);
-    }
-
-    [AvaloniaFact]
-    public async Task Pinned_TheCompletedLeaveTheList()
-    {
-        // Fixado o painel vira canto de tela, e ali altura é o recurso escasso:
-        // o que já foi feito sai da lista para o que falta caber.
-        var window = await ShowAsync([Row("Deploy")], [Row("Revisar PR")]);
-
-        VisibleTexts(window).Should().Contain("Revisar PR");
-
-        window.Chrome.ToggleTopmost();
-        Settle(window);
-
-        var texts = VisibleTexts(window);
-
-        texts.Should().NotContain("Revisar PR");
-        texts.Should().Contain("Deploy");
-    }
-
-    [AvaloniaFact]
-    public async Task Unpinned_TheCompletedComeBack()
-    {
-        // Esconder é do modo, não do dado: soltar o pino devolve a seção
-        // inteira, sem nova consulta.
-        var window = await ShowAsync([Row("Deploy")], [Row("Revisar PR")]);
-
-        window.Chrome.ToggleTopmost();
-        window.Chrome.ToggleTopmost();
-        Settle(window);
-
-        VisibleTexts(window).Should().Contain("Revisar PR");
-    }
-
-    [AvaloniaFact]
-    public async Task PinnedFromDisk_OpensAlreadyShowingOnlyWhatIsPending()
-    {
-        // O pino restaurado não passa por clique nenhum: quem avisa a lista é a
-        // mesma ponte, senão o painel abriria fixado e cheio de concluídas até
-        // o primeiro toque no alfinete.
-        var viewModel = new TodayViewModel(
-            new FakeUseCaseRunner
-            {
-                Result = new TodayBoard(Date, [], [], [Row("Deploy")], [], [Row("Revisar PR")]),
-            },
-            new FakeConfirmationDialog(),
-            new FakeClipboardWriter(),
-            TimeProvider.System,
-            NullLogger<TodayViewModel>.Instance);
-
-        await viewModel.LoadAsync(CancellationToken.None);
-
-        // A ordem do composition root: o quadro entra antes de o disco ser lido.
-        var window = new MainWindow { DataContext = viewModel };
-
-        window.Attach(new RecordingStore(
-            WidgetState.Default with { X = 500, Y = 300, Topmost = true }));
-
-        window.Show();
-        Settle(window);
-
-        window.Topmost.Should().BeTrue();
-        VisibleTexts(window).Should().NotContain("Revisar PR").And.Contain("Deploy");
-    }
-
-    [AvaloniaFact]
-    public async Task PinnedWithEverythingDone_SaysSoInsteadOfGoingBlank()
-    {
-        // Sem as concluídas, um dia terminado deixaria o painel em branco — e
-        // no modo discreto não sobra nem cabeçalho para explicar o vazio.
-        var window = await ShowAsync([], [Row("Revisar PR")]);
-
-        window.Chrome.ToggleTopmost();
-        Settle(window);
-
-        VisibleTexts(window).Should().Contain("Tudo concluído. Aproveite.");
     }
 
     /// <summary>Lembra o que foi gravado, sem tocar no disco.</summary>

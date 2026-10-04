@@ -57,11 +57,6 @@ public static class ThemeResources
         resources["WidgetSuccessHaloBrush"] = Brush(p.Success, HaloOpacity);
         resources["WidgetTextMidHaloBrush"] = Brush(p.TextMid, HaloOpacity);
 
-        // Os botões do modo discreto flutuam sobre a área de trabalho. Eram
-        // preto translúcido fixo: no tema claro, ícone escuro sobre preto sumia.
-        resources["WidgetGhostChromeBrush"] = Brush(p.Canvas, 0.65);
-        resources["WidgetGhostChromeHoverBrush"] = Brush(p.Canvas, 0.85);
-
         AddShadows(resources, theme.IsDark);
         AddFluentOverrides(resources, p);
         AddButtons(resources, p, theme.IsDark);
