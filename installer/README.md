@@ -126,6 +126,9 @@ Preserva os dados. Para remover tudo, explicitamente:
 Na desinstalação com interface, o MyTaskApp **pergunta** se deve remover os
 dados, com o foco no **Não**. Responder Não mostra onde eles ficaram.
 
+Se o app estiver aberto, a desinstalação avisa e o fecha antes de apagar
+qualquer arquivo — do mesmo jeito que a atualização.
+
 ### Atualizar
 
 Basta rodar o instalador da versão nova. Como o `AppId` é fixo:
@@ -134,8 +137,13 @@ Basta rodar o instalador da versão nova. Como o `AppId` é fixo:
 - não aparece uma segunda entrada em *Aplicativos Instalados*;
 - os atalhos continuam válidos;
 - os dados não são tocados;
-- se o app estiver aberto, o `AppMutex` detecta (o mesmo nome que
-  `SingleInstance` cria no código) e o instalador pede para fechá-lo;
+- se o app estiver aberto, o instalador **avisa que vai fechá-lo** e, com o
+  OK, encerra tudo que roda de dentro da pasta de instalação (ADR-049). Cancelar
+  interrompe a instalação sem mexer em nada. No modo silencioso o aviso vale
+  como OK, e o app **volta sozinho para a bandeja** no fim da atualização;
+- qualquer outro processo segurando um arquivo da pasta (um terminal, um
+  editor) aparece na página *Preparando para Instalar*, e o instalador o fecha
+  pelo Restart Manager (`CloseApplications=force`);
 - a caixa "Iniciar com o Windows" reflete o estado **atual** da chave `Run`,
   e não o que foi marcado na instalação anterior — quem desligou a opção pelo
   menu do app não a vê voltar sozinha ao atualizar.
@@ -207,8 +215,10 @@ rascunho da release, antes de publicá-la:
 2. Abrir pelo Menu Iniciar; criar uma tarefa.
 3. Fechar a janela (vai para a bandeja) e **clicar no atalho de novo** — a
    janela existente precisa reaparecer, sem um segundo processo.
-4. Instalar a versão seguinte por cima: a tarefa continua lá, e há **uma** só
-   entrada em *Aplicativos Instalados*.
+4. Instalar a versão seguinte por cima **com o app aberto na bandeja**: aparece
+   o aviso de que ele será fechado; com OK a instalação segue sem pedir mais
+   nada. A tarefa continua lá, e há **uma** só entrada em *Aplicativos
+   Instalados*.
 5. Desinstalar respondendo **Não** à pergunta sobre os dados; conferir que
    `%APPDATA%\MyTaskApp\mytaskapp.db` continua no lugar.
 6. Reinstalar: as tarefas voltam.
