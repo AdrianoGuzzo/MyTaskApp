@@ -51,7 +51,72 @@ public class WindowsInstallerContractTests
         // O acordo entre código e instalador. Renomear a constante sem editar o
         // .iss faria o upgrade trocar binários com o app aberto.
         HasDirective($"#define AppMutexName   \"{SingleInstance.MutexName}\"").Should().BeTrue();
-        HasDirective("AppMutex={#AppMutexName}").Should().BeTrue();
+        HasDirective("CheckForMutexes('{#AppMutexName}')").Should().BeTrue();
+    }
+
+    [Fact]
+    public void ARunningApp_IsClosedByTheInstaller_InsteadOfBlockingIt()
+    {
+        // AppMutex só bloqueia e pede para o usuário fechar o app sozinho — e o
+        // app vive na bandeja, onde ninguém acha (ADR-049).
+        Directives.Should().NotContain(line => line.StartsWith("AppMutex=", StringComparison.OrdinalIgnoreCase));
+
+        // No PrepareToInstall: a pasta já é conhecida, e quem desistiu no meio
+        // do assistente não perdeu o app aberto por nada.
+        HasDirective("function PrepareToInstall(var NeedsRestart: Boolean): String;").Should().BeTrue();
+        HasDirective("CloseRunningApp(ExpandConstant('{app}'), 'AppWillCloseSetup')").Should().BeTrue();
+    }
+
+    [Fact]
+    public void TheUserIsWarnedBeforeTheAppIsClosed_AndCanStillBackOut()
+    {
+        HasDirective("brazilianportuguese.AppWillCloseSetup=").Should().BeTrue();
+
+        // OK por padrão: num /SUPPRESSMSGBOXES a atualização automática segue,
+        // em vez de parar para sempre num app aberto.
+        HasDirective("mbInformation, MB_OKCANCEL, IDOK)").Should().BeTrue();
+    }
+
+    [Fact]
+    public void AnyOtherProcessHoldingTheProgramFiles_IsClosedToo()
+    {
+        // O Restart Manager cobre o que não roda de dentro da pasta mas segura
+        // um arquivo dela. O filtro padrão só olharia .exe, .dll e .chm.
+        HasDirective("CloseApplications=force").Should().BeTrue();
+        HasDirective("CloseApplicationsFilter=*.*").Should().BeTrue();
+    }
+
+    [Fact]
+    public void ClosingTheApp_NeverTakesItsChildProcessesAlong()
+    {
+        // Agentes, terminais e gh abertos pelo app são trabalho do usuário.
+        var kills = Directives
+            .Where(line => line.Contains("taskkill", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        kills.Should().NotBeEmpty();
+        kills.Should().NotContain(line => line.Contains("/T", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void UninstallingAlsoClosesARunningApp_BeforeDeletingAnyFile()
+    {
+        // usAppMutexCheck: depois do "tem certeza?", antes de apagar arquivos.
+        HasDirective("if CurUninstallStep = usAppMutexCheck then").Should().BeTrue();
+        HasDirective("'AppWillCloseUninstall'").Should().BeTrue();
+    }
+
+    [Fact]
+    public void ASilentUpdateThatClosedTheApp_BringsItBackToTheTray()
+    {
+        // Um app de lembretes fechado por uma atualização automática não
+        // lembraria de mais nada (ADR-016) — e não pode voltar elevado.
+        var reopen = Directives.Should()
+            .ContainSingle(line => line.Contains("Check: ShouldReopenClosedApp", StringComparison.Ordinal))
+            .Subject;
+
+        reopen.Should().Contain("{#StartupFlag}").And.Contain("runasoriginaluser");
+        HasDirective("Result := AppClosedBySetup and WizardSilent();").Should().BeTrue();
     }
 
     [Fact]
