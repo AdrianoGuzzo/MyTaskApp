@@ -2790,7 +2790,7 @@ Com `--model` também no campo, vale o da lista, que vem por último. Em
 
 ---
 
-## ADR-041 — Temas: seis paletas, "Automático" segue o Windows
+## ADR-041 — Temas: sete paletas, "Automático" segue o Windows
 
 **Contexto:** o ADR-017 fixou o app no escuro (`RequestedThemeVariant="Dark"`)
 porque seguir o Windows, naquela época, dava uma chapa preta de 900x700. O
@@ -2798,7 +2798,7 @@ problema era o tamanho e o preto puro, não a ideia de seguir o sistema. Agora o
 painel é um widget com paleta própria, e dá para oferecer o claro sem voltar
 ao problema antigo.
 
-**Decisão:** seis temas, e mais "Automático", que é o padrão:
+**Decisão:** sete temas, e mais "Automático", que é o padrão:
 
 | Id              | Nome            | Tipo   | Destaque              |
 |-----------------|-----------------|--------|-----------------------|
@@ -2807,6 +2807,7 @@ ao problema antigo.
 | `charcoal`      | Carvão          | escuro | índigo (o de sempre)  |
 | `nordic`        | Nórdico         | escuro | gelo                  |
 | `plum`          | Ameixa          | escuro | magenta               |
+| `ponta`         | Ponta           | escuro | verde-limão           |
 | `high-contrast` | Alto contraste  | escuro | amarelo               |
 
 "Automático" (`system`) usa Papel com o Windows claro, Carvão com o Windows
@@ -2870,6 +2871,17 @@ essas matizes: Sépia é petróleo, Ameixa é magenta (rosa ficaria perto do
 perigo), Nórdico é gelo. No Alto contraste o destaque é amarelo, e a atenção
 virou laranja.
 
+**Ponta, a exceção de marca.** O Ponta veio depois, na identidade verde da
+Ponta, e é o único tema com destaque na matiz do sucesso. A paleta da marca vai
+para os papéis de sempre, sem chave nova: petróleo `#104544` no fundo, `#154E44`
+no cartão, `#1E5B45` no hover, `#2D6F44` na borda, e o limão `#7CBB3B` só na
+ação (`#A2D152` no hover e como texto, `#5EA341` pressionado). Para o verde não
+virar duas coisas, o sucesso é menta (`#6EE7B7`), a mais de 40° de matiz do
+limão (`ThemeCatalogTests`). Dois tons saíram da paleta por contraste: a letra
+do botão é `#0A2F2E`, porque `#104544` sobre o pressionado dava 3,5:1, e o
+`AccentSoft` é `#24573A`, porque o limão como texto sobre o teal `#1E5B45` dava
+4,47:1.
+
 **Armadilhas do Fluent encontradas renderizando, e não nos testes:** várias
 chaves do Fluent apontam para outras por `StaticResource` dentro do próprio
 dicionário do tema. Reapontar `TextOnAccentFillColorPrimaryBrush` não chega ao
@@ -2881,6 +2893,12 @@ amarelo. Essas chaves são reapontadas uma a uma. O `Button` comum usa
 `ControlFillColorDefault`. Ele passou a usar o `TextHigh` do tema translúcido:
 no Sépia era cinza frio sobre creme, e no Carvão 20% de quase-branco é o que
 já era.
+
+A seleção de texto (`TextBox`, `SelectableTextBlock` das anotações) é pintada
+com o destaque, mas o Fluent deixa a letra na cor do texto. Com destaque claro
+(Nórdico, Ameixa, Alto contraste, Ponta), o selecionado ficava branco sobre
+claro, perto de 2:1. Agora a letra selecionada é `WidgetOnAccentBrush`
+(`Styles/Widget.axaml`). Nos temas de letra branca no botão, nada muda.
 
 **A escolha no menu.** "Tema ▸" no menu do painel, com "Automático" primeiro.
 Cada item tem uma amostra nas cores do tema (fundo, cartão e um ponto de

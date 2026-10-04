@@ -215,15 +215,17 @@ public class WidgetChromeViewModelTests
         chrome.ThemeId.Should().Be(ThemeCatalog.SystemId);
     }
 
-    [Fact]
-    public void TheThemeTravelsToAndFromTheDisk()
+    [Theory]
+    [InlineData("high-contrast")]
+    [InlineData("ponta")]
+    public void TheThemeTravelsToAndFromTheDisk(string theme)
     {
         var chrome = new WidgetChromeViewModel();
 
-        chrome.Restore(WidgetState.Default with { Theme = "high-contrast" });
+        chrome.Restore(WidgetState.Default with { Theme = theme });
 
-        chrome.ThemeId.Should().Be("high-contrast");
-        chrome.CaptureInto(WidgetState.Default).Theme.Should().Be("high-contrast");
+        chrome.ThemeId.Should().Be(theme);
+        chrome.CaptureInto(WidgetState.Default).Theme.Should().Be(theme);
     }
 
     [Fact]

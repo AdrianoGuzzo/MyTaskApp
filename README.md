@@ -81,9 +81,9 @@ primeiro para Windows. Também roda no Linux, com algumas funções a menos.
   cria um segundo processo.
 - **Iniciar com o Windows** (ligado por padrão no instalador). O app sobe
   direto na bandeja. Dá para mudar em *☰ → Iniciar com o Windows*.
-- **Temas:** Papel, Sépia, Carvão, Nórdico, Ameixa e Alto contraste, além de
-  **Automático**, que segue o tema claro, escuro ou de alto contraste do
-  Windows.
+- **Temas:** Papel, Sépia, Carvão, Nórdico, Ameixa, Ponta e Alto contraste,
+  além de **Automático**, que segue o tema claro, escuro ou de alto contraste
+  do Windows.
 
 ### Anotações, etiquetas e ciclo de vida
 
