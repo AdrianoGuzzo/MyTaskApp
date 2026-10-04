@@ -19,7 +19,7 @@ namespace MyTaskApp.Desktop.Views;
 /// <remarks>
 /// A moldura (<see cref="Chrome"/>) decide; a janela executa. Chamada nativa
 /// nenhuma mora aqui — passa pelas portas <see cref="IWindowBehaviorService"/>
-/// e <see cref="IGlobalHotkeyService"/> (ADR-047).
+/// e <see cref="IGlobalHotkeyService"/> (ADR-048).
 /// </remarks>
 public partial class MainWindow : Window
 {
@@ -294,7 +294,7 @@ public partial class MainWindow : Window
     /// <summary>
     /// Todo pedido de fechar passa por aqui — o X da moldura, o Alt+F4 e o
     /// "fechar janela" da barra de tarefas — e vira o que "Ao fechar a janela"
-    /// mandar (ADR-047). Desligar o Windows e encerrar o app não perguntam nada.
+    /// mandar (ADR-048). Desligar o Windows e encerrar o app não perguntam nada.
     /// </summary>
     protected override void OnClosing(WindowClosingEventArgs e)
     {
@@ -373,7 +373,7 @@ public partial class MainWindow : Window
     /// <summary>
     /// Só o modo da janela e a densidade mexem em geometria. "Sempre no topo",
     /// opacidade e tema chegam aqui como qualquer outra preferência e não
-    /// passam por <see cref="ApplyMode"/> nem pelo HUD (ADR-017, ADR-047).
+    /// passam por <see cref="ApplyMode"/> nem pelo HUD (ADR-017, ADR-048).
     /// </summary>
     private void OnChromePropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
@@ -449,7 +449,7 @@ public partial class MainWindow : Window
     {
         if (!_hudLayout && _placed)
         {
-            // A janela normal volta exatamente para onde estava (ADR-047): a
+            // A janela normal volta exatamente para onde estava (ADR-048): a
             // geometria dela é carimbada antes de o cartão tomar o lugar.
             _state = Capture();
             _hudScreenHint = CentreOfWindow();

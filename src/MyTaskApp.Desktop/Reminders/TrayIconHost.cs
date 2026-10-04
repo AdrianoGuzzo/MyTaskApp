@@ -102,7 +102,7 @@ internal sealed class TrayIconHost(
     }
 
     /// <summary>
-    /// O HUD também se liga e desliga por aqui (ADR-047): uma rota de volta que
+    /// O HUD também se liga e desliga por aqui (ADR-048): uma rota de volta que
     /// não depende de achar o alfinete num cartão de canto de tela.
     /// </summary>
     public void ShowHud(bool isHud)

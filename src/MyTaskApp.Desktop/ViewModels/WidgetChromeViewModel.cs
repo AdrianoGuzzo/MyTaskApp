@@ -16,7 +16,7 @@ namespace MyTaskApp.Desktop.ViewModels;
 /// </summary>
 /// <remarks>
 /// Só decisão: nada aqui posiciona, redimensiona ou chama o sistema. A janela
-/// observa e executa (ADR-047).
+/// observa e executa (ADR-048).
 /// </remarks>
 public sealed partial class WidgetChromeViewModel : ObservableObject
 {
@@ -44,7 +44,7 @@ public sealed partial class WidgetChromeViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(CollapseTip))]
     private WidgetMode _mode = WidgetMode.Expanded;
 
-    /// <summary>A máquina de estados da janela (ADR-047). Só os comandos abaixo a movem.</summary>
+    /// <summary>A máquina de estados da janela (ADR-048). Só os comandos abaixo a movem.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsNormal))]
     [NotifyPropertyChangedFor(nameof(IsHud))]
@@ -331,7 +331,7 @@ public sealed partial class WidgetChromeViewModel : ObservableObject
 
     /// <summary>
     /// Entrar no HUD: "manter visível sobre as outras janelas", não "ficar
-    /// transparente" (ADR-047). Com o HUD recolhido ligado, entra como pílula.
+    /// transparente" (ADR-048). Com o HUD recolhido ligado, entra como pílula.
     /// </summary>
     [RelayCommand]
     public void EnterHud()

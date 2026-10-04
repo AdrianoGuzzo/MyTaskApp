@@ -121,7 +121,12 @@ A janela da tarefa tem a aba **Desenvolvimento**:
 4. **Bolinha de estado Git na linha:** âmbar quando há alteração não
    commitada, azul quando há commit sem push e verde quando tudo foi enviado.
    Ao concluir a tarefa, o app pergunta o que fazer com o worktree.
-5. **Remover worktree** apaga a pasta. Se algum processo a estiver segurando,
+5. **PR aberta da branch.** Se a branch já existe e tem PR aberta no GitHub, o
+   formulário mostra **"PR #123 aberta ↗"**, um link que abre a PR. Os balões
+   da aba do repositório e da lista Hoje também mostram a PR. Usa o
+   [GitHub CLI](https://cli.github.com/) (`gh`) com o seu login. Se ele faltar,
+   o app mostra como instalar (ADR-047).
+6. **Remover worktree** apaga a pasta. Se algum processo a estiver segurando,
    o app mostra qual.
 
 ### Claude Code por tarefa
@@ -550,7 +555,7 @@ fica em [`CHANGELOG.md`](CHANGELOG.md).
 
 | Documento | Conteúdo |
 |---|---|
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | decisões de arquitetura (ADR-001 a ADR-045), com o motivo de cada uma |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | decisões de arquitetura (ADR-001 a ADR-048), com o motivo de cada uma |
 | [`docs/jira-oauth-app.md`](docs/jira-oauth-app.md) | registrar o app OAuth do Jira e pôr as credenciais no build |
 | [`docs/release-process.md`](docs/release-process.md) | Conventional Commits, SemVer, pipeline de release, hotfix, verificação de versão |
 | [`installer/README.md`](installer/README.md) | instaladores Windows e Linux, parâmetros, atualização, teste de fumaça |

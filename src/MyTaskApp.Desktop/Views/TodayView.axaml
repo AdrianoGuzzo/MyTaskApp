@@ -340,6 +340,10 @@
                                 <StackPanel>
                                   <TextBlock Text="{Binding Label}" FontWeight="SemiBold" />
                                   <TextBlock Classes="tipDetail" Text="{Binding Detail}" />
+                                  <!-- ADR-047: o balão some com o mouse, então aqui é só o aviso; o link fica na tarefa. -->
+                                  <TextBlock Classes="tipDetail"
+                                             Text="{Binding PullRequestText}"
+                                             IsVisible="{Binding HasPullRequest}" />
                                 </StackPanel>
                               </DockPanel>
                             </DataTemplate>
@@ -1260,7 +1264,7 @@
     </Style>
 
     <!--
-      HUD (ADR-047). Vem depois dos estilos base e do compacto de propósito: no
+      HUD (ADR-048). Vem depois dos estilos base e do compacto de propósito: no
       Avalonia não há especificidade de CSS, quem casa por último ganha. O
       cartão do HUD tem fundo próprio, então as linhas ficam como na janela
       normal — sem as pílulas do antigo modo discreto.

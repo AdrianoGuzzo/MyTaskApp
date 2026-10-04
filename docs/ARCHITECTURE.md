@@ -707,7 +707,7 @@ propósito — `WidgetState` tem um par `Width`/`Height` só, então gravar a al
 do compacto apagaria para sempre o tamanho que o usuário escolheu no painel
 inteiro. Nada disso vem do pino, que continua sendo apenas ordem Z.
 
-> **Revisto pelo ADR-047.** O modo discreto saiu, e o alfinete do cabeçalho
+> **Revisto pelo ADR-048.** O modo discreto saiu, e o alfinete do cabeçalho
 > virou "Fixar como HUD", que muda a geometria de propósito. "Sempre no topo"
 > continua no menu, só para a janela normal, e continua sendo apenas ordem Z.
 > O que este ADR diz sobre o modo discreto e o pino levando-o junto fica como
@@ -3360,7 +3360,76 @@ Linux.
 - o alfinete solto (`U+E718`) e o fixado (`U+E840`) usam o contorno vazado e o
   cheio; na Segoe Fluent os dois são o mesmo desenho e quem diferencia é a cor.
 
-## ADR-047 — HUD: o pino deixa de ser "transparente" e vira "visível sem atrapalhar"
+## ADR-047 — PR aberta da branch, pelo GitHub CLI
+
+**Contexto:** com a issue do Jira (ADR-045), a branch da tarefa muitas vezes já
+existe — alguém começou, abriu a PR, e a tarefa volta para outra pessoa. Na
+aba Desenvolvimento o aviso dizia "a branch já existe", mas não que ela já tinha
+PR aberta, e o usuário ia ao GitHub procurar.
+
+**Decisão:** o app pergunta ao GitHub pela PR aberta da branch usando o
+**GitHub CLI (`gh`)**, com o login que o `gh` já tem:
+
+```
+gh pr list --repo github.com/{dono}/{nome} --head {branch} --state open \
+           --json number,title,url,isDraft --limit 1
+```
+
+- **Onde aparece:** no formulário de criação, embaixo do aviso de branch
+  existente, um link **"PR #123 aberta ↗"** com o título ao lado. O clique abre a
+  PR no navegador. A mesma informação vai para o **balão da aba do
+  repositório** e para o **balão do título na lista Hoje**, no bloco WORKTREE.
+  Nos balões não há link, porque eles somem quando o mouse sai.
+- **Quando pergunta:** só para branch que **já existe**, local ou no remoto,
+  porque branch nova não tem PR. A pergunta espera a mesma pausa da digitação
+  do diretório. Com o ambiente pronto, pergunta pela branch dele. Na lista Hoje,
+  pergunta depois das cores do Git (ADR-034), sem atrasá-las.
+- **De onde vem o repositório:** de `git remote get-url origin`. Valem os
+  formatos https, `ssh://` e `git@github.com:dono/nome.git`. **Só github.com**:
+  GitHub Enterprise tem host e login próprios no `gh`, e fica para quando alguém
+  precisar.
+- **Cache de 2 minutos** no cliente, que é singleton. A lista Hoje recarrega a
+  cada minuto, e cada recarga não pode virar uma rajada de idas ao GitHub.
+  "Verificar novamente" limpa o cache. Falha (erro ou timeout) fica só **20
+  segundos**: o bastante para a recarga seguinte não abrir outra leva de `gh`
+  presos, e pouco para a PR voltar logo que a rede voltar.
+- **Timeout de 8 segundos.** A resposta normal vem em menos de um segundo. Em
+  03/10/2026 o `gh` chegou a ficar preso esperando o `api.github.com` por vários
+  minutos seguidos, enquanto outras chamadas passavam, e cada consulta ocupava
+  os 15 segundos de antes.
+- **Nunca bloqueia nem lança.** Sem remoto do GitHub, sem rede ou com o `gh` em
+  erro, criar o worktree nunca depende disso. Quando a consulta da branch falha,
+  o formulário diz "Não foi possível consultar o GitHub…" com **"Tentar de
+  novo"**: sem o aviso, a falta do link parecia "a branch não tem PR".
+
+**Tutorial do `gh`:** se o repositório é do GitHub e o `gh` falta (ou está
+instalado sem login), o formulário avisa e oferece **"Como instalar o gh"**. O
+painel segue o modelo do Git (ADR-027):
+
+1. o comando de instalação por sistema: `winget install --id GitHub.cli`,
+   `brew install gh` ou o gerenciador da distribuição pelo `os-release`;
+2. `gh auth login`;
+3. `gh auth status` para conferir;
+4. o link para cli.github.com e um "Verificar novamente".
+
+Sem login, o painel pula a instalação. O app não instala nada sozinho, e o
+`GhLocator` relê o PATH a cada procura, então a instalação feita com o app
+aberto é encontrada sem reiniciar.
+
+**Por que o `gh` e não um token no app:** o `gh` já resolve o login (navegador,
+SSO da organização, 2FA), funciona com repositório privado e é o que quem usa
+GitHub costuma ter. Um token próprio pediria mais uma tela de integração e mais
+um segredo guardado no app, para uma informação que é só um aviso. A API
+pública sem token não serve, porque não enxerga repositório privado e tem
+limite de 60 consultas por hora.
+
+**Limites aceitos:**
+
+- `--head` filtra pelo nome da branch, sem o dono: uma PR de fork com a mesma
+  branch também conta;
+- com mais de uma PR aberta da mesma branch, só a primeira aparece.
+
+## ADR-048 — HUD: o pino deixa de ser "transparente" e vira "visível sem atrapalhar"
 
 **Contexto:** o pino do ADR-017 ligava `Topmost` e o modo discreto num clique
 só. O modo discreto apagava o fundo do painel (`Background="Transparent"`) e o

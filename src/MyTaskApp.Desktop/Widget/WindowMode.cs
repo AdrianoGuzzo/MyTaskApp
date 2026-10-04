@@ -1,7 +1,7 @@
 namespace MyTaskApp.Desktop.Widget;
 
 /// <summary>
-/// Que tipo de janela o app é agora (ADR-047). É o único estado que decide a
+/// Que tipo de janela o app é agora (ADR-048). É o único estado que decide a
 /// forma da janela; ficar no topo, opacidade do fundo e região clicável são
 /// preferências separadas, e nenhuma delas é deduzida daqui.
 /// </summary>

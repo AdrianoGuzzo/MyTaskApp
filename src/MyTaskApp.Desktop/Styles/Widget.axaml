@@ -98,7 +98,7 @@
   </Style>
 
   <!--
-    HUD (ADR-047): o cartão encosta na borda da janela — sem o anel de 10px,
+    HUD (ADR-048): o cartão encosta na borda da janela — sem o anel de 10px,
     sem sombra. Cada pixel transparente em volta seria clique roubado do app
     de trás, porque no Windows quem recebe o mouse é o retângulo da janela, e
     não o pixel desenhado. O fundo vem da camada hudBackdrop, com a opacidade

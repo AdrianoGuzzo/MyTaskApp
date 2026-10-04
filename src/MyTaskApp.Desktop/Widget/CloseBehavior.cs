@@ -1,6 +1,6 @@
 namespace MyTaskApp.Desktop.Widget;
 
-/// <summary>O que o X da janela (e o Alt+F4) significa para o usuário (ADR-047).</summary>
+/// <summary>O que o X da janela (e o Alt+F4) significa para o usuário (ADR-048).</summary>
 public enum CloseBehavior
 {
     /// <summary>Encerra o processo, com lembretes e tudo.</summary>

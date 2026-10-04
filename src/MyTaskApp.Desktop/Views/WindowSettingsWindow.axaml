@@ -11,7 +11,7 @@
         WindowStartupLocation="CenterOwner">
 
   <!--
-    Janela e comportamento (ADR-047). Liga direto na moldura do painel: cada
+    Janela e comportamento (ADR-048). Liga direto na moldura do painel: cada
     mudança vale na hora e vai para o widget.json pelo mesmo caminho do resto
     — sem botão "Salvar", porque não há nada para conferir antes.
   -->

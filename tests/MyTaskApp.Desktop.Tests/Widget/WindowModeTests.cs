@@ -4,7 +4,7 @@ using MyTaskApp.Desktop.Widget;
 namespace MyTaskApp.Desktop.Tests.Widget;
 
 /// <summary>
-/// A máquina de estados da janela (ADR-047) e o que ela <b>não</b> controla.
+/// A máquina de estados da janela (ADR-048) e o que ela <b>não</b> controla.
 /// O pino antigo era um booleano que ligava três coisas por baixo; aqui cada
 /// conceito anda sozinho, e é isso que estes testes cobram.
 /// </summary>

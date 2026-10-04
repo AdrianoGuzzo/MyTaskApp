@@ -22,7 +22,7 @@ namespace MyTaskApp.Desktop.Tests.ViewModels;
 /// alguém ler "fixar" como "prender" e transformá-lo numa trava de posição, e
 /// um widget que o usuário não consegue tirar da frente é pior do que um que
 /// não fica no topo. O alfinete do cabeçalho virou "fixar como HUD" no
-/// ADR-047 — esse, que muda a geometria de propósito, está em WidgetHudTests.
+/// ADR-048 — esse, que muda a geometria de propósito, está em WidgetHudTests.
 /// </summary>
 public class WidgetPinTests
 {

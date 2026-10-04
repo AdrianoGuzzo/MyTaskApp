@@ -17,7 +17,7 @@ using MyTaskApp.Domain.Tasks;
 namespace MyTaskApp.Desktop.Tests.ViewModels;
 
 /// <summary>
-/// O HUD desenhado de verdade (ADR-047). O que se guarda aqui é o que o pino
+/// O HUD desenhado de verdade (ADR-048). O que se guarda aqui é o que o pino
 /// antigo errava: janela que some, área vazia que rouba clique, X que faz
 /// coisa inesperada, e a janela normal que não volta para onde estava.
 /// </summary>

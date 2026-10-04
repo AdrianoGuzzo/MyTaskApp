@@ -145,7 +145,7 @@ public class WidgetChromeViewModelTests
     {
         // "Sempre no topo" controla só a ordem Z da janela normal. Se ele
         // notificasse Mode ou WindowMode — ou qualquer coisa derivada delas —
-        // a janela rodaria ApplyMode() ou viraria HUD (ADR-017, ADR-047).
+        // a janela rodaria ApplyMode() ou viraria HUD (ADR-017, ADR-048).
         var chrome = new WidgetChromeViewModel();
         var changed = new List<string?>();
         chrome.PropertyChanged += (_, args) => changed.Add(args.PropertyName);

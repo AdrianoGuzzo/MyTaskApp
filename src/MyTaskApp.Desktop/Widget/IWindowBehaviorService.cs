@@ -4,7 +4,7 @@ using Avalonia.Controls;
 namespace MyTaskApp.Desktop.Widget;
 
 /// <summary>
-/// O que só o sistema operacional sabe fazer com a janela (ADR-047). Fica
+/// O que só o sistema operacional sabe fazer com a janela (ADR-048). Fica
 /// atrás de uma porta para nenhuma chamada nativa vazar para o ViewModel, e
 /// para o Linux e os testes headless receberem o objeto nulo em vez de um
 /// <c>DllNotFoundException</c>.

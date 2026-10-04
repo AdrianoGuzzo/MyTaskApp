@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 namespace MyTaskApp.Desktop.Widget;
 
 /// <summary>
-/// Ctrl+Shift+Espaço pelo <c>RegisterHotKey</c> (ADR-047). O aviso chega como
+/// Ctrl+Shift+Espaço pelo <c>RegisterHotKey</c> (ADR-048). O aviso chega como
 /// <c>WM_HOTKEY</c> na janela principal, que o Avalonia deixa interceptar por
 /// <see cref="Win32Properties.AddWndProcHookCallback"/> — sem hook de teclado
 /// global: o sistema só avisa quando a combinação inteira é apertada.

@@ -130,7 +130,7 @@ public class WidgetStateStoreTests : IDisposable
     [Fact]
     public void TheWindowAndHudSettingsComeBack_AfterARestart()
     {
-        // Configuração salva → app reinicia → configuração restaurada (ADR-047).
+        // Configuração salva → app reinicia → configuração restaurada (ADR-048).
         var saved = WidgetState.Default with
         {
             X = 100,

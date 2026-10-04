@@ -23,7 +23,7 @@
     arrastar e redimensionar — e no Avalonia 12 isso é declarativo, via
     ElementRole, então quem move a janela continua sendo o sistema.
 
-    Duas formas, uma janela (ADR-047): a normal, com o cabeçalho de sempre, e
+    Duas formas, uma janela (ADR-048): a normal, com o cabeçalho de sempre, e
     o HUD — um cartão do tamanho exato do conteúdo, sem margem transparente,
     para nada em volta dele bloquear o clique de quem está atrás. O Topmost
     acima é o efetivo: o "sempre no topo" da janela normal ou o "manter o HUD
@@ -103,7 +103,7 @@
 
               <!--
                 O pino agora é "fixar como HUD": manter o app visível sobre as
-                outras janelas, num cartão que não atrapalha (ADR-047). O
+                outras janelas, num cartão que não atrapalha (ADR-048). O
                 "sempre no topo" da janela normal continua no menu.
               -->
               <Button Grid.Column="3"
@@ -239,7 +239,7 @@
                 </Button.Flyout>
               </Button>
 
-              <!-- O X faz o que "Ao fechar a janela" mandar (ADR-047). -->
+              <!-- O X faz o que "Ao fechar a janela" mandar (ADR-048). -->
               <Button Grid.Column="6"
                       Classes="chrome"
                       Content="&#xE711;"

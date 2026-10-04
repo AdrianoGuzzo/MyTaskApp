@@ -39,7 +39,7 @@ public sealed partial class App : Avalonia.Application
     private TrayIconHost? _tray;
     private MainWindow? _window;
 
-    /// <summary>"Janela e comportamento" (ADR-047): uma só, recriada se fechada.</summary>
+    /// <summary>"Janela e comportamento" (ADR-048): uma só, recriada se fechada.</summary>
     private WindowSettingsWindow? _windowSettings;
 
     /// <summary>Quem pinta o app. Exposto para os testes headless trocarem o tema.</summary>
@@ -131,7 +131,7 @@ public sealed partial class App : Avalonia.Application
 
     /// <summary>
     /// A bandeja é o que permite fechar a janela sem encerrar o app — e o que
-    /// o X faz é escolha do usuário (ADR-047), decidida pela própria janela.
+    /// o X faz é escolha do usuário (ADR-048), decidida pela própria janela.
     /// Se a bandeja não subir, a moldura fica sabendo: "ocultar" sem ícone
     /// não teria volta, e vira sair.
     /// </summary>
@@ -454,7 +454,7 @@ public sealed partial class App : Avalonia.Application
     /// <c>--startup</c> justamente para ele não aparecer na frente de ninguém
     /// no boot (ADR-023). A exceção é "iniciar no HUD": quem pediu o painel
     /// permanente no canto quer vê-lo depois do login, e o HUD é justamente a
-    /// forma que não aparece na frente de ninguém (ADR-047).
+    /// forma que não aparece na frente de ninguém (ADR-048).
     /// </remarks>
     private static void StartHiddenIfAsked(MainWindow window, LaunchOptions launch)
     {

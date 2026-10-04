@@ -24,13 +24,13 @@ public sealed record WidgetState
     /// <summary>
     /// "Sempre no topo" da janela <b>normal</b>. O HUD tem o seu
     /// (<see cref="HudSettings.AlwaysOnTop"/>): fixar o HUD num canto não pode
-    /// deixar a janela grande presa na frente de tudo ao sair dele (ADR-047).
+    /// deixar a janela grande presa na frente de tudo ao sair dele (ADR-048).
     /// </summary>
     public bool Topmost { get; init; }
 
     /// <summary>
     /// Legado: o modo discreto, que o pino ligava junto com o "sempre no topo"
-    /// até o ADR-047. Só é lido — <see cref="Sanitized"/> converte o pino
+    /// até o ADR-048. Só é lido — <see cref="Sanitized"/> converte o pino
     /// antigo em HUD e apaga o campo, que nunca mais é gravado.
     /// </summary>
     public bool? Ghost { get; init; }

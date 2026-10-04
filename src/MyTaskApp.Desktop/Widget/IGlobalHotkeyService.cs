@@ -3,7 +3,7 @@ using Avalonia.Controls;
 namespace MyTaskApp.Desktop.Widget;
 
 /// <summary>
-/// Um atalho que funciona com o app em segundo plano (ADR-047). Porta, e não
+/// Um atalho que funciona com o app em segundo plano (ADR-048). Porta, e não
 /// código na janela, porque cada sistema tem o seu jeito — e o Wayland, por
 /// desenho, nenhum.
 /// </summary>

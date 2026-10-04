@@ -5,7 +5,7 @@ using MyTaskApp.Desktop.ViewModels;
 namespace MyTaskApp.Desktop.Views;
 
 /// <summary>
-/// "Janela e comportamento" (ADR-047). O DataContext é a própria moldura da
+/// "Janela e comportamento" (ADR-048). O DataContext é a própria moldura da
 /// janela principal: não há cópia para sincronizar, e cada escolha vale na
 /// hora em que é feita.
 /// </summary>

@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 namespace MyTaskApp.Desktop.Widget;
 
 /// <summary>
-/// A região clicável pelo <c>SetWindowRgn</c> (ADR-047). No Windows o pixel
+/// A região clicável pelo <c>SetWindowRgn</c> (ADR-048). No Windows o pixel
 /// transparente <b>não</b> deixa o clique passar: quem decide é o retângulo da
 /// janela. A região encolhe esse retângulo para o desenho do cartão, e o
 /// sistema entrega o resto — de outro processo, inclusive — à janela de trás.

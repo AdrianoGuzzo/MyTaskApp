@@ -4,7 +4,7 @@ using MyTaskApp.Desktop.Widget;
 namespace MyTaskApp.Desktop.Tests.Widget;
 
 /// <summary>
-/// Onde o HUD pousa (ADR-047). Telas são retângulos em pixels físicos, como no
+/// Onde o HUD pousa (ADR-048). Telas são retângulos em pixels físicos, como no
 /// <see cref="WidgetPlacementTests"/>: dá para testar monitor à esquerda com
 /// coordenadas negativas e escala de 150% sem monitor nenhum.
 /// </summary>

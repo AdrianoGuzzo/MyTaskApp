@@ -3,7 +3,7 @@ using MyTaskApp.Desktop.Widget;
 namespace MyTaskApp.Desktop.Tests.Widget;
 
 /// <summary>
-/// O que o X faz (ADR-047). Regra pura: a janela só executa o que sai daqui,
+/// O que o X faz (ADR-048). Regra pura: a janela só executa o que sai daqui,
 /// então cada combinação de escolha, modo e bandeja cabe num teste sem display.
 /// </summary>
 public class CloseRoutingTests
