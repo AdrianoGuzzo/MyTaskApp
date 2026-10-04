@@ -256,6 +256,24 @@ public class GitClientTests
         _runner.Requests.Single().Arguments.Should().EndWith(["check-ref-format", "--branch", "x..y"]);
     }
 
+    [Fact]
+    public async Task RemoteUrl_AsksGitForTheNamedRemote()
+    {
+        _runner.Respond("remote", new ProcessResult(0, "git@github.com:acme/eco-core.git\n", "", false));
+
+        (await Client().GetRemoteUrlAsync(Repository, "origin", Ct)).Should().Be("git@github.com:acme/eco-core.git");
+        _runner.Requests.Single().Arguments.Should().EndWith(["-C", Repository, "remote", "get-url", "origin"]);
+    }
+
+    /// <summary>Sem o remoto o Git sai com erro: não é falha, é "não tem".</summary>
+    [Fact]
+    public async Task RemoteUrl_IsNull_WhenTheRemoteDoesNotExist()
+    {
+        _runner.Respond("remote", new ProcessResult(2, "", "error: No such remote 'origin'", false));
+
+        (await Client().GetRemoteUrlAsync(Repository, "origin", Ct)).Should().BeNull();
+    }
+
     /// <summary>Responde pelo subcomando do Git; guarda tudo o que foi pedido.</summary>
     private sealed class FakeProcessRunner : IProcessRunner
     {

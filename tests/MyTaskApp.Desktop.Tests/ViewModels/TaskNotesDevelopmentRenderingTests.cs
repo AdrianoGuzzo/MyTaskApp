@@ -28,7 +28,8 @@ public class TaskNotesDevelopmentRenderingTests
         GitInstallation? git = null,
         TaskDevelopmentView? development = null,
         IReadOnlyList<TaskDevelopmentView>? developments = null,
-        IReadOnlyList<GitTag>? tags = null)
+        IReadOnlyList<GitTag>? tags = null,
+        FakeTimeProvider? time = null)
     {
         var runner = new FakeUseCaseRunner();
         runner.ResultsByHandler[typeof(GetTaskDirectoriesHandler)] = TaskNotesAliasTests.Directories;
@@ -43,7 +44,7 @@ public class TaskNotesDevelopmentRenderingTests
         var viewModel = new TaskNotesViewModel(
             runner,
             new FakeDirectoryProbe(),
-            TestDevelopment.For(runner, timeProvider: new FakeTimeProvider()),
+            TestDevelopment.For(runner, timeProvider: time ?? new FakeTimeProvider()),
             NullLogger<TaskNotesViewModel>.Instance);
 
         viewModel.Load(TaskNotesAliasTests.Row());
@@ -207,6 +208,86 @@ public class TaskNotesDevelopmentRenderingTests
         box.Text.Should().Be(Repository);
         viewModel.Developments.Selected!.DirectoryText.Should().Be(Repository);
         window.IsVisible.Should().BeTrue("o Enter foi da lista, e não da janela");
+    }
+
+    /// <summary>A branch existente com PR aberta: o link aparece embaixo do aviso (ADR-047).</summary>
+    [AvaloniaFact]
+    public async Task AnExistingBranchWithAnOpenPullRequest_ShowsTheLink()
+    {
+        var time = new FakeTimeProvider();
+        var (window, viewModel, runner) = await ShowAsync(time: time);
+        runner.ResultsByHandler[typeof(FindPullRequestHandler)] = new PullRequestLookup(
+            PullRequestSupport.Ready,
+            new PullRequestInfo(47, "Corrige os animais", new Uri("https://github.com/acme/eco-core/pull/47"), IsDraft: false));
+        await OpenDevelopmentTabAsync(window, viewModel);
+
+        var environment = viewModel.Developments.Selected!;
+        environment.DirectoryText = Repository;
+        await environment.InspectDirectoryAsync(CancellationToken.None);
+        environment.NewBranchName = "main";
+        time.Advance(TaskDevelopmentViewModel.InspectionDelay);
+        await environment.PendingPullRequest;
+        Settle(window);
+
+        var link = Named<Button>(window, "PullRequestLink");
+        link.IsEffectivelyVisible.Should().BeTrue();
+        link.Content.Should().Be("PR #47 aberta ↗");
+        link.Command.Should().NotBeNull();
+        ToolTip.GetTip(link).Should().BeOfType<string>().Which.Should().Contain("/pull/47");
+        Texts(Named<StackPanel>(window, "PullRequestRow")).Should().Contain("Corrige os animais");
+        Named<StackPanel>(window, "GhGuideHint").IsEffectivelyVisible.Should().BeFalse();
+    }
+
+    /// <summary>A consulta da branch falhou: o aviso e o "Tentar de novo", no lugar do link.</summary>
+    [AvaloniaFact]
+    public async Task AFailedPullRequestLookup_ShowsTheNoticeAndTheRetry()
+    {
+        var time = new FakeTimeProvider();
+        var (window, viewModel, runner) = await ShowAsync(time: time);
+        runner.ResultsByHandler[typeof(FindPullRequestHandler)] = new PullRequestLookup(PullRequestSupport.Failed);
+        await OpenDevelopmentTabAsync(window, viewModel);
+
+        var environment = viewModel.Developments.Selected!;
+        environment.DirectoryText = Repository;
+        await environment.InspectDirectoryAsync(CancellationToken.None);
+        environment.NewBranchName = "main";
+        time.Advance(TaskDevelopmentViewModel.InspectionDelay);
+        await environment.PendingPullRequest;
+        Settle(window);
+
+        var notice = Named<StackPanel>(window, "PullRequestUnavailable");
+        notice.IsEffectivelyVisible.Should().BeTrue();
+        Texts(notice).Should().Contain(text => text != null && text.Contains("Não foi possível consultar o GitHub"));
+        Named<Button>(window, "RetryPullRequestButton").Command.Should().BeSameAs(environment.RecheckGhCommand);
+        Named<StackPanel>(window, "PullRequestRow").IsEffectivelyVisible.Should().BeFalse();
+    }
+
+    /// <summary>Repositório do GitHub sem o gh: o aviso, e o tutorial só depois do clique.</summary>
+    [AvaloniaFact]
+    public async Task WithoutGh_TheTutorialOpensOnRequest()
+    {
+        var time = new FakeTimeProvider();
+        var (window, viewModel, runner) = await ShowAsync(time: time);
+        runner.ResultsByHandler[typeof(FindPullRequestHandler)] = new PullRequestLookup(PullRequestSupport.CliMissing);
+        await OpenDevelopmentTabAsync(window, viewModel);
+
+        var environment = viewModel.Developments.Selected!;
+        environment.DirectoryText = Repository;
+        await environment.InspectDirectoryAsync(CancellationToken.None);
+        time.Advance(TaskDevelopmentViewModel.InspectionDelay);
+        await environment.PendingPullRequest;
+        Settle(window);
+
+        Named<StackPanel>(window, "GhGuideHint").IsEffectivelyVisible.Should().BeTrue();
+        Named<Border>(window, "GhGuidePanel").IsEffectivelyVisible.Should().BeFalse();
+
+        environment.ToggleGhGuideCommand.Execute(null);
+        Settle(window);
+
+        Named<Border>(window, "GhGuidePanel").IsEffectivelyVisible.Should().BeTrue();
+        window.GetVisualDescendants().OfType<SelectableTextBlock>().Select(block => block.Text)
+            .Should().Contain([environment.GhInstructions.Commands[0].Command, "gh auth login", "gh auth status"]);
+        Named<Button>(window, "RecheckGhButton").Command.Should().NotBeNull();
     }
 
     [AvaloniaFact]

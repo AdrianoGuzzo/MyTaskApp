@@ -80,6 +80,9 @@ public sealed partial class TodayViewModel(
     /// </summary>
     private readonly Dictionary<Guid, WorktreeSync> _worktreeSync = [];
 
+    /// <summary>A PR aberta de cada worktree, pelo mesmo motivo (ADR-047).</summary>
+    private readonly Dictionary<Guid, PullRequestInfo> _worktreePullRequests = [];
+
     /// <summary>
     /// As pendências de agente em que o usuário já clicou (ADR-037). Só em
     /// memória: a borda pulsa de novo ao reabrir o app, e isso é aceitável —
@@ -1111,26 +1114,70 @@ public sealed partial class TodayViewModel(
         if (worktrees.Count == 0)
         {
             _worktreeSync.Clear();
+            _worktreePullRequests.Clear();
             return;
         }
 
         var syncs = await ProbeWorktreesAsync(worktrees);
 
-        if (probe != _worktreeProbe || syncs.Count == 0)
+        if (probe != _worktreeProbe)
         {
             return;
         }
 
-        _worktreeSync.Clear();
-
-        foreach (var (id, sync) in syncs)
+        if (syncs.Count > 0)
         {
-            _worktreeSync[id] = sync;
+            _worktreeSync.Clear();
+
+            foreach (var (id, sync) in syncs)
+            {
+                _worktreeSync[id] = sync;
+            }
+
+            foreach (var row in Sections.SelectMany(section => section.Items))
+            {
+                row.Worktree.Apply(_worktreeSync);
+            }
+        }
+
+        // Depois das cores: o GitHub é mais lento que o Git (ADR-047).
+        var pullRequests = await FindWorktreePullRequestsAsync(worktrees);
+
+        if (probe != _worktreeProbe || pullRequests is null)
+        {
+            return;
+        }
+
+        _worktreePullRequests.Clear();
+
+        foreach (var (id, pullRequest) in pullRequests)
+        {
+            _worktreePullRequests[id] = pullRequest;
         }
 
         foreach (var row in Sections.SelectMany(section => section.Items))
         {
-            row.Worktree.Apply(_worktreeSync);
+            row.Worktree.ApplyPullRequests(_worktreePullRequests);
+        }
+    }
+
+    /// <summary>
+    /// As PRs abertas dos worktrees, ou <c>null</c> quando a pergunta falhou —
+    /// aí o que se sabia continua valendo. Nunca lança, como as cores.
+    /// </summary>
+    private async Task<IReadOnlyDictionary<Guid, PullRequestInfo>?> FindWorktreePullRequestsAsync(
+        IReadOnlyList<TaskWorktree> worktrees)
+    {
+        try
+        {
+            return await runner.RunAsync<FindWorktreePullRequestsHandler, IReadOnlyDictionary<Guid, PullRequestInfo>>(
+                (handler, token) => handler.HandleAsync(new FindWorktreePullRequests(worktrees), token),
+                CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "WorktreePullRequestsFailed");
+            return null;
         }
     }
 
@@ -1259,6 +1306,7 @@ public sealed partial class TodayViewModel(
             {
                 var row = new TaskRowViewModel(task, isCompleted);
                 row.Worktree.Apply(_worktreeSync);
+                row.Worktree.ApplyPullRequests(_worktreePullRequests);
                 row.ApplySeenAgentAlerts(_seenAgentAlerts);
                 return row;
             }),
