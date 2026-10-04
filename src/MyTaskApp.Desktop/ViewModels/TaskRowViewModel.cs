@@ -1,7 +1,9 @@
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
+using MyTaskApp.Application.Deadlines;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Domain.Agents;
+using MyTaskApp.Domain.Deadlines;
 using MyTaskApp.Domain.External;
 using MyTaskApp.Domain.Reminders;
 using MyTaskApp.Domain.Tasks;
@@ -14,9 +16,11 @@ public sealed class TaskRowViewModel : ObservableObject
     /// <summary>O usuário já clicou no selo desde a última pendência: a borda para de pulsar.</summary>
     private bool _agentAlertSeen;
 
-    public TaskRowViewModel(TodayTask task, bool isCompleted)
+    /// <param name="fixedOrder">A seção não aceita arrasto (PRAZOS): a alça some.</param>
+    public TaskRowViewModel(TodayTask task, bool isCompleted, bool fixedOrder = false)
     {
         Source = task;
+        IsFixedOrder = isCompleted || fixedOrder;
         OccurrenceId = task.OccurrenceId;
         TaskId = task.TaskId;
         Title = task.Title;
@@ -233,6 +237,9 @@ public sealed class TaskRowViewModel : ObservableObject
 
     public bool IsCompleted { get; }
 
+    /// <summary>Sem alça de arrasto: concluída, ou numa seção que se ordena sozinha.</summary>
+    public bool IsFixedOrder { get; }
+
     public bool HasScheduledTime { get; }
 
     /// <summary>A anotação livre desta tarefa, em Markdown; nula quando não há.</summary>
@@ -258,6 +265,54 @@ public sealed class TaskRowViewModel : ObservableObject
         : "Abrir esta tarefa";
 
     public ReminderPolicy Reminder { get; }
+
+    // ---------------------------------------------------------------------
+    // Prazo (ADR-050). Tudo copiado do TaskDeadlineView que a Application
+    // montou: a linha não faz conta de prazo nenhuma, só escolhe a cor.
+    // ---------------------------------------------------------------------
+
+    public TaskDeadlineView? Deadline => Source.Deadline;
+
+    public bool HasDeadline => Deadline is not null;
+
+    /// <summary>"ATENÇÃO · vence amanhã às 18:00" — o texto diz a severidade, a cor reforça.</summary>
+    public string DeadlineLabel => Deadline?.Label ?? string.Empty;
+
+    /// <summary>O balão: a data por extenso e quanto falta, mais a próxima ação.</summary>
+    public string DeadlineTip => Deadline is not { } view
+        ? string.Empty
+        : string.Join(
+            Environment.NewLine,
+            new[]
+            {
+                $"Prazo: {view.DateLabel}",
+                view.Countdown,
+                NextAction is null ? null : $"Próxima ação: {NextAction}",
+            }.OfType<string>());
+
+    public bool IsDeadlineAttention => Deadline?.Severity == DeadlineSeverity.Attention && !IsCompleted;
+
+    public bool IsDeadlineUrgent => Deadline?.Severity == DeadlineSeverity.Urgent && !IsCompleted;
+
+    public bool IsDeadlineOverdue => Deadline?.Severity == DeadlineSeverity.Overdue && !IsCompleted;
+
+    /// <summary>Concluída depois do prazo: o registro fica, discreto, para quem quiser saber.</summary>
+    public bool IsDeadlineMissed => Deadline?.Status == DeadlineStatus.Missed;
+
+    /// <summary>"Alterar prazo" quando já tem; "Definir prazo" quando não.</summary>
+    public string DeadlineMenuHeader => HasDeadline ? "Alterar prazo" : "Definir prazo";
+
+    /// <summary>Prazo só se mexe em tarefa aberta: o de uma concluída é histórico (§22).</summary>
+    public bool CanChangeDeadline => !IsCompleted;
+
+    public bool CanClearDeadline => HasDeadline && !IsCompleted;
+
+    public string? NextAction => Source.NextAction;
+
+    /// <summary>Os avisos de prazo da tarefa; <c>null</c> = segue o padrão.</summary>
+    public DeadlineAlertStage? DeadlineAlerts => Source.DeadlineAlerts;
+
+    public TimeSpan? Estimate => Source.Estimate;
 
     /// <summary>Acende o ⚠: o lembrete avisou e ninguém reagiu.</summary>
     public bool IsAwaitingAttention { get; }

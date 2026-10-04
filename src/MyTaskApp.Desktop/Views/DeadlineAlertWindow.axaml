@@ -1,22 +1,22 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
-        x:Class="MyTaskApp.Desktop.Views.AgentAlertWindow"
-        x:DataType="vm:AgentAlertViewModel"
-        Title="Agente de IA"
+        x:Class="MyTaskApp.Desktop.Views.DeadlineAlertWindow"
+        x:DataType="vm:DeadlineAlertViewModel"
+        Title="Prazo"
         Width="336"
         SizeToContent="Height"
         CanResize="False"
         ShowInTaskbar="False"
         ShowActivated="False"
-        Topmost="True"
         WindowDecorations="None"
         Background="Transparent"
         TransparencyLevelHint="Transparent">
 
   <!--
-    O aviso do agente (ADR-037). Mesmo cartão do lembrete, no mesmo canto, mas
-    nunca rouba o foco: quem está digitando em outro lugar continua digitando.
+    O aviso de prazo (ADR-050). O mesmo cartão do lembrete e do agente, no
+    mesmo canto, sem roubar o foco: diz o que vence e quando (§27), e oferece
+    as saídas — abrir, dar mais um dia, ou calar só o aviso por uma hora.
   -->
   <Window.Styles>
     <Style Selector="Border.card">
@@ -29,38 +29,40 @@
       <Setter Property="BoxShadow" Value="{DynamicResource WidgetPopupShadow}" />
     </Style>
 
-    <!-- Pergunta ou permissão: o agente está parado até alguém responder. -->
-    <Style Selector="Border.card.question">
+    <Style Selector="Border.card.urgent">
       <Setter Property="BorderThickness" Value="2" />
       <Setter Property="BorderBrush" Value="{DynamicResource WidgetCautionBrush}" />
     </Style>
 
-    <Style Selector="Border.card.failure">
+    <Style Selector="Border.card.overdue">
       <Setter Property="BorderThickness" Value="2" />
       <Setter Property="BorderBrush" Value="{DynamicResource WidgetDangerBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.glyph">
+      <Setter Property="FontFamily" Value="{StaticResource WidgetIconFont}" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetCautionBrush}" />
+    </Style>
+
+    <Style Selector="Border.card.overdue TextBlock.glyph">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetDangerBrush}" />
     </Style>
   </Window.Styles>
 
   <Border Classes="card"
-          Classes.question="{Binding IsQuestion}"
-          Classes.failure="{Binding IsFailure}">
+          Classes.urgent="{Binding IsUrgent}"
+          Classes.overdue="{Binding IsOverdue}">
     <StackPanel Spacing="8">
 
       <StackPanel Orientation="Horizontal" Spacing="7">
-        <TextBlock Text="●"
-                   FontSize="11"
-                   VerticalAlignment="Center"
-                   Foreground="{DynamicResource WidgetAccentHoverBrush}" />
-        <TextBlock x:Name="AgentAlertHeading"
+        <TextBlock Classes="glyph" Text="&#xE823;" />
+        <TextBlock x:Name="DeadlineAlertHeading"
                    Text="{Binding Heading}"
                    FontSize="10"
                    FontWeight="SemiBold"
                    LetterSpacing="0.6"
-                   Foreground="{DynamicResource WidgetTextLowBrush}"
-                   VerticalAlignment="Center" />
-        <TextBlock Text="{Binding TimeLabel}"
-                   FontFamily="Consolas, Menlo, monospace"
-                   FontSize="10"
                    Foreground="{DynamicResource WidgetTextLowBrush}"
                    VerticalAlignment="Center" />
       </StackPanel>
@@ -71,30 +73,11 @@
                  Foreground="{DynamicResource WidgetTextHighBrush}"
                  TextWrapping="Wrap" />
 
-      <TextBlock Text="{Binding Context}"
-                 FontFamily="Consolas, Menlo, monospace"
-                 FontSize="10"
+      <TextBlock x:Name="DeadlineAlertMessage"
+                 Text="{Binding Message}"
+                 FontSize="12"
                  Foreground="{DynamicResource WidgetTextMidBrush}"
-                 TextTrimming="CharacterEllipsis"
-                 IsVisible="{Binding Context, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-
-      <TextBlock x:Name="AgentAlertMessage"
-                 Text="{Binding MessageText}"
-                 FontSize="11"
-                 MaxLines="4"
-                 TextTrimming="CharacterEllipsis"
-                 Foreground="{DynamicResource WidgetTextMidBrush}"
-                 TextWrapping="Wrap"
-                 IsVisible="{Binding MessageText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-
-      <!-- O agente esperando e a entrega perto (ADR-050, §26): a pendência pesa mais. -->
-      <TextBlock x:Name="AgentAlertDeadline"
-                 Text="{Binding DeadlineLabel}"
-                 FontSize="11"
-                 FontWeight="SemiBold"
-                 Foreground="{DynamicResource WidgetCautionBrush}"
-                 TextWrapping="Wrap"
-                 IsVisible="{Binding DeadlineLabel, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                 TextWrapping="Wrap" />
 
       <Border Padding="9,6"
               CornerRadius="{StaticResource WidgetPillRadius}"
@@ -106,15 +89,29 @@
                    TextWrapping="Wrap" />
       </Border>
 
-      <StackPanel Orientation="Horizontal" Spacing="7">
-        <Button x:Name="AgentAlertOpenTerminal"
-                Content="Abrir terminal"
+      <WrapPanel>
+        <Button x:Name="DeadlineAlertOpen"
+                Content="Abrir"
                 Classes="accent"
-                Command="{Binding OpenTerminalCommand}" />
-        <Button x:Name="AgentAlertDismiss"
-                Content="Dispensar"
+                Margin="0,0,7,0"
+                IsVisible="{Binding !IsDigest}"
+                Command="{Binding OpenCommand}" />
+        <Button x:Name="DeadlineAlertExtend"
+                Content="+1 dia"
+                Margin="0,0,7,0"
+                ToolTip.Tip="Muda o prazo para amanhã, no mesmo horário"
+                IsVisible="{Binding !IsDigest}"
+                Command="{Binding ExtendCommand}" />
+        <Button x:Name="DeadlineAlertSnooze"
+                Content="Adiar 1 h"
+                Margin="0,0,7,0"
+                ToolTip.Tip="Cala só este aviso por uma hora; o prazo não muda"
+                IsVisible="{Binding !IsDigest}"
+                Command="{Binding SnoozeCommand}" />
+        <Button x:Name="DeadlineAlertDismiss"
+                Content="OK"
                 Command="{Binding DismissCommand}" />
-      </StackPanel>
+      </WrapPanel>
 
     </StackPanel>
   </Border>

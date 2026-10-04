@@ -10,6 +10,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using MyTaskApp.Desktop.Interactions;
 using MyTaskApp.Desktop.ViewModels;
+using MyTaskApp.Domain.Deadlines;
 
 namespace MyTaskApp.Desktop.Views;
 
@@ -286,6 +287,21 @@ public sealed partial class TodayView : UserControl
         {
             e.Handled = true;
             viewModel.OpenIssueCommand.Execute(row);
+        }
+    }
+
+    /// <summary>
+    /// Um atalho de prazo do menu da linha (ADR-050). Clique, e não comando: o
+    /// comando precisa da linha e do atalho juntos, e o <c>Tag</c> do item é
+    /// quem diz qual atalho é.
+    /// </summary>
+    private void OnDeadlineShortcutClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem { DataContext: TaskRowViewModel row, Tag: string tag }
+            && Enum.TryParse<DeadlineShortcut>(tag, out var shortcut)
+            && DataContext is TodayViewModel viewModel)
+        {
+            viewModel.SetDeadlineShortcutCommand.Execute(new DeadlineShortcutRequest(row, shortcut));
         }
     }
 

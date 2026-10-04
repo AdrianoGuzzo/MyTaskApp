@@ -42,6 +42,7 @@ ICONS = {
     0xE711: ("Dismiss", "dismiss_20_regular"),
     0xE712: ("More Horizontal", "more_horizontal_20_regular"),
     0xE718: ("Pin", "pin_20_regular"),
+    0xE823: ("Clock", "clock_20_regular"),
     0xE738: ("Subtract", "subtract_20_regular"),
     0xE840: ("Pin", "pin_20_filled"),
     0xE890: ("Eye", "eye_20_regular"),
