@@ -126,5 +126,125 @@ public class WidgetStateStoreTests : IDisposable
 
         NewStore().Load().Theme.Should().Be(ThemeCatalog.SystemId);
     }
-}
 
+    [Fact]
+    public void TheWindowAndHudSettingsComeBack_AfterARestart()
+    {
+        // Configuração salva → app reinicia → configuração restaurada (ADR-048).
+        var saved = WidgetState.Default with
+        {
+            X = 100,
+            Y = 80,
+            WindowMode = WindowMode.HudCollapsed,
+            CloseBehavior = CloseBehavior.Hud,
+            StartInHud = true,
+            GlobalHotkey = true,
+            Hud = new HudSettings
+            {
+                Position = HudPosition.Custom,
+                Size = HudSize.Normal,
+                Opacity = 0.85,
+                AlwaysOnTop = false,
+                UseCollapsed = true,
+                X = -1500,
+                Y = 40,
+                IntroSeen = true,
+            },
+        };
+
+        NewStore().Save(saved);
+
+        NewStore().Load().Should().Be(saved);
+    }
+
+    [Fact]
+    public void TheFileReadsLikeTheSettingsScreen()
+    {
+        // Enum por nome, e o HUD aninhado: quem abrir o widget.json entende.
+        NewStore().Save(WidgetState.Default with { CloseBehavior = CloseBehavior.Hud });
+
+        var json = File.ReadAllText(Path.Combine(_directory, "widget.json"));
+
+        json.Should().Contain("\"CloseBehavior\": \"Hud\"")
+            .And.Contain("\"Hud\": {")
+            .And.Contain("\"Position\": \"TopLeft\"")
+            .And.NotContain("Ghost");
+    }
+
+    [Fact]
+    public void AFileFromBeforeTheHud_KeepsTheOldBehaviour()
+    {
+        // Quem atualiza não tem nada disso no arquivo: o X continua escondendo
+        // na bandeja e a janela abre normal.
+        Directory.CreateDirectory(_directory);
+        File.WriteAllText(
+            Path.Combine(_directory, "widget.json"),
+            """{ "Mode": "Compact", "Width": 360, "Height": 560, "Topmost": true }""");
+
+        var state = NewStore().Load();
+
+        state.WindowMode.Should().Be(WindowMode.Normal);
+        state.CloseBehavior.Should().Be(CloseBehavior.Tray);
+        state.Topmost.Should().BeTrue();
+        state.Hud.Should().Be(HudSettings.Default);
+    }
+
+    [Fact]
+    public void TheOldPinWithTheDiscreetMode_ReopensAsTheHud()
+    {
+        // O pino antigo era "fica no canto, por cima, sem atrapalhar" — o HUD.
+        // Reabrir como janela grande fixada no topo seria o pior dos dois.
+        Directory.CreateDirectory(_directory);
+        File.WriteAllText(
+            Path.Combine(_directory, "widget.json"),
+            """{ "Width": 360, "Height": 560, "Topmost": true, "Ghost": true }""");
+
+        var state = NewStore().Load();
+
+        state.WindowMode.Should().Be(WindowMode.Hud);
+        state.Topmost.Should().BeFalse();
+        state.Ghost.Should().BeNull();
+    }
+
+    [Fact]
+    public void TheDiscreetModeWithoutThePin_IsSimplyDropped()
+    {
+        Directory.CreateDirectory(_directory);
+        File.WriteAllText(
+            Path.Combine(_directory, "widget.json"),
+            """{ "Width": 360, "Height": 560, "Ghost": true }""");
+
+        var state = NewStore().Load();
+
+        state.WindowMode.Should().Be(WindowMode.Normal);
+        state.Ghost.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("""{ "Hud": { "Opacity": 0.05 } }""", HudSettings.MinOpacity)]
+    [InlineData("""{ "Hud": { "Opacity": 3 } }""", 1)]
+    [InlineData("""{ "Hud": null }""", HudSettings.DefaultOpacity)]
+    public void AHandEditedHud_CannotBecomeInvisible(string json, double opacity)
+    {
+        Directory.CreateDirectory(_directory);
+        File.WriteAllText(Path.Combine(_directory, "widget.json"), json);
+
+        NewStore().Load().Hud.Opacity.Should().Be(opacity);
+    }
+
+    [Fact]
+    public void UnknownValues_FallBackToTheDefaults()
+    {
+        Directory.CreateDirectory(_directory);
+        File.WriteAllText(
+            Path.Combine(_directory, "widget.json"),
+            """{ "WindowMode": 9, "CloseBehavior": 7, "Hud": { "Position": 99, "Size": 12 } }""");
+
+        var state = NewStore().Load();
+
+        state.WindowMode.Should().Be(WindowMode.Normal);
+        state.CloseBehavior.Should().Be(CloseBehavior.Tray);
+        state.Hud.Position.Should().Be(HudPosition.TopLeft);
+        state.Hud.Size.Should().Be(HudSize.Compact);
+    }
+}

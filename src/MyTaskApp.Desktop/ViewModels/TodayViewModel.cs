@@ -155,6 +155,7 @@ public sealed partial class TodayViewModel(
     private int _completedCount;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasPending))]
     private int _pendingCount;
 
     /// <summary>"3 de 7 concluídas".</summary>
@@ -175,6 +176,9 @@ public sealed partial class TodayViewModel(
 
     /// <summary>Dia vazio não mostra barra de progresso de nada sobre nada.</summary>
     public bool HasProgress => TotalCount > 0;
+
+    /// <summary>O número na pílula do HUD recolhido some quando não falta nada.</summary>
+    public bool HasPending => PendingCount > 0;
 
     /// <summary>
     /// Quantas tarefas ainda esperam. A bandeja escuta para virar o balão num
