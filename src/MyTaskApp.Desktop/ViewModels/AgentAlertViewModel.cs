@@ -45,6 +45,10 @@ public sealed partial class AgentAlertViewModel(
     [ObservableProperty]
     private string? _errorMessage;
 
+    /// <summary>"Prazo da tarefa: ATENÇÃO · vence amanhã às 18:00" — só quando aperta (§26).</summary>
+    [ObservableProperty]
+    private string? _deadlineLabel;
+
     public Guid SessionId { get; private set; }
 
     public Guid TaskId { get; private set; }
@@ -68,6 +72,7 @@ public sealed partial class AgentAlertViewModel(
         TimeLabel = attention.At.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture);
         IsQuestion = attention.Activity is AgentActivity.WaitingForUser;
         IsFailure = attention.Activity is AgentActivity.Failed;
+        DeadlineLabel = attention.DeadlineLabel;
         ErrorMessage = null;
     }
 

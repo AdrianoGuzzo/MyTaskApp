@@ -3,7 +3,9 @@ using Avalonia.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Agents;
+using MyTaskApp.Application.Deadlines;
 using MyTaskApp.Application.Reminders;
+using MyTaskApp.Domain.Deadlines;
 using MyTaskApp.Desktop.ViewModels;
 using MyTaskApp.Desktop.Views;
 
@@ -21,12 +23,16 @@ namespace MyTaskApp.Desktop.Reminders;
 /// </remarks>
 internal sealed class AlertPresenter(
     IServiceProvider services,
-    ILogger<AlertPresenter> logger) : IAlertPresenter, IAgentAttentionPresenter
+    ILogger<AlertPresenter> logger) : IAlertPresenter, IAgentAttentionPresenter, IDeadlineAlertPresenter
 {
     /// <summary>Acima disto a tela vira um mural; o despacho já agrega antes.</summary>
     private const int MaxVisible = 3;
 
-    private readonly Dictionary<Guid, Window> _open = [];
+    /// <summary>
+    /// A chave é o id e se o aviso é de prazo: a mesma ocorrência pode ter, ao
+    /// mesmo tempo, o lembrete e o prazo na tela (ADR-050), e um não fecha o outro.
+    /// </summary>
+    private readonly Dictionary<(bool IsDeadline, Guid Id), Window> _open = [];
 
     /// <summary>Avisa a aplicação de que o usuário reagiu, para o quadro recarregar.</summary>
     public event Action? Acted;
@@ -44,7 +50,7 @@ internal sealed class AlertPresenter(
         Dispatcher.UIThread.InvokeAsync(() => PresentDigest(digest)).GetTask();
 
     public Task DismissAsync(Guid occurrenceId, CancellationToken cancellationToken = default) =>
-        Dispatcher.UIThread.InvokeAsync(() => Close(occurrenceId)).GetTask();
+        Dispatcher.UIThread.InvokeAsync(() => Close((false, occurrenceId))).GetTask();
 
     // IAgentAttentionPresenter.DismissAsync tem a mesma assinatura: a chave é a
     // sessão, e fechar é o mesmo gesto.
@@ -59,7 +65,7 @@ internal sealed class AlertPresenter(
     /// </summary>
     private void Present(AgentAttention attention)
     {
-        if (_open.TryGetValue(attention.SessionId, out var existing))
+        if (_open.TryGetValue((false, attention.SessionId), out var existing))
         {
             ((AgentAlertViewModel)existing.DataContext!).Show(attention);
             return;
@@ -76,9 +82,9 @@ internal sealed class AlertPresenter(
 
         var window = new AgentAlertWindow { DataContext = viewModel };
 
-        viewModel.Closed += _ => Close(attention.SessionId);
+        viewModel.Closed += _ => Close((false, attention.SessionId));
 
-        _open[attention.SessionId] = window;
+        _open[(false, attention.SessionId)] = window;
 
         // Sem ativar: aparece por cima, mas o teclado fica onde estava.
         window.Show();
@@ -91,7 +97,7 @@ internal sealed class AlertPresenter(
         // Já há janela para esta ocorrência: atualiza no lugar. Sem isto, um
         // lembrete repetindo empilha uma janela nova a cada 15 minutos enquanto
         // o usuário está fora.
-        if (_open.TryGetValue(alert.OccurrenceId, out var existing))
+        if (_open.TryGetValue((false, alert.OccurrenceId), out var existing))
         {
             ((ReminderAlertViewModel)existing.DataContext!).Show(alert);
             Escalate(existing, alert);
@@ -111,11 +117,11 @@ internal sealed class AlertPresenter(
 
         viewModel.Acted += _ =>
         {
-            Close(alert.OccurrenceId);
+            Close((false, alert.OccurrenceId));
             Acted?.Invoke();
         };
 
-        _open[alert.OccurrenceId] = window;
+        _open[(false, alert.OccurrenceId)] = window;
 
         // Nunca modal: o aviso não pode impedir o usuário de trabalhar.
         window.Show();
@@ -123,6 +129,74 @@ internal sealed class AlertPresenter(
         Position(window);
         Escalate(window, alert);
     }
+
+    // ---------------------------------------------------------------------
+    // Prazo (ADR-050): mesma pilha, mesmo canto, chave própria.
+    // ---------------------------------------------------------------------
+
+    public Task PresentAsync(DeadlineAlert alert, CancellationToken cancellationToken = default) =>
+        Dispatcher.UIThread.InvokeAsync(() => Present(alert)).GetTask();
+
+    public Task PresentDigestAsync(DeadlineDigest digest, CancellationToken cancellationToken = default) =>
+        Dispatcher.UIThread.InvokeAsync(() => Present(new DeadlineAlert(
+            Guid.Empty,
+            Guid.Empty,
+            $"{digest.Count} tarefas com prazo",
+            "Prazos pedindo atenção",
+            "Veja a seção PRAZOS e as atrasadas na lista.",
+            DeadlineAlertStage.None,
+            digest.IsUrgent ? DeadlineSeverity.Urgent : DeadlineSeverity.Attention,
+            digest.IsUrgent))).GetTask();
+
+    /// <summary>Explícito: a assinatura é a mesma do lembrete, e a chave não.</summary>
+    Task IDeadlineAlertPresenter.DismissAsync(Guid occurrenceId, CancellationToken cancellationToken) =>
+        Dispatcher.UIThread.InvokeAsync(() => Close((true, occurrenceId))).GetTask();
+
+    /// <summary>
+    /// Um aviso de prazo por ocorrência, atualizado no lugar: o degrau seguinte
+    /// troca o texto em vez de empilhar. Urgente fica por cima das outras
+    /// janelas, mas nunca rouba o foco — o prazo é lembrete, não alarme.
+    /// </summary>
+    private void Present(DeadlineAlert alert)
+    {
+        var key = (true, alert.OccurrenceId);
+
+        if (_open.TryGetValue(key, out var existing))
+        {
+            ((DeadlineAlertViewModel)existing.DataContext!).Show(alert);
+            existing.Topmost = alert.IsUrgent;
+            return;
+        }
+
+        if (_open.Count >= MaxVisible)
+        {
+            logger.LogDebug("DeadlineAlertSuppressed {OccurrenceId}", alert.OccurrenceId);
+            return;
+        }
+
+        var viewModel = services.GetRequiredService<DeadlineAlertViewModel>();
+        viewModel.Show(alert);
+
+        var window = new DeadlineAlertWindow { DataContext = viewModel };
+
+        viewModel.Acted += () =>
+        {
+            Close(key);
+            Acted?.Invoke();
+        };
+
+        viewModel.OpenRequested += occurrenceId => OpenRequested?.Invoke(occurrenceId);
+
+        _open[key] = window;
+
+        window.Topmost = alert.IsUrgent;
+        window.Show();
+
+        Position(window);
+    }
+
+    /// <summary>"Abrir" no aviso de prazo: o composition root sabe abrir a tarefa.</summary>
+    public event Action<Guid>? OpenRequested;
 
     private void PresentDigest(ReminderDigest digest)
     {
@@ -139,9 +213,9 @@ internal sealed class AlertPresenter(
         Present(alert);
     }
 
-    private void Close(Guid occurrenceId)
+    private void Close((bool IsDeadline, Guid Id) key)
     {
-        if (_open.Remove(occurrenceId, out var window))
+        if (_open.Remove(key, out var window))
         {
             window.Close();
         }

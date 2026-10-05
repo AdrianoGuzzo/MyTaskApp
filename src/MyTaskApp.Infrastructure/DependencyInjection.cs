@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
+using MyTaskApp.Application.Deadlines;
 using MyTaskApp.Application.Development;
 using MyTaskApp.Application.External;
 using MyTaskApp.Application.External.Jira;
@@ -58,6 +59,11 @@ public static class DependencyInjection
         services.AddScoped<ITodayQuery, TodayQuery>();
         services.AddScoped<IReminderSettingsStore, ReminderSettingsStore>();
         services.AddScoped<IDueReminderQuery, DueReminderQuery>();
+
+        // Prazos (ADR-050): a configuração e as candidatas a aviso.
+        services.AddScoped<IDeadlineSettingsStore, DeadlineSettingsStore>();
+        services.AddScoped<IDeadlineAlertQuery, DeadlineAlertQuery>();
+
         services.AddScoped<ITagRepository, TagRepository>();
         services.AddScoped<ITagQuery, TagQuery>();
         services.AddScoped<IDevelopmentCommandRepository, DevelopmentCommandRepository>();

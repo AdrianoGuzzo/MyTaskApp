@@ -171,7 +171,12 @@ public sealed record AgentAttention(
     string? Branch,
     AgentActivity Activity,
     string? Message,
-    DateTimeOffset At);
+    DateTimeOffset At,
+    /// <summary>
+    /// O prazo da tarefa, quando está perto (ADR-050, §26); <c>null</c> = sem
+    /// prazo, ou com folga.
+    /// </summary>
+    string? DeadlineLabel = null);
 
 /// <summary>
 /// Põe na tela o aviso de que um agente precisa do usuário (ADR-037). A

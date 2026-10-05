@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using MyTaskApp.Application.Deadlines;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Domain;
+using MyTaskApp.Domain.Deadlines;
 using MyTaskApp.Domain.Reminders;
 using MyTaskApp.Desktop.ViewModels;
 
@@ -137,8 +139,134 @@ public class ReminderSettingsViewModelTests
         return viewModel;
     }
 
-    private ReminderSettingsViewModel ViewModel() =>
-        new(_runner, NullLogger<ReminderSettingsViewModel>.Instance);
+    [Fact]
+    public async Task Loading_AlsoFillsTheDeadlineAlerts()
+    {
+        _runner.Result = new ReminderSettings(ReminderPolicy.Default, null);
+        var viewModel = ViewModel();
+        _runner.ResultsByHandler[typeof(GetDeadlineSettingsHandler)] = new DeadlineSettings(
+            new DeadlineAlertPolicy(false, DeadlineAlertPolicy.Default.Stages, TimeSpan.FromDays(1)),
+            new TimeOnly(17, 0));
+
+        await viewModel.LoadAsync(Ct);
+
+        viewModel.Deadlines.IsDisabled.Should().BeTrue();
+        viewModel.Deadlines.DefaultTime.Should().Be(TimeSpan.FromHours(17));
+    }
+
+    [Fact]
+    public async Task Saving_AlsoSavesTheDeadlineAlerts_BeforeTheReminder()
+    {
+        var viewModel = await LoadedAsync();
+
+        await viewModel.SaveAsync(Ct);
+
+        _runner.Invoked.Should().ContainInOrder(
+            typeof(UpdateDeadlineSettingsHandler), typeof(UpdateReminderDefaultsHandler));
+    }
+
+    [Fact]
+    public async Task RestoringDefaults_AlsoRestoresTheDeadlineAlerts()
+    {
+        var viewModel = await LoadedAsync();
+        viewModel.Deadlines.IsDisabled = true;
+
+        await viewModel.RestoreDefaultsAsync(Ct);
+
+        viewModel.Deadlines.IsDefault.Should().BeTrue();
+    }
+
+    private ReminderSettingsViewModel ViewModel()
+    {
+        // A mesma janela carrega e grava os alertas de prazo (ADR-050).
+        _runner.ResultsByHandler.TryAdd(typeof(GetDeadlineSettingsHandler), DeadlineSettings.Factory);
+        _runner.ResultsByHandler.TryAdd(typeof(UpdateDeadlineSettingsHandler), DeadlineSettings.Factory);
+
+        return new(_runner, NullLogger<ReminderSettingsViewModel>.Instance);
+    }
+}
+
+public class DeadlineSettingsEditorViewModelTests
+{
+    [Fact]
+    public void TheFactorySettings_ShowAsDefault_AndSaveAsThem()
+    {
+        var editor = new DeadlineSettingsEditorViewModel();
+
+        editor.Load(DeadlineSettings.Factory);
+
+        editor.IsDefault.Should().BeTrue();
+        editor.RepeatIndex.Should().Be(3, "uma vez por dia");
+        editor.ToCommand().Should().Be(new UpdateDeadlineSettings(
+            true,
+            DeadlineAlertPolicy.Default.Stages,
+            TimeSpan.FromDays(1),
+            DeadlineSettings.FactoryDefaultTime));
+    }
+
+    [Fact]
+    public void Customizing_StartsFromTheDefaultStages()
+    {
+        var editor = new DeadlineSettingsEditorViewModel();
+        editor.Load(DeadlineSettings.Factory);
+
+        editor.IsCustom = true;
+        editor.AlertThreeDays = true;
+        editor.AlertTwoHours = false;
+        editor.RepeatIndex = 2;
+
+        var command = editor.ToCommand();
+
+        command.IsEnabled.Should().BeTrue();
+        command.Stages.Should().Be(
+            DeadlineAlertStage.ThreeDays | DeadlineAlertStage.OneDay
+            | DeadlineAlertStage.EightHours | DeadlineAlertStage.Overdue);
+        command.OverdueRepeatEvery.Should().Be(TimeSpan.FromHours(4));
+    }
+
+    [Fact]
+    public void ACustomPolicy_LoadsAsCustom()
+    {
+        var editor = new DeadlineSettingsEditorViewModel();
+
+        editor.Load(new DeadlineSettings(
+            new DeadlineAlertPolicy(true, DeadlineAlertStage.SevenDays | DeadlineAlertStage.Overdue, null),
+            new TimeOnly(9, 30)));
+
+        editor.IsCustom.Should().BeTrue();
+        editor.AlertSevenDays.Should().BeTrue();
+        editor.AlertOneDay.Should().BeFalse();
+        editor.RepeatIndex.Should().Be(0, "o atraso avisa uma vez só");
+        editor.DefaultTime.Should().Be(new TimeSpan(9, 30, 0));
+    }
+
+    [Fact]
+    public void Disabling_KeepsTheChosenStagesForLater()
+    {
+        var editor = new DeadlineSettingsEditorViewModel();
+        editor.Load(DeadlineSettings.Factory);
+        editor.IsCustom = true;
+        editor.AlertSevenDays = true;
+
+        editor.IsDisabled = true;
+
+        var command = editor.ToCommand();
+        command.IsEnabled.Should().BeFalse();
+        command.Stages.Should().HaveFlag(DeadlineAlertStage.SevenDays);
+        editor.ShowsOptions.Should().BeFalse();
+    }
+
+    [Fact]
+    public void WithoutTheOverdueStage_RepeatCannotBeChosen()
+    {
+        var editor = new DeadlineSettingsEditorViewModel();
+        editor.Load(DeadlineSettings.Factory);
+        editor.IsCustom = true;
+
+        editor.AlertOverdue = false;
+
+        editor.CanRepeat.Should().BeFalse();
+    }
 }
 
 public class ReminderEditorViewModelTests

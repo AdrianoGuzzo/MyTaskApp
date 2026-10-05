@@ -52,7 +52,8 @@ public sealed partial class TaskNotesViewModel(
     IDirectoryProbe directoryProbe,
     TaskDevelopmentsViewModel developments,
     ILogger<TaskNotesViewModel> logger,
-    TaskIssueViewModel? issue = null) : ObservableObject
+    TaskIssueViewModel? issue = null,
+    TaskDeadlineViewModel? deadline = null) : ObservableObject
 {
     public const int NotesTab = 0;
 
@@ -139,6 +140,12 @@ public sealed partial class TaskNotesViewModel(
     /// montam a janela sem ele; no app, vem do contêiner.
     /// </summary>
     public TaskIssueViewModel? Issue { get; } = issue;
+
+    /// <summary>
+    /// O card do prazo (ADR-050): prazo, avisos, próxima ação e estimativa.
+    /// Opcional pelo mesmo motivo do <see cref="Issue"/>.
+    /// </summary>
+    public TaskDeadlineViewModel? Deadline { get; } = deadline;
 
     public bool IsNotesTab => SelectedTabIndex == NotesTab;
 
@@ -228,6 +235,8 @@ public sealed partial class TaskNotesViewModel(
         SelectedTabIndex = NotesTab;
 
         Developments.Load(row.TaskId, row.Title, row.IsCompleted);
+
+        Deadline?.Load(row);
 
         if (Issue is { } card)
         {

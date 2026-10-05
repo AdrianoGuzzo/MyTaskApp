@@ -1,0 +1,119 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
+        x:Class="MyTaskApp.Desktop.Views.DeadlineAlertWindow"
+        x:DataType="vm:DeadlineAlertViewModel"
+        Title="Prazo"
+        Width="336"
+        SizeToContent="Height"
+        CanResize="False"
+        ShowInTaskbar="False"
+        ShowActivated="False"
+        WindowDecorations="None"
+        Background="Transparent"
+        TransparencyLevelHint="Transparent">
+
+  <!--
+    O aviso de prazo (ADR-050). O mesmo cartão do lembrete e do agente, no
+    mesmo canto, sem roubar o foco: diz o que vence e quando (§27), e oferece
+    as saídas — abrir, dar mais um dia, ou calar só o aviso por uma hora.
+  -->
+  <Window.Styles>
+    <Style Selector="Border.card">
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetShellRadius}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Padding" Value="14,12" />
+      <Setter Property="Margin" Value="8" />
+      <Setter Property="Background" Value="{DynamicResource WidgetSurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetStrokeBrush}" />
+      <Setter Property="BoxShadow" Value="{DynamicResource WidgetPopupShadow}" />
+    </Style>
+
+    <Style Selector="Border.card.urgent">
+      <Setter Property="BorderThickness" Value="2" />
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetCautionBrush}" />
+    </Style>
+
+    <Style Selector="Border.card.overdue">
+      <Setter Property="BorderThickness" Value="2" />
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetDangerBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.glyph">
+      <Setter Property="FontFamily" Value="{StaticResource WidgetIconFont}" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetCautionBrush}" />
+    </Style>
+
+    <Style Selector="Border.card.overdue TextBlock.glyph">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetDangerBrush}" />
+    </Style>
+  </Window.Styles>
+
+  <Border Classes="card"
+          Classes.urgent="{Binding IsUrgent}"
+          Classes.overdue="{Binding IsOverdue}">
+    <StackPanel Spacing="8">
+
+      <StackPanel Orientation="Horizontal" Spacing="7">
+        <TextBlock Classes="glyph" Text="&#xE823;" />
+        <TextBlock x:Name="DeadlineAlertHeading"
+                   Text="{Binding Heading}"
+                   FontSize="10"
+                   FontWeight="SemiBold"
+                   LetterSpacing="0.6"
+                   Foreground="{DynamicResource WidgetTextLowBrush}"
+                   VerticalAlignment="Center" />
+      </StackPanel>
+
+      <TextBlock Text="{Binding Title}"
+                 FontSize="14"
+                 FontWeight="SemiBold"
+                 Foreground="{DynamicResource WidgetTextHighBrush}"
+                 TextWrapping="Wrap" />
+
+      <TextBlock x:Name="DeadlineAlertMessage"
+                 Text="{Binding Message}"
+                 FontSize="12"
+                 Foreground="{DynamicResource WidgetTextMidBrush}"
+                 TextWrapping="Wrap" />
+
+      <Border Padding="9,6"
+              CornerRadius="{StaticResource WidgetPillRadius}"
+              Background="{DynamicResource WidgetDangerSoftBrush}"
+              IsVisible="{Binding ErrorMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
+        <TextBlock Text="{Binding ErrorMessage}"
+                   FontSize="11"
+                   Foreground="{DynamicResource WidgetDangerBrush}"
+                   TextWrapping="Wrap" />
+      </Border>
+
+      <WrapPanel>
+        <Button x:Name="DeadlineAlertOpen"
+                Content="Abrir"
+                Classes="accent"
+                Margin="0,0,7,0"
+                IsVisible="{Binding !IsDigest}"
+                Command="{Binding OpenCommand}" />
+        <Button x:Name="DeadlineAlertExtend"
+                Content="+1 dia"
+                Margin="0,0,7,0"
+                ToolTip.Tip="Muda o prazo para amanhã, no mesmo horário"
+                IsVisible="{Binding !IsDigest}"
+                Command="{Binding ExtendCommand}" />
+        <Button x:Name="DeadlineAlertSnooze"
+                Content="Adiar 1 h"
+                Margin="0,0,7,0"
+                ToolTip.Tip="Cala só este aviso por uma hora; o prazo não muda"
+                IsVisible="{Binding !IsDigest}"
+                Command="{Binding SnoozeCommand}" />
+        <Button x:Name="DeadlineAlertDismiss"
+                Content="OK"
+                Command="{Binding DismissCommand}" />
+      </WrapPanel>
+
+    </StackPanel>
+  </Border>
+
+</Window>

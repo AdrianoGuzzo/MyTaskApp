@@ -1,3 +1,4 @@
+using MyTaskApp.Domain.Deadlines;
 using MyTaskApp.Domain.Tasks;
 
 namespace MyTaskApp.Domain.Planning;
@@ -7,8 +8,10 @@ namespace MyTaskApp.Domain.Planning;
 /// <paramref name="CompletedOn"/> já como data local: converter instante em data
 /// é responsabilidade da borda, não do domínio (ADR-002).
 /// </summary>
+/// <param name="Deadline">O prazo, quando há (ADR-050). Sem ele, nada muda.</param>
 public readonly record struct TodayCandidate(
     DateOnly? ScheduledDate,
     TimeOnly? ScheduledTime,
     TaskItemStatus Status,
-    DateOnly? CompletedOn);
+    DateOnly? CompletedOn,
+    TaskDeadline? Deadline = null);

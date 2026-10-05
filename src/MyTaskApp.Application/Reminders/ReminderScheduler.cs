@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Configuration;
+using MyTaskApp.Application.Deadlines;
 
 namespace MyTaskApp.Application.Reminders;
 
@@ -82,11 +83,20 @@ public sealed class ReminderScheduler(
         {
             NoteClockSkew();
 
-            // O handler precisa de DbContext, que é scoped; o runner abre o
-            // escopo (ADR-012). Sem isto este singleton capturaria um escopo.
-            return await runner.RunAsync<DispatchDueRemindersHandler, DispatchDueRemindersResult>(
-                (handler, token) => handler.HandleAsync(new DispatchDueReminders(), token),
-                cancellationToken);
+            try
+            {
+                // O handler precisa de DbContext, que é scoped; o runner abre o
+                // escopo (ADR-012). Sem isto este singleton capturaria um escopo.
+                return await runner.RunAsync<DispatchDueRemindersHandler, DispatchDueRemindersResult>(
+                    (handler, token) => handler.HandleAsync(new DispatchDueReminders(), token),
+                    cancellationToken);
+            }
+            finally
+            {
+                // No finally, e não depois: um lembrete que lança não pode
+                // calar o prazo, nem o contrário.
+                await DispatchDeadlinesAsync(cancellationToken);
+            }
         }
         finally
         {
@@ -151,6 +161,30 @@ public sealed class ReminderScheduler(
     {
         _stopping.Dispose();
         _gate.Dispose();
+    }
+
+    /// <summary>
+    /// Os avisos de prazo (ADR-050) vão no mesmo tique, e não num terceiro
+    /// agendador: a cadência é a mesma dos lembretes — o degrau de 2 horas
+    /// precisa da mesma precisão —, e o ADR-021 só separou o ciclo de vida
+    /// porque ali eram 30 s contra 6 h. Escopo próprio e falha própria.
+    /// </summary>
+    private async Task DispatchDeadlinesAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await runner.RunAsync<DispatchDeadlineAlertsHandler, DispatchDeadlineAlertsResult>(
+                (handler, token) => handler.HandleAsync(new DispatchDeadlineAlerts(), token),
+                cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            // Desligando: normal.
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "DeadlineTickFailed");
+        }
     }
 
     /// <summary>Um tique que lança nunca pode matar o timer.</summary>

@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
+using MyTaskApp.Application.Deadlines;
 using MyTaskApp.Application.Development;
 using MyTaskApp.Application.External;
 using MyTaskApp.Application.External.Jira;
@@ -17,6 +18,7 @@ using MyTaskApp.Application.Tasks;
 using MyTaskApp.Desktop.Composition;
 using MyTaskApp.Desktop.Views;
 using MyTaskApp.Domain;
+using MyTaskApp.Domain.Deadlines;
 using MyTaskApp.Domain.External;
 using MyTaskApp.Domain.Lifecycle;
 using MyTaskApp.Domain.Planning;
@@ -29,6 +31,9 @@ namespace MyTaskApp.Desktop.ViewModels;
 /// poder desfazer exatamente o movimento que foi feito.
 /// </summary>
 public sealed record SectionReorder(TodaySectionViewModel Section, int From, int To);
+
+/// <summary>Um atalho de prazo pedido no menu de uma linha (ADR-050).</summary>
+public sealed record DeadlineShortcutRequest(TaskRowViewModel Row, DeadlineShortcut Shortcut);
 
 /// <summary>
 /// Tela "Hoje" (§9). Não decide o que é atrasado nem o que é "agora" — isso é do
@@ -128,6 +133,14 @@ public sealed partial class TodayViewModel(
     /// </summary>
     [ObservableProperty]
     private bool _hideCompleted;
+
+    /// <summary>
+    /// No HUD, PRAZOS mostra só o que aperta — atrasada, hoje, amanhã (§10). O
+    /// prazo de daqui a duas semanas continua na janela normal, e os números
+    /// continuam contando tudo, como em <see cref="HideCompleted"/>.
+    /// </summary>
+    [ObservableProperty]
+    private bool _pressingDeadlinesOnly;
 
     /// <summary>Texto da captura rápida: uma tarefa por linha.</summary>
     [ObservableProperty]
@@ -402,6 +415,58 @@ public sealed partial class TodayViewModel(
             await LoadAsync(cancellationToken);
         }
     }
+
+    /// <summary>
+    /// Um atalho de prazo do menu da linha (§9): "Amanhã", "Final da semana",
+    /// "Em 3 dias". Sem abrir a tarefa — prazo de tarefa longa se ajusta de
+    /// passagem.
+    /// </summary>
+    [RelayCommand]
+    public async Task SetDeadlineShortcutAsync(
+        DeadlineShortcutRequest request,
+        CancellationToken cancellationToken)
+    {
+        TaskDeadlineView? view = null;
+
+        var saved = await TryAsync(
+            async () => view = await runner.RunAsync<SetDeadlineHandler, TaskDeadlineView>(
+                (handler, token) => handler.HandleAsync(
+                    new SetDeadlineShortcut(request.Row.OccurrenceId, request.Shortcut), token),
+                cancellationToken),
+            "Não foi possível definir o prazo desta tarefa.");
+
+        if (saved)
+        {
+            await LoadAsync(cancellationToken);
+            StatusMessage = $"Prazo: {view!.DateLabel}.";
+        }
+    }
+
+    /// <summary>"Remover prazo": a tarefa volta a ser uma tarefa comum (§9).</summary>
+    [RelayCommand]
+    public async Task ClearDeadlineAsync(TaskRowViewModel row, CancellationToken cancellationToken)
+    {
+        var cleared = await TryAsync(
+            () => runner.RunAsync<ClearDeadlineHandler>(
+                (handler, token) => handler.HandleAsync(new ClearDeadline(row.OccurrenceId), token),
+                cancellationToken),
+            "Não foi possível remover o prazo desta tarefa.");
+
+        if (cleared)
+        {
+            await LoadAsync(cancellationToken);
+            StatusMessage = "Prazo removido.";
+        }
+    }
+
+    /// <summary>
+    /// "Personalizado…": dia e hora escolhidos à mão, no card de prazo da
+    /// tarefa. A janela é do composition root, como a das anotações.
+    /// </summary>
+    public event Action<TaskRowViewModel>? DeadlineEditorRequested;
+
+    [RelayCommand]
+    public void EditDeadline(TaskRowViewModel row) => DeadlineEditorRequested?.Invoke(row);
 
     /// <summary>
     /// Pede a tela de configuração. O ViewModel não sabe abrir janela — quem
@@ -1228,6 +1293,18 @@ public sealed partial class TodayViewModel(
         AddSection("ATRASADAS", TodaySection.Overdue, board.Overdue, isCompleted: false);
         AddSection("AGORA", TodaySection.Now, board.Now, isCompleted: false);
         AddSection("HOJE", TodaySection.Today, board.Today, isCompleted: false);
+
+        // PRAZOS (ADR-050): ordenada pelo prazo, e não pela mão. O resumo do
+        // §11 vai no próprio cabeçalho — uma linha, e não um painel.
+        AddSection(
+            board.DeadlineSummary.IsEmpty ? "PRAZOS" : $"PRAZOS · {board.DeadlineSummary.Label}",
+            TodaySection.Deadlines,
+            PressingDeadlinesOnly
+                ? [.. board.Deadlines.Where(task => task.Deadline?.Severity >= DeadlineSeverity.Attention)]
+                : board.Deadlines,
+            isCompleted: false,
+            fixedOrder: true);
+
         AddSection("SEM HORÁRIO", TodaySection.Unscheduled, board.Unscheduled, isCompleted: false);
 
         if (!HideCompleted)
@@ -1241,7 +1318,7 @@ public sealed partial class TodayViewModel(
         // precisa mais ser lembrada. Do quadro, e não das seções: esconder as
         // concluídas não pode fazer a borda delas voltar a pulsar.
         _seenAgentAlerts.IntersectWith(
-            new[] { board.Overdue, board.Now, board.Today, board.Unscheduled, board.Completed }
+            new[] { board.Overdue, board.Now, board.Today, board.Deadlines, board.Unscheduled, board.Completed }
                 .SelectMany(tasks => tasks)
                 .SelectMany(task => (task.ActiveAgents ?? []).Select(agent => new AgentAlertKey(
                     task.TaskId, agent.DevelopmentId, agent.Activity, agent.ActivityChangedAt))));
@@ -1252,6 +1329,14 @@ public sealed partial class TodayViewModel(
     }
 
     partial void OnHideCompletedChanged(bool value)
+    {
+        if (_board is { } board)
+        {
+            ShowSections(board);
+        }
+    }
+
+    partial void OnPressingDeadlinesOnlyChanged(bool value)
     {
         if (_board is { } board)
         {
@@ -1292,11 +1377,16 @@ public sealed partial class TodayViewModel(
     }
 
     /// <summary>Seção vazia não vira cabeçalho solto na tela.</summary>
+    /// <param name="fixedOrder">
+    /// A seção tem ordem própria e não aceita arrasto, como PRAZOS. CONCLUÍDAS
+    /// chega aqui pela outra porta, <paramref name="isCompleted"/>.
+    /// </param>
     private void AddSection(
         string header,
         TodaySection section,
         IReadOnlyList<TodayTask> tasks,
-        bool isCompleted)
+        bool isCompleted,
+        bool fixedOrder = false)
     {
         if (tasks.Count == 0)
         {
@@ -1308,7 +1398,7 @@ public sealed partial class TodayViewModel(
             section,
             tasks.Select(task =>
             {
-                var row = new TaskRowViewModel(task, isCompleted);
+                var row = new TaskRowViewModel(task, isCompleted, fixedOrder);
                 row.Worktree.Apply(_worktreeSync);
                 row.Worktree.ApplyPullRequests(_worktreePullRequests);
                 row.ApplySeenAgentAlerts(_seenAgentAlerts);
@@ -1319,7 +1409,7 @@ public sealed partial class TodayViewModel(
             // propósito: a linha decide a alça por IsCompleted, e um segundo
             // critério aqui faria a seção de um item só mostrar uma alça que o
             // code-behind recusaria — desacordo silencioso entre os dois.
-            canReorder: !isCompleted));
+            canReorder: !isCompleted && !fixedOrder));
     }
 
     /// <summary>

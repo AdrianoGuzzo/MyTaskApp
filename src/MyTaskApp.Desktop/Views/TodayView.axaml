@@ -112,7 +112,7 @@
     -->
     <DataTemplate x:Key="TaskRow" x:DataType="vm:TaskRowViewModel">
       <Border Classes="row"
-              Classes.fixedOrder="{Binding IsCompleted}"
+              Classes.fixedOrder="{Binding IsFixedOrder}"
               chrome:WindowDecorationProperties.ElementRole="User">
 
         <!--
@@ -148,6 +148,31 @@
                       Command="{Binding #Root.((vm:TodayViewModel)DataContext).CopyBranchNameCommand}"
                       CommandParameter="{Binding}" />
             <Separator IsVisible="{Binding HasBranchName}" />
+            <!--
+              O prazo (ADR-050, §9): definir ou mudar sem abrir a tarefa. Os
+              atalhos são cliques de code-behind porque o comando precisa da
+              linha e do atalho juntos (ver OnDeadlineShortcutClick).
+            -->
+            <MenuItem Classes="deadline"
+                      Header="{Binding DeadlineMenuHeader}"
+                      IsVisible="{Binding CanChangeDeadline}">
+              <MenuItem Header="Hoje" Tag="Today" Click="OnDeadlineShortcutClick" />
+              <MenuItem Header="Amanhã" Tag="Tomorrow" Click="OnDeadlineShortcutClick" />
+              <MenuItem Header="Final da semana" Tag="EndOfWeek" Click="OnDeadlineShortcutClick" />
+              <MenuItem Header="Próxima semana" Tag="NextWeek" Click="OnDeadlineShortcutClick" />
+              <Separator />
+              <MenuItem Header="Em 3 dias" Tag="InThreeDays" Click="OnDeadlineShortcutClick" />
+              <MenuItem Header="Em 1 semana" Tag="InOneWeek" Click="OnDeadlineShortcutClick" />
+              <Separator />
+              <MenuItem Header="Personalizado…"
+                        Command="{Binding #Root.((vm:TodayViewModel)DataContext).EditDeadlineCommand}"
+                        CommandParameter="{Binding}" />
+            </MenuItem>
+            <MenuItem Header="Remover prazo"
+                      IsVisible="{Binding CanClearDeadline}"
+                      Command="{Binding #Root.((vm:TodayViewModel)DataContext).ClearDeadlineCommand}"
+                      CommandParameter="{Binding}" />
+            <Separator IsVisible="{Binding CanChangeDeadline}" />
             <MenuItem Classes="startAgent"
                       Header="Abrir Claude Code"
                       IsVisible="{Binding Worktree.HasWorktree}"
@@ -355,6 +380,28 @@
                 </ToolTip.Tip>
               </TextBlock>
             </DockPanel>
+
+            <!--
+              O prazo (ADR-050): relógio e texto, abaixo do título. O texto já
+              diz a severidade ("ATENÇÃO · …", "ATRASADA · …"); a cor só
+              reforça. Discreto como o ⚠ — a tarefa continua sendo o título.
+              O balão traz a data por extenso e a próxima ação.
+            -->
+            <StackPanel x:Name="DeadlineLine"
+                        Classes="deadline"
+                        Classes.attention="{Binding IsDeadlineAttention}"
+                        Classes.urgent="{Binding IsDeadlineUrgent}"
+                        Classes.overdue="{Binding IsDeadlineOverdue}"
+                        Classes.missed="{Binding IsDeadlineMissed}"
+                        Orientation="Horizontal"
+                        Spacing="4"
+                        HorizontalAlignment="Left"
+                        Background="Transparent"
+                        IsVisible="{Binding HasDeadline}"
+                        ToolTip.Tip="{Binding DeadlineTip}">
+              <TextBlock Classes="deadlineGlyph" Text="&#xE823;" />
+              <TextBlock Classes="deadlineLabel" Text="{Binding DeadlineLabel}" />
+            </StackPanel>
 
             <StackPanel Orientation="Horizontal"
                         Spacing="4"
@@ -594,6 +641,46 @@
 
     <Style Selector="TextBlock.time.late">
       <Setter Property="Foreground" Value="{DynamicResource WidgetDangerBrush}" />
+    </Style>
+
+    <!--
+      O prazo (ADR-050). Discreto por padrão — texto baixo, como o horário —,
+      e a cor sobe com a severidade, que o próprio texto também escreve.
+    -->
+    <Style Selector="StackPanel.deadline TextBlock">
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="StackPanel.deadline TextBlock.deadlineGlyph">
+      <Setter Property="FontFamily" Value="{StaticResource WidgetIconFont}" />
+      <Setter Property="FontSize" Value="9" />
+    </Style>
+
+    <Style Selector="StackPanel.deadline TextBlock.deadlineLabel">
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <Style Selector="StackPanel.deadline.attention TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetCautionBrush}" />
+    </Style>
+
+    <Style Selector="StackPanel.deadline.urgent TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetDangerBrush}" />
+    </Style>
+
+    <Style Selector="StackPanel.deadline.urgent TextBlock.deadlineLabel">
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <Style Selector="StackPanel.deadline.overdue TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetDangerBrush}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <Style Selector="StackPanel.deadline.missed TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetCautionBrush}" />
     </Style>
 
     <Style Selector="TextBlock.waiting">

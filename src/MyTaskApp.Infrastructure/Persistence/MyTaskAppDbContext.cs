@@ -55,6 +55,9 @@ public sealed class MyTaskAppDbContext(DbContextOptions<MyTaskAppDbContext> opti
     /// <summary>As convenções de nome de branch das tarefas vinculadas (ADR-045).</summary>
     internal DbSet<BranchSettingsRow> BranchSettings => Set<BranchSettingsRow>();
 
+    /// <summary>Os avisos de prazo e o horário padrão do prazo (ADR-050).</summary>
+    internal DbSet<DeadlineSettingsRow> DeadlineSettings => Set<DeadlineSettingsRow>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder) =>
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(MyTaskAppDbContext).Assembly);
 }

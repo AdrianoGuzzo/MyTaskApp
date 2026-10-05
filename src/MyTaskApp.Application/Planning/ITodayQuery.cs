@@ -1,4 +1,5 @@
 using MyTaskApp.Domain.Agents;
+using MyTaskApp.Domain.Deadlines;
 using MyTaskApp.Domain.External;
 using MyTaskApp.Domain.Reminders;
 using MyTaskApp.Domain.Tasks;
@@ -31,7 +32,15 @@ public sealed record TodayOccurrenceRow(
     /// <summary>Os worktrees prontos da tarefa, um por ambiente (ADR-031, ADR-034).</summary>
     IReadOnlyList<WorktreeRow>? Worktrees = null,
     /// <summary>O retrato da issue vinculada; <c>null</c> = tarefa só local (ADR-045).</summary>
-    ExternalLink? External = null);
+    ExternalLink? External = null,
+    /// <summary>O prazo da ocorrência; <c>null</c> = sem prazo (ADR-050).</summary>
+    TaskDeadline? Deadline = null,
+    /// <summary>Os avisos de prazo da tarefa; <c>null</c> = segue a configuração global.</summary>
+    DeadlineAlertStage? DeadlineAlerts = null,
+    /// <summary>O próximo passo de uma tarefa longa (§14).</summary>
+    string? NextAction = null,
+    /// <summary>A estimativa de trabalho (§15).</summary>
+    TimeSpan? Estimate = null);
 
 /// <summary>
 /// Um agente em execução: em qual ambiente e de qual repositório. Ambiente
@@ -66,8 +75,9 @@ public sealed record TagBadge(Guid Id, string Name, string ColorHex);
 public interface ITodayQuery
 {
     /// <summary>
-    /// Candidatas ao quadro de hoje: pendentes até <paramref name="today"/> e
-    /// concluídas recentes. Filtrar no banco evita trazer o histórico inteiro.
+    /// Candidatas ao quadro de hoje: pendentes até <paramref name="today"/>,
+    /// pendentes com prazo de qualquer data (ADR-050) e concluídas recentes.
+    /// Filtrar no banco evita trazer o histórico inteiro.
     /// </summary>
     Task<IReadOnlyList<TodayOccurrenceRow>> GetCandidatesAsync(
         DateOnly today,

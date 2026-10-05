@@ -1,8 +1,10 @@
 using Microsoft.Extensions.Options;
 using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Configuration;
+using MyTaskApp.Application.Deadlines;
 using MyTaskApp.Domain.Planning;
 using MyTaskApp.Domain.Reminders;
+using MyTaskApp.Domain.Tasks;
 
 namespace MyTaskApp.Application.Planning;
 
@@ -40,6 +42,16 @@ public sealed class GetTodayBoardHandler(
                 ActiveAgents = Agents(entry.Row.ActiveAgents),
                 Worktrees = Worktrees(entry.Row.Worktrees),
                 External = entry.Row.External,
+                Deadline = entry.Row.Deadline is { } deadline
+                    ? TaskDeadlineView.Describe(
+                        deadline,
+                        clock,
+                        nowUtc,
+                        entry.Row.Status is TaskItemStatus.Completed ? entry.Row.CompletedAt : null)
+                    : null,
+                DeadlineAlerts = entry.Row.DeadlineAlerts,
+                NextAction = entry.Row.NextAction,
+                Estimate = entry.Row.Estimate,
             };
 
         IEnumerable<(TodayOccurrenceRow Row, TodayPlacement? Placement)> InSection(TodaySection section) =>
@@ -76,7 +88,17 @@ public sealed class GetTodayBoardHandler(
             Completed: InSection(TodaySection.Completed)
                 .OrderByDescending(entry => entry.Row.CompletedAt)
                 .Select(ToTask)
-                .ToList());
+                .ToList())
+        {
+            // PRAZOS é ordenada pelo prazo, e nada mais: a pergunta da seção é
+            // "o que vence primeiro", e arrastar não muda a resposta.
+            Deadlines = InSection(TodaySection.Deadlines)
+                .OrderBy(entry => entry.Row.Deadline!.Date)
+                .ThenBy(entry => entry.Row.Deadline!.Time)
+                .ThenByDescending(entry => entry.Row.Priority)
+                .Select(ToTask)
+                .ToList(),
+        };
     }
 
     /// <summary>
@@ -98,7 +120,8 @@ public sealed class GetTodayBoardHandler(
                 row.ScheduledTime,
                 row.Status,
                 // O domínio raciocina em data local; a conversão é daqui (ADR-002).
-                row.CompletedAt is { } completedAt ? clock.ToLocalDate(completedAt) : null),
+                row.CompletedAt is { } completedAt ? clock.ToLocalDate(completedAt) : null,
+                row.Deadline),
             today,
             now,
             window);

@@ -29,6 +29,24 @@ public static class TodayClassifier
                 : null;
         }
 
+        if (candidate.Deadline is { } deadline)
+        {
+            // Com prazo, quem diz que está atrasada é o prazo, e não a data em
+            // que foi capturada: o que entra segunda para entregar sexta não
+            // vira ATRASADA na terça (ADR-050).
+            if (deadline.HasPassed(today, now))
+            {
+                return new TodayPlacement(TodaySection.Overdue, IsLate: false);
+            }
+
+            // Marcada para uma hora de hoje: é o plano do dia, e o prazo vai
+            // junto como rótulo. O resto corre em PRAZOS, uma seção só.
+            if (candidate.ScheduledDate != today || candidate.ScheduledTime is null)
+            {
+                return new TodayPlacement(TodaySection.Deadlines, IsLate: false);
+            }
+        }
+
         if (candidate.ScheduledDate is not { } scheduledDate || scheduledDate > today)
         {
             return null;

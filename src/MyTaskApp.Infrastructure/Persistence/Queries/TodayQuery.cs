@@ -34,6 +34,10 @@ internal sealed class TodayQuery(MyTaskAppDbContext context) : ITodayQuery
                 (occurrence.Status == TaskItemStatus.Pending
                     && occurrence.ScheduledDate != null
                     && occurrence.ScheduledDate <= today)
+                // Com prazo, a responsabilidade corre desde já, qualquer que
+                // seja a data marcada (ADR-050). Cai no índice parcial do prazo.
+                || (occurrence.Status == TaskItemStatus.Pending
+                    && occurrence.DeadlineDate != null)
                 || (occurrence.Status == TaskItemStatus.Completed
                     && occurrence.CompletedAt >= completedFrom
                     && occurrence.CompletedAt < completedUntil))
@@ -58,6 +62,9 @@ internal sealed class TodayQuery(MyTaskAppDbContext context) : ITodayQuery
                 task.Description,
                 Reminder = task.Reminder,
                 task.External,
+                task.DeadlineAlerts,
+                task.NextAction,
+                task.Estimate,
             })
             .ToListAsync(cancellationToken);
 
@@ -181,7 +188,11 @@ internal sealed class TodayQuery(MyTaskAppDbContext context) : ITodayQuery
                     tagsByTask.GetValueOrDefault(definition.Id),
                     agentsByTask.GetValueOrDefault(definition.Id),
                     worktreesByTask.GetValueOrDefault(definition.Id),
-                    definition.External);
+                    definition.External,
+                    occurrence.Deadline,
+                    definition.DeadlineAlerts,
+                    definition.NextAction,
+                    definition.Estimate);
             })
             .ToList();
     }

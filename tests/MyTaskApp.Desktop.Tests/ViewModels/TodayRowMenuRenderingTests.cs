@@ -76,13 +76,17 @@ public class TodayRowMenuRenderingTests
     {
         var window = await ShowAsync(new TodayBoard(Date, [], [], [Row("Fechar o mês")], [], []));
 
-        var items = RowMenuOf(window).Menu.Items.OfType<MenuItem>().ToList();
+        // Aberto: o cabeçalho do prazo ("Definir"/"Alterar") é binding, e só
+        // é avaliado quando o menu entra na árvore.
+        var items = OpenRowMenu(window).Items.OfType<MenuItem>().ToList();
 
         items.Select(item => item.Header).Should().Equal(
             "Abrir no Jira ↗",
             "Copiar chave do Jira",
             "Copiar link do Jira",
             "Copiar nome da branch",
+            "Definir prazo",
+            "Remover prazo",
             "Abrir Claude Code",
             "Abrir terminal no worktree",
             "Abrir pasta do worktree",
@@ -118,9 +122,12 @@ public class TodayRowMenuRenderingTests
         var window = await ShowAsync(new TodayBoard(Date, [], [], [Row("Fechar o mês")], [], []));
 
         // "Abrir Claude Code", o terminal e a pasta são clique de code-behind:
-        // podem precisar perguntar o ambiente (ADR-036, ADR-045).
+        // podem precisar perguntar o ambiente (ADR-036, ADR-045). O prazo é um
+        // submenu, conferido no teste seguinte.
         var items = OpenRowMenu(window).Items.OfType<MenuItem>()
-            .Where(item => !item.Classes.Contains("startAgent") && !item.Classes.Contains("worktreeAction"))
+            .Where(item => !item.Classes.Contains("startAgent")
+                && !item.Classes.Contains("worktreeAction")
+                && !item.Classes.Contains("deadline"))
             .ToList();
 
         items.Should().NotBeEmpty().And.AllSatisfy(item =>
@@ -128,6 +135,35 @@ public class TodayRowMenuRenderingTests
             item.Command.Should().NotBeNull();
             item.CommandParameter.Should().BeOfType<TaskRowViewModel>();
         });
+    }
+
+    /// <summary>
+    /// O submenu do prazo (ADR-050): os atalhos sabem a linha e o atalho, e o
+    /// "Personalizado…" resolve o comando com a linha — o cast até o
+    /// DataContext do UserControl é o fio que quebra sem avisar.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task TheDeadlineSubmenu_KnowsItsRowAndItsShortcuts()
+    {
+        var window = await ShowAsync(new TodayBoard(Date, [], [], [Row("Fechar o mês")], [], []));
+
+        var deadline = OpenRowMenu(window).Items.OfType<MenuItem>()
+            .Single(item => item.Classes.Contains("deadline"));
+        var entries = deadline.Items.OfType<MenuItem>().ToList();
+
+        deadline.IsVisible.Should().BeTrue();
+        entries.Select(item => item.Header).Should().Equal(
+            "Hoje", "Amanhã", "Final da semana", "Próxima semana", "Em 3 dias", "Em 1 semana", "Personalizado…");
+
+        entries.Where(item => item.Tag is not null).Should().AllSatisfy(item =>
+        {
+            Enum.TryParse<MyTaskApp.Domain.Deadlines.DeadlineShortcut>((string)item.Tag!, out _).Should().BeTrue();
+            item.DataContext.Should().BeOfType<TaskRowViewModel>();
+        });
+
+        var custom = entries.Single(item => item.Tag is null);
+        custom.Command.Should().NotBeNull();
+        custom.CommandParameter.Should().BeOfType<TaskRowViewModel>();
     }
 
     /// <summary>

@@ -342,6 +342,79 @@
       <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
     </Style>
 
+    <!-- ===== O prazo (ADR-050) ===== -->
+
+    <Style Selector="Border.deadlineCard Button.small">
+      <Setter Property="Padding" Value="8,3" />
+      <Setter Property="FontSize" Value="11" />
+    </Style>
+
+    <Style Selector="Border.deadlineCard Button.chip">
+      <Setter Property="Margin" Value="0,0,6,4" />
+    </Style>
+
+    <Style Selector="Border.deadlineCard RadioButton, Border.deadlineCard CheckBox">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Margin" Value="0,0,12,0" />
+      <Setter Property="MinHeight" Value="24" />
+    </Style>
+
+    <Style Selector="Border.deadlineCard TextBlock.planLabel">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+    </Style>
+
+    <Style Selector="Border.deadlineCard TextBox.plan, Border.deadlineCard NumericUpDown.plan">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="MinHeight" Value="28" />
+    </Style>
+
+    <!--
+      O tema tira a moldura de todo campo (Tokens.axaml): quem a desenha é o
+      cartão em volta. Aqui o cartão tem vários campos, então cada um ganha a
+      sua — senão "próxima ação" parece rótulo, e a estimativa nem aparece.
+    -->
+    <Style Selector="Border.deadlineCard TextBox.plan /template/ Border#PART_BorderElement, Border.deadlineCard NumericUpDown.plan TextBox /template/ Border#PART_BorderElement">
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetStrokeBrush}" />
+      <Setter Property="Background" Value="{DynamicResource WidgetCanvasBrush}" />
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetPillRadius}" />
+    </Style>
+
+    <Style Selector="Border.deadlineCard TextBox.plan:focus /template/ Border#PART_BorderElement, Border.deadlineCard NumericUpDown.plan TextBox:focus /template/ Border#PART_BorderElement">
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetAccentBrush}" />
+      <Setter Property="Background" Value="{DynamicResource WidgetCanvasBrush}" />
+    </Style>
+
+    <Style Selector="Border.deadlineCard TextBlock.deadlineGlyph">
+      <Setter Property="FontFamily" Value="{StaticResource WidgetIconFont}" />
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextMidBrush}" />
+    </Style>
+
+    <Style Selector="StackPanel.deadlineSummary TextBlock.deadlineDate">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+    </Style>
+
+    <Style Selector="StackPanel.deadlineSummary TextBlock.deadlineCountdown">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextMidBrush}" />
+    </Style>
+
+    <Style Selector="StackPanel.deadlineSummary.attention TextBlock.deadlineCountdown">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetCautionBrush}" />
+    </Style>
+
+    <Style Selector="StackPanel.deadlineSummary.urgent TextBlock.deadlineCountdown, StackPanel.deadlineSummary.overdue TextBlock.deadlineCountdown">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetDangerBrush}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
     <Style Selector="Border.issueSuggestion">
       <Setter Property="Padding" Value="8,5" />
       <Setter Property="CornerRadius" Value="5" />
@@ -796,6 +869,146 @@
                    Text="{Binding StatusMessage}"
                    IsVisible="{Binding StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}" />
       </StackPanel>
+        </DataTemplate>
+      </ContentControl.ContentTemplate>
+    </ContentControl>
+
+    <!--
+      O prazo (ADR-050): até quando, quanto falta, os avisos desta tarefa e a
+      próxima ação. Sem prazo é uma linha só — a tarefa de cinco minutos não
+      ganha formulário. Grava cada coisa na hora, como o card do Jira.
+    -->
+    <ContentControl DockPanel.Dock="Top"
+                    x:Name="DeadlineSection"
+                    Margin="24,0,24,10"
+                    Content="{Binding Deadline}"
+                    IsVisible="{Binding Deadline, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <ContentControl.ContentTemplate>
+        <DataTemplate x:DataType="vm:TaskDeadlineViewModel">
+          <Border Classes="issueCard deadlineCard">
+            <StackPanel Spacing="8">
+
+              <!-- A linha do prazo: data, quanto falta, e as duas ações. -->
+              <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8">
+                <TextBlock Grid.Column="0" Classes="deadlineGlyph" Text="&#xE823;" />
+                <StackPanel Grid.Column="1"
+                            Classes="deadlineSummary"
+                            Classes.attention="{Binding IsAttention}"
+                            Classes.urgent="{Binding IsUrgent}"
+                            Classes.overdue="{Binding IsOverdue}"
+                            Orientation="Horizontal"
+                            Spacing="6"
+                            VerticalAlignment="Center">
+                  <TextBlock Classes="deadlineDate"
+                             Text="{Binding DateLabel}"
+                             IsVisible="{Binding HasDeadline}" />
+                  <TextBlock Classes="deadlineCountdown"
+                             Text="{Binding Countdown, StringFormat='· {0}'}"
+                             IsVisible="{Binding HasDeadline}" />
+                  <TextBlock Classes="issueMeta"
+                             Text="Sem prazo"
+                             IsVisible="{Binding !HasDeadline}" />
+                </StackPanel>
+                <Button Grid.Column="2"
+                        Classes="small"
+                        Content="{Binding EditLabel}"
+                        IsVisible="{Binding IsEditable}"
+                        Command="{Binding ToggleEditingCommand}" />
+                <Button Grid.Column="3"
+                        Classes="small"
+                        Content="Remover"
+                        ToolTip.Tip="Remover o prazo desta tarefa"
+                        IsVisible="{Binding HasDeadline}"
+                        IsEnabled="{Binding IsEditable}"
+                        Command="{Binding ClearCommand}" />
+              </Grid>
+
+              <!-- Escolher: os atalhos de um clique e, abaixo, dia e hora. -->
+              <StackPanel Spacing="8" IsVisible="{Binding IsEditing}">
+                <WrapPanel>
+                  <Button Classes="small chip" Content="Hoje" Command="{Binding UseShortcutCommand}" CommandParameter="Today" />
+                  <Button Classes="small chip" Content="Amanhã" Command="{Binding UseShortcutCommand}" CommandParameter="Tomorrow" />
+                  <Button Classes="small chip" Content="Final da semana" Command="{Binding UseShortcutCommand}" CommandParameter="EndOfWeek" />
+                  <Button Classes="small chip" Content="Próxima semana" Command="{Binding UseShortcutCommand}" CommandParameter="NextWeek" />
+                  <Button Classes="small chip" Content="+3 dias" Command="{Binding UseShortcutCommand}" CommandParameter="InThreeDays" />
+                  <Button Classes="small chip" Content="+1 semana" Command="{Binding UseShortcutCommand}" CommandParameter="InOneWeek" />
+                </WrapPanel>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <CalendarDatePicker SelectedDate="{Binding CustomDate}"
+                                      PlaceholderText="Dia"
+                                      Width="150" />
+                  <TimePicker SelectedTime="{Binding CustomTime}"
+                              ClockIdentifier="24HourClock"
+                              MinuteIncrement="5" />
+                  <Button Classes="accent small"
+                          Content="Aplicar"
+                          Command="{Binding ApplyCustomCommand}" />
+                </StackPanel>
+              </StackPanel>
+
+              <!-- §14 e §15: o próximo passo e quanto deve dar. Opcionais. -->
+              <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto" ColumnSpacing="8" IsVisible="{Binding ShowsPlan}">
+                <TextBlock Grid.Column="0" Classes="planLabel" Text="Próxima ação" />
+                <TextBox Grid.Column="1"
+                         Classes="plan"
+                         Text="{Binding NextAction}"
+                         PlaceholderText="ex.: criar endpoint POST /diets"
+                         MaxLength="200"
+                         IsReadOnly="{Binding IsReadOnly}" />
+                <TextBlock Grid.Column="2" Classes="planLabel" Text="Estimativa" />
+                <NumericUpDown Grid.Column="3"
+                               Classes="plan"
+                               Value="{Binding EstimateHours}"
+                               ShowButtonSpinner="False"
+                               Minimum="0"
+                               Maximum="999"
+                               Increment="0.5"
+                               FormatString="0.#"
+                               Width="64"
+                               IsReadOnly="{Binding IsReadOnly}"
+                               ToolTip.Tip="Estimativa de trabalho, em horas" />
+                <TextBlock Grid.Column="4" Classes="planLabel" Text="h" />
+                <Button Grid.Column="5"
+                        Classes="small"
+                        Content="Salvar"
+                        IsVisible="{Binding HasPlanChanges}"
+                        Command="{Binding SavePlanCommand}" />
+              </Grid>
+
+              <!-- §20: os avisos desta tarefa. Padrão segue a configuração. -->
+              <StackPanel Spacing="6" IsVisible="{Binding HasDeadline}" IsEnabled="{Binding IsEditable}">
+                <WrapPanel>
+                  <TextBlock Classes="issueMeta" Text="Avisos:" Margin="0,0,8,0" VerticalAlignment="Center" />
+                  <RadioButton GroupName="DeadlineAlerts"
+                               Content="Padrão"
+                               IsChecked="{Binding IsDefaultAlerts}" />
+                  <RadioButton GroupName="DeadlineAlerts"
+                               Content="Silencioso"
+                               IsChecked="{Binding IsSilentAlerts}" />
+                  <RadioButton GroupName="DeadlineAlerts"
+                               Content="Só na véspera"
+                               IsChecked="{Binding IsDayBeforeAlerts}" />
+                  <RadioButton GroupName="DeadlineAlerts"
+                               Content="Personalizado"
+                               IsChecked="{Binding IsCustomAlerts}" />
+                </WrapPanel>
+                <WrapPanel IsVisible="{Binding IsCustomAlerts}">
+                  <CheckBox Content="7 dias" IsChecked="{Binding AlertSevenDays}" />
+                  <CheckBox Content="3 dias" IsChecked="{Binding AlertThreeDays}" />
+                  <CheckBox Content="24 h" IsChecked="{Binding AlertOneDay}" />
+                  <CheckBox Content="8 h" IsChecked="{Binding AlertEightHours}" />
+                  <CheckBox Content="2 h" IsChecked="{Binding AlertTwoHours}" />
+                  <CheckBox Content="Atrasada" IsChecked="{Binding AlertOverdue}" />
+                </WrapPanel>
+              </StackPanel>
+
+              <TextBlock Classes="issueMeta"
+                         Foreground="{DynamicResource WidgetDangerBrush}"
+                         Text="{Binding ErrorMessage}"
+                         TextWrapping="Wrap"
+                         IsVisible="{Binding ErrorMessage, Converter={x:Static ObjectConverters.IsNotNull}}" />
+            </StackPanel>
+          </Border>
         </DataTemplate>
       </ContentControl.ContentTemplate>
     </ContentControl>
