@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using MyTaskApp.Application;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
+using MyTaskApp.Application.Deadlines;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Application.Sounds;
 using MyTaskApp.Desktop.Reminders;
@@ -63,6 +64,11 @@ internal static class AppServices
             // O aviso do agente de IA (ADR-037) sai pela mesma pilha de janelas.
             .AddSingleton<IAgentAttentionPresenter>(services => services.GetRequiredService<AlertPresenter>())
             .AddTransient<AgentAlertViewModel>()
+
+            // E o aviso de prazo (ADR-050), pela mesma pilha. Antes de
+            // AddApplication, ganha do objeto nulo.
+            .AddSingleton<IDeadlineAlertPresenter>(services => services.GetRequiredService<AlertPresenter>())
+            .AddTransient<DeadlineAlertViewModel>()
             .AddSingleton<ISoundPlayer, WindowsSoundPlayer>()
 
             // Os sons dos avisos do agente (ADR-042): arquivo, e não bipe.
@@ -146,6 +152,9 @@ internal static class AppServices
 
             // O cartão da issue do Jira na janela da tarefa (ADR-045): um por janela.
             .AddTransient<TaskIssueViewModel>()
+
+            // O card do prazo na janela da tarefa (ADR-050): um por janela.
+            .AddTransient<TaskDeadlineViewModel>()
 
             // A aba Desenvolvimento de cada anotação (ADR-027): uma por janela,
             // como a própria anotação, com um ambiente por repositório (ADR-031).

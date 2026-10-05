@@ -379,6 +379,9 @@ public sealed partial class App : Avalonia.Application
         TodayViewModel todayViewModel)
     {
         todayViewModel.NotesRequested += row => ShowNotes(services, window, todayViewModel, row);
+        todayViewModel.DeadlineEditorRequested += row => EditDeadline(services, window, todayViewModel, row);
+        services.GetRequiredService<AlertPresenter>().OpenRequested += occurrenceId =>
+            OpenFromDeadlineAlert(services, window, todayViewModel, occurrenceId);
     }
 
     /// <summary>
@@ -387,7 +390,7 @@ public sealed partial class App : Avalonia.Application
     /// texto de uma linha só, e reusá-lo obrigaria a lembrar de limpar tudo a
     /// cada abertura.
     /// </summary>
-    private void ShowNotes(
+    private TaskNotesWindow ShowNotes(
         IServiceProvider services,
         Window owner,
         TodayViewModel todayViewModel,
@@ -396,7 +399,7 @@ public sealed partial class App : Avalonia.Application
         if (_notes.TryGetValue(row.TaskId, out var opened))
         {
             opened.Reveal();
-            return;
+            return opened;
         }
 
         var viewModel = services.GetRequiredService<TaskNotesViewModel>();
@@ -421,11 +424,61 @@ public sealed partial class App : Avalonia.Application
                 () => _ = todayViewModel.LoadAsync(CancellationToken.None));
         }
 
+        // O prazo, os avisos e a próxima ação mudam o que a linha desenha (ADR-050).
+        if (viewModel.Deadline is { } deadline)
+        {
+            deadline.Changed += () => Dispatcher.UIThread.Post(
+                () => _ = todayViewModel.LoadAsync(CancellationToken.None));
+        }
+
         _notes[row.TaskId] = notes;
         notes.Closed += (_, _) => _notes.Remove(row.TaskId);
 
         notes.Show(owner);
         notes.Activate();
+
+        return notes;
+    }
+
+    /// <summary>
+    /// "Personalizado…" no menu da linha (ADR-050): a tarefa abre já com o
+    /// card do prazo escolhendo dia e hora.
+    /// </summary>
+    private void EditDeadline(
+        IServiceProvider services,
+        Window owner,
+        TodayViewModel todayViewModel,
+        TaskRowViewModel row)
+    {
+        var notes = ShowNotes(services, owner, todayViewModel, row);
+
+        if (notes.DataContext is TaskNotesViewModel { Deadline: { } deadline })
+        {
+            deadline.BeginEdit();
+        }
+    }
+
+    /// <summary>
+    /// "Abrir" no aviso de prazo: a tarefa da linha que está na tela. Sem a
+    /// linha (já concluída, ou fora do quadro), basta trazer o painel.
+    /// </summary>
+    private void OpenFromDeadlineAlert(
+        IServiceProvider services,
+        MainWindow window,
+        TodayViewModel todayViewModel,
+        Guid occurrenceId)
+    {
+        var row = todayViewModel.Sections
+            .SelectMany(section => section.Items)
+            .FirstOrDefault(item => item.OccurrenceId == occurrenceId);
+
+        if (row is null)
+        {
+            Reveal(window);
+            return;
+        }
+
+        ShowNotes(services, window, todayViewModel, row);
     }
 
     /// <summary>

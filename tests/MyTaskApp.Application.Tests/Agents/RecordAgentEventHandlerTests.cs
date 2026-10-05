@@ -1,8 +1,13 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using MyTaskApp.Application.Agents;
+using MyTaskApp.Application.Configuration;
+using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Sounds;
 using MyTaskApp.Application.Tests.Fakes;
 using MyTaskApp.Domain.Agents;
+using MyTaskApp.Domain.Deadlines;
 using MyTaskApp.Domain.Tasks;
 
 namespace MyTaskApp.Application.Tests.Agents;
@@ -30,6 +35,7 @@ public class RecordAgentEventHandlerTests
     private readonly FakeAgentAlertSoundStore _sounds = new();
     private readonly FakeSoundLibrary _library = new();
     private readonly RecordingAudioPlayer _player = new();
+    private readonly FakeTimeProvider _time = new(Now);
     private readonly TaskItem _task;
     private readonly AgentSession _session;
     private readonly string _token;
@@ -59,6 +65,8 @@ public class RecordAgentEventHandlerTests
             _presenter,
             _windows,
             new AgentAlertSoundPlayer(_sounds, _library, _player, NullLogger<AgentAlertSoundPlayer>.Instance),
+            new UserClock(_time, Options.Create(new ApplicationOptions { TimeZoneId = "UTC" }), NullLogger<UserClock>.Instance),
+            _time,
             NullLogger<RecordAgentEventHandler>.Instance);
 
     private AgentEvent Event(
@@ -90,6 +98,34 @@ public class RecordAgentEventHandlerTests
         attention.Branch.Should().Be("feature/123");
         attention.Activity.Should().Be(AgentActivity.WaitingForUser);
         attention.Message.Should().Be("Redis ou MemoryCache?");
+        attention.DeadlineLabel.Should().BeNull("a tarefa não tem prazo");
+    }
+
+    /// <summary>
+    /// §26: o agente esperando você é mais relevante quando a entrega está
+    /// perto — o aviso diz o prazo junto.
+    /// </summary>
+    [Fact]
+    public async Task WaitingForTheUser_WithADeadlineTomorrow_SaysTheDeadline()
+    {
+        var tomorrow = DateOnly.FromDateTime(Now.UtcDateTime).AddDays(1);
+        _task.SetOccurrenceDeadline(_task.Occurrences[0].Id, new TaskDeadline(tomorrow, new TimeOnly(18, 0)), DeadlineAlertStage.None);
+
+        await SendAsync(Event(AgentEventType.NeedsUserInput, "Posso seguir?"));
+
+        _presenter.Presented.Should().ContainSingle()
+            .Which.DeadlineLabel.Should().Be("Prazo da tarefa: ATENÇÃO · vence amanhã às 18:00");
+    }
+
+    [Fact]
+    public async Task WaitingForTheUser_WithADistantDeadline_LeavesItOut()
+    {
+        var nextMonth = DateOnly.FromDateTime(Now.UtcDateTime).AddDays(30);
+        _task.SetOccurrenceDeadline(_task.Occurrences[0].Id, new TaskDeadline(nextMonth, new TimeOnly(18, 0)), DeadlineAlertStage.None);
+
+        await SendAsync(Event(AgentEventType.NeedsUserInput, "Posso seguir?"));
+
+        _presenter.Presented.Should().ContainSingle().Which.DeadlineLabel.Should().BeNull();
     }
 
     /// <summary>"Stop" é o fim de uma resposta, não o da sessão: aguardando revisão.</summary>

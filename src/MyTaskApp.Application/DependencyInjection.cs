@@ -6,6 +6,7 @@ using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Commands;
 using MyTaskApp.Application.Configuration;
+using MyTaskApp.Application.Deadlines;
 using MyTaskApp.Application.Development;
 using MyTaskApp.Application.External;
 using MyTaskApp.Application.External.Jira;
@@ -161,6 +162,17 @@ public static class DependencyInjection
         services.AddScoped<AcknowledgeReminderHandler>();
         services.AddScoped<SnoozeReminderHandler>();
         services.AddScoped<DispatchDueRemindersHandler>();
+
+        // Prazos (ADR-050). O despacho roda no tique do ReminderScheduler.
+        services.AddScoped<SetDeadlineHandler>();
+        services.AddScoped<ClearDeadlineHandler>();
+        services.AddScoped<SnoozeDeadlineAlertHandler>();
+        services.AddScoped<SetTaskDeadlineAlertsHandler>();
+        services.AddScoped<UpdateTaskPlanHandler>();
+        services.AddScoped<GetDeadlineSettingsHandler>();
+        services.AddScoped<UpdateDeadlineSettingsHandler>();
+        services.AddScoped<DispatchDeadlineAlertsHandler>();
+        services.TryAddSingleton<IDeadlineAlertPresenter, NoDeadlineAlertPresenter>();
 
         // Singleton: e um laco so, e ele nao pode capturar escopo nenhum
         // (validateScopes: true reprovaria). So recebe IUseCaseRunner.

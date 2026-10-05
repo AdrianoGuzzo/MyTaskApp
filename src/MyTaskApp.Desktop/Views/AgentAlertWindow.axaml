@@ -87,6 +87,15 @@
                  TextWrapping="Wrap"
                  IsVisible="{Binding MessageText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
+      <!-- O agente esperando e a entrega perto (ADR-050, §26): a pendência pesa mais. -->
+      <TextBlock x:Name="AgentAlertDeadline"
+                 Text="{Binding DeadlineLabel}"
+                 FontSize="11"
+                 FontWeight="SemiBold"
+                 Foreground="{DynamicResource WidgetCautionBrush}"
+                 TextWrapping="Wrap"
+                 IsVisible="{Binding DeadlineLabel, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
       <Border Padding="9,6"
               CornerRadius="{StaticResource WidgetPillRadius}"
               Background="{DynamicResource WidgetDangerSoftBrush}"

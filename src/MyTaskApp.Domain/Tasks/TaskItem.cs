@@ -1,3 +1,4 @@
+using MyTaskApp.Domain.Deadlines;
 using MyTaskApp.Domain.External;
 using MyTaskApp.Domain.Lifecycle;
 using MyTaskApp.Domain.Reminders;
@@ -12,6 +13,10 @@ namespace MyTaskApp.Domain.Tasks;
 public sealed class TaskItem
 {
     public const int MaxTitleLength = 200;
+
+    public const int MaxNextActionLength = 200;
+
+    public static readonly TimeSpan MaxEstimate = TimeSpan.FromHours(999);
 
     private readonly List<TaskOccurrence> _occurrences = [];
 
@@ -67,6 +72,26 @@ public sealed class TaskItem
     /// <c>null</c> = tarefa só local, que é o caso comum e continua sendo.
     /// </summary>
     public ExternalLink? External { get; private set; }
+
+    /// <summary>
+    /// Os avisos de prazo desta tarefa (§20). <c>null</c> = segue a
+    /// configuração global, viva; <see cref="DeadlineAlertStage.None"/> =
+    /// silenciosa; qualquer outro conjunto = personalizado, e vence a global.
+    /// </summary>
+    public DeadlineAlertStage? DeadlineAlerts { get; private set; }
+
+    /// <summary>
+    /// O próximo passo concreto de uma tarefa longa (§14) — o que impede
+    /// "implementar o módulo" de virar um item impossível de retomar. Opcional,
+    /// e uma linha só: não é lista de subtarefas.
+    /// </summary>
+    public string? NextAction { get; private set; }
+
+    /// <summary>
+    /// Quanto trabalho a tarefa deve dar (§15). Só guardado e mostrado por
+    /// enquanto; é o dado de que um planejamento futuro vai precisar.
+    /// </summary>
+    public TimeSpan? Estimate { get; private set; }
 
     /// <summary>Quando foi arquivado. <c>null</c> = está na lista principal.</summary>
     public DateTimeOffset? ArchivedAt { get; private set; }
@@ -593,6 +618,102 @@ public sealed class TaskItem
         occurrence.Reschedule(schedule);
 
         return occurrence;
+    }
+
+    // ---------------------------------------------------------------------
+    // Prazo (ADR-050)
+    //
+    // O prazo é da ocorrência, como o agendamento: é ela que se conclui, e é
+    // ela que a lista mostra. A política dos avisos é da série, como a do
+    // lembrete. Nada disto chama RefreshConclusion — prazo não é execução.
+    // ---------------------------------------------------------------------
+
+    /// <param name="initialStage">
+    /// O degrau em que o prazo já nasce, calculado pela Application com a
+    /// política em vigor. Os avisos partem dele.
+    /// </param>
+    public TaskOccurrence SetOccurrenceDeadline(
+        Guid occurrenceId,
+        TaskDeadline deadline,
+        DeadlineAlertStage initialStage)
+    {
+        var occurrence = GetOccurrence(occurrenceId);
+
+        RefuseWhenOutOfTheMainList("definir o prazo de");
+
+        occurrence.SetDeadline(deadline, initialStage);
+
+        return occurrence;
+    }
+
+    public TaskOccurrence ClearOccurrenceDeadline(Guid occurrenceId)
+    {
+        var occurrence = GetOccurrence(occurrenceId);
+
+        RefuseWhenOutOfTheMainList("remover o prazo de");
+
+        occurrence.ClearDeadline();
+
+        return occurrence;
+    }
+
+    /// <summary>Adia o <b>aviso</b> do prazo. O prazo não se move (§21).</summary>
+    public TaskOccurrence SnoozeDeadlineAlert(Guid occurrenceId, DateTimeOffset untilUtc)
+    {
+        var occurrence = GetOccurrence(occurrenceId);
+
+        RefuseWhenOutOfTheMainList("adiar o aviso de");
+
+        occurrence.SnoozeDeadlineAlert(untilUtc);
+
+        return occurrence;
+    }
+
+    /// <summary>
+    /// Registra o aviso que saiu. Sem a guarda da lista principal, como o
+    /// disparo do lembrete: o despacho já filtra arquivados, e entre a consulta
+    /// e a gravação uma recusa aqui derrubaria o lote inteiro.
+    /// </summary>
+    public void MarkDeadlineAlerted(Guid occurrenceId, DeadlineAlertStage stage, DateTimeOffset atUtc) =>
+        GetOccurrence(occurrenceId).MarkDeadlineAlerted(stage, atUtc);
+
+    /// <param name="alerts"><c>null</c> volta a seguir a configuração global.</param>
+    public void ChangeDeadlineAlerts(DeadlineAlertStage? alerts)
+    {
+        RefuseWhenOutOfTheMainList("mudar os avisos de prazo de");
+
+        if (alerts is { } stages && !DeadlineAlertStages.IsValidSet(stages))
+        {
+            throw new DomainException("Esse aviso de prazo não existe.");
+        }
+
+        DeadlineAlerts = alerts;
+    }
+
+    /// <summary>
+    /// Próxima ação e estimativa juntas, e atômicas como <see cref="Update"/>:
+    /// as duas são validadas antes de qualquer uma ser gravada.
+    /// </summary>
+    public void ChangePlan(string? nextAction, TimeSpan? estimate)
+    {
+        RefuseWhenOutOfTheMainList("editar");
+
+        var normalizedAction = NormalizeOptionalText(nextAction);
+
+        if (normalizedAction?.Length > MaxNextActionLength)
+        {
+            throw new DomainException(
+                $"A próxima ação não pode passar de {MaxNextActionLength} caracteres.");
+        }
+
+        if (estimate is { } span && (span <= TimeSpan.Zero || span > MaxEstimate))
+        {
+            throw new DomainException(
+                $"A estimativa precisa ficar entre alguns minutos e {MaxEstimate.TotalHours:0} horas.");
+        }
+
+        NextAction = normalizedAction;
+        Estimate = estimate;
     }
 
     /// <summary>

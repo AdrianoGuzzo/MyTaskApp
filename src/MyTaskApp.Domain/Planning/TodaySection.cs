@@ -8,4 +8,11 @@ public enum TodaySection
     Today = 2,
     Unscheduled = 3,
     Completed = 4,
+
+    /// <summary>
+    /// PRAZOS: tarefas com prazo que não estão marcadas para uma hora de hoje —
+    /// responsabilidades que continuam correndo enquanto o usuário faz outras
+    /// coisas (ADR-050).
+    /// </summary>
+    Deadlines = 5,
 }

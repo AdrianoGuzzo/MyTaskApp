@@ -40,7 +40,7 @@ primeiro para Windows. Também roda no Linux, com algumas funções a menos.
 - **Captura rápida.** A tela abre com uma caixa já focada. Cada linha vira uma
   tarefa para hoje. `Enter` registra a lista inteira, `Shift+Enter` quebra a
   linha. A captura é atômica: ou entra tudo, ou nada (até 100 linhas).
-- **Seções do dia.** `ATRASADAS`, `AGORA`, `HOJE`, `SEM HORÁRIO` e `CONCLUÍDAS`.
+- **Seções do dia.** `ATRASADAS`, `AGORA`, `HOJE`, `PRAZOS`, `SEM HORÁRIO` e `CONCLUÍDAS`.
   A janela "agora" vai de 15 min antes a 60 min depois do horário, e é
   configurável. O quadro se atualiza sozinho a cada minuto.
 - **Ordem manual.** Arraste as linhas para reordenar dentro da seção.
@@ -58,6 +58,23 @@ primeiro para Windows. Também roda no Linux, com algumas funções a menos.
   no banco. Ao abrir, o app avisa o que deveria ter avisado enquanto estava
   fechado.
 - O padrão de lembrete é ajustado em *☰ → Configuração de lembretes…*.
+
+### Prazos para tarefas longas
+
+- Uma tarefa pode ter um **prazo** ("sexta às 18:00"), independente do horário
+  e do lembrete. Pelo menu `⋯` da linha: Hoje, Amanhã, Final da semana, Próxima
+  semana, Em 3 dias, Em 1 semana ou Personalizado; e Remover prazo.
+- A linha mostra quanto falta, com a severidade escrita: "5 dias restantes",
+  "ATENÇÃO · vence amanhã às 18:00", "URGENTE · vence em 1h 42min",
+  "ATRASADA · há 3 horas".
+- A seção `PRAZOS` junta o que tem prazo e não está marcado para uma hora de
+  hoje, ordenado pelo prazo, com o resumo no cabeçalho. A tarefa só vai para
+  `ATRASADAS` quando o **prazo** passa. No HUD, só o que vence em até 48 horas.
+- Avisos por degrau, um de cada: por padrão na véspera, faltando 8 h e 2 h, e
+  ao atrasar (repetindo uma vez por dia). Configuráveis em *☰ → Configuração de
+  lembretes…*, e por tarefa (Padrão, Silencioso, Só na véspera, Personalizado).
+  "Adiar 1 h" adia o aviso, não o prazo.
+- Na janela da tarefa: prazo, avisos, **próxima ação** e **estimativa**.
 
 ### Um widget, não uma janela
 

@@ -333,6 +333,9 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                     b.Property<long>("CreatedAt")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int?>("DeadlineAlerts")
+                        .HasColumnType("INTEGER");
+
                     b.Property<long?>("DeletedAt")
                         .HasColumnType("INTEGER");
 
@@ -341,6 +344,14 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Description")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("Estimate")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("EstimateTicks");
+
+                    b.Property<string>("NextAction")
+                        .HasMaxLength(200)
                         .HasColumnType("TEXT");
 
                     b.Property<int>("Priority")
@@ -392,6 +403,14 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                     b.Property<long?>("CompletedAt")
                         .HasColumnType("INTEGER");
 
+                    b.Property<DateOnly?>("DeadlineDate")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("Deadline_Date");
+
+                    b.Property<TimeOnly?>("DeadlineTime")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("Deadline_Time");
+
                     b.Property<int?>("Position")
                         .HasColumnType("INTEGER");
 
@@ -410,6 +429,10 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CompletedAt");
+
+                    b.HasIndex("DeadlineDate")
+                        .HasDatabaseName("IX_TaskOccurrences_Deadline")
+                        .HasFilter("\"Deadline_Date\" IS NOT NULL AND \"Status\" = 0");
 
                     b.HasIndex("ScheduledDate", "Status");
 
@@ -499,6 +522,32 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                     b.ToTable("DataRetentionSettings", null, t =>
                         {
                             t.HasCheckConstraint("CK_DataRetentionSettings_SingleRow", "Id = 1");
+                        });
+                });
+
+            modelBuilder.Entity("MyTaskApp.Infrastructure.Persistence.DeadlineSettingsRow", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<TimeOnly>("DefaultTime")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("OverdueRepeatEvery")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("OverdueRepeatEveryTicks");
+
+                    b.Property<int>("Stages")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("DeadlineSettings", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_DeadlineSettings_SingleRow", "Id = 1");
                         });
                 });
 
@@ -696,6 +745,31 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.OwnsOne("MyTaskApp.Domain.Deadlines.DeadlineAlertState", "DeadlineAlert", b1 =>
+                        {
+                            b1.Property<Guid>("TaskOccurrenceId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<long?>("LastAlertAtUtc")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("DeadlineAlert_LastAlertAtUtc");
+
+                            b1.Property<int>("LastStage")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("DeadlineAlert_LastStage");
+
+                            b1.Property<long?>("SnoozedUntilUtc")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("DeadlineAlert_SnoozedUntilUtc");
+
+                            b1.HasKey("TaskOccurrenceId");
+
+                            b1.ToTable("TaskOccurrences");
+
+                            b1.WithOwner()
+                                .HasForeignKey("TaskOccurrenceId");
+                        });
+
                     b.OwnsOne("MyTaskApp.Domain.Reminders.ReminderState", "Reminder", b1 =>
                         {
                             b1.Property<Guid>("TaskOccurrenceId")
@@ -735,6 +809,9 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                             b1.WithOwner()
                                 .HasForeignKey("TaskOccurrenceId");
                         });
+
+                    b.Navigation("DeadlineAlert")
+                        .IsRequired();
 
                     b.Navigation("Reminder")
                         .IsRequired();

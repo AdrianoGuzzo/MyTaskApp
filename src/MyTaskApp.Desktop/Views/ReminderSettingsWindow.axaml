@@ -38,6 +38,57 @@
 
     <views:ReminderEditorView DataContext="{Binding Editor}" />
 
+    <!--
+      Alertas de prazo (ADR-050, §19). Três escolhas, e as caixas de cada degrau
+      só para quem personalizar. Vale na hora para toda tarefa em "Padrão".
+    -->
+    <StackPanel x:Name="DeadlineSettings"
+                Spacing="8"
+                DataContext="{Binding Deadlines}">
+      <Separator Margin="0,0,0,4" />
+      <TextBlock Text="Alertas de prazo" FontSize="14" FontWeight="SemiBold" />
+      <TextBlock FontSize="12"
+                 Opacity="0.6"
+                 TextWrapping="Wrap"
+                 Text="Para tarefas com prazo. Padrão: avisa na véspera, faltando 8 horas, 2 horas e quando ficar atrasada. Cada tarefa pode ter o seu próprio ajuste." />
+
+      <StackPanel Orientation="Horizontal" Spacing="14">
+        <RadioButton GroupName="DeadlineSettingsMode" Content="Padrão" IsChecked="{Binding IsDefault}" />
+        <RadioButton GroupName="DeadlineSettingsMode" Content="Personalizado" IsChecked="{Binding IsCustom}" />
+        <RadioButton GroupName="DeadlineSettingsMode" Content="Desativado" IsChecked="{Binding IsDisabled}" />
+      </StackPanel>
+
+      <StackPanel Spacing="2" IsVisible="{Binding IsCustom}">
+        <TextBlock FontSize="12" Opacity="0.7" Text="Avisar quando faltar:" />
+        <WrapPanel>
+          <CheckBox Content="7 dias" Margin="0,0,14,0" IsChecked="{Binding AlertSevenDays}" />
+          <CheckBox Content="3 dias" Margin="0,0,14,0" IsChecked="{Binding AlertThreeDays}" />
+          <CheckBox Content="1 dia" Margin="0,0,14,0" IsChecked="{Binding AlertOneDay}" />
+          <CheckBox Content="8 horas" Margin="0,0,14,0" IsChecked="{Binding AlertEightHours}" />
+          <CheckBox Content="2 horas" Margin="0,0,14,0" IsChecked="{Binding AlertTwoHours}" />
+        </WrapPanel>
+        <CheckBox Content="Avisar quando ficar atrasada" IsChecked="{Binding AlertOverdue}" />
+      </StackPanel>
+
+      <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" ColumnSpacing="12" RowSpacing="8"
+            IsVisible="{Binding ShowsOptions}">
+        <TextBlock Grid.Row="0" Grid.Column="0" VerticalAlignment="Center" FontSize="12" Text="Repetir o aviso de atraso" />
+        <ComboBox Grid.Row="0"
+                  Grid.Column="1"
+                  MinWidth="170"
+                  ItemsSource="{x:Static vm:DeadlineSettingsEditorViewModel.RepeatLabels}"
+                  SelectedIndex="{Binding RepeatIndex}"
+                  IsEnabled="{Binding CanRepeat}" />
+        <TextBlock Grid.Row="1" Grid.Column="0" VerticalAlignment="Center" FontSize="12" Text="Horário padrão do prazo" />
+        <TimePicker Grid.Row="1"
+                    Grid.Column="1"
+                    SelectedTime="{Binding DefaultTime}"
+                    ClockIdentifier="24HourClock"
+                    MinuteIncrement="15"
+                    ToolTip.Tip="O horário que um prazo recebe quando você escolhe só o dia (Amanhã, Final da semana…)" />
+      </Grid>
+    </StackPanel>
+
     <Border Padding="12,9"
             CornerRadius="6"
             Background="{DynamicResource SystemFillColorCriticalBackgroundBrush}"

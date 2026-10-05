@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Deadlines;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.Reminders;
@@ -33,6 +34,13 @@ public sealed partial class ReminderSettingsViewModel(
 
     public ReminderEditorViewModel Editor { get; } = new();
 
+    /// <summary>
+    /// Os alertas de prazo (ADR-050). Na mesma janela e no mesmo "Salvar":
+    /// lembrete e prazo são as duas formas de o app chamar atenção, e o usuário
+    /// procura as duas no mesmo lugar.
+    /// </summary>
+    public DeadlineSettingsEditorViewModel Deadlines { get; } = new();
+
     /// <summary>Avisa a janela de que pode fechar.</summary>
     public event Action? Saved;
 
@@ -40,11 +48,19 @@ public sealed partial class ReminderSettingsViewModel(
     public async Task LoadAsync(CancellationToken cancellationToken)
     {
         ReminderSettings? settings = null;
+        DeadlineSettings? deadlines = null;
 
         var loaded = await TryAsync(
-            async () => settings = await runner.RunAsync<GetReminderDefaultsHandler, ReminderSettings>(
-                (handler, token) => handler.HandleAsync(new GetReminderDefaults(), token),
-                cancellationToken),
+            async () =>
+            {
+                settings = await runner.RunAsync<GetReminderDefaultsHandler, ReminderSettings>(
+                    (handler, token) => handler.HandleAsync(new GetReminderDefaults(), token),
+                    cancellationToken);
+
+                deadlines = await runner.RunAsync<GetDeadlineSettingsHandler, DeadlineSettings>(
+                    (handler, token) => handler.HandleAsync(new GetDeadlineSettings(), token),
+                    cancellationToken);
+            },
             "Não foi possível carregar a configuração de lembretes.");
 
         if (!loaded)
@@ -53,6 +69,7 @@ public sealed partial class ReminderSettingsViewModel(
         }
 
         Editor.Load(settings!.DefaultPolicy);
+        Deadlines.Load(deadlines ?? DeadlineSettings.Factory);
         ShowPause(settings.PausedUntilUtc);
         StatusMessage = null;
     }
@@ -73,18 +90,29 @@ public sealed partial class ReminderSettingsViewModel(
             return;
         }
 
+        var deadlines = Deadlines.ToCommand();
+
         var saved = await TryAsync(
-            () => runner.RunAsync<UpdateReminderDefaultsHandler>(
-                (handler, token) => handler.HandleAsync(
-                    new UpdateReminderDefaults(
-                        policy.IsEnabled,
-                        policy.Anchor,
-                        policy.Offset,
-                        policy.RepeatUntilAcknowledged,
-                        policy.RepeatEvery,
-                        policy.Channels),
-                    token),
-                cancellationToken),
+            async () =>
+            {
+                // O prazo primeiro: é ele que pode recusar ("escolha pelo menos
+                // um aviso"), e a recusa não deve deixar o lembrete já gravado.
+                await runner.RunAsync<UpdateDeadlineSettingsHandler, DeadlineSettings>(
+                    (handler, token) => handler.HandleAsync(deadlines, token),
+                    cancellationToken);
+
+                await runner.RunAsync<UpdateReminderDefaultsHandler>(
+                    (handler, token) => handler.HandleAsync(
+                        new UpdateReminderDefaults(
+                            policy.IsEnabled,
+                            policy.Anchor,
+                            policy.Offset,
+                            policy.RepeatUntilAcknowledged,
+                            policy.RepeatEvery,
+                            policy.Channels),
+                        token),
+                    cancellationToken);
+            },
             "Não foi possível salvar a configuração.");
 
         if (saved)
@@ -98,6 +126,7 @@ public sealed partial class ReminderSettingsViewModel(
     {
         // "Restaurar padrão" lê da mesma constante que a instalação nova usa.
         Editor.Load(ReminderPolicy.Default);
+        Deadlines.Load(DeadlineSettings.Factory);
         StatusMessage = "Padrão de fábrica restaurado. Salve para aplicar.";
 
         return Task.CompletedTask;

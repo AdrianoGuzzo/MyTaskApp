@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using MyTaskApp.Application.Configuration;
+using MyTaskApp.Application.Deadlines;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Application.Tests.Fakes;
 
@@ -157,6 +158,44 @@ public class ReminderSchedulerTests
         _time.Advance(TimeSpan.FromSeconds(expected));
 
         _runner.Invocations.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task EachTick_AlsoChecksTheDeadlines()
+    {
+        // ADR-050: o prazo anda no mesmo tique, sem timer próprio.
+        await using var scheduler = Scheduler();
+        scheduler.Start();
+
+        _time.Advance(Period);
+
+        _runner.DeadlineInvocations.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task AReminderTickThatThrows_StillChecksTheDeadlines()
+    {
+        await using var scheduler = Scheduler();
+        _runner.Failure = new InvalidOperationException("banco fora do ar");
+        _runner.FailingHandler = typeof(DispatchDueRemindersHandler);
+
+        var tick = () => scheduler.TickAsync(Ct);
+
+        await tick.Should().ThrowAsync<InvalidOperationException>();
+        _runner.DeadlineInvocations.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task ADeadlineTickThatThrows_DoesNotFailTheReminderTick()
+    {
+        await using var scheduler = Scheduler();
+        _runner.Failure = new InvalidOperationException("banco fora do ar");
+        _runner.FailingHandler = typeof(DispatchDeadlineAlertsHandler);
+
+        var result = await scheduler.TickAsync(Ct);
+
+        result.Should().Be(DispatchDueRemindersResult.Nothing);
+        _runner.Invocations.Should().Be(1);
     }
 
     private ReminderScheduler Scheduler(int tickSeconds = 30) =>

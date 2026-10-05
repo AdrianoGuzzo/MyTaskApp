@@ -1,4 +1,6 @@
+using MyTaskApp.Application.Deadlines;
 using MyTaskApp.Domain.Agents;
+using MyTaskApp.Domain.Deadlines;
 using MyTaskApp.Domain.External;
 using MyTaskApp.Domain.Reminders;
 using MyTaskApp.Domain.Tasks;
@@ -41,7 +43,19 @@ public sealed record TodayTask(
     /// A issue vinculada, como estava na última leitura (ADR-045). Vem do
     /// banco, nunca da rede: a lista desenha a chave e o tipo mesmo sem Jira.
     /// </summary>
-    ExternalLink? External = null);
+    ExternalLink? External = null,
+    /// <summary>
+    /// O prazo já avaliado e escrito; <c>null</c> = sem prazo (ADR-050). A
+    /// lista se recarrega a cada minuto, e é isso que faz "5 dias" virar
+    /// "4 dias e 23 horas" sem timer nenhum por tarefa.
+    /// </summary>
+    TaskDeadlineView? Deadline = null,
+    /// <summary>Os avisos de prazo da tarefa; <c>null</c> = segue o padrão global.</summary>
+    DeadlineAlertStage? DeadlineAlerts = null,
+    /// <summary>O próximo passo de uma tarefa longa (§14).</summary>
+    string? NextAction = null,
+    /// <summary>A estimativa de trabalho (§15).</summary>
+    TimeSpan? Estimate = null);
 
 /// <summary>Um worktree da tarefa, com o nome do repositório para a linha e o balão.</summary>
 public sealed record TaskWorktree(
@@ -74,8 +88,56 @@ public sealed record TodayBoard(
     IReadOnlyList<TodayTask> Unscheduled,
     IReadOnlyList<TodayTask> Completed)
 {
-    public int TotalVisible =>
-        Overdue.Count + Now.Count + Today.Count + Unscheduled.Count + Completed.Count;
+    /// <summary>
+    /// PRAZOS (ADR-050): com prazo e fora do plano de hoje, do prazo mais
+    /// próximo ao mais distante. Propriedade, e não parâmetro, para quem monta
+    /// um quadro sem prazos não precisar saber que a seção existe.
+    /// </summary>
+    public IReadOnlyList<TodayTask> Deadlines { get; init; } = [];
 
-    public int RemainingCount => Overdue.Count + Now.Count + Today.Count + Unscheduled.Count;
+    public int TotalVisible =>
+        Overdue.Count + Now.Count + Today.Count + Deadlines.Count + Unscheduled.Count + Completed.Count;
+
+    /// <summary>Tarefa com prazo é trabalho aberto, então PRAZOS conta.</summary>
+    public int RemainingCount =>
+        Overdue.Count + Now.Count + Today.Count + Deadlines.Count + Unscheduled.Count;
+
+    /// <summary>O resumo de prazos do §11, contado sobre todas as seções abertas.</summary>
+    public DeadlineSummary DeadlineSummary => DeadlineSummary.Of(
+        Overdue.Concat(Now).Concat(Today).Concat(Deadlines).Concat(Unscheduled));
+}
+
+/// <summary>
+/// Quantos prazos pedem atenção (§11): atrasados, vencendo hoje e nos próximos
+/// sete dias. Um resumo, não um painel.
+/// </summary>
+public sealed record DeadlineSummary(int Overdue, int DueToday, int ThisWeek)
+{
+    public static readonly TimeSpan Week = TimeSpan.FromDays(7);
+
+    public bool IsEmpty => Overdue + DueToday + ThisWeek == 0;
+
+    /// <summary>"1 atrasada · 2 hoje · 3 na semana", só com o que houver.</summary>
+    public string Label => string.Join(
+        " · ",
+        new[]
+        {
+            Overdue > 0 ? $"{Overdue} {(Overdue == 1 ? "atrasada" : "atrasadas")}" : null,
+            DueToday > 0 ? $"{DueToday} hoje" : null,
+            ThisWeek > 0 ? $"{ThisWeek} na semana" : null,
+        }.OfType<string>());
+
+    public static DeadlineSummary Of(IEnumerable<TodayTask> open)
+    {
+        var deadlines = open
+            .Select(task => task.Deadline)
+            .OfType<TaskDeadlineView>()
+            .ToList();
+
+        return new DeadlineSummary(
+            deadlines.Count(view => view.Status is DeadlineStatus.Overdue),
+            deadlines.Count(view => view.Status is DeadlineStatus.DueToday),
+            deadlines.Count(view => view.Status is DeadlineStatus.DueSoon or DeadlineStatus.OnTrack
+                && view.Remaining <= Week));
+    }
 }

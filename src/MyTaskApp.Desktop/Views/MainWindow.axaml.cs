@@ -416,12 +416,14 @@ public partial class MainWindow : Window
     /// No HUD a lista mostra só o que falta: ali altura é o recurso escasso, e
     /// uma tarefa riscada empurra para fora da vista uma que ainda espera.
     /// Quem decide é a moldura, mas quem monta a lista é o quadro de hoje.
+    /// Pela mesma razão, o prazo com folga fica só na janela normal (§10).
     /// </summary>
     private void ShowPendingOnly()
     {
         if (DataContext is TodayViewModel board)
         {
             board.HideCompleted = Chrome.IsHud;
+            board.PressingDeadlinesOnly = Chrome.IsHud;
         }
     }
 

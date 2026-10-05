@@ -135,6 +135,16 @@ internal sealed class TaskItemConfiguration : IEntityTypeConfiguration<TaskItem>
                 .IsRequired();
         });
 
+        // Prazo (ADR-050). A sobrescrita dos avisos é um [Flags] como int, para
+        // continuar traduzível; nula = segue a configuração global.
+        builder.Property(task => task.DeadlineAlerts).HasConversion<int?>();
+
+        builder.Property(task => task.NextAction).HasMaxLength(TaskItem.MaxNextActionLength);
+
+        builder.Property(task => task.Estimate)
+            .HasColumnName("EstimateTicks")
+            .HasConversion(TimeSpanTicksConverter.Instance);
+
         builder.HasMany(task => task.Occurrences)
             .WithOne()
             .HasForeignKey(occurrence => occurrence.TaskItemId)

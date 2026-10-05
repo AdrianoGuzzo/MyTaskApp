@@ -1,8 +1,11 @@
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Deadlines;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Domain.Agents;
+using MyTaskApp.Domain.Deadlines;
+using MyTaskApp.Domain.Tasks;
 
 namespace MyTaskApp.Application.Agents;
 
@@ -55,6 +58,8 @@ public sealed class RecordAgentEventHandler(
     IAgentAttentionPresenter presenter,
     ITerminalWindowManager windows,
     AgentAlertSoundPlayer sounds,
+    IUserClock clock,
+    TimeProvider timeProvider,
     ILogger<RecordAgentEventHandler> logger)
 {
     public async Task<AgentEventOutcome> HandleAsync(
@@ -208,7 +213,28 @@ public sealed class RecordAgentEventHandler(
                 development?.Branch,
                 session.Activity,
                 session.ActivityMessage,
-                session.ActivityChangedAt ?? DateTimeOffset.UtcNow),
+                session.ActivityChangedAt ?? DateTimeOffset.UtcNow,
+                DeadlineLabelOf(task)),
             cancellationToken);
+    }
+
+    /// <summary>
+    /// O agente parou esperando você <b>e</b> a entrega está perto: é isso que
+    /// torna a pendência relevante (§26). Prazo folgado não entra no aviso.
+    /// </summary>
+    private string? DeadlineLabelOf(TaskItem? task)
+    {
+        if (task?.Occurrences
+                .Where(occurrence => occurrence.Status is TaskItemStatus.Pending)
+                .Select(occurrence => occurrence.Deadline)
+                .OfType<TaskDeadline>()
+                .MinBy(deadline => (deadline.Date, deadline.Time)) is not { } deadline)
+        {
+            return null;
+        }
+
+        var view = TaskDeadlineView.Describe(deadline, clock, timeProvider.GetUtcNow());
+
+        return view.Severity >= DeadlineSeverity.Attention ? $"Prazo da tarefa: {view.Label}" : null;
     }
 }
