@@ -37,5 +37,30 @@ internal sealed class DevelopmentCommandConfiguration : IEntityTypeConfiguration
         builder.Property(command => command.UpdatedAt)
             .HasConversion(UtcInstantConverter.Instance)
             .IsRequired();
+
+        // O comando rápido (ADR-051). Os padrões são o comportamento de antes:
+        // quem atualiza continua com comandos escondidos, na raiz do worktree.
+        builder.Property(command => command.Name)
+            .HasMaxLength(DevelopmentCommand.MaxNameLength);
+
+        builder.Property(command => command.Mode).HasConversion<int>();
+
+        builder.Property(command => command.WorkingDirectory)
+            .HasMaxLength(CommandWorkingDirectory.MaxLength);
+
+        // Sem HasDefaultValue(true): o EF tomaria o false do CLR por "não
+        // informado" e gravaria true no lugar. O true das linhas antigas vem da
+        // migration QuickCommands, escrito à mão.
+
+        // As definições dos parâmetros são parte do comando: excluí-lo leva todas.
+        builder.HasMany(command => command.Parameters)
+            .WithOne()
+            .HasForeignKey(parameter => parameter.DevelopmentCommandId)
+            .IsRequired()
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Navigation(command => command.Parameters)
+            .HasField("_parameters")
+            .UsePropertyAccessMode(PropertyAccessMode.Field);
     }
 }

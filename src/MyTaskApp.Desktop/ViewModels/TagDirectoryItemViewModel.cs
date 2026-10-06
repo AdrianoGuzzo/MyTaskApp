@@ -1,6 +1,8 @@
+using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
+using MyTaskApp.Application.Commands;
 using MyTaskApp.Application.Tags;
 using MyTaskApp.Desktop.Notes;
 using MyTaskApp.Domain.Tags;
@@ -34,6 +36,53 @@ public sealed partial class TagDirectoryItemViewModel(TagListItemViewModel owner
     public bool HasDefaultBranch => !string.IsNullOrEmpty(Row.DefaultBranch);
 
     public string DefaultBranchLabel => $"Branch padrão: {Row.DefaultBranch}";
+
+    /// <summary>Os comandos rápidos que os worktrees deste repositório mostram (ADR-051).</summary>
+    public ObservableCollection<TagDirectoryCommandItemViewModel> Commands { get; } = [];
+
+    /// <summary>Os comandos globais que ainda não estão aqui, para "+ Adicionar comando".</summary>
+    public ObservableCollection<DevelopmentCommandRow> AvailableCommands { get; } = [];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasNoCommands))]
+    private bool _isCommandsExpanded;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CommandsLabel), nameof(HasNoCommands))]
+    private int _commandCount = row.CommandCount;
+
+    [ObservableProperty]
+    private DevelopmentCommandRow? _selectedNewCommand;
+
+    public string CommandsLabel => CommandCount == 0 ? "Comandos" : $"Comandos ({CommandCount})";
+
+    public bool HasNoCommands => IsCommandsExpanded && CommandCount == 0;
+
+    public bool HasAvailableCommands => AvailableCommands.Count > 0;
+
+    /// <summary>Troca as listas de uma vez, depois de cada mudança.</summary>
+    internal void ShowCommands(IReadOnlyList<TagDirectoryCommandRow> bindings, IReadOnlyList<DevelopmentCommandRow> globals)
+    {
+        Commands.Clear();
+
+        for (var index = 0; index < bindings.Count; index++)
+        {
+            Commands.Add(new TagDirectoryCommandItemViewModel(this, bindings[index], index, bindings.Count));
+        }
+
+        var used = bindings.Select(binding => binding.CommandId).ToHashSet();
+
+        AvailableCommands.Clear();
+
+        foreach (var global in globals.Where(global => !used.Contains(global.Id)).OrderBy(global => global.DisplayName, StringComparer.CurrentCultureIgnoreCase))
+        {
+            AvailableCommands.Add(global);
+        }
+
+        SelectedNewCommand = AvailableCommands.FirstOrDefault();
+        CommandCount = bindings.Count;
+        OnPropertyChanged(nameof(HasAvailableCommands));
+    }
 
     /// <summary><c>null</c> enquanto a conferência não volta.</summary>
     [ObservableProperty]

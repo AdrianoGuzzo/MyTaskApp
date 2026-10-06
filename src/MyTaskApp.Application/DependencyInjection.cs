@@ -12,6 +12,7 @@ using MyTaskApp.Application.External;
 using MyTaskApp.Application.External.Jira;
 using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Application.Planning;
+using MyTaskApp.Application.QuickCommands;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Application.Sounds;
 using MyTaskApp.Application.Tags;
@@ -94,6 +95,21 @@ public static class DependencyInjection
         services.AddScoped<RunCommandHandler>();
         services.AddScoped<SetDevelopmentCommandsHandler>();
         services.AddScoped<RunDevelopmentCommandsHandler>();
+
+        // Comandos rápidos: o global vira botão no diretório da etiqueta (ADR-051).
+        services.AddScoped<GetTagDirectoryCommandsHandler>();
+        services.AddScoped<AddTagDirectoryCommandHandler>();
+        services.AddScoped<CustomizeTagDirectoryCommandHandler>();
+        services.AddScoped<SetTagDirectoryCommandEnabledHandler>();
+        services.AddScoped<MoveTagDirectoryCommandHandler>();
+        services.AddScoped<RemoveTagDirectoryCommandHandler>();
+        services.AddScoped<GetQuickCommandsHandler>();
+        services.AddScoped<PrepareQuickCommandHandler>();
+        services.AddScoped<RunQuickCommandHandler>();
+        services.AddScoped<CancelQuickCommandHandler>();
+        services.AddScoped<FocusCommandExecutionHandler>();
+        services.AddScoped<EndCommandExecutionHandler>();
+        services.AddScoped<ReconcileCommandExecutionsHandler>();
 
         // Sessões de agente de IA (Claude Code) por tarefa (ADR-030). Os
         // agentes em si vêm da Infrastructure; aqui, o catálogo e os casos de uso.
@@ -187,6 +203,12 @@ public static class DependencyInjection
         services.TryAddSingleton<AgentSessionMonitor>();
         services.TryAddSingleton<IAgentSessionWatcher>(
             provider => provider.GetRequiredService<AgentSessionMonitor>());
+
+        // O mesmo desenho para os comandos rápidos (ADR-051): o monitor é o
+        // dono dos vigias e do registro do que roda neste processo.
+        services.TryAddSingleton<CommandExecutionMonitor>();
+        services.TryAddSingleton<ICommandExecutionWatcher>(
+            provider => provider.GetRequiredService<CommandExecutionMonitor>());
 
         return services;
     }

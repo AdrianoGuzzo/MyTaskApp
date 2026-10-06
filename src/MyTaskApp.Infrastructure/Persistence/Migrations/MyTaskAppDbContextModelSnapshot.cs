@@ -135,6 +135,90 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                     b.ToTable("TaskAuditEntries", (string)null);
                 });
 
+            modelBuilder.Entity("MyTaskApp.Domain.Commands.CommandExecution", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CommandLine")
+                        .IsRequired()
+                        .HasMaxLength(8000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CommandName")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("DevelopmentCommandId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ErrorOutput")
+                        .HasMaxLength(64000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("ExitCode")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("FailureReason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("FinishedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("KeepTerminalOpen")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Mode")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Output")
+                        .HasMaxLength(64000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("ProcessId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ProcessStartedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("StartedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("TagDirectoryCommandId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("TaskDevelopmentId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("TaskItemId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("WorkingDirectory")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DevelopmentCommandId");
+
+                    b.HasIndex("TagDirectoryCommandId");
+
+                    b.HasIndex("TaskDevelopmentId", "StartedAt");
+
+                    b.HasIndex("TaskItemId", "StartedAt");
+
+                    b.HasIndex(new[] { "Status" }, "IX_CommandExecutions_Active")
+                        .HasFilter("\"Status\" IN (1, 2)");
+
+                    b.ToTable("CommandExecutions", (string)null);
+                });
+
             modelBuilder.Entity("MyTaskApp.Domain.Commands.DevelopmentCommand", b =>
                 {
                     b.Property<Guid>("Id")
@@ -158,8 +242,25 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("KeepTerminalOpen")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Mode")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("RequiresConfirmation")
+                        .HasColumnType("INTEGER");
+
                     b.Property<long>("UpdatedAt")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("WorkingDirectory")
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
@@ -167,6 +268,46 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("DevelopmentCommands", (string)null);
+                });
+
+            modelBuilder.Entity("MyTaskApp.Domain.Commands.DevelopmentCommandParameter", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DefaultValue")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("DevelopmentCommandId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsRequired")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Label")
+                        .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Options")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DevelopmentCommandId", "Order");
+
+                    b.ToTable("DevelopmentCommandParameters", (string)null);
                 });
 
             modelBuilder.Entity("MyTaskApp.Domain.Tags.Tag", b =>
@@ -237,6 +378,46 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("TagDirectories", (string)null);
+                });
+
+            modelBuilder.Entity("MyTaskApp.Domain.Tags.TagDirectoryCommand", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CommandOverride")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("DevelopmentCommandId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("TagDirectoryId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("WorkingDirectoryOverride")
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DevelopmentCommandId");
+
+                    b.HasIndex("TagDirectoryId", "DevelopmentCommandId")
+                        .IsUnique();
+
+                    b.HasIndex("TagDirectoryId", "Order");
+
+                    b.ToTable("TagDirectoryCommands", (string)null);
                 });
 
             modelBuilder.Entity("MyTaskApp.Domain.Tasks.TaskDevelopment", b =>
@@ -599,11 +780,59 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("MyTaskApp.Domain.Commands.CommandExecution", b =>
+                {
+                    b.HasOne("MyTaskApp.Domain.Commands.DevelopmentCommand", null)
+                        .WithMany()
+                        .HasForeignKey("DevelopmentCommandId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("MyTaskApp.Domain.Tags.TagDirectoryCommand", null)
+                        .WithMany()
+                        .HasForeignKey("TagDirectoryCommandId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("MyTaskApp.Domain.Tasks.TaskDevelopment", null)
+                        .WithMany()
+                        .HasForeignKey("TaskDevelopmentId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("MyTaskApp.Domain.Tasks.TaskItem", null)
+                        .WithMany()
+                        .HasForeignKey("TaskItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MyTaskApp.Domain.Commands.DevelopmentCommandParameter", b =>
+                {
+                    b.HasOne("MyTaskApp.Domain.Commands.DevelopmentCommand", null)
+                        .WithMany("Parameters")
+                        .HasForeignKey("DevelopmentCommandId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("MyTaskApp.Domain.Tags.TagDirectory", b =>
                 {
                     b.HasOne("MyTaskApp.Domain.Tags.Tag", null)
                         .WithMany("Directories")
                         .HasForeignKey("TagId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MyTaskApp.Domain.Tags.TagDirectoryCommand", b =>
+                {
+                    b.HasOne("MyTaskApp.Domain.Commands.DevelopmentCommand", null)
+                        .WithMany()
+                        .HasForeignKey("DevelopmentCommandId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("MyTaskApp.Domain.Tags.TagDirectory", null)
+                        .WithMany("Commands")
+                        .HasForeignKey("TagDirectoryId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
@@ -817,9 +1046,19 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("MyTaskApp.Domain.Commands.DevelopmentCommand", b =>
+                {
+                    b.Navigation("Parameters");
+                });
+
             modelBuilder.Entity("MyTaskApp.Domain.Tags.Tag", b =>
                 {
                     b.Navigation("Directories");
+                });
+
+            modelBuilder.Entity("MyTaskApp.Domain.Tags.TagDirectory", b =>
+                {
+                    b.Navigation("Commands");
                 });
 
             modelBuilder.Entity("MyTaskApp.Domain.Tasks.TaskDevelopment", b =>

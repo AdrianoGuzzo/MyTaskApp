@@ -4,12 +4,14 @@ using Microsoft.Extensions.Logging.Abstractions;
 using MyTaskApp.Application;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
+using MyTaskApp.Application.Commands;
 using MyTaskApp.Application.Development;
 using MyTaskApp.Application.External;
 using MyTaskApp.Application.External.Jira;
 using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Application.Tasks;
 using MyTaskApp.Application.Planning;
+using MyTaskApp.Application.QuickCommands;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Application.Sounds;
 using MyTaskApp.Application.Tags;
@@ -22,6 +24,7 @@ public class ApplicationRegistrationTests
     private static ServiceProvider BuildProvider()
     {
         var repository = new FakeTaskItemRepository();
+        var processes = new FakeAgentProcessTracker();
 
         return new ServiceCollection()
             .AddSingleton(typeof(ILogger<>), typeof(NullLogger<>))
@@ -36,13 +39,17 @@ public class ApplicationRegistrationTests
             .AddSingleton<IChecklistArchiveQuery>(new FakeChecklistArchiveQuery())
             .AddSingleton<ILifecycleSweepQuery>(new FakeLifecycleSweepQuery())
             .AddSingleton<ITagRepository>(new FakeTagRepository())
-            .AddSingleton<ITagQuery>(new StubTagQuery())
+            .AddSingleton<ITagQuery>(new FakeTagQuery())
             .AddSingleton<IAlertPresenter>(new StubAlertPresenter())
             .AddSingleton<ISoundPlayer>(new StubSoundPlayer())
             .AddSingleton<IGitClient>(new FakeGitClient())
             .AddSingleton<IDirectoryProbe>(new FakeDirectoryProbe())
             .AddSingleton<IAgentSessionRepository>(new FakeAgentSessionRepository())
-            .AddSingleton<IAgentProcessTracker>(new FakeAgentProcessTracker())
+            .AddSingleton<IAgentProcessTracker>(processes)
+            .AddSingleton<IDevelopmentCommandRepository>(new FakeDevelopmentCommandRepository())
+            .AddSingleton<ICommandExecutor>(new FakeCommandExecutor())
+            .AddSingleton<ICommandExecutionRepository>(new FakeCommandExecutionRepository())
+            .AddSingleton<ITerminalCommandLauncher>(new FakeTerminalCommandLauncher(processes, DateTimeOffset.UnixEpoch))
             .AddSingleton<ITerminalWindowManager>(new FakeTerminalWindowManager())
             .AddSingleton<ITerminalLauncher>(new FakeTerminalLauncher(new FakeAgentProcessTracker(), DateTimeOffset.UnixEpoch))
             .AddSingleton<IAgentCliProvider>(new FakeAgentCliProvider())
@@ -78,6 +85,29 @@ public class ApplicationRegistrationTests
     [InlineData(typeof(UpdateTagDirectoryHandler))]
     [InlineData(typeof(RemoveTagDirectoryHandler))]
     [InlineData(typeof(GetTaskDevelopmentsHandler))]
+    [InlineData(typeof(GetDevelopmentCommandsHandler))]
+    [InlineData(typeof(CreateDevelopmentCommandHandler))]
+    [InlineData(typeof(UpdateDevelopmentCommandHandler))]
+    [InlineData(typeof(DeleteDevelopmentCommandHandler))]
+    [InlineData(typeof(ValidateCommandEntriesHandler))]
+    [InlineData(typeof(RunCommandHandler))]
+    [InlineData(typeof(SetDevelopmentCommandsHandler))]
+    [InlineData(typeof(RunDevelopmentCommandsHandler))]
+    [InlineData(typeof(GetTagDirectoryCommandsHandler))]
+    [InlineData(typeof(AddTagDirectoryCommandHandler))]
+    [InlineData(typeof(CustomizeTagDirectoryCommandHandler))]
+    [InlineData(typeof(SetTagDirectoryCommandEnabledHandler))]
+    [InlineData(typeof(MoveTagDirectoryCommandHandler))]
+    [InlineData(typeof(RemoveTagDirectoryCommandHandler))]
+    [InlineData(typeof(GetQuickCommandsHandler))]
+    [InlineData(typeof(PrepareQuickCommandHandler))]
+    [InlineData(typeof(RunQuickCommandHandler))]
+    [InlineData(typeof(CancelQuickCommandHandler))]
+    [InlineData(typeof(FocusCommandExecutionHandler))]
+    [InlineData(typeof(EndCommandExecutionHandler))]
+    [InlineData(typeof(ReconcileCommandExecutionsHandler))]
+    [InlineData(typeof(CommandExecutionMonitor))]
+    [InlineData(typeof(ICommandExecutionWatcher))]
     [InlineData(typeof(ListEnvironmentFilesHandler))]
     [InlineData(typeof(ForgetDevelopmentHandler))]
     [InlineData(typeof(DetectGitHandler))]
@@ -163,6 +193,19 @@ public class ApplicationRegistrationTests
             .Should().BeSameAs(provider.GetRequiredService<AgentSessionMonitor>());
     }
 
+    /// <summary>
+    /// O mesmo para os comandos rápidos (ADR-051): o registro do que roda neste
+    /// processo só serve se for um só.
+    /// </summary>
+    [Fact]
+    public void TheExecutionWatcher_IsTheMonitorItself()
+    {
+        using var provider = BuildProvider();
+
+        provider.GetRequiredService<ICommandExecutionWatcher>()
+            .Should().BeSameAs(provider.GetRequiredService<CommandExecutionMonitor>());
+    }
+
     [Fact]
     public void UserClock_IsRegisteredAsASingletonSoTheTimeZoneIsResolvedOnce()
     {
@@ -202,22 +245,6 @@ public class ApplicationRegistrationTests
             Task.FromResult(Disconnected);
 
         public Task DisconnectAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
-    }
-
-    private sealed class StubTagQuery : ITagQuery
-    {
-        public Task<IReadOnlyList<TagRow>> ListAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult<IReadOnlyList<TagRow>>([]);
-
-        public Task<IReadOnlyList<TagDirectoryRow>> ListDirectoriesAsync(
-            Guid tagId,
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult<IReadOnlyList<TagDirectoryRow>>([]);
-
-        public Task<IReadOnlyList<TagDirectoryRow>> ListDirectoriesForTaskAsync(
-            Guid taskId,
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult<IReadOnlyList<TagDirectoryRow>>([]);
     }
 
     private sealed class StubTodayQuery : ITodayQuery

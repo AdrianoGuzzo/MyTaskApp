@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Commands;
 using MyTaskApp.Application.Tags;
 using MyTaskApp.Desktop.Composition;
 using MyTaskApp.Desktop.Views;
@@ -319,6 +320,178 @@ public sealed partial class TagsViewModel(
 
         await LoadDirectoriesAsync(item, cancellationToken);
         StatusMessage = "Diretório excluído.";
+    }
+
+    /// <summary>
+    /// Abre (ou fecha) os comandos rápidos do diretório (ADR-051). Abrir lê os
+    /// globais de novo: a janela de comandos pode ter mudado com esta aberta.
+    /// </summary>
+    [RelayCommand]
+    public async Task ToggleDirectoryCommandsAsync(TagDirectoryItemViewModel directory, CancellationToken cancellationToken)
+    {
+        directory.IsCommandsExpanded = !directory.IsCommandsExpanded;
+
+        if (directory.IsCommandsExpanded)
+        {
+            await LoadDirectoryCommandsAsync(directory, cancellationToken);
+        }
+    }
+
+    [RelayCommand]
+    public async Task AddDirectoryCommandAsync(TagDirectoryItemViewModel directory, CancellationToken cancellationToken)
+    {
+        if (directory.SelectedNewCommand is not { } command)
+        {
+            ErrorMessage = "Escolha um comando. Cadastre-os em Comandos globais.";
+            return;
+        }
+
+        var tagId = directory.Owner.Row.Id;
+        var directoryId = directory.Row.Id;
+
+        await ChangeDirectoryCommandsAsync(
+            directory,
+            () => runner.RunAsync<AddTagDirectoryCommandHandler, Guid>(
+                (handler, token) => handler.HandleAsync(new AddTagDirectoryCommand(tagId, directoryId, command.Id), token),
+                cancellationToken),
+            $"{command.DisplayName} adicionado a {directory.Alias}.",
+            cancellationToken);
+    }
+
+    /// <summary>Liga ou desliga sem tirar da lista: a personalização fica.</summary>
+    [RelayCommand]
+    public Task ToggleDirectoryCommandAsync(TagDirectoryCommandItemViewModel item, CancellationToken cancellationToken)
+    {
+        var (tagId, directoryId, bindingId) = Ids(item);
+        var enabled = !item.IsEnabled;
+
+        return ChangeDirectoryCommandsAsync(
+            item.Owner,
+            () => runner.RunAsync<SetTagDirectoryCommandEnabledHandler>(
+                (handler, token) => handler.HandleAsync(
+                    new SetTagDirectoryCommandEnabled(tagId, directoryId, bindingId, enabled), token),
+                cancellationToken),
+            null,
+            cancellationToken);
+    }
+
+    [RelayCommand]
+    public Task MoveDirectoryCommandUpAsync(TagDirectoryCommandItemViewModel item, CancellationToken cancellationToken) =>
+        MoveDirectoryCommandAsync(item, -1, cancellationToken);
+
+    [RelayCommand]
+    public Task MoveDirectoryCommandDownAsync(TagDirectoryCommandItemViewModel item, CancellationToken cancellationToken) =>
+        MoveDirectoryCommandAsync(item, +1, cancellationToken);
+
+    [RelayCommand]
+    public Task RemoveDirectoryCommandAsync(TagDirectoryCommandItemViewModel item, CancellationToken cancellationToken)
+    {
+        var (tagId, directoryId, bindingId) = Ids(item);
+
+        return ChangeDirectoryCommandsAsync(
+            item.Owner,
+            () => runner.RunAsync<RemoveTagDirectoryCommandHandler>(
+                (handler, token) => handler.HandleAsync(new RemoveTagDirectoryCommand(tagId, directoryId, bindingId), token),
+                cancellationToken),
+            $"{item.DisplayName} saiu de {item.Owner.Alias}. O comando global continua cadastrado.",
+            cancellationToken);
+    }
+
+    [RelayCommand]
+    public void BeginCustomizeDirectoryCommand(TagDirectoryCommandItemViewModel item) => item.BeginCustomize();
+
+    [RelayCommand]
+    public void CancelCustomizeDirectoryCommand(TagDirectoryCommandItemViewModel item) => item.IsCustomizing = false;
+
+    /// <summary>
+    /// "Usar configuração global" apaga a personalização. Personalizar com a
+    /// mesma linha do global guarda só a pasta: o texto continua seguindo o global.
+    /// </summary>
+    [RelayCommand]
+    public Task SaveDirectoryCommandCustomizationAsync(
+        TagDirectoryCommandItemViewModel item,
+        CancellationToken cancellationToken)
+    {
+        var (tagId, directoryId, bindingId) = Ids(item);
+
+        string? command = null;
+        string? folder = null;
+
+        if (item.Customize)
+        {
+            var typed = item.CommandOverride.Trim();
+
+            command = typed.Length == 0 || typed == item.GlobalCommand ? null : typed;
+            folder = string.IsNullOrWhiteSpace(item.WorkingDirectoryOverride) ? null : item.WorkingDirectoryOverride;
+        }
+
+        return ChangeDirectoryCommandsAsync(
+            item.Owner,
+            () => runner.RunAsync<CustomizeTagDirectoryCommandHandler>(
+                (handler, token) => handler.HandleAsync(
+                    new CustomizeTagDirectoryCommand(tagId, directoryId, bindingId, command, folder), token),
+                cancellationToken),
+            command is null && folder is null
+                ? $"{item.DisplayName} usa a configuração global."
+                : $"{item.DisplayName} personalizado para {item.Owner.Alias}.",
+            cancellationToken);
+    }
+
+    private Task MoveDirectoryCommandAsync(TagDirectoryCommandItemViewModel item, int offset, CancellationToken cancellationToken)
+    {
+        var (tagId, directoryId, bindingId) = Ids(item);
+
+        return ChangeDirectoryCommandsAsync(
+            item.Owner,
+            () => runner.RunAsync<MoveTagDirectoryCommandHandler>(
+                (handler, token) => handler.HandleAsync(
+                    new MoveTagDirectoryCommand(tagId, directoryId, bindingId, offset), token),
+                cancellationToken),
+            null,
+            cancellationToken);
+    }
+
+    private static (Guid TagId, Guid DirectoryId, Guid BindingId) Ids(TagDirectoryCommandItemViewModel item) =>
+        (item.Owner.Owner.Row.Id, item.Owner.Row.Id, item.Row.Id);
+
+    private async Task ChangeDirectoryCommandsAsync(
+        TagDirectoryItemViewModel directory,
+        Func<Task> change,
+        string? done,
+        CancellationToken cancellationToken)
+    {
+        if (!await TryAsync(change, "Não foi possível alterar os comandos do diretório."))
+        {
+            return;
+        }
+
+        await LoadDirectoryCommandsAsync(directory, cancellationToken);
+
+        if (done is not null)
+        {
+            StatusMessage = done;
+        }
+    }
+
+    private async Task LoadDirectoryCommandsAsync(TagDirectoryItemViewModel directory, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var bindings = await runner.RunAsync<GetTagDirectoryCommandsHandler, IReadOnlyList<TagDirectoryCommandRow>>(
+                (handler, token) => handler.HandleAsync(new GetTagDirectoryCommands(directory.Row.Id), token),
+                cancellationToken);
+
+            var globals = await runner.RunAsync<GetDevelopmentCommandsHandler, IReadOnlyList<DevelopmentCommandRow>>(
+                (handler, token) => handler.HandleAsync(new GetDevelopmentCommands(), token),
+                cancellationToken);
+
+            directory.ShowCommands(bindings, globals);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.LogError(exception, "TagDirectoryCommandsLoadFailed {DirectoryId}", directory.Row.Id);
+            ErrorMessage = "Não foi possível carregar os comandos do diretório.";
+        }
     }
 
     /// <summary>

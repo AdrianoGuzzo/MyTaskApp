@@ -149,6 +149,15 @@ public sealed partial class TaskDevelopmentsViewModel(
     /// <summary>O agente pode ter aberto ou fechado: todas as abas conferem.</summary>
     public Task RefreshAgentsAsync() => RefreshAgentsAsync(except: null);
 
+    /// <summary>Um comando rápido mudou de estado (o terminal fechou, ADR-051): todas as abas conferem.</summary>
+    public async Task RefreshQuickCommandsAsync()
+    {
+        foreach (var item in Items.Where(item => !item.IsDraft).ToList())
+        {
+            await item.RefreshQuickCommandsAsync();
+        }
+    }
+
     /// <remarks>
     /// A aba da frente já conferiu o seu ao ativar; as outras conferem aqui,
     /// para a bolinha de agente aberto aparecer nelas também.

@@ -42,6 +42,10 @@ internal static class TestDevelopment
                 clipboard ?? new FakeClipboardWriter(),
                 shell ?? new FakeShellLauncher(),
                 NullLogger<AgentSessionViewModel>.Instance),
+            new QuickCommandsViewModel(
+                runner,
+                new FakeQuickCommandPrompt(),
+                NullLogger<QuickCommandsViewModel>.Instance),
             NullLogger<TaskDevelopmentViewModel>.Instance);
 
     /// <summary>Um ambiente gravado, como a consulta devolve.</summary>

@@ -93,6 +93,10 @@ public sealed partial class TaskNotesWindow : Window
                 _ = viewModel.LoadAliasesAsync(CancellationToken.None);
                 _ = viewModel.Developments.Selected?.LoadGlobalCommandsAsync(CancellationToken.None);
             }
+
+            // Os comandos rápidos também: um comando ligado ao diretório em
+            // Etiquetas… aparece ao voltar para esta janela (ADR-051).
+            _ = ViewModel?.Developments.Selected?.RefreshQuickCommandsAsync();
         };
     }
 
@@ -197,6 +201,15 @@ public sealed partial class TaskNotesWindow : Window
                     viewModel.Developments.Selected = busy;
                     busy.Message = "Aguarde a criação do worktree terminar para fechar.";
                 }
+            }
+            else if (busy is { QuickCommands.IsRunning: true })
+            {
+                // O mesmo para um comando rápido escondido (ADR-051).
+                e.Cancel = true;
+                viewModel.SelectedTabIndex = TaskNotesViewModel.DevelopmentTab;
+                viewModel.Developments.Selected = busy;
+                busy.CancelQuickCommand();
+                busy.Message = "Comando cancelado. Feche de novo para sair.";
             }
             else if (busy is { Commands.IsRunning: true })
             {

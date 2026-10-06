@@ -13,7 +13,7 @@ internal sealed class UnsupportedTerminalLauncher : ITerminalLauncher
         TerminalLaunchOptions options,
         CancellationToken cancellationToken = default) =>
         Task.FromResult(TerminalLaunchResult.Failed(
-            "Abrir o agente num terminal ainda não é suportado neste sistema."));
+            "Abrir um terminal pelo app ainda não é suportado neste sistema."));
 }
 
 internal sealed class UnsupportedTerminalWindowManager : ITerminalWindowManager
