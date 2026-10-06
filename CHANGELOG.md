@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.5.0...v1.6.0) (2026-10-06)
+
+
+### Added
+
+* comandos rápidos, o comando global vira botão no worktree da tarefa ([#58](https://github.com/AdrianoGuzzo/MyTaskApp/issues/58)) ([01bd23b](https://github.com/AdrianoGuzzo/MyTaskApp/commit/01bd23b46174c4a12c2df33922f3da3f2fdb4d43))
+
 ## [1.5.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.4.0...v1.5.0) (2026-10-05)
 
 
