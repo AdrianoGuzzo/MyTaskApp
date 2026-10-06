@@ -12,6 +12,7 @@ internal sealed class TagRepository(MyTaskAppDbContext context) : ITagRepository
     public Task<Tag?> FindByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         context.Tags
             .Include(tag => tag.Directories)
+            .ThenInclude(directory => directory.Commands)
             .SingleOrDefaultAsync(tag => tag.Id == id, cancellationToken);
 
     /// <remarks>

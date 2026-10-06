@@ -64,6 +64,7 @@ public sealed partial class TaskDevelopmentViewModel(
     IConfirmationDialog confirmation,
     TimeProvider timeProvider,
     AgentSessionViewModel agent,
+    QuickCommandsViewModel quickCommands,
     ILogger<TaskDevelopmentViewModel> logger) : ObservableObject
 {
     /// <summary>Espera entre a última tecla no campo Diretório e a pergunta ao Git.</summary>
@@ -406,6 +407,18 @@ public sealed partial class TaskDevelopmentViewModel(
     /// <summary>O card do Claude Code: só aparece com o worktree pronto.</summary>
     public AgentSessionViewModel Agent { get; } = agent;
 
+    // --- Comandos rápidos (ADR-051) ------------------------------------------
+
+    /// <summary>A seção "⚡ Comandos": os botões do diretório da etiqueta, com o worktree pronto.</summary>
+    public QuickCommandsViewModel QuickCommands { get; } = quickCommands;
+
+    /// <summary>Os botões e o estado de cada um, de novo: o terminal pode ter fechado lá fora.</summary>
+    public Task RefreshQuickCommandsAsync() =>
+        IsReady ? QuickCommands.RefreshAsync(CancellationToken.None) : Task.CompletedTask;
+
+    /// <summary>Cancela o comando rápido escondido em andamento, se houver.</summary>
+    public void CancelQuickCommand() => QuickCommands.Cancel();
+
     // --- Pronto ------------------------------------------------------------
 
     [ObservableProperty]
@@ -426,7 +439,7 @@ public sealed partial class TaskDevelopmentViewModel(
     public event Action<TaskDevelopmentViewModel>? Changed;
 
     /// <summary>Algo em andamento que fechar a janela interromperia.</summary>
-    public bool IsBusy => IsRunning || IsRemoving || Commands.IsRunning;
+    public bool IsBusy => IsRunning || IsRemoving || Commands.IsRunning || QuickCommands.IsRunning;
 
     // --- A aba do repositório (ADR-031) ------------------------------------
 
@@ -552,10 +565,11 @@ public sealed partial class TaskDevelopmentViewModel(
     {
         SyncCommandsEditable();
 
-        // O agente abre no worktree: só com ele pronto há o que mostrar.
+        // O agente e os comandos rápidos abrem no worktree: só com ele pronto há o que mostrar.
         if (value is DevelopmentPanelState.Ready)
         {
             _ = Agent.RefreshAsync(CancellationToken.None);
+            _ = QuickCommands.RefreshAsync(CancellationToken.None);
         }
     }
 
@@ -601,6 +615,13 @@ public sealed partial class TaskDevelopmentViewModel(
                 OnPropertyChanged(nameof(IsBusy));
             }
         };
+        QuickCommands.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName == nameof(QuickCommandsViewModel.IsRunning))
+            {
+                OnPropertyChanged(nameof(IsBusy));
+            }
+        };
     }
 
     partial void OnDevelopmentChanged(TaskDevelopmentView? value)
@@ -609,6 +630,8 @@ public sealed partial class TaskDevelopmentViewModel(
         {
             Agent.Load(_taskId, value.Id, IsReadOnly, value.AgentPrompt);
         }
+
+        QuickCommands.Load(_taskId, value?.Id);
 
         // Pronto, a PR que o balão da aba mostra é a da branch do ambiente.
         _ = SchedulePullRequestLookup();

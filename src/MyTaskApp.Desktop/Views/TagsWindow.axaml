@@ -1,13 +1,14 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
+        xmlns:cmd="using:MyTaskApp.Application.Commands"
         xmlns:spell="using:MyTaskApp.Desktop.SpellChecking"
         x:Class="MyTaskApp.Desktop.Views.TagsWindow"
         x:DataType="vm:TagsViewModel"
         x:Name="Root"
         Title="Etiquetas"
-        Width="540"
-        Height="640"
+        Width="600"
+        Height="700"
         MinWidth="440"
         MinHeight="440"
         WindowStartupLocation="CenterOwner">
@@ -268,7 +269,8 @@
                   <ItemsControl ItemsSource="{Binding Directories}">
                     <ItemsControl.ItemTemplate>
                       <DataTemplate x:DataType="vm:TagDirectoryItemViewModel">
-                        <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,0,0,4">
+                        <StackPanel Spacing="4" Margin="0,0,0,4">
+                        <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto">
 
                           <!-- ✓ a pasta existe agora; ⚠ não existe (o cadastro continua valendo). -->
                           <Panel Grid.Column="0" Width="18" Margin="0,1,6,0"
@@ -308,7 +310,17 @@
                                        IsVisible="{Binding Description, Converter={x:Static ObjectConverters.IsNotNull}}" />
                           </StackPanel>
 
-                          <Button Grid.Column="2"
+                          <ToggleButton Grid.Column="2"
+                                        Classes="rowAction"
+                                        Margin="6,0,0,0"
+                                        VerticalAlignment="Top"
+                                        Content="{Binding CommandsLabel}"
+                                        IsChecked="{Binding IsCommandsExpanded, Mode=OneWay}"
+                                        ToolTip.Tip="Comandos rápidos: viram botões nos worktrees deste repositório."
+                                        Command="{Binding #Root.((vm:TagsViewModel)DataContext).ToggleDirectoryCommandsCommand}"
+                                        CommandParameter="{Binding}" />
+
+                          <Button Grid.Column="3"
                                   Classes="rowAction"
                                   Margin="6,0,6,0"
                                   VerticalAlignment="Top"
@@ -316,13 +328,157 @@
                                   Command="{Binding #Root.((vm:TagsViewModel)DataContext).EditDirectoryCommand}"
                                   CommandParameter="{Binding}" />
 
-                          <Button Grid.Column="3"
+                          <Button Grid.Column="4"
                                   Classes="rowAction danger"
                                   VerticalAlignment="Top"
                                   Content="Excluir"
                                   Command="{Binding #Root.((vm:TagsViewModel)DataContext).DeleteDirectoryCommand}"
                                   CommandParameter="{Binding}" />
                         </Grid>
+
+                        <!--
+                          Comandos rápidos do diretório (ADR-051): cada um vira
+                          um botão "▶" nos worktrees deste repositório.
+                        -->
+                        <Border x:Name="DirectoryCommands"
+                                Margin="24,0,0,4"
+                                Padding="8,6"
+                                CornerRadius="6"
+                                BorderThickness="1"
+                                BorderBrush="{DynamicResource WidgetStrokeSoftBrush}"
+                                IsVisible="{Binding IsCommandsExpanded}">
+                          <StackPanel Spacing="6">
+
+                            <TextBlock Classes="meta"
+                                       TextWrapping="Wrap"
+                                       IsVisible="{Binding HasNoCommands}"
+                                       Text="Nenhum comando ainda. Os que entrarem aqui viram botões &quot;▶&quot; no worktree de toda tarefa deste repositório." />
+
+                            <ItemsControl ItemsSource="{Binding Commands}">
+                              <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:TagDirectoryCommandItemViewModel">
+                                  <StackPanel Spacing="4" Margin="0,0,0,4">
+                                    <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto">
+                                      <CheckBox Grid.Column="0"
+                                                VerticalAlignment="Top"
+                                                ToolTip.Tip="Desligado, o botão some sem perder a associação."
+                                                IsChecked="{Binding IsEnabled, Mode=OneWay}"
+                                                Command="{Binding #Root.((vm:TagsViewModel)DataContext).ToggleDirectoryCommandCommand}"
+                                                CommandParameter="{Binding}" />
+                                      <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding DisplayName}" FontSize="12" FontWeight="SemiBold" />
+                                        <TextBlock Classes="meta"
+                                                   FontFamily="Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace"
+                                                   Text="{Binding EffectiveCommand}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   ToolTip.Tip="{Binding EffectiveCommand}" />
+                                        <TextBlock Classes="meta"
+                                                   Foreground="{DynamicResource WidgetAccentTextBrush}"
+                                                   Text="{Binding CustomizedLabel}"
+                                                   IsVisible="{Binding IsCustomized}" />
+                                      </StackPanel>
+                                      <Button Grid.Column="2"
+                                              Classes="rowAction"
+                                              Margin="6,0,0,0"
+                                              VerticalAlignment="Top"
+                                              Content="&#x2191;"
+                                              ToolTip.Tip="Subir"
+                                              IsEnabled="{Binding CanMoveUp}"
+                                              Command="{Binding #Root.((vm:TagsViewModel)DataContext).MoveDirectoryCommandUpCommand}"
+                                              CommandParameter="{Binding}" />
+                                      <Button Grid.Column="3"
+                                              Classes="rowAction"
+                                              Margin="4,0,0,0"
+                                              VerticalAlignment="Top"
+                                              Content="&#x2193;"
+                                              ToolTip.Tip="Descer"
+                                              IsEnabled="{Binding CanMoveDown}"
+                                              Command="{Binding #Root.((vm:TagsViewModel)DataContext).MoveDirectoryCommandDownCommand}"
+                                              CommandParameter="{Binding}" />
+                                      <Button Grid.Column="4"
+                                              Classes="rowAction"
+                                              Margin="4,0,0,0"
+                                              VerticalAlignment="Top"
+                                              Content="Personalizar"
+                                              Command="{Binding #Root.((vm:TagsViewModel)DataContext).BeginCustomizeDirectoryCommandCommand}"
+                                              CommandParameter="{Binding}" />
+                                      <Button Grid.Column="5"
+                                              Classes="rowAction danger"
+                                              Margin="4,0,0,0"
+                                              VerticalAlignment="Top"
+                                              Content="&#xD7;"
+                                              ToolTip.Tip="Tirar deste diretório (o comando global continua)"
+                                              Command="{Binding #Root.((vm:TagsViewModel)DataContext).RemoveDirectoryCommandCommand}"
+                                              CommandParameter="{Binding}" />
+                                    </Grid>
+
+                                    <!-- "Personalizar": outro texto ou outra pasta só neste diretório. -->
+                                    <StackPanel Spacing="6" Margin="24,0,0,0" IsVisible="{Binding IsCustomizing}">
+                                      <RadioButton FontSize="12"
+                                                   GroupName="{Binding Row.Id}"
+                                                   Content="Usar configuração global"
+                                                   IsChecked="{Binding UsesGlobal}" />
+                                      <RadioButton FontSize="12"
+                                                   GroupName="{Binding Row.Id}"
+                                                   Content="Personalizar para este diretório"
+                                                   IsChecked="{Binding Customize}" />
+                                      <StackPanel Spacing="6" IsVisible="{Binding Customize}">
+                                        <TextBox FontSize="12"
+                                                 FontFamily="Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace"
+                                                 MaxLength="2000"
+                                                 PlaceholderText="{Binding GlobalCommand}"
+                                                 Text="{Binding CommandOverride}" />
+                                        <TextBox FontSize="12"
+                                                 FontFamily="Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace"
+                                                 MaxLength="1024"
+                                                 PlaceholderText="Pasta: a do comando global (ou subpasta, ex.: src/Eco.Web; &quot;.&quot; é a raiz)"
+                                                 Text="{Binding WorkingDirectoryOverride}" />
+                                      </StackPanel>
+                                      <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Right">
+                                        <Button Classes="rowAction"
+                                                Content="Cancelar"
+                                                Command="{Binding #Root.((vm:TagsViewModel)DataContext).CancelCustomizeDirectoryCommandCommand}"
+                                                CommandParameter="{Binding}" />
+                                        <Button Classes="rowAction accent"
+                                                Content="Salvar"
+                                                Command="{Binding #Root.((vm:TagsViewModel)DataContext).SaveDirectoryCommandCustomizationCommand}"
+                                                CommandParameter="{Binding}" />
+                                      </StackPanel>
+                                    </StackPanel>
+                                  </StackPanel>
+                                </DataTemplate>
+                              </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6" IsVisible="{Binding HasAvailableCommands}">
+                              <ComboBox Grid.Column="0"
+                                        FontSize="12"
+                                        HorizontalAlignment="Stretch"
+                                        ItemsSource="{Binding AvailableCommands}"
+                                        SelectedItem="{Binding SelectedNewCommand}">
+                                <ComboBox.ItemTemplate>
+                                  <DataTemplate x:DataType="cmd:DevelopmentCommandRow">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                      <TextBlock Text="{Binding DisplayName}" FontSize="12" />
+                                      <TextBlock Classes="meta" VerticalAlignment="Center" Text="{Binding Command}" />
+                                    </StackPanel>
+                                  </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                              </ComboBox>
+                              <Button Grid.Column="1"
+                                      Classes="rowAction"
+                                      Content="+ Adicionar comando"
+                                      Command="{Binding #Root.((vm:TagsViewModel)DataContext).AddDirectoryCommandCommand}"
+                                      CommandParameter="{Binding}" />
+                            </Grid>
+
+                            <TextBlock Classes="meta"
+                                       TextWrapping="Wrap"
+                                       IsVisible="{Binding !HasAvailableCommands}"
+                                       Text="Todos os comandos globais já estão aqui. Cadastre outros em Comandos globais… (menu do painel)." />
+                          </StackPanel>
+                        </Border>
+                        </StackPanel>
                       </DataTemplate>
                     </ItemsControl.ItemTemplate>
                   </ItemsControl>

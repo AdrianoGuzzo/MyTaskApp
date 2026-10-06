@@ -48,4 +48,37 @@ internal static class ShellCommandPlanner
 
     public static ShellLaunch ForCurrentSystem(string command) =>
         For(OperatingSystem.IsWindows(), command, Environment.GetEnvironmentVariable);
+
+    /// <summary>
+    /// O shell de um comando rápido num terminal visível (ADR-051): a mesma
+    /// receita do <see cref="For"/>, com <c>/k</c> para a janela ficar aberta
+    /// depois do comando, ou <c>/c</c> para fechar com ele.
+    /// </summary>
+    /// <remarks>
+    /// Aqui o shell precisa de caminho absoluto: o lançador do terminal não deixa
+    /// o sistema "achar" um executável. Sem <c>ComSpec</c>, vale o <c>cmd.exe</c>
+    /// da pasta do sistema. No terminal o <c>chcp 65001</c> continua útil: é o
+    /// que faz o acento do output aparecer certo no console clássico.
+    /// </remarks>
+    public static ShellLaunch ForTerminal(
+        bool isWindows,
+        string command,
+        bool keepOpen,
+        Func<string, string?> environment,
+        string systemDirectory)
+    {
+        if (isWindows)
+        {
+            var comSpec = environment("ComSpec");
+            var shell = !string.IsNullOrWhiteSpace(comSpec) && Path.IsPathFullyQualified(comSpec)
+                ? comSpec
+                : Path.Combine(systemDirectory, "cmd.exe");
+
+            var mode = keepOpen ? "/k" : "/c";
+
+            return new ShellLaunch(shell, $"/d /s {mode} \"chcp 65001>nul & {command}\"", []);
+        }
+
+        return new ShellLaunch("/bin/sh", null, ["-c", command]);
+    }
 }

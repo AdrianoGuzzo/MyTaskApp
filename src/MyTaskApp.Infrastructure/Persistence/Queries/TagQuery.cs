@@ -37,6 +37,77 @@ internal sealed class TagQuery(MyTaskAppDbContext context) : ITagQuery
                 link => link.TaskItemId == taskId && link.TagId == tag.Id)),
             cancellationToken);
 
+    /// <remarks>Ordena no cliente: o EF não traduz ordenação depois da projeção no record.</remarks>
+    public async Task<IReadOnlyList<TagDirectoryCommandRow>> ListDirectoryCommandsAsync(
+        Guid directoryId,
+        CancellationToken cancellationToken = default)
+    {
+        var rows = await CommandRows(context.TagDirectoryCommands.Where(binding => binding.TagDirectoryId == directoryId))
+            .ToListAsync(cancellationToken);
+
+        return [.. rows.OrderBy(row => row.Order)];
+    }
+
+    /// <remarks>
+    /// Duas consultas, e o encaixe no cliente: os diretórios com comando são
+    /// poucos, e cada botão precisa do texto do comando global.
+    /// </remarks>
+    public async Task<IReadOnlyList<CommandDirectoryRow>> ListCommandDirectoriesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var commands = await CommandRows(context.TagDirectoryCommands).ToListAsync(cancellationToken);
+
+        if (commands.Count == 0)
+        {
+            return [];
+        }
+
+        var directoryIds = commands.Select(row => row.DirectoryId).Distinct().ToList();
+
+        var directories = await context.TagDirectories
+            .AsNoTracking()
+            .Where(directory => directoryIds.Contains(directory.Id))
+            .Join(
+                context.Tags,
+                directory => directory.TagId,
+                tag => tag.Id,
+                (directory, tag) => new { directory.Id, directory.TagId, TagName = tag.Name, directory.Alias, directory.Path })
+            .ToListAsync(cancellationToken);
+
+        return
+        [
+            .. directories
+                .OrderBy(directory => directory.TagName, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(directory => directory.Alias, StringComparer.OrdinalIgnoreCase)
+                .Select(directory => new CommandDirectoryRow(
+                    directory.Id,
+                    directory.TagId,
+                    directory.TagName,
+                    directory.Alias,
+                    directory.Path,
+                    [.. commands.Where(row => row.DirectoryId == directory.Id).OrderBy(row => row.Order)])),
+        ];
+    }
+
+    private IQueryable<TagDirectoryCommandRow> CommandRows(IQueryable<Domain.Tags.TagDirectoryCommand> bindings) =>
+        bindings
+            .AsNoTracking()
+            .Join(
+                context.DevelopmentCommands,
+                binding => binding.DevelopmentCommandId,
+                command => command.Id,
+                (binding, command) => new TagDirectoryCommandRow(
+                    binding.Id,
+                    binding.TagDirectoryId,
+                    command.Id,
+                    command.Alias,
+                    command.Name,
+                    command.Command,
+                    binding.Order,
+                    binding.IsEnabled,
+                    binding.CommandOverride,
+                    binding.WorkingDirectoryOverride));
+
     /// <remarks>
     /// Ordena no cliente: a ordem por alias segue o NOCASE da coluna no SQL,
     /// mas o desempate pelo nome da etiqueta (o mesmo alias em duas etiquetas)
@@ -61,7 +132,8 @@ internal sealed class TagQuery(MyTaskAppDbContext context) : ITagQuery
                     directory.Path,
                     directory.Name,
                     directory.Description,
-                    directory.DefaultBranch))
+                    directory.DefaultBranch,
+                    context.TagDirectoryCommands.Count(binding => binding.TagDirectoryId == directory.Id)))
             .ToListAsync(cancellationToken);
 
         return

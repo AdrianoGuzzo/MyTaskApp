@@ -12,6 +12,7 @@ public sealed record TagRow(
 
 /// <summary>Uma pasta de etiqueta, com a etiqueta junto para o autocomplete diferenciar.</summary>
 /// <param name="DefaultBranch">A origem preferida quando o repositório é esta pasta.</param>
+/// <param name="CommandCount">Quantos comandos rápidos ela oferece (ADR-051).</param>
 public sealed record TagDirectoryRow(
     Guid Id,
     Guid TagId,
@@ -21,7 +22,41 @@ public sealed record TagDirectoryRow(
     string Path,
     string? Name,
     string? Description,
-    string? DefaultBranch = null);
+    string? DefaultBranch = null,
+    int CommandCount = 0);
+
+/// <summary>Um comando rápido associado a um diretório (ADR-051), com o comando global junto.</summary>
+/// <param name="Command">O texto do comando global; o efetivo é <see cref="EffectiveCommand"/>.</param>
+public sealed record TagDirectoryCommandRow(
+    Guid Id,
+    Guid DirectoryId,
+    Guid CommandId,
+    string Alias,
+    string? Name,
+    string Command,
+    int Order,
+    bool IsEnabled,
+    string? CommandOverride,
+    string? WorkingDirectoryOverride)
+{
+    public string DisplayName => Name ?? Alias;
+
+    public string EffectiveCommand => CommandOverride ?? Command;
+
+    public bool IsCustomized => CommandOverride is not null || WorkingDirectoryOverride is not null;
+}
+
+/// <summary>
+/// Um diretório que oferece comandos rápidos, com eles na ordem dos botões. É o
+/// que a tarefa cruza com o repositório do ambiente (ADR-051).
+/// </summary>
+public sealed record CommandDirectoryRow(
+    Guid Id,
+    Guid TagId,
+    string TagName,
+    string Alias,
+    string Path,
+    IReadOnlyList<TagDirectoryCommandRow> Commands);
 
 public interface ITagQuery
 {
@@ -39,5 +74,19 @@ public interface ITagQuery
     /// </summary>
     Task<IReadOnlyList<TagDirectoryRow>> ListDirectoriesForTaskAsync(
         Guid taskId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Os comandos rápidos de um diretório, na ordem dos botões (ADR-051).</summary>
+    Task<IReadOnlyList<TagDirectoryCommandRow>> ListDirectoryCommandsAsync(
+        Guid directoryId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Os diretórios, de qualquer etiqueta, que oferecem algum comando rápido
+    /// (ADR-051). De todas as etiquetas, e não só das da tarefa: o ambiente é
+    /// achado pelo caminho do repositório, e quem decide a preferência é a
+    /// Application.
+    /// </summary>
+    Task<IReadOnlyList<CommandDirectoryRow>> ListCommandDirectoriesAsync(
         CancellationToken cancellationToken = default);
 }

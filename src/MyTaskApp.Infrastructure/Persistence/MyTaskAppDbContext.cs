@@ -31,6 +31,15 @@ public sealed class MyTaskAppDbContext(DbContextOptions<MyTaskAppDbContext> opti
     /// <summary>Os comandos globais chamados por <c>@alias</c> (ADR-028).</summary>
     public DbSet<DevelopmentCommand> DevelopmentCommands => Set<DevelopmentCommand>();
 
+    /// <summary>Como perguntar os <c>{nome}</c> de cada comando global (ADR-051).</summary>
+    public DbSet<DevelopmentCommandParameter> DevelopmentCommandParameters => Set<DevelopmentCommandParameter>();
+
+    /// <summary>Os comandos rápidos de cada diretório de etiqueta, em ordem (ADR-051).</summary>
+    public DbSet<TagDirectoryCommand> TagDirectoryCommands => Set<TagDirectoryCommand>();
+
+    /// <summary>O histórico dos comandos rápidos executados (ADR-051).</summary>
+    public DbSet<CommandExecution> CommandExecutions => Set<CommandExecution>();
+
     /// <summary>As sessões de agente de IA abertas para as tarefas (ADR-030).</summary>
     public DbSet<AgentSession> AgentSessions => Set<AgentSession>();
 

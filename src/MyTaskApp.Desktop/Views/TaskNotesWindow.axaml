@@ -6,6 +6,7 @@
         xmlns:dev="using:MyTaskApp.Desktop.Development"
         xmlns:views="using:MyTaskApp.Desktop.Views"
         xmlns:agents="using:MyTaskApp.Application.Agents"
+        xmlns:commands="using:MyTaskApp.Application.Commands"
         x:Class="MyTaskApp.Desktop.Views.TaskNotesWindow"
         x:DataType="vm:TaskNotesViewModel"
         x:Name="Root"
@@ -1848,6 +1849,128 @@
                           Command="{Binding SaveCommandsCommand}" />
                   <Button Content="Gerenciar comandos globais…" Command="{Binding OpenGlobalCommandsCommand}" />
                 </WrapPanel>
+              </StackPanel>
+            </Border>
+
+            <!--
+              Comandos rápidos (ADR-051): os comandos ligados ao diretório da
+              etiqueta deste repositório, um botão cada. O worktree, a pasta e as
+              variáveis vêm do ambiente; o usuário só clica.
+            -->
+            <Border Classes="card" x:Name="QuickCommandsCard" IsVisible="{Binding IsReady}">
+              <StackPanel x:Name="QuickCommandsPanel"
+                          x:DataType="vm:QuickCommandsViewModel"
+                          DataContext="{Binding QuickCommands}"
+                          Spacing="10">
+
+                <TextBlock Classes="sectionTitle" Text="⚡ Comandos" />
+
+                <TextBlock x:Name="QuickCommandsEmpty"
+                           Classes="hint"
+                           TextWrapping="Wrap"
+                           IsVisible="{Binding HasNoItems}"
+                           Text="Nenhum comando para este repositório. Em Etiquetas…, abra o diretório dele e adicione comandos globais em &quot;Comandos&quot;: eles viram botões aqui." />
+
+                <ItemsControl x:Name="QuickCommandList" ItemsSource="{Binding Items}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:QuickCommandItemViewModel">
+                      <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10" Margin="0,0,0,6">
+                        <Button Grid.Column="0"
+                                MinWidth="150"
+                                HorizontalContentAlignment="Left"
+                                VerticalAlignment="Top"
+                                Content="{Binding RunLabel}"
+                                ToolTip.Tip="{Binding Tip}"
+                                IsEnabled="{Binding CanRun}"
+                                Command="{Binding #QuickCommandsPanel.((vm:QuickCommandsViewModel)DataContext).RunCommand}"
+                                CommandParameter="{Binding}" />
+                        <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                          <TextBlock FontFamily="Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace"
+                                     FontSize="12"
+                                     TextTrimming="CharacterEllipsis"
+                                     Text="{Binding Template}"
+                                     ToolTip.Tip="{Binding Template}" />
+                          <TextBlock Classes="hint"
+                                     Classes.ok="{Binding IsOk}"
+                                     Classes.bad="{Binding IsFailed}"
+                                     TextTrimming="CharacterEllipsis"
+                                     IsVisible="{Binding HasStatus}"
+                                     Text="{Binding StatusText}"
+                                     ToolTip.Tip="{Binding StatusText}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Top">
+                          <Button Content="Mostrar terminal"
+                                  IsVisible="{Binding HasTerminal}"
+                                  Command="{Binding #QuickCommandsPanel.((vm:QuickCommandsViewModel)DataContext).ShowTerminalCommand}"
+                                  CommandParameter="{Binding}" />
+                          <Button Content="Ver saída"
+                                  IsVisible="{Binding HasOutput}"
+                                  Command="{Binding #QuickCommandsPanel.((vm:QuickCommandsViewModel)DataContext).ShowOutputCommand}"
+                                  CommandParameter="{Binding}" />
+                          <Button Content="Cancelar"
+                                  IsVisible="{Binding CanCancel}"
+                                  Command="{Binding #QuickCommandsPanel.((vm:QuickCommandsViewModel)DataContext).CancelCommand}" />
+                        </StackPanel>
+                      </Grid>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <Border Height="1" Background="{DynamicResource WidgetStrokeSoftBrush}" IsVisible="{Binding HasGlobals}" />
+
+                <!-- Qualquer comando global, mesmo sem estar no diretório da etiqueta. -->
+                <StackPanel Spacing="8" IsVisible="{Binding HasGlobals}">
+                  <Button x:Name="AdHocButton"
+                          HorizontalAlignment="Left"
+                          Content="+ Executar comando…"
+                          Command="{Binding ToggleAdHocCommand}" />
+                  <StackPanel x:Name="AdHocPanel" Spacing="6" IsVisible="{Binding IsAdHocOpen}">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                      <ComboBox Grid.Column="0"
+                                x:Name="AdHocCommands"
+                                HorizontalAlignment="Stretch"
+                                ItemsSource="{Binding Globals}"
+                                SelectedItem="{Binding SelectedAdHoc}">
+                        <ComboBox.ItemTemplate>
+                          <DataTemplate x:DataType="commands:DevelopmentCommandRow">
+                            <TextBlock Text="{Binding DisplayName}" />
+                          </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                      </ComboBox>
+                      <Button Grid.Column="1"
+                              Classes="accent"
+                              Content="Executar"
+                              Command="{Binding RunAdHocCommand}" />
+                    </Grid>
+                    <TextBlock Classes="hint"
+                               FontFamily="Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace"
+                               TextWrapping="Wrap"
+                               IsVisible="{Binding HasAdHocSelection}"
+                               Text="{Binding AdHocPreview}" />
+                  </StackPanel>
+                </StackPanel>
+
+                <!-- O resultado da execução escondida: o mesmo "terminal" dos pós-Worktree. -->
+                <StackPanel x:Name="QuickCommandOutput" Spacing="6" IsVisible="{Binding HasOutput}">
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Grid.Column="0"
+                               Classes="hint"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis"
+                               Text="{Binding OutputTitle}" />
+                    <Button Grid.Column="1"
+                            Content="Cancelar"
+                            IsVisible="{Binding IsRunning}"
+                            Command="{Binding CancelCommand}" />
+                  </Grid>
+                  <views:CommandOutputView x:Name="QuickCommandTerminal" DataContext="{Binding Output}" />
+                </StackPanel>
+
+                <TextBlock x:Name="QuickCommandsMessage"
+                           Classes="body warn"
+                           TextWrapping="Wrap"
+                           IsVisible="{Binding HasMessage}"
+                           Text="{Binding Message}" />
               </StackPanel>
             </Border>
 

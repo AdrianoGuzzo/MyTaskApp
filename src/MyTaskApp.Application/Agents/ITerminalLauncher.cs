@@ -25,11 +25,18 @@ public interface ITerminalLauncher
 /// Variáveis acrescentadas ao ambiente herdado do app — é por elas que o
 /// agente sabe de qual tarefa é (ADR-037). <c>null</c> = só o herdado.
 /// </param>
+/// <param name="RawArguments">
+/// A linha de argumentos como o programa a lê, sem as aspas que o .NET poria
+/// em cada item. Só para o <c>cmd /k "linha"</c> dos comandos rápidos (ADR-051):
+/// o cmd não entende o <c>\"</c> com que o .NET escaparia as aspas do usuário.
+/// Exclui <see cref="Arguments"/>.
+/// </param>
 public sealed record TerminalLaunchOptions(
     string Executable,
     IReadOnlyList<string> Arguments,
     string WorkingDirectory,
-    IReadOnlyDictionary<string, string>? Environment = null);
+    IReadOnlyDictionary<string, string>? Environment = null,
+    string? RawArguments = null);
 
 public sealed record TerminalLaunchResult
 {
@@ -85,4 +92,11 @@ public interface IAgentProcessTracker
     /// (e não encerra o processo).
     /// </summary>
     IDisposable? WatchExit(int processId, DateTimeOffset startedAt, Action onExited);
+
+    /// <summary>
+    /// Como <see cref="WatchExit"/>, com o exit code quando o sistema o informa
+    /// (ADR-051). <c>null</c> quando não dá para saber.
+    /// </summary>
+    IDisposable? WatchExitCode(int processId, DateTimeOffset startedAt, Action<int?> onExited) =>
+        WatchExit(processId, startedAt, () => onExited(null));
 }

@@ -7,14 +7,15 @@
         x:DataType="vm:DevelopmentCommandsViewModel"
         x:Name="Root"
         Title="Comandos globais"
-        Width="640"
-        Height="720"
+        Width="680"
+        Height="820"
         MinWidth="480"
         MinHeight="480"
         WindowStartupLocation="CenterOwner">
 
   <!--
-    Os comandos que a lista pós-Worktree chama por @alias (ADR-028). Mesmo
+    Os comandos que a lista pós-Worktree chama por @alias (ADR-028), e que viram
+    botão no worktree quando ligados a um diretório de etiqueta (ADR-051). Mesmo
     desenho da janela de etiquetas: formulário em cima, lista embaixo.
   -->
 
@@ -132,15 +133,25 @@
 
     <!-- ============================ FORMULÁRIO ============================ -->
     <Border DockPanel.Dock="Top" Classes="card" Margin="0,0,0,12">
+      <ScrollViewer MaxHeight="420" HorizontalScrollBarVisibility="Disabled">
       <StackPanel Spacing="8">
 
         <TextBlock Classes="sectionTitle" Text="{Binding FormTitle}" />
 
-        <TextBox x:Name="AliasBox"
-                 FontSize="12"
-                 MaxLength="40"
-                 PlaceholderText="Apelido (ex.: @restore)"
-                 Text="{Binding Alias}" />
+        <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+          <TextBox Grid.Column="0"
+                   x:Name="NameBox"
+                   FontSize="12"
+                   MaxLength="80"
+                   PlaceholderText="Nome do botão (ex.: Executar aplicação)"
+                   Text="{Binding Name}" />
+          <TextBox Grid.Column="1"
+                   x:Name="AliasBox"
+                   FontSize="12"
+                   MaxLength="40"
+                   PlaceholderText="Apelido (ex.: @restore)"
+                   Text="{Binding Alias}" />
+        </Grid>
 
         <TextBox x:Name="CommandBox"
                  FontSize="12"
@@ -160,6 +171,87 @@
                    Text="{Binding DetectedParameters}"
                    IsVisible="{Binding HasDetectedParameters}" />
 
+        <TextBlock x:Name="VariablesHintText"
+                   Classes="meta"
+                   TextWrapping="Wrap"
+                   Text="{Binding VariablesHint}" />
+
+        <!-- Como o botão roda no worktree (ADR-051). -->
+        <StackPanel x:Name="ModeChoice" Orientation="Horizontal" Spacing="16">
+          <RadioButton GroupName="CommandMode"
+                       FontSize="12"
+                       Content="Execução (resultado na tela)"
+                       IsChecked="{Binding IsExecute}" />
+          <RadioButton x:Name="TerminalMode"
+                       GroupName="CommandMode"
+                       FontSize="12"
+                       Content="Terminal (abre uma janela)"
+                       IsChecked="{Binding IsTerminal}" />
+        </StackPanel>
+
+        <TextBox x:Name="WorkingDirectoryBox"
+                 FontSize="12"
+                 FontFamily="Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace"
+                 MaxLength="1024"
+                 PlaceholderText="Pasta: raiz do worktree (ou uma subpasta, ex.: src/Eco.Web)"
+                 Text="{Binding WorkingDirectory}" />
+
+        <WrapPanel ItemSpacing="16" LineSpacing="4">
+          <CheckBox FontSize="12"
+                    Content="Manter o terminal aberto quando o comando terminar"
+                    IsVisible="{Binding IsTerminal}"
+                    IsChecked="{Binding KeepTerminalOpen}" />
+          <CheckBox x:Name="RequiresConfirmationBox"
+                    FontSize="12"
+                    Content="Pedir confirmação antes de executar"
+                    IsChecked="{Binding RequiresConfirmation}" />
+        </WrapPanel>
+
+        <!-- Uma linha por {nome}: como a tela pergunta o valor antes de executar. -->
+        <StackPanel Spacing="6" IsVisible="{Binding HasParameterEditors}">
+          <TextBlock Classes="meta" Text="Parâmetros — perguntados antes de executar o botão:" />
+          <ItemsControl x:Name="ParameterEditorList" ItemsSource="{Binding ParameterEditors}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:DevelopmentCommandParameterEditorViewModel">
+                <Border Classes="card" Margin="0,0,0,6" Padding="8,6">
+                  <StackPanel Spacing="6">
+                    <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8">
+                      <TextBlock Grid.Column="0"
+                                 Classes="code"
+                                 VerticalAlignment="Center"
+                                 Text="{Binding Placeholder}" />
+                      <TextBox Grid.Column="1"
+                               FontSize="12"
+                               MaxLength="80"
+                               PlaceholderText="Rótulo (ex.: Projeto)"
+                               Text="{Binding Label}" />
+                      <ComboBox Grid.Column="2"
+                                FontSize="12"
+                                MinWidth="130"
+                                ItemsSource="{x:Static vm:DevelopmentCommandParameterEditorViewModel.TypeOptions}"
+                                SelectedIndex="{Binding TypeIndex}" />
+                      <CheckBox Grid.Column="3"
+                                FontSize="12"
+                                Content="Obrigatório"
+                                IsChecked="{Binding IsRequired}" />
+                    </Grid>
+                    <TextBox FontSize="12"
+                             MaxLength="500"
+                             PlaceholderText="Valor padrão (opcional)"
+                             Text="{Binding DefaultValue}" />
+                    <TextBox FontSize="12"
+                             AcceptsReturn="True"
+                             MinHeight="56"
+                             PlaceholderText="Opções, uma por linha (ex.: Development)"
+                             IsVisible="{Binding IsChoice}"
+                             Text="{Binding OptionsText}" />
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+
         <TextBox FontSize="12"
                  MaxLength="500"
                  PlaceholderText="Descrição (opcional)"
@@ -178,6 +270,7 @@
         </StackPanel>
 
       </StackPanel>
+      </ScrollViewer>
     </Border>
 
     <!-- ============================== LISTA =============================== -->
@@ -199,7 +292,7 @@
       <TextBlock DockPanel.Dock="Top"
                  Classes="empty"
                  IsVisible="{Binding IsEmpty}"
-                 Text="Nenhum comando ainda. Crie o primeiro acima — use {nome} para um parâmetro. Depois, na aba Desenvolvimento de uma tarefa, digite @ no campo de comando." />
+                 Text="Nenhum comando ainda. Crie o primeiro acima — use {nome} para um parâmetro. Depois, ligue-o a um diretório em Etiquetas… para virar um botão no worktree, ou digite @ na lista de comandos pós-Worktree de uma tarefa." />
 
       <ScrollViewer HorizontalScrollBarVisibility="Disabled">
         <ItemsControl x:Name="CommandList" ItemsSource="{Binding Commands}">
@@ -209,7 +302,13 @@
                 <Grid ColumnDefinitions="*,Auto,Auto,Auto">
 
                   <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding Alias}" FontSize="12.5" FontWeight="SemiBold" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <TextBlock Text="{Binding DisplayName}" FontSize="12.5" FontWeight="SemiBold" />
+                      <TextBlock Classes="meta"
+                                 VerticalAlignment="Center"
+                                 Text="{Binding Alias}"
+                                 IsVisible="{Binding HasName}" />
+                    </StackPanel>
                     <TextBlock Classes="code"
                                Text="{Binding Command}"
                                TextTrimming="CharacterEllipsis"
@@ -223,6 +322,7 @@
                                Text="{Binding Description}"
                                TextWrapping="Wrap"
                                IsVisible="{Binding HasDescription}" />
+                    <TextBlock Classes="meta" Text="{Binding Summary}" />
                   </StackPanel>
 
                   <Button Grid.Column="1"

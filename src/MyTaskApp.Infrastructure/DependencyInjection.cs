@@ -13,6 +13,7 @@ using MyTaskApp.Application.External;
 using MyTaskApp.Application.External.Jira;
 using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Application.Planning;
+using MyTaskApp.Application.QuickCommands;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Application.Sounds;
 using MyTaskApp.Application.Tags;
@@ -68,6 +69,7 @@ public static class DependencyInjection
         services.AddScoped<ITagQuery, TagQuery>();
         services.AddScoped<IDevelopmentCommandRepository, DevelopmentCommandRepository>();
         services.AddScoped<IAgentSessionRepository, AgentSessionRepository>();
+        services.AddScoped<ICommandExecutionRepository, CommandExecutionRepository>();
         services.AddScoped<IAgentSettingsStore, AgentSettingsStore>();
         services.AddScoped<IAgentAlertSoundStore, AgentAlertSoundStore>();
 
@@ -111,6 +113,11 @@ public static class DependencyInjection
 
         // Comandos pós-Worktree pelo shell do sistema (ADR-028).
         services.AddSingleton<ICommandExecutor, ShellCommandExecutor>();
+
+        // Comandos rápidos num terminal visível (ADR-051): o shell do sistema,
+        // aberto pelo mesmo lançador do agente.
+        services.AddSingleton<ITerminalCommandLauncher>(
+            provider => new ShellTerminalCommandLauncher(provider.GetRequiredService<ITerminalLauncher>()));
 
         // Agentes de IA num terminal real, por tarefa (ADR-030). Um agente novo
         // é mais um IAgentCliProvider aqui; o terminal é escolhido por sistema.

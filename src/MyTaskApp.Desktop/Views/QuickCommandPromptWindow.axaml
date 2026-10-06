@@ -1,0 +1,96 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
+        x:Class="MyTaskApp.Desktop.Views.QuickCommandPromptWindow"
+        x:DataType="vm:QuickCommandPromptViewModel"
+        x:Name="Dialog"
+        Width="480"
+        SizeToContent="Height"
+        CanResize="False"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner">
+
+  <!--
+    Antes de um comando rápido (ADR-051): os parâmetros que o comando pede e a
+    linha final, ao vivo. Quando o comando pede confirmação, ler a linha é a
+    confirmação — por isso ela aparece inteira, e não só os campos.
+  -->
+
+  <StackPanel Margin="24,20" Spacing="12">
+
+    <TextBlock x:Name="TitleText"
+               FontSize="16"
+               FontWeight="SemiBold"
+               TextWrapping="Wrap"
+               Text="{Binding Title}" />
+
+    <ItemsControl x:Name="Fields" ItemsSource="{Binding Fields}" IsVisible="{Binding HasFields}">
+      <ItemsControl.ItemTemplate>
+        <DataTemplate x:DataType="vm:QuickCommandFieldViewModel">
+          <StackPanel Spacing="4" Margin="0,0,0,8">
+            <TextBlock FontSize="12" FontWeight="SemiBold" Text="{Binding Label}" />
+            <TextBox FontSize="12"
+                     MaxLength="500"
+                     IsVisible="{Binding IsText}"
+                     PlaceholderText="{Binding Placeholder}"
+                     Text="{Binding Value}" />
+            <ComboBox FontSize="12"
+                      HorizontalAlignment="Stretch"
+                      IsVisible="{Binding IsChoice}"
+                      ItemsSource="{Binding Choices}"
+                      SelectedItem="{Binding Value}" />
+            <TextBlock FontSize="11.5"
+                       Foreground="{DynamicResource WidgetDangerBrush}"
+                       TextWrapping="Wrap"
+                       IsVisible="{Binding HasError}"
+                       Text="{Binding Error}" />
+          </StackPanel>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+
+    <StackPanel Spacing="6">
+      <TextBlock FontSize="12.5" Text="{Binding Headline}" />
+      <TextBlock FontSize="11.5" Opacity="0.75" TextWrapping="Wrap" Text="{Binding ModeText}" />
+      <Border Padding="10,8"
+              CornerRadius="6"
+              Background="{DynamicResource WidgetSurfaceBrush}"
+              BorderBrush="{DynamicResource WidgetStrokeSoftBrush}"
+              BorderThickness="1">
+        <StackPanel Spacing="4">
+          <SelectableTextBlock x:Name="PreviewLine"
+                               FontFamily="Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace"
+                               FontSize="12"
+                               TextWrapping="Wrap"
+                               Text="{Binding PreviewText}" />
+          <TextBlock FontSize="11"
+                     Opacity="0.7"
+                     TextWrapping="Wrap"
+                     Text="{Binding WorkingDirectory}" />
+        </StackPanel>
+      </Border>
+      <TextBlock x:Name="ProblemText"
+                 FontSize="11.5"
+                 Foreground="{DynamicResource WidgetDangerBrush}"
+                 TextWrapping="Wrap"
+                 IsVisible="{Binding HasProblem}"
+                 Text="{Binding Problem}" />
+    </StackPanel>
+
+    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+      <Button x:Name="CancelButton"
+              MinWidth="96"
+              Content="Cancelar"
+              IsCancel="True"
+              Click="OnCancel" />
+      <Button x:Name="RunButton"
+              MinWidth="96"
+              Classes="accent"
+              Content="Executar"
+              IsEnabled="{Binding CanAccept}"
+              Click="OnRun" />
+    </StackPanel>
+
+  </StackPanel>
+
+</Window>

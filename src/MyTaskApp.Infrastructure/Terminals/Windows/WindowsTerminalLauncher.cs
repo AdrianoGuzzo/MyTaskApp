@@ -60,6 +60,13 @@ internal sealed class WindowsTerminalLauncher(
             WorkingDirectory = options.WorkingDirectory,
         };
 
+        // A linha crua é só para o cmd dos comandos rápidos (ADR-051): ele lê os
+        // próprios argumentos, e não entende o \" que o ArgumentList poria.
+        if (options.RawArguments is { } raw)
+        {
+            startInfo.Arguments = raw;
+        }
+
         foreach (var argument in options.Arguments)
         {
             startInfo.ArgumentList.Add(argument);
@@ -92,7 +99,7 @@ internal sealed class WindowsTerminalLauncher(
         }
         catch (Exception exception) when (exception is Win32Exception or InvalidOperationException)
         {
-            logger.LogWarning(exception, "AgentTerminalLaunchFailed {Executable}", options.Executable);
+            logger.LogWarning(exception, "TerminalLaunchFailed {Executable}", options.Executable);
 
             return Task.FromResult(TerminalLaunchResult.Failed(
                 $"Não foi possível abrir o terminal: {exception.Message}"));
@@ -117,6 +124,12 @@ internal sealed class WindowsTerminalLauncher(
             || !directoryExists(options.WorkingDirectory))
         {
             return $"A pasta não existe: {options.WorkingDirectory}";
+        }
+
+        // O .NET recusaria na hora de iniciar; aqui a mensagem é melhor.
+        if (options.RawArguments is not null && options.Arguments.Count > 0)
+        {
+            return "Use a linha crua ou a lista de argumentos, não as duas.";
         }
 
         return null;

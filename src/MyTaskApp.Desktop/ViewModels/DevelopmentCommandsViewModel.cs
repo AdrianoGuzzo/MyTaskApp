@@ -17,14 +17,38 @@ public sealed class DevelopmentCommandListItemViewModel(DevelopmentCommandRow ro
 
     public string Alias => Row.Alias;
 
+    /// <summary>O rótulo do botão; sem nome, o alias (ADR-051).</summary>
+    public string DisplayName => Row.DisplayName;
+
+    public bool HasName => Row.Name is not null;
+
     public string Command => Row.Command;
+
+    /// <summary>"Terminal · pasta src/Eco.Web · pede confirmação" — o que o botão faz.</summary>
+    public string Summary =>
+        string.Join(" · ", new[]
+        {
+            Row.Mode == CommandMode.Terminal ? "Terminal" : "Execução",
+            Row.WorkingDirectory is { } folder ? $"pasta {folder}" : null,
+            Row.RequiresConfirmation ? "pede confirmação" : null,
+            Row.BindingCount switch
+            {
+                0 => null,
+                1 => "em 1 diretório",
+                var count => $"em {count} diretórios",
+            },
+        }.OfType<string>());
 
     public string? Description => Row.Description;
 
     public bool HasDescription => !string.IsNullOrEmpty(Row.Description);
 
-    /// <summary>Os <c>{nome}</c> do comando, que quem chama preenche.</summary>
-    public IReadOnlyList<string> Parameters { get; } = CommandParameters.Names(row.Command);
+    /// <summary>
+    /// Os <c>{nome}</c> do comando, que quem chama preenche. As variáveis de
+    /// contexto (<c>{worktree}</c>…) o app preenche sozinho (ADR-051).
+    /// </summary>
+    public IReadOnlyList<string> Parameters { get; } =
+        [.. CommandParameters.Names(row.Command).Where(name => !CommandVariables.IsContextName(name))];
 
     public bool HasParameters => Parameters.Count > 0;
 
@@ -33,6 +57,7 @@ public sealed class DevelopmentCommandListItemViewModel(DevelopmentCommandRow ro
 
     public bool Matches(string query) =>
         Row.Alias.Contains(query, StringComparison.OrdinalIgnoreCase)
+        || (Row.Name?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false)
         || Row.Command.Contains(query, StringComparison.OrdinalIgnoreCase)
         || (Row.Description?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false);
 }
@@ -54,6 +79,9 @@ public sealed partial class DevelopmentCommandsViewModel(
 
     private CancellationTokenSource? _test;
 
+    /// <summary>O apelido que o nome sugeriu por último.</summary>
+    private string? _suggestedAlias;
+
     [ObservableProperty]
     private bool _isBusy;
 
@@ -74,6 +102,11 @@ public sealed partial class DevelopmentCommandsViewModel(
     [NotifyPropertyChangedFor(nameof(IsEditing), nameof(FormTitle), nameof(SaveLabel))]
     private Guid? _editingId;
 
+    /// <summary>O rótulo do botão no worktree: "Executar aplicação" (ADR-051).</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
+    private string _name = string.Empty;
+
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
     [NotifyPropertyChangedFor(nameof(DetectedParameters))]
@@ -86,6 +119,21 @@ public sealed partial class DevelopmentCommandsViewModel(
 
     [ObservableProperty]
     private string _description = string.Empty;
+
+    /// <summary>Terminal visível (<c>dotnet run</c>) em vez de escondido com o resultado na tela.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsExecute))]
+    private bool _isTerminal;
+
+    /// <summary>Relativa ao worktree; em branco é a raiz.</summary>
+    [ObservableProperty]
+    private string _workingDirectory = string.Empty;
+
+    [ObservableProperty]
+    private bool _keepTerminalOpen = true;
+
+    [ObservableProperty]
+    private bool _requiresConfirmation;
 
     /// <summary>Onde "Testar" roda. Fica entre um teste e outro.</summary>
     [ObservableProperty]
@@ -107,6 +155,24 @@ public sealed partial class DevelopmentCommandsViewModel(
 
     public ObservableCollection<DevelopmentCommandListItemViewModel> Commands { get; } = [];
 
+    /// <summary>Uma linha por <c>{nome}</c> do comando, enquanto o usuário digita (ADR-051).</summary>
+    public ObservableCollection<DevelopmentCommandParameterEditorViewModel> ParameterEditors { get; } = [];
+
+    public bool HasParameterEditors => ParameterEditors.Count > 0;
+
+    public bool IsExecute
+    {
+        get => !IsTerminal;
+        set => IsTerminal = !value;
+    }
+
+    /// <summary>As variáveis que o app preenche sozinho, para a dica do formulário.</summary>
+    public string VariablesHint { get; } =
+        "Variáveis que o app preenche: " + string.Join(", ", CommandVariables.All
+            .Where(variable => variable.Name is not (CommandVariables.WorktreePath or CommandVariables.RepositoryPath))
+            .Select(variable => variable.Placeholder))
+        + ". Caminho com espaço vai entre aspas: code \"{worktree}\".";
+
     public CommandOutputViewModel TestOutput { get; } = new();
 
     public bool IsEditing => EditingId is not null;
@@ -117,14 +183,17 @@ public sealed partial class DevelopmentCommandsViewModel(
 
     /// <summary>Os parâmetros do comando em edição, enquanto o usuário digita.</summary>
     public string? DetectedParameters =>
-        CommandParameters.Names(Command) is { Count: > 0 } names
+        UserParameters(Command) is { Count: > 0 } names
             ? $"Parâmetros: {string.Join(", ", names)} — quem chama preenche com "
               + CommandAliasResolver.UsageOf(AliasForUsage, names)
             : null;
 
     public bool HasDetectedParameters => DetectedParameters is not null;
 
-    public bool CanSave => !string.IsNullOrWhiteSpace(Alias) && !string.IsNullOrWhiteSpace(Command);
+    /// <summary>Sem apelido, vale o sugerido pelo nome: quem só quer o botão não precisa pensar em @alias.</summary>
+    public bool CanSave =>
+        !string.IsNullOrWhiteSpace(Command)
+        && (!string.IsNullOrWhiteSpace(Alias) || TagDirectoryItemViewModel.SuggestAlias(Name).Length > 0);
 
     private string AliasForUsage
     {
@@ -135,6 +204,57 @@ public sealed partial class DevelopmentCommandsViewModel(
             return alias.Length == 0 ? "@apelido" : alias[0] == '@' ? alias : "@" + alias;
         }
     }
+
+    private static IReadOnlyList<string> UserParameters(string? command) =>
+        [.. CommandParameters.Names(command).Where(name => !CommandVariables.IsContextName(name))];
+
+    /// <summary>
+    /// O nome sugere o apelido enquanto o apelido for o que ele sugeriu: quem
+    /// digitou um apelido próprio não o perde ao ajustar o nome.
+    /// </summary>
+    partial void OnNameChanged(string value)
+    {
+        var alias = Alias.Trim();
+
+        if (alias.Length > 0 && alias != _suggestedAlias)
+        {
+            return;
+        }
+
+        _suggestedAlias = TagDirectoryItemViewModel.SuggestAlias(value);
+        Alias = _suggestedAlias;
+    }
+
+    /// <summary>Acompanha os <c>{nome}</c> do texto, sem perder o que já foi preenchido de cada um.</summary>
+    partial void OnCommandChanged(string value) => SyncParameterEditors(null);
+
+    private void SyncParameterEditors(IReadOnlyList<CommandParameterSpec>? saved)
+    {
+        var names = UserParameters(Command);
+        var current = ParameterEditors.ToDictionary(editor => editor.Name, StringComparer.OrdinalIgnoreCase);
+
+        ParameterEditors.Clear();
+
+        foreach (var name in names)
+        {
+            var spec = saved?.FirstOrDefault(item => string.Equals(item.Name, name, StringComparison.OrdinalIgnoreCase));
+
+            ParameterEditors.Add(saved is null && current.TryGetValue(name, out var existing)
+                ? existing
+                : new DevelopmentCommandParameterEditorViewModel(name, spec));
+        }
+
+        OnPropertyChanged(nameof(HasParameterEditors));
+    }
+
+    private DevelopmentCommandSettings FormSettings() =>
+        new(
+            string.IsNullOrWhiteSpace(Name) ? null : Name.Trim(),
+            IsTerminal ? CommandMode.Terminal : CommandMode.Execute,
+            string.IsNullOrWhiteSpace(WorkingDirectory) ? null : WorkingDirectory.Trim(),
+            KeepTerminalOpen,
+            RequiresConfirmation,
+            [.. ParameterEditors.Select(editor => editor.ToSpec())]);
 
     [RelayCommand]
     public async Task LoadAsync(CancellationToken cancellationToken)
@@ -162,19 +282,20 @@ public sealed partial class DevelopmentCommandsViewModel(
     public async Task SaveAsync(CancellationToken cancellationToken)
     {
         var editingId = EditingId;
-        var alias = Alias;
+        var alias = string.IsNullOrWhiteSpace(Alias) ? TagDirectoryItemViewModel.SuggestAlias(Name) : Alias;
         var command = Command;
         var description = Description;
+        var settings = FormSettings();
 
         var saved = await TryAsync(
             () => editingId is { } id
                 ? runner.RunAsync<UpdateDevelopmentCommandHandler, DevelopmentCommandRow>(
                     (handler, token) => handler.HandleAsync(
-                        new UpdateDevelopmentCommand(id, alias, command, description), token),
+                        new UpdateDevelopmentCommand(id, alias, command, description, settings), token),
                     cancellationToken)
                 : runner.RunAsync<CreateDevelopmentCommandHandler, DevelopmentCommandRow>(
                     (handler, token) => handler.HandleAsync(
-                        new CreateDevelopmentCommand(alias, command, description), token),
+                        new CreateDevelopmentCommand(alias, command, description, settings), token),
                     cancellationToken),
             "Não foi possível salvar o comando.");
 
@@ -193,9 +314,16 @@ public sealed partial class DevelopmentCommandsViewModel(
     public void Edit(DevelopmentCommandListItemViewModel item)
     {
         EditingId = item.Row.Id;
+        _suggestedAlias = null;
         Alias = item.Alias;
+        Name = item.Row.Name ?? string.Empty;
         Command = item.Command;
         Description = item.Description ?? string.Empty;
+        IsTerminal = item.Row.Mode == CommandMode.Terminal;
+        WorkingDirectory = item.Row.WorkingDirectory ?? string.Empty;
+        KeepTerminalOpen = item.Row.KeepTerminalOpen;
+        RequiresConfirmation = item.Row.RequiresConfirmation;
+        SyncParameterEditors(item.Row.Parameters ?? []);
         ErrorMessage = null;
         StatusMessage = null;
     }
@@ -206,10 +334,17 @@ public sealed partial class DevelopmentCommandsViewModel(
     [RelayCommand]
     public async Task DeleteAsync(DevelopmentCommandListItemViewModel item, CancellationToken cancellationToken)
     {
+        var bindings = item.Row.BindingCount switch
+        {
+            0 => string.Empty,
+            1 => " O botão dele também sai do diretório de etiqueta que o oferece.",
+            var count => $" O botão dele também sai dos {count} diretórios de etiqueta que o oferecem.",
+        };
+
         var confirmed = await confirmation.AskAsync(new ConfirmationRequest(
             $"Excluir {item.Alias}?",
             $"As tarefas que chamam {item.Alias} vão avisar que ele não existe na próxima execução. "
-            + "Nenhuma lista de tarefa é alterada.",
+            + "Nenhuma lista de tarefa é alterada." + bindings,
             "Excluir"));
 
         if (!confirmed)
@@ -260,7 +395,16 @@ public sealed partial class DevelopmentCommandsViewModel(
 
         // Só comando com {nome} usa o campo: os outros testam como sempre, pelo apelido.
         var arguments = item.HasParameters ? TestArguments.Trim() : string.Empty;
-        var expansion = CommandAliasResolver.Expand(item.Command, arguments);
+        var expansion = CommandAliasResolver.Expand(
+            item.Command,
+            arguments,
+            CommandContext.ForFolder(TestDirectory.Trim().Trim('"')));
+
+        if (expansion.Error is { } unsafeValue)
+        {
+            ErrorMessage = unsafeValue;
+            return;
+        }
 
         if (!expansion.IsComplete)
         {
@@ -372,9 +516,16 @@ public sealed partial class DevelopmentCommandsViewModel(
     private void ResetForm()
     {
         EditingId = null;
+        _suggestedAlias = null;
+        Name = string.Empty;
         Alias = string.Empty;
         Command = string.Empty;
         Description = string.Empty;
+        IsTerminal = false;
+        WorkingDirectory = string.Empty;
+        KeepTerminalOpen = true;
+        RequiresConfirmation = false;
+        SyncParameterEditors([]);
     }
 
     private async Task<bool> TryAsync(Func<Task> operation, string fallbackMessage)

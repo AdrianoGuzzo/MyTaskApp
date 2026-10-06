@@ -101,6 +101,32 @@ public sealed class Tag
 
     public void RemoveDirectory(Guid directoryId) => _directories.Remove(GetDirectory(directoryId));
 
+    /// <summary>
+    /// Oferece um comando global como botão nos worktrees do diretório
+    /// (ADR-051). Entra no fim da lista, ligado. Que o comando existe é o caso de
+    /// uso quem confere: ele é de outro agregado.
+    /// </summary>
+    public TagDirectoryCommand AddDirectoryCommand(Guid directoryId, Guid developmentCommandId, DateTimeOffset at) =>
+        GetDirectory(directoryId).AddCommand(developmentCommandId, at);
+
+    /// <summary>Personaliza só neste diretório. Em branco volta à configuração global.</summary>
+    public void CustomizeDirectoryCommand(
+        Guid directoryId,
+        Guid bindingId,
+        string? commandOverride,
+        string? workingDirectoryOverride) =>
+        GetDirectory(directoryId).CustomizeCommand(bindingId, commandOverride, workingDirectoryOverride);
+
+    /// <summary>Desligar esconde o botão sem perder a associação nem a personalização.</summary>
+    public void SetDirectoryCommandEnabled(Guid directoryId, Guid bindingId, bool enabled) =>
+        GetDirectory(directoryId).EnableCommand(bindingId, enabled);
+
+    public void MoveDirectoryCommand(Guid directoryId, Guid bindingId, int offset) =>
+        GetDirectory(directoryId).MoveCommand(bindingId, offset);
+
+    public void RemoveDirectoryCommand(Guid directoryId, Guid bindingId) =>
+        GetDirectory(directoryId).RemoveCommand(bindingId);
+
     private TagDirectory GetDirectory(Guid directoryId) =>
         _directories.Find(directory => directory.Id == directoryId)
         ?? throw new DomainException("Diretório não encontrado.");

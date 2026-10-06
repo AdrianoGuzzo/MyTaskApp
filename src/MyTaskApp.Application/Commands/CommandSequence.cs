@@ -94,13 +94,8 @@ internal static class CommandSequence
                     lines,
                     cancellationToken);
 
-                var state = execution.Success
-                    ? CommandStepState.Succeeded
-                    : execution.Canceled
-                        ? CommandStepState.Canceled
-                        : CommandStepState.Failed;
-
-                var error = execution.TimedOut ? "O comando demorou demais e foi interrompido." : null;
+                var state = StateOf(execution);
+                var error = execution.TimedOut ? TimeoutMessage : null;
 
                 result = new CommandStepResult(step.Index, step.Entry, step.Command, state, execution, error);
             }
@@ -119,6 +114,16 @@ internal static class CommandSequence
 
         return new CommandRunSummary(results);
     }
+
+    public const string TimeoutMessage = "O comando demorou demais e foi interrompido.";
+
+    /// <summary>Como uma execução terminada aparece: a mesma regra para a lista e para o comando rápido.</summary>
+    public static CommandStepState StateOf(CommandExecutionResult execution) =>
+        execution.Success
+            ? CommandStepState.Succeeded
+            : execution.Canceled
+                ? CommandStepState.Canceled
+                : CommandStepState.Failed;
 
     /// <summary>Carimba cada linha com a etapa que a escreveu.</summary>
     private sealed class LineForwarder(int index, IProgress<CommandStepProgress> progress)

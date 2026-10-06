@@ -22,4 +22,10 @@ public interface IDevelopmentCommandRepository
         CancellationToken cancellationToken = default);
 
     void Remove(DevelopmentCommand command);
+
+    /// <summary>
+    /// Em quantos diretórios de etiqueta cada comando é botão (ADR-051). Comando
+    /// sem associação não aparece.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, int>> CountBindingsAsync(CancellationToken cancellationToken = default);
 }
