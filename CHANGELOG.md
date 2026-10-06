@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.4.0...v1.5.0) (2026-10-05)
+
+
+### Added
+
+* prazos para tarefas longas, com seção PRAZOS e avisos por degrau ([#56](https://github.com/AdrianoGuzzo/MyTaskApp/issues/56)) ([93c0a22](https://github.com/AdrianoGuzzo/MyTaskApp/commit/93c0a22fbad51934f002d636b92540953e2e9ef9))
+
 ## [1.4.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.3.0...v1.4.0) (2026-10-04)
 
 
