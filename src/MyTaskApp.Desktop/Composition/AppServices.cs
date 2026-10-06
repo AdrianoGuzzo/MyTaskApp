@@ -99,6 +99,10 @@ internal static class AppServices
             // a janela dona a cada pergunta.
             .AddSingleton<IConfirmationDialog, ConfirmationDialog>()
 
+            // Os parâmetros e a confirmação de um comando rápido (ADR-051).
+            // Sem estado, como a confirmação: descobre a janela a cada pergunta.
+            .AddSingleton<IQuickCommandPrompt, QuickCommandPrompt>()
+
             // Copiar o texto de uma linha (§12). Singleton sem estado, como o
             // dialogo: descobre a janela a cada escrita.
             .AddSingleton<IClipboardWriter, ClipboardWriter>()
@@ -165,6 +169,9 @@ internal static class AppServices
 
             // O card do agente de IA dentro dela (ADR-030): também um por janela.
             .AddTransient<AgentSessionViewModel>()
+
+            // A seção "⚡ Comandos" de cada ambiente (ADR-051): uma por ambiente.
+            .AddTransient<QuickCommandsViewModel>()
             .AddApplication(configuration)
             .AddInfrastructure(configuration)
             .BuildServiceProvider(validateScopes: true);

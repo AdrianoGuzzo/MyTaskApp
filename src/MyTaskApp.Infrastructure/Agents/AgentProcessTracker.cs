@@ -30,7 +30,15 @@ internal sealed class AgentProcessTracker : IAgentProcessTracker
         return process is not null;
     }
 
-    public IDisposable? WatchExit(int processId, DateTimeOffset startedAt, Action onExited)
+    public IDisposable? WatchExit(int processId, DateTimeOffset startedAt, Action onExited) =>
+        WatchExitCode(processId, startedAt, _ => onExited());
+
+    /// <remarks>
+    /// O exit code de um processo que o app não iniciou só sai se o handle foi
+    /// aberto antes de ele sair — e é o que o vigia segura enquanto espera.
+    /// Saiu antes de o vigia abrir, ou o sistema negou: <c>null</c>.
+    /// </remarks>
+    public IDisposable? WatchExitCode(int processId, DateTimeOffset startedAt, Action<int?> onExited)
     {
         var process = Open(processId, startedAt);
 
@@ -117,16 +125,34 @@ internal sealed class AgentProcessTracker : IAgentProcessTracker
     private sealed class ExitWatch : IDisposable
     {
         private readonly Process _process;
-        private Action? _onExited;
+        private Action<int?>? _onExited;
 
-        public ExitWatch(Process process, Action onExited)
+        public ExitWatch(Process process, Action<int?> onExited)
         {
             _process = process;
             _onExited = onExited;
             _process.Exited += OnProcessExited;
         }
 
-        public void Fire() => Interlocked.Exchange(ref _onExited, null)?.Invoke();
+        public void Fire()
+        {
+            if (Interlocked.Exchange(ref _onExited, null) is { } onExited)
+            {
+                onExited(ExitCodeOf(_process));
+            }
+        }
+
+        private static int? ExitCodeOf(Process process)
+        {
+            try
+            {
+                return process.ExitCode;
+            }
+            catch (Exception exception) when (IsGone(exception))
+            {
+                return null;
+            }
+        }
 
         public void Dispose()
         {

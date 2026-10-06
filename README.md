@@ -133,17 +133,23 @@ A janela da tarefa tem a aba **Desenvolvimento**:
    `npm ci`, roda em sequência com o output ao vivo e para no primeiro erro.
    Os **comandos globais** (`@restore` → `dotnet restore`) ficam em
    *☰ → Comandos globais…*.
-3. **Vários ambientes por tarefa**, um worktree por repositório (o app e a
+3. **Comandos rápidos.** Ligue um comando global a um diretório da etiqueta
+   (*☰ → Etiquetas… → Comandos*) e ele vira um botão **▶** no worktree pronto
+   de toda tarefa daquele repositório: "▶ Executar aplicação" abre um terminal
+   no worktree rodando `dotnet run`; "▶ Testes" roda escondido e mostra o
+   resultado. Variáveis como `{worktree}` e `{branch}` são preenchidas
+   sozinhas, e parâmetros e confirmação são perguntados antes (ADR-051).
+4. **Vários ambientes por tarefa**, um worktree por repositório (o app e a
    API, o front e o back).
-4. **Bolinha de estado Git na linha:** âmbar quando há alteração não
+5. **Bolinha de estado Git na linha:** âmbar quando há alteração não
    commitada, azul quando há commit sem push e verde quando tudo foi enviado.
    Ao concluir a tarefa, o app pergunta o que fazer com o worktree.
-5. **PR aberta da branch.** Se a branch já existe e tem PR aberta no GitHub, o
+6. **PR aberta da branch.** Se a branch já existe e tem PR aberta no GitHub, o
    formulário mostra **"PR #123 aberta ↗"**, um link que abre a PR. Os balões
    da aba do repositório e da lista Hoje também mostram a PR. Usa o
    [GitHub CLI](https://cli.github.com/) (`gh`) com o seu login. Se ele faltar,
    o app mostra como instalar (ADR-047).
-6. **Remover worktree** apaga a pasta. Se algum processo a estiver segurando,
+7. **Remover worktree** apaga a pasta. Se algum processo a estiver segurando,
    o app mostra qual.
 
 ### Claude Code por tarefa

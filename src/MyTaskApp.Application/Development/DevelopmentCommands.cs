@@ -85,7 +85,12 @@ public sealed class RunDevelopmentCommandsHandler(
         }
 
         var globals = await GlobalCommandLookup.LoadAsync(commands, cancellationToken);
-        var resolved = CommandAliasResolver.Resolve(entries, globals);
+        // {worktree}, {branch}… nos globais valem aqui também (ADR-051). Sem
+        // diretório de etiqueta, {tag} fica sem valor.
+        var resolved = CommandAliasResolver.Resolve(
+            entries,
+            globals,
+            CommandContext.For(task, development, tagName: null));
 
         logger.LogInformation(
             "DevelopmentCommandsStarted {TaskId} {Count} {WorktreePath}",

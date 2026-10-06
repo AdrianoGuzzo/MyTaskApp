@@ -4,16 +4,50 @@ using MyTaskApp.Domain.Commands;
 
 namespace MyTaskApp.Application.Commands;
 
-/// <summary>Um comando global como a tela o mostra (ADR-028).</summary>
+/// <summary>Um comando global como a tela o mostra (ADR-028), com o que o comando rápido usa (ADR-051).</summary>
+/// <param name="Parameters">As definições cadastradas; um <c>{nome}</c> sem definição é texto obrigatório.</param>
+/// <param name="BindingCount">Em quantos diretórios de etiqueta ele é botão — o aviso antes de excluir.</param>
 public sealed record DevelopmentCommandRow(
     Guid Id,
     string Alias,
     string Command,
     string? Description,
-    DateTimeOffset UpdatedAt)
+    DateTimeOffset UpdatedAt,
+    string? Name = null,
+    CommandMode Mode = CommandMode.Execute,
+    string? WorkingDirectory = null,
+    bool KeepTerminalOpen = true,
+    bool RequiresConfirmation = false,
+    IReadOnlyList<CommandParameterSpec>? Parameters = null,
+    int BindingCount = 0)
 {
-    public static DevelopmentCommandRow From(DevelopmentCommand command) =>
-        new(command.Id, command.Alias, command.Command, command.Description, command.UpdatedAt);
+    public string DisplayName => Name ?? Alias;
+
+    public DevelopmentCommandSettings Settings =>
+        new(Name, Mode, WorkingDirectory, KeepTerminalOpen, RequiresConfirmation, Parameters);
+
+    public static DevelopmentCommandRow From(DevelopmentCommand command, int bindingCount = 0) =>
+        new(
+            command.Id,
+            command.Alias,
+            command.Command,
+            command.Description,
+            command.UpdatedAt,
+            command.Name,
+            command.Mode,
+            command.WorkingDirectory,
+            command.KeepTerminalOpen,
+            command.RequiresConfirmation,
+            [.. command.Parameters.Select(parameter => parameter.ToSpec())],
+            bindingCount);
+
+    /// <summary>A definição de cada <c>{nome}</c> do texto (ver <see cref="DevelopmentCommand.ParametersOf"/>).</summary>
+    public IReadOnlyList<CommandParameterSpec> ParametersOf(string text) =>
+        [.. CommandParameters.Names(text)
+            .Where(name => !CommandVariables.IsContextName(name))
+            .Select(name => (Parameters ?? []).FirstOrDefault(
+                                spec => string.Equals(spec.Name, name, StringComparison.OrdinalIgnoreCase))
+                            ?? CommandParameterSpec.Plain(name))];
 }
 
 public sealed record GetDevelopmentCommands;
@@ -25,12 +59,18 @@ public sealed class GetDevelopmentCommandsHandler(IDevelopmentCommandRepository 
         CancellationToken cancellationToken = default)
     {
         var all = await commands.ListAsync(cancellationToken);
+        var bindings = await commands.CountBindingsAsync(cancellationToken);
 
-        return all.Select(DevelopmentCommandRow.From).ToList();
+        return all.Select(command => DevelopmentCommandRow.From(command, bindings.GetValueOrDefault(command.Id))).ToList();
     }
 }
 
-public sealed record CreateDevelopmentCommand(string Alias, string Command, string? Description);
+/// <param name="Settings">O comando rápido (ADR-051). <c>null</c> é o padrão: escondido, na raiz.</param>
+public sealed record CreateDevelopmentCommand(
+    string Alias,
+    string Command,
+    string? Description,
+    DevelopmentCommandSettings? Settings = null);
 
 public sealed class CreateDevelopmentCommandHandler(
     IDevelopmentCommandRepository commands,
@@ -46,6 +86,7 @@ public sealed class CreateDevelopmentCommandHandler(
             command.Alias,
             command.Command,
             command.Description,
+            command.Settings ?? DevelopmentCommandSettings.Default,
             timeProvider.GetUtcNow());
 
         await commands.EnsureAliasIsFreeAsync(created.Alias, exceptId: null, cancellationToken);
@@ -59,7 +100,13 @@ public sealed class CreateDevelopmentCommandHandler(
     }
 }
 
-public sealed record UpdateDevelopmentCommand(Guid CommandId, string Alias, string Command, string? Description);
+/// <param name="Settings">O comando rápido (ADR-051). <c>null</c> mantém o que está gravado.</param>
+public sealed record UpdateDevelopmentCommand(
+    Guid CommandId,
+    string Alias,
+    string Command,
+    string? Description,
+    DevelopmentCommandSettings? Settings = null);
 
 public sealed class UpdateDevelopmentCommandHandler(
     IDevelopmentCommandRepository commands,
@@ -84,13 +131,20 @@ public sealed class UpdateDevelopmentCommandHandler(
             existing.Id,
             cancellationToken);
 
-        existing.Update(command.Alias, command.Command, command.Description, timeProvider.GetUtcNow());
+        existing.Update(
+            command.Alias,
+            command.Command,
+            command.Description,
+            command.Settings ?? existing.Settings,
+            timeProvider.GetUtcNow());
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation("DevelopmentCommandUpdated {CommandId} {Alias}", existing.Id, existing.Alias);
 
-        return DevelopmentCommandRow.From(existing);
+        var bindings = await commands.CountBindingsAsync(cancellationToken);
+
+        return DevelopmentCommandRow.From(existing, bindings.GetValueOrDefault(existing.Id));
     }
 }
 
@@ -101,6 +155,10 @@ public sealed class DeleteDevelopmentCommandHandler(
     IUnitOfWork unitOfWork,
     ILogger<DeleteDevelopmentCommandHandler> logger)
 {
+    /// <remarks>
+    /// Leva junto os botões dos diretórios que o ofereciam (cascata, ADR-051); o
+    /// histórico de execuções fica, sem o vínculo. A tela avisa quantos antes.
+    /// </remarks>
     public async Task HandleAsync(DeleteDevelopmentCommand command, CancellationToken cancellationToken = default)
     {
         var existing = await commands.GetByIdAsync(command.CommandId, cancellationToken);

@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Domain;
+using MyTaskApp.Domain.Commands;
 
 namespace MyTaskApp.Application.Commands;
 
@@ -25,7 +26,7 @@ internal static class GlobalCommandLookup
         var problems = new List<string>();
 
         var missing = resolved
-            .Where(step => !step.IsResolved && !step.LacksParameters)
+            .Where(step => step.IsUnknownAlias)
             .Select(step => CommandAliasResolver.AliasOf(step.Entry))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -43,7 +44,7 @@ internal static class GlobalCommandLookup
         }
 
         problems.AddRange(resolved
-            .Where(step => step.LacksParameters)
+            .Where(step => step.LacksParameters || step.HasUnsafeValue)
             .Select(step => $"Comando {step.Index + 1}: {step.Error}"));
 
         if (problems.Count > 0)
@@ -62,12 +63,22 @@ public sealed record ValidateCommandEntries(IReadOnlyList<string> Entries);
 
 public sealed class ValidateCommandEntriesHandler(IDevelopmentCommandRepository commands)
 {
+    /// <summary>
+    /// O worktree ainda não existe: as variáveis dele não podem faltar, e ficam
+    /// para a execução (ADR-051). <c>{tag}</c> não: a lista pós-Worktree não vem
+    /// de um diretório de etiqueta, então ninguém a preencheria.
+    /// </summary>
+    private static readonly CommandContext BeforeTheWorktree = CommandContext.Deferred(
+        CommandVariables.All
+            .Select(variable => variable.Name)
+            .Where(name => name != CommandVariables.Tag));
+
     public async Task<IReadOnlyList<ResolvedCommand>> HandleAsync(
         ValidateCommandEntries query,
         CancellationToken cancellationToken = default)
     {
         var globals = await GlobalCommandLookup.LoadAsync(commands, cancellationToken);
-        var resolved = CommandAliasResolver.Resolve(query.Entries, globals);
+        var resolved = CommandAliasResolver.Resolve(query.Entries, globals, BeforeTheWorktree);
 
         GlobalCommandLookup.EnsureResolved(resolved);
 
@@ -100,7 +111,7 @@ public sealed class RunCommandHandler(
         var directory = await CommandDirectory.RequireAsync(directories, command.WorkingDirectory, cancellationToken);
 
         var globals = await GlobalCommandLookup.LoadAsync(commands, cancellationToken);
-        var resolved = CommandAliasResolver.Resolve([command.Entry], globals);
+        var resolved = CommandAliasResolver.Resolve([command.Entry], globals, CommandContext.ForFolder(directory));
 
         var summary = await CommandSequence.RunAsync(resolved, directory, executor, progress, cancellationToken);
 

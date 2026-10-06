@@ -10,11 +10,14 @@ internal sealed class DevelopmentCommandRepository(MyTaskAppDbContext context) :
         await context.DevelopmentCommands.AddAsync(command, cancellationToken);
 
     public Task<DevelopmentCommand?> FindByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
-        context.DevelopmentCommands.SingleOrDefaultAsync(command => command.Id == id, cancellationToken);
+        context.DevelopmentCommands
+            .Include(command => command.Parameters)
+            .SingleOrDefaultAsync(command => command.Id == id, cancellationToken);
 
     /// <remarks>A coluna é NOCASE: a ordem já não separa maiúsculas.</remarks>
     public async Task<IReadOnlyList<DevelopmentCommand>> ListAsync(CancellationToken cancellationToken = default) =>
         await context.DevelopmentCommands
+            .Include(command => command.Parameters)
             .OrderBy(command => command.Alias)
             .ToListAsync(cancellationToken);
 
@@ -31,4 +34,10 @@ internal sealed class DevelopmentCommandRepository(MyTaskAppDbContext context) :
             cancellationToken);
 
     public void Remove(DevelopmentCommand command) => context.DevelopmentCommands.Remove(command);
+
+    public async Task<IReadOnlyDictionary<Guid, int>> CountBindingsAsync(CancellationToken cancellationToken = default) =>
+        await context.TagDirectoryCommands
+            .GroupBy(binding => binding.DevelopmentCommandId)
+            .Select(group => new { group.Key, Count = group.Count() })
+            .ToDictionaryAsync(group => group.Key, group => group.Count, cancellationToken);
 }

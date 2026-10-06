@@ -24,6 +24,10 @@ public sealed class TagDirectory
     /// <summary>O mesmo limite do Git para nome de branch.</summary>
     public const int MaxDefaultBranchLength = 255;
 
+    public const int MaxCommands = 50;
+
+    private readonly List<TagDirectoryCommand> _commands = [];
+
     private TagDirectory(
         Guid id,
         Guid tagId,
@@ -66,6 +70,71 @@ public sealed class TagDirectory
     public string? DefaultBranch { get; private set; }
 
     public DateTimeOffset CreatedAt { get; }
+
+    /// <summary>Os comandos rápidos dos worktrees deste repositório, na ordem dos botões (ADR-051).</summary>
+    public IReadOnlyList<TagDirectoryCommand> Commands => [.. _commands.OrderBy(command => command.Order)];
+
+    internal TagDirectoryCommand AddCommand(Guid developmentCommandId, DateTimeOffset at)
+    {
+        if (_commands.Exists(command => command.DevelopmentCommandId == developmentCommandId))
+        {
+            throw new DomainException($"O diretório {Alias} já tem este comando.");
+        }
+
+        if (_commands.Count >= MaxCommands)
+        {
+            throw new DomainException($"Um diretório aceita até {MaxCommands} comandos.");
+        }
+
+        var command = TagDirectoryCommand.Create(Id, developmentCommandId, _commands.Count, at);
+
+        _commands.Add(command);
+        Renumber();
+
+        return command;
+    }
+
+    internal void CustomizeCommand(Guid bindingId, string? commandOverride, string? workingDirectoryOverride) =>
+        GetCommand(bindingId).Customize(commandOverride, workingDirectoryOverride);
+
+    internal void EnableCommand(Guid bindingId, bool enabled) => GetCommand(bindingId).Enable(enabled);
+
+    internal void RemoveCommand(Guid bindingId)
+    {
+        _commands.Remove(GetCommand(bindingId));
+        Renumber();
+    }
+
+    /// <summary>Anda <paramref name="offset"/> posições, parando nas pontas.</summary>
+    internal void MoveCommand(Guid bindingId, int offset)
+    {
+        var ordered = Commands.ToList();
+        var command = GetCommand(bindingId);
+        var from = ordered.IndexOf(command);
+        var to = Math.Clamp(from + offset, 0, ordered.Count - 1);
+
+        ordered.RemoveAt(from);
+        ordered.Insert(to, command);
+
+        for (var index = 0; index < ordered.Count; index++)
+        {
+            ordered[index].Place(index);
+        }
+    }
+
+    private TagDirectoryCommand GetCommand(Guid bindingId) =>
+        _commands.Find(command => command.Id == bindingId)
+        ?? throw new DomainException("Este comando não está mais no diretório.");
+
+    private void Renumber()
+    {
+        var ordered = Commands;
+
+        for (var index = 0; index < ordered.Count; index++)
+        {
+            ordered[index].Place(index);
+        }
+    }
 
     internal static TagDirectory Create(
         Guid tagId,

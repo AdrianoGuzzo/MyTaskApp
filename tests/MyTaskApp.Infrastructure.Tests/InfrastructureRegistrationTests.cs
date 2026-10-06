@@ -9,6 +9,7 @@ using MyTaskApp.Application.Development;
 using MyTaskApp.Application.External;
 using MyTaskApp.Application.External.Jira;
 using MyTaskApp.Application.Planning;
+using MyTaskApp.Application.QuickCommands;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Application.Sounds;
 using MyTaskApp.Application.Tags;
@@ -94,6 +95,10 @@ public class InfrastructureRegistrationTests : IDisposable
     [InlineData(typeof(IAgentProcessTracker))]
     [InlineData(typeof(ITerminalLauncher))]
     [InlineData(typeof(ITerminalWindowManager))]
+    [InlineData(typeof(IDevelopmentCommandRepository))]
+    [InlineData(typeof(ICommandExecutor))]
+    [InlineData(typeof(ICommandExecutionRepository))]
+    [InlineData(typeof(ITerminalCommandLauncher))]
     public void EveryPort_IsWiredToAnImplementation(Type serviceType)
     {
         using var provider = BuildProvider();

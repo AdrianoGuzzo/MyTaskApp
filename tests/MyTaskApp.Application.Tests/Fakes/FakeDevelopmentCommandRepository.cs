@@ -12,9 +12,21 @@ internal sealed class FakeDevelopmentCommandRepository : IDevelopmentCommandRepo
 
     public int SaveCount { get; private set; }
 
-    public DevelopmentCommand Seed(string alias, string command, string? description = null)
+    /// <summary>Em quantos diretórios cada comando é botão (ADR-051).</summary>
+    public Dictionary<Guid, int> Bindings { get; } = [];
+
+    public DevelopmentCommand Seed(
+        string alias,
+        string command,
+        string? description = null,
+        DevelopmentCommandSettings? settings = null)
     {
-        var created = DevelopmentCommand.Create(alias, command, description, FakeCommandExecutor.Started);
+        var created = DevelopmentCommand.Create(
+            alias,
+            command,
+            description,
+            settings ?? DevelopmentCommandSettings.Default,
+            FakeCommandExecutor.Started);
         _commands[created.Id] = created;
         return created;
     }
@@ -42,6 +54,9 @@ internal sealed class FakeDevelopmentCommandRepository : IDevelopmentCommandRepo
             && command.Id != exceptId));
 
     public void Remove(DevelopmentCommand command) => _commands.Remove(command.Id);
+
+    public Task<IReadOnlyDictionary<Guid, int>> CountBindingsAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyDictionary<Guid, int>>(new Dictionary<Guid, int>(Bindings));
 
     public Task SaveChangesAsync(CancellationToken cancellationToken = default)
     {

@@ -6,6 +6,7 @@ using Avalonia.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Lifecycle;
+using MyTaskApp.Application.QuickCommands;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Application.Sounds;
 using MyTaskApp.Desktop.Composition;
@@ -94,6 +95,7 @@ public sealed partial class App : Avalonia.Application
                 SetUpTags(Services, window, todayViewModel);
                 SetUpIntegrations(Services, todayViewModel);
                 SetUpAgentSessions(Services, todayViewModel);
+                SetUpCommandExecutions(Services);
                 ListenForSecondLaunch(Services, window);
 
                 // A moldura só sabe iniciar com o Windows depois de conhecer o
@@ -326,6 +328,27 @@ public sealed partial class App : Avalonia.Application
         // ela, o agente abre sem acompanhamento. Os Claude que ficaram abertos
         // com o app fechado voltam a ser ouvidos a partir daqui.
         services.GetRequiredService<IAgentEventEndpoint>().Start();
+    }
+
+    /// <summary>
+    /// Os comandos rápidos em terminal (ADR-051): quando um fecha, a janela da
+    /// tarefa, se aberta, atualiza o botão. Pelo mesmo motivo do agente, quem
+    /// assina o monitor é a <see cref="App"/>, e não o ViewModel da janela.
+    /// </summary>
+    private void SetUpCommandExecutions(IServiceProvider services)
+    {
+        var monitor = services.GetRequiredService<CommandExecutionMonitor>();
+
+        monitor.ExecutionsChanged += taskId => OnUiThread(() =>
+        {
+            if (_notes.TryGetValue(taskId, out var notes) && notes.DataContext is TaskNotesViewModel viewModel)
+            {
+                _ = viewModel.Developments.RefreshQuickCommandsAsync();
+            }
+        });
+
+        // Reencontra os terminais que ficaram abertos com o app fechado.
+        monitor.Start();
     }
 
     private static void ShowTags(IServiceProvider services, Window owner)
@@ -571,6 +594,7 @@ public sealed partial class App : Avalonia.Application
         services.GetRequiredService<ReminderScheduler>().Dispose();
         services.GetRequiredService<LifecycleMaintenanceScheduler>().Dispose();
         services.GetRequiredService<AgentSessionMonitor>().Dispose();
+        services.GetRequiredService<CommandExecutionMonitor>().Dispose();
         (services.GetRequiredService<IAgentEventEndpoint>() as IDisposable)?.Dispose();
         (services.GetRequiredService<IAudioPlayer>() as IDisposable)?.Dispose();
 

@@ -54,7 +54,7 @@ internal sealed class FakeAgentSessionRepository : IAgentSessionRepository
 internal sealed class FakeAgentProcessTracker : IAgentProcessTracker
 {
     private readonly Dictionary<int, DateTimeOffset> _alive = [];
-    private readonly Dictionary<int, Action> _watchers = [];
+    private readonly Dictionary<int, Action<int?>> _watchers = [];
 
     public IReadOnlyCollection<int> Watched => _watchers.Keys;
 
@@ -62,21 +62,24 @@ internal sealed class FakeAgentProcessTracker : IAgentProcessTracker
 
     public void Run(int processId, DateTimeOffset startedAt) => _alive[processId] = startedAt;
 
-    /// <summary>O processo sai: some da lista e quem vigia é avisado.</summary>
-    public void Exit(int processId)
+    /// <summary>O processo sai: some da lista e quem vigia é avisado, com o exit code se houver.</summary>
+    public void Exit(int processId, int? exitCode = null)
     {
         _alive.Remove(processId);
 
         if (_watchers.Remove(processId, out var onExited))
         {
-            onExited();
+            onExited(exitCode);
         }
     }
 
     public bool IsAlive(int processId, DateTimeOffset startedAt) =>
         _alive.TryGetValue(processId, out var actual) && actual == startedAt;
 
-    public IDisposable? WatchExit(int processId, DateTimeOffset startedAt, Action onExited)
+    public IDisposable? WatchExit(int processId, DateTimeOffset startedAt, Action onExited) =>
+        WatchExitCode(processId, startedAt, _ => onExited());
+
+    public IDisposable? WatchExitCode(int processId, DateTimeOffset startedAt, Action<int?> onExited)
     {
         if (!IsAlive(processId, startedAt))
         {

@@ -43,5 +43,17 @@ internal sealed class TagDirectoryConfiguration : IEntityTypeConfiguration<TagDi
         builder.Property(directory => directory.CreatedAt)
             .HasConversion(UtcInstantConverter.Instance)
             .IsRequired();
+
+        // Os comandos rápidos do diretório são parte dele (ADR-051): excluir o
+        // diretório, ou a etiqueta, leva as associações junto.
+        builder.HasMany(directory => directory.Commands)
+            .WithOne()
+            .HasForeignKey(binding => binding.TagDirectoryId)
+            .IsRequired()
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Navigation(directory => directory.Commands)
+            .HasField("_commands")
+            .UsePropertyAccessMode(PropertyAccessMode.Field);
     }
 }
