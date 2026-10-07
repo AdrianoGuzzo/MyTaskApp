@@ -1,8 +1,11 @@
+using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Microsoft.Extensions.Logging.Abstractions;
 using MyTaskApp.Application.StickyNotes;
 using MyTaskApp.Desktop.StickyNotes;
+using MyTaskApp.Desktop.Theming;
 using MyTaskApp.Desktop.Tests.ViewModels;
 using MyTaskApp.Domain;
 
@@ -148,6 +151,71 @@ public class StickyNoteWindowManagerTests
 
         failure.Should().Be("Não foi possível abrir o post-it.");
     }
+
+    /// <summary>A cor do post-it é calculada em C#: trocar o tema tem de repintar o que está aberto.</summary>
+    [AvaloniaFact]
+    public async Task ChangingTheTheme_RepaintsTheOpenNotes()
+    {
+        var themes = ((App)Avalonia.Application.Current!).Themes!;
+        var view = TestStickyNotes.View(
+            "algo",
+            color: new StickyNoteColor(MyTaskApp.Domain.StickyNotes.StickyNoteColorMode.Palette, MyTaskApp.Domain.StickyNotes.StickyNotePaletteColor.Blue, null));
+        _runner.ResultsByHandler[typeof(CreateStickyNoteHandler)] = view;
+        var manager = Create();
+        manager.Themes = themes;
+
+        try
+        {
+            themes.Use("charcoal");
+            var window = await manager.CreateNewAsync();
+            var card = window!.GetVisualDescendants().OfType<Border>().Single(border => border.Name == "Card");
+            var dark = Background(card);
+
+            themes.Use("paper");
+            Dispatcher.UIThread.RunJobs();
+
+            Background(card).Should().NotBe(dark);
+            window!.ViewModel!.Look.Text.Should().Be(ThemeCatalog.Paper.Palette.TextHigh);
+        }
+        finally
+        {
+            themes.Use(ThemeCatalog.SystemId);
+            manager.Themes = null;
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task ARecoloredTag_ReachesTheOpenNotes()
+    {
+        var view = TestStickyNotes.View("algo", tagId: Guid.CreateVersion7(), tagName: "Infra",
+            color: new StickyNoteColor(MyTaskApp.Domain.StickyNotes.StickyNoteColorMode.Tag, null, "#3B82F6"));
+        _runner.ResultsByHandler[typeof(CreateStickyNoteHandler)] = view;
+        var manager = Create();
+        var window = await manager.CreateNewAsync();
+        _runner.ResultsByHandler[typeof(GetStickyNoteHandler)] =
+            view with { Color = view.Color with { TagColorHex = "#EF4444" } };
+
+        await manager.RefreshAllAsync();
+
+        window!.ViewModel!.View.Color.HueHex.Should().Be("#EF4444");
+    }
+
+    [AvaloniaFact]
+    public async Task ARefreshThatFails_LeavesTheNoteAsItWas()
+    {
+        var view = TestStickyNotes.View("algo");
+        _runner.ResultsByHandler[typeof(CreateStickyNoteHandler)] = view;
+        var manager = Create();
+        var window = await manager.CreateNewAsync();
+        _runner.NextFailure = new IOException("travado");
+
+        await manager.RefreshAllAsync();
+
+        window!.ViewModel!.View.Should().Be(view);
+    }
+
+    private static Avalonia.Media.Color? Background(Border border) =>
+        (border.GetBaseValue(Border.BackgroundProperty).GetValueOrDefault() as Avalonia.Media.ISolidColorBrush)?.Color;
 
     [AvaloniaFact]
     public async Task CtrlShiftNInsideANote_OpensAnotherOne()

@@ -21,16 +21,14 @@ public class StickyNoteViewModelTests
         new(TestStickyNotes.View(content, pinned), _runner, NullLogger.Instance);
 
     [Fact]
-    public void TheHeader_ShowsTheFirstLine()
+    public void TheWindowTitle_IsTheFirstLine()
     {
         var viewModel = Create("\n  Falar com Marcelo  \nsobre o deploy");
 
-        viewModel.HeaderTitle.Should().Be("Falar com Marcelo");
         viewModel.WindowTitle.Should().Be("Post-it — Falar com Marcelo");
 
         viewModel.Content = string.Empty;
 
-        viewModel.HeaderTitle.Should().BeEmpty();
         viewModel.WindowTitle.Should().Be("Post-it");
     }
 

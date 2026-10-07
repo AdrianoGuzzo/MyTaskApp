@@ -1,11 +1,25 @@
+using System.Windows.Input;
+using Avalonia;
+using Avalonia.Media;
+using Avalonia.Media.Immutable;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.StickyNotes;
+using MyTaskApp.Application.Tags;
+using MyTaskApp.Desktop.Theming;
 using MyTaskApp.Domain;
+using MyTaskApp.Domain.StickyNotes;
 
 namespace MyTaskApp.Desktop.ViewModels;
+
+/// <summary>Um item de rádio dos submenus do post-it: cor, etiqueta, opacidade.</summary>
+/// <param name="Swatch">A amostra de cor ao lado do nome; nula quando não há cor a mostrar.</param>
+public sealed record StickyNoteChoiceViewModel(string Label, IBrush? Swatch, bool IsSelected, ICommand Select)
+{
+    public bool HasSwatch => Swatch is not null;
+}
 
 /// <summary>Onde a janela do post-it está, na convenção do banco: posição física e tamanho em DIP.</summary>
 public readonly record struct StickyNoteGeometry(int X, int Y, double Width, double Height);
@@ -31,11 +45,19 @@ public sealed partial class StickyNoteViewModel : ObservableObject
     private string _savedContent;
     private StickyNoteGeometry? _pendingGeometry;
     private bool _closing;
+    private AppTheme _theme;
+    private IReadOnlyList<TagRow> _tags = [];
 
-    public StickyNoteViewModel(StickyNoteView view, IUseCaseRunner runner, ILogger logger)
+    /// <param name="theme">O tema na tela; nulo (testes, designer) desenha no Carvão.</param>
+    public StickyNoteViewModel(
+        StickyNoteView view,
+        IUseCaseRunner runner,
+        ILogger logger,
+        AppTheme? theme = null)
     {
         _runner = runner;
         _logger = logger;
+        _theme = theme ?? ThemeCatalog.Charcoal;
 
         Id = view.Id;
         _savedContent = view.Content;
@@ -43,6 +65,8 @@ public sealed partial class StickyNoteViewModel : ObservableObject
         _isPinned = view.IsPinned;
 
         View = view;
+        Look = Paint();
+        RebuildChoices();
     }
 
     public Guid Id { get; }
@@ -53,8 +77,85 @@ public sealed partial class StickyNoteViewModel : ObservableObject
     /// </summary>
     public StickyNoteView View { get; private set; }
 
+    /// <summary>As cores calculadas para o tema ativo (ADR-054).</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HeaderTitle), nameof(WindowTitle), nameof(HasUnsavedText))]
+    [NotifyPropertyChangedFor(
+        nameof(NoteBackground),
+        nameof(NoteHeaderBackground),
+        nameof(NoteBorderBrush),
+        nameof(NoteBorderThickness),
+        nameof(StripeBrush),
+        nameof(HasStripe))]
+    private StickyNoteAppearance _look;
+
+    /// <summary>O fundo, com a opacidade escolhida no pincel: o texto por cima nunca fica translúcido.</summary>
+    public IBrush NoteBackground => new ImmutableSolidColorBrush(Look.Background, View.Opacity / 100d);
+
+    public IBrush NoteHeaderBackground => new ImmutableSolidColorBrush(Look.Header, View.Opacity / 100d);
+
+    public IBrush NoteBorderBrush => new ImmutableSolidColorBrush(Look.Border);
+
+    public Thickness NoteBorderThickness => new(Look.BorderThickness);
+
+    /// <summary>A faixa lateral do modo Atenção — e a cor do ícone que a acompanha.</summary>
+    public IBrush? StripeBrush => Look.Stripe is { } stripe ? new ImmutableSolidColorBrush(stripe) : null;
+
+    public bool HasStripe => Look.Stripe is not null;
+
+    public bool IsAttention => View.Emphasis == StickyNoteEmphasis.Attention;
+
+    public bool HasTag => View.TagName is not null;
+
+    /// <summary>A bolinha da etiqueta no cabeçalho, na cor dela — mesmo com uma cor própria escolhida.</summary>
+    public IBrush? TagDotBrush =>
+        HasTag && TagColorHex is { } hex ? new ImmutableSolidColorBrush(Color.Parse(hex)) : null;
+
+    public string? TagTip => View.TagName is { } name ? $"Etiqueta: {name}" : null;
+
+    /// <summary>Cor ▸ — automática, as da paleta e a da etiqueta.</summary>
+    public IReadOnlyList<StickyNoteChoiceViewModel> ColorChoices { get; private set; } = [];
+
+    /// <summary>Etiqueta ▸ — nenhuma, ou uma das existentes.</summary>
+    public IReadOnlyList<StickyNoteChoiceViewModel> TagChoices { get; private set; } = [];
+
+    /// <summary>Opacidade ▸ — do fundo, com o piso do HUD.</summary>
+    public IReadOnlyList<StickyNoteChoiceViewModel> OpacityChoices { get; private set; } = [];
+
+    private string? TagColorHex => _tags.FirstOrDefault(tag => tag.Id == View.TagId)?.ColorHex
+        ?? (View.Color.Mode == StickyNoteColorMode.Tag ? View.Color.TagColorHex : null);
+
+    /// <summary>O tema mudou: as cores calculadas são refeitas, o resto é <c>DynamicResource</c>.</summary>
+    public void UseTheme(AppTheme theme)
+    {
+        _theme = theme;
+        Look = Paint();
+    }
+
+    /// <summary>
+    /// O post-it relido do banco — depois de mudar a aparência, ou de a
+    /// etiqueta ser recolorida na janela de etiquetas. O texto da tela não é
+    /// tocado: ele pode ter mudado depois da leitura.
+    /// </summary>
+    public void ApplyView(StickyNoteView view)
+    {
+        View = view;
+
+        OnPropertyChanged(nameof(View));
+        OnPropertyChanged(nameof(IsAttention));
+        OnPropertyChanged(nameof(HasTag));
+        OnPropertyChanged(nameof(TagDotBrush));
+        OnPropertyChanged(nameof(TagTip));
+
+        Look = Paint();
+        RebuildChoices();
+
+        // Mesmo Look (opacidade muda só o pincel): avisa os pincéis de qualquer jeito.
+        OnPropertyChanged(nameof(NoteBackground));
+        OnPropertyChanged(nameof(NoteHeaderBackground));
+    }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(WindowTitle), nameof(HasUnsavedText))]
     private string _content;
 
     [ObservableProperty]
@@ -69,10 +170,7 @@ public sealed partial class StickyNoteViewModel : ObservableObject
 
     public bool HasUnsavedText => !string.Equals(Content, _savedContent, StringComparison.Ordinal);
 
-    /// <summary>A primeira linha, apagada no cabeçalho — o que identifica o post-it de longe.</summary>
-    public string HeaderTitle => StickyNoteText.FirstLine(Content) ?? string.Empty;
-
-    /// <summary>O nome que o Alt+Tab e o leitor de tela anunciam.</summary>
+    /// <summary>O nome que o Alt+Tab e o leitor de tela anunciam: a primeira linha do texto.</summary>
     public string WindowTitle => StickyNoteText.FirstLine(Content) is { } first ? $"Post-it — {first}" : "Post-it";
 
     /// <summary>Alfinete cheio quando fixado (E840), vazado quando solto (E718).</summary>
@@ -157,6 +255,151 @@ public sealed partial class StickyNoteViewModel : ObservableObject
 
     [RelayCommand]
     private void NewNote() => NewNoteRequested?.Invoke();
+
+    /// <summary>
+    /// As etiquetas existentes, lidas quando o menu abre: elas mudam na janela
+    /// de etiquetas enquanto o post-it fica na tela.
+    /// </summary>
+    [RelayCommand]
+    private async Task LoadTagsAsync()
+    {
+        try
+        {
+            _tags = await _runner.RunAsync<GetTagsHandler, IReadOnlyList<TagRow>>(
+                (handler, ct) => handler.HandleAsync(new GetTags(), ct));
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // Sem a lista o menu mostra só "Nenhuma"; não merece faixa de erro.
+            _logger.LogWarning(exception, "StickyNoteTagsNotLoaded {NoteId}", Id);
+        }
+
+        RebuildChoices();
+    }
+
+    /// <summary>Atenção liga e desliga: mais cor e uma faixa lateral, sem animação nenhuma.</summary>
+    [RelayCommand]
+    private Task ToggleAttentionAsync() => ChangeAppearanceAsync(
+        View.TagId,
+        View.Color.Mode,
+        View.Color.PaletteColor,
+        IsAttention ? StickyNoteEmphasis.Normal : StickyNoteEmphasis.Attention,
+        View.Opacity);
+
+    private Task UseColorAsync(StickyNoteColorMode mode, StickyNotePaletteColor? color) =>
+        ChangeAppearanceAsync(View.TagId, mode, color, View.Emphasis, View.Opacity);
+
+    /// <summary>
+    /// Escolher uma etiqueta usa a cor dela — a não ser que o post-it tenha cor
+    /// própria, que a etiqueta não sobrescreve. Tirar a etiqueta de quem usava a
+    /// cor dela volta ao tema.
+    /// </summary>
+    private Task UseTagAsync(Guid? tagId)
+    {
+        var mode = View.Color.Mode switch
+        {
+            StickyNoteColorMode.Palette => StickyNoteColorMode.Palette,
+            _ when tagId is null => StickyNoteColorMode.Theme,
+            _ => StickyNoteColorMode.Tag,
+        };
+
+        return ChangeAppearanceAsync(tagId, mode, View.Color.PaletteColor, View.Emphasis, View.Opacity);
+    }
+
+    private Task UseOpacityAsync(int opacity) =>
+        ChangeAppearanceAsync(View.TagId, View.Color.Mode, View.Color.PaletteColor, View.Emphasis, opacity);
+
+    private Task ChangeAppearanceAsync(
+        Guid? tagId,
+        StickyNoteColorMode mode,
+        StickyNotePaletteColor? color,
+        StickyNoteEmphasis emphasis,
+        int opacity) => WriteAsync(async () =>
+    {
+        StickyNoteView? changed = null;
+
+        if (!await TryAsync(async () => changed = await _runner.RunAsync<ChangeStickyNoteAppearanceHandler, StickyNoteView>(
+                (handler, ct) => handler.HandleAsync(
+                    new ChangeStickyNoteAppearance(Id, tagId, mode, color, emphasis, opacity),
+                    ct))))
+        {
+            return;
+        }
+
+        if (changed is not null)
+        {
+            ApplyView(changed);
+        }
+
+        Changed?.Invoke();
+    });
+
+    private StickyNoteAppearance Paint()
+    {
+        var hue = View.Color.HueHex is { } hex ? Color.Parse(hex) : (Color?)null;
+
+        return StickyNoteTint.For(_theme, hue, IsAttention);
+    }
+
+    private void RebuildChoices()
+    {
+        var mode = View.Color.EffectiveMode;
+
+        ColorChoices =
+        [
+            new StickyNoteChoiceViewModel(
+                "Automática (tema)",
+                null,
+                mode == StickyNoteColorMode.Theme,
+                new AsyncRelayCommand(() => UseColorAsync(StickyNoteColorMode.Theme, null))),
+            .. StickyNotePalette.All.Select(color => new StickyNoteChoiceViewModel(
+                StickyNotePalette.NameOf(color),
+                new ImmutableSolidColorBrush(Color.Parse(StickyNotePalette.HexOf(color))),
+                mode == StickyNoteColorMode.Palette && View.Color.PaletteColor == color,
+                new AsyncRelayCommand(() => UseColorAsync(StickyNoteColorMode.Palette, color)))),
+            new StickyNoteChoiceViewModel(
+                HasTag ? $"Cor da etiqueta ({View.TagName})" : "Cor da etiqueta — escolha uma etiqueta",
+                TagDotBrush,
+                mode == StickyNoteColorMode.Tag,
+                new AsyncRelayCommand(() => UseColorAsync(StickyNoteColorMode.Tag, null), () => HasTag)),
+        ];
+
+        TagChoices =
+        [
+            new StickyNoteChoiceViewModel(
+                "Nenhuma",
+                null,
+                View.TagId is null,
+                new AsyncRelayCommand(() => UseTagAsync(null))),
+            .. Tags().Select(tag => new StickyNoteChoiceViewModel(
+                tag.Name,
+                new ImmutableSolidColorBrush(Color.Parse(tag.ColorHex)),
+                View.TagId == tag.Id,
+                new AsyncRelayCommand(() => UseTagAsync(tag.Id)))),
+        ];
+
+        OpacityChoices =
+        [
+            .. new[] { 100, 90, 80, 70 }.Select(opacity => new StickyNoteChoiceViewModel(
+                $"{opacity}%",
+                null,
+                View.Opacity == opacity,
+                new AsyncRelayCommand(() => UseOpacityAsync(opacity)))),
+        ];
+
+        OnPropertyChanged(nameof(ColorChoices));
+        OnPropertyChanged(nameof(TagChoices));
+        OnPropertyChanged(nameof(OpacityChoices));
+    }
+
+    /// <summary>
+    /// As etiquetas do menu. Antes da primeira leitura, a do próprio post-it já
+    /// aparece marcada — senão o menu abriria dizendo "Nenhuma" por um instante.
+    /// </summary>
+    private IEnumerable<TagRow> Tags() =>
+        _tags.Count > 0 || View.TagId is not { } tagId || View.TagName is not { } name
+            ? _tags
+            : [new TagRow(tagId, name, TagColorHex ?? "#94A3B8", 0)];
 
     /// <summary>Arquivar e excluir tiram o post-it da tela, depois de gravar o que estava escrito.</summary>
     private Task LeaveAsync(Func<Task> operation) => WriteAsync(async () =>

@@ -4,6 +4,7 @@ using Avalonia.Threading;
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.StickyNotes;
+using MyTaskApp.Desktop.Theming;
 using MyTaskApp.Desktop.ViewModels;
 using MyTaskApp.Desktop.Views;
 using MyTaskApp.Domain;
@@ -25,6 +26,32 @@ public sealed class StickyNoteWindowManager(IUseCaseRunner runner, ILogger<Stick
     private const string OpenFailedMessage = "Não foi possível abrir o post-it.";
 
     private readonly Dictionary<Guid, StickyNoteWindow> _open = [];
+
+    private ThemeController? _themes;
+
+    /// <summary>
+    /// Quem pinta o app. A cor do post-it é calculada em C# sobre o tema
+    /// (ADR-054), e um <c>DynamicResource</c> não a alcança: trocar o tema
+    /// repinta os post-its abertos por aqui.
+    /// </summary>
+    public ThemeController? Themes
+    {
+        get => _themes;
+        set
+        {
+            if (_themes is not null)
+            {
+                _themes.Changed -= OnThemeChanged;
+            }
+
+            _themes = value;
+
+            if (_themes is not null)
+            {
+                _themes.Changed += OnThemeChanged;
+            }
+        }
+    }
 
     /// <summary>
     /// Onde um post-it novo nasce: na tela do widget, como os avisos
@@ -123,9 +150,35 @@ public sealed class StickyNoteWindowManager(IUseCaseRunner runner, ILogger<Stick
         }
     }
 
+    /// <summary>
+    /// Relê os post-its abertos: a etiqueta deles foi renomeada, recolorida ou
+    /// excluída na janela de etiquetas. Quem usa a cor da etiqueta acompanha.
+    /// </summary>
+    public async Task RefreshAllAsync()
+    {
+        foreach (var (noteId, window) in _open.ToList())
+        {
+            var view = await TryQuietlyAsync(() => runner.RunAsync<GetStickyNoteHandler, StickyNoteView>(
+                (handler, ct) => handler.HandleAsync(new GetStickyNote(noteId), ct)));
+
+            if (view is not null)
+            {
+                window.ViewModel?.ApplyView(view);
+            }
+        }
+    }
+
+    private void OnThemeChanged(AppTheme theme)
+    {
+        foreach (var window in _open.Values)
+        {
+            window.ViewModel?.UseTheme(theme);
+        }
+    }
+
     private StickyNoteWindow Show(StickyNoteView view, bool activate)
     {
-        var viewModel = new StickyNoteViewModel(view, runner, logger);
+        var viewModel = new StickyNoteViewModel(view, runner, logger, _themes?.Current);
         var window = new StickyNoteWindow(viewModel, Anchor?.Invoke(), _open.Count)
         {
             ShowActivated = activate,
@@ -170,6 +223,21 @@ public sealed class StickyNoteWindowManager(IUseCaseRunner runner, ILogger<Stick
     private void OnChanged() => NotesChanged?.Invoke();
 
     private void OnNewNoteRequested() => _ = CreateNewAsync();
+
+    /// <summary>Uma releitura que falha deixa o post-it como está — o próximo gesto relê.</summary>
+    private async Task<T?> TryQuietlyAsync<T>(Func<Task<T>> operation)
+        where T : class
+    {
+        try
+        {
+            return await operation();
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.LogWarning(exception, "StickyNoteRefreshFailed");
+            return null;
+        }
+    }
 
     private async Task<T?> TryAsync<T>(Func<Task<T>> operation)
         where T : class

@@ -58,8 +58,29 @@ public class StickyNoteWindowTests
         Named<TextBox>(window, "Editor").Text.Should().Be("Perguntar ao João\nsobre a API");
         window.Title.Should().Be("Post-it — Perguntar ao João");
         window.ShowInTaskbar.Should().BeFalse();
-        window.GetVisualDescendants().OfType<TextBlock>()
-            .Should().Contain(block => block.Text == "Perguntar ao João");
+    }
+
+    [AvaloniaFact]
+    public void TagAndAttention_ShowInTheHeader()
+    {
+        var plain = Show(TestStickyNotes.View("algo"));
+
+        Named<Avalonia.Controls.Shapes.Ellipse>(plain, "TagDot").IsVisible.Should().BeFalse();
+        Named<TextBlock>(plain, "AttentionGlyph").IsVisible.Should().BeFalse();
+        Named<Border>(plain, "Stripe").IsVisible.Should().BeFalse();
+
+        var marked = Show(TestStickyNotes.View(
+            "algo",
+            tagId: Guid.CreateVersion7(),
+            tagName: "ECO CORE",
+            color: new StickyNoteColor(MyTaskApp.Domain.StickyNotes.StickyNoteColorMode.Tag, null, "#3B82F6"),
+            emphasis: MyTaskApp.Domain.StickyNotes.StickyNoteEmphasis.Attention));
+
+        var dot = Named<Avalonia.Controls.Shapes.Ellipse>(marked, "TagDot");
+        dot.IsVisible.Should().BeTrue();
+        ToolTip.GetTip(dot).Should().Be("Etiqueta: ECO CORE");
+        Named<TextBlock>(marked, "AttentionGlyph").IsVisible.Should().BeTrue();
+        Named<Border>(marked, "Stripe").IsVisible.Should().BeTrue();
     }
 
     /// <summary>

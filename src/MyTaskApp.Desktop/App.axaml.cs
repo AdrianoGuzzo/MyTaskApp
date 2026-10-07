@@ -291,12 +291,19 @@ public sealed partial class App : Avalonia.Application
     /// Post-its (ADR-054): os fixados voltam para a tela junto com o app, e um
     /// novo nasce na tela onde o widget está.
     /// </summary>
-    private static void SetUpStickyNotes(
+    private void SetUpStickyNotes(
         IServiceProvider services,
         MainWindow window,
         TodayViewModel todayViewModel)
     {
         var notes = services.GetRequiredService<StickyNoteWindowManager>();
+
+        // A cor do post-it é calculada sobre o tema: trocar o tema repinta.
+        notes.Themes = _themes;
+
+        // Recolorir ou excluir uma etiqueta muda quem usa a cor dela.
+        services.GetRequiredService<TagsViewModel>().Changed +=
+            () => Dispatcher.UIThread.Post(() => _ = notes.RefreshAllAsync());
 
         // Escondido na bandeja, o widget não diz nada sobre onde o usuário está.
         notes.Anchor = () => window.IsVisible ? window.Position : null;

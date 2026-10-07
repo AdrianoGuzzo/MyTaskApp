@@ -261,6 +261,9 @@ public partial class StickyNoteWindow : Window
         Close();
     }
 
+    /// <summary>As etiquetas mudam na outra janela enquanto o post-it fica aberto: relê ao abrir o menu.</summary>
+    private void OnMenuOpening(object? sender, EventArgs e) => _viewModel?.LoadTagsCommand.Execute(null);
+
     /// <summary>
     /// Rede de segurança do <c>ElementRole="TitleBar"</c>: se a plataforma
     /// ignorar o papel, quem arrasta é o cabeçalho, e só ele — nunca o texto.

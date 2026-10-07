@@ -30,6 +30,29 @@
     <KeyBinding Gesture="Ctrl+Shift+N" Command="{Binding NewNoteCommand}" />
   </Window.KeyBindings>
 
+  <Window.Resources>
+    <!-- Os rádios dos submenus (cor, etiqueta, opacidade): um tema, três listas. -->
+    <ControlTheme x:Key="StickyChoiceItem"
+                  TargetType="MenuItem"
+                  BasedOn="{StaticResource {x:Type MenuItem}}"
+                  x:DataType="vm:StickyNoteChoiceViewModel">
+      <Setter Property="ToggleType" Value="Radio" />
+      <Setter Property="IsChecked" Value="{Binding IsSelected, Mode=OneWay}" />
+      <Setter Property="Command" Value="{Binding Select}" />
+    </ControlTheme>
+
+    <DataTemplate x:Key="StickyChoiceTemplate" x:DataType="vm:StickyNoteChoiceViewModel">
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <Ellipse Width="10"
+                 Height="10"
+                 Fill="{Binding Swatch}"
+                 IsVisible="{Binding HasSwatch}"
+                 VerticalAlignment="Center" />
+        <TextBlock Text="{Binding Label}" VerticalAlignment="Center" />
+      </StackPanel>
+    </DataTemplate>
+  </Window.Resources>
+
   <Window.Styles>
 
     <!-- O cartão: a mesma casca do widget, num raio de cartão. -->
@@ -57,13 +80,6 @@
       <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
       <Setter Property="VerticalAlignment" Value="Center" />
       <Setter Property="Margin" Value="0,0,6,0" />
-    </Style>
-
-    <Style Selector="TextBlock.stickyTitle">
-      <Setter Property="FontSize" Value="11" />
-      <Setter Property="Foreground" Value="{DynamicResource WidgetTextMidBrush}" />
-      <Setter Property="VerticalAlignment" Value="Center" />
-      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
     </Style>
 
     <!--
@@ -119,24 +135,64 @@
 
   <Panel>
 
-    <Border x:Name="Card" Classes="stickyNote">
+    <!--
+      As cores do cartão são calculadas para o tema ativo (StickyNoteTint): a cor
+      do post-it é tinta sobre o cartão do tema, nunca um fundo que derrube o
+      contraste do texto. A opacidade escolhida está no pincel do fundo.
+    -->
+    <Border x:Name="Card"
+            Classes="stickyNote"
+            Background="{Binding NoteBackground}"
+            BorderBrush="{Binding NoteBorderBrush}"
+            BorderThickness="{Binding NoteBorderThickness}">
 
       <DockPanel>
+
+        <!-- Atenção: uma faixa lateral na cor do post-it. Sem piscar nada. -->
+        <Border x:Name="Stripe"
+                DockPanel.Dock="Left"
+                Width="3"
+                Background="{Binding StripeBrush}"
+                IsVisible="{Binding HasStripe}" />
 
         <Border x:Name="Header"
                 DockPanel.Dock="Top"
                 Classes="stickyHeader"
+                Background="{Binding NoteHeaderBackground}"
                 chrome:WindowDecorationProperties.ElementRole="TitleBar"
                 PointerPressed="OnHeaderPointerPressed">
 
-          <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto">
+          <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto">
 
             <TextBlock Grid.Column="0" Classes="stickyGlyph" Text="&#xE70F;" />
 
-            <TextBlock Grid.Column="1" Classes="stickyTitle" Text="{Binding HeaderTitle}" />
+            <TextBlock x:Name="AttentionGlyph"
+                       Grid.Column="1"
+                       Classes="stickyGlyph"
+                       Text="&#xEA8F;"
+                       Foreground="{Binding StripeBrush}"
+                       IsVisible="{Binding IsAttention}"
+                       ToolTip.Tip="Atenção" />
+
+            <!-- A etiqueta: a bolinha na cor dela, o nome no balão — como na linha do checklist. -->
+            <Ellipse x:Name="TagDot"
+                     Grid.Column="2"
+                     Width="8"
+                     Height="8"
+                     Margin="0,0,6,0"
+                     VerticalAlignment="Center"
+                     Fill="{Binding TagDotBrush}"
+                     IsVisible="{Binding HasTag}"
+                     ToolTip.Tip="{Binding TagTip}" />
+
+            <!--
+              Sem título: a primeira linha já está logo abaixo, no texto, e
+              repeti-la no cabeçalho era ruído. Ela vive no título da janela
+              (Alt+Tab, leitor de tela) e na lista de post-its.
+            -->
 
             <Button x:Name="PinButton"
-                    Grid.Column="2"
+                    Grid.Column="4"
                     Classes="chrome stickyControl"
                     Classes.on="{Binding IsPinned}"
                     Content="{Binding PinGlyph}"
@@ -145,13 +201,30 @@
                     Command="{Binding TogglePinCommand}" />
 
             <Button x:Name="MenuButton"
-                    Grid.Column="3"
+                    Grid.Column="5"
                     Classes="chrome stickyControl"
                     Content="&#xE712;"
                     chrome:WindowDecorationProperties.ElementRole="User"
-                    ToolTip.Tip="Mais ações">
+                    ToolTip.Tip="Cor, etiqueta e mais ações">
               <Button.Flyout>
-                <MenuFlyout Placement="BottomEdgeAlignedRight">
+                <MenuFlyout Placement="BottomEdgeAlignedRight" Opening="OnMenuOpening">
+                  <MenuItem Header="Cor"
+                            ItemsSource="{Binding ColorChoices}"
+                            ItemContainerTheme="{StaticResource StickyChoiceItem}"
+                            ItemTemplate="{StaticResource StickyChoiceTemplate}" />
+                  <MenuItem Header="Etiqueta"
+                            ItemsSource="{Binding TagChoices}"
+                            ItemContainerTheme="{StaticResource StickyChoiceItem}"
+                            ItemTemplate="{StaticResource StickyChoiceTemplate}" />
+                  <MenuItem Header="Atenção"
+                            ToggleType="CheckBox"
+                            IsChecked="{Binding IsAttention, Mode=OneWay}"
+                            Command="{Binding ToggleAttentionCommand}" />
+                  <MenuItem Header="Opacidade"
+                            ItemsSource="{Binding OpacityChoices}"
+                            ItemContainerTheme="{StaticResource StickyChoiceItem}"
+                            ItemTemplate="{StaticResource StickyChoiceTemplate}" />
+                  <Separator />
                   <MenuItem Header="Novo post-it" InputGesture="Ctrl+Shift+N" Command="{Binding NewNoteCommand}" />
                   <Separator />
                   <MenuItem Header="Arquivar" Command="{Binding ArchiveCommand}" />
@@ -161,7 +234,7 @@
             </Button>
 
             <Button x:Name="CloseButton"
-                    Grid.Column="4"
+                    Grid.Column="6"
                     Classes="chrome stickyControl"
                     Content="&#xE711;"
                     chrome:WindowDecorationProperties.ElementRole="User"
