@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.7.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.6.0...v1.7.0) (2026-10-07)
+
+
+### Added
+
+* histórico dos últimos 7 dias, com o concluído e o trabalhado em cada dia ([#62](https://github.com/AdrianoGuzzo/MyTaskApp/issues/62)) ([ab49824](https://github.com/AdrianoGuzzo/MyTaskApp/commit/ab498247364ba4c6efd924cfe35afed6377ec850))
+* tempo trabalhado por tarefa, com cronômetro e lançamento manual ([#60](https://github.com/AdrianoGuzzo/MyTaskApp/issues/60)) ([a057465](https://github.com/AdrianoGuzzo/MyTaskApp/commit/a0574657012f227bd441733601083a2c9e8dbfc6))
+
 ## [1.6.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.5.0...v1.6.0) (2026-10-06)
 
 
