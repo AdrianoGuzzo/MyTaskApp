@@ -54,6 +54,10 @@ internal static class AppServices
             .AddSingleton(launch)
             .AddLogging(builder => builder.AddSerilog(Log.Logger))
             .AddSingleton<IUseCaseRunner, ScopedUseCaseRunner>()
+
+            // O relógio do cronômetro (ADR-052): um para o app, que a lista, a
+            // faixa do HUD e a aba "Tempo" de cada janela leem.
+            .AddSingleton<ActiveTimerViewModel>()
             .AddSingleton<TodayViewModel>()
 
             // O Desktop tambem e camada adaptadora: implementa portas da
@@ -102,6 +106,9 @@ internal static class AppServices
             // Os parâmetros e a confirmação de um comando rápido (ADR-051).
             // Sem estado, como a confirmação: descobre a janela a cada pergunta.
             .AddSingleton<IQuickCommandPrompt, QuickCommandPrompt>()
+
+            // Lançar e corrigir um período de trabalho (ADR-052), pelo mesmo molde.
+            .AddSingleton<ITimeEntryEditor, TimeEntryEditor>()
 
             // Copiar o texto de uma linha (§12). Singleton sem estado, como o
             // dialogo: descobre a janela a cada escrita.
@@ -159,6 +166,9 @@ internal static class AppServices
 
             // O card do prazo na janela da tarefa (ADR-050): um por janela.
             .AddTransient<TaskDeadlineViewModel>()
+
+            // A aba "Tempo" da janela da tarefa (ADR-052): uma por janela.
+            .AddTransient<TaskTimeLogViewModel>()
 
             // A aba Desenvolvimento de cada anotação (ADR-027): uma por janela,
             // como a própria anotação, com um ambiente por repositório (ADR-031).

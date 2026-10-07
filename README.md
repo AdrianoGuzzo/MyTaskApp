@@ -76,6 +76,25 @@ primeiro para Windows. Também roda no Linux, com algumas funções a menos.
   "Adiar 1 h" adia o aviso, não o prazo.
 - Na janela da tarefa: prazo, avisos, **próxima ação** e **estimativa**.
 
+### Tempo trabalhado
+
+- **Cronômetro por tarefa.** O botão ▶ da linha inicia e o ⏹ para. Enquanto
+  corre, a linha mostra o relógio (`00:37:42`) e fica levemente destacada.
+  Há **um cronômetro por vez**: iniciar outra tarefa pergunta se é para parar a
+  atual ("Parar e iniciar").
+- O início fica gravado no banco desde o clique. Fechar o app, reiniciar o
+  Windows ou suspender o computador não perde nada: ao voltar, o relógio
+  continua contando do início.
+- Concluir, cancelar, arquivar ou mandar a tarefa para a lixeira para o
+  cronômetro dela.
+- A aba **Tempo** da janela da tarefa mostra o registrado, o que está em
+  andamento, o gasto contra a estimativa ("4h 30min / 6h · 75%") e o histórico
+  por dia, com início, fim, duração, origem (Timer ou Manual) e observação.
+  **+ Adicionar tempo** lança um período esquecido. Cada período pode ser
+  editado ou excluído, e períodos da mesma tarefa não se sobrepõem.
+- No HUD, uma faixa com a tarefa e o relógio fica visível enquanto o
+  cronômetro corre.
+
 ### Um widget, não uma janela
 
 - Painel de 360×560 sem moldura, arrastável e redimensionável, com três modos:

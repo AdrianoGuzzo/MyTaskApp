@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.TimeTracking;
 using MyTaskApp.Domain.Auditing;
 
 namespace MyTaskApp.Application.Lifecycle;
@@ -10,6 +11,7 @@ public sealed record ArchiveChecklist(Guid TaskId);
 public sealed class ArchiveChecklistHandler(
     ITaskItemRepository tasks,
     IUnitOfWork unitOfWork,
+    ITimeEntryRepository timeEntries,
     ITaskAuditLog audit,
     ICurrentUser currentUser,
     TimeProvider timeProvider,
@@ -23,6 +25,14 @@ public sealed class ArchiveChecklistHandler(
         var now = timeProvider.GetUtcNow();
 
         task.Archive(now);
+
+        // O que foi guardado sai da lista, e o cronômetro dele não pode
+        // continuar correndo onde ninguém o vê (ADR-052).
+        await RunningTimer.StopIfOnAsync(
+            timeEntries,
+            task.Occurrences.Select(occurrence => occurrence.Id).ToList(),
+            now,
+            cancellationToken);
 
         await audit.RecordAsync(
             TaskAuditEntry.ByUser(

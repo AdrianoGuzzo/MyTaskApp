@@ -17,6 +17,7 @@ using MyTaskApp.Application.QuickCommands;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Application.Sounds;
 using MyTaskApp.Application.Tags;
+using MyTaskApp.Application.TimeTracking;
 using MyTaskApp.Infrastructure.Agents;
 using MyTaskApp.Infrastructure.Agents.ClaudeCode;
 using MyTaskApp.Infrastructure.FileSystem;
@@ -72,6 +73,10 @@ public static class DependencyInjection
         services.AddScoped<ICommandExecutionRepository, CommandExecutionRepository>();
         services.AddScoped<IAgentSettingsStore, AgentSettingsStore>();
         services.AddScoped<IAgentAlertSoundStore, AgentAlertSoundStore>();
+
+        // Tempo trabalhado (ADR-052).
+        services.AddScoped<ITimeEntryRepository, TimeEntryRepository>();
+        services.AddScoped<IActiveTimerQuery, ActiveTimerQuery>();
 
         // Os sons dos avisos (ADR-042): os personalizados ficam com os dados do
         // usuário; os do app são renderizados numa pasta descartável.

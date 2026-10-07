@@ -1,4 +1,5 @@
 using MyTaskApp.Application.Deadlines;
+using MyTaskApp.Application.TimeTracking;
 using MyTaskApp.Domain.Agents;
 using MyTaskApp.Domain.Deadlines;
 using MyTaskApp.Domain.External;
@@ -55,7 +56,17 @@ public sealed record TodayTask(
     /// <summary>O próximo passo de uma tarefa longa (§14).</summary>
     string? NextAction = null,
     /// <summary>A estimativa de trabalho (§15).</summary>
-    TimeSpan? Estimate = null);
+    TimeSpan? Estimate = null,
+    /// <summary>
+    /// O tempo registrado: a soma dos períodos encerrados (ADR-052). Não muda a
+    /// cada segundo — o que corre está em <see cref="TimerStartedAt"/>.
+    /// </summary>
+    TimeSpan Logged = default,
+    /// <summary>
+    /// O início do cronômetro que corre nesta ocorrência; <c>null</c> = parado.
+    /// O relógio da linha é <c>agora − isto</c>, calculado na tela.
+    /// </summary>
+    DateTimeOffset? TimerStartedAt = null);
 
 /// <summary>Um worktree da tarefa, com o nome do repositório para a linha e o balão.</summary>
 public sealed record TaskWorktree(
@@ -94,6 +105,13 @@ public sealed record TodayBoard(
     /// um quadro sem prazos não precisar saber que a seção existe.
     /// </summary>
     public IReadOnlyList<TodayTask> Deadlines { get; init; } = [];
+
+    /// <summary>
+    /// O cronômetro que corre no app, esteja a tarefa no quadro ou não (ADR-052):
+    /// uma tarefa marcada para amanhã também pode estar sendo trabalhada hoje, e
+    /// o HUD esconde parte das seções. <c>null</c> = nenhum.
+    /// </summary>
+    public ActiveTimerView? ActiveTimer { get; init; }
 
     public int TotalVisible =>
         Overdue.Count + Now.Count + Today.Count + Deadlines.Count + Unscheduled.Count + Completed.Count;

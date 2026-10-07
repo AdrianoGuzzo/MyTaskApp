@@ -113,6 +113,7 @@
     <DataTemplate x:Key="TaskRow" x:DataType="vm:TaskRowViewModel">
       <Border Classes="row"
               Classes.fixedOrder="{Binding IsFixedOrder}"
+              Classes.timing="{Binding IsTiming}"
               chrome:WindowDecorationProperties.ElementRole="User">
 
         <!--
@@ -196,7 +197,7 @@
           </MenuFlyout>
         </Border.ContextFlyout>
 
-        <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto,Auto,Auto,Auto">
+        <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto,Auto,Auto,Auto,Auto">
 
           <!--
             Um agente parou esperando o usuário (ADR-037): uma moldura âmbar
@@ -205,7 +206,7 @@
             atrás de tudo, e sem hit test: não muda o tamanho da linha nem
             rouba clique. A margem negativa desfaz o Padding da linha.
           -->
-          <Border Grid.ColumnSpan="10"
+          <Border Grid.ColumnSpan="11"
                   Classes="agentFrame"
                   Classes.alerting="{Binding IsAgentAlerting}"
                   Classes.seen="{Binding IsAgentAlertSeen}"
@@ -403,6 +404,29 @@
               <TextBlock Classes="deadlineLabel" Text="{Binding DeadlineLabel}" />
             </StackPanel>
 
+            <!--
+              O tempo (ADR-052), abaixo do título como o prazo: o relógio que
+              corre, ou o total registrado. Embaixo, e não ao lado, porque num
+              painel de 360px cada pixel à direita sai do título. O relógio vem
+              do ActiveTimer do quadro, que tica; a linha é recriada a cada
+              recarga e não guardaria a contagem.
+            -->
+            <StackPanel x:Name="TimeLine"
+                        Classes="timeLine"
+                        Classes.running="{Binding IsTiming}"
+                        Orientation="Horizontal"
+                        Spacing="4"
+                        HorizontalAlignment="Left"
+                        Background="Transparent"
+                        IsVisible="{Binding ShowsTimeLine}"
+                        ToolTip.Tip="{Binding TimerTip}">
+              <TextBlock Classes="timeLineText"
+                         Text="{Binding #Root.((vm:TodayViewModel)DataContext).ActiveTimer.ElapsedText}"
+                         IsVisible="{Binding IsTiming}" />
+              <TextBlock Classes="timeLineText"
+                         Text="{Binding TimeLineTotal}" />
+            </StackPanel>
+
             <StackPanel Orientation="Horizontal"
                         Spacing="4"
                         IsVisible="{Binding IsAwaitingAttention}">
@@ -576,7 +600,26 @@
                   ToolTip.Tip="Mais ações deste checklist"
                   Click="OnRowMenuClick" />
 
-          <TextBlock Grid.Column="9"
+          <!--
+            O cronômetro (ADR-052). Parado, é um ▶ discreto como os vizinhos,
+            com o total ao lado quando já há tempo lançado; correndo, é um ⏹ e
+            o relógio, aceso sempre — é por ele que se para sem abrir a tarefa.
+            O relógio não é da linha (ela é recriada a cada recarga): vem do
+            ActiveTimer do quadro, que tica uma vez por segundo.
+          -->
+          <Button Grid.Column="9"
+                  x:Name="TimerButton"
+                  Classes="timer"
+                  Classes.on="{Binding IsTiming}"
+                  Classes.hidden="{Binding !ShowsTimer}"
+                  IsEnabled="{Binding CanToggleTimer}"
+                  ToolTip.Tip="{Binding TimerTip}"
+                  Command="{Binding #Root.((vm:TodayViewModel)DataContext).ToggleTimerCommand}"
+                  CommandParameter="{Binding}">
+            <TextBlock Classes="timerGlyph" Text="{Binding TimerGlyph}" />
+          </Button>
+
+          <TextBlock Grid.Column="10"
                      Margin="8,0,2,0"
                      Text="{Binding TimeLabel}"
                      Classes="time"
@@ -1127,6 +1170,110 @@
     </Style>
 
     <!--
+      O cronômetro da linha (ADR-052). Parado, é um ▶ que some como os vizinhos
+      até o hover — o total já está escrito abaixo do título; correndo, é um ⏹
+      inteiro e na cor de destaque, o único botão da linha que nunca se esconde.
+    -->
+    <Style Selector="Button.timer">
+      <Setter Property="Padding" Value="6,2" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="Opacity" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextMidBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <DoubleTransition Property="Opacity" Duration="0:0:0.12" />
+        </Transitions>
+      </Setter>
+    </Style>
+
+    <Style Selector="Button.timer TextBlock.timerGlyph">
+      <Setter Property="FontFamily" Value="{StaticResource WidgetIconFont}" />
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Border.row:pointerover Button.timer">
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+
+    <!-- A linha de tempo: discreta como o prazo; o relógio que corre, na cor de destaque. -->
+    <Style Selector="StackPanel.timeLine TextBlock.timeLineText">
+      <Setter Property="FontFamily" Value="Consolas, Menlo, monospace" />
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="StackPanel.timeLine.running TextBlock.timeLineText">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetAccentBrush}" />
+    </Style>
+
+    <Style Selector="Button.timer.on">
+      <Setter Property="Opacity" Value="1" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetAccentBrush}" />
+    </Style>
+
+    <!-- Desabilitado (concluída com tempo): só o total, sem cara de botão apagado. -->
+    <Style Selector="Button.timer:disabled /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+    </Style>
+
+    <!--
+      A linha que está sendo cronometrada: um fundo de destaque bem leve, para
+      achá-la de relance numa lista de vinte. Discreto de propósito (§19): a
+      tarefa continua sendo o título.
+    -->
+    <Style Selector="Border.row.timing">
+      <Setter Property="Background" Value="{DynamicResource WidgetAccentSoftBrush}" />
+    </Style>
+
+    <!--
+      A faixa do cronômetro, acima da lista: "⏹ Título · 01:37:42". Some por
+      padrão; aparece quando a linha não está à vista (tarefa de amanhã, seção
+      escondida) e, no HUD, sempre — lá o cronômetro precisa estar à mão mesmo
+      com a lista filtrada (ADR-052). Só literais nos Setters: a visibilidade
+      vem de classes ligadas no elemento.
+    -->
+    <Style Selector="Border.activeTimerStrip">
+      <Setter Property="IsVisible" Value="False" />
+      <Setter Property="Margin" Value="12,8,12,0" />
+      <Setter Property="Padding" Value="4,2,10,2" />
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetPillRadius}" />
+      <Setter Property="Background" Value="{DynamicResource WidgetAccentSoftBrush}" />
+    </Style>
+
+    <Style Selector="Border.activeTimerStrip.offBoard">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+
+    <Style Selector="Border.activeTimerStrip TextBlock">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+    </Style>
+
+    <Style Selector="Border.activeTimerStrip TextBlock.timerText">
+      <Setter Property="FontFamily" Value="Consolas, Menlo, monospace" />
+      <Setter Property="FontSize" Value="10.5" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetAccentBrush}" />
+    </Style>
+
+    <Style Selector="Border.activeTimerStrip Button.stripStop">
+      <Setter Property="FontFamily" Value="{StaticResource WidgetIconFont}" />
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="Padding" Value="6,3" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetAccentBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!--
       O item levantado. Ele é a mesma linha, desenhada de novo numa camada
       acima da lista: ganha corpo (fundo opaco e sombra) porque precisa parecer
       ter descolado do painel, e não ser um reflexo dele.
@@ -1415,6 +1562,36 @@
       <Setter Property="IsVisible" Value="True" />
     </Style>
 
+    <!--
+      O cronômetro no HUD (ADR-052): o parado sai do layout, como a etiqueta, e
+      volta no hover; o que corre fica, e a faixa acima da lista aparece sempre.
+      Não vira painel de controle: é uma linha e um botão.
+    -->
+    <Style Selector="views|TodayView.hud Button.timer">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+
+    <Style Selector="views|TodayView.hud Border.row:pointerover Button.timer">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+
+    <Style Selector="views|TodayView.hud Button.timer.on">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+
+    <Style Selector="views|TodayView.hud Border.activeTimerStrip.running">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+
+    <!--
+      Concluída sem tempo nenhum: o botão não existe, nem no hover. Classe, e não
+      IsVisible no elemento: valor local venceria as regras do HUD acima. Por
+      último, para vencer o hover do HUD.
+    -->
+    <Style Selector="Button.timer.hidden">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+
   </UserControl.Styles>
 
   <Panel>
@@ -1607,6 +1784,37 @@
                    FontSize="11"
                    Foreground="{DynamicResource WidgetTextHighBrush}"
                    TextWrapping="Wrap" />
+      </Border>
+
+      <!--
+        O cronômetro que corre (ADR-052), quando a linha dele não está à vista
+        — e sempre no HUD. O ⏹ para; o título abre a tarefa, se ela estiver
+        no quadro. A visibilidade é dos estilos (Border.activeTimerStrip).
+      -->
+      <Border x:Name="ActiveTimerStrip"
+              DockPanel.Dock="Top"
+              Classes="activeTimerStrip"
+              Classes.offBoard="{Binding IsActiveTimerOffBoard}"
+              Classes.running="{Binding ActiveTimer.IsRunning}"
+              chrome:WindowDecorationProperties.ElementRole="User"
+              ToolTip.Tip="{Binding ActiveTimer.Tip}">
+        <Grid ColumnDefinitions="Auto,*,Auto">
+          <Button Grid.Column="0"
+                  Classes="stripStop"
+                  Content="&#xE71A;"
+                  ToolTip.Tip="Parar o cronômetro"
+                  Command="{Binding StopActiveTimerCommand}" />
+          <TextBlock Grid.Column="1"
+                     Margin="2,0,8,0"
+                     Text="{Binding ActiveTimer.TaskTitle}"
+                     TextTrimming="CharacterEllipsis"
+                     Background="Transparent"
+                     Cursor="Hand"
+                     Tapped="OnActiveTimerTitleTapped" />
+          <TextBlock Grid.Column="2"
+                     Classes="timerText"
+                     Text="{Binding ActiveTimer.ElapsedText}" />
+        </Grid>
       </Border>
 
       <TextBlock DockPanel.Dock="Top"

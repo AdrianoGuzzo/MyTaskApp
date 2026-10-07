@@ -96,6 +96,7 @@ public sealed partial class App : Avalonia.Application
                 SetUpIntegrations(Services, todayViewModel);
                 SetUpAgentSessions(Services, todayViewModel);
                 SetUpCommandExecutions(Services);
+                SetUpTimeTracking(todayViewModel);
                 ListenForSecondLaunch(Services, window);
 
                 // A moldura só sabe iniciar com o Windows depois de conhecer o
@@ -335,6 +336,27 @@ public sealed partial class App : Avalonia.Application
     /// tarefa, se aberta, atualiza o botão. Pelo mesmo motivo do agente, quem
     /// assina o monitor é a <see cref="App"/>, e não o ViewModel da janela.
     /// </summary>
+    /// <summary>
+    /// O cronômetro começou, parou ou trocou de tarefa (ADR-052) — pela lista,
+    /// pela faixa ou por outra janela: a aba "Tempo" das tarefas envolvidas, se
+    /// abertas, recarrega o histórico. Pela <see cref="App"/>, e não assinando o
+    /// relógio no ViewModel da janela, pelo mesmo motivo dos monitores.
+    /// </summary>
+    private void SetUpTimeTracking(TodayViewModel todayViewModel)
+    {
+        todayViewModel.ActiveTimer.Changed += (previous, current) => OnUiThread(() =>
+        {
+            foreach (var taskId in new[] { previous?.TaskId, current?.TaskId }.OfType<Guid>().Distinct())
+            {
+                if (_notes.TryGetValue(taskId, out var notes)
+                    && notes.DataContext is TaskNotesViewModel { Time: { } time })
+                {
+                    _ = time.ActivateAsync(CancellationToken.None);
+                }
+            }
+        });
+    }
+
     private void SetUpCommandExecutions(IServiceProvider services)
     {
         var monitor = services.GetRequiredService<CommandExecutionMonitor>();
@@ -454,8 +476,21 @@ public sealed partial class App : Avalonia.Application
                 () => _ = todayViewModel.LoadAsync(CancellationToken.None));
         }
 
+        // O tempo lançado e o cronômetro mudam o total e o relógio da linha (ADR-052).
+        if (viewModel.Time is { } time)
+        {
+            time.Changed += () => Dispatcher.UIThread.Post(
+                () => _ = todayViewModel.LoadAsync(CancellationToken.None));
+        }
+
         _notes[row.TaskId] = notes;
-        notes.Closed += (_, _) => _notes.Remove(row.TaskId);
+        notes.Closed += (_, _) =>
+        {
+            _notes.Remove(row.TaskId);
+
+            // O relógio é do app: sem soltar, ele seguraria esta aba viva.
+            viewModel.Time?.Detach();
+        };
 
         notes.Show(owner);
         notes.Activate();

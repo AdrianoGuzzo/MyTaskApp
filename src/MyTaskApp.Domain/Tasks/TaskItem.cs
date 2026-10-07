@@ -566,6 +566,37 @@ public sealed class TaskItem
     }
 
     /// <summary>
+    /// Confere que o ▶ vale nesta ocorrência (ADR-052), sem mudar nada: o período
+    /// é outro agregado, e é o caso de uso que o cria. Só trabalho em aberto,
+    /// na lista principal, ganha cronômetro — lançar tempo depois, à mão, vale
+    /// também para o que já foi concluído.
+    /// </summary>
+    public void EnsureTimerCanStart(Guid occurrenceId)
+    {
+        var occurrence = GetOccurrence(occurrenceId);
+
+        RefuseWhenOutOfTheMainList("cronometrar");
+
+        if (occurrence.Status != TaskItemStatus.Pending)
+        {
+            throw new DomainException("Só é possível cronometrar uma tarefa pendente. Reabra-a primeiro.");
+        }
+    }
+
+    /// <summary>
+    /// Confere que os períodos desta ocorrência podem ser lançados, corrigidos ou
+    /// excluídos à mão (ADR-052). Vale para tarefa concluída — esquecer de
+    /// iniciar o cronômetro é justamente o caso —, mas não para o que já foi
+    /// guardado: arquivado e lixeira são somente leitura.
+    /// </summary>
+    public void EnsureTimeCanBeLogged(Guid occurrenceId)
+    {
+        GetOccurrence(occurrenceId);
+
+        RefuseWhenOutOfTheMainList("lançar tempo em");
+    }
+
+    /// <summary>
     /// Põe a ocorrência na n-ésima casa da seção em que ela aparece (ADR-022).
     /// </summary>
     /// <remarks>

@@ -40,7 +40,11 @@ public sealed record TodayOccurrenceRow(
     /// <summary>O próximo passo de uma tarefa longa (§14).</summary>
     string? NextAction = null,
     /// <summary>A estimativa de trabalho (§15).</summary>
-    TimeSpan? Estimate = null);
+    TimeSpan? Estimate = null,
+    /// <summary>A soma dos períodos encerrados da ocorrência (ADR-052).</summary>
+    TimeSpan Logged = default,
+    /// <summary>O início do cronômetro, se ele corre nesta ocorrência; <c>null</c> = parado.</summary>
+    DateTimeOffset? TimerStartedAt = null);
 
 /// <summary>
 /// Um agente em execução: em qual ambiente e de qual repositório. Ambiente

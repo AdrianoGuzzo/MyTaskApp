@@ -83,7 +83,8 @@ public class TaskNotesDevelopmentRenderingTests
     {
         var (window, viewModel, _) = await ShowAsync();
 
-        var tabs = window.GetVisualDescendants().OfType<TabItem>().ToList();
+        // A aba Tempo (ADR-052) só aparece com o ViewModel dela, que esta montagem não passa.
+        var tabs = window.GetVisualDescendants().OfType<TabItem>().Where(tab => tab.IsVisible).ToList();
 
         tabs.Select(tab => tab.Header).Should().Equal("Anotação", "Desenvolvimento");
         viewModel.IsNotesTab.Should().BeTrue();

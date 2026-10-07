@@ -17,4 +17,15 @@ public enum TaskAuditOperation
     /// realizada pelo sistema" não precisa de uma operação própria.
     /// </summary>
     PermanentlyDeleted = 7,
+
+    /// <summary>
+    /// Um período lançado à mão (ADR-052). O ▶/⏹ não entra na trilha: o próprio
+    /// período já é o registro, e auditá-lo dobraria a tabela sem dizer nada novo.
+    /// </summary>
+    TimeEntryAdded = 8,
+
+    /// <summary>Um período corrigido; os detalhes dizem o antes e o depois.</summary>
+    TimeEntryChanged = 9,
+
+    TimeEntryDeleted = 10,
 }

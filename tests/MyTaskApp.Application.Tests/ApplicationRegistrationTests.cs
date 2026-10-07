@@ -16,6 +16,7 @@ using MyTaskApp.Application.Reminders;
 using MyTaskApp.Application.Sounds;
 using MyTaskApp.Application.Tags;
 using MyTaskApp.Application.Tests.Fakes;
+using MyTaskApp.Application.TimeTracking;
 
 namespace MyTaskApp.Application.Tests;
 
@@ -25,6 +26,7 @@ public class ApplicationRegistrationTests
     {
         var repository = new FakeTaskItemRepository();
         var processes = new FakeAgentProcessTracker();
+        var timeEntries = new FakeTimeEntryRepository();
 
         return new ServiceCollection()
             .AddSingleton(typeof(ILogger<>), typeof(NullLogger<>))
@@ -60,6 +62,8 @@ public class ApplicationRegistrationTests
             .AddSingleton<IDirectoryRemover>(new FakeDirectoryRemover())
             .AddSingleton<IBranchConventionStore>(new FakeBranchConventionStore())
             .AddSingleton<IJiraAuthenticationService>(new StubJiraAuthentication())
+            .AddSingleton<ITimeEntryRepository>(timeEntries)
+            .AddSingleton<IActiveTimerQuery>(new FakeActiveTimerQuery(timeEntries, repository))
             // Normalmente vem do composition root do Desktop (ADR-012).
             .AddSingleton<IUseCaseRunner>(new CountingUseCaseRunner())
             .AddApplication()
@@ -172,6 +176,13 @@ public class ApplicationRegistrationTests
     [InlineData(typeof(ListJiraProjectsHandler))]
     [InlineData(typeof(SetJiraDefaultProjectHandler))]
     [InlineData(typeof(DisconnectJiraHandler))]
+    [InlineData(typeof(StartTimerHandler))]
+    [InlineData(typeof(StopTimerHandler))]
+    [InlineData(typeof(GetActiveTimerHandler))]
+    [InlineData(typeof(AddTimeEntryHandler))]
+    [InlineData(typeof(UpdateTimeEntryHandler))]
+    [InlineData(typeof(DeleteTimeEntryHandler))]
+    [InlineData(typeof(GetTaskTimeLogHandler))]
     public void EveryUseCase_CanBeResolved(Type handlerType)
     {
         using var provider = BuildProvider();

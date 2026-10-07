@@ -623,6 +623,42 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                     b.ToTable("TaskOccurrences", (string)null);
                 });
 
+            modelBuilder.Entity("MyTaskApp.Domain.TimeTracking.TimeEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("EndedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Source")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("StartedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("TaskOccurrenceId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StartedAt");
+
+                    b.HasIndex("TaskOccurrenceId", "StartedAt");
+
+                    b.ToTable("TimeEntries", (string)null);
+                });
+
             modelBuilder.Entity("MyTaskApp.Infrastructure.Persistence.AgentAlertSoundRow", b =>
                 {
                     b.Property<int>("Activity")
@@ -1043,6 +1079,15 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Reminder")
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MyTaskApp.Domain.TimeTracking.TimeEntry", b =>
+                {
+                    b.HasOne("MyTaskApp.Domain.Tasks.TaskOccurrence", null)
+                        .WithMany()
+                        .HasForeignKey("TaskOccurrenceId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 

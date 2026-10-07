@@ -49,6 +49,11 @@ ICONS = {
     0xE8A7: ("Open", "open_20_regular"),
     0xE8EC: ("Tag", "tag_20_regular"),
     0xEA8F: ("Alert", "alert_20_regular"),
+    # Tempo trabalhado (ADR-052): ▶/⏹ na linha, ✎/🗑 no histórico.
+    0xE768: ("Play", "play_20_regular"),
+    0xE71A: ("Stop", "stop_20_regular"),
+    0xE70F: ("Edit", "edit_20_regular"),
+    0xE74D: ("Delete", "delete_20_regular"),
 }
 
 FAMILY = "MyTaskApp Icons"

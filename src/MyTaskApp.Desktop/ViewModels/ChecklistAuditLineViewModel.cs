@@ -51,6 +51,9 @@ public sealed class ChecklistAuditLineViewModel
         TaskAuditOperation.MovedToTrash => "Movido para a lixeira",
         TaskAuditOperation.RestoredFromTrash => "Restaurado da lixeira",
         TaskAuditOperation.PermanentlyDeleted => "Excluído definitivamente",
+        TaskAuditOperation.TimeEntryAdded => "Tempo lançado",
+        TaskAuditOperation.TimeEntryChanged => "Tempo corrigido",
+        TaskAuditOperation.TimeEntryDeleted => "Tempo excluído",
         _ => operation.ToString(),
     };
 }
