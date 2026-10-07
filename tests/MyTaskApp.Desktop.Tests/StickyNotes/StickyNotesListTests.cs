@@ -245,6 +245,31 @@ public class StickyNotesListTests
         window.Topmost.Should().BeTrue();
     }
 
+    /// <summary>Cada pausa da digitação de um post-it avisa a lista; escondida, ela não relê.</summary>
+    [AvaloniaFact]
+    public async Task AHiddenList_DoesNotRereadOnEveryKeystrokePause()
+    {
+        var view = TestStickyNotes.View("algo");
+        _runner.ResultsByHandler[typeof(CreateStickyNoteHandler)] = view;
+        Lists(Row("algo", id: view.Id));
+        var list = Create();
+        var window = new StickyNotesWindow(list);
+        var note = await _windows.CreateNewAsync();
+        _runner.Invoked.Clear();
+
+        note!.ViewModel!.Content = "algo mais";
+        await note.ViewModel.FlushAsync();
+
+        _runner.Invoked.Should().NotContain(typeof(GetStickyNotesHandler));
+
+        window.Show();
+        list.IsShown.Should().BeTrue();
+        note.ViewModel.Content = "algo mais, e mais";
+        await note.ViewModel.FlushAsync();
+
+        _runner.Invoked.Should().Contain(typeof(GetStickyNotesHandler));
+    }
+
     [AvaloniaFact]
     public async Task TheWindow_DrawsTheRowsAndHidesOnX()
     {

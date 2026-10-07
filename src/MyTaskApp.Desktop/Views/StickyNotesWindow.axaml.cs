@@ -12,7 +12,19 @@ public sealed partial class StickyNotesWindow : Window
     public StickyNotesWindow() => InitializeComponent();
 
     public StickyNotesWindow(StickyNotesViewModel viewModel)
-        : this() => DataContext = viewModel;
+        : this()
+    {
+        DataContext = viewModel;
+
+        // Escondida, a lista não relê a cada pausa de digitação de um post-it.
+        PropertyChanged += (_, e) =>
+        {
+            if (e.Property == IsVisibleProperty)
+            {
+                viewModel.IsShown = IsVisible;
+            }
+        };
+    }
 
     /// <summary>
     /// O "X" esconde, não fecha: a janela é singleton do contêiner, e uma janela

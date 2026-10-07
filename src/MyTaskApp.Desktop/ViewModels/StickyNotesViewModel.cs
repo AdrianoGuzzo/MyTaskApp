@@ -80,9 +80,20 @@ public sealed partial class StickyNotesViewModel : ObservableObject
         _logger = logger;
 
         // Qualquer mudança num post-it aberto (texto, pino, arquivar) aparece
-        // na lista sem reabri-la.
-        _windows.NotesChanged += () => _ = LoadAsync();
+        // na lista sem reabri-la — mas só com a lista na tela: cada pausa da
+        // digitação de um post-it vira um aviso, e reler uma lista escondida a
+        // cada uma seria consulta sem ninguém olhando. Ela relê ao reabrir.
+        _windows.NotesChanged += () =>
+        {
+            if (IsShown)
+            {
+                _ = LoadAsync();
+            }
+        };
     }
+
+    /// <summary>A janela da lista está na tela. Quem informa é a própria janela.</summary>
+    public bool IsShown { get; set; }
 
     public ObservableCollection<StickyNoteRowViewModel> Rows { get; } = [];
 
