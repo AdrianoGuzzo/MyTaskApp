@@ -75,7 +75,7 @@
 
           <StackPanel Spacing="8">
 
-            <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto">
+            <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto,Auto">
 
               <!-- A marca: o único bloco de cor de destaque sempre visível. -->
               <Border Grid.Column="0" Classes="brandMark">
@@ -102,11 +102,29 @@
                          IsVisible="{Binding #Shell.Chrome.IsCompact}" />
 
               <!--
+                O histórico dos últimos 7 dias (ADR-053): um flyout, e não uma janela —
+                o checklist continua à vista atrás, e Esc e o clique fora fecham.
+              -->
+              <Button Grid.Column="3"
+                      Classes="chrome"
+                      Content="&#xE81C;"
+                      chrome:WindowDecorationProperties.ElementRole="User"
+                      ToolTip.Tip="Ver histórico dos últimos 7 dias">
+                <Button.Flyout>
+                  <Flyout Placement="BottomEdgeAlignedRight"
+                          Opened="OnHistoryFlyoutOpened"
+                          Closed="OnHistoryFlyoutClosed">
+                    <views:ActivityHistoryPanel DataContext="{Binding #Shell.((vm:TodayViewModel)DataContext).History}" />
+                  </Flyout>
+                </Button.Flyout>
+              </Button>
+
+              <!--
                 O pino agora é "fixar como HUD": manter o app visível sobre as
                 outras janelas, num cartão que não atrapalha (ADR-048). O
                 "sempre no topo" da janela normal continua no menu.
               -->
-              <Button Grid.Column="3"
+              <Button Grid.Column="4"
                       x:Name="HudButton"
                       Classes="chrome"
                       Content="&#xE718;"
@@ -114,14 +132,14 @@
                       ToolTip.Tip="Fixar como HUD — fica visível sobre as outras janelas"
                       Command="{Binding #Shell.Chrome.EnterHudCommand}" />
 
-              <Button Grid.Column="4"
+              <Button Grid.Column="5"
                       Classes="chrome"
                       Content="{Binding #Shell.Chrome.CollapseGlyph}"
                       chrome:WindowDecorationProperties.ElementRole="User"
                       ToolTip.Tip="{Binding #Shell.Chrome.CollapseTip}"
                       Command="{Binding #Shell.Chrome.ToggleCollapsedCommand}" />
 
-              <Button Grid.Column="5"
+              <Button Grid.Column="6"
                       Classes="chrome"
                       Content="&#xE712;"
                       chrome:WindowDecorationProperties.ElementRole="User"
@@ -240,7 +258,7 @@
               </Button>
 
               <!-- O X faz o que "Ao fechar a janela" mandar (ADR-048). -->
-              <Button Grid.Column="6"
+              <Button Grid.Column="7"
                       Classes="chrome"
                       Content="&#xE711;"
                       chrome:WindowDecorationProperties.ElementRole="User"
@@ -285,7 +303,7 @@
                 IsVisible="{Binding #Shell.Chrome.IsHudExpanded}"
                 PointerPressed="OnHudBarPointerPressed">
 
-          <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto">
+          <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto,Auto">
 
             <Border Grid.Column="0" Classes="brandMark">
               <TextBlock Text="&#x2713;" />
@@ -306,8 +324,28 @@
                     ToolTip.Tip="{Binding #Shell.Chrome.CaptureTip}"
                     Command="{Binding #Shell.Chrome.ToggleCaptureCommand}" />
 
-            <!-- Aceso: o HUD está ligado. O clique é a porta de volta. -->
+            <!--
+              O histórico dos últimos 7 dias (ADR-053): um flyout, e não uma janela —
+              o checklist continua à vista atrás, e Esc e o clique fora fecham.
+              No HUD compacto, de 260px, ele sai: o contador já não caberia.
+            -->
             <Button Grid.Column="4"
+                    Classes="chrome"
+                    Content="&#xE81C;"
+                    IsVisible="{Binding !#Shell.Chrome.IsHudCompact}"
+                    chrome:WindowDecorationProperties.ElementRole="User"
+                    ToolTip.Tip="Ver histórico dos últimos 7 dias">
+              <Button.Flyout>
+                <Flyout Placement="BottomEdgeAlignedRight"
+                        Opened="OnHistoryFlyoutOpened"
+                        Closed="OnHistoryFlyoutClosed">
+                  <views:ActivityHistoryPanel DataContext="{Binding #Shell.((vm:TodayViewModel)DataContext).History}" />
+                </Flyout>
+              </Button.Flyout>
+            </Button>
+
+            <!-- Aceso: o HUD está ligado. O clique é a porta de volta. -->
+            <Button Grid.Column="5"
                     x:Name="HudExitButton"
                     Classes="chrome on"
                     Content="&#xE840;"
@@ -315,7 +353,7 @@
                     ToolTip.Tip="HUD ativo — clique para voltar à janela normal"
                     Command="{Binding #Shell.Chrome.ExitHudCommand}" />
 
-            <Button Grid.Column="5"
+            <Button Grid.Column="6"
                     Classes="chrome"
                     Content="&#xE712;"
                     chrome:WindowDecorationProperties.ElementRole="User"
@@ -356,7 +394,7 @@
               não faria nada: a janela abre estas opções em vez de ignorar o
               clique.
             -->
-            <Button Grid.Column="6"
+            <Button Grid.Column="7"
                     x:Name="HudCloseButton"
                     Classes="chrome"
                     Content="&#xE711;"

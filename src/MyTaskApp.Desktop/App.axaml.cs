@@ -427,6 +427,7 @@ public sealed partial class App : Avalonia.Application
         todayViewModel.DeadlineEditorRequested += row => EditDeadline(services, window, todayViewModel, row);
         services.GetRequiredService<AlertPresenter>().OpenRequested += occurrenceId =>
             OpenFromDeadlineAlert(services, window, todayViewModel, occurrenceId);
+        todayViewModel.History.OpenRequested += row => OpenFromHistory(services, window, todayViewModel, row);
     }
 
     /// <summary>
@@ -537,6 +538,29 @@ public sealed partial class App : Avalonia.Application
         }
 
         ShowNotes(services, window, todayViewModel, row);
+    }
+
+    /// <summary>
+    /// Uma linha do histórico (ADR-053): a mesma janela da tarefa, já na aba
+    /// "Tempo" — quem chega pelo histórico quer ver onde o tempo foi. Se a
+    /// tarefa está no quadro, vale a linha de lá, que já tem o Git aplicado.
+    /// </summary>
+    private void OpenFromHistory(
+        IServiceProvider services,
+        MainWindow window,
+        TodayViewModel todayViewModel,
+        TaskRowViewModel row)
+    {
+        var onBoard = todayViewModel.Sections
+            .SelectMany(section => section.Items)
+            .FirstOrDefault(item => item.OccurrenceId == row.OccurrenceId);
+
+        var notes = ShowNotes(services, window, todayViewModel, onBoard ?? row);
+
+        if (notes.DataContext is TaskNotesViewModel { Time: not null } viewModel)
+        {
+            viewModel.SelectedTabIndex = TaskNotesViewModel.TimeTab;
+        }
     }
 
     /// <summary>

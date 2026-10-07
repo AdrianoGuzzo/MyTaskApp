@@ -204,8 +204,51 @@ public class GetTodayBoardHandlerTests
         _query.RequestedDate.Should().Be(Today);
     }
 
+    [Fact]
+    public async Task ATaskCompletedDaysAgo_OpensFromOutsideTheBoard_AsCompleted()
+    {
+        // O histórico (ADR-053) abre a tarefa que já saiu do quadro.
+        var row = Row("Configurar ambiente", Today.AddDays(-3), status: TaskItemStatus.Completed,
+            completedAt: NowUtc.AddDays(-3));
+        _query.Rows = [row];
+
+        var found = await Handler().HandleAsync(new GetBoardTask(row.OccurrenceId), Ct);
+
+        found.Should().NotBeNull();
+        found!.IsCompleted.Should().BeTrue();
+        found.Task.OccurrenceId.Should().Be(row.OccurrenceId);
+        found.Task.Title.Should().Be("Configurar ambiente");
+        found.Task.IsLate.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task APendingTaskForAnotherDay_Opens_WithoutCallingItselfLate()
+    {
+        var row = Row("Preparar demo", Today.AddDays(2));
+        _query.Rows = [row];
+
+        var found = await Handler().HandleAsync(new GetBoardTask(row.OccurrenceId), Ct);
+
+        found!.IsCompleted.Should().BeFalse();
+        found.Task.IsLate.Should().BeFalse();
+        found.Task.ScheduledDate.Should().Be(Today.AddDays(2));
+    }
+
+    [Fact]
+    public async Task AnOccurrenceThatIsGone_IsNull()
+    {
+        var found = await Handler().HandleAsync(new GetBoardTask(Guid.CreateVersion7()), Ct);
+
+        found.Should().BeNull();
+    }
+
     private sealed class FakeTodayQuery : ITodayQuery
     {
+        public Task<TodayOccurrenceRow?> FindOccurrenceAsync(
+            Guid occurrenceId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(Rows.FirstOrDefault(row => row.OccurrenceId == occurrenceId));
+
         public IReadOnlyList<TodayOccurrenceRow> Rows { get; set; } = [];
 
         public DateOnly? RequestedDate { get; private set; }
