@@ -125,6 +125,17 @@
       <Setter Property="Padding" Value="10,6" />
     </Style>
 
+    <Style Selector="Border.stickyStatus">
+      <Setter Property="Background" Value="{DynamicResource WidgetAccentSoftBrush}" />
+      <Setter Property="Padding" Value="10,6" />
+    </Style>
+
+    <Style Selector="Border.stickyStatus > TextBlock">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
     <Style Selector="Border.stickyError > TextBlock">
       <Setter Property="FontSize" Value="11" />
       <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
@@ -225,6 +236,9 @@
                             ItemContainerTheme="{StaticResource StickyChoiceItem}"
                             ItemTemplate="{StaticResource StickyChoiceTemplate}" />
                   <Separator />
+                  <MenuItem Header="Transformar em tarefa" Command="{Binding ConvertToTaskCommand}" />
+                  <MenuItem Header="Criar tarefa com a seleção" Command="{Binding ConvertSelectionCommand}" />
+                  <Separator />
                   <MenuItem Header="Novo post-it" InputGesture="Ctrl+Shift+N" Command="{Binding NewNoteCommand}" />
                   <Separator />
                   <MenuItem Header="Arquivar" Command="{Binding ArchiveCommand}" />
@@ -246,6 +260,13 @@
 
         <Border DockPanel.Dock="Bottom" Classes="stickyError" IsVisible="{Binding HasError}">
           <TextBlock Text="{Binding ErrorMessage}" />
+        </Border>
+
+        <Border x:Name="StatusBanner"
+                DockPanel.Dock="Bottom"
+                Classes="stickyStatus"
+                IsVisible="{Binding HasStatus}">
+          <TextBlock Text="{Binding StatusMessage}" />
         </Border>
 
         <TextBox x:Name="Editor"

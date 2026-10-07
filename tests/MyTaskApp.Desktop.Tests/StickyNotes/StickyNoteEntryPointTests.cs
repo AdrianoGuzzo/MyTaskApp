@@ -59,6 +59,20 @@ public class StickyNoteEntryPointTests
 
         menu.Should().Contain(item => item.Header as string == "Post-its");
         menu.Should().Contain(item => item.Header as string == "Novo post-it");
+        menu.Should().Contain(item => item.Header as string == "Meus post-its…");
+        menu.Should().Contain(item => item.Header as string == "Post-its arquivados…");
+    }
+
+    [Fact]
+    public void TheListCommand_CarriesTheTab()
+    {
+        var today = Today();
+        var asked = new List<MyTaskApp.Application.StickyNotes.StickyNoteScope>();
+        today.StickyNotesRequested += asked.Add;
+
+        today.OpenStickyNotesCommand.Execute(MyTaskApp.Application.StickyNotes.StickyNoteScope.Archived);
+
+        asked.Should().Equal(MyTaskApp.Application.StickyNotes.StickyNoteScope.Archived);
     }
 }
 

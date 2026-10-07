@@ -83,6 +83,8 @@ public partial class StickyNoteWindow : Window
         viewModel.PropertyChanged += OnViewModelPropertyChanged;
         viewModel.CloseRequested += OnCloseRequested;
 
+        Editor.PropertyChanged += OnEditorPropertyChanged;
+
         PositionChanged += (_, _) => TrackGeometry();
 
         // Sair da janela grava na hora: o próximo gesto pode ser fechar o app
@@ -258,7 +260,41 @@ public partial class StickyNoteWindow : Window
         _closingForReal = true;
         _contentSave.Stop();
         _geometrySave.Stop();
+
+        // Com um recado na tela ("convertido em tarefa"), a janela fica o
+        // bastante para ele ser lido: sumir no clique pareceria que o post-it
+        // foi perdido.
+        if (_viewModel?.HasStatus == true && IsVisible)
+        {
+            IsClosingSoon = true;
+            DispatcherTimer.RunOnce(Close, FarewellDelay);
+            return;
+        }
+
         Close();
+    }
+
+    /// <summary>Quanto o recado de despedida fica na tela antes de a janela fechar.</summary>
+    internal static readonly TimeSpan FarewellDelay = TimeSpan.FromMilliseconds(1200);
+
+    /// <summary>A janela já foi mandada fechar e só espera o recado ser lido.</summary>
+    internal bool IsClosingSoon { get; private set; }
+
+    /// <summary>
+    /// A seleção vira o trecho de "Criar tarefa com a seleção" — mas só com o
+    /// foco no texto: clicar no ⋯ tira o foco, e a seleção que importa é a de
+    /// antes do clique.
+    /// </summary>
+    private void OnEditorPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (_viewModel is null
+            || !Editor.IsFocused
+            || (e.Property != TextBox.SelectionStartProperty && e.Property != TextBox.SelectionEndProperty))
+        {
+            return;
+        }
+
+        _viewModel.Selection = Editor.SelectedText;
     }
 
     /// <summary>As etiquetas mudam na outra janela enquanto o post-it fica aberto: relê ao abrir o menu.</summary>

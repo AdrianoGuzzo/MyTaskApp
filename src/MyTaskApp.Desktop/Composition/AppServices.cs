@@ -156,8 +156,11 @@ internal static class AppServices
             .AddSingleton<AgentAlertSoundsViewModel>()
             .AddSingleton<AgentAlertSoundsWindow>()
 
-            // Post-its (ADR-054): um dono só das janelas abertas — uma por post-it.
+            // Post-its (ADR-054): um dono só das janelas abertas — uma por post-it —
+            // e a lista, janela única como as outras do menu.
             .AddSingleton<StickyNoteWindowManager>()
+            .AddSingleton<StickyNotesViewModel>()
+            .AddSingleton<StickyNotesWindow>()
 
             // A anotacao de um item (§12). Transient, e nao singleton como as
             // duas acima: sao duas telas diferentes para dois checklists

@@ -168,6 +168,21 @@ public sealed partial class StickyNoteViewModel : ObservableObject
 
     public bool HasError => ErrorMessage is not null;
 
+    /// <summary>"Post-it convertido em tarefa" — o retorno de um gesto que tira algo da tela.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasStatus))]
+    private string? _statusMessage;
+
+    public bool HasStatus => StatusMessage is not null;
+
+    /// <summary>O trecho selecionado no texto, para "Criar tarefa com a seleção".</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ConvertSelectionCommand))]
+    private string? _selection;
+
+    /// <summary>Uma tarefa nasceu deste post-it: o quadro de hoje tem de mostrá-la.</summary>
+    public event Action<ConvertStickyNoteToTaskResult>? TaskCreated;
+
     public bool HasUnsavedText => !string.Equals(Content, _savedContent, StringComparison.Ordinal);
 
     /// <summary>O nome que o Alt+Tab e o leitor de tela anunciam: a primeira linha do texto.</summary>
@@ -255,6 +270,65 @@ public sealed partial class StickyNoteViewModel : ObservableObject
 
     [RelayCommand]
     private void NewNote() => NewNoteRequested?.Invoke();
+
+    /// <summary>
+    /// "Isso virou uma tarefa": o texto inteiro vira tarefa para hoje, com a
+    /// etiqueta, e o post-it vai para os arquivados — recuperável, e fora da
+    /// tela. Grava o texto antes, para a tarefa sair com a última palavra.
+    /// </summary>
+    [RelayCommand]
+    private Task ConvertToTaskAsync() => WriteAsync(async () =>
+    {
+        if (_closing || !await SaveContentAsync() || !await SaveGeometryCoreAsync())
+        {
+            return;
+        }
+
+        if (await ConvertAsync(selection: null) is not { } result)
+        {
+            return;
+        }
+
+        StatusMessage = "Post-it convertido em tarefa.";
+        TaskCreated?.Invoke(result);
+
+        if (result.NoteArchived)
+        {
+            _closing = true;
+            Changed?.Invoke();
+            CloseRequested?.Invoke();
+        }
+    });
+
+    /// <summary>Só o trecho selecionado vira tarefa; o post-it fica como está.</summary>
+    [RelayCommand(CanExecute = nameof(CanConvertSelection))]
+    private Task ConvertSelectionAsync() => WriteAsync(async () =>
+    {
+        if (_closing || Selection is not { } selection)
+        {
+            return;
+        }
+
+        if (await ConvertAsync(selection) is not { } result)
+        {
+            return;
+        }
+
+        StatusMessage = $"Tarefa criada: {result.Title}";
+        TaskCreated?.Invoke(result);
+    });
+
+    private bool CanConvertSelection() => !string.IsNullOrWhiteSpace(Selection);
+
+    private async Task<ConvertStickyNoteToTaskResult?> ConvertAsync(string? selection)
+    {
+        ConvertStickyNoteToTaskResult? result = null;
+
+        await TryAsync(async () => result = await _runner.RunAsync<ConvertStickyNoteToTaskHandler, ConvertStickyNoteToTaskResult>(
+            (handler, ct) => handler.HandleAsync(new ConvertStickyNoteToTask(Id, selection), ct)));
+
+        return result;
+    }
 
     /// <summary>
     /// As etiquetas existentes, lidas quando o menu abre: elas mudam na janela

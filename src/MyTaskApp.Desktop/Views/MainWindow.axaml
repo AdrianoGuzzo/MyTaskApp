@@ -3,6 +3,7 @@
         xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
         xmlns:views="using:MyTaskApp.Desktop.Views"
         xmlns:chrome="using:Avalonia.Controls.Chrome"
+        xmlns:notes="using:MyTaskApp.Application.StickyNotes"
         x:Class="MyTaskApp.Desktop.Views.MainWindow"
         x:DataType="vm:TodayViewModel"
         x:Name="Shell"
@@ -156,6 +157,12 @@
                       <MenuItem Header="Novo post-it"
                                 InputGesture="Ctrl+Shift+N"
                                 Command="{Binding NewStickyNoteCommand}" />
+                      <MenuItem Header="Meus post-its…"
+                                Command="{Binding OpenStickyNotesCommand}"
+                                CommandParameter="{x:Static notes:StickyNoteScope.Active}" />
+                      <MenuItem Header="Post-its arquivados…"
+                                Command="{Binding OpenStickyNotesCommand}"
+                                CommandParameter="{x:Static notes:StickyNoteScope.Archived}" />
                     </MenuItem>
                     <Separator />
                     <MenuItem Header="Painel completo"

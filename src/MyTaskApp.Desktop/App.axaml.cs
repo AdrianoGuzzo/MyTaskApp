@@ -9,6 +9,7 @@ using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Application.QuickCommands;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Application.Sounds;
+using MyTaskApp.Application.StickyNotes;
 using MyTaskApp.Desktop.Composition;
 using MyTaskApp.Desktop.Reminders;
 using MyTaskApp.Desktop.SpellChecking;
@@ -310,6 +311,15 @@ public sealed partial class App : Avalonia.Application
         notes.Failed += message => Log.Warning("StickyNoteFailed {Message}", message);
 
         todayViewModel.NewStickyNoteRequested += () => _ = notes.CreateNewAsync();
+
+        // Post-it → tarefa: a tarefa nasce para hoje e tem de aparecer já, sem
+        // esperar o refresh de 60 s.
+        notes.TaskCreated += created => _ = todayViewModel.LoadAsync(CancellationToken.None);
+
+        var list = services.GetRequiredService<StickyNotesViewModel>();
+        list.TaskCreated += created => _ = todayViewModel.LoadAsync(CancellationToken.None);
+
+        todayViewModel.StickyNotesRequested += scope => ShowStickyNotes(services, window, scope);
 
         _ = notes.OpenStartupNotesAsync();
     }
@@ -646,6 +656,27 @@ public sealed partial class App : Avalonia.Application
         // deixa minimizada.
         window.WindowState = WindowState.Normal;
         window.Activate();
+    }
+
+    /// <summary>
+    /// A lista de post-its. Da bandeja o painel pode estar escondido, e janela
+    /// com dono escondido não aparece: aí ela abre sozinha.
+    /// </summary>
+    private static void ShowStickyNotes(IServiceProvider services, Window owner, StickyNoteScope scope)
+    {
+        var window = services.GetRequiredService<StickyNotesWindow>();
+
+        if (owner.IsVisible)
+        {
+            window.Show(owner);
+        }
+        else
+        {
+            window.Show();
+        }
+
+        window.Activate();
+        _ = window.RevealAsync(scope);
     }
 
     private static void ShowSettings(IServiceProvider services, Window owner)

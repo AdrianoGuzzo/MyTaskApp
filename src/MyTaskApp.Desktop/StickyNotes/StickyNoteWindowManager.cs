@@ -67,6 +67,9 @@ public sealed class StickyNoteWindowManager(IUseCaseRunner runner, ILogger<Stick
     /// <summary>Uma falha sem janela onde mostrá-la — criar ou abrir.</summary>
     public event Action<string>? Failed;
 
+    /// <summary>Uma tarefa nasceu de um post-it: o quadro de hoje tem de mostrá-la.</summary>
+    public event Action<ConvertStickyNoteToTaskResult>? TaskCreated;
+
     public bool IsOpen(Guid noteId) => _open.ContainsKey(noteId);
 
     public StickyNoteWindow? Find(Guid noteId) => _open.GetValueOrDefault(noteId);
@@ -188,11 +191,13 @@ public sealed class StickyNoteWindowManager(IUseCaseRunner runner, ILogger<Stick
 
         viewModel.Changed += OnChanged;
         viewModel.NewNoteRequested += OnNewNoteRequested;
+        viewModel.TaskCreated += OnTaskCreated;
 
         window.Closed += (_, _) =>
         {
             viewModel.Changed -= OnChanged;
             viewModel.NewNoteRequested -= OnNewNoteRequested;
+            viewModel.TaskCreated -= OnTaskCreated;
 
             if (_open.TryGetValue(view.Id, out var current) && ReferenceEquals(current, window))
             {
@@ -223,6 +228,8 @@ public sealed class StickyNoteWindowManager(IUseCaseRunner runner, ILogger<Stick
     private void OnChanged() => NotesChanged?.Invoke();
 
     private void OnNewNoteRequested() => _ = CreateNewAsync();
+
+    private void OnTaskCreated(ConvertStickyNoteToTaskResult result) => TaskCreated?.Invoke(result);
 
     /// <summary>Uma releitura que falha deixa o post-it como está — o próximo gesto relê.</summary>
     private async Task<T?> TryQuietlyAsync<T>(Func<Task<T>> operation)
