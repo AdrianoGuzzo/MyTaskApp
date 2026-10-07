@@ -1,5 +1,8 @@
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Commands;
+using MyTaskApp.Domain;
+using MyTaskApp.Domain.Commands;
 
 namespace MyTaskApp.Application.Tags;
 
@@ -20,6 +23,12 @@ public sealed class AddTagDirectoryCommandHandler(
     {
         // O comando é de outro agregado: a etiqueta não tem como conferir.
         var global = await commands.GetByIdAsync(command.CommandId, cancellationToken);
+
+        if (!global.IsGlobal)
+        {
+            throw new DomainException("Este comando é só de outro diretório. Crie um aqui com \"+ Novo comando\".");
+        }
+
         var tag = await tags.GetByIdAsync(command.TagId, cancellationToken);
 
         var binding = tag.AddDirectoryCommand(command.DirectoryId, global.Id, timeProvider.GetUtcNow());
@@ -107,24 +116,124 @@ public sealed class MoveTagDirectoryCommandHandler(ITagRepository tags, IUnitOfW
     }
 }
 
-/// <summary>Tira o botão do diretório. O comando global continua cadastrado.</summary>
+/// <summary>
+/// Tira o botão do diretório. O comando global continua cadastrado; o comando
+/// só deste diretório (ADR-054) não tem outro lugar, e é excluído junto.
+/// </summary>
 public sealed record RemoveTagDirectoryCommand(Guid TagId, Guid DirectoryId, Guid BindingId);
 
 public sealed class RemoveTagDirectoryCommandHandler(
     ITagRepository tags,
+    IDevelopmentCommandRepository commands,
     IUnitOfWork unitOfWork,
     ILogger<RemoveTagDirectoryCommandHandler> logger)
 {
     public async Task HandleAsync(RemoveTagDirectoryCommand command, CancellationToken cancellationToken = default)
     {
         var tag = await tags.GetByIdAsync(command.TagId, cancellationToken);
+        var binding = tag.GetDirectoryCommand(command.DirectoryId, command.BindingId);
 
         tag.RemoveDirectoryCommand(command.DirectoryId, command.BindingId);
+
+        if (await commands.FindByIdAsync(binding.DevelopmentCommandId, cancellationToken) is { } own
+            && own.TagDirectoryId == command.DirectoryId)
+        {
+            commands.Remove(own);
+        }
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation("TagDirectoryCommandRemoved {TagId} {BindingId}", tag.Id, command.BindingId);
     }
+}
+
+/// <summary>
+/// Cria um comando só deste diretório (ADR-054), sem passar por Comandos
+/// globais, e já o oferece como botão: entra no fim da lista, ligado.
+/// </summary>
+/// <param name="Settings">O nome é obrigatório: é o rótulo do botão.</param>
+public sealed record CreateDirectoryOnlyCommand(
+    Guid TagId,
+    Guid DirectoryId,
+    string Command,
+    string? Description,
+    DevelopmentCommandSettings Settings);
+
+public sealed class CreateDirectoryOnlyCommandHandler(
+    ITagRepository tags,
+    IDevelopmentCommandRepository commands,
+    IUnitOfWork unitOfWork,
+    TimeProvider timeProvider,
+    ILogger<CreateDirectoryOnlyCommandHandler> logger)
+{
+    /// <returns>A associação do botão no diretório.</returns>
+    public async Task<Guid> HandleAsync(CreateDirectoryOnlyCommand command, CancellationToken cancellationToken = default)
+    {
+        var tag = await tags.GetByIdAsync(command.TagId, cancellationToken);
+        var at = timeProvider.GetUtcNow();
+
+        var created = DevelopmentCommand.CreateForDirectory(
+            command.DirectoryId,
+            command.Command,
+            command.Description,
+            command.Settings,
+            at);
+
+        // A associação antes do comando entrar no contexto: diretório que não
+        // existe, ou já cheio, recusa sem deixar um comando sem botão.
+        var binding = tag.AddDirectoryCommand(command.DirectoryId, created.Id, at);
+
+        await commands.AddAsync(created, cancellationToken);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation(
+            "DirectoryOnlyCommandCreated {TagId} {DirectoryId} {CommandId}",
+            tag.Id,
+            command.DirectoryId,
+            created.Id);
+
+        return binding.Id;
+    }
+}
+
+/// <summary>Edita um comando só do diretório (ADR-054). Atômico, como o global.</summary>
+public sealed record UpdateDirectoryOnlyCommand(
+    Guid CommandId,
+    string Command,
+    string? Description,
+    DevelopmentCommandSettings Settings);
+
+public sealed class UpdateDirectoryOnlyCommandHandler(
+    IDevelopmentCommandRepository commands,
+    IUnitOfWork unitOfWork,
+    TimeProvider timeProvider,
+    ILogger<UpdateDirectoryOnlyCommandHandler> logger)
+{
+    public async Task<DevelopmentCommandRow> HandleAsync(
+        UpdateDirectoryOnlyCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        var existing = await commands.GetByIdAsync(command.CommandId, cancellationToken);
+
+        existing.UpdateForDirectory(command.Command, command.Description, command.Settings, timeProvider.GetUtcNow());
+
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("DirectoryOnlyCommandUpdated {CommandId}", existing.Id);
+
+        return DevelopmentCommandRow.From(existing);
+    }
+}
+
+/// <summary>Um comando inteiro, para o formulário de edição do comando do diretório (ADR-054).</summary>
+public sealed record GetDirectoryOnlyCommand(Guid CommandId);
+
+public sealed class GetDirectoryOnlyCommandHandler(IDevelopmentCommandRepository commands)
+{
+    public async Task<DevelopmentCommandRow> HandleAsync(
+        GetDirectoryOnlyCommand query,
+        CancellationToken cancellationToken = default) =>
+        DevelopmentCommandRow.From(await commands.GetByIdAsync(query.CommandId, cancellationToken));
 }
 
 public sealed record GetTagDirectoryCommands(Guid DirectoryId);

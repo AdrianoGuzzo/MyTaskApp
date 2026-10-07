@@ -26,7 +26,7 @@ public sealed partial class DevelopmentCommandCatalog : ObservableObject
 
     partial void OnRowsChanged(IReadOnlyList<DevelopmentCommandRow> value) =>
         _byAlias = value
-            .GroupBy(row => row.Alias, StringComparer.OrdinalIgnoreCase)
+            .GroupBy(row => row.Alias ?? string.Empty, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
 }
 
@@ -35,7 +35,7 @@ public sealed partial class CommandSuggestionViewModel(DevelopmentCommandRow row
 {
     public DevelopmentCommandRow Row { get; } = row;
 
-    public string Alias => Row.Alias;
+    public string Alias => Row.Alias ?? string.Empty;
 
     public string Command => Row.Command;
 
@@ -112,7 +112,7 @@ public sealed partial class CommandCompletionViewModel(DevelopmentCommandCatalog
         var matches = AliasCompletion.Filter(
             catalog.Rows,
             token.Value.Query,
-            row => row.Alias,
+            row => row.Alias ?? string.Empty,
             row => row.Command);
 
         if (matches.Count == 0)

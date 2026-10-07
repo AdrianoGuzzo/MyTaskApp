@@ -20,6 +20,12 @@ namespace MyTaskApp.Domain.Commands;
 /// a definição dos parâmetros — mora em <see cref="DevelopmentCommandSettings"/>,
 /// e o padrão é o comportamento de sempre.
 /// </para>
+/// <para>
+/// Um comando pode também ser <b>do diretório</b> (<see cref="TagDirectoryId"/>,
+/// ADR-054): criado direto num diretório de etiqueta, só para ele. Não tem
+/// apelido, não aparece em Comandos globais nem na lista pós-Worktree, e vai
+/// embora com o diretório. O nome é obrigatório, porque é o rótulo do botão.
+/// </para>
 /// </remarks>
 public sealed class DevelopmentCommand
 {
@@ -35,12 +41,14 @@ public sealed class DevelopmentCommand
 
     private DevelopmentCommand(
         Guid id,
-        string alias,
+        Guid? tagDirectoryId,
+        string? alias,
         string command,
         string? description,
         DateTimeOffset createdAt)
     {
         Id = id;
+        TagDirectoryId = tagDirectoryId;
         Alias = alias;
         Command = command;
         Description = description;
@@ -51,8 +59,19 @@ public sealed class DevelopmentCommand
 
     public Guid Id { get; }
 
-    /// <summary>Sempre começa com <c>@</c> (ver <see cref="NormalizeAlias"/>).</summary>
-    public string Alias { get; private set; }
+    /// <summary>
+    /// O diretório de etiqueta dono do comando; <c>null</c> é um comando global.
+    /// Não muda: um comando do diretório não vira global nem troca de diretório.
+    /// </summary>
+    public Guid? TagDirectoryId { get; }
+
+    public bool IsGlobal => TagDirectoryId is null;
+
+    /// <summary>
+    /// Sempre começa com <c>@</c> (ver <see cref="NormalizeAlias"/>). <c>null</c>
+    /// só no comando do diretório, que ninguém chama por apelido.
+    /// </summary>
+    public string? Alias { get; private set; }
 
     /// <summary>O texto que vai para o shell, como o usuário o digitaria.</summary>
     public string Command { get; private set; }
@@ -81,8 +100,8 @@ public sealed class DevelopmentCommand
     public IReadOnlyList<DevelopmentCommandParameter> Parameters =>
         [.. _parameters.OrderBy(parameter => parameter.Order)];
 
-    /// <summary>O que a tela mostra: o nome, ou o alias.</summary>
-    public string DisplayName => Name ?? Alias;
+    /// <summary>O que a tela mostra: o nome, ou o alias. O global sempre tem alias; o do diretório, nome.</summary>
+    public string DisplayName => Name ?? Alias ?? string.Empty;
 
     public DevelopmentCommandSettings Settings =>
         new(Name, Mode, WorkingDirectory, KeepTerminalOpen, RequiresConfirmation,
@@ -104,7 +123,32 @@ public sealed class DevelopmentCommand
     {
         var created = new DevelopmentCommand(
             Guid.CreateVersion7(createdAt),
+            null,
             NormalizeAlias(alias),
+            NormalizeCommand(command),
+            NormalizeDescription(description),
+            createdAt);
+
+        created.Apply(created.Command, settings, createdAt);
+
+        return created;
+    }
+
+    /// <summary>
+    /// Um comando só do diretório (ADR-054): sem apelido, e o nome é obrigatório.
+    /// Que o diretório existe é o caso de uso quem confere: ele é de outro agregado.
+    /// </summary>
+    public static DevelopmentCommand CreateForDirectory(
+        Guid tagDirectoryId,
+        string command,
+        string? description,
+        DevelopmentCommandSettings settings,
+        DateTimeOffset createdAt)
+    {
+        var created = new DevelopmentCommand(
+            Guid.CreateVersion7(createdAt),
+            tagDirectoryId,
+            null,
             NormalizeCommand(command),
             NormalizeDescription(description),
             createdAt);
@@ -121,7 +165,7 @@ public sealed class DevelopmentCommand
     public void Update(string alias, string command, string? description, DateTimeOffset at) =>
         Update(alias, command, description, Settings, at);
 
-    /// <summary>Atômico: valida tudo antes de trocar qualquer campo.</summary>
+    /// <summary>Atômico: valida tudo antes de trocar qualquer campo. Só no comando global.</summary>
     public void Update(
         string alias,
         string command,
@@ -129,7 +173,36 @@ public sealed class DevelopmentCommand
         DevelopmentCommandSettings settings,
         DateTimeOffset at)
     {
-        var normalizedAlias = NormalizeAlias(alias);
+        if (!IsGlobal)
+        {
+            throw new DomainException("Este comando é de um diretório de etiqueta e se edita em Etiquetas.");
+        }
+
+        Change(NormalizeAlias(alias), command, description, settings, at);
+    }
+
+    /// <summary>Atômico, como o global. Só no comando do diretório (ADR-054).</summary>
+    public void UpdateForDirectory(
+        string command,
+        string? description,
+        DevelopmentCommandSettings settings,
+        DateTimeOffset at)
+    {
+        if (IsGlobal)
+        {
+            throw new DomainException("Este comando é global e se edita em Comandos globais.");
+        }
+
+        Change(null, command, description, settings, at);
+    }
+
+    private void Change(
+        string? normalizedAlias,
+        string command,
+        string? description,
+        DevelopmentCommandSettings settings,
+        DateTimeOffset at)
+    {
         var normalizedCommand = NormalizeCommand(command);
         var normalizedDescription = NormalizeDescription(description);
 
@@ -184,11 +257,17 @@ public sealed class DevelopmentCommand
     /// <summary>
     /// Valida as configurações contra o texto do comando. As definições de
     /// parâmetros que o texto já não tem saem; definir uma variável de contexto
-    /// (<c>{worktree}</c>…) é recusado, porque quem a preenche é o app.
+    /// (<c>{worktree}</c>…) é recusado, porque quem a preenche é o app. O
+    /// comando do diretório não tem apelido para mostrar no lugar do nome.
     /// </summary>
-    private static DevelopmentCommandSettings NormalizeSettings(string command, DevelopmentCommandSettings settings)
+    private DevelopmentCommandSettings NormalizeSettings(string command, DevelopmentCommandSettings settings)
     {
         var name = string.IsNullOrWhiteSpace(settings.Name) ? null : settings.Name.Trim();
+
+        if (name is null && !IsGlobal)
+        {
+            throw new DomainException("Dê um nome ao comando: é o rótulo do botão no worktree.");
+        }
 
         if (name?.Length > MaxNameLength)
         {

@@ -9,8 +9,16 @@ public interface IDevelopmentCommandRepository
 
     Task<DevelopmentCommand?> FindByIdAsync(Guid id, CancellationToken cancellationToken = default);
 
-    /// <summary>Todos, por apelido. A lista é curta: é o que cabe na memória de quem digita.</summary>
+    /// <summary>
+    /// Os globais, por apelido. A lista é curta: é o que cabe na memória de quem
+    /// digita. Os comandos só de um diretório (ADR-054) ficam de fora.
+    /// </summary>
     Task<IReadOnlyList<DevelopmentCommand>> ListAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Os comandos só destes diretórios de etiqueta (ADR-054).</summary>
+    Task<IReadOnlyList<DevelopmentCommand>> ListForDirectoriesAsync(
+        IReadOnlyCollection<Guid> directoryIds,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Se outro comando já usa o apelido, sem diferenciar maiúsculas.

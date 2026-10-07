@@ -6,10 +6,12 @@ namespace MyTaskApp.Application.Commands;
 
 /// <summary>Um comando global como a tela o mostra (ADR-028), com o que o comando rápido usa (ADR-051).</summary>
 /// <param name="Parameters">As definições cadastradas; um <c>{nome}</c> sem definição é texto obrigatório.</param>
+/// <param name="Alias"><c>null</c> só no comando do diretório (ADR-054).</param>
 /// <param name="BindingCount">Em quantos diretórios de etiqueta ele é botão — o aviso antes de excluir.</param>
+/// <param name="TagDirectoryId">O diretório dono do comando; <c>null</c> é global (ADR-054).</param>
 public sealed record DevelopmentCommandRow(
     Guid Id,
-    string Alias,
+    string? Alias,
     string Command,
     string? Description,
     DateTimeOffset UpdatedAt,
@@ -19,9 +21,12 @@ public sealed record DevelopmentCommandRow(
     bool KeepTerminalOpen = true,
     bool RequiresConfirmation = false,
     IReadOnlyList<CommandParameterSpec>? Parameters = null,
-    int BindingCount = 0)
+    int BindingCount = 0,
+    Guid? TagDirectoryId = null)
 {
-    public string DisplayName => Name ?? Alias;
+    public string DisplayName => Name ?? Alias ?? string.Empty;
+
+    public bool IsGlobal => TagDirectoryId is null;
 
     public DevelopmentCommandSettings Settings =>
         new(Name, Mode, WorkingDirectory, KeepTerminalOpen, RequiresConfirmation, Parameters);
@@ -39,7 +44,8 @@ public sealed record DevelopmentCommandRow(
             command.KeepTerminalOpen,
             command.RequiresConfirmation,
             [.. command.Parameters.Select(parameter => parameter.ToSpec())],
-            bindingCount);
+            bindingCount,
+            command.TagDirectoryId);
 
     /// <summary>A definição de cada <c>{nome}</c> do texto (ver <see cref="DevelopmentCommand.ParametersOf"/>).</summary>
     public IReadOnlyList<CommandParameterSpec> ParametersOf(string text) =>
@@ -82,14 +88,16 @@ public sealed class CreateDevelopmentCommandHandler(
         CreateDevelopmentCommand command,
         CancellationToken cancellationToken = default)
     {
+        var alias = DevelopmentCommand.NormalizeAlias(command.Alias);
+
         var created = DevelopmentCommand.Create(
-            command.Alias,
+            alias,
             command.Command,
             command.Description,
             command.Settings ?? DevelopmentCommandSettings.Default,
             timeProvider.GetUtcNow());
 
-        await commands.EnsureAliasIsFreeAsync(created.Alias, exceptId: null, cancellationToken);
+        await commands.EnsureAliasIsFreeAsync(alias, exceptId: null, cancellationToken);
 
         await commands.AddAsync(created, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);

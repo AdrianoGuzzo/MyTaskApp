@@ -14,7 +14,10 @@ internal static class GlobalCommandLookup
     {
         var all = await commands.ListAsync(cancellationToken);
 
-        return all.ToDictionary(command => command.Alias, command => command.Command, StringComparer.OrdinalIgnoreCase);
+        // Só os globais, que sempre têm apelido: o comando do diretório não é chamado por @ (ADR-054).
+        return all
+            .Where(command => command.Alias is not null)
+            .ToDictionary(command => command.Alias!, command => command.Command, StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>

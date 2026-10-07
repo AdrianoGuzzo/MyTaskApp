@@ -15,7 +15,7 @@ public sealed class DevelopmentCommandListItemViewModel(DevelopmentCommandRow ro
 {
     public DevelopmentCommandRow Row { get; } = row;
 
-    public string Alias => Row.Alias;
+    public string Alias => Row.Alias ?? string.Empty;
 
     /// <summary>O rótulo do botão; sem nome, o alias (ADR-051).</summary>
     public string DisplayName => Row.DisplayName;
@@ -56,7 +56,7 @@ public sealed class DevelopmentCommandListItemViewModel(DevelopmentCommandRow ro
     public string Usage => $"Uso: {CommandAliasResolver.UsageOf(Alias, Parameters)}";
 
     public bool Matches(string query) =>
-        Row.Alias.Contains(query, StringComparison.OrdinalIgnoreCase)
+        Alias.Contains(query, StringComparison.OrdinalIgnoreCase)
         || (Row.Name?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false)
         || Row.Command.Contains(query, StringComparison.OrdinalIgnoreCase)
         || (Row.Description?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false);
@@ -167,11 +167,7 @@ public sealed partial class DevelopmentCommandsViewModel(
     }
 
     /// <summary>As variáveis que o app preenche sozinho, para a dica do formulário.</summary>
-    public string VariablesHint { get; } =
-        "Variáveis que o app preenche: " + string.Join(", ", CommandVariables.All
-            .Where(variable => variable.Name is not (CommandVariables.WorktreePath or CommandVariables.RepositoryPath))
-            .Select(variable => variable.Placeholder))
-        + ". Caminho com espaço vai entre aspas: code \"{worktree}\".";
+    public string VariablesHint => DevelopmentCommandParameterEditorViewModel.VariablesHint;
 
     public CommandOutputViewModel TestOutput { get; } = new();
 
@@ -206,7 +202,7 @@ public sealed partial class DevelopmentCommandsViewModel(
     }
 
     private static IReadOnlyList<string> UserParameters(string? command) =>
-        [.. CommandParameters.Names(command).Where(name => !CommandVariables.IsContextName(name))];
+        DevelopmentCommandParameterEditorViewModel.UserParameters(command);
 
     /// <summary>
     /// O nome sugere o apelido enquanto o apelido for o que ele sugeriu: quem
@@ -230,20 +226,7 @@ public sealed partial class DevelopmentCommandsViewModel(
 
     private void SyncParameterEditors(IReadOnlyList<CommandParameterSpec>? saved)
     {
-        var names = UserParameters(Command);
-        var current = ParameterEditors.ToDictionary(editor => editor.Name, StringComparer.OrdinalIgnoreCase);
-
-        ParameterEditors.Clear();
-
-        foreach (var name in names)
-        {
-            var spec = saved?.FirstOrDefault(item => string.Equals(item.Name, name, StringComparison.OrdinalIgnoreCase));
-
-            ParameterEditors.Add(saved is null && current.TryGetValue(name, out var existing)
-                ? existing
-                : new DevelopmentCommandParameterEditorViewModel(name, spec));
-        }
-
+        DevelopmentCommandParameterEditorViewModel.Sync(ParameterEditors, Command, saved);
         OnPropertyChanged(nameof(HasParameterEditors));
     }
 

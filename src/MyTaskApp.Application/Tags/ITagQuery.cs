@@ -26,20 +26,23 @@ public sealed record TagDirectoryRow(
     int CommandCount = 0);
 
 /// <summary>Um comando rápido associado a um diretório (ADR-051), com o comando global junto.</summary>
+/// <param name="Alias"><c>null</c> no comando só do diretório.</param>
 /// <param name="Command">O texto do comando global; o efetivo é <see cref="EffectiveCommand"/>.</param>
+/// <param name="IsDirectoryOnly">Criado direto no diretório, e não um global oferecido aqui (ADR-054).</param>
 public sealed record TagDirectoryCommandRow(
     Guid Id,
     Guid DirectoryId,
     Guid CommandId,
-    string Alias,
+    string? Alias,
     string? Name,
     string Command,
     int Order,
     bool IsEnabled,
     string? CommandOverride,
-    string? WorkingDirectoryOverride)
+    string? WorkingDirectoryOverride,
+    bool IsDirectoryOnly = false)
 {
-    public string DisplayName => Name ?? Alias;
+    public string DisplayName => Name ?? Alias ?? string.Empty;
 
     public string EffectiveCommand => CommandOverride ?? Command;
 

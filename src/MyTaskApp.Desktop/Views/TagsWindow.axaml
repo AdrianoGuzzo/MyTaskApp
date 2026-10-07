@@ -376,6 +376,9 @@
                                                    Foreground="{DynamicResource WidgetAccentTextBrush}"
                                                    Text="{Binding CustomizedLabel}"
                                                    IsVisible="{Binding IsCustomized}" />
+                                        <TextBlock Classes="meta"
+                                                   Text="Só deste diretório"
+                                                   IsVisible="{Binding IsDirectoryOnly}" />
                                       </StackPanel>
                                       <Button Grid.Column="2"
                                               Classes="rowAction"
@@ -400,14 +403,24 @@
                                               Margin="4,0,0,0"
                                               VerticalAlignment="Top"
                                               Content="Personalizar"
+                                              IsVisible="{Binding !IsDirectoryOnly}"
                                               Command="{Binding #Root.((vm:TagsViewModel)DataContext).BeginCustomizeDirectoryCommandCommand}"
+                                              CommandParameter="{Binding}" />
+                                      <!-- O comando só do diretório (ADR-054) não tem global a personalizar: edita-se o próprio. -->
+                                      <Button Grid.Column="4"
+                                              Classes="rowAction"
+                                              Margin="4,0,0,0"
+                                              VerticalAlignment="Top"
+                                              Content="Editar"
+                                              IsVisible="{Binding IsDirectoryOnly}"
+                                              Command="{Binding #Root.((vm:TagsViewModel)DataContext).EditDirectoryOnlyCommandCommand}"
                                               CommandParameter="{Binding}" />
                                       <Button Grid.Column="5"
                                               Classes="rowAction danger"
                                               Margin="4,0,0,0"
                                               VerticalAlignment="Top"
                                               Content="&#xD7;"
-                                              ToolTip.Tip="Tirar deste diretório (o comando global continua)"
+                                              ToolTip.Tip="{Binding RemoveTip}"
                                               Command="{Binding #Root.((vm:TagsViewModel)DataContext).RemoveDirectoryCommandCommand}"
                                               CommandParameter="{Binding}" />
                                     </Grid>
@@ -467,15 +480,26 @@
                               </ComboBox>
                               <Button Grid.Column="1"
                                       Classes="rowAction"
-                                      Content="+ Adicionar comando"
+                                      Content="+ Adicionar global"
+                                      ToolTip.Tip="Oferece aqui um comando de Comandos globais"
                                       Command="{Binding #Root.((vm:TagsViewModel)DataContext).AddDirectoryCommandCommand}"
                                       CommandParameter="{Binding}" />
                             </Grid>
 
-                            <TextBlock Classes="meta"
-                                       TextWrapping="Wrap"
-                                       IsVisible="{Binding !HasAvailableCommands}"
-                                       Text="Todos os comandos globais já estão aqui. Cadastre outros em Comandos globais… (menu do painel)." />
+                            <!-- Sem passar por Comandos globais (ADR-054): o comando é só deste diretório. -->
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                              <TextBlock Grid.Column="0"
+                                         Classes="meta"
+                                         VerticalAlignment="Center"
+                                         TextWrapping="Wrap"
+                                         Text="{Binding NewCommandHint}" />
+                              <Button Grid.Column="1"
+                                      Classes="rowAction"
+                                      Content="+ Novo comando"
+                                      ToolTip.Tip="Cria um comando só deste diretório, sem cadastrá-lo em Comandos globais"
+                                      Command="{Binding #Root.((vm:TagsViewModel)DataContext).NewDirectoryCommandCommand}"
+                                      CommandParameter="{Binding}" />
+                            </Grid>
                           </StackPanel>
                         </Border>
                         </StackPanel>

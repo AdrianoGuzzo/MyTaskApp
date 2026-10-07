@@ -106,7 +106,8 @@ internal sealed class TagQuery(MyTaskAppDbContext context) : ITagQuery
                     binding.Order,
                     binding.IsEnabled,
                     binding.CommandOverride,
-                    binding.WorkingDirectoryOverride));
+                    binding.WorkingDirectoryOverride,
+                    command.TagDirectoryId != null));
 
     /// <remarks>
     /// Ordena no cliente: a ordem por alias segue o NOCASE da coluna no SQL,

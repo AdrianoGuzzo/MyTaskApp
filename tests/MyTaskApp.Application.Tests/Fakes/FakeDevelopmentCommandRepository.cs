@@ -40,9 +40,32 @@ internal sealed class FakeDevelopmentCommandRepository : IDevelopmentCommandRepo
     public Task<DevelopmentCommand?> FindByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         Task.FromResult(_commands.GetValueOrDefault(id));
 
+    /// <summary>Um comando só do diretório (ADR-054).</summary>
+    public DevelopmentCommand SeedForDirectory(
+        Guid directoryId,
+        string name,
+        string command,
+        DevelopmentCommandSettings? settings = null)
+    {
+        var created = DevelopmentCommand.CreateForDirectory(
+            directoryId,
+            command,
+            null,
+            (settings ?? DevelopmentCommandSettings.Default) with { Name = name },
+            FakeCommandExecutor.Started);
+        _commands[created.Id] = created;
+        return created;
+    }
+
     public Task<IReadOnlyList<DevelopmentCommand>> ListAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<DevelopmentCommand>>(
-            [.. _commands.Values.OrderBy(command => command.Alias, StringComparer.OrdinalIgnoreCase)]);
+            [.. _commands.Values.Where(command => command.IsGlobal).OrderBy(command => command.Alias, StringComparer.OrdinalIgnoreCase)]);
+
+    public Task<IReadOnlyList<DevelopmentCommand>> ListForDirectoriesAsync(
+        IReadOnlyCollection<Guid> directoryIds,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<DevelopmentCommand>>(
+            [.. _commands.Values.Where(command => command.TagDirectoryId is { } owner && directoryIds.Contains(owner))]);
 
     /// <summary>Sem diferenciar maiúsculas, como a coluna NOCASE do banco.</summary>
     public Task<bool> AliasExistsAsync(
