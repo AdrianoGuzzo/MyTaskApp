@@ -166,6 +166,29 @@
         </StackPanel>
       </Border>
 
+      <!-- Post-its (ADR-054): o atalho de captura, de qualquer programa. -->
+      <Border Classes="card" IsVisible="{Binding CanUseNoteHotkey}">
+        <StackPanel Spacing="10">
+          <TextBlock Classes="sectionTitle" Text="Post-its" />
+
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <TextBlock Text="Novo post-it de qualquer lugar" VerticalAlignment="Center" />
+            <ComboBox x:Name="NoteHotkeyBox"
+                      MinWidth="140"
+                      ItemsSource="{Binding NoteHotkeyChoices}"
+                      SelectedValueBinding="{Binding Id, x:DataType=vm:HotkeyChoice}"
+                      DisplayMemberBinding="{Binding Label, x:DataType=vm:HotkeyChoice}"
+                      SelectedValue="{Binding NoteHotkey, Mode=TwoWay}" />
+          </StackPanel>
+          <TextBlock Classes="hint"
+                     Text="Funciona com o app em segundo plano ou escondido na bandeja. Ctrl+Shift+N também é oferecido, mas no VS Code ele abre uma janela nova, no navegador uma janela anônima e no Explorer uma pasta nova: ligado, o atalho passa a ser do MyTaskApp. Dentro do app, Ctrl+Shift+N sempre cria um post-it." />
+          <TextBlock Classes="hint"
+                     Foreground="{DynamicResource WidgetDangerBrush}"
+                     Text="{Binding NoteHotkeyMessage}"
+                     IsVisible="{Binding NoteHotkeyMessage, Converter={x:Static ObjectConverters.IsNotNull}}" />
+        </StackPanel>
+      </Border>
+
       <Grid ColumnDefinitions="*,Auto">
         <Button Grid.Column="0"
                 HorizontalAlignment="Left"

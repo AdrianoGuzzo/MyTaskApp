@@ -19,7 +19,9 @@ internal sealed record TrayActions(
     Action ToggleHud,
     Action WindowSettings,
     Action UseCompact,
-    Action Hide);
+    Action Hide,
+    Action NewStickyNote,
+    Action StickyNotes);
 
 /// <summary>
 /// O ícone da bandeja: é o que permite fechar a janela e o app continuar
@@ -124,10 +126,18 @@ internal sealed class TrayIconHost(
         _hud = null;
     }
 
-    private NativeMenu BuildMenu(TrayActions actions)
+    /// <remarks>Interno para o teste conferir os itens sem subir o ícone.</remarks>
+    internal NativeMenu BuildMenu(TrayActions actions)
     {
         var open = new NativeMenuItem("Abrir");
         open.Click += (_, _) => actions.Open();
+
+        // Post-it sem abrir o painel (ADR-054): da bandeja direto para o texto.
+        var newNote = new NativeMenuItem("Novo post-it");
+        newNote.Click += (_, _) => actions.NewStickyNote();
+
+        var notes = new NativeMenuItem("Post-its…");
+        notes.Click += (_, _) => actions.StickyNotes();
 
         var compact = new NativeMenuItem("Modo compacto");
         compact.Click += (_, _) => actions.UseCompact();
@@ -162,6 +172,9 @@ internal sealed class TrayIconHost(
         return
         [
             open,
+            newNote,
+            notes,
+            new NativeMenuItemSeparator(),
             _hud,
             compact,
             _topmost,

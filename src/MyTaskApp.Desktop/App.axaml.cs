@@ -9,9 +9,11 @@ using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Application.QuickCommands;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Application.Sounds;
+using MyTaskApp.Application.StickyNotes;
 using MyTaskApp.Desktop.Composition;
 using MyTaskApp.Desktop.Reminders;
 using MyTaskApp.Desktop.SpellChecking;
+using MyTaskApp.Desktop.StickyNotes;
 using MyTaskApp.Desktop.Theming;
 using MyTaskApp.Desktop.ViewModels;
 using MyTaskApp.Desktop.Views;
@@ -77,7 +79,8 @@ public sealed partial class App : Avalonia.Application
                 window.Attach(
                     Services.GetRequiredService<IWidgetStateStore>(),
                     Services.GetRequiredService<IWindowBehaviorService>(),
-                    Services.GetRequiredService<IGlobalHotkeyService>());
+                    Services.GetRequiredService<IGlobalHotkeyService>(),
+                    Services.GetRequiredService<IGlobalHotkeyFactory>());
 
                 // "Sair" de dentro da janela (o X com "fechar o aplicativo", o
                 // menu do HUD) passa pelo mesmo encerramento da bandeja.
@@ -93,6 +96,7 @@ public sealed partial class App : Avalonia.Application
                 SetUpDataManagement(Services, window, todayViewModel);
                 SetUpNotes(Services, window, todayViewModel);
                 SetUpTags(Services, window, todayViewModel);
+                SetUpStickyNotes(Services, window, todayViewModel);
                 SetUpIntegrations(Services, todayViewModel);
                 SetUpAgentSessions(Services, todayViewModel);
                 SetUpCommandExecutions(Services);
@@ -157,7 +161,9 @@ public sealed partial class App : Avalonia.Application
             }),
             WindowSettings: () => OnUiThread(() => ShowWindowSettings(window)),
             UseCompact: () => OnUiThread(() => window.Chrome.UseMode("compact")),
-            Hide: () => OnUiThread(window.HideAndRemember)));
+            Hide: () => OnUiThread(window.HideAndRemember),
+            NewStickyNote: () => OnUiThread(() => _ = services.GetRequiredService<StickyNoteWindowManager>().CreateNewAsync()),
+            StickyNotes: () => OnUiThread(() => ShowStickyNotes(services, window, StickyNoteScope.Active))));
 
         window.Chrome.TrayAvailable = installed;
 
@@ -283,6 +289,45 @@ public sealed partial class App : Avalonia.Application
                     _ = todayViewModel.LoadAsync(CancellationToken.None);
                     _ = todayViewModel.RefreshCaptureTagsAsync(CancellationToken.None);
                 });
+    }
+
+    /// <summary>
+    /// Post-its (ADR-054): os fixados voltam para a tela junto com o app, e um
+    /// novo nasce na tela onde o widget está.
+    /// </summary>
+    private void SetUpStickyNotes(
+        IServiceProvider services,
+        MainWindow window,
+        TodayViewModel todayViewModel)
+    {
+        var notes = services.GetRequiredService<StickyNoteWindowManager>();
+
+        // A cor do post-it é calculada sobre o tema: trocar o tema repinta.
+        notes.Themes = _themes;
+
+        // Recolorir ou excluir uma etiqueta muda quem usa a cor dela.
+        services.GetRequiredService<TagsViewModel>().Changed +=
+            () => Dispatcher.UIThread.Post(() => _ = notes.RefreshAllAsync());
+
+        // Escondido na bandeja, o widget não diz nada sobre onde o usuário está.
+        notes.Anchor = () => window.IsVisible ? window.Position : null;
+        notes.Failed += message => Log.Warning("StickyNoteFailed {Message}", message);
+
+        todayViewModel.NewStickyNoteRequested += () => _ = notes.CreateNewAsync();
+
+        // Ctrl+Alt+N de qualquer lugar, com o app até escondido na bandeja.
+        window.NewNoteHotkeyPressed += () => _ = notes.CreateNewAsync();
+
+        // Post-it → tarefa: a tarefa nasce para hoje e tem de aparecer já, sem
+        // esperar o refresh de 60 s.
+        notes.TaskCreated += created => _ = todayViewModel.LoadAsync(CancellationToken.None);
+
+        var list = services.GetRequiredService<StickyNotesViewModel>();
+        list.TaskCreated += created => _ = todayViewModel.LoadAsync(CancellationToken.None);
+
+        todayViewModel.StickyNotesRequested += scope => ShowStickyNotes(services, window, scope);
+
+        _ = notes.OpenStartupNotesAsync();
     }
 
     /// <summary>
@@ -617,6 +662,27 @@ public sealed partial class App : Avalonia.Application
         // deixa minimizada.
         window.WindowState = WindowState.Normal;
         window.Activate();
+    }
+
+    /// <summary>
+    /// A lista de post-its. Da bandeja o painel pode estar escondido, e janela
+    /// com dono escondido não aparece: aí ela abre sozinha.
+    /// </summary>
+    private static void ShowStickyNotes(IServiceProvider services, Window owner, StickyNoteScope scope)
+    {
+        var window = services.GetRequiredService<StickyNotesWindow>();
+
+        if (owner.IsVisible)
+        {
+            window.Show(owner);
+        }
+        else
+        {
+            window.Show();
+        }
+
+        window.Activate();
+        _ = window.RevealAsync(scope);
     }
 
     private static void ShowSettings(IServiceProvider services, Window owner)

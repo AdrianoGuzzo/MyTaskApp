@@ -2,7 +2,6 @@ using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Reminders;
-using MyTaskApp.Domain.Auditing;
 using MyTaskApp.Domain.Reminders;
 using MyTaskApp.Domain.Tasks;
 
@@ -38,34 +37,24 @@ public sealed class CreateTaskHandler(
     {
         var createdAt = timeProvider.GetUtcNow();
 
-        // Sem politica explicita vale o padrao do usuario: e o que faz
-        // "crio e nao preciso mais olhar" funcionar sem configurar nada.
-        var reminder = command.Reminder
-            ?? (await settings.GetAsync(cancellationToken)).DefaultPolicy;
-
-        var task = TaskItem.Create(
-            command.Title,
+        var task = await TaskCreation.AddAsync(
+            tasks,
+            settings,
+            audit,
+            currentUser,
+            clock,
             createdAt,
-            command.Description,
-            command.Priority,
-            new TaskSchedule(command.ScheduledDate, command.ScheduledTime),
-            reminder);
+            command.Reminder,
+            reminder => TaskItem.Create(
+                command.Title,
+                createdAt,
+                command.Description,
+                command.Priority,
+                new TaskSchedule(command.ScheduledDate, command.ScheduledTime),
+                reminder),
+            cancellationToken);
 
         var occurrence = task.Occurrences.Single();
-
-        // Armar antes de salvar: o lembrete entra na mesma transacao da tarefa.
-        ReminderArming.Arm(task, occurrence, clock, createdAt);
-
-        await tasks.AddAsync(task, cancellationToken);
-
-        await audit.RecordAsync(
-            TaskAuditEntry.ByUser(
-                task.Id,
-                task.Title,
-                TaskAuditOperation.Created,
-                createdAt,
-                currentUser.Name),
-            cancellationToken);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 

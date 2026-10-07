@@ -1,0 +1,42 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:chrome="using:Avalonia.Controls.Chrome"
+             x:Class="MyTaskApp.Desktop.Views.ResizeGrips">
+
+  <!--
+    Alças de redimensionamento de uma janela sem moldura (ADR-017). Moram sobre
+    o anel da sombra, onde não há conteúdo para roubar clique. Os papéis fazem o
+    sistema redimensionar; o PointerPressed é a rede de segurança se a
+    plataforma ignorar o papel. Um controle só para o widget e os post-its
+    (ADR-054): duas cópias em XAML divergiriam na primeira correção.
+  -->
+  <Grid RowDefinitions="8,*,8" ColumnDefinitions="8,*,8">
+
+    <Border Grid.Row="0" Grid.Column="0" Background="Transparent" Cursor="TopLeftCorner"
+            Tag="NorthWest" chrome:WindowDecorationProperties.ElementRole="ResizeNW"
+            PointerPressed="OnResizePointerPressed" />
+    <Border Grid.Row="0" Grid.Column="1" Background="Transparent" Cursor="SizeNorthSouth"
+            Tag="North" chrome:WindowDecorationProperties.ElementRole="ResizeN"
+            PointerPressed="OnResizePointerPressed" />
+    <Border Grid.Row="0" Grid.Column="2" Background="Transparent" Cursor="TopRightCorner"
+            Tag="NorthEast" chrome:WindowDecorationProperties.ElementRole="ResizeNE"
+            PointerPressed="OnResizePointerPressed" />
+    <Border Grid.Row="1" Grid.Column="0" Background="Transparent" Cursor="SizeWestEast"
+            Tag="West" chrome:WindowDecorationProperties.ElementRole="ResizeW"
+            PointerPressed="OnResizePointerPressed" />
+    <Border Grid.Row="1" Grid.Column="2" Background="Transparent" Cursor="SizeWestEast"
+            Tag="East" chrome:WindowDecorationProperties.ElementRole="ResizeE"
+            PointerPressed="OnResizePointerPressed" />
+    <Border Grid.Row="2" Grid.Column="0" Background="Transparent" Cursor="BottomLeftCorner"
+            Tag="SouthWest" chrome:WindowDecorationProperties.ElementRole="ResizeSW"
+            PointerPressed="OnResizePointerPressed" />
+    <Border Grid.Row="2" Grid.Column="1" Background="Transparent" Cursor="SizeNorthSouth"
+            Tag="South" chrome:WindowDecorationProperties.ElementRole="ResizeS"
+            PointerPressed="OnResizePointerPressed" />
+    <Border Grid.Row="2" Grid.Column="2" Background="Transparent" Cursor="BottomRightCorner"
+            Tag="SouthEast" chrome:WindowDecorationProperties.ElementRole="ResizeSE"
+            PointerPressed="OnResizePointerPressed" />
+
+  </Grid>
+
+</UserControl>

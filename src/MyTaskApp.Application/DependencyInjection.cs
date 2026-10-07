@@ -16,6 +16,7 @@ using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.QuickCommands;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Application.Sounds;
+using MyTaskApp.Application.StickyNotes;
 using MyTaskApp.Application.Tags;
 using MyTaskApp.Application.Tasks;
 using MyTaskApp.Application.TimeTracking;
@@ -204,6 +205,23 @@ public static class DependencyInjection
 
         // O histórico dos últimos dias (ADR-053): só leitura, sobre o que já está gravado.
         services.AddScoped<GetActivityHistoryHandler>();
+
+        // Post-its (ADR-054): o que ainda não merece virar tarefa.
+        services.AddScoped<CreateStickyNoteHandler>();
+        services.AddScoped<EditStickyNoteHandler>();
+        services.AddScoped<ChangeStickyNoteAppearanceHandler>();
+        services.AddScoped<PinStickyNoteHandler>();
+        services.AddScoped<SetStickyNoteOpenHandler>();
+        services.AddScoped<PlaceStickyNoteHandler>();
+        services.AddScoped<ArchiveStickyNoteHandler>();
+        services.AddScoped<RestoreStickyNoteHandler>();
+        services.AddScoped<MoveStickyNoteToTrashHandler>();
+        services.AddScoped<RestoreStickyNoteFromTrashHandler>();
+        services.AddScoped<PurgeStickyNoteHandler>();
+        services.AddScoped<ConvertStickyNoteToTaskHandler>();
+        services.AddScoped<GetStickyNotesHandler>();
+        services.AddScoped<GetStickyNoteHandler>();
+        services.AddScoped<GetStartupStickyNotesHandler>();
 
         // Singleton: e um laco so, e ele nao pode capturar escopo nenhum
         // (validateScopes: true reprovaria). So recebe IUseCaseRunner.

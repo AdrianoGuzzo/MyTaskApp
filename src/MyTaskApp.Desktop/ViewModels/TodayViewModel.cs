@@ -13,6 +13,7 @@ using MyTaskApp.Application.External.Jira;
 using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Reminders;
+using MyTaskApp.Application.StickyNotes;
 using MyTaskApp.Application.Tags;
 using MyTaskApp.Application.Tasks;
 using MyTaskApp.Application.TimeTracking;
@@ -519,6 +520,18 @@ public sealed partial class TodayViewModel(
 
     [RelayCommand]
     public void OpenNotes(TaskRowViewModel row) => NotesRequested?.Invoke(row);
+
+    /// <summary>Pede um post-it novo, aberto e com o cursor no texto (ADR-054).</summary>
+    public event Action? NewStickyNoteRequested;
+
+    [RelayCommand]
+    public void NewStickyNote() => NewStickyNoteRequested?.Invoke();
+
+    /// <summary>Pede a lista de post-its, numa aba (ADR-054).</summary>
+    public event Action<StickyNoteScope>? StickyNotesRequested;
+
+    [RelayCommand]
+    public void OpenStickyNotes(StickyNoteScope scope) => StickyNotesRequested?.Invoke(scope);
 
     /// <summary>Pede a janela de gerenciamento de etiquetas (ADR-025).</summary>
     public event Action? TagsRequested;

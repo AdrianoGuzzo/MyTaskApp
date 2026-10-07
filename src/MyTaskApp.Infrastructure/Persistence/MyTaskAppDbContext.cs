@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using MyTaskApp.Domain.Agents;
 using MyTaskApp.Domain.Auditing;
 using MyTaskApp.Domain.Commands;
+using MyTaskApp.Domain.StickyNotes;
 using MyTaskApp.Domain.Tags;
 using MyTaskApp.Domain.Tasks;
 using MyTaskApp.Domain.TimeTracking;
@@ -46,6 +47,9 @@ public sealed class MyTaskAppDbContext(DbContextOptions<MyTaskAppDbContext> opti
 
     /// <summary>Os períodos de trabalho de cada ocorrência (ADR-052).</summary>
     public DbSet<TimeEntry> TimeEntries => Set<TimeEntry>();
+
+    /// <summary>Os post-its: o que ainda não virou tarefa (ADR-054).</summary>
+    public DbSet<StickyNote> StickyNotes => Set<StickyNote>();
 
     /// <summary>
     /// A trilha de auditoria do ciclo de vida. <b>Não</b> tem relacionamento com
