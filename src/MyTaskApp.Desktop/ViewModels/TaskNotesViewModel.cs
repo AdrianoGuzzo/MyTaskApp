@@ -53,11 +53,14 @@ public sealed partial class TaskNotesViewModel(
     TaskDevelopmentsViewModel developments,
     ILogger<TaskNotesViewModel> logger,
     TaskIssueViewModel? issue = null,
-    TaskDeadlineViewModel? deadline = null) : ObservableObject
+    TaskDeadlineViewModel? deadline = null,
+    TaskTimeLogViewModel? time = null) : ObservableObject
 {
     public const int NotesTab = 0;
 
     public const int DevelopmentTab = 1;
+
+    public const int TimeTab = 2;
 
     /// <summary>O texto como está no banco — a régua do "alterações não salvas".</summary>
     private string _persisted = string.Empty;
@@ -146,6 +149,12 @@ public sealed partial class TaskNotesViewModel(
     /// Opcional pelo mesmo motivo do <see cref="Issue"/>.
     /// </summary>
     public TaskDeadlineViewModel? Deadline { get; } = deadline;
+
+    /// <summary>
+    /// A aba "Tempo" (ADR-052): cronômetro, total e histórico. Opcional pelo
+    /// mesmo motivo do <see cref="Issue"/>.
+    /// </summary>
+    public TaskTimeLogViewModel? Time { get; } = time;
 
     public bool IsNotesTab => SelectedTabIndex == NotesTab;
 
@@ -237,6 +246,7 @@ public sealed partial class TaskNotesViewModel(
         Developments.Load(row.TaskId, row.Title, row.IsCompleted);
 
         Deadline?.Load(row);
+        Time?.Load(row);
 
         if (Issue is { } card)
         {
@@ -249,12 +259,16 @@ public sealed partial class TaskNotesViewModel(
         }
     }
 
-    /// <summary>A aba Desenvolvimento se atualiza a cada vez que aparece.</summary>
+    /// <summary>As abas Desenvolvimento e Tempo se atualizam a cada vez que aparecem.</summary>
     partial void OnSelectedTabIndexChanged(int value)
     {
         if (value == DevelopmentTab)
         {
             _ = Developments.ActivateAsync(CancellationToken.None);
+        }
+        else if (value == TimeTab && Time is { } time)
+        {
+            _ = time.ActivateAsync(CancellationToken.None);
         }
     }
 

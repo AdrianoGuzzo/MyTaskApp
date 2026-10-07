@@ -164,6 +164,29 @@ internal sealed class TodayQuery(MyTaskAppDbContext context) : ITodayQuery
                         row.WorktreePath))
                     .ToList());
 
+        // O tempo trabalhado (ADR-052), num lote só como os anteriores. Soma em
+        // C#, e não em SQL: os instantes são ticks atrás de um conversor, e o EF
+        // não traduz a subtração. São poucos períodos por linha do quadro.
+        var occurrenceIds = occurrences.Select(occurrence => occurrence.Id).ToArray();
+
+        var periods = await context.TimeEntries
+            .AsNoTracking()
+            .Where(entry => occurrenceIds.Contains(entry.TaskOccurrenceId))
+            .Select(entry => new { entry.TaskOccurrenceId, entry.StartedAt, entry.EndedAt })
+            .ToListAsync(cancellationToken);
+
+        var loggedByOccurrence = periods
+            .Where(period => period.EndedAt != null)
+            .GroupBy(period => period.TaskOccurrenceId)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Aggregate(TimeSpan.Zero, (total, period) => total + (period.EndedAt!.Value - period.StartedAt)));
+
+        var timerByOccurrence = periods
+            .Where(period => period.EndedAt == null)
+            .GroupBy(period => period.TaskOccurrenceId)
+            .ToDictionary(group => group.Key, group => group.Min(period => period.StartedAt));
+
         return occurrences
             .Select(occurrence =>
             {
@@ -192,7 +215,9 @@ internal sealed class TodayQuery(MyTaskAppDbContext context) : ITodayQuery
                     occurrence.Deadline,
                     definition.DeadlineAlerts,
                     definition.NextAction,
-                    definition.Estimate);
+                    definition.Estimate,
+                    loggedByOccurrence.GetValueOrDefault(occurrence.Id),
+                    timerByOccurrence.TryGetValue(occurrence.Id, out var timerStartedAt) ? timerStartedAt : null);
             })
             .ToList();
     }

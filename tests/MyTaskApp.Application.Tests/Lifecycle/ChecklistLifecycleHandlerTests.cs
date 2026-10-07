@@ -33,10 +33,13 @@ public class ChecklistLifecycleHandlerTests
         return task;
     }
 
+    private readonly FakeTimeEntryRepository _timeEntries = new();
+
     private ArchiveChecklistHandler Archive() =>
         new(
             _repository,
             _repository,
+            _timeEntries,
             _audit,
             _user,
             _time,
@@ -56,6 +59,7 @@ public class ChecklistLifecycleHandlerTests
         new(
             _repository,
             _repository,
+            _timeEntries,
             _audit,
             _user,
             _time,

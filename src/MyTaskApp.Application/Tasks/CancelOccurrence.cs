@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.TimeTracking;
 using MyTaskApp.Domain.Auditing;
 
 namespace MyTaskApp.Application.Tasks;
@@ -9,6 +10,7 @@ public sealed record CancelOccurrence(Guid OccurrenceId);
 public sealed class CancelOccurrenceHandler(
     ITaskItemRepository tasks,
     IUnitOfWork unitOfWork,
+    ITimeEntryRepository timeEntries,
     ITaskAuditLog audit,
     ICurrentUser currentUser,
     TimeProvider timeProvider,
@@ -26,6 +28,8 @@ public sealed class CancelOccurrenceHandler(
         var wasConcluded = task.ConcludedAt is not null;
 
         task.CancelOccurrence(command.OccurrenceId);
+
+        await RunningTimer.StopIfOnAsync(timeEntries, [command.OccurrenceId], now, cancellationToken);
 
         await ChecklistConclusionAudit.RecordIfChangedAsync(
             audit, task, wasConcluded, now, currentUser.Name, cancellationToken);

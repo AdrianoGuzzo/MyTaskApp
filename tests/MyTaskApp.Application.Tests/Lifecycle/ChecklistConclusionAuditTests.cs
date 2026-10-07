@@ -40,6 +40,7 @@ public class ChecklistConclusionAuditTests
         new(
             _repository,
             _repository,
+            new FakeTimeEntryRepository(),
             _audit,
             _user,
             _time,

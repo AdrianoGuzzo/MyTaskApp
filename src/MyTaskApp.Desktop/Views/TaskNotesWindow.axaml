@@ -559,6 +559,79 @@
       <Setter Property="Foreground" Value="{DynamicResource WidgetTextMidBrush}" />
     </Style>
 
+    <!-- ===== Aba Tempo (ADR-052) ===== -->
+
+    <Style Selector="TextBlock.timeClock">
+      <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, monospace" />
+      <Setter Property="FontSize" Value="15" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetAccentBrush}" />
+    </Style>
+
+    <Style Selector="Button.timeToggle">
+      <Setter Property="Padding" Value="10,4" />
+      <Setter Property="FontSize" Value="12" />
+    </Style>
+
+    <Style Selector="Button.timeToggle TextBlock.timeGlyph">
+      <Setter Property="FontFamily" Value="{StaticResource WidgetIconFont}" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Border.timeEntry">
+      <Setter Property="Padding" Value="8,4" />
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetPillRadius}" />
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="Border.timeEntry:pointerover">
+      <Setter Property="Background" Value="{DynamicResource WidgetSurfaceBrush}" />
+    </Style>
+
+    <Style Selector="Border.timeEntry.active">
+      <Setter Property="Background" Value="{DynamicResource WidgetAccentSoftBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.timeRange">
+      <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, monospace" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.timeDuration">
+      <Setter Property="Margin" Value="12,0,0,0" />
+      <Setter Property="MinWidth" Value="64" />
+      <Setter Property="TextAlignment" Value="Right" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.timeSource">
+      <Setter Property="Margin" Value="12,0,4,0" />
+      <Setter Property="MinWidth" Value="48" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+    </Style>
+
+    <!-- ✎ e 🗑 discretos até o hover, como os botões da linha da lista. -->
+    <Style Selector="Button.timeAction">
+      <Setter Property="FontFamily" Value="{StaticResource WidgetIconFont}" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Padding" Value="6,3" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="Opacity" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextMidBrush}" />
+    </Style>
+
+    <Style Selector="Border.timeEntry:pointerover Button.timeAction">
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+
     <Style Selector="TextBlock.body">
       <Setter Property="FontSize" Value="12.5" />
       <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
@@ -569,6 +642,14 @@
       <Setter Property="FontSize" Value="11.5" />
       <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
       <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <!--
+      Passou da estimativa (ADR-052): cor de cautela, e o texto já diz quanto.
+      Não bloqueia nada. Depois do TextBlock.hint, para a cor dele não vencer.
+    -->
+    <Style Selector="TextBlock.hint.over">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetCautionBrush}" />
     </Style>
 
     <Style Selector="TextBlock.ok">
@@ -975,6 +1056,12 @@
                         IsVisible="{Binding HasPlanChanges}"
                         Command="{Binding SavePlanCommand}" />
               </Grid>
+
+              <!-- ADR-052: quanto da estimativa já foi; o detalhe está na aba Tempo. -->
+              <TextBlock x:Name="SpentLine"
+                         Classes="issueMeta"
+                         Text="{Binding SpentLabel}"
+                         IsVisible="{Binding HasSpent}" />
 
               <!-- §20: os avisos desta tarefa. Padrão segue a configuração. -->
               <StackPanel Spacing="6" IsVisible="{Binding HasDeadline}" IsEnabled="{Binding IsEditable}">
@@ -2242,6 +2329,123 @@
                        IsVisible="{Binding Message, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
           </StackPanel>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <!--
+        A aba Tempo (ADR-052): o cronômetro, o registrado contra a estimativa e
+        o histórico por dia. Cada coisa grava quando acontece, como a aba
+        Desenvolvimento. O relógio é o mesmo da linha (Timer, do app).
+      -->
+      <TabItem x:Name="TimeTabItem"
+               Header="Tempo"
+               IsVisible="{Binding Time, Converter={x:Static ObjectConverters.IsNotNull}}">
+        <ScrollViewer x:Name="TimeScroll"
+                      HorizontalScrollBarVisibility="Disabled"
+                      Margin="0,10,0,10">
+          <StackPanel x:Name="TimeSection"
+                      x:DataType="vm:TaskTimeLogViewModel"
+                      DataContext="{Binding Time}"
+                      Spacing="10">
+
+            <Border Classes="card">
+              <StackPanel Spacing="6">
+                <Grid ColumnDefinitions="*,Auto,Auto">
+                  <TextBlock Grid.Column="0"
+                             Classes="sectionTitle"
+                             VerticalAlignment="Center"
+                             Text="Tempo trabalhado" />
+                  <TextBlock Grid.Column="1"
+                             x:Name="TimeClock"
+                             Classes="timeClock"
+                             Margin="12,0,10,0"
+                             VerticalAlignment="Center"
+                             Text="{Binding Timer.ElapsedText}"
+                             IsVisible="{Binding IsRunningHere}" />
+                  <Button Grid.Column="2"
+                          x:Name="TimeToggleButton"
+                          Classes="timeToggle"
+                          Classes.accent="{Binding !IsRunningHere}"
+                          IsEnabled="{Binding CanToggleTimer}"
+                          Command="{Binding ToggleTimerCommand}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <TextBlock Classes="timeGlyph" Text="{Binding TimerGlyph}" />
+                      <TextBlock Text="{Binding TimerLabel}" />
+                    </StackPanel>
+                  </Button>
+                </Grid>
+
+                <TextBlock x:Name="TimeSummary" Classes="body" Text="{Binding SummaryText}" />
+
+                <TextBlock x:Name="TimeEstimate"
+                           Classes="hint"
+                           Classes.over="{Binding IsOverEstimate}"
+                           Text="{Binding EstimateText}"
+                           IsVisible="{Binding HasEstimate}" />
+              </StackPanel>
+            </Border>
+
+            <TextBlock Classes="hint"
+                       x:Name="TimeEmpty"
+                       Text="Nenhum tempo registrado ainda. Use &quot;Iniciar&quot; para cronometrar, ou &quot;+ Adicionar tempo&quot; se esqueceu de iniciar."
+                       IsVisible="{Binding IsEmpty}" />
+
+            <ItemsControl x:Name="TimeDays" ItemsSource="{Binding Days}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:TimeEntryDayViewModel">
+                  <StackPanel Margin="0,0,0,8" Spacing="2">
+                    <Grid ColumnDefinitions="*,Auto" Margin="2,0,2,2">
+                      <TextBlock Grid.Column="0" Classes="fieldLabel" Text="{Binding Label}" />
+                      <TextBlock Grid.Column="1" Classes="hint" Text="{Binding TotalText}" />
+                    </Grid>
+                    <ItemsControl ItemsSource="{Binding Entries}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:TimeEntryRowViewModel">
+                          <Border Classes="timeEntry" Classes.active="{Binding IsActive}">
+                            <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto">
+                              <StackPanel Grid.Column="0" Spacing="1" VerticalAlignment="Center">
+                                <TextBlock Classes="timeRange" Text="{Binding RangeLabel}" />
+                                <TextBlock Classes="issueMeta"
+                                           Text="{Binding Note}"
+                                           IsVisible="{Binding HasNote}" />
+                              </StackPanel>
+                              <TextBlock Grid.Column="1" Classes="timeDuration" Text="{Binding DurationLabel}" />
+                              <TextBlock Grid.Column="2" Classes="timeSource" Text="{Binding SourceLabel}" />
+                              <Button Grid.Column="3"
+                                      Classes="timeAction"
+                                      Content="{Binding EditGlyph}"
+                                      ToolTip.Tip="Editar este período"
+                                      IsVisible="{Binding CanEdit}"
+                                      Command="{Binding #TimeSection.((vm:TaskTimeLogViewModel)DataContext).EditEntryCommand}"
+                                      CommandParameter="{Binding}" />
+                              <Button Grid.Column="4"
+                                      Classes="timeAction"
+                                      Content="{Binding DeleteGlyph}"
+                                      ToolTip.Tip="Excluir este período"
+                                      Command="{Binding #TimeSection.((vm:TaskTimeLogViewModel)DataContext).DeleteEntryCommand}"
+                                      CommandParameter="{Binding}" />
+                            </Grid>
+                          </Border>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <Button x:Name="AddTimeButton"
+                    HorizontalAlignment="Left"
+                    Content="+ Adicionar tempo"
+                    ToolTip.Tip="Lançar um período que o cronômetro não pegou"
+                    Command="{Binding AddEntryCommand}" />
+
+            <TextBlock Classes="issueMeta"
+                       Foreground="{DynamicResource WidgetDangerBrush}"
+                       Text="{Binding ErrorMessage}"
+                       IsVisible="{Binding ErrorMessage, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
           </StackPanel>
         </ScrollViewer>
       </TabItem>
