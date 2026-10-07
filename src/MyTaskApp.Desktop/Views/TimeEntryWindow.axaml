@@ -1,0 +1,101 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
+        x:Class="MyTaskApp.Desktop.Views.TimeEntryWindow"
+        x:DataType="vm:TimeEntryEditorViewModel"
+        Width="400"
+        SizeToContent="Height"
+        CanResize="False"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner">
+
+  <!--
+    "Adicionar tempo" e "Editar período" (ADR-052): o dia, o início e o fim, em
+    hora de parede. A regra (fim depois do início, nada no futuro, sem
+    sobreposição) é do caso de uso; a recusa aparece aqui, com o diálogo aberto
+    e o que foi digitado intacto.
+  -->
+
+  <StackPanel Margin="24,20" Spacing="12">
+
+    <TextBlock x:Name="HeadingText"
+               FontSize="16"
+               FontWeight="SemiBold"
+               Text="{Binding Heading}" />
+
+    <StackPanel Spacing="4">
+      <TextBlock FontSize="12" FontWeight="SemiBold" Text="Data" />
+      <CalendarDatePicker x:Name="DatePicker"
+                          SelectedDate="{Binding Date}"
+                          PlaceholderText="Dia"
+                          Width="160" />
+    </StackPanel>
+
+    <!--
+      Um embaixo do outro: o TimePicker do Fluent é largo, e dois lado a lado
+      não cabem num diálogo estreito. A duração fica ao lado do fim, onde se
+      confere o que acabou de escolher.
+    -->
+    <StackPanel Spacing="4">
+      <TextBlock FontSize="12" FontWeight="SemiBold" Text="Início" />
+      <TimePicker x:Name="StartPicker"
+                  SelectedTime="{Binding StartTime}"
+                  ClockIdentifier="24HourClock"
+                  MinuteIncrement="1" />
+    </StackPanel>
+
+    <StackPanel Spacing="4">
+      <TextBlock FontSize="12" FontWeight="SemiBold" Text="Fim" />
+      <StackPanel Orientation="Horizontal" Spacing="12">
+        <TimePicker x:Name="EndPicker"
+                    SelectedTime="{Binding EndTime}"
+                    ClockIdentifier="24HourClock"
+                    MinuteIncrement="1" />
+        <TextBlock VerticalAlignment="Center"
+                   FontSize="12"
+                   Opacity="0.75"
+                   Text="{Binding DurationText}" />
+      </StackPanel>
+    </StackPanel>
+
+    <CheckBox x:Name="EndsLaterBox"
+              FontSize="12"
+              IsVisible="{Binding ShowsEndsLater}"
+              IsChecked="{Binding EndsLater}"
+              Content="{Binding EndsLaterLabel}" />
+
+    <StackPanel Spacing="4">
+      <TextBlock FontSize="12" FontWeight="SemiBold" Text="Observação" />
+      <TextBox x:Name="NoteBox"
+               FontSize="12"
+               AcceptsReturn="False"
+               MaxLength="{Binding MaxNoteLength}"
+               PlaceholderText="Opcional"
+               Text="{Binding Note}" />
+    </StackPanel>
+
+    <TextBlock x:Name="ErrorText"
+               FontSize="11.5"
+               Foreground="{DynamicResource WidgetDangerBrush}"
+               TextWrapping="Wrap"
+               IsVisible="{Binding ErrorMessage, Converter={x:Static ObjectConverters.IsNotNull}}"
+               Text="{Binding ErrorMessage}" />
+
+    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+      <Button x:Name="CancelButton"
+              MinWidth="96"
+              Content="Cancelar"
+              IsCancel="True"
+              Click="OnCancel" />
+      <Button x:Name="AcceptButton"
+              MinWidth="96"
+              Classes="accent"
+              IsDefault="True"
+              Content="{Binding AcceptLabel}"
+              IsEnabled="{Binding CanAccept}"
+              Click="OnAccept" />
+    </StackPanel>
+
+  </StackPanel>
+
+</Window>

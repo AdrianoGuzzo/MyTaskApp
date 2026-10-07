@@ -16,10 +16,13 @@ public class CompleteOccurrenceHandlerTests
     private readonly FakeTaskItemRepository _repository = new();
     private readonly FakeTimeProvider _clock = new(Now);
 
+    private readonly FakeTimeEntryRepository _timeEntries = new();
+
     private CompleteOccurrenceHandler Handler() =>
         new(
             _repository,
             _repository,
+            _timeEntries,
             new FakeTaskAuditLog(),
             new FakeCurrentUser(),
             _clock,
@@ -107,6 +110,7 @@ public class ReopenAndCancelOccurrenceHandlerTests
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private readonly FakeTaskItemRepository _repository = new();
+    private readonly FakeTimeEntryRepository _timeEntries = new();
 
     private TaskOccurrence SeedPendingOccurrence()
     {
@@ -144,6 +148,7 @@ public class ReopenAndCancelOccurrenceHandlerTests
         var handler = new CancelOccurrenceHandler(
             _repository,
             _repository,
+            _timeEntries,
             new FakeTaskAuditLog(),
             new FakeCurrentUser(),
             new FakeTimeProvider(Now),
@@ -161,6 +166,7 @@ public class ReopenAndCancelOccurrenceHandlerTests
         var handler = new CancelOccurrenceHandler(
             _repository,
             _repository,
+            _timeEntries,
             new FakeTaskAuditLog(),
             new FakeCurrentUser(),
             new FakeTimeProvider(Now),

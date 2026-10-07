@@ -17,6 +17,7 @@ using MyTaskApp.Application.Reminders;
 using MyTaskApp.Application.Sounds;
 using MyTaskApp.Application.Tags;
 using MyTaskApp.Application.Tasks;
+using MyTaskApp.Application.TimeTracking;
 
 namespace MyTaskApp.Application;
 
@@ -189,6 +190,16 @@ public static class DependencyInjection
         services.AddScoped<UpdateDeadlineSettingsHandler>();
         services.AddScoped<DispatchDeadlineAlertsHandler>();
         services.TryAddSingleton<IDeadlineAlertPresenter, NoDeadlineAlertPresenter>();
+
+        // Tempo trabalhado (ADR-052). Não há laço nem monitor: o cronômetro é o
+        // StartedAt gravado, e o relógio da tela é só apresentação.
+        services.AddScoped<StartTimerHandler>();
+        services.AddScoped<StopTimerHandler>();
+        services.AddScoped<GetActiveTimerHandler>();
+        services.AddScoped<AddTimeEntryHandler>();
+        services.AddScoped<UpdateTimeEntryHandler>();
+        services.AddScoped<DeleteTimeEntryHandler>();
+        services.AddScoped<GetTaskTimeLogHandler>();
 
         // Singleton: e um laco so, e ele nao pode capturar escopo nenhum
         // (validateScopes: true reprovaria). So recebe IUseCaseRunner.

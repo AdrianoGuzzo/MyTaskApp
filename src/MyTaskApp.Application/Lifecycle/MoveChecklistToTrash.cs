@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.TimeTracking;
 using MyTaskApp.Domain.Auditing;
 
 namespace MyTaskApp.Application.Lifecycle;
@@ -13,6 +14,7 @@ public sealed record MoveChecklistToTrash(Guid TaskId);
 public sealed class MoveChecklistToTrashHandler(
     ITaskItemRepository tasks,
     IUnitOfWork unitOfWork,
+    ITimeEntryRepository timeEntries,
     ITaskAuditLog audit,
     ICurrentUser currentUser,
     TimeProvider timeProvider,
@@ -26,6 +28,12 @@ public sealed class MoveChecklistToTrashHandler(
         var now = timeProvider.GetUtcNow();
 
         task.MoveToTrash(now, currentUser.Name);
+
+        await RunningTimer.StopIfOnAsync(
+            timeEntries,
+            task.Occurrences.Select(occurrence => occurrence.Id).ToList(),
+            now,
+            cancellationToken);
 
         await audit.RecordAsync(
             TaskAuditEntry.ByUser(

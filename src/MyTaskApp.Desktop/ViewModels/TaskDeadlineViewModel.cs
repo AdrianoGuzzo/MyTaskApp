@@ -5,6 +5,7 @@ using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Deadlines;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.Deadlines;
+using MyTaskApp.Domain.TimeTracking;
 
 namespace MyTaskApp.Desktop.ViewModels;
 
@@ -182,6 +183,17 @@ public sealed partial class TaskDeadlineViewModel(
     public bool HasPlanChanges =>
         Normalize(NextAction) != _persistedNextAction || ToEstimate(EstimateHours) != _persistedEstimate;
 
+    /// <summary>
+    /// "Gasto: 4h 30min / 6h · 75%" ao lado da estimativa (ADR-052), com o
+    /// registrado até a abertura da janela. O detalhe — e o que corre agora —
+    /// fica na aba "Tempo". Vazio sem estimativa ou sem tempo nenhum.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSpent))]
+    private string? _spentLabel;
+
+    public bool HasSpent => SpentLabel is not null;
+
     public void Load(TaskRowViewModel row)
     {
         _loading = true;
@@ -199,6 +211,10 @@ public sealed partial class TaskDeadlineViewModel(
             ErrorMessage = null;
             NextAction = row.NextAction ?? string.Empty;
             EstimateHours = row.Estimate is { } estimate ? (decimal)estimate.TotalHours : null;
+            SpentLabel = row.Estimate is { } planned && (row.HasLoggedTime || row.IsTiming)
+                ? $"Gasto: {WorkTimeFormatter.AgainstEstimate(row.Logged, planned)}"
+                  + (row.IsTiming ? " · cronômetro correndo" : string.Empty)
+                : null;
             ShowAlerts(row.DeadlineAlerts);
             ResetCustom();
         }

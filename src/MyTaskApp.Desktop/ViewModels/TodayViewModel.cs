@@ -15,6 +15,7 @@ using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Application.Tags;
 using MyTaskApp.Application.Tasks;
+using MyTaskApp.Application.TimeTracking;
 using MyTaskApp.Desktop.Composition;
 using MyTaskApp.Desktop.Views;
 using MyTaskApp.Domain;
@@ -45,7 +46,10 @@ public sealed partial class TodayViewModel(
     IClipboardWriter clipboard,
     TimeProvider timeProvider,
     ILogger<TodayViewModel> logger,
-    IShellLauncher? shell = null) : ObservableObject, IDisposable
+    IShellLauncher? shell = null,
+    // O relógio do cronômetro é do app, não do quadro: a janela da tarefa lê o
+    // mesmo. Opcional para os testes que não falam de tempo (ADR-052).
+    ActiveTimerViewModel? activeTimer = null) : ObservableObject, IDisposable
 {
     /// <summary>
     /// O rótulo "aguardando há N minutos" envelhece sozinho, então o quadro
@@ -97,6 +101,26 @@ public sealed partial class TodayViewModel(
 
     /// <summary>Descarta a resposta de uma conferência que outra mais nova já superou.</summary>
     private int _worktreeProbe;
+
+    /// <summary>Só descarta o relógio que ele mesmo criou; o do contêiner é do app.</summary>
+    private readonly bool _ownsActiveTimer = activeTimer is null;
+
+    /// <summary>O cronômetro que corre, com o relógio que a linha e a faixa desenham (ADR-052).</summary>
+    public ActiveTimerViewModel ActiveTimer { get; } = activeTimer ?? new ActiveTimerViewModel(timeProvider);
+
+    /// <summary>
+    /// A linha do cronômetro, se ela estiver na tela. Sem ela — tarefa de amanhã,
+    /// seção escondida —, a faixa acima da lista é o único lugar do ⏹.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsActiveTimerOffBoard))]
+    private TaskRowViewModel? _activeTimerRow;
+
+    /// <summary>
+    /// A faixa aparece na janela normal só quando a linha não está à vista; no
+    /// HUD ela aparece sempre (é a regra de estilo <c>TodayView.hud</c>).
+    /// </summary>
+    public bool IsActiveTimerOffBoard => ActiveTimer.IsRunning && ActiveTimerRow is null;
 
     [ObservableProperty]
     private string _title = string.Empty;
@@ -1012,7 +1036,133 @@ public sealed partial class TodayViewModel(
         _refresh?.Dispose();
         _refresh = null;
         _tagSaves.Dispose();
+
+        if (_ownsActiveTimer)
+        {
+            ActiveTimer.Dispose();
+        }
     }
+
+    // ---------------------------------------------------------------------
+    // Cronômetro (ADR-052). A tela só pede: um cronômetro no app inteiro é
+    // regra da Application, que relê o banco. A pergunta de troca é daqui
+    // porque é conversa com o usuário, mas o caso de uso recusa a troca não
+    // confirmada mesmo que a tela esqueça de perguntar.
+    // ---------------------------------------------------------------------
+
+    /// <summary>▶ ou ⏹ na linha.</summary>
+    [RelayCommand]
+    public async Task ToggleTimerAsync(TaskRowViewModel row, CancellationToken cancellationToken)
+    {
+        if (row.IsTiming)
+        {
+            await StopTimerAsync(row.OccurrenceId, cancellationToken);
+            return;
+        }
+
+        if (!row.CanToggleTimer)
+        {
+            return;
+        }
+
+        await StartTimerAsync(row.OccurrenceId, row.Title, cancellationToken);
+    }
+
+    /// <summary>⏹ na faixa: para o que corre, esteja a linha na tela ou não.</summary>
+    [RelayCommand]
+    public async Task StopActiveTimerAsync(CancellationToken cancellationToken)
+    {
+        if (ActiveTimer.OccurrenceId is { } occurrenceId)
+        {
+            await StopTimerAsync(occurrenceId, cancellationToken);
+        }
+    }
+
+    /// <summary>O título na faixa abre a tarefa, quando ela está no quadro.</summary>
+    [RelayCommand]
+    public void OpenActiveTimerTask()
+    {
+        if (ActiveTimerRow is { } row)
+        {
+            OpenNotes(row);
+        }
+    }
+
+    /// <summary>
+    /// Inicia o cronômetro de uma tarefa, perguntando antes se outra está correndo.
+    /// Público para a aba "Tempo" usar o mesmo caminho e a mesma pergunta.
+    /// </summary>
+    /// <returns><c>true</c> quando o cronômetro ficou correndo nesta tarefa.</returns>
+    public async Task<bool> StartTimerAsync(Guid occurrenceId, string title, CancellationToken cancellationToken)
+    {
+        ActiveTimerView? running = null;
+
+        // Relido do banco: o quadro na tela pode ter até um minuto.
+        var read = await TryAsync(
+            async () => running = await runner.RunAsync<GetActiveTimerHandler, ActiveTimerView?>(
+                (handler, token) => handler.HandleAsync(token),
+                cancellationToken),
+            "Não foi possível verificar o cronômetro.");
+
+        if (!read)
+        {
+            return false;
+        }
+
+        var replace = false;
+
+        if (running is not null && running.OccurrenceId != occurrenceId)
+        {
+            if (!await confirmation.AskAsync(SwitchTimerPrompt(running.TaskTitle, title)))
+            {
+                return false;
+            }
+
+            replace = true;
+        }
+
+        var started = await TryAsync(
+            () => runner.RunAsync<StartTimerHandler, ActiveTimerView>(
+                (handler, token) => handler.HandleAsync(new StartTimer(occurrenceId, replace), token),
+                cancellationToken),
+            "Não foi possível iniciar o cronômetro.");
+
+        if (started)
+        {
+            await LoadAsync(cancellationToken);
+        }
+
+        return started;
+    }
+
+    /// <summary>Para o cronômetro desta tarefa. Público pelo mesmo motivo de <see cref="StartTimerAsync"/>.</summary>
+    public async Task<bool> StopTimerAsync(Guid occurrenceId, CancellationToken cancellationToken)
+    {
+        var stopped = await TryAsync(
+            () => runner.RunAsync<StopTimerHandler>(
+                (handler, token) => handler.HandleAsync(new StopTimer(occurrenceId), token),
+                cancellationToken),
+            "Não foi possível parar o cronômetro.");
+
+        if (stopped)
+        {
+            await LoadAsync(cancellationToken);
+        }
+
+        return stopped;
+    }
+
+    /// <summary>
+    /// "Parar e iniciar": a troca de tarefa diz as duas, pelo nome. O foco nasce
+    /// em Cancelar (<see cref="ConfirmWindow"/>): o Enter reflexo não pode parar
+    /// o trabalho de ninguém.
+    /// </summary>
+    public static ConfirmationRequest SwitchTimerPrompt(string runningTitle, string nextTitle) =>
+        new(
+            "Trocar de tarefa?",
+            $"Você está trabalhando em:{Environment.NewLine}{Environment.NewLine}\"{runningTitle}\"{Environment.NewLine}{Environment.NewLine}"
+            + $"Deseja parar essa tarefa e iniciar:{Environment.NewLine}{Environment.NewLine}\"{nextTitle}\"?",
+            "Parar e iniciar");
 
     [RelayCommand]
     public async Task ToggleAsync(TaskRowViewModel row, CancellationToken cancellationToken)
@@ -1278,6 +1428,11 @@ public sealed partial class TodayViewModel(
 
         Title = $"HOJE — {board.Date.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)}";
 
+        // Antes das seções: a linha que corre procura o relógio aqui. É também
+        // o que restaura o cronômetro ao abrir o app — o primeiro quadro já vem
+        // com o que o banco tem aberto (ADR-052).
+        ActiveTimer.Show(board.ActiveTimer);
+
         ShowProgress(board);
         ShowSections(board);
     }
@@ -1313,6 +1468,13 @@ public sealed partial class TodayViewModel(
         }
 
         IsEmpty = Sections.Count == 0;
+
+        ActiveTimerRow = ActiveTimer.OccurrenceId is { } timing
+            ? Sections.SelectMany(section => section.Items).FirstOrDefault(row => row.OccurrenceId == timing)
+            : null;
+
+        // O cronômetro pode ter começado ou parado sem a linha mudar (nula antes e depois).
+        OnPropertyChanged(nameof(IsActiveTimerOffBoard));
 
         // Pendência que sumiu do quadro (respondida, sessão fechada) não
         // precisa mais ser lembrada. Do quadro, e não das seções: esconder as

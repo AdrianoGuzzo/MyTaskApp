@@ -7,8 +7,21 @@ using MyTaskApp.Domain.Deadlines;
 using MyTaskApp.Domain.External;
 using MyTaskApp.Domain.Reminders;
 using MyTaskApp.Domain.Tasks;
+using MyTaskApp.Domain.TimeTracking;
 
 namespace MyTaskApp.Desktop.ViewModels;
+
+/// <summary>
+/// ▶ e ⏹ na fonte de ícones (ADR-046): o "⏹" de texto vira emoji colorido em
+/// parte das máquinas. Os códigos são os da Segoe Fluent Icons, e a fonte
+/// embutida carrega os mesmos.
+/// </summary>
+public static class TimerGlyphs
+{
+    public const string Play = "";
+
+    public const string Stop = "";
+}
 
 /// <summary>Uma linha da lista. Só carrega o que a tela precisa desenhar.</summary>
 public sealed class TaskRowViewModel : ObservableObject
@@ -313,6 +326,52 @@ public sealed class TaskRowViewModel : ObservableObject
     public DeadlineAlertStage? DeadlineAlerts => Source.DeadlineAlerts;
 
     public TimeSpan? Estimate => Source.Estimate;
+
+    // ---------------------------------------------------------------------
+    // Tempo trabalhado (ADR-052). O relógio que corre não é da linha: ela é
+    // recriada a cada recarga, então o "00:37:42" vem do ActiveTimerViewModel
+    // do quadro, e aqui fica só o que não muda a cada segundo.
+    // ---------------------------------------------------------------------
+
+    /// <summary>O cronômetro do app corre nesta ocorrência.</summary>
+    public bool IsTiming => Source.TimerStartedAt is not null;
+
+    /// <summary>A soma dos períodos encerrados.</summary>
+    public TimeSpan Logged => Source.Logged;
+
+    public bool HasLoggedTime => Logged > TimeSpan.Zero;
+
+    /// <summary>"4h 32min" ao lado do ▶; vazio sem nada registrado, para o botão parado ser só o ícone.</summary>
+    public string LoggedText => HasLoggedTime ? WorkTimeFormatter.Duration(Logged) : string.Empty;
+
+    /// <summary>
+    /// ▶ só em trabalho aberto; numa concluída o botão fica só para mostrar o
+    /// total. O ⏹ vale sempre: um cronômetro correndo tem de poder parar.
+    /// </summary>
+    public bool CanToggleTimer => IsTiming || !IsCompleted;
+
+    /// <summary>Sem tempo e sem cronômetro, concluída não mostra o botão nem no hover.</summary>
+    public bool ShowsTimer => CanToggleTimer || HasLoggedTime;
+
+    /// <summary>A linha de tempo abaixo do título: o relógio que corre, ou o total registrado.</summary>
+    public bool ShowsTimeLine => IsTiming || HasLoggedTime;
+
+    /// <summary>
+    /// O total na linha de tempo quando nada corre. Correndo, a linha mostra só o
+    /// relógio; o total registrado fica no balão e na aba "Tempo".
+    /// </summary>
+    public string TimeLineTotal => IsTiming ? string.Empty : LoggedText;
+
+    /// <summary>O glifo do botão: ⏹ correndo, ▶ parado.</summary>
+    public string TimerGlyph => IsTiming ? TimerGlyphs.Stop : TimerGlyphs.Play;
+
+    public string TimerTip => IsTiming
+        ? HasLoggedTime ? $"Parar o cronômetro · {LoggedText} registrados antes" : "Parar o cronômetro"
+        : !CanToggleTimer
+            ? $"Tempo gasto: {LoggedText}"
+            : HasLoggedTime
+                ? $"Iniciar o cronômetro · {LoggedText} registrados"
+                : "Iniciar o cronômetro";
 
     /// <summary>Acende o ⚠: o lembrete avisou e ninguém reagiu.</summary>
     public bool IsAwaitingAttention { get; }

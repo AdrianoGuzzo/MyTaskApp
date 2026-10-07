@@ -124,6 +124,21 @@ public sealed partial class TodayView : UserControl
     /// "● Worktree criado" abre a tarefa: é lá, na aba Desenvolvimento, que o
     /// worktree se remove (ADR-034).
     /// </summary>
+    /// <summary>
+    /// O título na faixa do cronômetro abre a tarefa (ADR-052). Um texto, e não
+    /// um botão, para a faixa continuar sendo uma linha discreta.
+    /// </summary>
+    private void OnActiveTimerTitleTapped(object? sender, TappedEventArgs e)
+    {
+        if (DataContext is not TodayViewModel viewModel)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        viewModel.OpenActiveTimerTaskCommand.Execute(null);
+    }
+
     private void OnWorktreeBadgeTapped(object? sender, TappedEventArgs e)
     {
         if (sender is not Control { DataContext: TaskRowViewModel row }

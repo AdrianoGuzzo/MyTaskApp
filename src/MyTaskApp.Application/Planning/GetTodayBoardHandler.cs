@@ -2,6 +2,7 @@ using Microsoft.Extensions.Options;
 using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Configuration;
 using MyTaskApp.Application.Deadlines;
+using MyTaskApp.Application.TimeTracking;
 using MyTaskApp.Domain.Planning;
 using MyTaskApp.Domain.Reminders;
 using MyTaskApp.Domain.Tasks;
@@ -19,7 +20,10 @@ public sealed class GetTodayBoardHandler(
     IOptions<ApplicationOptions> options,
     // Opcional para os testes do quadro não precisarem montar agentes: sem
     // catálogo, o selo mostra o id do agente em vez do nome (ADR-030).
-    IAgentCliProviders? agents = null)
+    IAgentCliProviders? agents = null,
+    // Opcional pelo mesmo motivo: sem ele, o quadro não mostra a faixa do
+    // cronômetro ativo, e o resto fica igual (ADR-052).
+    IActiveTimerQuery? timers = null)
 {
     public async Task<TodayBoard> HandleAsync(CancellationToken cancellationToken = default)
     {
@@ -52,7 +56,11 @@ public sealed class GetTodayBoardHandler(
                 DeadlineAlerts = entry.Row.DeadlineAlerts,
                 NextAction = entry.Row.NextAction,
                 Estimate = entry.Row.Estimate,
+                Logged = entry.Row.Logged,
+                TimerStartedAt = entry.Row.TimerStartedAt,
             };
+
+        var activeTimer = timers is null ? null : await timers.FindAsync(cancellationToken);
 
         IEnumerable<(TodayOccurrenceRow Row, TodayPlacement? Placement)> InSection(TodaySection section) =>
             placed.Where(entry => entry.Placement!.Section == section);
@@ -98,6 +106,7 @@ public sealed class GetTodayBoardHandler(
                 .ThenByDescending(entry => entry.Row.Priority)
                 .Select(ToTask)
                 .ToList(),
+            ActiveTimer = activeTimer,
         };
     }
 

@@ -4,6 +4,7 @@ using MyTaskApp.Domain.Auditing;
 using MyTaskApp.Domain.Commands;
 using MyTaskApp.Domain.Tags;
 using MyTaskApp.Domain.Tasks;
+using MyTaskApp.Domain.TimeTracking;
 
 namespace MyTaskApp.Infrastructure.Persistence;
 
@@ -42,6 +43,9 @@ public sealed class MyTaskAppDbContext(DbContextOptions<MyTaskAppDbContext> opti
 
     /// <summary>As sessões de agente de IA abertas para as tarefas (ADR-030).</summary>
     public DbSet<AgentSession> AgentSessions => Set<AgentSession>();
+
+    /// <summary>Os períodos de trabalho de cada ocorrência (ADR-052).</summary>
+    public DbSet<TimeEntry> TimeEntries => Set<TimeEntry>();
 
     /// <summary>
     /// A trilha de auditoria do ciclo de vida. <b>Não</b> tem relacionamento com
