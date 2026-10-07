@@ -121,6 +121,11 @@ public class TodayBoardAttentionTests
 
     private sealed class StubQuery : ITodayQuery
     {
+        public Task<TodayOccurrenceRow?> FindOccurrenceAsync(
+            Guid occurrenceId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(Rows.FirstOrDefault(row => row.OccurrenceId == occurrenceId));
+
         public IReadOnlyList<TodayOccurrenceRow> Rows { get; set; } = [];
 
         public Task<IReadOnlyList<TodayOccurrenceRow>> GetCandidatesAsync(

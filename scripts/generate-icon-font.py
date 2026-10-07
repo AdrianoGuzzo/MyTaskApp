@@ -54,6 +54,8 @@ ICONS = {
     0xE71A: ("Stop", "stop_20_regular"),
     0xE70F: ("Edit", "edit_20_regular"),
     0xE74D: ("Delete", "delete_20_regular"),
+    # Histórico dos últimos dias (ADR-053), no cabeçalho.
+    0xE81C: ("History", "history_20_regular"),
 }
 
 FAMILY = "MyTaskApp Icons"

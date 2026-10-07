@@ -64,6 +64,11 @@ public class TodayBoardTimeTests
 
     private sealed class StubTodayQuery(params TodayOccurrenceRow[] rows) : ITodayQuery
     {
+        public Task<TodayOccurrenceRow?> FindOccurrenceAsync(
+            Guid occurrenceId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(rows.FirstOrDefault(row => row.OccurrenceId == occurrenceId));
+
         public Task<IReadOnlyList<TodayOccurrenceRow>> GetCandidatesAsync(
             DateOnly today,
             CancellationToken cancellationToken = default) =>

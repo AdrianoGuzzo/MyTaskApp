@@ -43,6 +43,34 @@ internal sealed class TodayQuery(MyTaskAppDbContext context) : ITodayQuery
                     && occurrence.CompletedAt < completedUntil))
             .ToListAsync(cancellationToken);
 
+        return await DescribeAsync(occurrences, cancellationToken);
+    }
+
+    public async Task<TodayOccurrenceRow?> FindOccurrenceAsync(
+        Guid occurrenceId,
+        CancellationToken cancellationToken = default)
+    {
+        // Arquivada continua abrindo, e abre só para leitura, porque está
+        // concluída. A lixeira não abre: lá a tarefa só se restaura (ADR-020).
+        var occurrences = await context.Occurrences
+            .AsNoTracking()
+            .Where(occurrence => occurrence.Id == occurrenceId
+                && context.Tasks.Any(task => task.Id == occurrence.TaskItemId && task.DeletedAt == null))
+            .ToListAsync(cancellationToken);
+
+        var rows = await DescribeAsync(occurrences, cancellationToken);
+
+        return rows.Count == 0 ? null : rows[0];
+    }
+
+    /// <summary>
+    /// A linha inteira de cada ocorrência — definição, etiquetas, agentes,
+    /// worktrees e tempo —, um lote por assunto, nunca uma consulta por linha.
+    /// </summary>
+    private async Task<IReadOnlyList<TodayOccurrenceRow>> DescribeAsync(
+        List<TaskOccurrence> occurrences,
+        CancellationToken cancellationToken)
+    {
         if (occurrences.Count == 0)
         {
             return [];
