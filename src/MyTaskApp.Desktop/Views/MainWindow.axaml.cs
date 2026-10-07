@@ -56,6 +56,11 @@ public partial class MainWindow : Window
     private IGlobalHotkeyService _hotkeys = UnsupportedGlobalHotkey.Instance;
     private bool _hotkeyRegistered;
 
+    /// <summary>O atalho de "Novo post-it" (ADR-054): a combinação é escolha do usuário.</summary>
+    private IGlobalHotkeyFactory _noteHotkeys = UnsupportedGlobalHotkeyFactory.Instance;
+    private IGlobalHotkeyService? _noteHotkey;
+    private string _noteHotkeyRegistered = HotkeyGesture.Off;
+
     /// <summary>
     /// O que vai para o disco. No HUD, a geometria aqui é a da janela normal,
     /// carimbada ao entrar — é ela que volta ao sair.
@@ -177,6 +182,12 @@ public partial class MainWindow : Window
     /// </summary>
     public Action? ExitHandler { get; set; }
 
+    /// <summary>
+    /// O atalho global de "Novo post-it" foi apertado (ADR-054). Quem cria o
+    /// post-it é o App; a janela só é a dona do atalho, como do outro.
+    /// </summary>
+    public event Action? NewNoteHotkeyPressed;
+
     /// <summary>As opções do X do HUD estão à vista. Para os testes.</summary>
     internal bool AreCloseChoicesOpen => FlyoutBase.GetAttachedFlyout(HudCloseButton)?.IsOpen == true;
 
@@ -188,13 +199,16 @@ public partial class MainWindow : Window
     public void Attach(
         IWidgetStateStore store,
         IWindowBehaviorService? behavior = null,
-        IGlobalHotkeyService? hotkeys = null)
+        IGlobalHotkeyService? hotkeys = null,
+        IGlobalHotkeyFactory? noteHotkeys = null)
     {
         _store = store;
         _behavior = behavior ?? PortableWindowBehavior.Instance;
         _hotkeys = hotkeys ?? UnsupportedGlobalHotkey.Instance;
+        _noteHotkeys = noteHotkeys ?? UnsupportedGlobalHotkeyFactory.Instance;
 
         Chrome.UseHotkeySupport(_hotkeys.IsSupported);
+        Chrome.UseNoteHotkeySupport(_noteHotkeys.IsSupported);
 
         _state = store.Load();
 
@@ -251,6 +265,7 @@ public partial class MainWindow : Window
         PersistNow();
 
         SyncHotkey();
+        SyncNoteHotkey();
         UpdateInteractiveRegion();
 
         if (_hudLayout)
@@ -411,6 +426,10 @@ public partial class MainWindow : Window
 
             case nameof(WidgetChromeViewModel.UseGlobalHotkey):
                 SyncHotkey();
+                break;
+
+            case nameof(WidgetChromeViewModel.NoteHotkey):
+                SyncNoteHotkey();
                 break;
         }
 
@@ -775,6 +794,42 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// Registra a combinação escolhida para "Novo post-it", soltando a anterior.
+    /// Se outro programa já é dono dela, a escolha volta para "Desligado" e a
+    /// tela diz por quê — o mesmo do atalho do HUD.
+    /// </summary>
+    private void SyncNoteHotkey()
+    {
+        if (!_placed || Chrome.NoteHotkey == _noteHotkeyRegistered)
+        {
+            return;
+        }
+
+        _noteHotkey?.Unregister();
+        _noteHotkey = null;
+        _noteHotkeyRegistered = HotkeyGesture.Off;
+
+        if (HotkeyGesture.FindNewNote(Chrome.NoteHotkey) is not { } gesture || !_noteHotkeys.IsSupported)
+        {
+            Chrome.NoteHotkeyMessage = null;
+            return;
+        }
+
+        var hotkey = _noteHotkeys.Create(gesture);
+
+        if (hotkey.Register(this, () => Dispatcher.UIThread.Post(() => NewNoteHotkeyPressed?.Invoke())))
+        {
+            _noteHotkey = hotkey;
+            _noteHotkeyRegistered = gesture.Id;
+            Chrome.NoteHotkeyMessage = null;
+            return;
+        }
+
+        Chrome.NoteHotkeyMessage = $"{gesture.Label} já está em uso por outro programa.";
+        Chrome.NoteHotkey = HotkeyGesture.Off;
+    }
+
     /// <summary>Normal vira HUD, HUD vira normal — e um app escondido na bandeja aparece.</summary>
     private void OnHotkeyPressed() => Dispatcher.UIThread.Post(() =>
     {
@@ -974,6 +1029,9 @@ public partial class MainWindow : Window
             _hotkeys.Unregister();
             _hotkeyRegistered = false;
         }
+
+        _noteHotkey?.Unregister();
+        _noteHotkey = null;
 
         base.OnClosed(args);
     }

@@ -79,7 +79,8 @@ public sealed partial class App : Avalonia.Application
                 window.Attach(
                     Services.GetRequiredService<IWidgetStateStore>(),
                     Services.GetRequiredService<IWindowBehaviorService>(),
-                    Services.GetRequiredService<IGlobalHotkeyService>());
+                    Services.GetRequiredService<IGlobalHotkeyService>(),
+                    Services.GetRequiredService<IGlobalHotkeyFactory>());
 
                 // "Sair" de dentro da janela (o X com "fechar o aplicativo", o
                 // menu do HUD) passa pelo mesmo encerramento da bandeja.
@@ -160,7 +161,9 @@ public sealed partial class App : Avalonia.Application
             }),
             WindowSettings: () => OnUiThread(() => ShowWindowSettings(window)),
             UseCompact: () => OnUiThread(() => window.Chrome.UseMode("compact")),
-            Hide: () => OnUiThread(window.HideAndRemember)));
+            Hide: () => OnUiThread(window.HideAndRemember),
+            NewStickyNote: () => OnUiThread(() => _ = services.GetRequiredService<StickyNoteWindowManager>().CreateNewAsync()),
+            StickyNotes: () => OnUiThread(() => ShowStickyNotes(services, window, StickyNoteScope.Active))));
 
         window.Chrome.TrayAvailable = installed;
 
@@ -311,6 +314,9 @@ public sealed partial class App : Avalonia.Application
         notes.Failed += message => Log.Warning("StickyNoteFailed {Message}", message);
 
         todayViewModel.NewStickyNoteRequested += () => _ = notes.CreateNewAsync();
+
+        // Ctrl+Alt+N de qualquer lugar, com o app até escondido na bandeja.
+        window.NewNoteHotkeyPressed += () => _ = notes.CreateNewAsync();
 
         // Post-it → tarefa: a tarefa nasce para hoje e tem de aparecer já, sem
         // esperar o refresh de 60 s.

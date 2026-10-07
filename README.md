@@ -108,6 +108,36 @@ primeiro para Windows. Também roda no Linux, com algumas funções a menos.
 - O painel abre por cima do checklist e fecha com Esc, no × ou com um clique
   fora. No HUD compacto o botão fica de fora, por falta de espaço.
 
+### Post-its
+
+O que ainda não merece virar tarefa: "falar com o João sobre a API", uma ideia,
+uma pergunta para depois. Post-its não aparecem nas seções do checklist.
+
+- **Ctrl+Alt+N**, de qualquer programa e mesmo com o app na bandeja, abre um
+  post-it novo com o cursor no texto. Dentro do app, o atalho é
+  **Ctrl+Shift+N**. Também dá para criar pelo menu *☰ → Post-its* e pela
+  bandeja. O atalho global pode ser trocado ou desligado em
+  *☰ → Janela e comportamento…*.
+- Cada post-it é uma janela pequena e independente, que arrasta pelo
+  cabeçalho e redimensiona pelas bordas. Posição, tamanho e texto são salvos
+  sozinhos, sem botão Salvar.
+- **Fixar na tela** (o alfinete) deixa aquele post-it sobre as outras
+  janelas, sem mexer no widget nem nos outros post-its.
+- No menu ⋯ ficam **Cor** (automática, sete cores ou a cor da etiqueta),
+  **Etiqueta**, **Atenção** (mais cor e uma faixa lateral) e **Opacidade**. A
+  cor é uma tinta sobre o cartão do tema, então o texto continua legível em
+  qualquer tema, inclusive no Alto contraste.
+- **Transformar em tarefa:** a primeira linha vira o título e o texto inteiro a
+  anotação. A etiqueta vem junto, a tarefa entra em HOJE e o post-it vai para
+  os arquivados. **Criar tarefa com a seleção** transforma só o trecho
+  selecionado.
+- O X (ou Esc) fecha sem excluir. *☰ → Post-its → Meus post-its…* reabre
+  qualquer um, com tamanho, posição e pino. Na mesma lista ficam
+  **Arquivados** e **Lixeira**, com o mesmo prazo de retenção dos checklists.
+  Um post-it fechado em branco é descartado.
+- Ao reabrir o app, só os post-its **fixados** voltam para a tela. Os outros
+  continuam na lista.
+
 ### Um widget, não uma janela
 
 - Painel de 360×560 sem moldura, arrastável e redimensionável, com três modos:

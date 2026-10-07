@@ -92,6 +92,10 @@ public class StickyNoteAppearanceTests
         viewModel.ColorChoices.Single(choice => choice.IsSelected).Label.Should().Be("Laranja");
         viewModel.ColorChoices[0].Label.Should().Be("Automática (tema)");
 
+        // Automática não tem amostra; cada cor da paleta tem a sua.
+        viewModel.ColorChoices[0].HasSwatch.Should().BeFalse();
+        viewModel.ColorChoices[1].HasSwatch.Should().BeTrue();
+
         // "Cor da etiqueta" sem etiqueta não tem o que usar.
         viewModel.ColorChoices[^1].Select.CanExecute(null).Should().BeFalse();
         viewModel.OpacityChoices.Single(choice => choice.IsSelected).Label.Should().Be("100%");

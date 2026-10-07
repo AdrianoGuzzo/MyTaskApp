@@ -91,9 +91,11 @@ internal static class AppServices
             .AddSingleton<IWindowBehaviorService>(services => OperatingSystem.IsWindows()
                 ? ActivatorUtilities.CreateInstance<WindowsWindowBehavior>(services)
                 : PortableWindowBehavior.Instance)
-            .AddSingleton<IGlobalHotkeyService>(services => OperatingSystem.IsWindows()
-                ? ActivatorUtilities.CreateInstance<WindowsGlobalHotkey>(services)
-                : UnsupportedGlobalHotkey.Instance)
+            .AddSingleton<IGlobalHotkeyFactory>(services => OperatingSystem.IsWindows()
+                ? ActivatorUtilities.CreateInstance<WindowsGlobalHotkeyFactory>(services)
+                : UnsupportedGlobalHotkeyFactory.Instance)
+            .AddSingleton<IGlobalHotkeyService>(services =>
+                services.GetRequiredService<IGlobalHotkeyFactory>().Create(HotkeyGesture.ToggleHud))
 
             // Quem o app consegue identificar como autor das operacoes (§5, §8).
             // Registrado aqui, antes de AddApplication, porque o nome da conta
