@@ -23,18 +23,39 @@ public interface IGlobalHotkeyService
     void Unregister();
 }
 
-/// <summary>O objeto nulo: fora do Windows a opção some da tela.</summary>
-public sealed class UnsupportedGlobalHotkey : IGlobalHotkeyService
+/// <summary>
+/// Um atalho global por combinação (ADR-054): o do HUD é fixo, o do post-it é
+/// escolha do usuário e muda em tempo de execução.
+/// </summary>
+public interface IGlobalHotkeyFactory
 {
-    public static UnsupportedGlobalHotkey Instance { get; } = new();
+    bool IsSupported { get; }
+
+    IGlobalHotkeyService Create(HotkeyGesture gesture);
+}
+
+/// <summary>O objeto nulo: fora do Windows a opção some da tela.</summary>
+public sealed class UnsupportedGlobalHotkey(string gestureLabel) : IGlobalHotkeyService
+{
+    public static UnsupportedGlobalHotkey Instance { get; } = new(HotkeyGesture.ToggleHud.Label);
 
     public bool IsSupported => false;
 
-    public string GestureLabel => "Ctrl+Shift+Espaço";
+    public string GestureLabel { get; } = gestureLabel;
 
     public bool Register(Window owner, Action pressed) => false;
 
     public void Unregister()
     {
     }
+}
+
+/// <summary>Fora do Windows, e no host headless: nenhum atalho global.</summary>
+public sealed class UnsupportedGlobalHotkeyFactory : IGlobalHotkeyFactory
+{
+    public static UnsupportedGlobalHotkeyFactory Instance { get; } = new();
+
+    public bool IsSupported => false;
+
+    public IGlobalHotkeyService Create(HotkeyGesture gesture) => new UnsupportedGlobalHotkey(gesture.Label);
 }

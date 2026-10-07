@@ -54,4 +54,24 @@ internal sealed class LifecycleSweepQuery(MyTaskAppDbContext context) : ILifecyc
             .Select(task => task.Id)
             .ToListAsync(cancellationToken);
     }
+
+    /// <remarks>Servida por <c>IX_StickyNotes_Trashed</c>, o mesmo filtro.</remarks>
+    public async Task<IReadOnlyList<Guid>> GetStickyNotesReadyToPurgeAsync(
+        DateTimeOffset deletedBefore,
+        int limit,
+        CancellationToken cancellationToken = default)
+    {
+        if (limit <= 0)
+        {
+            return [];
+        }
+
+        return await context.StickyNotes
+            .AsNoTracking()
+            .Where(note => note.DeletedAt != null && note.DeletedAt <= deletedBefore)
+            .OrderBy(note => note.DeletedAt)
+            .Take(limit)
+            .Select(note => note.Id)
+            .ToListAsync(cancellationToken);
+    }
 }

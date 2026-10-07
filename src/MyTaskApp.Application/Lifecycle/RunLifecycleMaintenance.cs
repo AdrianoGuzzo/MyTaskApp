@@ -9,11 +9,12 @@ namespace MyTaskApp.Application.Lifecycle;
 /// <summary>Um tique da manutenção do ciclo de vida (§2, §6).</summary>
 public sealed record RunLifecycleMaintenance;
 
-public sealed record LifecycleMaintenanceResult(int Archived, int Purged)
+/// <param name="PurgedNotes">Post-its apagados de vez por prazo vencido na lixeira (ADR-054).</param>
+public sealed record LifecycleMaintenanceResult(int Archived, int Purged, int PurgedNotes = 0)
 {
     public static LifecycleMaintenanceResult Nothing { get; } = new(0, 0);
 
-    public bool DidSomething => Archived > 0 || Purged > 0;
+    public bool DidSomething => Archived > 0 || Purged > 0 || PurgedNotes > 0;
 }
 
 /// <summary>
@@ -41,6 +42,7 @@ public sealed record LifecycleMaintenanceResult(int Archived, int Purged)
 public sealed class RunLifecycleMaintenanceHandler(
     ILifecycleSweepQuery sweep,
     ITaskItemRepository tasks,
+    IStickyNoteRepository notes,
     IUnitOfWork unitOfWork,
     ITaskAuditLog audit,
     IDataRetentionSettingsStore settings,
@@ -63,8 +65,9 @@ public sealed class RunLifecycleMaintenanceHandler(
             : 0;
 
         var purged = await PurgeExpiredAsync(policy, now, cancellationToken);
+        var purgedNotes = await PurgeExpiredNotesAsync(policy, now, cancellationToken);
 
-        if (archived == 0 && purged == 0)
+        if (archived == 0 && purged == 0 && purgedNotes == 0)
         {
             // Debug, e não Information: um tique vazio não é notícia, e enche o
             // log de quem nunca arquivou nada.
@@ -74,9 +77,45 @@ public sealed class RunLifecycleMaintenanceHandler(
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        logger.LogInformation("LifecycleSweepRan {Archived} {Purged}", archived, purged);
+        logger.LogInformation(
+            "LifecycleSweepRan {Archived} {Purged} {PurgedNotes}",
+            archived,
+            purged,
+            purgedNotes);
 
-        return new LifecycleMaintenanceResult(archived, purged);
+        return new LifecycleMaintenanceResult(archived, purged, purgedNotes);
+    }
+
+    /// <summary>
+    /// A lixeira dos post-its, no mesmo prazo e com a mesma reconferência. Sem
+    /// trilha de auditoria: ela é dos checklists (ADR-020), e um post-it apagado
+    /// não deixa pergunta a investigar depois (ADR-054).
+    /// </summary>
+    private async Task<int> PurgeExpiredNotesAsync(
+        DataRetentionPolicy policy,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var cutoff = policy.TrashCutoff(now);
+        var candidates = await sweep.GetStickyNotesReadyToPurgeAsync(cutoff, BatchSize, cancellationToken);
+
+        var count = 0;
+
+        foreach (var noteId in candidates)
+        {
+            var note = await notes.FindByIdAsync(noteId, cancellationToken);
+
+            if (note is null || note.DeletedAt is not { } deletedAt || deletedAt > cutoff)
+            {
+                continue;
+            }
+
+            notes.Remove(note);
+
+            count++;
+        }
+
+        return count;
     }
 
     private async Task<int> ArchiveConcludedAsync(

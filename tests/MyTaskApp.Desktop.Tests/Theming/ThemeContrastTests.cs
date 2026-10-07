@@ -117,38 +117,17 @@ public class ThemeContrastTests
     [InlineData("#767676", "#FFFFFF", 4.54)]
     public void TheRatio_MatchesTheWcagFormula(string a, string b, double expected)
     {
-        Contrast.Ratio(Color.Parse(a), Color.Parse(b)).Should().BeApproximately(expected, 0.01);
+        ColorContrast.Ratio(Color.Parse(a), Color.Parse(b)).Should().BeApproximately(expected, 0.01);
     }
 
     private static ThemePalette Palette(string id) => ThemeCatalog.Find(id)!.Palette;
 
     private static void ShouldContrast(Color foreground, Color background, double minimum)
     {
-        var ratio = Contrast.Ratio(foreground, background);
+        var ratio = ColorContrast.Ratio(foreground, background);
 
         ratio.Should().BeGreaterThanOrEqualTo(
             minimum,
             $"{foreground} sobre {background} dá {ratio:0.00}:1");
-    }
-}
-
-/// <summary>Razão de contraste da WCAG 2.x, a partir da luminância relativa.</summary>
-internal static class Contrast
-{
-    public static double Ratio(Color a, Color b)
-    {
-        var (la, lb) = (Luminance(a), Luminance(b));
-
-        return (Math.Max(la, lb) + 0.05) / (Math.Min(la, lb) + 0.05);
-    }
-
-    private static double Luminance(Color color) =>
-        (0.2126 * Linear(color.R)) + (0.7152 * Linear(color.G)) + (0.0722 * Linear(color.B));
-
-    private static double Linear(byte channel)
-    {
-        var c = channel / 255.0;
-
-        return c <= 0.03928 ? c / 12.92 : Math.Pow((c + 0.055) / 1.055, 2.4);
     }
 }

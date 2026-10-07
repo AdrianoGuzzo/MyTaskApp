@@ -28,4 +28,13 @@ public interface ILifecycleSweepQuery
         DateTimeOffset deletedBefore,
         int limit,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Post-its na lixeira desde antes de <paramref name="deletedBefore"/> — o
+    /// mesmo prazo dos checklists (ADR-054).
+    /// </summary>
+    Task<IReadOnlyList<Guid>> GetStickyNotesReadyToPurgeAsync(
+        DateTimeOffset deletedBefore,
+        int limit,
+        CancellationToken cancellationToken = default);
 }

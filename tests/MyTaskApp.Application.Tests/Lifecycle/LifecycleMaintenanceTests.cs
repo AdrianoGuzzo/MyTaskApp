@@ -4,6 +4,7 @@ using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Application.Tests.Fakes;
 using MyTaskApp.Domain.Auditing;
 using MyTaskApp.Domain.Lifecycle;
+using MyTaskApp.Domain.StickyNotes;
 using MyTaskApp.Domain.Tasks;
 
 namespace MyTaskApp.Application.Tests.Lifecycle;
@@ -25,10 +26,13 @@ public class LifecycleMaintenanceTests
     private readonly FakeDataRetentionSettingsStore _settings = new();
     private readonly FakeTimeProvider _time = new(Now);
 
+    private readonly FakeStickyNoteRepository _notes = new();
+
     private RunLifecycleMaintenanceHandler Handler() =>
         new(
             _sweep,
             _repository,
+            _notes,
             _repository,
             _audit,
             _settings,
@@ -251,5 +255,51 @@ public class LifecycleMaintenanceTests
         await Handler().HandleAsync(new RunLifecycleMaintenance(), Ct);
 
         _sweep.PurgeCutoffAsked.Should().Be(Now.AddDays(-7));
+        _sweep.NotesPurgeCutoffAsked.Should().Be(Now.AddDays(-7));
+    }
+
+    // ------------------------------------------------------------------
+    // Lixeira dos post-its (ADR-054): mesmo prazo, mesma reconferência
+    // ------------------------------------------------------------------
+
+    private StickyNote SeedTrashedNote(DateTimeOffset deletedAt)
+    {
+        var note = StickyNote.Create(deletedAt.AddDays(-1));
+        note.Edit("ideia antiga", deletedAt.AddDays(-1));
+        note.MoveToTrash(deletedAt);
+
+        _notes.Seed(note);
+        _sweep.NotesReadyToPurge.Add(note.Id);
+
+        return note;
+    }
+
+    [Fact]
+    public async Task ANotePastTheTrashRetention_IsPermanentlyDeletedWithoutAudit()
+    {
+        SeedTrashedNote(Now.AddDays(-31));
+
+        var result = await Handler().HandleAsync(new RunLifecycleMaintenance(), Ct);
+
+        result.PurgedNotes.Should().Be(1);
+        result.DidSomething.Should().BeTrue();
+        _notes.Notes.Should().BeEmpty();
+        _audit.Entries.Should().BeEmpty();
+        _repository.SaveCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task ANoteRestoredOrStillInsideTheWindow_IsNotDeleted()
+    {
+        var restored = SeedTrashedNote(Now.AddDays(-40));
+        restored.RestoreFromTrash();
+        SeedTrashedNote(Now.AddDays(-2));
+        _sweep.NotesReadyToPurge.Add(Guid.CreateVersion7());
+
+        var result = await Handler().HandleAsync(new RunLifecycleMaintenance(), Ct);
+
+        result.PurgedNotes.Should().Be(0);
+        _notes.Notes.Should().HaveCount(2);
+        _repository.SaveCount.Should().Be(0);
     }
 }

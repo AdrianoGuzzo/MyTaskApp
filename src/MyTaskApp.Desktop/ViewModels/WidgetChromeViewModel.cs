@@ -139,6 +139,17 @@ public sealed partial class WidgetChromeViewModel : ObservableObject
     private string? _hotkeyMessage;
 
     /// <summary>
+    /// O atalho global de "Novo post-it" (ADR-054): o id da combinação, ou
+    /// <see cref="HotkeyGesture.Off"/>. Quem registra é a janela.
+    /// </summary>
+    [ObservableProperty]
+    private string _noteHotkey = HotkeyGesture.DefaultNewNote;
+
+    /// <summary>Por que o atalho do post-it não pôde ser ligado, quando não pôde.</summary>
+    [ObservableProperty]
+    private string? _noteHotkeyMessage;
+
+    /// <summary>
     /// Se o ícone da bandeja subiu. Sem ele "ocultar" não tem caminho de
     /// volta, e o X passa a sair (ADR-016).
     /// </summary>
@@ -153,6 +164,8 @@ public sealed partial class WidgetChromeViewModel : ObservableObject
     private IStartupRegistration _startup = UnsupportedStartupRegistration.Instance;
 
     private bool _canUseGlobalHotkey;
+
+    private bool _canUseNoteHotkey;
 
     private HudSettings _hud = HudSettings.Default;
 
@@ -314,6 +327,15 @@ public sealed partial class WidgetChromeViewModel : ObservableObject
     public bool CanStartWithWindows => _startup.IsSupported;
 
     public bool CanUseGlobalHotkey => _canUseGlobalHotkey;
+
+    public bool CanUseNoteHotkey => _canUseNoteHotkey;
+
+    /// <summary>As escolhas do atalho do post-it, com "Desligado" no fim.</summary>
+    public IReadOnlyList<HotkeyChoice> NoteHotkeyChoices { get; } =
+    [
+        .. HotkeyGesture.NewNoteChoices.Select(gesture => new HotkeyChoice(gesture.Id, gesture.Label)),
+        new HotkeyChoice(HotkeyGesture.Off, "Desligado"),
+    ];
 
     /// <summary>
     /// Esconder é da janela, não daqui. O ViewModel só avisa — mesmo desenho do
@@ -517,6 +539,13 @@ public sealed partial class WidgetChromeViewModel : ObservableObject
         OnPropertyChanged(nameof(CanUseGlobalHotkey));
     }
 
+    /// <summary>O mesmo para o atalho do post-it.</summary>
+    public void UseNoteHotkeySupport(bool supported)
+    {
+        _canUseNoteHotkey = supported;
+        OnPropertyChanged(nameof(CanUseNoteHotkey));
+    }
+
     /// <summary>
     /// Comando, e não <c>Mode=TwoWay</c> como o "abrir recolhido": a escrita no
     /// registro pode falhar, e aí o visto precisa contar o que aconteceu de
@@ -553,6 +582,7 @@ public sealed partial class WidgetChromeViewModel : ObservableObject
         CloseBehavior = state.CloseBehavior;
         StartInHud = state.StartInHud;
         UseGlobalHotkey = state.GlobalHotkey;
+        NoteHotkey = HotkeyGesture.NormalizeNewNote(state.NoteHotkey);
         HudAlwaysOnTop = state.Hud.AlwaysOnTop;
         HudPosition = state.Hud.Position;
         HudSize = state.Hud.Size;
@@ -578,6 +608,7 @@ public sealed partial class WidgetChromeViewModel : ObservableObject
         CloseBehavior = CloseBehavior,
         StartInHud = StartInHud,
         GlobalHotkey = UseGlobalHotkey,
+        NoteHotkey = NoteHotkey,
         Hud = _hud with
         {
             AlwaysOnTop = HudAlwaysOnTop,
@@ -590,6 +621,9 @@ public sealed partial class WidgetChromeViewModel : ObservableObject
         Theme = ThemeId,
     };
 }
+
+/// <summary>Uma combinação de atalho na lista de "Janela e comportamento…".</summary>
+public sealed record HotkeyChoice(string Id, string Label);
 
 /// <summary>Um ponto em pixels físicos, sem trazer o Avalonia para quem só quer ler o número.</summary>
 public readonly record struct PixelPointValue(int X, int Y);

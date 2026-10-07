@@ -55,6 +55,14 @@ public sealed record WidgetState
     /// </summary>
     public bool GlobalHotkey { get; init; }
 
+    /// <summary>
+    /// O atalho global de "Novo post-it" (ADR-054): o id de uma combinação de
+    /// <see cref="HotkeyGesture.NewNoteChoices"/>, ou <see cref="HotkeyGesture.Off"/>.
+    /// Ligado por padrão — inclusive para quem atualiza, que tem um arquivo
+    /// sem a chave —, porque Ctrl+Alt+N não é de nenhum programa de todo dia.
+    /// </summary>
+    public string NoteHotkey { get; init; } = HotkeyGesture.DefaultNewNote;
+
     /// <summary>Abrir direto na bandeja, sem mostrar o painel.</summary>
     public bool StartHidden { get; init; }
 
@@ -97,5 +105,6 @@ public sealed record WidgetState
         CloseBehavior = Enum.IsDefined(CloseBehavior) ? CloseBehavior : CloseBehavior.Tray,
         Hud = (Hud ?? HudSettings.Default).Sanitized(),
         Theme = ThemeCatalog.Normalize(Theme),
+        NoteHotkey = HotkeyGesture.NormalizeNewNote(NoteHotkey),
     };
 }

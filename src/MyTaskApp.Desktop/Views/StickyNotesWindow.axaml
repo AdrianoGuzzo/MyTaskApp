@@ -1,0 +1,230 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
+        xmlns:notes="using:MyTaskApp.Application.StickyNotes"
+        x:Class="MyTaskApp.Desktop.Views.StickyNotesWindow"
+        x:DataType="vm:StickyNotesViewModel"
+        x:Name="Root"
+        Title="Post-its"
+        Width="400"
+        Height="520"
+        MinWidth="320"
+        MinHeight="320"
+        WindowStartupLocation="CenterOwner">
+
+  <!--
+    A lista de post-its (ADR-054): o caminho de volta para os fechados, os
+    arquivados e a lixeira. Pequena de propósito — o post-it é captura, e uma
+    tela de gerenciamento pesada contrariaria a razão de ele existir.
+  -->
+
+  <Window.Styles>
+
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="{DynamicResource WidgetSurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetStrokeSoftBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetCardRadius}" />
+      <Setter Property="Padding" Value="10,8,6,8" />
+      <Setter Property="Margin" Value="0,0,0,6" />
+    </Style>
+
+    <Style Selector="Border.card:pointerover">
+      <Setter Property="Background" Value="{DynamicResource WidgetSurfaceHoverBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.noteTitle">
+      <Setter Property="FontSize" Value="12.5" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <Style Selector="TextBlock.meta">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <Style Selector="TextBlock.empty">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextMidBrush}" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="Margin" Value="0,32,0,0" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="TextAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="TextBlock.glyph">
+      <Setter Property="FontFamily" Value="{StaticResource WidgetIconFont}" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- As abas: rádio de verdade, para o leitor de tela anunciar qual está marcada. -->
+    <Style Selector="RadioButton.scope">
+      <Setter Property="Margin" Value="0,0,12,0" />
+      <Setter Property="FontSize" Value="12" />
+    </Style>
+
+    <Style Selector="Border.status">
+      <Setter Property="Background" Value="{DynamicResource WidgetAccentSoftBrush}" />
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetPillRadius}" />
+      <Setter Property="Padding" Value="10,6" />
+      <Setter Property="Margin" Value="0,0,0,8" />
+    </Style>
+
+    <Style Selector="Border.error">
+      <Setter Property="Background" Value="{DynamicResource WidgetDangerSoftBrush}" />
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetPillRadius}" />
+      <Setter Property="Padding" Value="10,6" />
+      <Setter Property="Margin" Value="0,0,0,8" />
+    </Style>
+
+    <Style Selector="Border.status > TextBlock, Border.error > TextBlock">
+      <Setter Property="FontSize" Value="11.5" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+  </Window.Styles>
+
+  <DockPanel Background="{DynamicResource WidgetCanvasBrush}">
+
+    <StackPanel DockPanel.Dock="Top" Margin="14,12,14,8" Spacing="10">
+
+      <Grid ColumnDefinitions="*,Auto">
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+          <RadioButton x:Name="ActiveTab"
+                       Classes="scope"
+                       GroupName="scope"
+                       Content="Ativos"
+                       IsChecked="{Binding IsActiveScope, Mode=OneWay}"
+                       Command="{Binding ShowScopeCommand}"
+                       CommandParameter="{x:Static notes:StickyNoteScope.Active}" />
+          <RadioButton x:Name="ArchivedTab"
+                       Classes="scope"
+                       GroupName="scope"
+                       Content="Arquivados"
+                       IsChecked="{Binding IsArchivedScope, Mode=OneWay}"
+                       Command="{Binding ShowScopeCommand}"
+                       CommandParameter="{x:Static notes:StickyNoteScope.Archived}" />
+          <RadioButton x:Name="TrashTab"
+                       Classes="scope"
+                       GroupName="scope"
+                       Content="Lixeira"
+                       IsChecked="{Binding IsTrashScope, Mode=OneWay}"
+                       Command="{Binding ShowScopeCommand}"
+                       CommandParameter="{x:Static notes:StickyNoteScope.Trashed}" />
+        </StackPanel>
+
+        <Button Grid.Column="1"
+                x:Name="NewNoteButton"
+                Classes="accent"
+                Content="+ Novo post-it"
+                ToolTip.Tip="Ctrl+Shift+N"
+                Command="{Binding NewNoteCommand}" />
+      </Grid>
+
+      <Border Classes="status" IsVisible="{Binding HasStatus}">
+        <TextBlock Text="{Binding StatusMessage}" />
+      </Border>
+
+      <Border Classes="error" IsVisible="{Binding HasError}">
+        <TextBlock Text="{Binding ErrorMessage}" />
+      </Border>
+
+    </StackPanel>
+
+    <Panel Margin="14,0,14,12">
+
+      <TextBlock Classes="empty" Text="{Binding EmptyMessage}" IsVisible="{Binding IsEmpty}" />
+
+      <ScrollViewer>
+        <ItemsControl x:Name="NoteList" ItemsSource="{Binding Rows}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:StickyNoteRowViewModel">
+              <Border Classes="card">
+
+                <Border.ContextFlyout>
+                  <MenuFlyout>
+                    <MenuItem Header="Abrir"
+                              IsVisible="{Binding #Root.((vm:StickyNotesViewModel)DataContext).IsActiveScope}"
+                              Command="{Binding #Root.((vm:StickyNotesViewModel)DataContext).OpenCommand}"
+                              CommandParameter="{Binding}" />
+                    <MenuItem Header="{Binding PinLabel}"
+                              IsVisible="{Binding #Root.((vm:StickyNotesViewModel)DataContext).IsActiveScope}"
+                              Command="{Binding #Root.((vm:StickyNotesViewModel)DataContext).TogglePinCommand}"
+                              CommandParameter="{Binding}" />
+                    <MenuItem Header="Transformar em tarefa"
+                              IsVisible="{Binding #Root.((vm:StickyNotesViewModel)DataContext).IsActiveScope}"
+                              Command="{Binding #Root.((vm:StickyNotesViewModel)DataContext).ConvertToTaskCommand}"
+                              CommandParameter="{Binding}" />
+                    <MenuItem Header="Arquivar"
+                              IsVisible="{Binding #Root.((vm:StickyNotesViewModel)DataContext).IsActiveScope}"
+                              Command="{Binding #Root.((vm:StickyNotesViewModel)DataContext).ArchiveCommand}"
+                              CommandParameter="{Binding}" />
+                    <MenuItem Header="Restaurar"
+                              IsVisible="{Binding !#Root.((vm:StickyNotesViewModel)DataContext).IsActiveScope}"
+                              Command="{Binding #Root.((vm:StickyNotesViewModel)DataContext).RestoreCommand}"
+                              CommandParameter="{Binding}" />
+                    <MenuItem Header="Excluir"
+                              IsVisible="{Binding !#Root.((vm:StickyNotesViewModel)DataContext).IsTrashScope}"
+                              Command="{Binding #Root.((vm:StickyNotesViewModel)DataContext).MoveToTrashCommand}"
+                              CommandParameter="{Binding}" />
+                    <MenuItem Header="Excluir definitivamente…"
+                              IsVisible="{Binding #Root.((vm:StickyNotesViewModel)DataContext).IsTrashScope}"
+                              Command="{Binding #Root.((vm:StickyNotesViewModel)DataContext).PurgeCommand}"
+                              CommandParameter="{Binding}" />
+                  </MenuFlyout>
+                </Border.ContextFlyout>
+
+                <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+
+                  <Ellipse Grid.Column="0"
+                           Width="8"
+                           Height="8"
+                           Margin="0,0,8,0"
+                           VerticalAlignment="Center"
+                           Fill="{Binding DotBrush}"
+                           IsVisible="{Binding HasDot}" />
+
+                  <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <TextBlock Classes="glyph"
+                                 Text="&#xEA8F;"
+                                 Foreground="{DynamicResource WidgetCautionBrush}"
+                                 IsVisible="{Binding IsAttention}"
+                                 ToolTip.Tip="Atenção" />
+                      <TextBlock Classes="noteTitle" Text="{Binding Title}" />
+                    </StackPanel>
+                    <TextBlock Classes="meta" Text="{Binding Meta}" />
+                  </StackPanel>
+
+                  <!-- Abrir é o gesto principal: um botão, e não só o menu. -->
+                  <Button Grid.Column="2"
+                          Classes="chrome"
+                          Content="&#xE8A7;"
+                          ToolTip.Tip="Abrir"
+                          IsVisible="{Binding #Root.((vm:StickyNotesViewModel)DataContext).IsActiveScope}"
+                          Command="{Binding #Root.((vm:StickyNotesViewModel)DataContext).OpenCommand}"
+                          CommandParameter="{Binding}" />
+
+                  <!-- O ⋯ abre o mesmo menu do clique direito: duas cópias divergiriam (ADR-021). -->
+                  <Button Grid.Column="3"
+                          Classes="chrome"
+                          Content="&#xE712;"
+                          ToolTip.Tip="Mais ações"
+                          Click="OnRowMenuClick" />
+
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+
+    </Panel>
+
+  </DockPanel>
+
+</Window>
