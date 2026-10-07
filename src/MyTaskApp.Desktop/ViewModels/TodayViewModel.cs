@@ -256,6 +256,9 @@ public sealed partial class TodayViewModel(
     /// <summary>O autocomplete do Jira embaixo da caixa de captura (ADR-045).</summary>
     public IssueSuggestionsViewModel CaptureSuggestions { get; } = new(runner, timeProvider, logger);
 
+    /// <summary>O painel "Histórico · 7 dias" do ↺ do cabeçalho (ADR-053).</summary>
+    public ActivityHistoryViewModel History { get; } = new(runner, logger);
+
     /// <summary>
     /// "GAECO-1234 · BUG — será vinculada ao Jira": a confirmação, embaixo da
     /// caixa, de que a linha vai nascer ligada à issue. <c>null</c> = nenhuma.

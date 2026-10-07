@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -87,6 +88,9 @@ public partial class MainWindow : Window
     /// <summary>Saída combinada com o App: o <c>Closing</c> deixa passar.</summary>
     private bool _closingForReal;
 
+    /// <summary>O flyout do histórico aberto agora — o do cabeçalho normal ou o do HUD.</summary>
+    private FlyoutBase? _openHistory;
+
     static MainWindow()
     {
         Popup.IsOpenProperty.Changed.AddClassHandler<Popup>((popup, args) =>
@@ -141,6 +145,10 @@ public partial class MainWindow : Window
         Chrome.HideRequested += HideAndRemember;
         Chrome.CloseRequested += Close;
         Chrome.ExitRequested += ExitNow;
+
+        // O Esc do histórico (ADR-053), na descida: antes da caixa de captura,
+        // que também usa a tecla.
+        AddHandler(KeyDownEvent, OnHistoryEscape, RoutingStrategies.Tunnel);
 
         // O quadro chega depois do construtor — o composition root e os testes
         // atribuem o DataContext no inicializador —, então o estado do HUD
@@ -1007,6 +1015,50 @@ public partial class MainWindow : Window
         return Chrome.IsExpanded
             ? state with { Width = ClientSize.Width, Height = ClientSize.Height }
             : state;
+    }
+
+    /// <summary>
+    /// O ↺ abriu o histórico (ADR-053): carrega a cada abertura, porque o que
+    /// se quer ver é o agora. O "×" e o clique numa tarefa fecham pelo
+    /// ViewModel, que não conhece o flyout.
+    /// </summary>
+    private void OnHistoryFlyoutOpened(object? sender, EventArgs e)
+    {
+        if (sender is not FlyoutBase flyout || DataContext is not TodayViewModel today)
+        {
+            return;
+        }
+
+        _openHistory = flyout;
+        today.History.CloseRequested -= HideHistory;
+        today.History.CloseRequested += HideHistory;
+        _ = today.History.LoadAsync(CancellationToken.None);
+    }
+
+    private void OnHistoryFlyoutClosed(object? sender, EventArgs e)
+    {
+        _openHistory = null;
+
+        if (DataContext is TodayViewModel today)
+        {
+            today.History.CloseRequested -= HideHistory;
+        }
+    }
+
+    private void HideHistory() => _openHistory?.Hide();
+
+    /// <summary>
+    /// Esc fecha o histórico. Abrir o flyout não tira o foco da janela — ele
+    /// continua, por exemplo, na caixa de captura —, então a tecla chega aqui,
+    /// e não ao painel. Com o foco dentro do painel, quem fecha é ele.
+    /// </summary>
+    private void OnHistoryEscape(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape && _openHistory is { } flyout)
+        {
+            flyout.Hide();
+            e.Handled = true;
+        }
     }
 
     /// <summary>

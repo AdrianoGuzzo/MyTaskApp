@@ -300,7 +300,8 @@ public class WidgetHudTests
         var bar = WithClass(window, "hudBar");
         var buttons = bar.GetVisualDescendants().OfType<Button>().ToList();
 
-        buttons.Should().HaveCount(4).And.OnlyContain(button =>
+        // Nova tarefa, histórico (ADR-053), sair do HUD, menu e fechar.
+        buttons.Should().HaveCount(5).And.OnlyContain(button =>
             WindowDecorationProperties.GetElementRole(button) == WindowDecorationsElementRole.User);
 
         var exit = buttons.Single(button => button.Name == "HudExitButton");

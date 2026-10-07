@@ -11,6 +11,7 @@ using MyTaskApp.Application.Deadlines;
 using MyTaskApp.Application.Development;
 using MyTaskApp.Application.External;
 using MyTaskApp.Application.External.Jira;
+using MyTaskApp.Application.History;
 using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.QuickCommands;
@@ -77,6 +78,9 @@ public static class DependencyInjection
         // Tempo trabalhado (ADR-052).
         services.AddScoped<ITimeEntryRepository, TimeEntryRepository>();
         services.AddScoped<IActiveTimerQuery, ActiveTimerQuery>();
+
+        // O histórico dos últimos dias (ADR-053): uma projeção, sem tabela.
+        services.AddScoped<IActivityHistoryQuery, ActivityHistoryQuery>();
 
         // Os sons dos avisos (ADR-042): os personalizados ficam com os dados do
         // usuário; os do app são renderizados numa pasta descartável.

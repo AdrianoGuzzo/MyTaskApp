@@ -1,0 +1,162 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
+             xmlns:history="using:MyTaskApp.Application.History"
+             x:Class="MyTaskApp.Desktop.Views.ActivityHistoryPanel"
+             x:DataType="vm:ActivityHistoryViewModel"
+             x:Name="Root"
+             Width="300"
+             Focusable="True">
+
+  <!--
+    "Histórico · 7 dias" (ADR-053). Mora num Flyout do cabeçalho, e não numa
+    janela: o checklist continua à vista atrás, e Esc e o clique fora já fecham
+    pelo próprio flyout. A altura tem teto e a lista rola, para o painel caber
+    sobre o HUD e a janela compacta.
+  -->
+
+  <UserControl.Styles>
+    <!-- O mesmo cabeçalho das seções do checklist (PRAZOS, CONCLUÍDAS). -->
+    <Style Selector="TextBlock.historyDay">
+      <Setter Property="FontSize" Value="9.5" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="LetterSpacing" Value="0.8" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+      <Setter Property="Margin" Value="6,10,0,3" />
+    </Style>
+
+    <Style Selector="TextBlock.historyNothing">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+      <Setter Property="Margin" Value="6,0,0,2" />
+    </Style>
+
+    <!-- A linha inteira é o clique que abre a tarefa: texto, e não botão cheio. -->
+    <Style Selector="Button.historyItem">
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="Padding" Value="6,4" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style Selector="Button.historyItem /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+
+    <Style Selector="Button.historyItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource WidgetSurfaceHoverBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.historyTitle">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <Style Selector="TextBlock.historyDetail">
+      <Setter Property="FontSize" Value="10.5" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextMidBrush}" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <!-- ✓ concluída, na cor de destaque; ○ trabalhada, só o contorno. -->
+    <Style Selector="TextBlock.historyDone">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetAccentBrush}" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Ellipse.historyWorked">
+      <Setter Property="Width" Value="8" />
+      <Setter Property="Height" Value="8" />
+      <Setter Property="StrokeThickness" Value="1.2" />
+      <Setter Property="Stroke" Value="{DynamicResource WidgetTextLowBrush}" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="Margin" Value="0,4,0,0" />
+    </Style>
+  </UserControl.Styles>
+
+  <DockPanel>
+
+    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="6,0,0,2">
+      <TextBlock Grid.Column="0"
+                 Text="{Binding Heading}"
+                 FontSize="12.5"
+                 FontWeight="SemiBold"
+                 VerticalAlignment="Center" />
+      <Button Grid.Column="1"
+              x:Name="CloseButton"
+              Classes="chrome"
+              Content="&#xE711;"
+              ToolTip.Tip="Fechar"
+              Command="{Binding CloseCommand}" />
+    </Grid>
+
+    <Border DockPanel.Dock="Bottom"
+            BorderBrush="{DynamicResource WidgetStrokeSoftBrush}"
+            BorderThickness="0,1,0,0"
+            Margin="0,6,0,0"
+            Padding="6,6,0,0">
+      <TextBlock x:Name="SummaryText"
+                 Classes="metric"
+                 Text="{Binding Summary}" />
+    </Border>
+
+    <TextBlock DockPanel.Dock="Bottom"
+               Text="{Binding ErrorMessage}"
+               FontSize="11"
+               TextWrapping="Wrap"
+               Margin="6,6,0,0"
+               Foreground="{DynamicResource WidgetDangerBrush}"
+               IsVisible="{Binding ErrorMessage, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+    <ScrollViewer MaxHeight="380" HorizontalScrollBarVisibility="Disabled">
+      <!-- A margem é da barra de rolagem, que se sobrepõe ao conteúdo. -->
+      <ItemsControl x:Name="DayList" ItemsSource="{Binding Days}" Margin="0,0,10,0">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="history:ActivityDayView">
+            <StackPanel>
+
+              <TextBlock Classes="historyDay" Text="{Binding Label}" />
+
+              <TextBlock Classes="historyNothing"
+                         Text="Nenhuma atividade"
+                         IsVisible="{Binding IsEmpty}" />
+
+              <ItemsControl ItemsSource="{Binding Items}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="history:ActivityItemView">
+                    <Button Classes="historyItem"
+                            ToolTip.Tip="Abrir a tarefa"
+                            Command="{Binding #Root.((vm:ActivityHistoryViewModel)DataContext).OpenCommand}"
+                            CommandParameter="{Binding}">
+                      <Grid ColumnDefinitions="16,*">
+                        <TextBlock Grid.Column="0"
+                                   Classes="historyDone"
+                                   Text="&#x2713;"
+                                   IsVisible="{Binding IsCompleted}" />
+                        <Ellipse Grid.Column="0"
+                                 Classes="historyWorked"
+                                 VerticalAlignment="Top"
+                                 IsVisible="{Binding !IsCompleted}" />
+                        <StackPanel Grid.Column="1" Spacing="1">
+                          <TextBlock Classes="historyTitle" Text="{Binding Title}" />
+                          <TextBlock Classes="historyDetail" Text="{Binding Detail}" />
+                        </StackPanel>
+                      </Grid>
+                    </Button>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+
+            </StackPanel>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
+
+  </DockPanel>
+</UserControl>

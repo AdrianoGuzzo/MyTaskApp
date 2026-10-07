@@ -95,6 +95,19 @@ primeiro para Windows. Também roda no Linux, com algumas funções a menos.
 - No HUD, uma faixa com a tarefa e o relógio fica visível enquanto o
   cronômetro corre.
 
+### Histórico dos últimos 7 dias
+
+- O botão ↺ do cabeçalho abre **Histórico · 7 dias**: hoje e os seis dias
+  anteriores, cada um com o que foi **concluído** (✓, com a hora e o tempo do
+  dia) e o que foi **trabalhado** sem concluir (○, com o tempo do dia).
+- Uma tarefa longa aparece em cada dia em que foi trabalhada, com o tempo
+  daquele dia. Um período que atravessa a meia-noite conta em cada lado dela.
+- No rodapé fica o resumo da semana ("18 concluídas · 24h 35min"). O dia sem
+  nada aparece como "Nenhuma atividade".
+- Clicar numa linha abre a mesma janela da tarefa, já na aba **Tempo**.
+- O painel abre por cima do checklist e fecha com Esc, no × ou com um clique
+  fora. No HUD compacto o botão fica de fora, por falta de espaço.
+
 ### Um widget, não uma janela
 
 - Painel de 360×560 sem moldura, arrastável e redimensionável, com três modos:

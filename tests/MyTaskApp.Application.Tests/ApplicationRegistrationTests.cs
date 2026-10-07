@@ -8,6 +8,7 @@ using MyTaskApp.Application.Commands;
 using MyTaskApp.Application.Development;
 using MyTaskApp.Application.External;
 using MyTaskApp.Application.External.Jira;
+using MyTaskApp.Application.History;
 using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Application.Tasks;
 using MyTaskApp.Application.Planning;
@@ -64,6 +65,7 @@ public class ApplicationRegistrationTests
             .AddSingleton<IJiraAuthenticationService>(new StubJiraAuthentication())
             .AddSingleton<ITimeEntryRepository>(timeEntries)
             .AddSingleton<IActiveTimerQuery>(new FakeActiveTimerQuery(timeEntries, repository))
+            .AddSingleton<IActivityHistoryQuery>(new FakeActivityHistoryQuery())
             // Normalmente vem do composition root do Desktop (ADR-012).
             .AddSingleton<IUseCaseRunner>(new CountingUseCaseRunner())
             .AddApplication()
@@ -183,6 +185,7 @@ public class ApplicationRegistrationTests
     [InlineData(typeof(UpdateTimeEntryHandler))]
     [InlineData(typeof(DeleteTimeEntryHandler))]
     [InlineData(typeof(GetTaskTimeLogHandler))]
+    [InlineData(typeof(GetActivityHistoryHandler))]
     public void EveryUseCase_CanBeResolved(Type handlerType)
     {
         using var provider = BuildProvider();
@@ -260,6 +263,11 @@ public class ApplicationRegistrationTests
 
     private sealed class StubTodayQuery : ITodayQuery
     {
+        public Task<TodayOccurrenceRow?> FindOccurrenceAsync(
+            Guid occurrenceId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<TodayOccurrenceRow?>(null);
+
         public Task<IReadOnlyList<TodayOccurrenceRow>> GetCandidatesAsync(
             DateOnly today,
             CancellationToken cancellationToken = default) =>

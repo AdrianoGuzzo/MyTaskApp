@@ -25,6 +25,9 @@ public static class DeadlineFormatter
     private static readonly string[] WeekdayAbbreviations =
         ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
 
+    /// <summary>"ter", "sáb": a mesma abreviação do prazo, para o histórico (ADR-053) não ter outra.</summary>
+    public static string WeekdayAbbreviation(DateOnly date) => WeekdayAbbreviations[(int)date.DayOfWeek];
+
     /// <summary>
     /// Quanto falta, na unidade que se lê de relance: "8 dias", "2 dias e 4
     /// horas", "6 horas", "1h 42min", "48 minutos". Nunca "137 horas".

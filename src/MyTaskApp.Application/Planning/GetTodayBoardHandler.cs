@@ -9,6 +9,12 @@ using MyTaskApp.Domain.Tasks;
 
 namespace MyTaskApp.Application.Planning;
 
+/// <summary>Uma tarefa pela ocorrência, esteja ela no quadro de hoje ou não (ADR-053).</summary>
+public sealed record GetBoardTask(Guid OccurrenceId);
+
+/// <summary>A linha da tarefa e se ela está concluída — que é o que abre a janela só para leitura.</summary>
+public sealed record BoardTask(TodayTask Task, bool IsCompleted);
+
 /// <summary>
 /// Monta a tela "Hoje": busca as candidatas, deixa o domínio decidir a seção de
 /// cada uma e ordena cada seção pelo critério que faz sentido para ela.
@@ -41,24 +47,7 @@ public sealed class GetTodayBoardHandler(
             .ToList();
 
         TodayTask ToTask((TodayOccurrenceRow Row, TodayPlacement? Placement) entry) =>
-            Project(entry, nowUtc) with
-            {
-                ActiveAgents = Agents(entry.Row.ActiveAgents),
-                Worktrees = Worktrees(entry.Row.Worktrees),
-                External = entry.Row.External,
-                Deadline = entry.Row.Deadline is { } deadline
-                    ? TaskDeadlineView.Describe(
-                        deadline,
-                        clock,
-                        nowUtc,
-                        entry.Row.Status is TaskItemStatus.Completed ? entry.Row.CompletedAt : null)
-                    : null,
-                DeadlineAlerts = entry.Row.DeadlineAlerts,
-                NextAction = entry.Row.NextAction,
-                Estimate = entry.Row.Estimate,
-                Logged = entry.Row.Logged,
-                TimerStartedAt = entry.Row.TimerStartedAt,
-            };
+            Describe(entry.Row, entry.Placement!, nowUtc);
 
         var activeTimer = timers is null ? null : await timers.FindAsync(cancellationToken);
 
@@ -109,6 +98,47 @@ public sealed class GetTodayBoardHandler(
             ActiveTimer = activeTimer,
         };
     }
+
+    /// <summary>
+    /// Uma tarefa avulsa, com a mesma linha que o quadro desenharia (ADR-053): o
+    /// histórico abre por aqui a tarefa que já saiu do quadro. Fora do quadro
+    /// não há seção, então ela não se diz atrasada — quem abre quer a tarefa, e
+    /// não o lembrete.
+    /// </summary>
+    public async Task<BoardTask?> HandleAsync(GetBoardTask request, CancellationToken cancellationToken = default)
+    {
+        if (await query.FindOccurrenceAsync(request.OccurrenceId, cancellationToken) is not { } row)
+        {
+            return null;
+        }
+
+        var isCompleted = row.Status is TaskItemStatus.Completed;
+
+        var placement = Place(row, clock.Today, clock.CurrentTime, options.Value.ToNowWindow())
+            ?? new TodayPlacement(isCompleted ? TodaySection.Completed : TodaySection.Today, IsLate: false);
+
+        return new BoardTask(Describe(row, placement, timeProvider.GetUtcNow()), isCompleted);
+    }
+
+    private TodayTask Describe(TodayOccurrenceRow row, TodayPlacement placement, DateTimeOffset nowUtc) =>
+        Project((row, placement), nowUtc) with
+        {
+            ActiveAgents = Agents(row.ActiveAgents),
+            Worktrees = Worktrees(row.Worktrees),
+            External = row.External,
+            Deadline = row.Deadline is { } deadline
+                ? TaskDeadlineView.Describe(
+                    deadline,
+                    clock,
+                    nowUtc,
+                    row.Status is TaskItemStatus.Completed ? row.CompletedAt : null)
+                : null,
+            DeadlineAlerts = row.DeadlineAlerts,
+            NextAction = row.NextAction,
+            Estimate = row.Estimate,
+            Logged = row.Logged,
+            TimerStartedAt = row.TimerStartedAt,
+        };
 
     /// <summary>
     /// A casa escolhida à mão, ou o fim da fila para quem nunca foi arrastado.

@@ -49,7 +49,14 @@ internal sealed class TempSqliteDatabase : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        SqliteConnection.ClearAllPools();
+        // Só o pool deste arquivo. ClearAllPools fechava também as conexões de
+        // outro teste rodando em paralelo, que então falhava ao abrir com
+        // ObjectDisposedException no handle do SQLite — intermitente.
+        using (var connection = new SqliteConnection(ConnectionString))
+        {
+            SqliteConnection.ClearPool(connection);
+        }
+
         await Task.Yield();
 
         if (File.Exists(_path))

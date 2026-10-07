@@ -86,4 +86,13 @@ public interface ITodayQuery
     Task<IReadOnlyList<TodayOccurrenceRow>> GetCandidatesAsync(
         DateOnly today,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Uma ocorrência com a linha inteira, esteja ela no quadro de hoje ou não:
+    /// o histórico (ADR-053) abre a tarefa de três dias atrás pela mesma janela.
+    /// <c>null</c> = não existe mais, ou está na lixeira.
+    /// </summary>
+    Task<TodayOccurrenceRow?> FindOccurrenceAsync(
+        Guid occurrenceId,
+        CancellationToken cancellationToken = default);
 }

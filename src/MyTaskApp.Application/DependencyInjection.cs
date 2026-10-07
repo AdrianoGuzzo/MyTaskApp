@@ -10,6 +10,7 @@ using MyTaskApp.Application.Deadlines;
 using MyTaskApp.Application.Development;
 using MyTaskApp.Application.External;
 using MyTaskApp.Application.External.Jira;
+using MyTaskApp.Application.History;
 using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.QuickCommands;
@@ -200,6 +201,9 @@ public static class DependencyInjection
         services.AddScoped<UpdateTimeEntryHandler>();
         services.AddScoped<DeleteTimeEntryHandler>();
         services.AddScoped<GetTaskTimeLogHandler>();
+
+        // O histórico dos últimos dias (ADR-053): só leitura, sobre o que já está gravado.
+        services.AddScoped<GetActivityHistoryHandler>();
 
         // Singleton: e um laco so, e ele nao pode capturar escopo nenhum
         // (validateScopes: true reprovaria). So recebe IUseCaseRunner.

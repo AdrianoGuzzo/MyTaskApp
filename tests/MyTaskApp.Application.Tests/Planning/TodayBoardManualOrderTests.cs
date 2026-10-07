@@ -194,6 +194,11 @@ public class TodayBoardManualOrderTests
 
     private sealed class FakeQuery : ITodayQuery
     {
+        public Task<TodayOccurrenceRow?> FindOccurrenceAsync(
+            Guid occurrenceId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(Rows.FirstOrDefault(row => row.OccurrenceId == occurrenceId));
+
         public IReadOnlyList<TodayOccurrenceRow> Rows { get; set; } = [];
 
         public Task<IReadOnlyList<TodayOccurrenceRow>> GetCandidatesAsync(
