@@ -1,0 +1,190 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
+        xmlns:views="using:MyTaskApp.Desktop.Views"
+        xmlns:chrome="using:Avalonia.Controls.Chrome"
+        x:Class="MyTaskApp.Desktop.Views.StickyNoteWindow"
+        x:DataType="vm:StickyNoteViewModel"
+        Title="{Binding WindowTitle}"
+        Width="280"
+        Height="200"
+        MinWidth="200"
+        MinHeight="120"
+        WindowDecorations="None"
+        ExtendClientAreaToDecorationsHint="True"
+        Background="Transparent"
+        TransparencyLevelHint="Transparent"
+        ShowInTaskbar="False"
+        Topmost="{Binding IsPinned}">
+
+  <!--
+    Um post-it (ADR-054): uma janela por anotação, cada uma com o próprio
+    "sempre no topo" — independente do widget e do HUD. Sem botão na barra de
+    tarefas: cinco post-its não podem virar cinco botões lá embaixo. Quem os
+    acha de volta é a lista de post-its, no painel e na bandeja.
+  -->
+
+  <Window.KeyBindings>
+    <KeyBinding Gesture="Escape" Command="{Binding CloseCommand}" />
+    <KeyBinding Gesture="Ctrl+W" Command="{Binding CloseCommand}" />
+    <KeyBinding Gesture="Ctrl+Shift+N" Command="{Binding NewNoteCommand}" />
+  </Window.KeyBindings>
+
+  <Window.Styles>
+
+    <!-- O cartão: a mesma casca do widget, num raio de cartão. -->
+    <Style Selector="Border.stickyNote">
+      <!-- O anel de 8px é da sombra e das alças de redimensionar. -->
+      <Setter Property="Margin" Value="8" />
+      <Setter Property="Background" Value="{DynamicResource WidgetSurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetStrokeBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetShellRadius}" />
+      <Setter Property="BoxShadow" Value="{DynamicResource WidgetPopupShadow}" />
+      <Setter Property="ClipToBounds" Value="True" />
+    </Style>
+
+    <!-- Barra de arrasto: área, não elemento — por isso transparente, e não nula. -->
+    <Style Selector="Border.stickyHeader">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Padding" Value="10,4,4,0" />
+      <Setter Property="MinHeight" Value="30" />
+    </Style>
+
+    <Style Selector="TextBlock.stickyGlyph">
+      <Setter Property="FontFamily" Value="{StaticResource WidgetIconFont}" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Margin" Value="0,0,6,0" />
+    </Style>
+
+    <Style Selector="TextBlock.stickyTitle">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextMidBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <!--
+      Os controles só aparecem com o mouse no post-it ou com o foco nele
+      (teclado também chega). Opacidade, e não IsVisible: o cabeçalho não muda
+      de tamanho no hover, e a ordem de Tab continua alcançando os botões.
+    -->
+    <Style Selector="Button.stickyControl">
+      <Setter Property="Opacity" Value="0" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <DoubleTransition Property="Opacity" Duration="0:0:0.12" />
+          <BrushTransition Property="Background" Duration="0:0:0.12" />
+          <BrushTransition Property="Foreground" Duration="0:0:0.12" />
+        </Transitions>
+      </Setter>
+    </Style>
+
+    <Style Selector="Border.stickyNote:pointerover Button.stickyControl">
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+
+    <Style Selector="Border.stickyNote:focus-within Button.stickyControl">
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+
+    <!-- Fixado, o alfinete fica: é a indicação de que este post-it não sai da frente. -->
+    <Style Selector="Button.stickyControl.on">
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+
+    <Style Selector="TextBox.stickyEditor">
+      <Setter Property="AcceptsReturn" Value="True" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="Padding" Value="12,4,12,10" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+      <Setter Property="VerticalContentAlignment" Value="Top" />
+    </Style>
+
+    <Style Selector="Border.stickyError">
+      <Setter Property="Background" Value="{DynamicResource WidgetDangerSoftBrush}" />
+      <Setter Property="Padding" Value="10,6" />
+    </Style>
+
+    <Style Selector="Border.stickyError > TextBlock">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+  </Window.Styles>
+
+  <Panel>
+
+    <Border x:Name="Card" Classes="stickyNote">
+
+      <DockPanel>
+
+        <Border x:Name="Header"
+                DockPanel.Dock="Top"
+                Classes="stickyHeader"
+                chrome:WindowDecorationProperties.ElementRole="TitleBar"
+                PointerPressed="OnHeaderPointerPressed">
+
+          <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto">
+
+            <TextBlock Grid.Column="0" Classes="stickyGlyph" Text="&#xE70F;" />
+
+            <TextBlock Grid.Column="1" Classes="stickyTitle" Text="{Binding HeaderTitle}" />
+
+            <Button x:Name="PinButton"
+                    Grid.Column="2"
+                    Classes="chrome stickyControl"
+                    Classes.on="{Binding IsPinned}"
+                    Content="{Binding PinGlyph}"
+                    chrome:WindowDecorationProperties.ElementRole="User"
+                    ToolTip.Tip="{Binding PinTip}"
+                    Command="{Binding TogglePinCommand}" />
+
+            <Button x:Name="MenuButton"
+                    Grid.Column="3"
+                    Classes="chrome stickyControl"
+                    Content="&#xE712;"
+                    chrome:WindowDecorationProperties.ElementRole="User"
+                    ToolTip.Tip="Mais ações">
+              <Button.Flyout>
+                <MenuFlyout Placement="BottomEdgeAlignedRight">
+                  <MenuItem Header="Novo post-it" InputGesture="Ctrl+Shift+N" Command="{Binding NewNoteCommand}" />
+                  <Separator />
+                  <MenuItem Header="Arquivar" Command="{Binding ArchiveCommand}" />
+                  <MenuItem Header="Excluir" Command="{Binding MoveToTrashCommand}" />
+                </MenuFlyout>
+              </Button.Flyout>
+            </Button>
+
+            <Button x:Name="CloseButton"
+                    Grid.Column="4"
+                    Classes="chrome stickyControl"
+                    Content="&#xE711;"
+                    chrome:WindowDecorationProperties.ElementRole="User"
+                    ToolTip.Tip="Fechar (o post-it continua salvo) — Esc"
+                    Command="{Binding CloseCommand}" />
+
+          </Grid>
+        </Border>
+
+        <Border DockPanel.Dock="Bottom" Classes="stickyError" IsVisible="{Binding HasError}">
+          <TextBlock Text="{Binding ErrorMessage}" />
+        </Border>
+
+        <TextBox x:Name="Editor"
+                 Classes="stickyEditor"
+                 Text="{Binding Content}"
+                 PlaceholderText="Escreva aqui…" />
+
+      </DockPanel>
+    </Border>
+
+    <views:ResizeGrips />
+
+  </Panel>
+
+</Window>

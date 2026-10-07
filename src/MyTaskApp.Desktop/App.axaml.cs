@@ -12,6 +12,7 @@ using MyTaskApp.Application.Sounds;
 using MyTaskApp.Desktop.Composition;
 using MyTaskApp.Desktop.Reminders;
 using MyTaskApp.Desktop.SpellChecking;
+using MyTaskApp.Desktop.StickyNotes;
 using MyTaskApp.Desktop.Theming;
 using MyTaskApp.Desktop.ViewModels;
 using MyTaskApp.Desktop.Views;
@@ -93,6 +94,7 @@ public sealed partial class App : Avalonia.Application
                 SetUpDataManagement(Services, window, todayViewModel);
                 SetUpNotes(Services, window, todayViewModel);
                 SetUpTags(Services, window, todayViewModel);
+                SetUpStickyNotes(Services, window, todayViewModel);
                 SetUpIntegrations(Services, todayViewModel);
                 SetUpAgentSessions(Services, todayViewModel);
                 SetUpCommandExecutions(Services);
@@ -283,6 +285,26 @@ public sealed partial class App : Avalonia.Application
                     _ = todayViewModel.LoadAsync(CancellationToken.None);
                     _ = todayViewModel.RefreshCaptureTagsAsync(CancellationToken.None);
                 });
+    }
+
+    /// <summary>
+    /// Post-its (ADR-054): os fixados voltam para a tela junto com o app, e um
+    /// novo nasce na tela onde o widget está.
+    /// </summary>
+    private static void SetUpStickyNotes(
+        IServiceProvider services,
+        MainWindow window,
+        TodayViewModel todayViewModel)
+    {
+        var notes = services.GetRequiredService<StickyNoteWindowManager>();
+
+        // Escondido na bandeja, o widget não diz nada sobre onde o usuário está.
+        notes.Anchor = () => window.IsVisible ? window.Position : null;
+        notes.Failed += message => Log.Warning("StickyNoteFailed {Message}", message);
+
+        todayViewModel.NewStickyNoteRequested += () => _ = notes.CreateNewAsync();
+
+        _ = notes.OpenStartupNotesAsync();
     }
 
     /// <summary>

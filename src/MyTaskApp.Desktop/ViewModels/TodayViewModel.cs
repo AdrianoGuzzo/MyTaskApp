@@ -520,6 +520,12 @@ public sealed partial class TodayViewModel(
     [RelayCommand]
     public void OpenNotes(TaskRowViewModel row) => NotesRequested?.Invoke(row);
 
+    /// <summary>Pede um post-it novo, aberto e com o cursor no texto (ADR-054).</summary>
+    public event Action? NewStickyNoteRequested;
+
+    [RelayCommand]
+    public void NewStickyNote() => NewStickyNoteRequested?.Invoke();
+
     /// <summary>Pede a janela de gerenciamento de etiquetas (ADR-025).</summary>
     public event Action? TagsRequested;
 

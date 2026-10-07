@@ -1102,17 +1102,4 @@ public partial class MainWindow : Window
         _dragSettle.Stop();
         _dragSettle.Start();
     }
-
-    private void OnResizePointerPressed(object? sender, PointerPressedEventArgs e)
-    {
-        if (!CanResize || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
-        {
-            return;
-        }
-
-        if (sender is Control { Tag: string edge } && Enum.TryParse<WindowEdge>(edge, out var side))
-        {
-            BeginResizeDrag(side, e);
-        }
-    }
 }

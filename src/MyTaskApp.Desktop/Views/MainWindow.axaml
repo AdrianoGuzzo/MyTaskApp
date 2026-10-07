@@ -30,6 +30,11 @@
     sempre visível", conforme o modo.
   -->
 
+  <!-- Ctrl+Shift+N com o painel em foco; fora dele, o atalho global (ADR-054). -->
+  <Window.KeyBindings>
+    <KeyBinding Gesture="Ctrl+Shift+N" Command="{Binding NewStickyNoteCommand}" />
+  </Window.KeyBindings>
+
   <Window.Resources>
     <!-- Os rádios de tamanho e posição do menu do HUD. -->
     <ControlTheme x:Key="HudChoiceItem"
@@ -146,6 +151,13 @@
                       ToolTip.Tip="Mais opções">
                 <Button.Flyout>
                   <MenuFlyout Placement="BottomEdgeAlignedRight">
+                    <!-- Post-its (ADR-054): o que ainda não merece virar tarefa. -->
+                    <MenuItem Header="Post-its">
+                      <MenuItem Header="Novo post-it"
+                                InputGesture="Ctrl+Shift+N"
+                                Command="{Binding NewStickyNoteCommand}" />
+                    </MenuItem>
+                    <Separator />
                     <MenuItem Header="Painel completo"
                               ToggleType="Radio"
                               IsChecked="{Binding #Shell.Chrome.IsExpanded, Mode=OneWay}"
@@ -487,37 +499,8 @@
       PointerPressed é a rede de segurança se a plataforma ignorar o papel.
       O HUD não tem: o tamanho dele é escolha de preset.
     -->
-    <Grid Margin="2"
-          RowDefinitions="8,*,8"
-          ColumnDefinitions="8,*,8"
-          IsVisible="{Binding #Shell.Chrome.AreGripsVisible}">
-
-      <Border Grid.Row="0" Grid.Column="0" Background="Transparent" Cursor="TopLeftCorner"
-              Tag="NorthWest" chrome:WindowDecorationProperties.ElementRole="ResizeNW"
-              PointerPressed="OnResizePointerPressed" />
-      <Border Grid.Row="0" Grid.Column="1" Background="Transparent" Cursor="SizeNorthSouth"
-              Tag="North" chrome:WindowDecorationProperties.ElementRole="ResizeN"
-              PointerPressed="OnResizePointerPressed" />
-      <Border Grid.Row="0" Grid.Column="2" Background="Transparent" Cursor="TopRightCorner"
-              Tag="NorthEast" chrome:WindowDecorationProperties.ElementRole="ResizeNE"
-              PointerPressed="OnResizePointerPressed" />
-      <Border Grid.Row="1" Grid.Column="0" Background="Transparent" Cursor="SizeWestEast"
-              Tag="West" chrome:WindowDecorationProperties.ElementRole="ResizeW"
-              PointerPressed="OnResizePointerPressed" />
-      <Border Grid.Row="1" Grid.Column="2" Background="Transparent" Cursor="SizeWestEast"
-              Tag="East" chrome:WindowDecorationProperties.ElementRole="ResizeE"
-              PointerPressed="OnResizePointerPressed" />
-      <Border Grid.Row="2" Grid.Column="0" Background="Transparent" Cursor="BottomLeftCorner"
-              Tag="SouthWest" chrome:WindowDecorationProperties.ElementRole="ResizeSW"
-              PointerPressed="OnResizePointerPressed" />
-      <Border Grid.Row="2" Grid.Column="1" Background="Transparent" Cursor="SizeNorthSouth"
-              Tag="South" chrome:WindowDecorationProperties.ElementRole="ResizeS"
-              PointerPressed="OnResizePointerPressed" />
-      <Border Grid.Row="2" Grid.Column="2" Background="Transparent" Cursor="BottomRightCorner"
-              Tag="SouthEast" chrome:WindowDecorationProperties.ElementRole="ResizeSE"
-              PointerPressed="OnResizePointerPressed" />
-
-    </Grid>
+    <views:ResizeGrips Margin="2"
+                       IsVisible="{Binding #Shell.Chrome.AreGripsVisible}" />
 
   </Panel>
 

@@ -8,6 +8,7 @@ using MyTaskApp.Application.Reminders;
 using MyTaskApp.Application.Sounds;
 using MyTaskApp.Desktop.Reminders;
 using MyTaskApp.Desktop.SpellChecking;
+using MyTaskApp.Desktop.StickyNotes;
 using MyTaskApp.Desktop.ViewModels;
 using MyTaskApp.Desktop.Views;
 using MyTaskApp.Desktop.Widget;
@@ -154,6 +155,9 @@ internal static class AppServices
             // Sons dos avisos do agente (ADR-042): janela única, como as outras.
             .AddSingleton<AgentAlertSoundsViewModel>()
             .AddSingleton<AgentAlertSoundsWindow>()
+
+            // Post-its (ADR-054): um dono só das janelas abertas — uma por post-it.
+            .AddSingleton<StickyNoteWindowManager>()
 
             // A anotacao de um item (§12). Transient, e nao singleton como as
             // duas acima: sao duas telas diferentes para dois checklists
