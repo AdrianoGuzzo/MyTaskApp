@@ -17,6 +17,7 @@ using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.QuickCommands;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Application.Sounds;
+using MyTaskApp.Application.StickyNotes;
 using MyTaskApp.Application.Tags;
 using MyTaskApp.Application.TimeTracking;
 using MyTaskApp.Infrastructure.Agents;
@@ -81,6 +82,10 @@ public static class DependencyInjection
 
         // O histórico dos últimos dias (ADR-053): uma projeção, sem tabela.
         services.AddScoped<IActivityHistoryQuery, ActivityHistoryQuery>();
+
+        // Post-its (ADR-054).
+        services.AddScoped<IStickyNoteRepository, StickyNoteRepository>();
+        services.AddScoped<IStickyNoteQuery, StickyNoteQuery>();
 
         // Os sons dos avisos (ADR-042): os personalizados ficam com os dados do
         // usuário; os do app são renderizados numa pasta descartável.

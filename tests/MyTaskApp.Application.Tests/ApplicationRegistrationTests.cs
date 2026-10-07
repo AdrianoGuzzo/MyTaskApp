@@ -15,6 +15,7 @@ using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.QuickCommands;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Application.Sounds;
+using MyTaskApp.Application.StickyNotes;
 using MyTaskApp.Application.Tags;
 using MyTaskApp.Application.Tests.Fakes;
 using MyTaskApp.Application.TimeTracking;
@@ -28,6 +29,7 @@ public class ApplicationRegistrationTests
         var repository = new FakeTaskItemRepository();
         var processes = new FakeAgentProcessTracker();
         var timeEntries = new FakeTimeEntryRepository();
+        var notes = new FakeStickyNoteRepository();
 
         return new ServiceCollection()
             .AddSingleton(typeof(ILogger<>), typeof(NullLogger<>))
@@ -66,6 +68,8 @@ public class ApplicationRegistrationTests
             .AddSingleton<ITimeEntryRepository>(timeEntries)
             .AddSingleton<IActiveTimerQuery>(new FakeActiveTimerQuery(timeEntries, repository))
             .AddSingleton<IActivityHistoryQuery>(new FakeActivityHistoryQuery())
+            .AddSingleton<IStickyNoteRepository>(notes)
+            .AddSingleton<IStickyNoteQuery>(new FakeStickyNoteQuery(notes))
             // Normalmente vem do composition root do Desktop (ADR-012).
             .AddSingleton<IUseCaseRunner>(new CountingUseCaseRunner())
             .AddApplication()
@@ -186,6 +190,21 @@ public class ApplicationRegistrationTests
     [InlineData(typeof(DeleteTimeEntryHandler))]
     [InlineData(typeof(GetTaskTimeLogHandler))]
     [InlineData(typeof(GetActivityHistoryHandler))]
+    [InlineData(typeof(CreateStickyNoteHandler))]
+    [InlineData(typeof(EditStickyNoteHandler))]
+    [InlineData(typeof(ChangeStickyNoteAppearanceHandler))]
+    [InlineData(typeof(PinStickyNoteHandler))]
+    [InlineData(typeof(SetStickyNoteOpenHandler))]
+    [InlineData(typeof(PlaceStickyNoteHandler))]
+    [InlineData(typeof(ArchiveStickyNoteHandler))]
+    [InlineData(typeof(RestoreStickyNoteHandler))]
+    [InlineData(typeof(MoveStickyNoteToTrashHandler))]
+    [InlineData(typeof(RestoreStickyNoteFromTrashHandler))]
+    [InlineData(typeof(PurgeStickyNoteHandler))]
+    [InlineData(typeof(ConvertStickyNoteToTaskHandler))]
+    [InlineData(typeof(GetStickyNotesHandler))]
+    [InlineData(typeof(GetStickyNoteHandler))]
+    [InlineData(typeof(GetStartupStickyNotesHandler))]
     public void EveryUseCase_CanBeResolved(Type handlerType)
     {
         using var provider = BuildProvider();
