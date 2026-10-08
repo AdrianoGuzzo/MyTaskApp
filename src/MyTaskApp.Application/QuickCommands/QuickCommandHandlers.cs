@@ -60,7 +60,14 @@ internal static class QuickCommandTargets
         return (task, development);
     }
 
-    public static async Task<(IReadOnlyList<CommandDirectoryMatch> Matches, IReadOnlyList<DevelopmentCommandRow> Globals)>
+    /// <returns>
+    /// Os diretórios que casaram; os comandos que podem virar botão — os globais
+    /// e os só daqueles diretórios (ADR-055); e só os globais, para o avulso.
+    /// </returns>
+    public static async Task<(
+        IReadOnlyList<CommandDirectoryMatch> Matches,
+        IReadOnlyList<DevelopmentCommandRow> Commands,
+        IReadOnlyList<DevelopmentCommandRow> Globals)>
         CatalogAsync(
             ITagQuery tagQuery,
             IDevelopmentCommandRepository commands,
@@ -71,29 +78,41 @@ internal static class QuickCommandTargets
         var directories = await tagQuery.ListCommandDirectoriesAsync(cancellationToken);
         var globals = (await commands.ListAsync(cancellationToken)).Select(command => DevelopmentCommandRow.From(command)).ToList();
         var taskTags = task.Tags.Select(link => link.TagId).ToHashSet();
+        var matches = QuickCommandCatalog.Match(development.RepositoryPath, taskTags, directories);
 
-        return (QuickCommandCatalog.Match(development.RepositoryPath, taskTags, directories), globals);
+        if (matches.Count == 0)
+        {
+            return (matches, globals, globals);
+        }
+
+        var own = await commands.ListForDirectoriesAsync(
+            [.. matches.Select(match => match.Directory.Id)],
+            cancellationToken);
+
+        return (matches, [.. globals, .. own.Select(command => DevelopmentCommandRow.From(command))], globals);
     }
 
     /// <summary>
     /// O botão do diretório, ou — sem associação, ou com uma que já não está
-    /// aqui — o comando global como avulso.
+    /// aqui — o comando global como avulso. O comando só do diretório não tem
+    /// avulso: fora do botão, ele não existe.
     /// </summary>
     public static QuickCommandEntry Find(
         IReadOnlyList<CommandDirectoryMatch> matches,
+        IReadOnlyList<DevelopmentCommandRow> commands,
         IReadOnlyList<DevelopmentCommandRow> globals,
         Guid commandId,
         Guid? bindingId)
     {
         if (bindingId is not null
-            && QuickCommandCatalog.Entries(matches, globals)
+            && QuickCommandCatalog.Entries(matches, commands)
                 .FirstOrDefault(entry => entry.BindingId == bindingId && entry.CommandId == commandId) is { } bound)
         {
             return bound;
         }
 
         var global = globals.FirstOrDefault(row => row.Id == commandId)
-            ?? throw new DomainException("Este comando não existe mais. Ele pode ter sido excluído em Comandos globais.");
+            ?? throw new DomainException("Este comando não está mais disponível. Ele pode ter sido excluído, ou desligado no diretório da etiqueta.");
 
         return QuickCommandCatalog.AdHoc(global, matches);
     }
@@ -156,7 +175,7 @@ public sealed class GetQuickCommandsHandler(
             return QuickCommandsView.Empty;
         }
 
-        var (matches, globals) = await QuickCommandTargets.CatalogAsync(
+        var (matches, available, globals) = await QuickCommandTargets.CatalogAsync(
             tagQuery, commands, task, development, cancellationToken);
 
         var recent = await executions.ListForDevelopmentAsync(development.Id, cancellationToken);
@@ -170,7 +189,7 @@ public sealed class GetQuickCommandsHandler(
         }
 
         return new QuickCommandsView(
-            QuickCommandCatalog.Entries(matches, globals),
+            QuickCommandCatalog.Entries(matches, available),
             globals,
             [.. recent.Select(CommandExecutionView.From)]);
     }
@@ -193,10 +212,10 @@ public sealed class PrepareQuickCommandHandler(
         var (task, development) = await QuickCommandTargets.ReadyAsync(
             tasks, directories, query.TaskId, query.DevelopmentId, cancellationToken);
 
-        var (matches, globals) = await QuickCommandTargets.CatalogAsync(
+        var (matches, available, globals) = await QuickCommandTargets.CatalogAsync(
             tagQuery, commands, task, development, cancellationToken);
 
-        var entry = QuickCommandTargets.Find(matches, globals, query.CommandId, query.BindingId);
+        var entry = QuickCommandTargets.Find(matches, available, globals, query.CommandId, query.BindingId);
         var folder = await QuickCommandTargets.WorkingDirectoryAsync(directories, development, entry, cancellationToken);
 
         return new QuickCommandPlan(entry, folder, QuickCommandTargets.ContextFor(task, development, entry));
@@ -259,10 +278,10 @@ public sealed class RunQuickCommandHandler(
         var (task, development) = await QuickCommandTargets.ReadyAsync(
             tasks, directories, command.TaskId, command.DevelopmentId, cancellationToken);
 
-        var (matches, globals) = await QuickCommandTargets.CatalogAsync(
+        var (matches, available, globals) = await QuickCommandTargets.CatalogAsync(
             tagQuery, commands, task, development, cancellationToken);
 
-        var entry = QuickCommandTargets.Find(matches, globals, command.CommandId, command.BindingId);
+        var entry = QuickCommandTargets.Find(matches, available, globals, command.CommandId, command.BindingId);
         var folder = await QuickCommandTargets.WorkingDirectoryAsync(directories, development, entry, cancellationToken);
         var line = QuickCommandLine.Build(
             entry.Template,

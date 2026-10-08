@@ -18,7 +18,16 @@ internal sealed class DevelopmentCommandRepository(MyTaskAppDbContext context) :
     public async Task<IReadOnlyList<DevelopmentCommand>> ListAsync(CancellationToken cancellationToken = default) =>
         await context.DevelopmentCommands
             .Include(command => command.Parameters)
+            .Where(command => command.TagDirectoryId == null)
             .OrderBy(command => command.Alias)
+            .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<DevelopmentCommand>> ListForDirectoriesAsync(
+        IReadOnlyCollection<Guid> directoryIds,
+        CancellationToken cancellationToken = default) =>
+        await context.DevelopmentCommands
+            .Include(command => command.Parameters)
+            .Where(command => command.TagDirectoryId != null && directoryIds.Contains(command.TagDirectoryId.Value))
             .ToListAsync(cancellationToken);
 
     /// <remarks>

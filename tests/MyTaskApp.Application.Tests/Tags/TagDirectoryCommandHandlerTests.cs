@@ -33,9 +33,24 @@ public class TagDirectoryCommandHandlerTests
         _run = _commands.Seed("@run", "dotnet run");
     }
 
-    private Task<Guid> AddAsync(Guid commandId) =>
+    private Task<Guid> AddAsync(Guid commandId, Guid? directoryId = null) =>
         new AddTagDirectoryCommandHandler(_tags, _commands, _tags, _time, NullLogger<AddTagDirectoryCommandHandler>.Instance)
-            .HandleAsync(new AddTagDirectoryCommand(_tag.Id, _directory.Id, commandId), Ct);
+            .HandleAsync(new AddTagDirectoryCommand(_tag.Id, directoryId ?? _directory.Id, commandId), Ct);
+
+    private Task RemoveAsync(Guid bindingId) =>
+        new RemoveTagDirectoryCommandHandler(_tags, _commands, _tags, NullLogger<RemoveTagDirectoryCommandHandler>.Instance)
+            .HandleAsync(new RemoveTagDirectoryCommand(_tag.Id, _directory.Id, bindingId), Ct);
+
+    private Task<Guid> CreateOwnAsync(string? name, string command = "npm run dev", string? folder = null) =>
+        new CreateDirectoryOnlyCommandHandler(_tags, _commands, _tags, _time, NullLogger<CreateDirectoryOnlyCommandHandler>.Instance)
+            .HandleAsync(
+                new CreateDirectoryOnlyCommand(
+                    _tag.Id,
+                    _directory.Id,
+                    command,
+                    null,
+                    new DevelopmentCommandSettings(name, CommandMode.Terminal, folder)),
+                Ct);
 
     [Fact]
     public async Task Add_StoresAReference_AndSaves()
@@ -74,8 +89,7 @@ public class TagDirectoryCommandHandlerTests
         _directory.Commands[1].CommandOverride.Should().Be("dotnet run --project src/Eco.Web");
         _run.Command.Should().Be("dotnet run", "o global não muda");
 
-        await new RemoveTagDirectoryCommandHandler(_tags, _tags, NullLogger<RemoveTagDirectoryCommandHandler>.Instance)
-            .HandleAsync(new RemoveTagDirectoryCommand(_tag.Id, _directory.Id, test), Ct);
+        await RemoveAsync(test);
 
         _directory.Commands.Should().ContainSingle().Which.Id.Should().Be(run);
         _commands.Commands.Should().HaveCount(2, "tirar do diretório não exclui o global");
@@ -135,5 +149,125 @@ public class TagDirectoryCommandHandlerTests
         var rows = await new GetDevelopmentCommandsHandler(_commands).HandleAsync(new GetDevelopmentCommands(), Ct);
 
         rows.Single(row => row.Id == _run.Id).BindingCount.Should().Be(2);
+    }
+
+    // ---- Comando só do diretório (ADR-055) ----------------------------------
+
+    [Fact]
+    public async Task CreateOwn_MakesACommandWithoutAlias_AndPutsItAtTheEndOfTheDirectory()
+    {
+        await AddAsync(_run.Id);
+
+        var bindingId = await CreateOwnAsync("Front-end", folder: "web");
+
+        var own = _commands.Commands.Single(command => !command.IsGlobal);
+        own.TagDirectoryId.Should().Be(_directory.Id);
+        own.Alias.Should().BeNull();
+        own.DisplayName.Should().Be("Front-end");
+        own.Mode.Should().Be(CommandMode.Terminal);
+        own.WorkingDirectory.Should().Be("web");
+        _directory.Commands.Select(binding => binding.DevelopmentCommandId).Should().Equal(_run.Id, own.Id);
+        _directory.Commands[1].Id.Should().Be(bindingId);
+        _directory.Commands[1].IsEnabled.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task CreateOwn_WithoutAName_IsRefused_AndNothingIsAdded()
+    {
+        var create = () => CreateOwnAsync("  ");
+
+        (await create.Should().ThrowAsync<DomainException>()).WithMessage("*nome*");
+        _commands.Commands.Should().ContainSingle("só o @run do construtor");
+        _directory.Commands.Should().BeEmpty();
+        _tags.SaveCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task CreateOwn_InADirectoryThatDoesNotExist_LeavesNoCommandBehind()
+    {
+        var create = () => new CreateDirectoryOnlyCommandHandler(
+                _tags, _commands, _tags, _time, NullLogger<CreateDirectoryOnlyCommandHandler>.Instance)
+            .HandleAsync(
+                new CreateDirectoryOnlyCommand(_tag.Id, Guid.CreateVersion7(), "npm run dev", null, new DevelopmentCommandSettings("Front-end")),
+                Ct);
+
+        await create.Should().ThrowAsync<DomainException>();
+        _commands.Commands.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task OwnCommands_StayOutOfTheGlobals()
+    {
+        await CreateOwnAsync("Front-end");
+
+        var rows = await new GetDevelopmentCommandsHandler(_commands).HandleAsync(new GetDevelopmentCommands(), Ct);
+
+        rows.Should().ContainSingle().Which.Id.Should().Be(_run.Id);
+    }
+
+    [Fact]
+    public async Task UpdateOwn_ChangesTheCommand_AndGetReadsItBack()
+    {
+        await CreateOwnAsync("Front-end");
+        var own = _commands.Commands.Single(command => !command.IsGlobal);
+
+        await new UpdateDirectoryOnlyCommandHandler(_commands, _commands, _time, NullLogger<UpdateDirectoryOnlyCommandHandler>.Instance)
+            .HandleAsync(
+                new UpdateDirectoryOnlyCommand(own.Id, "npm run dev -- --port {port}", "Sobe o Vite", new DevelopmentCommandSettings("Front", RequiresConfirmation: true)),
+                Ct);
+
+        var row = await new GetDirectoryOnlyCommandHandler(_commands).HandleAsync(new GetDirectoryOnlyCommand(own.Id), Ct);
+
+        row.IsGlobal.Should().BeFalse();
+        row.TagDirectoryId.Should().Be(_directory.Id);
+        row.Name.Should().Be("Front");
+        row.Command.Should().Be("npm run dev -- --port {port}");
+        row.Description.Should().Be("Sobe o Vite");
+        row.Mode.Should().Be(CommandMode.Execute);
+        row.RequiresConfirmation.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task TheGlobalUpdate_RefusesAnOwnCommand_AndTheOwnUpdate_RefusesAGlobal()
+    {
+        await CreateOwnAsync("Front-end");
+        var own = _commands.Commands.Single(command => !command.IsGlobal);
+
+        var asGlobal = () => new UpdateDevelopmentCommandHandler(
+                _commands, _commands, _time, NullLogger<UpdateDevelopmentCommandHandler>.Instance)
+            .HandleAsync(new UpdateDevelopmentCommand(own.Id, "@front", "npm run dev", null), Ct);
+        var asOwn = () => new UpdateDirectoryOnlyCommandHandler(
+                _commands, _commands, _time, NullLogger<UpdateDirectoryOnlyCommandHandler>.Instance)
+            .HandleAsync(new UpdateDirectoryOnlyCommand(_run.Id, "dotnet run", null, new DevelopmentCommandSettings("Run")), Ct);
+
+        (await asGlobal.Should().ThrowAsync<DomainException>()).WithMessage("*Etiquetas*");
+        (await asOwn.Should().ThrowAsync<DomainException>()).WithMessage("*Comandos globais*");
+        own.Alias.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Removing_AnOwnCommand_DeletesIt_ButAGlobalStays()
+    {
+        var run = await AddAsync(_run.Id);
+        var front = await CreateOwnAsync("Front-end");
+
+        await RemoveAsync(front);
+        await RemoveAsync(run);
+
+        _directory.Commands.Should().BeEmpty();
+        _commands.Commands.Should().ContainSingle().Which.Id.Should().Be(_run.Id);
+    }
+
+    [Fact]
+    public async Task AnOwnCommand_CannotBeOfferedInAnotherDirectory()
+    {
+        var other = _tag.AddDirectory("@eco-web", @"C:\Projects\eco-web", null, null, Now);
+        await CreateOwnAsync("Front-end");
+        var own = _commands.Commands.Single(command => !command.IsGlobal);
+
+        var add = () => AddAsync(own.Id, other.Id);
+
+        (await add.Should().ThrowAsync<DomainException>()).WithMessage("*só de outro diretório*");
+        other.Commands.Should().BeEmpty();
     }
 }

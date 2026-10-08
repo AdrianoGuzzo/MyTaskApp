@@ -6,7 +6,7 @@ namespace MyTaskApp.Desktop.ViewModels;
 
 /// <summary>
 /// Um comando rápido na lista do diretório (ADR-051): ligado ou não, em que
-/// posição, e se o diretório o personalizou.
+/// posição, se o diretório o personalizou, e se é só dele (ADR-055).
 /// </summary>
 public sealed partial class TagDirectoryCommandItemViewModel(
     TagDirectoryItemViewModel owner,
@@ -26,6 +26,13 @@ public sealed partial class TagDirectoryCommandItemViewModel(
     public bool IsEnabled => Row.IsEnabled;
 
     public bool IsCustomized => Row.IsCustomized;
+
+    /// <summary>Criado aqui, e não um global (ADR-055): "Editar" no lugar de "Personalizar".</summary>
+    public bool IsDirectoryOnly => Row.IsDirectoryOnly;
+
+    public string RemoveTip => IsDirectoryOnly
+        ? "Excluir este comando (ele só existe neste diretório)"
+        : "Tirar deste diretório (o comando global continua)";
 
     public string CustomizedLabel =>
         Row.WorkingDirectoryOverride is { } folder

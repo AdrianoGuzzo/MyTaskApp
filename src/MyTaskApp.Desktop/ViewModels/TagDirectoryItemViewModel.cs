@@ -40,7 +40,7 @@ public sealed partial class TagDirectoryItemViewModel(TagListItemViewModel owner
     /// <summary>Os comandos rápidos que os worktrees deste repositório mostram (ADR-051).</summary>
     public ObservableCollection<TagDirectoryCommandItemViewModel> Commands { get; } = [];
 
-    /// <summary>Os comandos globais que ainda não estão aqui, para "+ Adicionar comando".</summary>
+    /// <summary>Os comandos globais que ainda não estão aqui, para "+ Adicionar global".</summary>
     public ObservableCollection<DevelopmentCommandRow> AvailableCommands { get; } = [];
 
     [ObservableProperty]
@@ -59,6 +59,11 @@ public sealed partial class TagDirectoryItemViewModel(TagListItemViewModel owner
     public bool HasNoCommands => IsCommandsExpanded && CommandCount == 0;
 
     public bool HasAvailableCommands => AvailableCommands.Count > 0;
+
+    /// <summary>Ao lado do "+ Novo comando" (ADR-055): o que ele faz, e o que fazer sem global a oferecer.</summary>
+    public string NewCommandHint => HasAvailableCommands
+        ? "Ou crie um comando só deste diretório, sem cadastrá-lo como global."
+        : "Nenhum comando global a adicionar. Crie um só deste diretório, ou cadastre um em Comandos globais… (menu do painel).";
 
     /// <summary>Troca as listas de uma vez, depois de cada mudança.</summary>
     internal void ShowCommands(IReadOnlyList<TagDirectoryCommandRow> bindings, IReadOnlyList<DevelopmentCommandRow> globals)
@@ -82,6 +87,7 @@ public sealed partial class TagDirectoryItemViewModel(TagListItemViewModel owner
         SelectedNewCommand = AvailableCommands.FirstOrDefault();
         CommandCount = bindings.Count;
         OnPropertyChanged(nameof(HasAvailableCommands));
+        OnPropertyChanged(nameof(NewCommandHint));
     }
 
     /// <summary><c>null</c> enquanto a conferência não volta.</summary>

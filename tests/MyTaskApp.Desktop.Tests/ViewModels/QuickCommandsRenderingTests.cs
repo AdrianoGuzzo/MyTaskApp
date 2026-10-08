@@ -209,7 +209,8 @@ public class QuickCommandsRenderingTests
         runner.ResultsByHandler[typeof(GetTagDirectoryCommandsHandler)] = (IReadOnlyList<TagDirectoryCommandRow>)
             [new(Guid.NewGuid(), core.Id, run.Id, run.Alias, run.Name, run.Command, 0, true, null, null)];
 
-        var viewModel = new TagsViewModel(runner, new FakeConfirmationDialog(), new FakeDirectoryProbe(), NullLogger<TagsViewModel>.Instance);
+        var viewModel = new TagsViewModel(
+            runner, new FakeConfirmationDialog(), new FakeDirectoryProbe(), new FakeDirectoryCommandEditor(), NullLogger<TagsViewModel>.Instance);
         var window = new TagsWindow(viewModel);
         window.Show();
         await viewModel.LoadAsync(CancellationToken.None);
@@ -225,5 +226,67 @@ public class QuickCommandsRenderingTests
             .Should().NotBeEmpty()
             .And.OnlyContain(button => button.Command!.CanExecute(button.CommandParameter));
         section.GetVisualDescendants().OfType<ComboBox>().Single().SelectedItem.Should().Be(test);
+    }
+
+    [AvaloniaFact]
+    public async Task TheTagsWindow_DrawsADirectoryOnlyCommand_WithEditInsteadOfCustomize()
+    {
+        var eco = new TagRow(Guid.NewGuid(), "ECO CORE", "#22C55E", 1, 1);
+        var core = new TagDirectoryRow(Guid.NewGuid(), eco.Id, eco.Name, eco.ColorHex, "@ecossistema-core", Repository, null, null, CommandCount: 1);
+
+        var runner = new FakeUseCaseRunner();
+        runner.ResultsByHandler[typeof(GetTagsHandler)] = (IReadOnlyList<TagRow>)[eco];
+        runner.ResultsByHandler[typeof(GetTagDirectoriesHandler)] = (IReadOnlyList<TagDirectoryRow>)[core];
+        runner.ResultsByHandler[typeof(GetDevelopmentCommandsHandler)] = (IReadOnlyList<DevelopmentCommandRow>)[];
+        runner.ResultsByHandler[typeof(GetTagDirectoryCommandsHandler)] = (IReadOnlyList<TagDirectoryCommandRow>)
+            [new(Guid.NewGuid(), core.Id, Guid.NewGuid(), null, "Front-end", "npm run dev", 0, true, null, null, IsDirectoryOnly: true)];
+
+        var viewModel = new TagsViewModel(
+            runner, new FakeConfirmationDialog(), new FakeDirectoryProbe(), new FakeDirectoryCommandEditor(), NullLogger<TagsViewModel>.Instance);
+        var window = new TagsWindow(viewModel);
+        window.Show();
+        await viewModel.LoadAsync(CancellationToken.None);
+        await viewModel.ToggleDirectoriesAsync(viewModel.Tags.Single(), CancellationToken.None);
+        await viewModel.ToggleDirectoryCommandsAsync(viewModel.Tags.Single().Directories.Single(), CancellationToken.None);
+        Settle(window);
+
+        var section = Named<Border>(window, "DirectoryCommands");
+        var visible = section.GetVisualDescendants().OfType<Button>().Where(button => button.IsEffectivelyVisible).ToList();
+
+        Texts(section).Should().Contain("Front-end").And.Contain("Só deste diretório");
+        visible.Select(button => button.Content as string).Should()
+            .Contain("Editar").And.Contain("+ Novo comando")
+            .And.NotContain("Personalizar").And.NotContain("+ Adicionar global");
+        visible.Where(button => button.Command is not null)
+            .Should().OnlyContain(button => button.Command!.CanExecute(button.CommandParameter));
+        section.GetVisualDescendants().OfType<ComboBox>().Should().OnlyContain(combo => !combo.IsEffectivelyVisible);
+    }
+
+    [AvaloniaFact]
+    public void TheDirectoryCommandDialog_DrawsTheFormWithoutAlias_AndAcceptsOnlyWithAName()
+    {
+        var viewModel = new DirectoryCommandEditorViewModel(new DirectoryCommandEditorRequest(
+            "Novo comando de @ecossistema-core",
+            "Criar comando",
+            null,
+            (_, _) => Task.FromResult<string?>(null)));
+
+        var window = new DirectoryCommandWindow(viewModel);
+        window.Show();
+        viewModel.Command = "npm run dev -- --port {porta}";
+        Settle(window);
+
+        window.Title.Should().Be("Novo comando de @ecossistema-core");
+        Named<TextBox>(window, "NameBox").Should().NotBeNull();
+        window.GetVisualDescendants().OfType<TextBox>().Should().NotContain(box => box.Name == "AliasBox");
+        Named<ItemsControl>(window, "ParameterEditorList").GetVisualDescendants().OfType<ComboBox>().Should().ContainSingle();
+        Named<Button>(window, "AcceptButton").IsEnabled.Should().BeFalse("sem nome, não há rótulo para o botão");
+
+        viewModel.Name = "Front-end";
+        Named<RadioButton>(window, "TerminalMode").IsChecked = true;
+        Settle(window);
+
+        Named<Button>(window, "AcceptButton").IsEnabled.Should().BeTrue();
+        viewModel.IsTerminal.Should().BeTrue();
     }
 }

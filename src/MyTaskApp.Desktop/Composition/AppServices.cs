@@ -113,6 +113,9 @@ internal static class AppServices
             // Lançar e corrigir um período de trabalho (ADR-052), pelo mesmo molde.
             .AddSingleton<ITimeEntryEditor, TimeEntryEditor>()
 
+            // O comando só do diretório da etiqueta (ADR-055), pelo mesmo molde.
+            .AddSingleton<IDirectoryCommandEditor, DirectoryCommandEditor>()
+
             // Copiar o texto de uma linha (§12). Singleton sem estado, como o
             // dialogo: descobre a janela a cada escrita.
             .AddSingleton<IClipboardWriter, ClipboardWriter>()
