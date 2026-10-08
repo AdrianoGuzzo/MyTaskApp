@@ -23,40 +23,70 @@
                FontWeight="SemiBold"
                Text="{Binding Heading}" />
 
-    <StackPanel Spacing="4">
-      <TextBlock FontSize="12" FontWeight="SemiBold" Text="Data" />
-      <CalendarDatePicker x:Name="DatePicker"
-                          SelectedDate="{Binding Date}"
-                          PlaceholderText="Dia"
-                          Width="160" />
-    </StackPanel>
-
     <!--
-      Um embaixo do outro: o TimePicker do Fluent é largo, e dois lado a lado
-      não cabem num diálogo estreito. A duração fica ao lado do fim, onde se
-      confere o que acabou de escolher.
+      Tudo digitável: 0831 é 08:31, 0610 é 06/10 (WallClockInput). Ao sair do
+      campo o texto volta por extenso, ou a mensagem diz o que não foi lido. O
+      calendário fica ao lado da data para quem prefere o mouse.
     -->
     <StackPanel Spacing="4">
-      <TextBlock FontSize="12" FontWeight="SemiBold" Text="Início" />
-      <TimePicker x:Name="StartPicker"
-                  SelectedTime="{Binding StartTime}"
-                  ClockIdentifier="24HourClock"
-                  MinuteIncrement="1" />
-    </StackPanel>
-
-    <StackPanel Spacing="4">
-      <TextBlock FontSize="12" FontWeight="SemiBold" Text="Fim" />
-      <StackPanel Orientation="Horizontal" Spacing="12">
-        <TimePicker x:Name="EndPicker"
-                    SelectedTime="{Binding EndTime}"
-                    ClockIdentifier="24HourClock"
-                    MinuteIncrement="1" />
-        <TextBlock VerticalAlignment="Center"
-                   FontSize="12"
-                   Opacity="0.75"
-                   Text="{Binding DurationText}" />
+      <TextBlock FontSize="12" FontWeight="SemiBold" Text="Data" />
+      <StackPanel Orientation="Horizontal" Spacing="4">
+        <TextBox x:Name="DateBox"
+                 Width="120"
+                 MaxLength="10"
+                 PlaceholderText="dd/mm/aaaa"
+                 Text="{Binding DateText}"
+                 GotFocus="OnFieldGotFocus"
+                 LostFocus="OnFieldLostFocus" />
+        <Button x:Name="CalendarButton"
+                Content="📅"
+                Padding="8,4"
+                ToolTip.Tip="Escolher no calendário"
+                Focusable="False">
+          <Button.Flyout>
+            <Flyout Placement="BottomEdgeAlignedLeft" Opening="OnCalendarOpening">
+              <Calendar x:Name="DayCalendar" SelectedDatesChanged="OnCalendarPicked" />
+            </Flyout>
+          </Button.Flyout>
+        </Button>
       </StackPanel>
     </StackPanel>
+
+    <!-- Lado a lado: a caixa de texto é estreita. A duração fecha a linha, onde se confere o que foi digitado. -->
+    <StackPanel Orientation="Horizontal" Spacing="12">
+      <StackPanel Spacing="4">
+        <TextBlock FontSize="12" FontWeight="SemiBold" Text="Início" />
+        <TextBox x:Name="StartBox"
+                 Width="80"
+                 MaxLength="5"
+                 PlaceholderText="hh:mm"
+                 Text="{Binding StartText}"
+                 GotFocus="OnFieldGotFocus"
+                 LostFocus="OnFieldLostFocus" />
+      </StackPanel>
+      <StackPanel Spacing="4">
+        <TextBlock FontSize="12" FontWeight="SemiBold" Text="Fim" />
+        <TextBox x:Name="EndBox"
+                 Width="80"
+                 MaxLength="5"
+                 PlaceholderText="hh:mm"
+                 Text="{Binding EndText}"
+                 GotFocus="OnFieldGotFocus"
+                 LostFocus="OnFieldLostFocus" />
+      </StackPanel>
+      <TextBlock VerticalAlignment="Bottom"
+                 Margin="0,0,0,7"
+                 FontSize="12"
+                 Opacity="0.75"
+                 Text="{Binding DurationText}" />
+    </StackPanel>
+
+    <TextBlock x:Name="InputErrorText"
+               FontSize="11.5"
+               Foreground="{DynamicResource WidgetDangerBrush}"
+               TextWrapping="Wrap"
+               IsVisible="{Binding InputError, Converter={x:Static ObjectConverters.IsNotNull}}"
+               Text="{Binding InputError}" />
 
     <CheckBox x:Name="EndsLaterBox"
               FontSize="12"
