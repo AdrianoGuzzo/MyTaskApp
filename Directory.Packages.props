@@ -31,6 +31,11 @@
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12" />
   </ItemGroup>
 
+  <ItemGroup Label="PostgreSQL">
+    <!-- Só o ADO.NET, para as consultas de leitura das operações de banco (ADR-056); o EF continua só SQLite. -->
+    <PackageVersion Include="Npgsql" Version="10.0.2" />
+  </ItemGroup>
+
   <ItemGroup Label="Logging">
     <PackageVersion Include="Serilog" Version="4.4.0" />
     <PackageVersion Include="Serilog.Extensions.Hosting" Version="10.0.0" />

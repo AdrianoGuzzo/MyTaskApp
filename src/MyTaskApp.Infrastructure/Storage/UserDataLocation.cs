@@ -30,7 +30,13 @@ public sealed class UserDataLocation
 
     private const string LogsFolderName = "logs";
 
-    private UserDataLocation(string root) => Root = root;
+    private const string DatabaseOperationsFolderName = "database-operations";
+
+    private UserDataLocation(string root, string localRoot)
+    {
+        Root = root;
+        LocalRoot = localRoot;
+    }
 
     /// <summary>
     /// A localização deste processo, resolvida uma vez. Quem precisa variar a
@@ -41,7 +47,7 @@ public sealed class UserDataLocation
 
     /// <summary>Raiz explícita, sem consultar o ambiente.</summary>
     public static UserDataLocation For(string root) =>
-        new(Path.GetFullPath(root));
+        new(Path.GetFullPath(root), Path.GetFullPath(root));
 
     /// <summary>
     /// A raiz informada vence; vazia cai na pasta de dados do sistema. O último
@@ -63,8 +69,30 @@ public sealed class UserDataLocation
             applicationData = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         }
 
-        return For(Path.Combine(applicationData, ProductFolderName));
+        var localApplicationData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
+        if (string.IsNullOrWhiteSpace(localApplicationData))
+        {
+            localApplicationData = applicationData;
+        }
+
+        return new UserDataLocation(
+            Path.GetFullPath(Path.Combine(applicationData, ProductFolderName)),
+            Path.GetFullPath(Path.Combine(localApplicationData, ProductFolderName)));
     }
+
+    /// <summary>
+    /// A pasta desta máquina, que não acompanha o perfil (<c>%LOCALAPPDATA%</c>,
+    /// <c>~/.local/share</c>). Com <see cref="OverrideVariable"/>, é a mesma raiz.
+    /// </summary>
+    public string LocalRoot { get; }
+
+    /// <summary>
+    /// Onde as operações de banco trabalham (ADR-056). Fica fora do AppData
+    /// <i>Roaming</i> de propósito: um perfil móvel de domínio sincroniza essa
+    /// pasta com um servidor no logoff — e um dump de produção não pode viajar.
+    /// </summary>
+    public string DatabaseOperations => Path.Combine(LocalRoot, DatabaseOperationsFolderName);
 
     /// <summary>A pasta que sobrevive a atualização e a desinstalação.</summary>
     public string Root { get; }

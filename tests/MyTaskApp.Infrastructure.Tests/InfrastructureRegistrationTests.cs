@@ -112,6 +112,13 @@ public class InfrastructureRegistrationTests : IDisposable
     [InlineData(typeof(IAnonymizationProfileRepository))]
     [InlineData(typeof(IDatabaseCopyProfileRepository))]
     [InlineData(typeof(IDatabaseOperationAuditLog))]
+    [InlineData(typeof(IDatabaseCredentialStore))]
+    [InlineData(typeof(IPostgresToolLocator))]
+    [InlineData(typeof(IPostgresServerInspector))]
+    [InlineData(typeof(IPostgresAnonymizerInspector))]
+    [InlineData(typeof(IPostgresDumpService))]
+    [InlineData(typeof(IPostgresRestoreService))]
+    [InlineData(typeof(IDatabaseOperationWorkspaceFactory))]
     public void EveryPort_IsWiredToAnImplementation(Type serviceType)
     {
         using var provider = BuildProvider();
@@ -142,6 +149,37 @@ public class InfrastructureRegistrationTests : IDisposable
 
         endpoint.Should().BeSameAs(provider.GetRequiredService<IAgentEventEndpoint>());
         endpoint.Address.Should().BeNull();
+    }
+
+    /// <summary>
+    /// Os casos de uso das operações de banco (ADR-056) montados com os
+    /// adaptadores de verdade: cofre, ferramentas, Npgsql e diretório isolado.
+    /// </summary>
+    [Theory]
+    [InlineData(typeof(MyTaskApp.Application.DatabaseOperations.RunDatabaseCopyHandler))]
+    [InlineData(typeof(MyTaskApp.Application.DatabaseOperations.ValidateDatabaseCopyHandler))]
+    [InlineData(typeof(MyTaskApp.Application.DatabaseOperations.DiagnoseDatabaseHandler))]
+    [InlineData(typeof(MyTaskApp.Application.DatabaseOperations.SaveDatabaseConnectionHandler))]
+    [InlineData(typeof(MyTaskApp.Application.DatabaseOperations.RecoverInterruptedDatabaseOperationsHandler))]
+    public void TheDatabaseOperations_ResolveWithTheRealAdapters(Type handlerType)
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Database:Directory"] = _directory,
+                ["DatabaseOperations:WorkspaceDirectory"] = Path.Combine(_directory, "database-operations"),
+            })
+            .Build();
+
+        using var provider = new ServiceCollection()
+            .AddSingleton(typeof(ILogger<>), typeof(NullLogger<>))
+            .AddSingleton<IUseCaseRunner>(UnusedRunner.Instance)
+            .AddApplication(configuration)
+            .AddInfrastructure(configuration)
+            .BuildServiceProvider(validateScopes: true);
+        using var scope = provider.CreateScope();
+
+        scope.ServiceProvider.GetRequiredService(handlerType).Should().NotBeNull();
     }
 
     /// <summary>Nunca chamado: o teste só monta o contêiner.</summary>

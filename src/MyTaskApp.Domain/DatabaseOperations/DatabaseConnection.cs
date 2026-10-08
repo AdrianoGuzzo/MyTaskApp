@@ -204,9 +204,11 @@ public sealed class DatabaseConnection
         var normalizedName = Required(name, MaxNameLength, "o nome da conexão");
         var normalizedHost = Identifier(host, MaxHostLength, "o servidor");
 
-        if (normalizedHost.Any(char.IsWhiteSpace))
+        // Vírgula é lista de hosts no libpq: o mesmo cadastro apontaria para
+        // vários servidores, e a comparação com os bancos de produção perderia o sentido.
+        if (normalizedHost.Any(char.IsWhiteSpace) || normalizedHost.Contains(',', StringComparison.Ordinal))
         {
-            throw new DomainException("O servidor não pode ter espaços.");
+            throw new DomainException("O servidor não pode ter espaços nem vírgulas.");
         }
 
         if (port is < 1 or > 65535)
@@ -215,6 +217,16 @@ public sealed class DatabaseConnection
         }
 
         var normalizedDatabase = Identifier(database, MaxIdentifierLength, "o banco");
+
+        // Um "nome de banco" com '=' ou "postgresql://" é lido pelas
+        // ferramentas como connection string inteira — e poderia levar um
+        // restore para outro servidor, longe da política.
+        if (normalizedDatabase.Contains('=', StringComparison.Ordinal)
+            || normalizedDatabase.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase)
+            || normalizedDatabase.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new DomainException("O nome do banco não pode ter '=' nem ser uma URL de conexão.");
+        }
         var normalizedUsername = Identifier(username, MaxIdentifierLength, "o usuário");
 
         if (!Enum.IsDefined(environment))

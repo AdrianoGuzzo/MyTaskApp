@@ -21,6 +21,7 @@ using MyTaskApp.Application.Sounds;
 using MyTaskApp.Application.StickyNotes;
 using MyTaskApp.Application.Tags;
 using MyTaskApp.Application.TimeTracking;
+using MyTaskApp.Domain.DatabaseOperations;
 using MyTaskApp.Infrastructure.Agents;
 using MyTaskApp.Infrastructure.Agents.ClaudeCode;
 using MyTaskApp.Infrastructure.FileSystem;
@@ -30,6 +31,7 @@ using MyTaskApp.Infrastructure.Jira;
 using MyTaskApp.Infrastructure.Persistence;
 using MyTaskApp.Infrastructure.Persistence.Queries;
 using MyTaskApp.Infrastructure.Persistence.Repositories;
+using MyTaskApp.Infrastructure.PostgreSql;
 using MyTaskApp.Infrastructure.Processes;
 using MyTaskApp.Infrastructure.Secrets;
 using MyTaskApp.Infrastructure.Sounds;
@@ -207,12 +209,39 @@ public static class DependencyInjection
     /// </summary>
     private static void AddDatabaseOperations(IServiceCollection services, IConfiguration configuration)
     {
-        _ = configuration;
+        var options = new DatabaseOperationsOptions();
+        configuration.GetSection(DatabaseOperationsOptions.SectionName).Bind(options);
+        services.AddSingleton(options);
 
         services.AddScoped<IDatabaseConnectionRepository, DatabaseConnectionRepository>();
         services.AddScoped<IAnonymizationProfileRepository, AnonymizationProfileRepository>();
         services.AddScoped<IDatabaseCopyProfileRepository, DatabaseCopyProfileRepository>();
         services.AddScoped<IDatabaseOperationAuditLog, EfDatabaseOperationAuditLog>();
+
+        // A política é do Domain; TryAdd para a Infrastructure subir sozinha nos testes.
+        services.TryAddSingleton<IDatabaseSecurityPolicy, DatabaseSecurityPolicy>();
+
+        // A senha: guardada pelo cofre do sistema, lida só aqui dentro.
+        services.AddSingleton<PostgresCredentialStore>();
+        services.AddSingleton<IDatabaseCredentialStore>(provider => provider.GetRequiredService<PostgresCredentialStore>());
+        services.AddSingleton<IPostgresPasswordReader>(provider => provider.GetRequiredService<PostgresCredentialStore>());
+
+        // Singleton por causa do cache: "Verificar novamente" é quem procura de novo.
+        services.AddSingleton<IPostgresToolLocator>(provider => PostgresToolLocator.ForCurrentSystem(
+            provider.GetRequiredService<IProcessRunner>(),
+            options,
+            provider.GetRequiredService<ILogger<PostgresToolLocator>>()));
+
+        services.AddSingleton<PgToolRunner>();
+        services.AddSingleton<IPostgresDumpService, PostgresDumpService>();
+        services.AddSingleton<IPostgresRestoreService, PostgresRestoreService>();
+        services.AddSingleton<IPostgresSessionFactory, NpgsqlPostgresSessionFactory>();
+        services.AddSingleton<IPostgresServerInspector, PostgresServerInspector>();
+        services.AddSingleton<IPostgresAnonymizerInspector, PostgresAnonymizerInspector>();
+
+        services.AddSingleton<IDatabaseOperationWorkspaceFactory>(provider => new DatabaseOperationWorkspaceFactory(
+            string.IsNullOrWhiteSpace(options.WorkspaceDirectory) ? UserDataLocation.Current.DatabaseOperations : options.WorkspaceDirectory,
+            provider.GetRequiredService<ILogger<DatabaseOperationWorkspaceFactory>>()));
     }
 
     private static HttpClient CreateJiraHttpClient()

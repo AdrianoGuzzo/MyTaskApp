@@ -71,6 +71,9 @@ public class DatabaseConnectionTests
     [InlineData("x", "h", 5432, "d", "-U", "hífen")]
     [InlineData("x", "h", 5432, "d", "", "usuário")]
     [InlineData("x", "h", 5432, "d\nx", "u", "inválidos")]
+    [InlineData("x", "dev,prod", 5432, "d", "u", "vírgulas")]
+    [InlineData("x", "h", 5432, "host=prod dbname=eco", "u", "URL")]
+    [InlineData("x", "h", 5432, "postgresql://prod/eco", "u", "URL")]
     public void InvalidFields_AreRefused(string name, string host, int port, string database, string username, string message)
     {
         FluentActions.Invoking(() => DatabaseConnection.Create(
