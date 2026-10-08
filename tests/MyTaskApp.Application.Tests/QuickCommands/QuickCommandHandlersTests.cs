@@ -336,7 +336,7 @@ public class QuickCommandHandlersTests
 
         var run = () => RunAsync(_test);
 
-        (await run.Should().ThrowAsync<DomainException>()).WithMessage("*não existe mais*");
+        (await run.Should().ThrowAsync<DomainException>()).WithMessage("*não está mais disponível*excluído*");
     }
 
     [Fact]
@@ -394,6 +394,42 @@ public class QuickCommandHandlersTests
         view.Commands.Select(entry => entry.Name).Should().Equal("Executar aplicação", "Testes");
         view.Globals.Should().HaveCount(2);
         view.Recent.Should().ContainSingle().Which.CommandId.Should().Be(_test.Id);
+    }
+
+    [Fact]
+    public async Task ADirectoryOnlyCommand_IsAButtonHere_ButNotAGlobal_AndRuns()
+    {
+        var front = _globals.SeedForDirectory(
+            _directoryId,
+            "Front-end",
+            "npm run dev",
+            new DevelopmentCommandSettings(WorkingDirectory: "web"));
+        _disk.Existing.Add(Path.Combine(Worktree, "web"));
+        Bind(_run, 0);
+        var binding = Bind(front, 1);
+
+        var view = await Getter().HandleAsync(new GetQuickCommands(_task.Id, Development.Id), Ct);
+        await RunAsync(front, binding);
+
+        view.Commands.Select(entry => entry.Name).Should().Equal("Executar aplicação", "Front-end");
+        view.Commands[1].Alias.Should().BeNull();
+        view.Globals.Select(global => global.Id).Should().NotContain(front.Id, "\"+ Executar comando…\" só oferece globais");
+        _executor.Requests.Should().ContainSingle()
+            .Which.Should().Be(new CommandExecutionRequest("npm run dev", Path.Combine(Worktree, "web")));
+    }
+
+    [Fact]
+    public async Task ADirectoryOnlyCommand_IsOnlyLoadedForItsOwnDirectory()
+    {
+        var elsewhere = _globals.SeedForDirectory(Guid.CreateVersion7(), "Outro", "npm start");
+        Bind(_run, 0);
+        Bind(elsewhere, 1);
+
+        var view = await Getter().HandleAsync(new GetQuickCommands(_task.Id, Development.Id), Ct);
+        var run = () => RunAsync(elsewhere, Guid.CreateVersion7());
+
+        view.Commands.Select(entry => entry.Name).Should().Equal("Executar aplicação");
+        (await run.Should().ThrowAsync<DomainException>()).WithMessage("*não está mais disponível*");
     }
 
     [Fact]

@@ -201,6 +201,9 @@ A janela da tarefa tem a aba **Desenvolvimento**:
    no worktree rodando `dotnet run`; "▶ Testes" roda escondido e mostra o
    resultado. Variáveis como `{worktree}` e `{branch}` são preenchidas
    sozinhas, e parâmetros e confirmação são perguntados antes (ADR-051).
+   Comando que só faz sentido num repositório não precisa ser global:
+   **+ Novo comando** cria um comando só daquele diretório, que não aparece em
+   Comandos globais nem em outros diretórios (ADR-055).
 4. **Vários ambientes por tarefa**, um worktree por repositório (o app e a
    API, o front e o back).
 5. **Bolinha de estado Git na linha:** âmbar quando há alteração não

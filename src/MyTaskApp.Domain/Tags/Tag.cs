@@ -127,6 +127,10 @@ public sealed class Tag
     public void RemoveDirectoryCommand(Guid directoryId, Guid bindingId) =>
         GetDirectory(directoryId).RemoveCommand(bindingId);
 
+    /// <summary>A associação, para o caso de uso saber a que comando ela aponta.</summary>
+    public TagDirectoryCommand GetDirectoryCommand(Guid directoryId, Guid bindingId) =>
+        GetDirectory(directoryId).GetCommand(bindingId);
+
     private TagDirectory GetDirectory(Guid directoryId) =>
         _directories.Find(directory => directory.Id == directoryId)
         ?? throw new DomainException("Diretório não encontrado.");

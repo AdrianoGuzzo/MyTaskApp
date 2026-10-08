@@ -106,6 +106,9 @@ public static class DependencyInjection
         services.AddScoped<SetTagDirectoryCommandEnabledHandler>();
         services.AddScoped<MoveTagDirectoryCommandHandler>();
         services.AddScoped<RemoveTagDirectoryCommandHandler>();
+        services.AddScoped<CreateDirectoryOnlyCommandHandler>();
+        services.AddScoped<UpdateDirectoryOnlyCommandHandler>();
+        services.AddScoped<GetDirectoryOnlyCommandHandler>();
         services.AddScoped<GetQuickCommandsHandler>();
         services.AddScoped<PrepareQuickCommandHandler>();
         services.AddScoped<RunQuickCommandHandler>();

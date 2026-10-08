@@ -1,0 +1,186 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
+        xmlns:spell="using:MyTaskApp.Desktop.SpellChecking"
+        x:Class="MyTaskApp.Desktop.Views.DirectoryCommandWindow"
+        x:DataType="vm:DirectoryCommandEditorViewModel"
+        Width="560"
+        SizeToContent="Height"
+        MaxHeight="760"
+        CanResize="False"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner">
+
+  <!--
+    "Novo comando" e "Editar comando" de um diretório de etiqueta (ADR-055): o
+    formulário de Comandos globais sem o apelido. A regra é do domínio; a recusa
+    aparece aqui, com o diálogo aberto e o que foi digitado intacto.
+  -->
+
+  <Window.Styles>
+
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="{DynamicResource WidgetSurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetStrokeSoftBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetCardRadius}" />
+    </Style>
+
+    <Style Selector="TextBlock.meta">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.code">
+      <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace" />
+      <Setter Property="FontSize" Value="11.5" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextMidBrush}" />
+    </Style>
+
+  </Window.Styles>
+
+  <DockPanel Margin="24,20">
+
+    <TextBlock DockPanel.Dock="Top"
+               x:Name="HeadingText"
+               Margin="0,0,0,12"
+               FontSize="16"
+               FontWeight="SemiBold"
+               Text="{Binding Heading}" />
+
+    <StackPanel DockPanel.Dock="Bottom" Spacing="12" Margin="0,12,0,0">
+      <TextBlock x:Name="ErrorText"
+                 FontSize="11.5"
+                 Foreground="{DynamicResource WidgetDangerBrush}"
+                 TextWrapping="Wrap"
+                 IsVisible="{Binding ErrorMessage, Converter={x:Static ObjectConverters.IsNotNull}}"
+                 Text="{Binding ErrorMessage}" />
+
+      <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+        <Button x:Name="CancelButton"
+                MinWidth="96"
+                Content="Cancelar"
+                IsCancel="True"
+                Click="OnCancel" />
+        <Button x:Name="AcceptButton"
+                MinWidth="96"
+                Classes="accent"
+                IsDefault="True"
+                Content="{Binding AcceptLabel}"
+                IsEnabled="{Binding CanAccept}"
+                Click="OnAccept" />
+      </StackPanel>
+    </StackPanel>
+
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+      <StackPanel Spacing="8">
+
+        <TextBox x:Name="NameBox"
+                 FontSize="12"
+                 MaxLength="80"
+                 PlaceholderText="Nome do botão (ex.: Executar front-end)"
+                 Text="{Binding Name}" />
+
+        <TextBox x:Name="CommandBox"
+                 FontSize="12"
+                 FontFamily="Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace"
+                 MaxLength="2000"
+                 PlaceholderText="Comando (ex.: npm run dev -- --port {porta})"
+                 Text="{Binding Command}" />
+
+        <TextBlock Classes="meta"
+                   TextWrapping="Wrap"
+                   Text="Só este diretório mostra este comando, como um botão &quot;▶&quot; no worktree. Para usá-lo em outros diretórios ou na lista pós-Worktree, cadastre-o em Comandos globais." />
+
+        <TextBlock x:Name="VariablesHintText"
+                   Classes="meta"
+                   TextWrapping="Wrap"
+                   Text="{Binding VariablesHint}" />
+
+        <StackPanel x:Name="ModeChoice" Orientation="Horizontal" Spacing="16">
+          <RadioButton GroupName="DirectoryCommandMode"
+                       FontSize="12"
+                       Content="Execução (resultado na tela)"
+                       IsChecked="{Binding IsExecute}" />
+          <RadioButton x:Name="TerminalMode"
+                       GroupName="DirectoryCommandMode"
+                       FontSize="12"
+                       Content="Terminal (abre uma janela)"
+                       IsChecked="{Binding IsTerminal}" />
+        </StackPanel>
+
+        <TextBox x:Name="WorkingDirectoryBox"
+                 FontSize="12"
+                 FontFamily="Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace"
+                 MaxLength="1024"
+                 PlaceholderText="Pasta: a do diretório no worktree (ou uma subpasta, ex.: web)"
+                 Text="{Binding WorkingDirectory}" />
+
+        <WrapPanel ItemSpacing="16" LineSpacing="4">
+          <CheckBox FontSize="12"
+                    Content="Manter o terminal aberto quando o comando terminar"
+                    IsVisible="{Binding IsTerminal}"
+                    IsChecked="{Binding KeepTerminalOpen}" />
+          <CheckBox x:Name="RequiresConfirmationBox"
+                    FontSize="12"
+                    Content="Pedir confirmação antes de executar"
+                    IsChecked="{Binding RequiresConfirmation}" />
+        </WrapPanel>
+
+        <!-- Uma linha por {nome}: como a tela pergunta o valor antes de executar. -->
+        <StackPanel Spacing="6" IsVisible="{Binding HasParameterEditors}">
+          <TextBlock Classes="meta" Text="Parâmetros — perguntados antes de executar o botão:" />
+          <ItemsControl x:Name="ParameterEditorList" ItemsSource="{Binding ParameterEditors}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:DevelopmentCommandParameterEditorViewModel">
+                <Border Classes="card" Margin="0,0,0,6" Padding="8,6">
+                  <StackPanel Spacing="6">
+                    <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8">
+                      <TextBlock Grid.Column="0"
+                                 Classes="code"
+                                 VerticalAlignment="Center"
+                                 Text="{Binding Placeholder}" />
+                      <TextBox Grid.Column="1"
+                               FontSize="12"
+                               MaxLength="80"
+                               PlaceholderText="Rótulo (ex.: Porta)"
+                               Text="{Binding Label}" />
+                      <ComboBox Grid.Column="2"
+                                FontSize="12"
+                                MinWidth="130"
+                                ItemsSource="{x:Static vm:DevelopmentCommandParameterEditorViewModel.TypeOptions}"
+                                SelectedIndex="{Binding TypeIndex}" />
+                      <CheckBox Grid.Column="3"
+                                FontSize="12"
+                                Content="Obrigatório"
+                                IsChecked="{Binding IsRequired}" />
+                    </Grid>
+                    <TextBox FontSize="12"
+                             MaxLength="500"
+                             PlaceholderText="Valor padrão (opcional)"
+                             Text="{Binding DefaultValue}" />
+                    <TextBox FontSize="12"
+                             AcceptsReturn="True"
+                             MinHeight="56"
+                             PlaceholderText="Opções, uma por linha (ex.: Development)"
+                             IsVisible="{Binding IsChoice}"
+                             Text="{Binding OptionsText}" />
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+
+        <TextBox FontSize="12"
+                 MaxLength="500"
+                 PlaceholderText="Descrição (opcional)"
+                 Text="{Binding Description}"
+                 spell:SpellCheck.IsEnabled="True" />
+
+      </StackPanel>
+    </ScrollViewer>
+
+  </DockPanel>
+
+</Window>

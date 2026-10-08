@@ -225,7 +225,6 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Alias")
-                        .IsRequired()
                         .HasMaxLength(40)
                         .HasColumnType("TEXT")
                         .UseCollation("NOCASE");
@@ -255,6 +254,9 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                     b.Property<bool>("RequiresConfirmation")
                         .HasColumnType("INTEGER");
 
+                    b.Property<Guid?>("TagDirectoryId")
+                        .HasColumnType("TEXT");
+
                     b.Property<long>("UpdatedAt")
                         .HasColumnType("INTEGER");
 
@@ -266,6 +268,8 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("Alias")
                         .IsUnique();
+
+                    b.HasIndex("TagDirectoryId");
 
                     b.ToTable("DevelopmentCommands", (string)null);
                 });
@@ -910,6 +914,14 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .HasForeignKey("TaskItemId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("MyTaskApp.Domain.Commands.DevelopmentCommand", b =>
+                {
+                    b.HasOne("MyTaskApp.Domain.Tags.TagDirectory", null)
+                        .WithMany()
+                        .HasForeignKey("TagDirectoryId")
+                        .OnDelete(DeleteBehavior.Cascade);
                 });
 
             modelBuilder.Entity("MyTaskApp.Domain.Commands.DevelopmentCommandParameter", b =>

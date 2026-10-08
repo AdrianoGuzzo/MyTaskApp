@@ -26,6 +26,7 @@ public class QuickCommandSettingsViewModelTests
 
     private readonly FakeUseCaseRunner _runner = new();
     private readonly FakeConfirmationDialog _confirmation = new();
+    private readonly FakeDirectoryCommandEditor _editor = new();
 
     private async Task<DevelopmentCommandsViewModel> GlobalsAsync()
     {
@@ -158,7 +159,7 @@ public class QuickCommandSettingsViewModelTests
         _runner.ResultsByHandler[typeof(GetDevelopmentCommandsHandler)] = (IReadOnlyList<DevelopmentCommandRow>)[Run, Test];
         _runner.ResultsByHandler[typeof(AddTagDirectoryCommandHandler)] = Guid.NewGuid();
 
-        var viewModel = new TagsViewModel(_runner, _confirmation, new FakeDirectoryProbe(), NullLogger<TagsViewModel>.Instance);
+        var viewModel = new TagsViewModel(_runner, _confirmation, new FakeDirectoryProbe(), _editor, NullLogger<TagsViewModel>.Instance);
         await viewModel.LoadAsync(Ct);
         var tag = viewModel.Tags.Single();
         await viewModel.ToggleDirectoriesAsync(tag, Ct);
@@ -243,5 +244,170 @@ public class QuickCommandSettingsViewModelTests
 
         viewModel.ErrorMessage.Should().Contain("Escolha um comando");
         _runner.Invoked.Should().NotContain(typeof(AddTagDirectoryCommandHandler));
+    }
+
+    // ---- Comando só do diretório (ADR-055) ----------------------------------
+
+    private static readonly DevelopmentCommandRow Front = new(
+        Guid.CreateVersion7(), null, "npm run dev -- --port {port}", "Sobe o Vite", At,
+        "Front-end", CommandMode.Terminal, "web", true, false,
+        [new CommandParameterSpec("port", "Porta", CommandParameterType.Number, "5173", true)],
+        TagDirectoryId: Core.Id);
+
+    private static TagDirectoryCommandRow OwnBinding(int order) =>
+        new(Guid.NewGuid(), Core.Id, Front.Id, null, Front.Name, Front.Command, order, true, null, null, IsDirectoryOnly: true);
+
+    private static DirectoryCommandDraft FrontDraft(DirectoryCommandEditorRequest _) =>
+        new("npm run dev", null, new DevelopmentCommandSettings("Front-end", CommandMode.Terminal));
+
+    [Fact]
+    public async Task NewCommand_OpensTheDialog_CreatesInTheDirectory_AndReloads()
+    {
+        var (viewModel, directory) = await DirectoryAsync();
+        await viewModel.ToggleDirectoryCommandsAsync(directory, Ct);
+        _runner.ResultsByHandler[typeof(CreateDirectoryOnlyCommandHandler)] = Guid.NewGuid();
+        _editor.Answer = FrontDraft;
+
+        await viewModel.NewDirectoryCommandAsync(directory, Ct);
+
+        var asked = _editor.Asked.Should().ContainSingle().Subject;
+        asked.Heading.Should().Be("Novo comando de @ecossistema-core");
+        asked.AcceptLabel.Should().Be("Criar comando");
+        asked.Initial.Should().BeNull();
+        _runner.Invoked.Should().ContainInOrder(typeof(CreateDirectoryOnlyCommandHandler), typeof(GetTagDirectoryCommandsHandler));
+        viewModel.StatusMessage.Should().Be("Front-end criado em @ecossistema-core.");
+    }
+
+    [Fact]
+    public async Task NewCommand_Refused_KeepsTheDialogOpen_WithTheReason()
+    {
+        var (viewModel, directory) = await DirectoryAsync();
+        _runner.FailuresByHandler[typeof(CreateDirectoryOnlyCommandHandler)] =
+            new MyTaskApp.Domain.DomainException("A pasta do comando precisa ficar dentro do worktree.");
+        _editor.Answer = FrontDraft;
+
+        await viewModel.NewDirectoryCommandAsync(directory, Ct);
+
+        _editor.LastError.Should().Be("A pasta do comando precisa ficar dentro do worktree.");
+        viewModel.StatusMessage.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task NewCommand_Cancelled_ChangesNothing()
+    {
+        var (viewModel, directory) = await DirectoryAsync();
+
+        await viewModel.NewDirectoryCommandAsync(directory, Ct);
+
+        _editor.Asked.Should().ContainSingle();
+        _runner.Invoked.Should().NotContain(typeof(CreateDirectoryOnlyCommandHandler));
+    }
+
+    [Fact]
+    public async Task AnOwnCommand_IsEditedInTheDialog_StartingFromWhatIsSaved()
+    {
+        var (viewModel, directory) = await DirectoryAsync(OwnBinding(0));
+        await viewModel.ToggleDirectoryCommandsAsync(directory, Ct);
+        _runner.ResultsByHandler[typeof(GetDirectoryOnlyCommandHandler)] = Front;
+        _runner.ResultsByHandler[typeof(UpdateDirectoryOnlyCommandHandler)] = Front;
+        _editor.Answer = request => new DirectoryCommandEditorViewModel(request).Draft();
+        var item = directory.Commands.Single();
+
+        item.IsDirectoryOnly.Should().BeTrue();
+        item.RemoveTip.Should().Contain("Excluir");
+
+        await viewModel.EditDirectoryOnlyCommandAsync(item, Ct);
+
+        var asked = _editor.Asked.Should().ContainSingle().Subject;
+        asked.Heading.Should().Be("Editar comando de @ecossistema-core");
+        asked.Initial.Should().Be(Front);
+        _runner.Invoked.Should().ContainInOrder(
+            typeof(GetDirectoryOnlyCommandHandler),
+            typeof(UpdateDirectoryOnlyCommandHandler),
+            typeof(GetTagDirectoryCommandsHandler));
+        viewModel.StatusMessage.Should().Be("Comando atualizado.");
+    }
+
+    [Fact]
+    public async Task RemovingAnOwnCommand_AsksFirst_BecauseItIsDeleted()
+    {
+        var (viewModel, directory) = await DirectoryAsync(OwnBinding(0));
+        await viewModel.ToggleDirectoryCommandsAsync(directory, Ct);
+
+        await viewModel.RemoveDirectoryCommandAsync(directory.Commands[0], Ct);
+
+        _confirmation.Asked.Should().ContainSingle().Which.Message.Should().Contain("só existe em @ecossistema-core");
+        _runner.Invoked.Should().NotContain(typeof(RemoveTagDirectoryCommandHandler));
+
+        _confirmation.Answer = true;
+        await viewModel.RemoveDirectoryCommandAsync(directory.Commands[0], Ct);
+
+        _runner.Invoked.Should().Contain(typeof(RemoveTagDirectoryCommandHandler));
+        viewModel.StatusMessage.Should().Be("Front-end excluído.");
+    }
+
+    [Fact]
+    public async Task RemovingAGlobal_DoesNotAsk()
+    {
+        var (viewModel, directory) = await DirectoryAsync(Binding(Run, 0));
+        await viewModel.ToggleDirectoryCommandsAsync(directory, Ct);
+
+        await viewModel.RemoveDirectoryCommandAsync(directory.Commands[0], Ct);
+
+        _confirmation.Asked.Should().BeEmpty();
+        _runner.Invoked.Should().Contain(typeof(RemoveTagDirectoryCommandHandler));
+    }
+
+    [Fact]
+    public async Task WithEveryGlobalAlreadyHere_TheHintPointsToNewCommand()
+    {
+        var (viewModel, directory) = await DirectoryAsync(Binding(Run, 0), Binding(Test, 1));
+        await viewModel.ToggleDirectoryCommandsAsync(directory, Ct);
+
+        directory.NewCommandHint.Should().StartWith("Nenhum comando global a adicionar");
+    }
+
+    [Fact]
+    public void TheDialog_StartsFromTheSavedCommand_AndBuildsTheDraft()
+    {
+        var editor = new DirectoryCommandEditorViewModel(
+            new DirectoryCommandEditorRequest("Editar", "Salvar", Front, (_, _) => Task.FromResult<string?>(null)));
+
+        editor.Name.Should().Be("Front-end");
+        editor.IsTerminal.Should().BeTrue();
+        editor.WorkingDirectory.Should().Be("web");
+        editor.ParameterEditors.Should().ContainSingle().Which.Label.Should().Be("Porta");
+
+        editor.Name = "  ";
+        editor.CanAccept.Should().BeFalse();
+
+        editor.Name = " Front ";
+        editor.IsExecute = true;
+        editor.Command = "npm run dev -- --port {port} --host {host}";
+        var draft = editor.Draft();
+
+        draft.Command.Should().Be("npm run dev -- --port {port} --host {host}");
+        draft.Description.Should().Be("Sobe o Vite");
+        draft.Settings.Name.Should().Be("Front");
+        draft.Settings.Mode.Should().Be(CommandMode.Execute);
+        draft.Settings.WorkingDirectory.Should().Be("web");
+        draft.Settings.Parameters!.Select(spec => spec.Name).Should().Equal("port", "host");
+        draft.Settings.Parameters![0].Label.Should().Be("Porta", "o que já estava preenchido fica");
+    }
+
+    [Fact]
+    public async Task TheDialog_ShowsTheRefusal_AndStaysOpen()
+    {
+        var editor = new DirectoryCommandEditorViewModel(
+            new DirectoryCommandEditorRequest("Novo", "Criar", null, (_, _) => Task.FromResult<string?>("Recusado.")))
+        {
+            Name = "Front-end",
+            Command = "npm run dev",
+        };
+
+        (await editor.AcceptAsync(Ct)).Should().BeFalse();
+
+        editor.ErrorMessage.Should().Be("Recusado.");
+        editor.IsBusy.Should().BeFalse();
     }
 }

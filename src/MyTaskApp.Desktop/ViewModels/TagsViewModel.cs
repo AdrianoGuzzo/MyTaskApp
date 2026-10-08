@@ -126,6 +126,7 @@ public sealed partial class TagsViewModel(
     IUseCaseRunner runner,
     IConfirmationDialog confirmation,
     IDirectoryProbe directoryProbe,
+    IDirectoryCommandEditor commandEditor,
     ILogger<TagsViewModel> logger) : ObservableObject
 {
     [ObservableProperty]
@@ -291,7 +292,10 @@ public sealed partial class TagsViewModel(
         var confirmed = await confirmation.AskAsync(new ConfirmationRequest(
             "Excluir diretório?",
             $"{directory.Alias} deixa de aparecer no autocomplete das anotações. "
-            + "O que já foi escrito com este caminho continua como está.",
+            + "O que já foi escrito com este caminho continua como está."
+            + (directory.CommandCount > 0
+                ? " Os botões de comando dele saem dos worktrees, e os comandos criados só nele são excluídos."
+                : string.Empty),
             "Excluir"));
 
         if (!confirmed)
@@ -383,18 +387,128 @@ public sealed partial class TagsViewModel(
     public Task MoveDirectoryCommandDownAsync(TagDirectoryCommandItemViewModel item, CancellationToken cancellationToken) =>
         MoveDirectoryCommandAsync(item, +1, cancellationToken);
 
+    /// <summary>
+    /// Tira o global do diretório sem perguntar: ele continua cadastrado. O
+    /// comando só do diretório (ADR-055) é excluído, e por isso pergunta antes.
+    /// </summary>
     [RelayCommand]
-    public Task RemoveDirectoryCommandAsync(TagDirectoryCommandItemViewModel item, CancellationToken cancellationToken)
+    public async Task RemoveDirectoryCommandAsync(TagDirectoryCommandItemViewModel item, CancellationToken cancellationToken)
     {
         var (tagId, directoryId, bindingId) = Ids(item);
 
-        return ChangeDirectoryCommandsAsync(
+        if (item.IsDirectoryOnly
+            && !await confirmation.AskAsync(new ConfirmationRequest(
+                $"Excluir {item.DisplayName}?",
+                $"Ele só existe em {item.Owner.Alias}: o botão sai dos worktrees e o comando não pode ser recuperado. "
+                + "O histórico de execuções fica.",
+                "Excluir")))
+        {
+            return;
+        }
+
+        await ChangeDirectoryCommandsAsync(
             item.Owner,
             () => runner.RunAsync<RemoveTagDirectoryCommandHandler>(
                 (handler, token) => handler.HandleAsync(new RemoveTagDirectoryCommand(tagId, directoryId, bindingId), token),
                 cancellationToken),
-            $"{item.DisplayName} saiu de {item.Owner.Alias}. O comando global continua cadastrado.",
+            item.IsDirectoryOnly
+                ? $"{item.DisplayName} excluído."
+                : $"{item.DisplayName} saiu de {item.Owner.Alias}. O comando global continua cadastrado.",
             cancellationToken);
+    }
+
+    /// <summary>
+    /// "+ Novo comando": um comando só deste diretório (ADR-055), sem passar por
+    /// Comandos globais. Entra no fim da lista, ligado.
+    /// </summary>
+    [RelayCommand]
+    public async Task NewDirectoryCommandAsync(TagDirectoryItemViewModel directory, CancellationToken cancellationToken)
+    {
+        var tagId = directory.Owner.Row.Id;
+        var directoryId = directory.Row.Id;
+        // O diálogo fecha na tentativa que gravou: a última é a que vale.
+        string? created = null;
+
+        var saved = await commandEditor.EditAsync(new DirectoryCommandEditorRequest(
+            $"Novo comando de {directory.Alias}",
+            "Criar comando",
+            null,
+            (draft, token) =>
+            {
+                created = draft.Settings.Name;
+
+                return SaveCommandAsync(() => runner.RunAsync<CreateDirectoryOnlyCommandHandler, Guid>(
+                    (handler, inner) => handler.HandleAsync(
+                        new CreateDirectoryOnlyCommand(tagId, directoryId, draft.Command, draft.Description, draft.Settings),
+                        inner),
+                    token));
+            }));
+
+        if (!saved)
+        {
+            return;
+        }
+
+        await LoadDirectoryCommandsAsync(directory, cancellationToken);
+        StatusMessage = $"{created} criado em {directory.Alias}.";
+    }
+
+    /// <summary>Abre o comando só do diretório no mesmo diálogo, com o que está gravado agora.</summary>
+    [RelayCommand]
+    public async Task EditDirectoryOnlyCommandAsync(TagDirectoryCommandItemViewModel item, CancellationToken cancellationToken)
+    {
+        var commandId = item.Row.CommandId;
+        DevelopmentCommandRow? current = null;
+
+        if (!await TryAsync(
+                async () => current = await runner.RunAsync<GetDirectoryOnlyCommandHandler, DevelopmentCommandRow>(
+                    (handler, token) => handler.HandleAsync(new GetDirectoryOnlyCommand(commandId), token),
+                    cancellationToken),
+                "Não foi possível abrir o comando.")
+            || current is null)
+        {
+            return;
+        }
+
+        var saved = await commandEditor.EditAsync(new DirectoryCommandEditorRequest(
+            $"Editar comando de {item.Owner.Alias}",
+            "Salvar alterações",
+            current,
+            (draft, token) => SaveCommandAsync(() => runner.RunAsync<UpdateDirectoryOnlyCommandHandler, DevelopmentCommandRow>(
+                (handler, inner) => handler.HandleAsync(
+                    new UpdateDirectoryOnlyCommand(commandId, draft.Command, draft.Description, draft.Settings),
+                    inner),
+                token))));
+
+        if (!saved)
+        {
+            return;
+        }
+
+        await LoadDirectoryCommandsAsync(item.Owner, cancellationToken);
+        StatusMessage = "Comando atualizado.";
+    }
+
+    /// <summary>
+    /// O gravar do diálogo: a recusa do domínio volta como mensagem, e o diálogo
+    /// fica aberto mostrando-a, com o que foi digitado.
+    /// </summary>
+    private async Task<string?> SaveCommandAsync(Func<Task> save)
+    {
+        try
+        {
+            await save();
+            return null;
+        }
+        catch (DomainException exception)
+        {
+            return exception.Message;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.LogError(exception, "DirectoryOnlyCommandSaveFailed");
+            return "Não foi possível salvar o comando.";
+        }
     }
 
     [RelayCommand]

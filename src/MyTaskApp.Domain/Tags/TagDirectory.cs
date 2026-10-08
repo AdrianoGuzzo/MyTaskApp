@@ -122,7 +122,7 @@ public sealed class TagDirectory
         }
     }
 
-    private TagDirectoryCommand GetCommand(Guid bindingId) =>
+    internal TagDirectoryCommand GetCommand(Guid bindingId) =>
         _commands.Find(command => command.Id == bindingId)
         ?? throw new DomainException("Este comando não está mais no diretório.");
 

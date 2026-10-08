@@ -28,7 +28,7 @@ public class TagDirectoriesViewModelTests
         _runner.ResultsByHandler[typeof(GetTagDirectoriesHandler)] = (IReadOnlyList<TagDirectoryRow>)[Core, Web];
         _runner.ResultsByHandler[typeof(AddTagDirectoryHandler)] = Guid.NewGuid();
 
-        var viewModel = new TagsViewModel(_runner, _confirmation, _probe, NullLogger<TagsViewModel>.Instance);
+        var viewModel = new TagsViewModel(_runner, _confirmation, _probe, new FakeDirectoryCommandEditor(), NullLogger<TagsViewModel>.Instance);
         await viewModel.LoadAsync(Ct);
 
         return (viewModel, viewModel.Tags.Single());

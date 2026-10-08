@@ -10,6 +10,11 @@ namespace MyTaskApp.Domain.Tags;
 /// <remarks>
 /// O override personaliza só aqui: <c>dotnet run --project src/Eco.Web</c> no
 /// lugar do <c>dotnet run</c> global. <c>null</c> é "usar a configuração global".
+/// <para>
+/// Um comando criado direto no diretório (ADR-055) também passa por aqui: a
+/// associação dá a ordem e o ligar/desligar. Ele não tem override — quem quer
+/// outro texto edita o próprio comando.
+/// </para>
 /// </remarks>
 public sealed class TagDirectoryCommand
 {
