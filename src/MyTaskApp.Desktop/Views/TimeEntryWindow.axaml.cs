@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using MyTaskApp.Desktop.ViewModels;
 
@@ -8,6 +9,9 @@ namespace MyTaskApp.Desktop.Views;
 /// <summary>O diálogo de um período de trabalho (ADR-052).</summary>
 public sealed partial class TimeEntryWindow : Window
 {
+    /// <summary>Pôr o dia digitado no calendário ao abrir não é escolher.</summary>
+    private bool _syncingCalendar;
+
     public TimeEntryWindow()
     {
         InitializeComponent();
@@ -28,7 +32,60 @@ public sealed partial class TimeEntryWindow : Window
         base.OnOpened(e);
 
         // O horário é o que se corrige quase sempre; o dia já vem certo.
-        Avalonia.Threading.Dispatcher.UIThread.Post(() => StartPicker.Focus());
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => StartBox.Focus());
+    }
+
+    /// <summary>Entrar no campo seleciona tudo: digitar <c>0831</c> substitui o que estava lá.</summary>
+    private void OnFieldGotFocus(object? sender, FocusChangedEventArgs e)
+    {
+        if (sender is TextBox box)
+        {
+            box.SelectAll();
+        }
+    }
+
+    private void OnFieldLostFocus(object? sender, RoutedEventArgs e) =>
+        (DataContext as TimeEntryEditorViewModel)?.Tidy();
+
+    /// <summary>O calendário abre no dia digitado e não oferece o futuro.</summary>
+    private void OnCalendarOpening(object? sender, EventArgs e)
+    {
+        if (DataContext is not TimeEntryEditorViewModel viewModel)
+        {
+            return;
+        }
+
+        var today = viewModel.Today.ToDateTime(TimeOnly.MinValue);
+        var day = viewModel.Date?.ToDateTime(TimeOnly.MinValue);
+
+        _syncingCalendar = true;
+
+        try
+        {
+            // Riscados, e não escondidos: o DisplayDateEnd deixaria um buraco no mês.
+            DayCalendar.BlackoutDates.Clear();
+            DayCalendar.BlackoutDates.Add(new CalendarDateRange(today.AddDays(1), today.AddYears(10)));
+            DayCalendar.SelectedDate = day <= today ? day : null;
+            DayCalendar.DisplayDate = day <= today ? day.Value : today;
+        }
+        finally
+        {
+            _syncingCalendar = false;
+        }
+    }
+
+    private void OnCalendarPicked(object? sender, SelectionChangedEventArgs e)
+    {
+        if (_syncingCalendar
+            || DataContext is not TimeEntryEditorViewModel viewModel
+            || DayCalendar.SelectedDate is not { } picked)
+        {
+            return;
+        }
+
+        viewModel.PickDate(DateOnly.FromDateTime(picked));
+        CalendarButton.Flyout?.Hide();
+        StartBox.Focus();
     }
 
     /// <summary>

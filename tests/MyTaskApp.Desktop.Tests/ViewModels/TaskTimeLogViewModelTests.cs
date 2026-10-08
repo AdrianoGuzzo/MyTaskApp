@@ -266,6 +266,7 @@ public class TimeEntryEditorViewModelTests
             "Adicionar tempo",
             "Adicionar",
             initial,
+            Today,
             (draft, _) => save?.Invoke(draft) ?? Task.FromResult<string?>(null)));
 
     [Fact]
@@ -283,8 +284,8 @@ public class TimeEntryEditorViewModelTests
     public void AnEndBeforeTheStart_OffersTheNextDay_WithoutGuessing()
     {
         var editor = Editor(new TimeEntryDraft(Today, new TimeOnly(14, 0), Today, new TimeOnly(15, 0), null));
-        editor.StartTime = new TimeSpan(23, 0, 0);
-        editor.EndTime = new TimeSpan(1, 30, 0);
+        editor.StartText = "2300";
+        editor.EndText = "0130";
 
         editor.ShowsEndsLater.Should().BeTrue();
         editor.Draft()!.EndDate.Should().Be(Today, "virar o dia é escolha do usuário");
@@ -326,9 +327,71 @@ public class TimeEntryEditorViewModelTests
     public void AnEmptyField_CannotBeAccepted()
     {
         var editor = Editor(new TimeEntryDraft(Today, new TimeOnly(14, 0), Today, new TimeOnly(15, 0), null));
-        editor.EndTime = null;
+        editor.EndText = string.Empty;
 
         editor.CanAccept.Should().BeFalse();
         editor.Draft().Should().BeNull();
+    }
+
+    [Fact]
+    public void TheFields_OpenWrittenOut()
+    {
+        var editor = Editor(new TimeEntryDraft(Today, new TimeOnly(8, 5), Today, new TimeOnly(9, 0), null));
+
+        editor.DateText.Should().Be("06/10/2026");
+        editor.StartText.Should().Be("08:05");
+        editor.EndText.Should().Be("09:00");
+    }
+
+    [Fact]
+    public void TypingDigitsOnly_IsReadAsTheTime_AndWrittenOutOnLeaving()
+    {
+        var editor = Editor(new TimeEntryDraft(Today, new TimeOnly(14, 0), Today, new TimeOnly(15, 0), null));
+
+        editor.DateText = "0510";
+        editor.StartText = "0831";
+        editor.EndText = "1015";
+
+        editor.Draft().Should().Be(new TimeEntryDraft(Today.AddDays(-1), new TimeOnly(8, 31), Today.AddDays(-1), new TimeOnly(10, 15), null));
+        editor.DurationText.Should().Be("1h 44min");
+
+        editor.Tidy();
+
+        editor.DateText.Should().Be("05/10/2026");
+        editor.StartText.Should().Be("08:31");
+        editor.EndText.Should().Be("10:15");
+        editor.InputError.Should().BeNull();
+    }
+
+    [Fact]
+    public void AnUnreadableField_ComplainsOnlyOnLeaving_AndTheComplaintGoesWhenFixed()
+    {
+        var editor = Editor(new TimeEntryDraft(Today, new TimeOnly(14, 0), Today, new TimeOnly(15, 0), null));
+
+        editor.StartText = "2560";
+
+        editor.CanAccept.Should().BeFalse();
+        editor.InputError.Should().BeNull("no meio da digitação ainda não é erro");
+
+        editor.Tidy();
+
+        editor.InputError.Should().StartWith("Início inválido");
+        editor.StartText.Should().Be("2560", "o que não foi lido fica como foi digitado");
+
+        editor.StartText = "1430";
+
+        editor.InputError.Should().BeNull();
+        editor.CanAccept.Should().BeTrue();
+    }
+
+    [Fact]
+    public void PickingInTheCalendar_WritesTheDay()
+    {
+        var editor = Editor(new TimeEntryDraft(Today, new TimeOnly(14, 0), Today, new TimeOnly(15, 0), null));
+
+        editor.PickDate(new DateOnly(2026, 9, 30));
+
+        editor.DateText.Should().Be("30/09/2026");
+        editor.Draft()!.StartDate.Should().Be(new DateOnly(2026, 9, 30));
     }
 }
