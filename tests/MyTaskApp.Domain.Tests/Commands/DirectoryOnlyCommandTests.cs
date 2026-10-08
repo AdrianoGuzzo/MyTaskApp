@@ -2,7 +2,7 @@ using MyTaskApp.Domain.Commands;
 
 namespace MyTaskApp.Domain.Tests.Commands;
 
-/// <summary>O comando criado direto no diretório da etiqueta, sem ser global (ADR-054).</summary>
+/// <summary>O comando criado direto no diretório da etiqueta, sem ser global (ADR-055).</summary>
 public class DirectoryOnlyCommandTests
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 7, 10, 0, 0, TimeSpan.Zero);

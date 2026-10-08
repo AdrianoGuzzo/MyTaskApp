@@ -40,7 +40,7 @@ internal sealed class FakeDevelopmentCommandRepository : IDevelopmentCommandRepo
     public Task<DevelopmentCommand?> FindByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         Task.FromResult(_commands.GetValueOrDefault(id));
 
-    /// <summary>Um comando só do diretório (ADR-054).</summary>
+    /// <summary>Um comando só do diretório (ADR-055).</summary>
     public DevelopmentCommand SeedForDirectory(
         Guid directoryId,
         string name,

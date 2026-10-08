@@ -8,6 +8,7 @@ using MyTaskApp.Application.Reminders;
 using MyTaskApp.Application.Sounds;
 using MyTaskApp.Desktop.Reminders;
 using MyTaskApp.Desktop.SpellChecking;
+using MyTaskApp.Desktop.StickyNotes;
 using MyTaskApp.Desktop.ViewModels;
 using MyTaskApp.Desktop.Views;
 using MyTaskApp.Desktop.Widget;
@@ -90,9 +91,11 @@ internal static class AppServices
             .AddSingleton<IWindowBehaviorService>(services => OperatingSystem.IsWindows()
                 ? ActivatorUtilities.CreateInstance<WindowsWindowBehavior>(services)
                 : PortableWindowBehavior.Instance)
-            .AddSingleton<IGlobalHotkeyService>(services => OperatingSystem.IsWindows()
-                ? ActivatorUtilities.CreateInstance<WindowsGlobalHotkey>(services)
-                : UnsupportedGlobalHotkey.Instance)
+            .AddSingleton<IGlobalHotkeyFactory>(services => OperatingSystem.IsWindows()
+                ? ActivatorUtilities.CreateInstance<WindowsGlobalHotkeyFactory>(services)
+                : UnsupportedGlobalHotkeyFactory.Instance)
+            .AddSingleton<IGlobalHotkeyService>(services =>
+                services.GetRequiredService<IGlobalHotkeyFactory>().Create(HotkeyGesture.ToggleHud))
 
             // Quem o app consegue identificar como autor das operacoes (§5, §8).
             // Registrado aqui, antes de AddApplication, porque o nome da conta
@@ -110,7 +113,7 @@ internal static class AppServices
             // Lançar e corrigir um período de trabalho (ADR-052), pelo mesmo molde.
             .AddSingleton<ITimeEntryEditor, TimeEntryEditor>()
 
-            // O comando só do diretório da etiqueta (ADR-054), pelo mesmo molde.
+            // O comando só do diretório da etiqueta (ADR-055), pelo mesmo molde.
             .AddSingleton<IDirectoryCommandEditor, DirectoryCommandEditor>()
 
             // Copiar o texto de uma linha (§12). Singleton sem estado, como o
@@ -157,6 +160,12 @@ internal static class AppServices
             // Sons dos avisos do agente (ADR-042): janela única, como as outras.
             .AddSingleton<AgentAlertSoundsViewModel>()
             .AddSingleton<AgentAlertSoundsWindow>()
+
+            // Post-its (ADR-054): um dono só das janelas abertas — uma por post-it —
+            // e a lista, janela única como as outras do menu.
+            .AddSingleton<StickyNoteWindowManager>()
+            .AddSingleton<StickyNotesViewModel>()
+            .AddSingleton<StickyNotesWindow>()
 
             // A anotacao de um item (§12). Transient, e nao singleton como as
             // duas acima: sao duas telas diferentes para dois checklists

@@ -118,7 +118,7 @@ public sealed class MoveTagDirectoryCommandHandler(ITagRepository tags, IUnitOfW
 
 /// <summary>
 /// Tira o botão do diretório. O comando global continua cadastrado; o comando
-/// só deste diretório (ADR-054) não tem outro lugar, e é excluído junto.
+/// só deste diretório (ADR-055) não tem outro lugar, e é excluído junto.
 /// </summary>
 public sealed record RemoveTagDirectoryCommand(Guid TagId, Guid DirectoryId, Guid BindingId);
 
@@ -148,7 +148,7 @@ public sealed class RemoveTagDirectoryCommandHandler(
 }
 
 /// <summary>
-/// Cria um comando só deste diretório (ADR-054), sem passar por Comandos
+/// Cria um comando só deste diretório (ADR-055), sem passar por Comandos
 /// globais, e já o oferece como botão: entra no fim da lista, ligado.
 /// </summary>
 /// <param name="Settings">O nome é obrigatório: é o rótulo do botão.</param>
@@ -196,7 +196,7 @@ public sealed class CreateDirectoryOnlyCommandHandler(
     }
 }
 
-/// <summary>Edita um comando só do diretório (ADR-054). Atômico, como o global.</summary>
+/// <summary>Edita um comando só do diretório (ADR-055). Atômico, como o global.</summary>
 public sealed record UpdateDirectoryOnlyCommand(
     Guid CommandId,
     string Command,
@@ -225,7 +225,7 @@ public sealed class UpdateDirectoryOnlyCommandHandler(
     }
 }
 
-/// <summary>Um comando inteiro, para o formulário de edição do comando do diretório (ADR-054).</summary>
+/// <summary>Um comando inteiro, para o formulário de edição do comando do diretório (ADR-055).</summary>
 public sealed record GetDirectoryOnlyCommand(Guid CommandId);
 
 public sealed class GetDirectoryOnlyCommandHandler(IDevelopmentCommandRepository commands)

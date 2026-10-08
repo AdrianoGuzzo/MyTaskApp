@@ -37,6 +37,12 @@ public sealed class ThemeController
 
     public AppTheme? Current { get; private set; }
 
+    /// <summary>
+    /// O tema na tela mudou. Para quem desenha cor calculada em C# — os post-its
+    /// (ADR-054) —, que um <c>DynamicResource</c> não alcança.
+    /// </summary>
+    public event Action<AppTheme>? Changed;
+
     /// <param name="choice">O id de um tema do catálogo, ou <see cref="ThemeCatalog.SystemId"/>.</param>
     public void Use(string? choice)
     {
@@ -78,6 +84,8 @@ public sealed class ThemeController
         _applied = resources;
         _application.RequestedThemeVariant = theme.IsDark ? ThemeVariant.Dark : ThemeVariant.Light;
         Current = theme;
+
+        Changed?.Invoke(theme);
     }
 
     private SystemAppearance ReadSystem()

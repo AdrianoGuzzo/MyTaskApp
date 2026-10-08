@@ -5,7 +5,7 @@ using MyTaskApp.Domain.Commands;
 
 namespace MyTaskApp.Desktop.ViewModels;
 
-/// <summary>O comando como o diálogo o devolve e o caso de uso o recebe (ADR-054).</summary>
+/// <summary>O comando como o diálogo o devolve e o caso de uso o recebe (ADR-055).</summary>
 /// <param name="Settings">Com o nome: no comando do diretório, ele é obrigatório.</param>
 public sealed record DirectoryCommandDraft(string Command, string? Description, DevelopmentCommandSettings Settings);
 
@@ -22,7 +22,7 @@ public sealed record DirectoryCommandEditorRequest(
     Func<DirectoryCommandDraft, CancellationToken, Task<string?>> SaveAsync);
 
 /// <summary>
-/// Cria ou edita um comando só do diretório da etiqueta (ADR-054). Porta, como
+/// Cria ou edita um comando só do diretório da etiqueta (ADR-055). Porta, como
 /// <see cref="ITimeEntryEditor"/>, para a janela de etiquetas ser testada sem janela.
 /// </summary>
 public interface IDirectoryCommandEditor

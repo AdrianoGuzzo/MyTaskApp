@@ -246,7 +246,7 @@ public class QuickCommandSettingsViewModelTests
         _runner.Invoked.Should().NotContain(typeof(AddTagDirectoryCommandHandler));
     }
 
-    // ---- Comando só do diretório (ADR-054) ----------------------------------
+    // ---- Comando só do diretório (ADR-055) ----------------------------------
 
     private static readonly DevelopmentCommandRow Front = new(
         Guid.CreateVersion7(), null, "npm run dev -- --port {port}", "Sobe o Vite", At,

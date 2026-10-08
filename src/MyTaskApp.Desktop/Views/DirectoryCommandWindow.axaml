@@ -12,7 +12,7 @@
         WindowStartupLocation="CenterOwner">
 
   <!--
-    "Novo comando" e "Editar comando" de um diretório de etiqueta (ADR-054): o
+    "Novo comando" e "Editar comando" de um diretório de etiqueta (ADR-055): o
     formulário de Comandos globais sem o apelido. A regra é do domínio; a recusa
     aparece aqui, com o diálogo aberto e o que foi digitado intacto.
   -->

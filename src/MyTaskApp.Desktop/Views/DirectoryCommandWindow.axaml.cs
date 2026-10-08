@@ -5,7 +5,7 @@ using MyTaskApp.Desktop.ViewModels;
 
 namespace MyTaskApp.Desktop.Views;
 
-/// <summary>O diálogo do comando só do diretório da etiqueta (ADR-054).</summary>
+/// <summary>O diálogo do comando só do diretório da etiqueta (ADR-055).</summary>
 public sealed partial class DirectoryCommandWindow : Window
 {
     public DirectoryCommandWindow()

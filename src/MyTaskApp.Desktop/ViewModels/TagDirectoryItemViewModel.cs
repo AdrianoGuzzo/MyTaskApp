@@ -60,7 +60,7 @@ public sealed partial class TagDirectoryItemViewModel(TagListItemViewModel owner
 
     public bool HasAvailableCommands => AvailableCommands.Count > 0;
 
-    /// <summary>Ao lado do "+ Novo comando" (ADR-054): o que ele faz, e o que fazer sem global a oferecer.</summary>
+    /// <summary>Ao lado do "+ Novo comando" (ADR-055): o que ele faz, e o que fazer sem global a oferecer.</summary>
     public string NewCommandHint => HasAvailableCommands
         ? "Ou crie um comando só deste diretório, sem cadastrá-lo como global."
         : "Nenhum comando global a adicionar. Crie um só deste diretório, ou cadastre um em Comandos globais… (menu do painel).";

@@ -6,9 +6,9 @@ namespace MyTaskApp.Application.Commands;
 
 /// <summary>Um comando global como a tela o mostra (ADR-028), com o que o comando rápido usa (ADR-051).</summary>
 /// <param name="Parameters">As definições cadastradas; um <c>{nome}</c> sem definição é texto obrigatório.</param>
-/// <param name="Alias"><c>null</c> só no comando do diretório (ADR-054).</param>
+/// <param name="Alias"><c>null</c> só no comando do diretório (ADR-055).</param>
 /// <param name="BindingCount">Em quantos diretórios de etiqueta ele é botão — o aviso antes de excluir.</param>
-/// <param name="TagDirectoryId">O diretório dono do comando; <c>null</c> é global (ADR-054).</param>
+/// <param name="TagDirectoryId">O diretório dono do comando; <c>null</c> é global (ADR-055).</param>
 public sealed record DevelopmentCommandRow(
     Guid Id,
     string? Alias,

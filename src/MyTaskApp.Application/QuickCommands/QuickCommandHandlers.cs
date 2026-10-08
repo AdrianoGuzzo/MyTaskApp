@@ -62,7 +62,7 @@ internal static class QuickCommandTargets
 
     /// <returns>
     /// Os diretórios que casaram; os comandos que podem virar botão — os globais
-    /// e os só daqueles diretórios (ADR-054); e só os globais, para o avulso.
+    /// e os só daqueles diretórios (ADR-055); e só os globais, para o avulso.
     /// </returns>
     public static async Task<(
         IReadOnlyList<CommandDirectoryMatch> Matches,

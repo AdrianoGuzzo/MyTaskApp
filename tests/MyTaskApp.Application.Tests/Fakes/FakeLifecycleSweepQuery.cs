@@ -39,4 +39,18 @@ internal sealed class FakeLifecycleSweepQuery : ILifecycleSweepQuery
 
         return Task.FromResult<IReadOnlyList<Guid>>([.. ReadyToPurge.Take(limit)]);
     }
+
+    public List<Guid> NotesReadyToPurge { get; } = [];
+
+    public DateTimeOffset? NotesPurgeCutoffAsked { get; private set; }
+
+    public Task<IReadOnlyList<Guid>> GetStickyNotesReadyToPurgeAsync(
+        DateTimeOffset deletedBefore,
+        int limit,
+        CancellationToken cancellationToken = default)
+    {
+        NotesPurgeCutoffAsked = deletedBefore;
+
+        return Task.FromResult<IReadOnlyList<Guid>>([.. NotesReadyToPurge.Take(limit)]);
+    }
 }

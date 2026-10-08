@@ -7,10 +7,10 @@ namespace MyTaskApp.Application.QuickCommands;
 
 /// <summary>
 /// Um botão "▶" do ambiente: o comando global com o que o diretório
-/// personalizou, ou o comando só do diretório, pronto para rodar (ADR-051, ADR-054).
+/// personalizou, ou o comando só do diretório, pronto para rodar (ADR-051, ADR-055).
 /// </summary>
 /// <param name="BindingId">A associação do diretório; <c>null</c> num comando avulso.</param>
-/// <param name="Alias"><c>null</c> no comando só do diretório (ADR-054).</param>
+/// <param name="Alias"><c>null</c> no comando só do diretório (ADR-055).</param>
 /// <param name="Template">O texto efetivo: o override do diretório, ou o global.</param>
 /// <param name="WorkingDirectory">Relativa ao worktree, já com o deslocamento do diretório; <c>null</c> é a raiz.</param>
 /// <param name="Parameters">Os <c>{nome}</c> que o usuário preenche, na ordem do texto.</param>
@@ -84,7 +84,7 @@ public static class QuickCommandCatalog
 
     /// <summary>Os botões, na ordem: diretório a diretório, e dentro dele na ordem cadastrada.</summary>
     /// <param name="commands">
-    /// Os globais e os comandos só dos diretórios que casaram (ADR-054): a
+    /// Os globais e os comandos só dos diretórios que casaram (ADR-055): a
     /// associação diz qual é qual, e os dois viram botão do mesmo jeito.
     /// </param>
     public static IReadOnlyList<QuickCommandEntry> Entries(

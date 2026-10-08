@@ -48,7 +48,7 @@ public sealed partial class DevelopmentCommandParameterEditorViewModel : Observa
 
     /// <summary>
     /// As variáveis que o app preenche sozinho, para a dica dos formulários de
-    /// comando — o global e o do diretório (ADR-054).
+    /// comando — o global e o do diretório (ADR-055).
     /// </summary>
     public static string VariablesHint { get; } =
         "Variáveis que o app preenche: " + string.Join(", ", CommandVariables.All

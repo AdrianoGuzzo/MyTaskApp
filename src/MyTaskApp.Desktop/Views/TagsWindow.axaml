@@ -406,7 +406,7 @@
                                               IsVisible="{Binding !IsDirectoryOnly}"
                                               Command="{Binding #Root.((vm:TagsViewModel)DataContext).BeginCustomizeDirectoryCommandCommand}"
                                               CommandParameter="{Binding}" />
-                                      <!-- O comando só do diretório (ADR-054) não tem global a personalizar: edita-se o próprio. -->
+                                      <!-- O comando só do diretório (ADR-055) não tem global a personalizar: edita-se o próprio. -->
                                       <Button Grid.Column="4"
                                               Classes="rowAction"
                                               Margin="4,0,0,0"
@@ -486,7 +486,7 @@
                                       CommandParameter="{Binding}" />
                             </Grid>
 
-                            <!-- Sem passar por Comandos globais (ADR-054): o comando é só deste diretório. -->
+                            <!-- Sem passar por Comandos globais (ADR-055): o comando é só deste diretório. -->
                             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
                               <TextBlock Grid.Column="0"
                                          Classes="meta"

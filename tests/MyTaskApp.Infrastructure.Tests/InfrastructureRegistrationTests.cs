@@ -13,6 +13,7 @@ using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.QuickCommands;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Application.Sounds;
+using MyTaskApp.Application.StickyNotes;
 using MyTaskApp.Application.Tags;
 using MyTaskApp.Application.TimeTracking;
 using MyTaskApp.Infrastructure;
@@ -104,6 +105,8 @@ public class InfrastructureRegistrationTests : IDisposable
     [InlineData(typeof(ITimeEntryRepository))]
     [InlineData(typeof(IActiveTimerQuery))]
     [InlineData(typeof(IActivityHistoryQuery))]
+    [InlineData(typeof(IStickyNoteRepository))]
+    [InlineData(typeof(IStickyNoteQuery))]
     public void EveryPort_IsWiredToAnImplementation(Type serviceType)
     {
         using var provider = BuildProvider();

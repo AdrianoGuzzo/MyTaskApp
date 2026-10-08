@@ -3,7 +3,7 @@ using MyTaskApp.Desktop.ViewModels;
 namespace MyTaskApp.Desktop.Tests.ViewModels;
 
 /// <summary>
-/// Responde o diálogo do comando só do diretório sem janela (ADR-054): grava o
+/// Responde o diálogo do comando só do diretório sem janela (ADR-055): grava o
 /// que o "usuário" preencheu, ou cancela. Guarda o que foi pedido.
 /// </summary>
 internal sealed class FakeDirectoryCommandEditor : IDirectoryCommandEditor

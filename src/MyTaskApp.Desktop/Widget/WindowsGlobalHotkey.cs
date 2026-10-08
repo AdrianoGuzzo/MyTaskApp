@@ -6,23 +6,22 @@ using Microsoft.Extensions.Logging;
 namespace MyTaskApp.Desktop.Widget;
 
 /// <summary>
-/// Ctrl+Shift+Espaço pelo <c>RegisterHotKey</c> (ADR-048). O aviso chega como
-/// <c>WM_HOTKEY</c> na janela principal, que o Avalonia deixa interceptar por
-/// <see cref="Win32Properties.AddWndProcHookCallback"/> — sem hook de teclado
-/// global: o sistema só avisa quando a combinação inteira é apertada.
+/// Uma combinação pelo <c>RegisterHotKey</c> (ADR-048, ADR-054). O aviso chega
+/// como <c>WM_HOTKEY</c> na janela principal, que o Avalonia deixa interceptar
+/// por <see cref="Win32Properties.AddWndProcHookCallback"/> — sem hook de
+/// teclado global: o sistema só avisa quando a combinação inteira é apertada.
 /// </summary>
-internal sealed partial class WindowsGlobalHotkey(ILogger<WindowsGlobalHotkey> logger)
+/// <remarks>
+/// Uma instância por combinação, cada uma com o seu id: o <c>WM_HOTKEY</c> diz
+/// qual disparou, e o gancho de cada uma só responde ao seu.
+/// </remarks>
+internal sealed partial class WindowsGlobalHotkey(ILogger<WindowsGlobalHotkey> logger, HotkeyGesture gesture)
     : IGlobalHotkeyService
 {
-    private const int HotkeyId = 0x4D54;
     private const uint WmHotkey = 0x0312;
-    private const uint ModControl = 0x0002;
-    private const uint ModShift = 0x0004;
 
-    /// <summary>Segurar a combinação não pode alternar janela e HUD em rajada.</summary>
+    /// <summary>Segurar a combinação não pode disparar o atalho em rajada.</summary>
     private const uint ModNoRepeat = 0x4000;
-
-    private const uint VkSpace = 0x20;
 
     private Window? _owner;
     private nint _hwnd;
@@ -30,7 +29,7 @@ internal sealed partial class WindowsGlobalHotkey(ILogger<WindowsGlobalHotkey> l
 
     public bool IsSupported => OperatingSystem.IsWindows();
 
-    public string GestureLabel => "Ctrl+Shift+Espaço";
+    public string GestureLabel => gesture.Label;
 
     public bool Register(Window owner, Action pressed)
     {
@@ -51,9 +50,9 @@ internal sealed partial class WindowsGlobalHotkey(ILogger<WindowsGlobalHotkey> l
 
         try
         {
-            if (!RegisterHotKey(handle.Handle, HotkeyId, ModControl | ModShift | ModNoRepeat, VkSpace))
+            if (!RegisterHotKey(handle.Handle, gesture.RegistrationId, (uint)gesture.Modifiers | ModNoRepeat, gesture.VirtualKey))
             {
-                logger.LogWarning("GlobalHotkeyTaken {Error}", Marshal.GetLastPInvokeError());
+                logger.LogWarning("GlobalHotkeyTaken {Gesture} {Error}", gesture.Id, Marshal.GetLastPInvokeError());
                 return false;
             }
         }
@@ -66,7 +65,7 @@ internal sealed partial class WindowsGlobalHotkey(ILogger<WindowsGlobalHotkey> l
 
         _hook = (IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam, ref bool handled) =>
         {
-            if (message == WmHotkey && wParam == HotkeyId)
+            if (message == WmHotkey && wParam == gesture.RegistrationId)
             {
                 handled = true;
                 pressed();
@@ -96,7 +95,7 @@ internal sealed partial class WindowsGlobalHotkey(ILogger<WindowsGlobalHotkey> l
     [SupportedOSPlatform("windows")]
     private void Release()
     {
-        UnregisterHotKey(_hwnd, HotkeyId);
+        UnregisterHotKey(_hwnd, gesture.RegistrationId);
 
         if (_hook is not null)
         {
@@ -115,4 +114,12 @@ internal sealed partial class WindowsGlobalHotkey(ILogger<WindowsGlobalHotkey> l
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool UnregisterHotKey(nint hwnd, int id);
+}
+
+/// <summary>Cria um <see cref="WindowsGlobalHotkey"/> por combinação.</summary>
+internal sealed class WindowsGlobalHotkeyFactory(ILogger<WindowsGlobalHotkey> logger) : IGlobalHotkeyFactory
+{
+    public bool IsSupported => OperatingSystem.IsWindows();
+
+    public IGlobalHotkeyService Create(HotkeyGesture gesture) => new WindowsGlobalHotkey(logger, gesture);
 }

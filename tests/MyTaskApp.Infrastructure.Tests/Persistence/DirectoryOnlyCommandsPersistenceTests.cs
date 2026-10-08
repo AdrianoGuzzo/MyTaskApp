@@ -9,7 +9,7 @@ namespace MyTaskApp.Infrastructure.Tests.Persistence;
 
 /// <summary>
 /// O comando criado direto no diretório da etiqueta contra SQLite de verdade
-/// (ADR-054): fora da lista de globais, sem apelido, e indo embora com o diretório.
+/// (ADR-055): fora da lista de globais, sem apelido, e indo embora com o diretório.
 /// </summary>
 public class DirectoryOnlyCommandsPersistenceTests
 {
@@ -139,7 +139,7 @@ public class DirectoryOnlyCommandsPersistenceTests
     [Fact]
     public async Task Upgrading_KeepsTheGlobalsTheirParametersBindingsAndHistory()
     {
-        await using var db = await new TempSqliteDatabase().MigrateToAsync("TimeEntries", Ct);
+        await using var db = await new TempSqliteDatabase().MigrateToAsync("StickyNotes", Ct);
         var commandId = Guid.CreateVersion7();
 
         // Só a tabela que a migration muda vai por SQL: as outras já têm a forma final.

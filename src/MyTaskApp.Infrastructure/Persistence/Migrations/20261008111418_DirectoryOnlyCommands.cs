@@ -46,7 +46,7 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            // Escrito à mão: sem apelido, os comandos só de diretório (ADR-054)
+            // Escrito à mão: sem apelido, os comandos só de diretório (ADR-055)
             // voltariam todos com "" e esbarrariam no índice único do Alias.
             migrationBuilder.Sql("DELETE FROM \"DevelopmentCommands\" WHERE \"TagDirectoryId\" IS NOT NULL;");
 

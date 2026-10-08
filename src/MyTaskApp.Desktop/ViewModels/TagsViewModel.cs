@@ -389,7 +389,7 @@ public sealed partial class TagsViewModel(
 
     /// <summary>
     /// Tira o global do diretório sem perguntar: ele continua cadastrado. O
-    /// comando só do diretório (ADR-054) é excluído, e por isso pergunta antes.
+    /// comando só do diretório (ADR-055) é excluído, e por isso pergunta antes.
     /// </summary>
     [RelayCommand]
     public async Task RemoveDirectoryCommandAsync(TagDirectoryCommandItemViewModel item, CancellationToken cancellationToken)
@@ -418,7 +418,7 @@ public sealed partial class TagsViewModel(
     }
 
     /// <summary>
-    /// "+ Novo comando": um comando só deste diretório (ADR-054), sem passar por
+    /// "+ Novo comando": um comando só deste diretório (ADR-055), sem passar por
     /// Comandos globais. Entra no fim da lista, ligado.
     /// </summary>
     [RelayCommand]

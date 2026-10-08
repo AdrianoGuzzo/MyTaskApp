@@ -314,6 +314,78 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                     b.ToTable("DevelopmentCommandParameters", (string)null);
                 });
 
+            modelBuilder.Entity("MyTaskApp.Domain.StickyNotes.StickyNote", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("ArchivedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ColorMode")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ConvertedTaskId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("DeletedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Emphasis")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<double>("Height")
+                        .HasColumnType("REAL");
+
+                    b.Property<bool>("IsOpen")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsPinned")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Opacity")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("PaletteColor")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("TagId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<double>("Width")
+                        .HasColumnType("REAL");
+
+                    b.Property<int?>("X")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("Y")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ArchivedAt")
+                        .HasDatabaseName("IX_StickyNotes_Archived")
+                        .HasFilter("\"ArchivedAt\" IS NOT NULL AND \"DeletedAt\" IS NULL");
+
+                    b.HasIndex("DeletedAt")
+                        .HasDatabaseName("IX_StickyNotes_Trashed")
+                        .HasFilter("\"DeletedAt\" IS NOT NULL");
+
+                    b.HasIndex("TagId");
+
+                    b.ToTable("StickyNotes", (string)null);
+                });
+
             modelBuilder.Entity("MyTaskApp.Domain.Tags.Tag", b =>
                 {
                     b.Property<Guid>("Id")
@@ -859,6 +931,14 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .HasForeignKey("DevelopmentCommandId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("MyTaskApp.Domain.StickyNotes.StickyNote", b =>
+                {
+                    b.HasOne("MyTaskApp.Domain.Tags.Tag", null)
+                        .WithMany()
+                        .HasForeignKey("TagId")
+                        .OnDelete(DeleteBehavior.SetNull);
                 });
 
             modelBuilder.Entity("MyTaskApp.Domain.Tags.TagDirectory", b =>

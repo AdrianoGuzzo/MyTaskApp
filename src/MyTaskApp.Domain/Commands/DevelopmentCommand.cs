@@ -22,7 +22,7 @@ namespace MyTaskApp.Domain.Commands;
 /// </para>
 /// <para>
 /// Um comando pode também ser <b>do diretório</b> (<see cref="TagDirectoryId"/>,
-/// ADR-054): criado direto num diretório de etiqueta, só para ele. Não tem
+/// ADR-055): criado direto num diretório de etiqueta, só para ele. Não tem
 /// apelido, não aparece em Comandos globais nem na lista pós-Worktree, e vai
 /// embora com o diretório. O nome é obrigatório, porque é o rótulo do botão.
 /// </para>
@@ -135,7 +135,7 @@ public sealed class DevelopmentCommand
     }
 
     /// <summary>
-    /// Um comando só do diretório (ADR-054): sem apelido, e o nome é obrigatório.
+    /// Um comando só do diretório (ADR-055): sem apelido, e o nome é obrigatório.
     /// Que o diretório existe é o caso de uso quem confere: ele é de outro agregado.
     /// </summary>
     public static DevelopmentCommand CreateForDirectory(
@@ -181,7 +181,7 @@ public sealed class DevelopmentCommand
         Change(NormalizeAlias(alias), command, description, settings, at);
     }
 
-    /// <summary>Atômico, como o global. Só no comando do diretório (ADR-054).</summary>
+    /// <summary>Atômico, como o global. Só no comando do diretório (ADR-055).</summary>
     public void UpdateForDirectory(
         string command,
         string? description,

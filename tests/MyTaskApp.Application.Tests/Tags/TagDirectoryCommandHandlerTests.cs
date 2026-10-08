@@ -151,7 +151,7 @@ public class TagDirectoryCommandHandlerTests
         rows.Single(row => row.Id == _run.Id).BindingCount.Should().Be(2);
     }
 
-    // ---- Comando só do diretório (ADR-054) ----------------------------------
+    // ---- Comando só do diretório (ADR-055) ----------------------------------
 
     [Fact]
     public async Task CreateOwn_MakesACommandWithoutAlias_AndPutsItAtTheEndOfTheDirectory()

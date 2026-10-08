@@ -11,11 +11,11 @@ public interface IDevelopmentCommandRepository
 
     /// <summary>
     /// Os globais, por apelido. A lista é curta: é o que cabe na memória de quem
-    /// digita. Os comandos só de um diretório (ADR-054) ficam de fora.
+    /// digita. Os comandos só de um diretório (ADR-055) ficam de fora.
     /// </summary>
     Task<IReadOnlyList<DevelopmentCommand>> ListAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>Os comandos só destes diretórios de etiqueta (ADR-054).</summary>
+    /// <summary>Os comandos só destes diretórios de etiqueta (ADR-055).</summary>
     Task<IReadOnlyList<DevelopmentCommand>> ListForDirectoriesAsync(
         IReadOnlyCollection<Guid> directoryIds,
         CancellationToken cancellationToken = default);

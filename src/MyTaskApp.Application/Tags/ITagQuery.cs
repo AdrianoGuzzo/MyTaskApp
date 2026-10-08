@@ -28,7 +28,7 @@ public sealed record TagDirectoryRow(
 /// <summary>Um comando rápido associado a um diretório (ADR-051), com o comando global junto.</summary>
 /// <param name="Alias"><c>null</c> no comando só do diretório.</param>
 /// <param name="Command">O texto do comando global; o efetivo é <see cref="EffectiveCommand"/>.</param>
-/// <param name="IsDirectoryOnly">Criado direto no diretório, e não um global oferecido aqui (ADR-054).</param>
+/// <param name="IsDirectoryOnly">Criado direto no diretório, e não um global oferecido aqui (ADR-055).</param>
 public sealed record TagDirectoryCommandRow(
     Guid Id,
     Guid DirectoryId,
