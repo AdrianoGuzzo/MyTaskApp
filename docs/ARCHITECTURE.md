@@ -4178,6 +4178,15 @@ a faixa do HUD e a aba "Tempo" amarram no mesmo `ElapsedText`.
   erro de digitação em 22 horas. A gravação é do caso de uso: uma recusa
   (sobreposição, fim no futuro) aparece no próprio diálogo, que fica aberto com
   o que foi digitado.
+- **Os campos são texto**, e não `TimePicker`/`CalendarDatePicker`: girar um
+  seletor para 08:31 é mais lento que digitar. `WallClockInput` lê `0831`,
+  `831`, `8h31` e `8` como hora, e `06/10/2026`, `0610`, `6/10`, `061026`,
+  `6`, "hoje" e "ontem" como dia. Sem ano (ou sem mês), vale a ocorrência mais
+  recente até hoje — em 03/01, `28/12` é o do ano que acabou —, porque período
+  no futuro não existe. Ao sair do campo o texto volta por extenso (`08:31`),
+  ou uma mensagem diz o que não foi lido; no meio da digitação, nada reclama
+  (`083` é o caminho para `0831`). Entrar no campo seleciona tudo, e o
+  calendário continua ao lado da data, com o futuro riscado.
 - **Excluir** pergunta com o período e a duração, faixa de aviso e foco em
   Cancelar (ADR-020). O app não tem desfazer, e não ganhou um.
 

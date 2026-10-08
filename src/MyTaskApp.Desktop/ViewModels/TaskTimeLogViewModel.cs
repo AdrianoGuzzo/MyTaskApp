@@ -233,6 +233,7 @@ public sealed partial class TaskTimeLogViewModel : ObservableObject
             "Adicionar tempo",
             "Adicionar",
             new TimeEntryDraft(_clock.Today, start, _clock.Today, end, null),
+            _clock.Today,
             (draft, token) => SaveAsync(
                 () => _runner.RunAsync<AddTimeEntryHandler, Guid>(
                     (handler, inner) => handler.HandleAsync(
@@ -260,6 +261,7 @@ public sealed partial class TaskTimeLogViewModel : ObservableObject
             "Editar período",
             "Salvar",
             new TimeEntryDraft(view.StartDate, view.StartTime, view.EndDate!.Value, view.EndTime!.Value, view.Note),
+            _clock.Today,
             (draft, token) => SaveAsync(
                 () => _runner.RunAsync<UpdateTimeEntryHandler>(
                     (handler, inner) => handler.HandleAsync(

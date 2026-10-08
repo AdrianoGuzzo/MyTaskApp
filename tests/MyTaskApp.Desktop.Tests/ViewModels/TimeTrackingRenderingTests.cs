@@ -74,6 +74,8 @@ public class TimeTrackingRenderingTests
 
     private static Border Strip(Visual window) => All<Border>(window).Single(border => border.Name == "ActiveTimerStrip");
 
+    private static TextBox Box(Visual window, string name) => All<TextBox>(window).Single(box => box.Name == name);
+
     private static IReadOnlyList<string> Texts(Visual root) =>
         All<TextBlock>(root)
             .Where(block => block.IsEffectivelyVisible && !string.IsNullOrWhiteSpace(block.Text))
@@ -206,6 +208,7 @@ public class TimeTrackingRenderingTests
             "Adicionar tempo",
             "Adicionar",
             new TimeEntryDraft(Date, new TimeOnly(14, 0), Date, new TimeOnly(15, 30), null),
+            Date,
             (_, _) => System.Threading.Tasks.Task.FromResult<string?>(null)));
 
         var window = new TimeEntryWindow(viewModel);
@@ -213,12 +216,40 @@ public class TimeTrackingRenderingTests
         window.UpdateLayout();
 
         window.Title.Should().Be("Adicionar tempo");
-        All<CalendarDatePicker>(window).Single().SelectedDate.Should().Be(new DateTime(2026, 10, 6));
-        All<TimePicker>(window).Select(picker => picker.SelectedTime)
-            .Should().Equal(new TimeSpan(14, 0, 0), new TimeSpan(15, 30, 0));
+        Box(window, "DateBox").Text.Should().Be("06/10/2026");
+        Box(window, "StartBox").Text.Should().Be("14:00");
+        Box(window, "EndBox").Text.Should().Be("15:30");
         All<TextBox>(window).Should().Contain(box => box.Name == "NoteBox");
         Texts(window).Should().Contain(["Data", "Início", "Fim", "Observação", "1h 30min"]);
         All<Button>(window).Single(button => button.Name == "AcceptButton").Content.Should().Be("Adicionar");
         All<CheckBox>(window).Single(box => box.Name == "EndsLaterBox").IsVisible.Should().BeFalse();
+    }
+
+    [AvaloniaFact]
+    public void TheDialog_TakesTheTimeTyped_AndWritesItOutOnLeaving()
+    {
+        var viewModel = new TimeEntryEditorViewModel(new TimeEntryEditorRequest(
+            "Adicionar tempo",
+            "Adicionar",
+            new TimeEntryDraft(Date, new TimeOnly(14, 0), Date, new TimeOnly(15, 30), null),
+            Date,
+            (_, _) => System.Threading.Tasks.Task.FromResult<string?>(null)));
+
+        var window = new TimeEntryWindow(viewModel);
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        // O diálogo abre no início, com tudo selecionado: digitar substitui.
+        var start = Box(window, "StartBox");
+        start.IsFocused.Should().BeTrue();
+        window.KeyTextInput("0831");
+        start.Text.Should().Be("0831");
+        Texts(window).Should().Contain("6h 59min");
+
+        Box(window, "EndBox").Focus();
+        Dispatcher.UIThread.RunJobs();
+
+        start.Text.Should().Be("08:31");
+        viewModel.Draft()!.StartTime.Should().Be(new TimeOnly(8, 31));
     }
 }
