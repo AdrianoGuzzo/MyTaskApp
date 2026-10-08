@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.8.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.7.0...v1.8.0) (2026-10-08)
+
+
+### Added
+
+* comando só do diretório da etiqueta, sem precisar ser global ([#63](https://github.com/AdrianoGuzzo/MyTaskApp/issues/63)) ([22ebe7f](https://github.com/AdrianoGuzzo/MyTaskApp/commit/22ebe7fe88b1c2e77699367ef1371b3dbc82b4cf))
+* post-its, anotações flutuantes que viram tarefa com um clique ([#64](https://github.com/AdrianoGuzzo/MyTaskApp/issues/64)) ([6af2262](https://github.com/AdrianoGuzzo/MyTaskApp/commit/6af226293f74c26ea0d6ea6a2393fb90fe8ac6e9))
+
 ## [1.7.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.6.0...v1.7.0) (2026-10-07)
 
 
