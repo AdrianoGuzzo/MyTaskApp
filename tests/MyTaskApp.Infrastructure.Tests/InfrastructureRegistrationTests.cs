@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using MyTaskApp.Application;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
+using MyTaskApp.Application.DatabaseOperations;
 using MyTaskApp.Application.Development;
 using MyTaskApp.Application.External;
 using MyTaskApp.Application.External.Jira;
@@ -107,6 +108,10 @@ public class InfrastructureRegistrationTests : IDisposable
     [InlineData(typeof(IActivityHistoryQuery))]
     [InlineData(typeof(IStickyNoteRepository))]
     [InlineData(typeof(IStickyNoteQuery))]
+    [InlineData(typeof(IDatabaseConnectionRepository))]
+    [InlineData(typeof(IAnonymizationProfileRepository))]
+    [InlineData(typeof(IDatabaseCopyProfileRepository))]
+    [InlineData(typeof(IDatabaseOperationAuditLog))]
     public void EveryPort_IsWiredToAnImplementation(Type serviceType)
     {
         using var provider = BuildProvider();

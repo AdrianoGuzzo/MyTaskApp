@@ -8,6 +8,7 @@ using Microsoft.Extensions.Options;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Deadlines;
+using MyTaskApp.Application.DatabaseOperations;
 using MyTaskApp.Application.Development;
 using MyTaskApp.Application.External;
 using MyTaskApp.Application.External.Jira;
@@ -149,6 +150,7 @@ public static class DependencyInjection
 
         AddSecrets(services);
         AddJira(services, configuration);
+        AddDatabaseOperations(services, configuration);
 
         if (OperatingSystem.IsWindows())
         {
@@ -197,6 +199,20 @@ public static class DependencyInjection
 
         // As convenções de branch são dado do usuário: no banco (ADR-014).
         services.AddScoped<IBranchConventionStore, BranchConventionStore>();
+    }
+
+    /// <summary>
+    /// Operações de banco PostgreSQL (ADR-056): o cadastro no SQLite do app e
+    /// a trilha de auditoria.
+    /// </summary>
+    private static void AddDatabaseOperations(IServiceCollection services, IConfiguration configuration)
+    {
+        _ = configuration;
+
+        services.AddScoped<IDatabaseConnectionRepository, DatabaseConnectionRepository>();
+        services.AddScoped<IAnonymizationProfileRepository, AnonymizationProfileRepository>();
+        services.AddScoped<IDatabaseCopyProfileRepository, DatabaseCopyProfileRepository>();
+        services.AddScoped<IDatabaseOperationAuditLog, EfDatabaseOperationAuditLog>();
     }
 
     private static HttpClient CreateJiraHttpClient()
