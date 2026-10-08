@@ -6,6 +6,7 @@ using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Commands;
 using MyTaskApp.Application.Configuration;
+using MyTaskApp.Application.DatabaseOperations;
 using MyTaskApp.Application.Deadlines;
 using MyTaskApp.Application.Development;
 using MyTaskApp.Application.External;
@@ -20,6 +21,7 @@ using MyTaskApp.Application.StickyNotes;
 using MyTaskApp.Application.Tags;
 using MyTaskApp.Application.Tasks;
 using MyTaskApp.Application.TimeTracking;
+using MyTaskApp.Domain.DatabaseOperations;
 
 namespace MyTaskApp.Application;
 
@@ -226,6 +228,8 @@ public static class DependencyInjection
         services.AddScoped<GetStickyNoteHandler>();
         services.AddScoped<GetStartupStickyNotesHandler>();
 
+        AddDatabaseOperations(services);
+
         // Singleton: e um laco so, e ele nao pode capturar escopo nenhum
         // (validateScopes: true reprovaria). So recebe IUseCaseRunner.
         services.TryAddSingleton<ReminderScheduler>();
@@ -247,5 +251,47 @@ public static class DependencyInjection
             provider => provider.GetRequiredService<CommandExecutionMonitor>());
 
         return services;
+    }
+
+    /// <summary>
+    /// Operações de banco PostgreSQL (ADR-056). A política e o portão são
+    /// singletons sem estado de escopo; o resto vive no escopo da operação.
+    /// </summary>
+    private static void AddDatabaseOperations(IServiceCollection services)
+    {
+        services.TryAddSingleton<IDatabaseSecurityPolicy, DatabaseSecurityPolicy>();
+        services.TryAddSingleton<DatabaseOperationGate>();
+
+        services.AddScoped<IPostgresEnvironmentDiagnostics, PostgresEnvironmentDiagnostics>();
+        services.AddScoped<IPostgresAnonymizationService, PostgresAnonymizationService>();
+        services.AddScoped<DatabaseCopyPlanner>();
+
+        services.AddScoped<GetDatabaseConnectionsHandler>();
+        services.AddScoped<SaveDatabaseConnectionHandler>();
+        services.AddScoped<SetDatabaseConnectionEnabledHandler>();
+        services.AddScoped<DeleteDatabaseConnectionHandler>();
+        services.AddScoped<TestDatabaseConnectionHandler>();
+
+        services.AddScoped<DetectPostgresToolsHandler>();
+        services.AddScoped<DiagnoseDatabaseHandler>();
+
+        services.AddScoped<GetAnonymizationProfilesHandler>();
+        services.AddScoped<SaveAnonymizationProfileHandler>();
+        services.AddScoped<SetAnonymizationProfileEnabledHandler>();
+        services.AddScoped<DeleteAnonymizationProfileHandler>();
+        services.AddScoped<SuggestSensitiveColumnsHandler>();
+        services.AddScoped<GenerateMaskingScriptHandler>();
+        services.AddScoped<ValidateAnonymizationProfileHandler>();
+
+        services.AddScoped<GetDatabaseCopyProfilesHandler>();
+        services.AddScoped<SaveDatabaseCopyProfileHandler>();
+        services.AddScoped<SetDatabaseCopyProfileEnabledHandler>();
+        services.AddScoped<DeleteDatabaseCopyProfileHandler>();
+
+        services.AddScoped<ValidateDatabaseCopyHandler>();
+        services.AddScoped<RunDatabaseCopyHandler>();
+
+        services.AddScoped<GetDatabaseOperationHistoryHandler>();
+        services.AddScoped<RecoverInterruptedDatabaseOperationsHandler>();
     }
 }

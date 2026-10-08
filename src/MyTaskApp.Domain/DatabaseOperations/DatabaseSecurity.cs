@@ -35,6 +35,9 @@ public enum SecurityViolationCode
     SqlExecutionForbidden,
     ProtectedSystemDatabase,
     UnsupportedOperation,
+
+    /// <summary>Cópia de produção sem a confirmação explícita (ou, na crítica, sem o nome digitado).</summary>
+    ConfirmationRequired,
 }
 
 public sealed record SecurityViolation(SecurityViolationCode Code, string Message);
