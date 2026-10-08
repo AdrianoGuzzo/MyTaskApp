@@ -36,6 +36,12 @@
                  TextWrapping="Wrap" />
     </Border>
 
+    <!-- Produção crítica (ADR-056): o nome do banco, digitado, acende o botão. -->
+    <StackPanel x:Name="TypedPanel" Spacing="4" IsVisible="False">
+      <TextBlock x:Name="TypedLabel" FontSize="12" TextWrapping="Wrap" />
+      <TextBox x:Name="TypedBox" />
+    </StackPanel>
+
     <StackPanel Orientation="Horizontal"
                 Spacing="8"
                 HorizontalAlignment="Right">

@@ -180,7 +180,7 @@ public sealed class PostgresEnvironmentDiagnostics(
         return checks;
     }
 
-    internal static string FormatBytes(long bytes)
+    public static string FormatBytes(long bytes)
     {
         string[] units = ["B", "KB", "MB", "GB", "TB"];
         double value = bytes;

@@ -279,6 +279,7 @@ public sealed partial class App : Avalonia.Application
         todayViewModel.CommandsRequested += () => ShowDevelopmentCommands(services, window);
         todayViewModel.SoundsRequested += () => ShowAgentAlertSounds(services, window);
         todayViewModel.IntegrationsRequested += () => ShowIntegrations(services, window);
+        todayViewModel.DatabaseOperationsRequested += () => ShowDatabaseOperations(services, window);
 
         // Renomear, recolorir ou excluir muda as bolinhas de todo o painel; sem
         // isto a mudança só apareceria no refresh de 60 s.
@@ -444,6 +445,16 @@ public sealed partial class App : Avalonia.Application
     private static void ShowIntegrations(IServiceProvider services, Window owner)
     {
         var window = services.GetRequiredService<IntegrationsWindow>();
+
+        window.Show(owner);
+        window.Activate();
+        window.Reveal();
+    }
+
+    /// <summary>A janela de bancos de dados (ADR-056), aberta pelo menu.</summary>
+    private static void ShowDatabaseOperations(IServiceProvider services, Window owner)
+    {
+        var window = services.GetRequiredService<DatabaseOperationsWindow>();
 
         window.Show(owner);
         window.Activate();
@@ -716,6 +727,9 @@ public sealed partial class App : Avalonia.Application
     /// <summary>Para o agendador e solta o ícone antes de o processo morrer.</summary>
     private void Shutdown(IServiceProvider services)
     {
+        // Uma cópia de banco em andamento para; a limpeza do diretório
+        // temporário roda no caminho de volta dela (ADR-056).
+        services.GetRequiredService<DatabaseOperationsViewModel>().CancelForShutdown();
         services.GetRequiredService<ReminderScheduler>().Dispose();
         services.GetRequiredService<LifecycleMaintenanceScheduler>().Dispose();
         services.GetRequiredService<AgentSessionMonitor>().Dispose();

@@ -1,0 +1,691 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
+        xmlns:views="using:MyTaskApp.Desktop.Views"
+        xmlns:db="using:MyTaskApp.Application.DatabaseOperations"
+        x:Class="MyTaskApp.Desktop.Views.DatabaseOperationsWindow"
+        x:DataType="vm:DatabaseOperationsViewModel"
+        x:Name="Root"
+        Title="Bancos de Dados"
+        Width="980"
+        Height="760"
+        MinWidth="760"
+        MinHeight="560"
+        WindowStartupLocation="CenterOwner">
+
+  <!--
+    Operações de banco PostgreSQL (ADR-056): conexões por ambiente,
+    diagnóstico, cópia de produção com anonimização, perfis e histórico.
+    A tela pede; quem decide se pode é a política, na Application.
+  -->
+
+  <Window.Styles>
+
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="{DynamicResource WidgetSurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetStrokeSoftBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetCardRadius}" />
+      <Setter Property="Padding" Value="12,10" />
+      <Setter Property="Margin" Value="0,0,0,8" />
+    </Style>
+
+    <Style Selector="TextBlock.sectionTitle">
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.meta">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style Selector="TextBlock.field">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextMidBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.empty">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Opacity" Value="0.6" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="Margin" Value="0,24,0,0" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style Selector="TextBlock.code">
+      <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, Menlo, monospace" />
+      <Setter Property="FontSize" Value="11.5" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <!-- O ambiente de cada conexão: produção salta aos olhos. -->
+    <Style Selector="Border.badge">
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetPillRadius}" />
+      <Setter Property="Padding" Value="6,1" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Background" Value="{DynamicResource WidgetStrokeSoftBrush}" />
+    </Style>
+    <Style Selector="Border.badge.production">
+      <Setter Property="Background" Value="{DynamicResource WidgetDangerSoftBrush}" />
+    </Style>
+    <Style Selector="Border.badge.staging">
+      <Setter Property="Background" Value="{DynamicResource WidgetCautionSoftBrush}" />
+    </Style>
+    <Style Selector="Border.badge.test">
+      <Setter Property="Background" Value="{DynamicResource WidgetAccentSoftBrush}" />
+    </Style>
+    <Style Selector="Border.badge TextBlock">
+      <Setter Property="FontSize" Value="9" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="LetterSpacing" Value="0.6" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextMidBrush}" />
+    </Style>
+    <Style Selector="Border.badge.production TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetDangerBrush}" />
+    </Style>
+
+    <!-- ✓ ⚠ ✗ do diagnóstico, da validação e da verificação. -->
+    <Style Selector="TextBlock.glyph">
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Width" Value="18" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+    </Style>
+    <Style Selector="TextBlock.glyph.pass">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetSuccessBrush}" />
+    </Style>
+    <Style Selector="TextBlock.glyph.warn">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetCautionBrush}" />
+    </Style>
+    <Style Selector="TextBlock.glyph.fail">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetDangerBrush}" />
+    </Style>
+
+    <Style Selector="Button.rowAction">
+      <Setter Property="Padding" Value="8,2" />
+      <Setter Property="FontSize" Value="11.5" />
+    </Style>
+
+    <Style Selector="TextBlock.error">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetDangerBrush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style Selector="TextBlock.status">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetAccentTextBrush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+  </Window.Styles>
+
+  <Window.Resources>
+
+    <!-- Um item ✓/⚠/✗, igual nas três telas que verificam alguma coisa. -->
+    <DataTemplate x:Key="CheckLine" x:DataType="vm:CheckItemViewModel">
+      <Grid ColumnDefinitions="Auto,200,*" Margin="0,1">
+        <TextBlock Classes="glyph"
+                   Classes.pass="{Binding IsPass}"
+                   Classes.warn="{Binding IsWarning}"
+                   Classes.fail="{Binding IsFail}"
+                   Text="{Binding Glyph}" />
+        <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="12" />
+        <TextBlock Grid.Column="2" Classes="meta" Text="{Binding Detail}" />
+      </Grid>
+    </DataTemplate>
+
+  </Window.Resources>
+
+  <DockPanel Margin="14,12">
+
+    <TextBlock DockPanel.Dock="Bottom"
+               Classes="error"
+               Margin="0,6,0,0"
+               Text="{Binding ErrorMessage}"
+               IsVisible="{Binding ErrorMessage, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+    <TabControl x:Name="Tabs" SelectedIndex="{Binding SelectedTabIndex}">
+
+      <!-- ============================== CONEXÕES ============================== -->
+      <TabItem Header="Conexões">
+        <Grid ColumnDefinitions="*,16,380" DataContext="{Binding Connections}" x:DataType="vm:DatabaseConnectionsViewModel">
+
+          <DockPanel>
+            <StackPanel DockPanel.Dock="Bottom" Spacing="4" Margin="0,6,0,0">
+              <TextBlock Classes="error" Text="{Binding ErrorMessage}"
+                         IsVisible="{Binding ErrorMessage, Converter={x:Static ObjectConverters.IsNotNull}}" />
+              <TextBlock Classes="status" Text="{Binding StatusMessage}"
+                         IsVisible="{Binding StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}" />
+            </StackPanel>
+
+            <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,4,0,8">
+              <TextBlock Classes="meta" VerticalAlignment="Center"
+                         Text="A senha fica no cofre do sistema; o banco do app guarda só a referência." />
+              <Button Grid.Column="1" Content="Nova conexão" Command="{Binding NewCommand}" />
+            </Grid>
+
+            <TextBlock Classes="empty" Text="Nenhuma conexão cadastrada." IsVisible="{Binding IsEmpty}" />
+
+            <ScrollViewer>
+              <ItemsControl x:Name="ConnectionList" ItemsSource="{Binding Connections}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:DatabaseConnectionItemViewModel">
+                    <Border Classes="card" Opacity="{Binding IsDisabled, Converter={x:Static views:DatabaseOperationsWindow.DisabledOpacity}}">
+                      <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel Spacing="3">
+                          <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" />
+                            <Border Classes="badge"
+                                    Classes.production="{Binding IsProduction}"
+                                    Classes.staging="{Binding IsStaging}"
+                                    Classes.test="{Binding IsTest}">
+                              <TextBlock Text="{Binding Badge}" />
+                            </Border>
+                            <TextBlock Classes="meta" Text="desativada" IsVisible="{Binding IsDisabled}" VerticalAlignment="Center" />
+                          </StackPanel>
+                          <TextBlock Classes="code" Text="{Binding Endpoint}" />
+                          <TextBlock Classes="meta" Text="{Binding PasswordLabel}" />
+                          <TextBlock Classes="meta" Text="{Binding Description}" IsVisible="{Binding HasDescription}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Top">
+                          <Button Classes="rowAction" Content="Editar"
+                                  Command="{Binding #Root.((vm:DatabaseOperationsViewModel)DataContext).Connections.EditCommand}"
+                                  CommandParameter="{Binding}" />
+                          <Button Classes="rowAction" Content="Ativar/Desativar"
+                                  Command="{Binding #Root.((vm:DatabaseOperationsViewModel)DataContext).Connections.ToggleEnabledCommand}"
+                                  CommandParameter="{Binding}" />
+                          <Button Classes="rowAction danger" Content="Excluir"
+                                  Command="{Binding #Root.((vm:DatabaseOperationsViewModel)DataContext).Connections.DeleteCommand}"
+                                  CommandParameter="{Binding}" />
+                        </StackPanel>
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+          </DockPanel>
+
+          <ScrollViewer Grid.Column="2">
+            <Border Classes="card">
+              <StackPanel Spacing="8">
+                <TextBlock Classes="sectionTitle" Text="{Binding FormTitle}" />
+
+                <StackPanel Spacing="3">
+                  <TextBlock Classes="field" Text="Nome" />
+                  <TextBox x:Name="ConnectionNameBox" PlaceholderText="ECO Produção" Text="{Binding Name}" />
+                </StackPanel>
+
+                <Grid ColumnDefinitions="*,8,90">
+                  <StackPanel Spacing="3">
+                    <TextBlock Classes="field" Text="Servidor" />
+                    <TextBox PlaceholderText="192.168.15.112" Text="{Binding Host}" />
+                  </StackPanel>
+                  <StackPanel Grid.Column="2" Spacing="3">
+                    <TextBlock Classes="field" Text="Porta" />
+                    <TextBox Text="{Binding Port}" />
+                  </StackPanel>
+                </Grid>
+
+                <Grid ColumnDefinitions="*,8,*">
+                  <StackPanel Spacing="3">
+                    <TextBlock Classes="field" Text="Banco" />
+                    <TextBox PlaceholderText="eco_core" Text="{Binding Database}" />
+                  </StackPanel>
+                  <StackPanel Grid.Column="2" Spacing="3">
+                    <TextBlock Classes="field" Text="Usuário" />
+                    <TextBox PlaceholderText="backup_user" Text="{Binding Username}" />
+                  </StackPanel>
+                </Grid>
+
+                <StackPanel Spacing="3">
+                  <TextBlock Classes="field" Text="Senha" />
+                  <TextBox x:Name="PasswordBox" PasswordChar="●" Text="{Binding Password}" />
+                  <TextBlock Classes="meta" Text="{Binding PasswordHint}" />
+                </StackPanel>
+
+                <StackPanel Spacing="3">
+                  <TextBlock Classes="field" Text="Ambiente" />
+                  <ComboBox x:Name="EnvironmentBox"
+                            HorizontalAlignment="Stretch"
+                            ItemsSource="{x:Static vm:DatabaseConnectionsViewModel.Environments}"
+                            SelectedItem="{Binding SelectedEnvironment}" />
+                  <TextBlock Classes="meta" Text="{Binding EnvironmentHint}" />
+                </StackPanel>
+
+                <StackPanel Spacing="3">
+                  <TextBlock Classes="field" Text="SSL" />
+                  <ComboBox HorizontalAlignment="Stretch"
+                            ItemsSource="{x:Static vm:DatabaseConnectionsViewModel.SslModes}"
+                            SelectedItem="{Binding SelectedSslMode}" />
+                </StackPanel>
+
+                <StackPanel Spacing="3">
+                  <TextBlock Classes="field" Text="Descrição" />
+                  <TextBox Text="{Binding Description}" />
+                </StackPanel>
+
+                <StackPanel Spacing="2">
+                  <TextBlock Classes="field" Text="Permissões" />
+                  <ItemsControl x:Name="PermissionList" ItemsSource="{Binding Permissions}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:PermissionOptionViewModel">
+                        <CheckBox Content="{Binding Label}"
+                                  IsChecked="{Binding IsChecked}"
+                                  IsEnabled="{Binding IsEditable}"
+                                  ToolTip.Tip="{Binding LockHint}" />
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+
+                <TextBlock Classes="meta"
+                           Text="{Binding TestResult}"
+                           IsVisible="{Binding HasTestResult}" />
+
+                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                  <Button Content="Cancelar" IsVisible="{Binding IsEditing}" Command="{Binding CancelEditCommand}" />
+                  <Button x:Name="TestConnectionButton" Content="Testar conexão" Command="{Binding TestCommand}" />
+                  <Button x:Name="SaveConnectionButton" Classes="accent" Content="{Binding SaveLabel}" Command="{Binding SaveCommand}" />
+                </StackPanel>
+              </StackPanel>
+            </Border>
+          </ScrollViewer>
+        </Grid>
+      </TabItem>
+
+      <!-- ============================= DIAGNÓSTICO ============================= -->
+      <TabItem Header="Diagnóstico">
+        <DockPanel DataContext="{Binding Diagnostics}" x:DataType="vm:DatabaseDiagnosticsViewModel">
+
+          <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,280,Auto,*,Auto" ColumnSpacing="8" Margin="0,4,0,8">
+            <TextBlock Classes="field" Text="Conexão" VerticalAlignment="Center" />
+            <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding Connections}" SelectedItem="{Binding SelectedConnection}" />
+            <Button Grid.Column="2" Content="Diagnosticar" Command="{Binding DiagnoseCommand}" />
+            <ProgressBar Grid.Column="3" IsIndeterminate="True" Width="120" HorizontalAlignment="Left" IsVisible="{Binding IsBusy}" />
+            <Button Grid.Column="4" x:Name="RefreshDiagnosticsButton" Content="Verificar novamente" Command="{Binding RefreshCommand}" />
+          </Grid>
+
+          <StackPanel DockPanel.Dock="Bottom" Spacing="4" Margin="0,6,0,0">
+            <TextBlock Classes="error" Text="{Binding ErrorMessage}"
+                       IsVisible="{Binding ErrorMessage, Converter={x:Static ObjectConverters.IsNotNull}}" />
+            <TextBlock Classes="status" Text="{Binding StatusMessage}"
+                       IsVisible="{Binding StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}" />
+          </StackPanel>
+
+          <ScrollViewer>
+            <StackPanel Spacing="4">
+              <TextBlock Classes="sectionTitle" Text="PostgreSQL Environment" FontSize="16" />
+
+              <Border Classes="card">
+                <StackPanel Spacing="4">
+                  <TextBlock Classes="sectionTitle" Text="Client Tools" />
+                  <ItemsControl x:Name="ClientToolsList" ItemsSource="{Binding ClientTools}" ItemTemplate="{StaticResource CheckLine}" />
+
+                  <StackPanel Spacing="4" Margin="0,6,0,0" IsVisible="{Binding HasMissingTools}">
+                    <TextBlock Text="Como instalar o que falta" FontWeight="SemiBold" />
+                    <ItemsControl ItemsSource="{Binding InstallSteps}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="x:String">
+                          <TextBlock Classes="meta" Text="{Binding}" />
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Text="Para conferir no terminal" FontWeight="SemiBold" Margin="0,4,0,0" />
+                    <ItemsControl ItemsSource="{Binding CheckCommands}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="x:String">
+                          <TextBlock Classes="code" Text="{Binding}" />
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Button HorizontalAlignment="Left" Content="Copiar comandos" Command="{Binding CopyCheckCommandsCommand}" />
+                  </StackPanel>
+                </StackPanel>
+              </Border>
+
+              <Border Classes="card" IsVisible="{Binding HasServer}">
+                <StackPanel Spacing="4">
+                  <TextBlock Classes="sectionTitle" Text="Server" />
+                  <ItemsControl ItemsSource="{Binding Server}" ItemTemplate="{StaticResource CheckLine}" />
+                </StackPanel>
+              </Border>
+
+              <Border Classes="card" IsVisible="{Binding HasAnonymizer}">
+                <StackPanel Spacing="4">
+                  <TextBlock Classes="sectionTitle" Text="PostgreSQL Anonymizer" />
+                  <ItemsControl ItemsSource="{Binding Anonymizer}" ItemTemplate="{StaticResource CheckLine}" />
+                </StackPanel>
+              </Border>
+            </StackPanel>
+          </ScrollViewer>
+        </DockPanel>
+      </TabItem>
+
+      <!-- ============================ COPIAR BANCO ============================ -->
+      <TabItem Header="Copiar Banco">
+        <ScrollViewer DataContext="{Binding Copy}" x:DataType="vm:DatabaseCopyViewModel">
+          <StackPanel Spacing="8" Margin="0,4,0,0">
+
+            <Border Classes="card">
+              <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="8">
+
+                <TextBlock Classes="field" Text="Perfil de cópia" VerticalAlignment="Center" />
+                <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" IsEnabled="{Binding CanEdit}"
+                          PlaceholderText="(opcional) carregar um perfil salvo"
+                          ItemsSource="{Binding CopyProfiles}" SelectedItem="{Binding SelectedCopyProfile}">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="db:DatabaseCopyProfileRow">
+                      <TextBlock Text="{Binding Name}" />
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+
+                <TextBlock Grid.Row="1" Classes="field" Text="Origem" VerticalAlignment="Center" />
+                <ComboBox Grid.Row="1" Grid.Column="1" x:Name="SourceBox" HorizontalAlignment="Stretch" IsEnabled="{Binding CanEdit}"
+                          ItemsSource="{Binding Connections}" SelectedItem="{Binding SelectedSource}" />
+
+                <TextBlock Grid.Row="2" Classes="field" Text="Destino" VerticalAlignment="Center" />
+                <ComboBox Grid.Row="2" Grid.Column="1" x:Name="DestinationBox" HorizontalAlignment="Stretch" IsEnabled="{Binding CanEdit}"
+                          ItemsSource="{Binding Connections}" SelectedItem="{Binding SelectedDestination}" />
+
+                <TextBlock Grid.Row="3" Classes="field" Text="Operação" VerticalAlignment="Center" />
+                <ComboBox Grid.Row="3" Grid.Column="1" HorizontalAlignment="Stretch" IsEnabled="{Binding CanEdit}"
+                          ItemsSource="{x:Static vm:DatabaseCopyViewModel.Operations}" SelectedItem="{Binding SelectedOperation}" />
+
+                <TextBlock Grid.Row="4" Classes="field" Text="Perfil" VerticalAlignment="Center" IsVisible="{Binding Anonymizes}" />
+                <ComboBox Grid.Row="4" Grid.Column="1" HorizontalAlignment="Stretch" IsVisible="{Binding Anonymizes}" IsEnabled="{Binding CanEdit}"
+                          PlaceholderText="Perfil de anonimização"
+                          ItemsSource="{Binding AnonymizationProfiles}" SelectedItem="{Binding SelectedAnonymizationProfile}">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="db:AnonymizationProfileRow">
+                      <TextBlock Text="{Binding Name}" />
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+
+                <WrapPanel Grid.Row="5" Grid.Column="1" IsEnabled="{Binding CanEdit}">
+                  <CheckBox Margin="0,0,16,0" Content="Estrutura" IsChecked="{Binding IncludeSchema}" />
+                  <CheckBox Margin="0,0,16,0" Content="Dados" IsChecked="{Binding IncludeData}" />
+                  <CheckBox Margin="0,0,16,0" Content="Recriar o destino" IsChecked="{Binding RecreateDestination}" />
+                  <CheckBox Margin="0,0,16,0" Content="Verificar depois do restore" IsChecked="{Binding VerifyAfterRestore}" />
+                  <CheckBox Margin="0,0,16,0" Content="Manter o dump anônimo" IsChecked="{Binding KeepAnonymizedArtifact}" IsVisible="{Binding Anonymizes}" />
+                </WrapPanel>
+              </Grid>
+            </Border>
+
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button x:Name="ValidateButton" Content="Validar" Command="{Binding ValidateCommand}" />
+              <Button x:Name="ExecuteButton" Classes="accent" Content="Executar" Command="{Binding ExecuteCommand}" />
+              <Button x:Name="CancelCopyButton" Content="Cancelar" IsVisible="{Binding IsRunning}" Command="{Binding CancelCommand}" />
+              <ProgressBar IsIndeterminate="True" Width="120" IsVisible="{Binding IsBusy}" VerticalAlignment="Center" />
+            </StackPanel>
+
+            <TextBlock Classes="error" Text="{Binding ErrorMessage}"
+                       IsVisible="{Binding ErrorMessage, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+            <!-- O resultado do [Validar]: a política primeiro, depois o ambiente. -->
+            <Border Classes="card" IsVisible="{Binding HasValidation}">
+              <StackPanel Spacing="4">
+                <TextBlock Classes="sectionTitle" Text="{Binding ValidationSummary}" />
+                <ItemsControl x:Name="ViolationList" ItemsSource="{Binding Violations}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="x:String">
+                      <TextBlock Classes="error" Text="{Binding StringFormat='⛔ {0}'}" />
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <ItemsControl ItemsSource="{Binding Checks}" ItemTemplate="{StaticResource CheckLine}" />
+              </StackPanel>
+            </Border>
+
+            <!-- O progresso: a barra, as etapas e os logs recolhíveis. -->
+            <Border Classes="card" IsVisible="{Binding HasSteps}">
+              <StackPanel Spacing="6">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                  <ProgressBar x:Name="CopyProgress" Minimum="0" Maximum="100" Value="{Binding Percent}" Height="10" />
+                  <TextBlock Grid.Column="1" Text="{Binding PercentText}" FontWeight="SemiBold" />
+                </Grid>
+
+                <ItemsControl x:Name="StepList" ItemsSource="{Binding Steps}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:DatabaseCopyStepViewModel">
+                      <Grid ColumnDefinitions="Auto,220,*" Margin="0,1">
+                        <TextBlock Classes="glyph"
+                                   Classes.pass="{Binding IsDone}"
+                                   Classes.warn="{Binding IsRunning}"
+                                   Classes.fail="{Binding IsFailed}"
+                                   Text="{Binding Glyph}" />
+                        <TextBlock Grid.Column="1" Text="{Binding Label}" FontSize="12" />
+                        <TextBlock Grid.Column="2" Classes="meta" Text="{Binding Detail}" />
+                      </Grid>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <TextBlock Text="{Binding ResultMessage}" FontWeight="SemiBold" TextWrapping="Wrap" IsVisible="{Binding HasResult}" />
+
+                <StackPanel Spacing="4" IsVisible="{Binding HasVerification}">
+                  <TextBlock Classes="sectionTitle" Text="Database Copy Verification" />
+                  <ItemsControl ItemsSource="{Binding Verification}" ItemTemplate="{StaticResource CheckLine}" />
+                </StackPanel>
+
+                <ToggleButton x:Name="LogToggle" HorizontalAlignment="Left" Content="Logs" IsChecked="{Binding IsLogOpen}" />
+                <views:CommandOutputView DataContext="{Binding Output}" IsVisible="{Binding #LogToggle.IsChecked}" />
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <!-- =============================== PERFIS =============================== -->
+      <TabItem Header="Perfis">
+        <ScrollViewer DataContext="{Binding Profiles}" x:DataType="vm:DatabaseProfilesViewModel">
+          <StackPanel Spacing="10" Margin="0,4,0,0">
+
+            <StackPanel Spacing="4">
+              <TextBlock Classes="error" Text="{Binding ErrorMessage}"
+                         IsVisible="{Binding ErrorMessage, Converter={x:Static ObjectConverters.IsNotNull}}" />
+              <TextBlock Classes="status" Text="{Binding StatusMessage}"
+                         IsVisible="{Binding StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}" />
+            </StackPanel>
+
+            <!-- Database Copy Profiles -->
+            <TextBlock Classes="sectionTitle" Text="Database Copy Profiles" FontSize="16" />
+            <Grid ColumnDefinitions="*,16,380">
+              <ItemsControl ItemsSource="{Binding CopyProfiles}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="db:DatabaseCopyProfileRow">
+                    <Border Classes="card">
+                      <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel Spacing="2">
+                          <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                          <TextBlock Classes="meta" Text="{Binding Options, Converter={x:Static views:DatabaseOperationsWindow.OptionsSummary}}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Top">
+                          <Button Classes="rowAction accent" Content="Usar"
+                                  Command="{Binding #Root.((vm:DatabaseOperationsViewModel)DataContext).Profiles.UseCopyProfileCommand}"
+                                  CommandParameter="{Binding}" />
+                          <Button Classes="rowAction" Content="Editar"
+                                  Command="{Binding #Root.((vm:DatabaseOperationsViewModel)DataContext).Profiles.EditCopyProfileCommand}"
+                                  CommandParameter="{Binding}" />
+                          <Button Classes="rowAction danger" Content="Excluir"
+                                  Command="{Binding #Root.((vm:DatabaseOperationsViewModel)DataContext).Profiles.DeleteCopyProfileCommand}"
+                                  CommandParameter="{Binding}" />
+                        </StackPanel>
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+
+              <Border Grid.Column="2" Classes="card">
+                <StackPanel Spacing="6">
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Classes="sectionTitle" Text="{Binding CopyFormTitle}" />
+                    <Button Grid.Column="1" Classes="rowAction" Content="Novo" Command="{Binding NewCopyProfileCommand}" />
+                  </Grid>
+                  <TextBox PlaceholderText="ECO Production → ECO Development" Text="{Binding CopyName}" />
+                  <TextBlock Classes="field" Text="Origem" />
+                  <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Connections}" SelectedItem="{Binding CopySource}" />
+                  <TextBlock Classes="field" Text="Destino" />
+                  <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Connections}" SelectedItem="{Binding CopyDestination}" />
+                  <CheckBox Content="Exigir anonimização" IsChecked="{Binding CopyRequireAnonymization}" />
+                  <ComboBox HorizontalAlignment="Stretch" IsVisible="{Binding CopyRequireAnonymization}"
+                            PlaceholderText="Perfil de anonimização"
+                            ItemsSource="{Binding AnonymizationProfiles}" SelectedItem="{Binding CopyAnonymizationProfile}">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate x:DataType="db:AnonymizationProfileRow">
+                        <TextBlock Text="{Binding Name}" />
+                      </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
+                  <WrapPanel>
+                    <CheckBox Margin="0,0,12,0" Content="Estrutura" IsChecked="{Binding CopyIncludeSchema}" />
+                    <CheckBox Margin="0,0,12,0" Content="Dados" IsChecked="{Binding CopyIncludeData}" />
+                    <CheckBox Margin="0,0,12,0" Content="Recriar o destino" IsChecked="{Binding CopyRecreateDestination}" />
+                    <CheckBox Margin="0,0,12,0" Content="Verificar depois" IsChecked="{Binding CopyVerifyAfterRestore}" />
+                    <CheckBox Margin="0,0,12,0" Content="Manter o dump anônimo" IsChecked="{Binding CopyKeepAnonymizedArtifact}" />
+                  </WrapPanel>
+                  <Button HorizontalAlignment="Right" Classes="accent" Content="Salvar perfil" Command="{Binding SaveCopyProfileCommand}" />
+                </StackPanel>
+              </Border>
+            </Grid>
+
+            <!-- Anonymization Profiles -->
+            <TextBlock Classes="sectionTitle" Text="Anonymization Profiles" FontSize="16" Margin="0,8,0,0" />
+            <Grid ColumnDefinitions="260,16,*">
+              <ItemsControl ItemsSource="{Binding AnonymizationProfiles}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="db:AnonymizationProfileRow">
+                    <Border Classes="card">
+                      <StackPanel Spacing="4">
+                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                        <TextBlock Classes="meta" Text="{Binding Rules.Count, StringFormat='{}{0} regra(s) confirmada(s)'}" />
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                          <Button Classes="rowAction" Content="Editar"
+                                  Command="{Binding #Root.((vm:DatabaseOperationsViewModel)DataContext).Profiles.EditAnonymizationProfileCommand}"
+                                  CommandParameter="{Binding}" />
+                          <Button Classes="rowAction danger" Content="Excluir"
+                                  Command="{Binding #Root.((vm:DatabaseOperationsViewModel)DataContext).Profiles.DeleteAnonymizationProfileCommand}"
+                                  CommandParameter="{Binding}" />
+                        </StackPanel>
+                      </StackPanel>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+
+              <Border Grid.Column="2" Classes="card">
+                <StackPanel Spacing="6">
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Classes="sectionTitle" Text="{Binding AnonymizationFormTitle}" />
+                    <Button Grid.Column="1" Classes="rowAction" Content="Novo" Command="{Binding NewAnonymizationProfileCommand}" />
+                  </Grid>
+                  <Grid ColumnDefinitions="*,8,*,8,120" RowDefinitions="Auto,Auto">
+                    <TextBlock Classes="field" Text="Nome" />
+                    <TextBox Grid.Row="1" PlaceholderText="ECO LGPD" Text="{Binding AnonymizationName}" />
+                    <TextBlock Grid.Column="2" Classes="field" Text="Conexão mascarada (role MASKED)" />
+                    <ComboBox Grid.Row="1" Grid.Column="2" HorizontalAlignment="Stretch"
+                              ItemsSource="{Binding Connections}" SelectedItem="{Binding MaskedConnection}" />
+                    <TextBlock Grid.Column="4" Classes="field" Text="Política" />
+                    <TextBox Grid.Row="1" Grid.Column="4" Text="{Binding PolicyName}" />
+                  </Grid>
+                  <TextBox PlaceholderText="Descrição" Text="{Binding AnonymizationDescription}" />
+
+                  <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel>
+                      <TextBlock Text="Possible sensitive data" FontWeight="SemiBold" />
+                      <TextBlock Classes="meta" Text="Sugestões só pelo nome e tipo das colunas. Marque o que é de fato dado pessoal; o resto não é gravado." />
+                    </StackPanel>
+                    <Button Grid.Column="1" Content="Sugerir colunas" Command="{Binding SuggestColumnsCommand}" VerticalAlignment="Top" />
+                  </Grid>
+
+                  <TextBlock Classes="meta" Text="{Binding RulesSummary}" IsVisible="{Binding HasRules}" />
+
+                  <ItemsControl x:Name="RuleList" ItemsSource="{Binding Rules}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:AnonymizationRuleItemViewModel">
+                        <Grid ColumnDefinitions="Auto,210,130,*,Auto" ColumnSpacing="6" Margin="0,2">
+                          <CheckBox IsChecked="{Binding IsConfirmed}" />
+                          <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Classes="code" Text="{Binding ColumnKey}" />
+                            <TextBlock Classes="meta" Text="{Binding Reason}" />
+                          </StackPanel>
+                          <Border Grid.Column="2" Classes="badge" Classes.production="{Binding IsHigh}" Classes.staging="{Binding IsMedium}" HorizontalAlignment="Left">
+                            <TextBlock Text="{Binding SensitivityLabel}" />
+                          </Border>
+                          <TextBox Grid.Column="3" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="11.5" Text="{Binding Expression}" />
+                          <CheckBox Grid.Column="4" Content="valor" IsChecked="{Binding IsValue}" ToolTip.Tip="MASKED WITH VALUE em vez de FUNCTION" />
+                        </Grid>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+
+                  <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                    <Button Content="Validar no servidor" Command="{Binding ValidateOnServerCommand}" />
+                    <Button Content="Gerar script" Command="{Binding GenerateScriptCommand}" />
+                    <Button Classes="accent" Content="Salvar perfil" Command="{Binding SaveAnonymizationProfileCommand}" />
+                  </StackPanel>
+
+                  <ItemsControl ItemsSource="{Binding ServerFindings}" IsVisible="{Binding HasServerFindings}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="x:String">
+                        <TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="12" />
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+
+                  <StackPanel Spacing="4" IsVisible="{Binding HasScript}">
+                    <Grid ColumnDefinitions="*,Auto">
+                      <TextBlock Classes="meta" VerticalAlignment="Center"
+                                 Text="Script para o DBA executar no banco de origem. O app não o executa: produção não é alterada daqui." />
+                      <Button Grid.Column="1" Content="Copiar" Command="{Binding CopyScriptCommand}" />
+                    </Grid>
+                    <TextBox IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap" MaxHeight="260"
+                             FontFamily="Cascadia Mono, Consolas, monospace" FontSize="11.5" Text="{Binding Script}" />
+                  </StackPanel>
+                </StackPanel>
+              </Border>
+            </Grid>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <!-- ============================== HISTÓRICO ============================== -->
+      <TabItem Header="Histórico">
+        <DockPanel DataContext="{Binding History}" x:DataType="vm:DatabaseHistoryViewModel">
+          <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,4,0,8">
+            <TextBlock Classes="meta" VerticalAlignment="Center" Text="Toda operação fica registrada — inclusive as bloqueadas pela política. Sem senha, sem dado de linha." />
+            <Button Grid.Column="1" Content="Atualizar" Command="{Binding LoadCommand}" />
+          </Grid>
+          <TextBlock DockPanel.Dock="Bottom" Classes="error" Text="{Binding ErrorMessage}"
+                     IsVisible="{Binding ErrorMessage, Converter={x:Static ObjectConverters.IsNotNull}}" />
+          <TextBlock DockPanel.Dock="Top" Classes="empty" Text="Nenhuma operação ainda." IsVisible="{Binding IsEmpty}" />
+          <ScrollViewer>
+            <ItemsControl x:Name="HistoryList" ItemsSource="{Binding Operations}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:DatabaseOperationItemViewModel">
+                  <Border Classes="card">
+                    <StackPanel Spacing="2">
+                      <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                        <TextBlock Grid.Column="1" Text="{Binding Status}" FontWeight="SemiBold" />
+                      </Grid>
+                      <TextBlock Classes="meta" Text="{Binding When}" />
+                      <TextBlock Classes="meta" Text="{Binding Meta}" />
+                      <TextBlock Classes="code" Text="{Binding Summary}" IsVisible="{Binding HasSummary}" />
+                      <TextBlock Classes="error" FontSize="11.5" Text="{Binding Error}" IsVisible="{Binding HasError}" />
+                    </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+        </DockPanel>
+      </TabItem>
+
+    </TabControl>
+  </DockPanel>
+</Window>
