@@ -147,6 +147,7 @@ public static class DependencyInjection
         services.AddSingleton<AgentEventListener>();
         services.AddSingleton<IAgentEventEndpoint>(provider => provider.GetRequiredService<AgentEventListener>());
 
+        AddSecrets(services);
         AddJira(services, configuration);
 
         if (OperatingSystem.IsWindows())
@@ -187,15 +188,6 @@ public static class DependencyInjection
             Path.Combine(UserDataLocation.Current.State, "jira.json"),
             provider.GetRequiredService<ILogger<JiraConnectionFile>>()));
 
-        if (OperatingSystem.IsWindows())
-        {
-            AddWindowsSecrets(services);
-        }
-        else
-        {
-            services.AddSingleton<ISecretStore, UnsupportedSecretStore>();
-        }
-
         services.AddSingleton<JiraAuthenticationService>();
         services.AddSingleton<IJiraAuthenticationService>(provider => provider.GetRequiredService<JiraAuthenticationService>());
         services.AddSingleton<IJiraAccess>(provider => provider.GetRequiredService<JiraAuthenticationService>());
@@ -220,6 +212,29 @@ public static class DependencyInjection
             typeof(DependencyInjection).Assembly.GetName().Version?.ToString(3)));
 
         return client;
+    }
+
+    /// <summary>
+    /// O cofre de segredos do app: o token do Jira (ADR-045) e as senhas das
+    /// conexões de banco (ADR-056). DPAPI no Windows, o chaveiro do sistema
+    /// pelo <c>secret-tool</c> no Linux; fora disso, recusar gravar.
+    /// </summary>
+    private static void AddSecrets(IServiceCollection services)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            AddWindowsSecrets(services);
+        }
+        else if (OperatingSystem.IsLinux())
+        {
+            services.AddSingleton<ISecretStore>(provider => SecretToolSecretStore.ForCurrentSystem(
+                provider.GetRequiredService<IProcessRunner>(),
+                provider.GetRequiredService<ILogger<SecretToolSecretStore>>()));
+        }
+        else
+        {
+            services.AddSingleton<ISecretStore, UnsupportedSecretStore>();
+        }
     }
 
     [SupportedOSPlatform("windows")]
