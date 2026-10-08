@@ -140,6 +140,8 @@ public class PgToolRunnerTests
             Ct);
 
         events.Should().HaveCount(2);
+        events[0].Line.IsError.Should().BeFalse("o --verbose sai pelo stderr, mas não é erro");
+        events[1].Line.IsError.Should().BeTrue();
         events[0].Kind.Should().Be(PgToolEventKind.TableData);
         events[0].Table.Should().Be("public.clientes");
         events.Should().OnlyContain(item => !item.Line.Text.Contains(Password, StringComparison.Ordinal));

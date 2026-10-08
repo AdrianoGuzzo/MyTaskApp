@@ -266,9 +266,11 @@ internal sealed class PgToolRunner(
 
         public void Report(CommandOutputLine value)
         {
-            var masked = value with { Text = SensitiveText.Mask(value.Text, [password]) };
+            // O --verbose das ferramentas sai todo pelo stderr: só é erro o que diz que é.
+            var text = SensitiveText.Mask(value.Text, [password]);
+            var masked = new CommandOutputLine(text, value.IsError && LooksLikeAProblem(text));
 
-            if (masked.IsError)
+            if (value.IsError)
             {
                 lock (_gate)
                 {
@@ -283,5 +285,11 @@ internal sealed class PgToolRunner(
 
             progress?.Report(PgVerboseOutputParser.Parse(masked));
         }
+
+        private static bool LooksLikeAProblem(string text) =>
+            text.Contains("error", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("fatal", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("warning", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("could not", StringComparison.OrdinalIgnoreCase);
     }
 }
