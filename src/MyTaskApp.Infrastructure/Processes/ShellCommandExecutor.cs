@@ -77,11 +77,11 @@ internal sealed class ShellCommandExecutor(TimeProvider timeProvider) : ICommand
 
         process.StandardInput.Close();
 
-        var standardOutput = new CapturedStream();
-        var standardError = new CapturedStream();
+        var standardOutput = new CapturedOutput(MaxCapturedChars);
+        var standardError = new CapturedOutput(MaxCapturedChars);
 
-        var readOutput = PumpAsync(process.StandardOutput, standardOutput, isError: false, output);
-        var readError = PumpAsync(process.StandardError, standardError, isError: true, output);
+        var readOutput = ProcessOutputPump.PumpAsync(process.StandardOutput, standardOutput, isError: false, output);
+        var readError = ProcessOutputPump.PumpAsync(process.StandardError, standardError, isError: true, output);
 
         using var timeout = new CancellationTokenSource(request.Timeout ?? DefaultTimeout);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
@@ -127,28 +127,6 @@ internal sealed class ShellCommandExecutor(TimeProvider timeProvider) : ICommand
         }
     }
 
-    private static async Task PumpAsync(
-        StreamReader reader,
-        CapturedStream captured,
-        bool isError,
-        IProgress<CommandOutputLine>? output)
-    {
-        try
-        {
-            // Fora da thread de UI de propósito: um npm install são milhares de
-            // linhas, e quem mostra cada uma decide como chegar à tela.
-            while (await reader.ReadLineAsync(CancellationToken.None).ConfigureAwait(false) is { } line)
-            {
-                captured.Append(line);
-                output?.Report(new CommandOutputLine(line, isError));
-            }
-        }
-        catch (Exception exception) when (exception is IOException or ObjectDisposedException)
-        {
-            // O processo foi morto com o pipe aberto: o que chegou até aqui basta.
-        }
-    }
-
     /// <summary>A árvore inteira: <c>npm</c> chama <c>node</c>, que chama o resto.</summary>
     private static void Kill(Process process)
     {
@@ -160,47 +138,6 @@ internal sealed class ShellCommandExecutor(TimeProvider timeProvider) : ICommand
         catch (Exception exception) when (exception is InvalidOperationException or Win32Exception)
         {
             // Já tinha terminado, ou morreu no meio do caminho.
-        }
-    }
-
-    /// <summary>O texto de uma saída, com teto. Lido de outra thread só no fim.</summary>
-    private sealed class CapturedStream
-    {
-        private readonly StringBuilder _text = new();
-
-        private readonly Lock _gate = new();
-
-        private bool _truncated;
-
-        public string Text
-        {
-            get
-            {
-                lock (_gate)
-                {
-                    return _text.ToString();
-                }
-            }
-        }
-
-        public void Append(string line)
-        {
-            lock (_gate)
-            {
-                if (_truncated)
-                {
-                    return;
-                }
-
-                if (_text.Length + line.Length + 1 > MaxCapturedChars)
-                {
-                    _text.AppendLine("… (output truncado)");
-                    _truncated = true;
-                    return;
-                }
-
-                _text.AppendLine(line);
-            }
         }
     }
 }

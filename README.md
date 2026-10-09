@@ -267,6 +267,39 @@ branch. Detalhes em [ADR-045](docs/ARCHITECTURE.md).
 - **Funciona sem rede.** A chave, o título e o link ficam no banco. Sem Jira, só
   a busca e o "Atualizar" ficam indisponíveis.
 
+### Bancos de Dados: cópia anonimizada de produção
+
+Em *☰ → Bancos de Dados…*, o MyTaskApp cadastra conexões PostgreSQL por
+ambiente e copia Produção para Desenvolvimento, Teste ou Homologação. Os dados
+chegam anonimizados pelo PostgreSQL Anonymizer. Produção nunca é alterada a
+partir do app. O guia completo está em
+[`docs/database-operations.md`](docs/database-operations.md), e a decisão em
+[ADR-056](docs/ARCHITECTURE.md).
+
+- **Conexões por ambiente**, com o badge PRODUCTION / STAGING / TEST /
+  DEVELOPMENT. A senha vai para o cofre do sistema (DPAPI no Windows, chaveiro
+  pelo `secret-tool` no Linux), nunca para o banco do app.
+- **Produção é só leitura:** nunca é destino, não recebe restore, `createdb`,
+  `dropdb`, SQL livre nem mascaramento estático. As permissões são travadas
+  pelo ambiente, e a política vale nos casos de uso e de novo antes de cada
+  processo, não só na tela.
+- **Dump anônimo:** o `pg_dump` roda com uma role `MASKED` do Anonymizer 2.x, e
+  o dado bruto de produção nunca chega ao disco. Antes do dump, um canário
+  confere que a máscara está mesmo ativa.
+- **Diagnóstico:** `psql`, `pg_dump`, `pg_restore`, `pg_isready`, `createdb` e
+  `dropdb` com versão e compatibilidade, mais o servidor e o Anonymizer, com
+  instruções quando falta algo.
+- **Perfis:** a cópia "ECO Production → ECO Development" é cadastrada uma vez.
+  O perfil de anonimização sugere colunas sensíveis (alta, média ou baixa
+  probabilidade), só grava o que você confirma e gera o script `SECURITY LABEL`
+  para o DBA.
+- **Copiar Banco:** [Validar] antes de [Executar], confirmação explícita de
+  produção, barra, etapas e logs ao vivo. No fim, o relatório de verificação
+  (estrutura, linhas e dados sensíveis diferentes da origem). Os temporários
+  são apagados.
+- **Histórico** de todas as operações, inclusive as bloqueadas, sem senha nem
+  dado de linha.
+
 ---
 
 ## Instalação
@@ -346,7 +379,9 @@ app **nunca** apaga suas tarefas.
 | Config do usuário | `%APPDATA%\MyTaskApp\appsettings.user.json` | `~/.config/MyTaskApp/appsettings.user.json` |
 | Logs | `%APPDATA%\MyTaskApp\logs` | `~/.config/MyTaskApp/logs` |
 | Conexão com o Jira | `%APPDATA%\MyTaskApp\jira.json` (sem segredo) | — |
-| Token do Jira | `%APPDATA%\MyTaskApp\secrets\jira.bin` (DPAPI) | — |
+| Token do Jira | `%APPDATA%\MyTaskApp\secrets\jira.bin` (DPAPI) | chaveiro do sistema (`secret-tool`) |
+| Senhas das conexões de banco | `%APPDATA%\MyTaskApp\secrets\postgres-<id>.bin` (DPAPI) | chaveiro do sistema (`secret-tool`) |
+| Temporários das cópias de banco | `%LOCALAPPDATA%\MyTaskApp\database-operations` | `~/.local/share/MyTaskApp/database-operations` |
 
 O banco é criado e atualizado pela própria aplicação na inicialização (migrations
 do EF Core). O instalador não mexe nele. Para fazer backup, copie o
@@ -393,6 +428,7 @@ mudar algum deles sem editar o diretório de instalação, crie um
 | `Jira:CallbackPort` | 47832 | porta da volta do login do Jira; precisa ser a registrada no app OAuth |
 | `Jira:RequestTimeoutSeconds` | 8 | quanto uma chamada ao Jira espera antes de desistir |
 | `Jira:ClientId` / `ClientSecret` | do build | o app OAuth da Atlassian ([como registrar](docs/jira-oauth-app.md)) |
+| `DatabaseOperations:*` | ver o guia | tempos limite e pasta das cópias de banco ([detalhes](docs/database-operations.md#configuração)) |
 
 Linha de comando: `MyTaskApp.exe --startup` abre direto na bandeja. É o
 argumento que o instalador grava na chave `Run` do Windows.
@@ -407,6 +443,7 @@ argumento que o instalador grava na chave `Run` do Windows.
 |---|---|---|
 | [.NET SDK](https://dotnet.microsoft.com/download) | **10.0.401** (fixado em `global.json`) | tudo |
 | Git | qualquer recente | aba Desenvolvimento e testes de Git |
+| Ferramentas cliente do PostgreSQL | 17 ou mais novas | só para usar *Bancos de Dados…*; os testes não precisam ([instalação](docs/database-operations.md#instalação)) |
 | Inno Setup 6 | `winget install -e --id JRSoftware.InnoSetup` | só para gerar o instalador Windows |
 
 As ferramentas locais (`dotnet-ef` e `reportgenerator`) ficam em
@@ -643,7 +680,8 @@ fica em [`CHANGELOG.md`](CHANGELOG.md).
 
 | Documento | Conteúdo |
 |---|---|
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | decisões de arquitetura (ADR-001 a ADR-048), com o motivo de cada uma |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | decisões de arquitetura (ADR-001 a ADR-056), com o motivo de cada uma |
+| [`docs/database-operations.md`](docs/database-operations.md) | conexões PostgreSQL, ambientes, ferramentas, PostgreSQL Anonymizer, cópia anonimizada de produção e solução de problemas |
 | [`docs/jira-oauth-app.md`](docs/jira-oauth-app.md) | registrar o app OAuth do Jira e pôr as credenciais no build |
 | [`docs/release-process.md`](docs/release-process.md) | Conventional Commits, SemVer, pipeline de release, hotfix, verificação de versão |
 | [`installer/README.md`](installer/README.md) | instaladores Windows e Linux, parâmetros, atualização, teste de fumaça |

@@ -16,12 +16,17 @@ namespace MyTaskApp.Desktop.Views;
 /// O botão que não faz nada, quando "Cancelar" não diz o que acontece — depois
 /// de concluir a tarefa, "Manter worktree" é uma escolha, não uma desistência.
 /// </param>
+/// <param name="RequiredText">
+/// O que precisa ser digitado para o botão de confirmar acender — o nome do
+/// banco, na cópia de produção crítica (ADR-056). <c>null</c> = só o clique.
+/// </param>
 public sealed record ConfirmationRequest(
     string Headline,
     string Message,
     string ConfirmLabel,
     bool IsIrreversible = false,
-    string CancelLabel = "Cancelar");
+    string CancelLabel = "Cancelar",
+    string? RequiredText = null);
 
 /// <summary>
 /// Pergunta antes de agir. Existe como porta para que os ViewModels sejam
@@ -46,6 +51,8 @@ public sealed partial class ConfirmWindow : Window
     /// </summary>
     public bool Answer { get; private set; }
 
+    private readonly string? _requiredText;
+
     public ConfirmWindow(ConfirmationRequest request)
         : this()
     {
@@ -55,6 +62,23 @@ public sealed partial class ConfirmWindow : Window
         ConfirmButton.Content = request.ConfirmLabel;
         CancelButton.Content = request.CancelLabel;
         DangerNotice.IsVisible = request.IsIrreversible;
+        _requiredText = request.RequiredText;
+
+        if (request.RequiredText is { } required)
+        {
+            TypedPanel.IsVisible = true;
+            TypedLabel.Text = $"Digite {required} para confirmar:";
+            ConfirmButton.IsEnabled = false;
+            // Pela propriedade, e não pelo TextChanged: o botão acende na mesma
+            // hora em que o texto bate, sem esperar a fila do dispatcher.
+            TypedBox.PropertyChanged += (_, change) =>
+            {
+                if (change.Property == TextBox.TextProperty)
+                {
+                    ConfirmButton.IsEnabled = string.Equals(TypedBox.Text?.Trim(), required, StringComparison.Ordinal);
+                }
+            };
+        }
 
         if (request.IsIrreversible)
         {
@@ -76,6 +100,11 @@ public sealed partial class ConfirmWindow : Window
 
     private void OnConfirm(object? sender, RoutedEventArgs e)
     {
+        if (_requiredText is not null && !string.Equals(TypedBox.Text?.Trim(), _requiredText, StringComparison.Ordinal))
+        {
+            return;
+        }
+
         Answer = true;
         Close(true);
     }

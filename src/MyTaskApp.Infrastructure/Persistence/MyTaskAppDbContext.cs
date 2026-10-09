@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using MyTaskApp.Domain.Agents;
 using MyTaskApp.Domain.Auditing;
 using MyTaskApp.Domain.Commands;
+using MyTaskApp.Domain.DatabaseOperations;
 using MyTaskApp.Domain.StickyNotes;
 using MyTaskApp.Domain.Tags;
 using MyTaskApp.Domain.Tasks;
@@ -57,6 +58,18 @@ public sealed class MyTaskAppDbContext(DbContextOptions<MyTaskAppDbContext> opti
     /// do checklist que elas registram (§8).
     /// </summary>
     public DbSet<TaskAuditEntry> TaskAudit => Set<TaskAuditEntry>();
+
+    /// <summary>As conexões PostgreSQL cadastradas, sem senha (ADR-056).</summary>
+    public DbSet<DatabaseConnection> DatabaseConnections => Set<DatabaseConnection>();
+
+    /// <summary>Os perfis de anonimização e as regras confirmadas (ADR-056).</summary>
+    public DbSet<AnonymizationProfile> AnonymizationProfiles => Set<AnonymizationProfile>();
+
+    /// <summary>As cópias que se repetem (ADR-056).</summary>
+    public DbSet<DatabaseCopyProfile> DatabaseCopyProfiles => Set<DatabaseCopyProfile>();
+
+    /// <summary>A trilha das operações de banco, sem chave estrangeira (ADR-056).</summary>
+    public DbSet<DatabaseOperationAudit> DatabaseOperationAudits => Set<DatabaseOperationAudit>();
 
     internal DbSet<ReminderSettingsRow> ReminderSettings => Set<ReminderSettingsRow>();
 

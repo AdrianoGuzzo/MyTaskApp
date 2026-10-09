@@ -5,6 +5,7 @@ using MyTaskApp.Application;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Commands;
+using MyTaskApp.Application.DatabaseOperations;
 using MyTaskApp.Application.Development;
 using MyTaskApp.Application.External;
 using MyTaskApp.Application.External.Jira;
@@ -30,6 +31,7 @@ public class ApplicationRegistrationTests
         var processes = new FakeAgentProcessTracker();
         var timeEntries = new FakeTimeEntryRepository();
         var notes = new FakeStickyNoteRepository();
+        var database = new DatabaseCopyScenario();
 
         return new ServiceCollection()
             .AddSingleton(typeof(ILogger<>), typeof(NullLogger<>))
@@ -70,6 +72,18 @@ public class ApplicationRegistrationTests
             .AddSingleton<IActivityHistoryQuery>(new FakeActivityHistoryQuery())
             .AddSingleton<IStickyNoteRepository>(notes)
             .AddSingleton<IStickyNoteQuery>(new FakeStickyNoteQuery(notes))
+            // Operações de banco (ADR-056): cadastro, cofre, ferramentas e servidor.
+            .AddSingleton<IDatabaseConnectionRepository>(database.Catalog.Connections)
+            .AddSingleton<IAnonymizationProfileRepository>(database.Catalog.AnonymizationProfiles)
+            .AddSingleton<IDatabaseCopyProfileRepository>(database.Catalog.CopyProfiles)
+            .AddSingleton<IDatabaseOperationAuditLog>(database.Catalog.Audit)
+            .AddSingleton<IDatabaseCredentialStore>(database.Credentials)
+            .AddSingleton<IPostgresToolLocator>(database.Locator)
+            .AddSingleton<IPostgresServerInspector>(database.Inspector)
+            .AddSingleton<IPostgresAnonymizerInspector>(database.Anonymizer)
+            .AddSingleton<IPostgresDumpService>(database.Tools)
+            .AddSingleton<IPostgresRestoreService>(database.Tools)
+            .AddSingleton<IDatabaseOperationWorkspaceFactory>(database.Workspaces)
             // Normalmente vem do composition root do Desktop (ADR-012).
             .AddSingleton<IUseCaseRunner>(new CountingUseCaseRunner())
             .AddApplication()
@@ -208,6 +222,28 @@ public class ApplicationRegistrationTests
     [InlineData(typeof(GetStickyNotesHandler))]
     [InlineData(typeof(GetStickyNoteHandler))]
     [InlineData(typeof(GetStartupStickyNotesHandler))]
+    [InlineData(typeof(GetDatabaseConnectionsHandler))]
+    [InlineData(typeof(SaveDatabaseConnectionHandler))]
+    [InlineData(typeof(SetDatabaseConnectionEnabledHandler))]
+    [InlineData(typeof(DeleteDatabaseConnectionHandler))]
+    [InlineData(typeof(TestDatabaseConnectionHandler))]
+    [InlineData(typeof(DetectPostgresToolsHandler))]
+    [InlineData(typeof(DiagnoseDatabaseHandler))]
+    [InlineData(typeof(GetAnonymizationProfilesHandler))]
+    [InlineData(typeof(SaveAnonymizationProfileHandler))]
+    [InlineData(typeof(SetAnonymizationProfileEnabledHandler))]
+    [InlineData(typeof(DeleteAnonymizationProfileHandler))]
+    [InlineData(typeof(SuggestSensitiveColumnsHandler))]
+    [InlineData(typeof(GenerateMaskingScriptHandler))]
+    [InlineData(typeof(ValidateAnonymizationProfileHandler))]
+    [InlineData(typeof(GetDatabaseCopyProfilesHandler))]
+    [InlineData(typeof(SaveDatabaseCopyProfileHandler))]
+    [InlineData(typeof(SetDatabaseCopyProfileEnabledHandler))]
+    [InlineData(typeof(DeleteDatabaseCopyProfileHandler))]
+    [InlineData(typeof(ValidateDatabaseCopyHandler))]
+    [InlineData(typeof(RunDatabaseCopyHandler))]
+    [InlineData(typeof(GetDatabaseOperationHistoryHandler))]
+    [InlineData(typeof(RecoverInterruptedDatabaseOperationsHandler))]
     public void EveryUseCase_CanBeResolved(Type handlerType)
     {
         using var provider = BuildProvider();
