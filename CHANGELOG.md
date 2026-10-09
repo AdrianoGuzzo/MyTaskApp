@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.9.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.8.0...v1.9.0) (2026-10-09)
+
+
+### Added
+
+* bancos de dados, cópia de produção anonimizada com política de segurança ([#68](https://github.com/AdrianoGuzzo/MyTaskApp/issues/68)) ([dc8ad18](https://github.com/AdrianoGuzzo/MyTaskApp/commit/dc8ad18ebd9dd4f5ba830db5b372fa01006bd120))
+* horário e data digitáveis no lançamento de tempo, 0831 é 08:31 ([#66](https://github.com/AdrianoGuzzo/MyTaskApp/issues/66)) ([7694d3e](https://github.com/AdrianoGuzzo/MyTaskApp/commit/7694d3eee044295e0b1749ff03701d35c8889322))
+
 ## [1.8.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.7.0...v1.8.0) (2026-10-08)
 
 
