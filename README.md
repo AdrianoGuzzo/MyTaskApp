@@ -273,12 +273,16 @@ Em *☰ → Bancos de Dados…*, o MyTaskApp cadastra conexões PostgreSQL por
 ambiente e copia Produção para Desenvolvimento, Teste ou Homologação. Os dados
 chegam anonimizados pelo PostgreSQL Anonymizer. Produção nunca é alterada a
 partir do app. O guia completo está em
-[`docs/database-operations.md`](docs/database-operations.md), e a decisão em
-[ADR-056](docs/ARCHITECTURE.md).
+[`docs/database-operations.md`](docs/database-operations.md), e as decisões em
+[ADR-056 e ADR-057](docs/ARCHITECTURE.md).
 
 - **Conexões por ambiente**, com o badge PRODUCTION / STAGING / TEST /
   DEVELOPMENT. A senha vai para o cofre do sistema (DPAPI no Windows, chaveiro
-  pelo `secret-tool` no Linux), nunca para o banco do app.
+  pelo `secret-tool` no Linux), nunca para o banco do app. O banco é opcional:
+  sem ele, a conexão é o servidor, e o banco é escolhido na hora de copiar.
+- **Apelidos:** a origem, o banco e a anonimização dele ficam salvos com um
+  nome (`lock_eco_core_1010`). A cópia para um servidor sem banco cria um banco
+  novo, `lock_eco_core_1010_20261009_143000`, com a data e a hora da cópia.
 - **Produção é só leitura:** nunca é destino, não recebe restore, `createdb`,
   `dropdb`, SQL livre nem mascaramento estático. As permissões são travadas
   pelo ambiente, e a política vale nos casos de uso e de novo antes de cada
@@ -680,7 +684,7 @@ fica em [`CHANGELOG.md`](CHANGELOG.md).
 
 | Documento | Conteúdo |
 |---|---|
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | decisões de arquitetura (ADR-001 a ADR-056), com o motivo de cada uma |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | decisões de arquitetura (ADR-001 a ADR-057), com o motivo de cada uma |
 | [`docs/database-operations.md`](docs/database-operations.md) | conexões PostgreSQL, ambientes, ferramentas, PostgreSQL Anonymizer, cópia anonimizada de produção e solução de problemas |
 | [`docs/jira-oauth-app.md`](docs/jira-oauth-app.md) | registrar o app OAuth do Jira e pôr as credenciais no build |
 | [`docs/release-process.md`](docs/release-process.md) | Conventional Commits, SemVer, pipeline de release, hotfix, verificação de versão |

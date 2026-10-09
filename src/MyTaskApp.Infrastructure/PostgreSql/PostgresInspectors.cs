@@ -21,11 +21,16 @@ internal sealed class PostgresServerInspector(
     {
         try
         {
-            await using var session = await sessions.OpenAsync(connection, password, cancellationToken);
+            // Só o servidor (ADR-057): testa pelo banco de manutenção, sem
+            // listar schemas e tabelas que seriam dele, não de um banco seu.
+            var serverOnly = !connection.HasDatabase;
+            await using var session = await sessions.OpenAsync(Maintenance(connection), password, cancellationToken);
 
             var info = (await session.QueryAsync(PostgresQueries.ServerInfo, [], cancellationToken)).Single();
-            var schemas = (await session.QueryAsync(PostgresQueries.Schemas, [], cancellationToken)).Select(row => Text(row[0])).ToList();
-            var tables = await session.QueryAsync(PostgresQueries.Tables, [], cancellationToken);
+            var schemas = serverOnly
+                ? []
+                : (await session.QueryAsync(PostgresQueries.Schemas, [], cancellationToken)).Select(row => Text(row[0])).ToList();
+            var tables = serverOnly ? [] : await session.QueryAsync(PostgresQueries.Tables, [], cancellationToken);
             var privileges = (await session.QueryAsync(PostgresQueries.Privileges, [], cancellationToken)).FirstOrDefault();
             var versionText = Text(info[0]);
 
@@ -48,6 +53,17 @@ internal sealed class PostgresServerInspector(
             logger.LogInformation("PostgresTestFailed {ConnectionId}", connection.Id);
             return ServerDiagnostics.Failed(exception.Message);
         }
+    }
+
+    public async Task<IReadOnlyList<string>> ListDatabasesAsync(
+        DatabaseConnectionSnapshot connection,
+        CancellationToken cancellationToken = default)
+    {
+        await using var session = await sessions.OpenAsync(
+            connection with { Database = PgArguments.MaintenanceDatabase }, null, cancellationToken);
+        return (await session.QueryAsync(PostgresQueries.Databases, [], cancellationToken))
+            .Select(row => Text(row[0]))
+            .ToList();
     }
 
     public async Task<IReadOnlyList<ColumnInfo>> ListColumnsAsync(DatabaseConnectionSnapshot connection, CancellationToken cancellationToken = default)
@@ -136,6 +152,9 @@ internal sealed class PostgresServerInspector(
 
         return new ColumnFingerprint(column, values);
     }
+
+    private static DatabaseConnectionSnapshot Maintenance(DatabaseConnectionSnapshot connection) =>
+        connection.HasDatabase ? connection : connection with { Database = PgArguments.MaintenanceDatabase };
 
     internal static string Text(object? value) => Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
 

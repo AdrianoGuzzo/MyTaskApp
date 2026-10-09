@@ -230,8 +230,9 @@
 
                 <Grid ColumnDefinitions="*,8,*">
                   <StackPanel Spacing="3">
-                    <TextBlock Classes="field" Text="Banco" />
-                    <TextBox PlaceholderText="eco_core" Text="{Binding Database}" />
+                    <TextBlock Classes="field" Text="Banco (opcional)" />
+                    <TextBox x:Name="DatabaseBox" PlaceholderText="eco_core (ou vazio)" Text="{Binding Database}"
+                             ToolTip.Tip="Vazio: a conexão é o servidor, e o banco é escolhido na cópia." />
                   </StackPanel>
                   <StackPanel Grid.Column="2" Spacing="3">
                     <TextBlock Classes="field" Text="Usuário" />
@@ -369,7 +370,7 @@
           <StackPanel Spacing="8" Margin="0,4,0,0">
 
             <Border Classes="card">
-              <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="8">
+              <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="8">
 
                 <TextBlock Classes="field" Text="Perfil de cópia" VerticalAlignment="Center" />
                 <ComboBox Grid.Column="1" HorizontalAlignment="Stretch" IsEnabled="{Binding CanEdit}"
@@ -382,20 +383,50 @@
                   </ComboBox.ItemTemplate>
                 </ComboBox>
 
-                <TextBlock Grid.Row="1" Classes="field" Text="Origem" VerticalAlignment="Center" />
-                <ComboBox Grid.Row="1" Grid.Column="1" x:Name="SourceBox" HorizontalAlignment="Stretch" IsEnabled="{Binding CanEdit}"
+                <TextBlock Grid.Row="1" Classes="field" Text="Apelido" VerticalAlignment="Center" />
+                <ComboBox Grid.Row="1" Grid.Column="1" x:Name="SavedDatabaseBox" HorizontalAlignment="Stretch" IsEnabled="{Binding CanEdit}"
+                          PlaceholderText="(opcional) um banco já salvo: origem, banco e anonimização"
+                          ItemsSource="{Binding SavedDatabases}" SelectedItem="{Binding SelectedSavedDatabase}">
+                  <ComboBox.ItemTemplate>
+                    <!-- Dois TextBlock, e não Run: Run com binding no template do ComboBox estoura a pilha no Avalonia 12. -->
+                    <DataTemplate x:DataType="db:SavedDatabaseRow">
+                      <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="{Binding Alias}" FontWeight="SemiBold" />
+                        <TextBlock Classes="meta" Text="{Binding DatabaseName}" VerticalAlignment="Center" />
+                      </StackPanel>
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+
+                <TextBlock Grid.Row="2" Classes="field" Text="Origem" VerticalAlignment="Center" />
+                <ComboBox Grid.Row="2" Grid.Column="1" x:Name="SourceBox" HorizontalAlignment="Stretch" IsEnabled="{Binding CanEdit}"
                           ItemsSource="{Binding Connections}" SelectedItem="{Binding SelectedSource}" />
 
-                <TextBlock Grid.Row="2" Classes="field" Text="Destino" VerticalAlignment="Center" />
-                <ComboBox Grid.Row="2" Grid.Column="1" x:Name="DestinationBox" HorizontalAlignment="Stretch" IsEnabled="{Binding CanEdit}"
-                          ItemsSource="{Binding Connections}" SelectedItem="{Binding SelectedDestination}" />
+                <!-- Origem só de servidor (ADR-057): o banco é escolhido aqui, da lista ou digitado. -->
+                <TextBlock Grid.Row="3" Classes="field" Text="Banco" VerticalAlignment="Center" IsVisible="{Binding NeedsSourceDatabase}" />
+                <StackPanel Grid.Row="3" Grid.Column="1" Spacing="2" IsVisible="{Binding NeedsSourceDatabase}">
+                  <AutoCompleteBox x:Name="SourceDatabaseBox" HorizontalAlignment="Stretch" IsEnabled="{Binding CanEdit}"
+                                   MinimumPrefixLength="0" FilterMode="Contains"
+                                   PlaceholderText="Banco de origem (ex.: eco_core_1010)"
+                                   ItemsSource="{Binding SourceDatabases}" Text="{Binding SourceDatabase}" />
+                  <TextBlock Classes="meta" Text="{Binding DatabaseListMessage}"
+                             IsVisible="{Binding DatabaseListMessage, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                </StackPanel>
 
-                <TextBlock Grid.Row="3" Classes="field" Text="Operação" VerticalAlignment="Center" />
-                <ComboBox Grid.Row="3" Grid.Column="1" HorizontalAlignment="Stretch" IsEnabled="{Binding CanEdit}"
+                <TextBlock Grid.Row="4" Classes="field" Text="Destino" VerticalAlignment="Center" />
+                <StackPanel Grid.Row="4" Grid.Column="1" Spacing="2">
+                  <ComboBox x:Name="DestinationBox" HorizontalAlignment="Stretch" IsEnabled="{Binding CanEdit}"
+                            ItemsSource="{Binding Connections}" SelectedItem="{Binding SelectedDestination}" />
+                  <TextBlock x:Name="DestinationPreview" Classes="meta" Text="{Binding DestinationPreview}"
+                             IsVisible="{Binding DestinationPreview, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                </StackPanel>
+
+                <TextBlock Grid.Row="5" Classes="field" Text="Operação" VerticalAlignment="Center" />
+                <ComboBox Grid.Row="5" Grid.Column="1" HorizontalAlignment="Stretch" IsEnabled="{Binding CanEdit}"
                           ItemsSource="{x:Static vm:DatabaseCopyViewModel.Operations}" SelectedItem="{Binding SelectedOperation}" />
 
-                <TextBlock Grid.Row="4" Classes="field" Text="Perfil" VerticalAlignment="Center" IsVisible="{Binding Anonymizes}" />
-                <ComboBox Grid.Row="4" Grid.Column="1" HorizontalAlignment="Stretch" IsVisible="{Binding Anonymizes}" IsEnabled="{Binding CanEdit}"
+                <TextBlock Grid.Row="6" Classes="field" Text="Perfil" VerticalAlignment="Center" IsVisible="{Binding Anonymizes}" />
+                <ComboBox Grid.Row="6" Grid.Column="1" HorizontalAlignment="Stretch" IsVisible="{Binding Anonymizes}" IsEnabled="{Binding CanEdit}"
                           PlaceholderText="Perfil de anonimização"
                           ItemsSource="{Binding AnonymizationProfiles}" SelectedItem="{Binding SelectedAnonymizationProfile}">
                   <ComboBox.ItemTemplate>
@@ -405,13 +436,26 @@
                   </ComboBox.ItemTemplate>
                 </ComboBox>
 
-                <WrapPanel Grid.Row="5" Grid.Column="1" IsEnabled="{Binding CanEdit}">
+                <WrapPanel Grid.Row="7" Grid.Column="1" IsEnabled="{Binding CanEdit}">
                   <CheckBox Margin="0,0,16,0" Content="Estrutura" IsChecked="{Binding IncludeSchema}" />
                   <CheckBox Margin="0,0,16,0" Content="Dados" IsChecked="{Binding IncludeData}" />
-                  <CheckBox Margin="0,0,16,0" Content="Recriar o destino" IsChecked="{Binding RecreateDestination}" />
+                  <CheckBox Margin="0,0,16,0" Content="Recriar o destino" IsChecked="{Binding RecreateDestination}"
+                            IsVisible="{Binding !CreatesNewDestination}" />
                   <CheckBox Margin="0,0,16,0" Content="Verificar depois do restore" IsChecked="{Binding VerifyAfterRestore}" />
                   <CheckBox Margin="0,0,16,0" Content="Manter o dump anônimo" IsChecked="{Binding KeepAnonymizedArtifact}" IsVisible="{Binding Anonymizes}" />
                 </WrapPanel>
+
+                <!-- Guardar origem + banco + anonimização com um apelido, para a próxima cópia. -->
+                <TextBlock Grid.Row="8" Classes="field" Text="Salvar como" VerticalAlignment="Center" />
+                <StackPanel Grid.Row="8" Grid.Column="1" Spacing="2">
+                  <Grid ColumnDefinitions="*,8,Auto">
+                    <TextBox x:Name="NewAliasBox" IsEnabled="{Binding CanEdit}"
+                             PlaceholderText="apelido, ex.: local_eco_core_1010" Text="{Binding NewAlias}" />
+                    <Button Grid.Column="2" x:Name="SaveAliasButton" Content="Salvar apelido" Command="{Binding SaveAliasCommand}" />
+                  </Grid>
+                  <TextBlock Classes="status" Text="{Binding AliasMessage}"
+                             IsVisible="{Binding AliasMessage, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                </StackPanel>
               </Grid>
             </Border>
 
@@ -529,6 +573,7 @@
                   <TextBox PlaceholderText="ECO Production → ECO Development" Text="{Binding CopyName}" />
                   <TextBlock Classes="field" Text="Origem" />
                   <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Connections}" SelectedItem="{Binding CopySource}" />
+                  <TextBox PlaceholderText="Banco de origem" Text="{Binding CopySourceDatabase}" IsVisible="{Binding CopyNeedsSourceDatabase}" />
                   <TextBlock Classes="field" Text="Destino" />
                   <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding Connections}" SelectedItem="{Binding CopyDestination}" />
                   <CheckBox Content="Exigir anonimização" IsChecked="{Binding CopyRequireAnonymization}" />
@@ -552,6 +597,33 @@
                 </StackPanel>
               </Border>
             </Grid>
+
+            <!-- Apelidos (ADR-057): origem + banco + anonimização, escolhidos na aba Copiar Banco. -->
+            <TextBlock Classes="sectionTitle" Text="Apelidos" FontSize="16" Margin="0,8,0,0" />
+            <TextBlock Classes="meta" Text="Salve um apelido na aba Copiar Banco. Para renomear, escolha o apelido lá e salve com o novo nome."
+                       IsVisible="{Binding !HasSavedDatabases}" />
+            <ItemsControl x:Name="SavedDatabaseList" ItemsSource="{Binding SavedDatabases}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:SavedDatabaseItemViewModel">
+                  <Border Classes="card">
+                    <Grid ColumnDefinitions="*,Auto">
+                      <StackPanel Spacing="2">
+                        <TextBlock Text="{Binding Alias}" FontWeight="SemiBold" />
+                        <TextBlock Classes="meta" Text="{Binding Detail}" />
+                      </StackPanel>
+                      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Top">
+                        <Button Classes="rowAction accent" Content="Usar"
+                                Command="{Binding #Root.((vm:DatabaseOperationsViewModel)DataContext).Profiles.UseSavedDatabaseCommand}"
+                                CommandParameter="{Binding}" />
+                        <Button Classes="rowAction danger" Content="Excluir"
+                                Command="{Binding #Root.((vm:DatabaseOperationsViewModel)DataContext).Profiles.DeleteSavedDatabaseCommand}"
+                                CommandParameter="{Binding}" />
+                      </StackPanel>
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
 
             <!-- Anonymization Profiles -->
             <TextBlock Classes="sectionTitle" Text="Anonymization Profiles" FontSize="16" Margin="0,8,0,0" />
@@ -593,6 +665,10 @@
                     <TextBox Grid.Row="1" Grid.Column="4" Text="{Binding PolicyName}" />
                   </Grid>
                   <TextBox PlaceholderText="Descrição" Text="{Binding AnonymizationDescription}" />
+                  <StackPanel Spacing="3" IsVisible="{Binding NeedsProfileDatabase}">
+                    <TextBlock Classes="field" Text="Banco (para sugerir colunas, gerar o script e validar)" />
+                    <TextBox x:Name="ProfileDatabaseBox" PlaceholderText="eco_core_1010" Text="{Binding ProfileDatabase}" />
+                  </StackPanel>
 
                   <Grid ColumnDefinitions="*,Auto">
                     <StackPanel>

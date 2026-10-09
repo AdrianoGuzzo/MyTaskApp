@@ -38,6 +38,9 @@ public enum SecurityViolationCode
 
     /// <summary>Cópia de produção sem a confirmação explícita (ou, na crítica, sem o nome digitado).</summary>
     ConfirmationRequired,
+
+    /// <summary>A conexão é só o servidor (ADR-057) e nenhum banco foi escolhido.</summary>
+    DatabaseNotChosen,
 }
 
 public sealed record SecurityViolation(SecurityViolationCode Code, string Message);
@@ -87,7 +90,8 @@ public sealed record AnonymizationFacts(
 /// Uma operação a julgar. As conexões vêm do banco do app, lidas pelo handler
 /// — nunca da tela. <see cref="ProtectedEndpoints"/> são as chaves de todo
 /// banco cadastrado como produção: um destino "Desenvolvimento" que aponte
-/// para um deles é produção com outro rótulo.
+/// para um deles é produção com outro rótulo. <see cref="NewDestinationDatabase"/>
+/// é a cópia para um banco novo, com nome gerado (ADR-057): só cria, nunca apaga.
 /// </summary>
 public sealed record DatabaseOperationRequest(
     DatabaseOperationType Operation,
@@ -96,7 +100,8 @@ public sealed record DatabaseOperationRequest(
     DatabaseConnectionSnapshot? DumpConnection = null,
     AnonymizationFacts? Anonymization = null,
     DatabaseCopyOptions? Options = null,
-    IReadOnlyCollection<string>? ProtectedEndpoints = null);
+    IReadOnlyCollection<string>? ProtectedEndpoints = null,
+    bool NewDestinationDatabase = false);
 
 /// <summary>Recusa da política de segurança. É um <see cref="DomainException"/>: a mensagem é para o usuário.</summary>
 public sealed class DatabaseSecurityException(SecurityDecision decision) : DomainException(
@@ -241,7 +246,11 @@ public sealed class DatabaseSecurityPolicy : IDatabaseSecurityPolicy
             violations.Add(SecurityViolationCode.NothingToCopy, "Escolha copiar a estrutura, os dados ou os dois.");
         }
 
-        if (destination is not null && options.RecreateDestination)
+        if (destination is not null && request.NewDestinationDatabase)
+        {
+            RequirePermission(destination, ConnectionPermission.CreateDatabase, "criar o banco", violations);
+        }
+        else if (destination is not null && options.RecreateDestination)
         {
             RequirePermission(destination, ConnectionPermission.DropDatabase, "apagar o banco para recriá-lo", violations);
             RequirePermission(destination, ConnectionPermission.CreateDatabase, "criar o banco", violations);
@@ -251,6 +260,11 @@ public sealed class DatabaseSecurityPolicy : IDatabaseSecurityPolicy
         {
             return;
         }
+
+        // Até aqui, uma conexão sem banco ainda pode ser julgada (permissões,
+        // ambiente). Para copiar, os dois lados precisam do banco resolvido.
+        RequireDatabase(source, "origem", violations);
+        RequireDatabase(destination, "destino", violations);
 
         var sourceRules = EnvironmentPolicy.For(source.Environment);
 
@@ -437,12 +451,30 @@ public sealed class DatabaseSecurityPolicy : IDatabaseSecurityPolicy
         string action,
         Violations violations)
     {
-        if (CheckDestination(request, violations, permission, action) is { } target
-            && SystemDatabases.Contains(target.Database))
+        if (CheckDestination(request, violations, permission, action) is not { } target)
+        {
+            return;
+        }
+
+        if (target.Database is not { } database)
+        {
+            RequireDatabase(target, "destino", violations);
+        }
+        else if (SystemDatabases.Contains(database))
         {
             violations.Add(
                 SecurityViolationCode.ProtectedSystemDatabase,
-                $"{target.Database} é um banco do próprio servidor e não pode ser alterado.");
+                $"{database} é um banco do próprio servidor e não pode ser alterado.");
+        }
+    }
+
+    private static void RequireDatabase(DatabaseConnectionSnapshot connection, string side, Violations violations)
+    {
+        if (!connection.HasDatabase)
+        {
+            violations.Add(
+                SecurityViolationCode.DatabaseNotChosen,
+                $"{connection.Name} é só o servidor: escolha o banco de {side}.");
         }
     }
 
@@ -481,12 +513,12 @@ public sealed class DatabaseSecurityPolicy : IDatabaseSecurityPolicy
         {
             violations.Add(
                 SecurityViolationCode.DestinationMatchesProtectedEndpoint,
-                $"{destination.Name} aponta para o mesmo banco de uma conexão de produção.");
+                $"{destination.Name} aponta para o mesmo banco (ou servidor) de uma conexão de produção.");
         }
     }
 
     private static bool IsProtectedEndpoint(DatabaseOperationRequest request, DatabaseConnectionSnapshot target) =>
-        request.ProtectedEndpoints?.Contains(target.EndpointKey) == true;
+        target.IsAmong(request.ProtectedEndpoints);
 
     private static DatabaseConnectionSnapshot? RequireTarget(DatabaseOperationRequest request, Violations violations)
     {

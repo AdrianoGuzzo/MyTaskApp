@@ -65,7 +65,7 @@ public class DatabaseConnectionTests
     [InlineData("x", "h o s t", 5432, "d", "u", "espaços")]
     [InlineData("x", "h", 0, "d", "u", "porta")]
     [InlineData("x", "h", 70000, "d", "u", "porta")]
-    [InlineData("x", "h", 5432, "", "u", "banco")]
+    [InlineData("x", "h", 5432, "*", "u", "banco")]
     [InlineData("x", "h", 5432, "--help", "u", "hífen")]
     [InlineData("x", "-h", 5432, "d", "u", "hífen")]
     [InlineData("x", "h", 5432, "d", "-U", "hífen")]

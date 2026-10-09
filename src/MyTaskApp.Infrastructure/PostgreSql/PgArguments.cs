@@ -26,7 +26,7 @@ internal static class PgArguments
     {
         var arguments = new List<string>(Connection(request.Connection))
         {
-            "--dbname", request.Connection.Database,
+            "--dbname", DatabaseOf(request.Connection),
             "--format=directory",
             "--file", request.OutputDirectory,
             "--jobs", Math.Max(1, request.Jobs).ToString(CultureInfo.InvariantCulture),
@@ -57,7 +57,7 @@ internal static class PgArguments
     {
         var arguments = new List<string>(Connection(request.Target))
         {
-            "--dbname", request.Target.Database,
+            "--dbname", DatabaseOf(request.Target),
             "--no-owner",
             "--no-privileges",
             "--no-security-labels",
@@ -82,7 +82,7 @@ internal static class PgArguments
         "--template=template0",
         "--encoding=UTF8",
         "--no-password",
-        target.Database,
+        DatabaseOf(target),
     ];
 
     /// <summary><c>--force</c> derruba as conexões abertas no destino (PostgreSQL 13+).</summary>
@@ -100,9 +100,18 @@ internal static class PgArguments
             arguments.Add("--force");
         }
 
-        arguments.Add(target.Database);
+        arguments.Add(DatabaseOf(target));
         return arguments;
     }
+
+    /// <summary>
+    /// O banco em que a ferramenta age. Uma conexão só de servidor (ADR-057)
+    /// chega aqui já resolvida pelo plano; sem banco, nada roda — o libpq
+    /// cairia no banco com o nome do usuário, longe da política.
+    /// </summary>
+    internal static string DatabaseOf(DatabaseConnectionSnapshot connection) =>
+        connection.Database ?? throw new DatabaseSecurityException(new SecurityDecision(
+            [new SecurityViolation(SecurityViolationCode.DatabaseNotChosen, $"{connection.Name} é só o servidor: nenhum banco foi escolhido.")]));
 
     private static IEnumerable<string> Connection(DatabaseConnectionSnapshot connection) =>
     [

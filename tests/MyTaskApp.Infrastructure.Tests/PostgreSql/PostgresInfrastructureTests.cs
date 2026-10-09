@@ -265,6 +265,34 @@ public class PostgresInspectorsTests
     }
 
     [Fact]
+    public async Task TestingAServerOnlyConnection_GoesThroughTheMaintenanceDatabase_WithoutItsSchemas()
+    {
+        _sessions
+            .Answer(PostgresQueries.ServerInfo, ["PostgreSQL 16.4 on x86_64", "backup_user", "postgres", 7000L])
+            .Answer(PostgresQueries.Privileges, [false, false, -1, true, 0L]);
+
+        var result = await Inspector().TestAsync(Connection(DatabaseEnvironment.Production, database: null), cancellationToken: Ct);
+
+        result.Connected.Should().BeTrue();
+        result.Schemas.Should().BeEmpty();
+        result.TableCount.Should().Be(0);
+        _sessions.Opened.Single().Connection.Database.Should().Be("postgres");
+        _sessions.Queries.Select(query => query.Sql).Should().NotContain([PostgresQueries.Schemas, PostgresQueries.Tables]);
+    }
+
+    [Fact]
+    public async Task TheServerDatabases_AreListed_FromTheMaintenanceDatabase()
+    {
+        _sessions.Answer(PostgresQueries.Databases, ["eco_core_1010"], ["eco_core_2020"]);
+
+        var databases = await Inspector().ListDatabasesAsync(Connection(DatabaseEnvironment.Production, database: null), Ct);
+
+        databases.Should().Equal("eco_core_1010", "eco_core_2020");
+        _sessions.Opened.Single().Connection.Database.Should().Be("postgres");
+        PostgresQueries.Databases.Should().Contain("NOT datistemplate").And.Contain("datallowconn");
+    }
+
+    [Fact]
     public async Task AFailedConnection_IsAnAnswer_NotAnException()
     {
         _sessions.OpenFailure = new DomainException("password authentication failed");

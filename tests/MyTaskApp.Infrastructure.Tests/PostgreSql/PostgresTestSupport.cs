@@ -12,7 +12,7 @@ internal static class PostgresTestSupport
 
     public static DatabaseConnectionSnapshot Connection(
         DatabaseEnvironment environment,
-        string database = "eco_core",
+        string? database = "eco_core",
         string username = "backup_user",
         string host = "192.168.15.112") =>
         DatabaseConnection.Create(

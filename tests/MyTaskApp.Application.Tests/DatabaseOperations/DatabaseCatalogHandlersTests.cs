@@ -130,7 +130,7 @@ public class DatabaseCatalogHandlersTests
     public async Task AConnectionUsedByAProfile_CannotBeDeleted()
     {
         var handler = new DeleteDatabaseConnectionHandler(
-            Catalog.Connections, Catalog.AnonymizationProfiles, Catalog.CopyProfiles, _scenario.Credentials, Catalog,
+            Catalog.Connections, Catalog.AnonymizationProfiles, Catalog.CopyProfiles, Catalog.SavedDatabases, _scenario.Credentials, Catalog,
             NullLogger<DeleteDatabaseConnectionHandler>.Instance);
 
         await FluentActions.Awaiting(() => handler.HandleAsync(new DeleteDatabaseConnection(_scenario.Masked.Id), Ct))
@@ -147,7 +147,7 @@ public class DatabaseCatalogHandlersTests
     {
         var id = await SaveHandler().HandleAsync(NewConnection(), Ct);
         var handler = new DeleteDatabaseConnectionHandler(
-            Catalog.Connections, Catalog.AnonymizationProfiles, Catalog.CopyProfiles, _scenario.Credentials, Catalog,
+            Catalog.Connections, Catalog.AnonymizationProfiles, Catalog.CopyProfiles, Catalog.SavedDatabases, _scenario.Credentials, Catalog,
             NullLogger<DeleteDatabaseConnectionHandler>.Instance);
 
         await handler.HandleAsync(new DeleteDatabaseConnection(id), Ct);
@@ -236,7 +236,7 @@ public class DatabaseCatalogHandlersTests
     [Fact]
     public async Task AnAnonymizationProfileInUse_CannotBeDeleted_ButAFreeOneCan()
     {
-        var handler = new DeleteAnonymizationProfileHandler(Catalog.AnonymizationProfiles, Catalog.CopyProfiles, Catalog);
+        var handler = new DeleteAnonymizationProfileHandler(Catalog.AnonymizationProfiles, Catalog.CopyProfiles, Catalog.SavedDatabases, Catalog);
         Catalog.CopyProfiles.Items.Add(DatabaseCopyProfile.Create("x", _scenario.Production.Id, _scenario.Development.Id,
             _scenario.Profile.Id, DatabaseCopyOptions.Default, DatabaseCopyScenario.Now));
 

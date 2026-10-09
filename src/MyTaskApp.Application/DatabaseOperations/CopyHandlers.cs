@@ -18,7 +18,9 @@ public sealed record DatabaseCopyValidation(
     DatabaseEnvironment DestinationEnvironment,
     bool RequiresProductionConfirmation,
     bool RequiresTypedConfirmation,
-    string ConfirmationText)
+    string ConfirmationText,
+    string? DestinationDatabase = null,
+    bool NewDestinationDatabase = false)
 {
     public bool CanRun => Decision.IsAllowed && Checks.All(check => check.Outcome != CheckOutcome.Fail);
 }
@@ -75,7 +77,9 @@ public sealed class ValidateDatabaseCopyHandler(
             plan.Destination.Environment,
             plan.Source.IsProtected,
             plan.SourceRules.RequiresTypedConfirmation,
-            plan.Source.Database);
+            plan.Source.Database ?? string.Empty,
+            plan.Destination.Database,
+            plan.NewDestinationDatabase);
     }
 
     private static CheckResult Connection(string side, DatabaseConnectionSnapshot connection, ServerDiagnostics result) =>
@@ -98,7 +102,8 @@ public sealed record DatabaseCopyResult(
     IReadOnlyDictionary<DatabaseCopyStep, CommandStepState> Steps,
     VerificationReport? Verification,
     string? Error,
-    string? KeptArtifactPath)
+    string? KeptArtifactPath,
+    string? DestinationDatabase = null)
 {
     public bool Succeeded => Status == DatabaseOperationStatus.Succeeded;
 }
@@ -186,7 +191,8 @@ public sealed class RunDatabaseCopyHandler(
         }
 
         if (plan.SourceRules.RequiresTypedConfirmation
-            && !string.Equals(command.TypedConfirmation?.Trim(), plan.Source.Database, StringComparison.Ordinal))
+            && (plan.Source.Database is null
+                || !string.Equals(command.TypedConfirmation?.Trim(), plan.Source.Database, StringComparison.Ordinal)))
         {
             return new SecurityViolation(
                 SecurityViolationCode.ConfirmationRequired,
@@ -243,9 +249,12 @@ internal sealed class DatabaseCopyRun(
         plan.Anonymizes ? _workspace!.AnonymizedDirectory : _workspace!.DumpDirectory,
         "archive");
 
-    /// <summary>Quando o destino vai ser recriado, o banco dele pode nem existir ainda: o teste vai ao banco de manutenção.</summary>
+    /// <summary>
+    /// Quando o destino vai ser criado (recriado, ou com nome gerado), o banco
+    /// dele pode nem existir ainda: o teste vai ao banco de manutenção.
+    /// </summary>
     public static DatabaseConnectionSnapshot Reachable(DatabaseCopyPlan plan) =>
-        plan.Request.Options.RecreateDestination ? plan.Destination with { Database = "postgres" } : plan.Destination;
+        plan.CreatesDestination ? plan.Destination with { Database = "postgres" } : plan.Destination;
 
     public static AnonymizationFacts ServerFacts(DatabaseCopyPlan plan, AnonymizationValidation validation) =>
         plan.RegisteredFacts.WithServer(
@@ -327,7 +336,8 @@ internal sealed class DatabaseCopyRun(
         await WriteMetadataAsync(status, kept);
         Report(DatabaseCopyStep.Cleanup, CommandStepState.Succeeded, _estimator.Complete(), status == DatabaseOperationStatus.Succeeded ? "Concluído." : error);
 
-        return new DatabaseCopyResult(status, entry.Id, new Dictionary<DatabaseCopyStep, CommandStepState>(_states), _verification, error, kept);
+        return new DatabaseCopyResult(
+            status, entry.Id, new Dictionary<DatabaseCopyStep, CommandStepState>(_states), _verification, error, kept, plan.Destination.Database);
     }
 
     private async Task ValidateSourceAsync(CancellationToken cancellationToken)
@@ -374,10 +384,15 @@ internal sealed class DatabaseCopyRun(
         _tools = await locator.DetectAsync(refresh: false, cancellationToken);
         entry.RecordTools(_tools.Describe(PostgresTool.PgDump, PostgresTool.PgRestore, PostgresTool.CreateDb, PostgresTool.DropDb));
 
-        if (plan.Request.Options.RecreateDestination
+        if (plan.DropsDestination
             && (!_tools.Find(PostgresTool.CreateDb).Found || !_tools.Find(PostgresTool.DropDb).Found))
         {
             throw new DomainException("Recriar o destino precisa de createdb e dropdb instalados.");
+        }
+
+        if (plan.NewDestinationDatabase && !_tools.Find(PostgresTool.CreateDb).Found)
+        {
+            throw new DomainException("Criar o banco de destino precisa do createdb instalado.");
         }
 
         var failures = PostgresCompatibility
@@ -498,27 +513,35 @@ internal sealed class DatabaseCopyRun(
 
     private async Task PrepareDestinationAsync(CancellationToken cancellationToken)
     {
-        if (!plan.Request.Options.RecreateDestination)
+        if (!plan.CreatesDestination)
         {
             Skip(DatabaseCopyStep.PrepareDestination, "O banco de destino é mantido.");
             return;
         }
 
-        Begin(DatabaseCopyStep.PrepareDestination, $"Recriando {plan.Destination.Database}…");
+        // Um banco com nome gerado é novo: só se cria. dropdb nunca roda nele.
+        Begin(DatabaseCopyStep.PrepareDestination, plan.DropsDestination
+            ? $"Recriando {plan.Destination.Database}…"
+            : $"Criando {plan.Destination.Database}…");
 
-        policy.Demand(new DatabaseOperationRequest(
-            DatabaseOperationType.DropDatabase, Destination: plan.Destination, ProtectedEndpoints: plan.ProtectedEndpoints));
-        EnsureSucceeded("dropdb", await restores.DropDatabaseAsync(
-            plan.Destination,
-            plan.ProtectedEndpoints,
-            PostgresCompatibility.SupportsForceDrop(_destinationServer?.ServerVersion),
-            cancellationToken));
+        if (plan.DropsDestination)
+        {
+            policy.Demand(new DatabaseOperationRequest(
+                DatabaseOperationType.DropDatabase, Destination: plan.Destination, ProtectedEndpoints: plan.ProtectedEndpoints));
+            EnsureSucceeded("dropdb", await restores.DropDatabaseAsync(
+                plan.Destination,
+                plan.ProtectedEndpoints,
+                PostgresCompatibility.SupportsForceDrop(_destinationServer?.ServerVersion),
+                cancellationToken));
+        }
 
         policy.Demand(new DatabaseOperationRequest(
             DatabaseOperationType.CreateDatabase, Destination: plan.Destination, ProtectedEndpoints: plan.ProtectedEndpoints));
         EnsureSucceeded("createdb", await restores.CreateDatabaseAsync(plan.Destination, plan.ProtectedEndpoints, cancellationToken));
 
-        Done(DatabaseCopyStep.PrepareDestination, $"{plan.Destination.Database} recriado vazio.");
+        Done(DatabaseCopyStep.PrepareDestination, plan.DropsDestination
+            ? $"{plan.Destination.Database} recriado vazio."
+            : $"{plan.Destination.Database} criado vazio.");
     }
 
     private async Task RestoreAsync(CancellationToken cancellationToken)

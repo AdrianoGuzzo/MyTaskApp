@@ -245,6 +245,68 @@ public class PgToolRunnerTests
         _processes.Requests.Should().BeEmpty();
     }
 
+    [Theory]
+    [MemberData(nameof(WritingTools))]
+    public async Task NothingThatWrites_StartsOnAServerWithoutADatabase(PostgresTool tool)
+    {
+        var server = Connection(DatabaseEnvironment.Development, database: null);
+
+        var refusal = await FluentActions.Awaiting(() => Runner().RunAsync(new PgInvocation(tool, ["x"], TimeSpan.FromMinutes(1), server), null, Ct))
+            .Should().ThrowAsync<DatabaseSecurityException>();
+
+        refusal.Which.Decision.Has(SecurityViolationCode.DatabaseNotChosen).Should().BeTrue();
+        _processes.Requests.Should().BeEmpty();
+    }
+
+    [Theory]
+    [MemberData(nameof(WritingTools))]
+    public async Task AProductionServer_ProtectsEveryDatabaseOnIt(PostgresTool tool)
+    {
+        var productionServer = Connection(DatabaseEnvironment.Production, database: null);
+        var sameServer = Connection(DatabaseEnvironment.Development, "copia_local");
+
+        await FluentActions.Awaiting(() => Runner().RunAsync(
+                new PgInvocation(tool, ["x"], TimeSpan.FromMinutes(1), sameServer, [productionServer.EndpointKey]), null, Ct))
+            .Should().ThrowAsync<DatabaseSecurityException>();
+
+        _processes.Requests.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ADumpOfAServerWithoutADatabase_IsStopped()
+    {
+        var server = Connection(DatabaseEnvironment.Development, database: null);
+
+        FluentActions.Invoking(() => PostgresProcessGuard.Check(new PgInvocation(PostgresTool.PgDump, ["x"], TimeSpan.Zero, server)))
+            .Should().Throw<DatabaseSecurityException>().Which.Decision.Has(SecurityViolationCode.DatabaseNotChosen).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Arguments_NeverGoOutWithoutADatabase()
+    {
+        // Sem --dbname, o libpq cairia no banco com o nome do usuário — longe da política.
+        var server = Connection(DatabaseEnvironment.Development, database: null);
+
+        FluentActions.Invoking(() => PgArguments.Dump(Dump(server, anonymous: false), 30)).Should().Throw<DatabaseSecurityException>();
+        FluentActions.Invoking(() => PgArguments.Restore(new PgRestoreRequest(server, @"C:\ws\a", true, true, 2, [])))
+            .Should().Throw<DatabaseSecurityException>();
+        FluentActions.Invoking(() => PgArguments.CreateDatabase(server)).Should().Throw<DatabaseSecurityException>();
+        FluentActions.Invoking(() => PgArguments.DropDatabase(server, force: false)).Should().Throw<DatabaseSecurityException>();
+
+        PgArguments.CreateDatabase(server.WithDatabase("lock_eco_core_1010_20261009_143000"))
+            .Should().EndWith("lock_eco_core_1010_20261009_143000");
+    }
+
+    [Fact]
+    public async Task ASession_NeverOpensWithoutADatabase()
+    {
+        var sessions = new NpgsqlPostgresSessionFactory(
+            new StaticPasswordReader(), _options, Microsoft.Extensions.Logging.Abstractions.NullLogger<NpgsqlPostgresSessionFactory>.Instance);
+
+        await FluentActions.Awaiting(() => sessions.OpenAsync(Connection(DatabaseEnvironment.Development, database: null), null, Ct))
+            .Should().ThrowAsync<DatabaseSecurityException>();
+    }
+
     [Fact]
     public void APlainDumpOfASourceThatDemandsAnonymization_IsStopped()
     {

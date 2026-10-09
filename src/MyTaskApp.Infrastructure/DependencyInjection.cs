@@ -216,6 +216,7 @@ public static class DependencyInjection
         services.AddScoped<IDatabaseConnectionRepository, DatabaseConnectionRepository>();
         services.AddScoped<IAnonymizationProfileRepository, AnonymizationProfileRepository>();
         services.AddScoped<IDatabaseCopyProfileRepository, DatabaseCopyProfileRepository>();
+        services.AddScoped<ISavedDatabaseRepository, SavedDatabaseRepository>();
         services.AddScoped<IDatabaseOperationAuditLog, EfDatabaseOperationAuditLog>();
 
         // A política é do Domain; TryAdd para a Infrastructure subir sozinha nos testes.

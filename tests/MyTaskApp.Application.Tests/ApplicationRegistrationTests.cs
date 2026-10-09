@@ -76,6 +76,7 @@ public class ApplicationRegistrationTests
             .AddSingleton<IDatabaseConnectionRepository>(database.Catalog.Connections)
             .AddSingleton<IAnonymizationProfileRepository>(database.Catalog.AnonymizationProfiles)
             .AddSingleton<IDatabaseCopyProfileRepository>(database.Catalog.CopyProfiles)
+            .AddSingleton<ISavedDatabaseRepository>(database.Catalog.SavedDatabases)
             .AddSingleton<IDatabaseOperationAuditLog>(database.Catalog.Audit)
             .AddSingleton<IDatabaseCredentialStore>(database.Credentials)
             .AddSingleton<IPostgresToolLocator>(database.Locator)

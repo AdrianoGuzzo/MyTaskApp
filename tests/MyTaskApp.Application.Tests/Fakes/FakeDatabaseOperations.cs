@@ -14,6 +14,8 @@ internal sealed class FakeDatabaseCatalog : IUnitOfWork
 
     public FakeCopyProfileRepository CopyProfiles { get; } = new();
 
+    public FakeSavedDatabaseRepository SavedDatabases { get; } = new();
+
     public FakeDatabaseAuditLog Audit { get; } = new();
 
     public FakeDatabaseCatalog() => Connections = new FakeConnectionRepository();
@@ -108,6 +110,35 @@ internal sealed class FakeCopyProfileRepository : IDatabaseCopyProfileRepository
         Task.FromResult(Items.Any(profile => profile.AnonymizationProfileId == anonymizationProfileId));
 
     public void Remove(DatabaseCopyProfile profile) => Items.Remove(profile);
+}
+
+internal sealed class FakeSavedDatabaseRepository : ISavedDatabaseRepository
+{
+    public List<SavedDatabase> Items { get; } = [];
+
+    public Task AddAsync(SavedDatabase saved, CancellationToken cancellationToken = default)
+    {
+        Items.Add(saved);
+        return Task.CompletedTask;
+    }
+
+    public Task<SavedDatabase?> FindByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Items.FirstOrDefault(saved => saved.Id == id));
+
+    public Task<IReadOnlyList<SavedDatabase>> ListAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<SavedDatabase>>(Items.OrderBy(saved => saved.Alias, StringComparer.Ordinal).ToList());
+
+    public Task<bool> AliasExistsAsync(string alias, Guid? exceptId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Items.Any(saved =>
+            string.Equals(saved.Alias, alias.Trim(), StringComparison.OrdinalIgnoreCase) && saved.Id != exceptId));
+
+    public Task<bool> AnyUsesConnectionAsync(Guid connectionId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Items.Any(saved => saved.ConnectionId == connectionId));
+
+    public Task<bool> AnyUsesAnonymizationProfileAsync(Guid anonymizationProfileId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Items.Any(saved => saved.AnonymizationProfileId == anonymizationProfileId));
+
+    public void Remove(SavedDatabase saved) => Items.Remove(saved);
 }
 
 internal sealed class FakeDatabaseAuditLog : IDatabaseOperationAuditLog
@@ -251,9 +282,19 @@ internal sealed class FakeServerInspector : IPostgresServerInspector
         return Task.FromResult(Diagnostics.TryGetValue(connection.Name, out var result) ? result : Connected());
     }
 
+    /// <summary>Os bancos do servidor, para a escolha numa conexão só de servidor (ADR-057).</summary>
+    public IReadOnlyList<string> Databases { get; set; } = ["eco_core_1010", "eco_core_2020"];
+
+    public Task<IReadOnlyList<string>> ListDatabasesAsync(DatabaseConnectionSnapshot connection, CancellationToken cancellationToken = default)
+    {
+        Calls.Add($"databases:{connection.Name}");
+        ThrowIfFailing();
+        return Task.FromResult(Databases);
+    }
+
     public Task<IReadOnlyList<ColumnInfo>> ListColumnsAsync(DatabaseConnectionSnapshot connection, CancellationToken cancellationToken = default)
     {
-        Calls.Add($"columns:{connection.Name}");
+        Calls.Add($"columns:{connection.Name}:{connection.Database}");
         ThrowIfFailing();
         return Task.FromResult(Columns);
     }
@@ -512,7 +553,8 @@ internal sealed class DatabaseCopyScenario
     public DatabaseCopyRequest Request(DatabaseCopyOptions? options = null, DatabaseOperationType operation = DatabaseOperationType.CopyAndAnonymize) =>
         new(Production.Id, Development.Id, operation, Profile.Id, options ?? DatabaseCopyOptions.Default);
 
-    public DatabaseCopyPlanner Planner() => new(Catalog.Connections, Catalog.AnonymizationProfiles, Catalog.CopyProfiles);
+    public DatabaseCopyPlanner Planner() =>
+        new(Catalog.Connections, Catalog.AnonymizationProfiles, Catalog.CopyProfiles, Catalog.SavedDatabases, Clock);
 
     public PostgresAnonymizationService Anonymization() => new(Anonymizer, Inspector, Tools, Policy);
 

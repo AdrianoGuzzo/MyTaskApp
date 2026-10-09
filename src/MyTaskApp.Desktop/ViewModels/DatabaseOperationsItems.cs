@@ -107,8 +107,13 @@ public sealed class DatabaseConnectionItemViewModel(DatabaseConnectionRow row)
 
     public bool IsDevelopment => Row.Environment == DatabaseEnvironment.Development;
 
-    /// <summary>"backup_user@192.168.15.112:5432/eco_core".</summary>
-    public string Endpoint => string.Create(CultureInfo.InvariantCulture, $"{Row.Username}@{Row.Host}:{Row.Port}/{Row.Database}");
+    /// <summary>"backup_user@192.168.15.112:5432/eco_core"; só o servidor, "…:5432 (banco na cópia)".</summary>
+    public string Endpoint => Row.Database is { } database
+        ? string.Create(CultureInfo.InvariantCulture, $"{Row.Username}@{Row.Host}:{Row.Port}/{database}")
+        : string.Create(CultureInfo.InvariantCulture, $"{Row.Username}@{Row.Host}:{Row.Port} (banco na cópia)");
+
+    /// <summary>Tem banco fixo; sem ele, a conexão é só o servidor e o banco é escolhido na cópia (ADR-057).</summary>
+    public bool HasDatabase => Row.Database is not null;
 
     public string PasswordLabel => Row.HasPassword ? "Senha guardada ✓" : "Sem senha guardada";
 
@@ -119,6 +124,22 @@ public sealed class DatabaseConnectionItemViewModel(DatabaseConnectionRow row)
     public bool HasDescription => !string.IsNullOrWhiteSpace(Row.Description);
 
     public override string ToString() => $"{Name} ({Badge})";
+}
+
+/// <summary>Um apelido na lista: "lock_eco_core_1010 — ECO Produção / eco_core_1010 · Anon ECO".</summary>
+public sealed class SavedDatabaseItemViewModel(SavedDatabaseRow row, string connectionName, string? anonymizationName)
+{
+    public SavedDatabaseRow Row { get; } = row;
+
+    public Guid Id => Row.Id;
+
+    public string Alias => Row.Alias;
+
+    public string Detail => anonymizationName is null
+        ? $"{connectionName} / {Row.DatabaseName} · sem anonimização"
+        : $"{connectionName} / {Row.DatabaseName} · {anonymizationName}";
+
+    public override string ToString() => Alias;
 }
 
 /// <summary>Uma permissão no formulário da conexão: travada quando o ambiente decide por ela.</summary>
@@ -255,7 +276,12 @@ public sealed class DatabaseOperationItemViewModel(DatabaseOperationRow row)
 {
     public DatabaseOperationRow Row { get; } = row;
 
-    public string Title => $"{DatabaseLabels.Operation(Row.OperationType)}: {Row.Source ?? "—"} → {Row.Destination ?? "—"}";
+    /// <summary>"Copiar + Anonimizar: ECO Produção/eco_core_1010 → Local/lock_eco_core_1010_20261009_143000".</summary>
+    public string Title =>
+        $"{DatabaseLabels.Operation(Row.OperationType)}: {Side(Row.Source, Row.SourceDatabase)} → {Side(Row.Destination, Row.DestinationDatabase)}";
+
+    private static string Side(string? connection, string? database) =>
+        database is null ? connection ?? "—" : $"{connection ?? "—"}/{database}";
 
     public string Status => DatabaseLabels.Status(Row.Status);
 

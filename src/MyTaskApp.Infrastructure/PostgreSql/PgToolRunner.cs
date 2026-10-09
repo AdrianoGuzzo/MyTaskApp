@@ -55,6 +55,10 @@ internal static class PostgresProcessGuard
                 {
                     violations.Add(new(SecurityViolationCode.MissingSource, "Dump sem conexão."));
                 }
+                else if (!source.HasDatabase)
+                {
+                    violations.Add(new(SecurityViolationCode.DatabaseNotChosen, $"{source.Name} é só o servidor: nenhum banco foi escolhido."));
+                }
                 else if (!source.Permissions.CanDump)
                 {
                     violations.Add(new(SecurityViolationCode.MissingPermission, $"{source.Name} não tem permissão para fazer dump."));
@@ -94,7 +98,14 @@ internal static class PostgresProcessGuard
             return;
         }
 
-        if (target.IsProtected || invocation.ProtectedEndpoints?.Contains(target.EndpointKey) == true)
+        if (!target.HasDatabase)
+        {
+            violations.Add(new(SecurityViolationCode.DatabaseNotChosen, $"{target.Name} é só o servidor: nenhum banco foi escolhido."));
+            return;
+        }
+
+        // Uma produção sem banco protege o servidor inteiro (host:porta/*).
+        if (target.IsProtected || target.IsAmong(invocation.ProtectedEndpoints))
         {
             violations.Add(new(SecurityViolationCode.ProtectedTargetModification, $"{target.Name} é produção: nada é gravado nele."));
         }
@@ -111,7 +122,7 @@ internal static class PostgresProcessGuard
             violations.Add(new(SecurityViolationCode.MissingPermission, $"{target.Name} não permite esta operação."));
         }
 
-        if (invocation.Tool is PostgresTool.CreateDb or PostgresTool.DropDb && SystemDatabases.Contains(target.Database))
+        if (invocation.Tool is PostgresTool.CreateDb or PostgresTool.DropDb && SystemDatabases.Contains(target.Database!))
         {
             violations.Add(new(SecurityViolationCode.ProtectedSystemDatabase, $"{target.Database} é um banco do próprio servidor."));
         }

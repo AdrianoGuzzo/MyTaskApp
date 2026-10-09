@@ -381,6 +381,22 @@ public class DatabaseOperationsServicesTests
     }
 
     [Fact]
+    public async Task AServerOnlyConnection_IsDiagnosed_WithoutReadingTheAnonymizer()
+    {
+        var scenario = new DatabaseCopyScenario();
+        var server = DatabaseConnection.Create("ECO Servidor", "10.0.0.5", 5432, null, "backup_user",
+            DatabaseEnvironment.Production, DatabaseSslMode.Prefer, null, ConnectionPermissions.FromFlags(ConnectionPermission.All), DatabaseCopyScenario.Now);
+
+        var report = await new PostgresEnvironmentDiagnostics(
+                scenario.Locator, scenario.Inspector, new ThrowingAnonymizer(), scenario.Policy, NullLogger<PostgresEnvironmentDiagnostics>.Instance)
+            .DiagnoseAsync(server.Snapshot(), "anon", false, Ct);
+
+        report.Server.Should().Contain(check => check.Outcome == CheckOutcome.Pass);
+        report.Anonymizer.Should().ContainSingle().Which.Should().Match<CheckResult>(
+            check => check.Outcome == CheckOutcome.Warning && check.Detail!.Contains("banco escolhido"));
+    }
+
+    [Fact]
     public async Task ADisabledConnection_IsNotDiagnosed()
     {
         var scenario = new DatabaseCopyScenario();

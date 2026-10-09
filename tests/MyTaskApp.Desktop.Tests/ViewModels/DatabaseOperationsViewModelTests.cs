@@ -34,7 +34,16 @@ internal static class DatabaseScreen
         Guid.CreateVersion7(), "ECO Production → ECO Development", Production.Id, Development.Id, Profile.Id,
         DatabaseCopyOptions.Default with { KeepAnonymizedArtifact = true }, true, Now);
 
-    public static DatabaseConnectionRow Row(string name, DatabaseEnvironment environment, string database, bool hasPassword = false) => new(
+    /// <summary>Uma conexão só de servidor (ADR-057): o banco é escolhido na cópia.</summary>
+    public static readonly DatabaseConnectionRow Server = Row("ECO Servidor", DatabaseEnvironment.Production, null, hasPassword: true);
+
+    /// <summary>O servidor local, sem banco: a cópia cria um banco novo com data e hora no nome.</summary>
+    public static readonly DatabaseConnectionRow LocalServer = Row("Local", DatabaseEnvironment.Development, null);
+
+    public static readonly SavedDatabaseRow Saved = new(
+        Guid.CreateVersion7(), "lock_eco_core_1010", Server.Id, "eco_core_1010", Profile.Id, Now);
+
+    public static DatabaseConnectionRow Row(string name, DatabaseEnvironment environment, string? database, bool hasPassword = false) => new(
         Guid.CreateVersion7(), name, "192.168.15.112", 5432, database, "backup_user", environment, DatabaseSslMode.Prefer, null, true,
         ConnectionPermissions.FromFlags(EnvironmentPolicy.For(environment).Defaults), hasPassword, Now);
 
@@ -45,6 +54,7 @@ internal static class DatabaseScreen
         runner.ResultsByHandler[typeof(GetDatabaseConnectionsHandler)] = (IReadOnlyList<DatabaseConnectionRow>)[Production, Masked, Development, Critical];
         runner.ResultsByHandler[typeof(GetAnonymizationProfilesHandler)] = (IReadOnlyList<AnonymizationProfileRow>)[Profile];
         runner.ResultsByHandler[typeof(GetDatabaseCopyProfilesHandler)] = (IReadOnlyList<DatabaseCopyProfileRow>)[CopyProfile];
+        runner.ResultsByHandler[typeof(GetSavedDatabasesHandler)] = (IReadOnlyList<SavedDatabaseRow>)[];
         runner.ResultsByHandler[typeof(GetDatabaseOperationHistoryHandler)] = (IReadOnlyList<DatabaseOperationRow>)
         [
             new DatabaseOperationRow(Guid.CreateVersion7(), DatabaseOperationType.CopyAndAnonymize, DatabaseOperationStatus.Succeeded,

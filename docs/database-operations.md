@@ -23,6 +23,7 @@ dados saírem de produção sem anonimização.
 - [Configurar o Anonymizer (DBA)](#configurar-o-anonymizer-dba)
 - [Regras de mascaramento](#regras-de-mascaramento)
 - [Copiar Produção → Desenvolvimento](#copiar-produção--desenvolvimento)
+- [Banco escolhido na cópia e apelidos](#banco-escolhido-na-cópia-e-apelidos)
 - [Verificação depois do restore](#verificação-depois-do-restore)
 - [Segurança](#segurança)
 - [Diretório temporário e auditoria](#diretório-temporário-e-auditoria)
@@ -48,7 +49,17 @@ com os argumentos um a um. O SQL só sai pelo Npgsql. O app não tem console SQL
 ## Conexões
 
 Cada conexão tem nome, servidor, porta, banco, usuário, ambiente, modo SSL,
-descrição, se está ativa e as permissões:
+descrição, se está ativa e as permissões.
+
+**O banco é opcional.** Sem ele, a conexão é só o servidor: um cadastro (e uma
+senha) serve para todos os bancos dele. O banco é escolhido na hora da cópia,
+por um apelido ou pela lista do servidor. Veja
+[Banco escolhido na cópia e apelidos](#banco-escolhido-na-cópia-e-apelidos).
+Uma conexão de **produção sem banco protege o servidor inteiro**: nenhum banco
+dele pode ser destino, nem por uma conexão "Desenvolvimento" que aponte para
+lá.
+
+As permissões:
 
 | Permissão | Significa |
 |---|---|
@@ -77,7 +88,8 @@ nunca recebe a senha guardada, só sabe se existe uma. Deixe o campo em branco
 para manter a senha atual.
 
 **Testar conexão** conecta com a senha digitada (sem salvar) ou com a guardada.
-Mostra o usuário, o banco e a versão do servidor.
+Mostra o usuário, o banco e a versão do servidor. Sem banco, o teste conecta ao
+banco de manutenção (`postgres`) e confirma só o servidor.
 
 ## Ambientes e política de segurança
 
@@ -383,7 +395,7 @@ mão), depois:
    | Validando Anonymizer | extensão 2.x, transparent masking, role `MASKED`, regras do perfil iguais às do servidor; e o **canário**, descrito abaixo |
    | Gerando dump anônimo | `pg_dump -Fd --jobs N` pela conexão mascarada, com `--no-security-labels --exclude-extension=anon` |
    | Anonimizando | confere o índice do dump: sem `SECURITY LABEL`, sem a extensão anon, com dados |
-   | Preparando destino | `dropdb --if-exists [--force]` e `createdb --template=template0` |
+   | Preparando destino | `dropdb --if-exists [--force]` e `createdb --template=template0`; num banco novo (destino sem banco), só o `createdb` |
    | Restaurando | `pg_restore --no-owner --no-privileges --no-security-labels --exit-on-error --jobs N` |
    | Validando resultado | a verificação (abaixo) |
    | Limpando arquivos temporários | sempre, com sucesso, falha ou cancelamento |
@@ -394,6 +406,59 @@ mão), depois:
 
 **Cancelar** mata o processo em andamento e limpa os temporários. O destino
 pode ficar incompleto: rode de novo com "Recriar o destino".
+
+## Banco escolhido na cópia e apelidos
+
+Com conexões só de servidor, o mesmo cadastro serve para `eco_core_1010`,
+`eco_core_2020` e qualquer outro banco do servidor. Cada banco pode ter a sua
+anonimização.
+
+**Escolher o banco.** Na aba **Copiar Banco**, ao escolher uma origem sem
+banco, aparece o campo **Banco**:
+
+- Ele lista os bancos do servidor: `pg_database`, sem os templates e sem o
+  `postgres`, lido pelo banco de manutenção em sessão só leitura.
+- Se o usuário não puder ler o `postgres`, a lista não vem, e dá para digitar o
+  nome.
+
+**O banco de destino.** Se o destino também for só o servidor (o PostgreSQL
+local, por exemplo), cada cópia cria **um banco novo**:
+
+```text
+{apelido}_{yyyyMMdd_HHmmss}      lock_eco_core_1010_20261009_143000
+{banco de origem}_{...}          eco_core_1010_20261009_143000   (sem apelido)
+```
+
+- A data e a hora são as da execução, no fuso local. A tela mostra o padrão
+  abaixo do destino, e o resultado e o Histórico mostram o nome criado.
+- Num banco novo, roda só o `createdb`: nada é apagado, e o destino precisa
+  apenas da permissão *Criar o banco*.
+- **As cópias anteriores ficam no destino.** Apague as que não servem mais por
+  fora do app.
+
+**Apelidos.** Depois de escolher origem, banco e perfil de anonimização,
+preencha **Salvar como** (por exemplo `lock_eco_core_1010`) e clique em
+**Salvar apelido**:
+
+- Na próxima vez, escolha o apelido no topo da aba. Origem, banco e
+  anonimização são preenchidos, e falta só o destino.
+- O apelido usa letras minúsculas sem acento, números e `_`, não começa com
+  número e tem até 47 caracteres. O resto dos 63 do PostgreSQL vai para a data.
+- Para **renomear**, escolha o apelido, troque o nome em *Salvar como* e salve.
+- Em **Perfis → Apelidos**, cada apelido tem **Usar** e **Excluir**. Excluir
+  tira só o apelido: os bancos já copiados continuam no destino.
+- Uma conexão ou um perfil de anonimização usado por um apelido não pode ser
+  excluído antes do apelido.
+
+**Anonimização por banco.** O perfil de anonimização continua ligado a uma
+conexão mascarada (role `MASKED`):
+
+- Se a mascarada for só o servidor, a cópia lê pelo **mesmo banco escolhido na
+  origem**.
+- Em **Perfis**, um campo **Banco** aparece para sugerir colunas, gerar o
+  script do DBA e validar no servidor.
+- Ao salvar o apelido, o app confere que a anonimização lê o mesmo servidor da
+  origem (e o mesmo banco, se a mascarada tiver um fixo).
 
 ## Verificação depois do restore
 

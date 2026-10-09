@@ -41,6 +41,15 @@ public interface IPostgresServerInspector
         SecretText? password = null,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Os bancos do servidor em que se pode conectar, por nome (ADR-057), sem os
+    /// templates nem o <c>postgres</c>. Lido pelo banco de manutenção, então
+    /// serve para uma conexão que é só o servidor.
+    /// </summary>
+    Task<IReadOnlyList<string>> ListDatabasesAsync(
+        DatabaseConnectionSnapshot connection,
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<ColumnInfo>> ListColumnsAsync(DatabaseConnectionSnapshot connection, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<TableInfo>> ListTablesAsync(DatabaseConnectionSnapshot connection, CancellationToken cancellationToken = default);

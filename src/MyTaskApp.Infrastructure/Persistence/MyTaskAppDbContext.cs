@@ -68,6 +68,9 @@ public sealed class MyTaskAppDbContext(DbContextOptions<MyTaskAppDbContext> opti
     /// <summary>As cópias que se repetem (ADR-056).</summary>
     public DbSet<DatabaseCopyProfile> DatabaseCopyProfiles => Set<DatabaseCopyProfile>();
 
+    /// <summary>Os apelidos de banco de origem: conexão, banco e anonimização (ADR-057).</summary>
+    public DbSet<SavedDatabase> SavedDatabases => Set<SavedDatabase>();
+
     /// <summary>A trilha das operações de banco, sem chave estrangeira (ADR-056).</summary>
     public DbSet<DatabaseOperationAudit> DatabaseOperationAudits => Set<DatabaseOperationAudit>();
 

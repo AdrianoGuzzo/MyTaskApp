@@ -49,10 +49,16 @@ public sealed partial class DatabaseOperationsViewModel : ObservableObject
 
         Connections.Changed += Reload;
         Profiles.Changed += Reload;
+        Copy.Changed += Reload;
         Copy.Finished += () => _ = History.LoadAsync(CancellationToken.None);
         Profiles.UseRequested += profile =>
         {
             Copy.UseProfile(profile);
+            SelectedTabIndex = CopyTab;
+        };
+        Profiles.UseSavedDatabaseRequested += saved =>
+        {
+            Copy.UseSavedDatabase(saved);
             SelectedTabIndex = CopyTab;
         };
     }
@@ -91,12 +97,14 @@ public sealed partial class DatabaseOperationsViewModel : ObservableObject
                 (handler, token) => handler.HandleAsync(new GetAnonymizationProfiles(), token), cancellationToken);
             var copies = await _runner.RunAsync<GetDatabaseCopyProfilesHandler, IReadOnlyList<DatabaseCopyProfileRow>>(
                 (handler, token) => handler.HandleAsync(new GetDatabaseCopyProfiles(), token), cancellationToken);
+            var saved = await _runner.RunAsync<GetSavedDatabasesHandler, IReadOnlyList<SavedDatabaseRow>>(
+                (handler, token) => handler.HandleAsync(new GetSavedDatabases(), token), cancellationToken);
 
             Connections.SetConnections(connections);
             var items = Connections.Connections.ToList();
             Diagnostics.SetConnections(items);
-            Copy.SetCatalog(items, anonymization, copies);
-            Profiles.SetCatalog(items, anonymization, copies);
+            Copy.SetCatalog(items, anonymization, copies, saved);
+            Profiles.SetCatalog(items, anonymization, copies, saved);
 
             await History.LoadAsync(cancellationToken);
 

@@ -75,6 +75,17 @@ public sealed class PostgresEnvironmentDiagnostics(
 
         IReadOnlyList<CheckResult> anonymizerChecks;
 
+        // O Anonymizer é por banco: numa conexão só de servidor (ADR-057), não há o que ler aqui.
+        if (!connection.HasDatabase)
+        {
+            anonymizerChecks =
+            [
+                new CheckResult(EnvironmentDiagnosticsReport.AnonymizerCategory, "Extension", CheckOutcome.Warning,
+                    "Conexão só do servidor: o Anonymizer é conferido no banco escolhido, ao validar a cópia ou o perfil."),
+            ];
+            return new EnvironmentDiagnosticsReport(ToolChecks(tools), serverChecks, anonymizerChecks, tools.Guide);
+        }
+
         try
         {
             var status = await anonymizer.GetStatusAsync(connection, policyName, cancellationToken);

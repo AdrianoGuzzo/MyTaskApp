@@ -271,6 +271,11 @@ public static class DependencyInjection
         services.AddScoped<SetDatabaseConnectionEnabledHandler>();
         services.AddScoped<DeleteDatabaseConnectionHandler>();
         services.AddScoped<TestDatabaseConnectionHandler>();
+        services.AddScoped<ListServerDatabasesHandler>();
+
+        services.AddScoped<GetSavedDatabasesHandler>();
+        services.AddScoped<SaveSavedDatabaseHandler>();
+        services.AddScoped<DeleteSavedDatabaseHandler>();
 
         services.AddScoped<DetectPostgresToolsHandler>();
         services.AddScoped<DiagnoseDatabaseHandler>();

@@ -15,7 +15,8 @@ namespace MyTaskApp.Desktop.ViewModels;
 /// <summary>
 /// A aba "Copiar Banco" (ADR-056): origem, destino, operação e perfil;
 /// [Validar] antes de [Executar]; a confirmação de produção; e o progresso
-/// com as etapas, a barra e os logs.
+/// com as etapas, a barra e os logs. Numa conexão só de servidor (ADR-057),
+/// o banco é escolhido aqui — da lista do servidor, ou por um apelido salvo.
 /// </summary>
 /// <remarks>
 /// A tela só pede: quem decide se pode é a política, de novo, no handler.
@@ -54,14 +55,38 @@ public sealed partial class DatabaseCopyViewModel(
     private bool _resultSucceeded;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Selection))]
-    [NotifyCanExecuteChangedFor(nameof(ValidateCommand), nameof(ExecuteCommand))]
+    [NotifyPropertyChangedFor(nameof(Selection), nameof(NeedsSourceDatabase), nameof(DestinationPreview))]
+    [NotifyCanExecuteChangedFor(nameof(ValidateCommand), nameof(ExecuteCommand), nameof(SaveAliasCommand))]
     private DatabaseConnectionItemViewModel? _selectedSource;
 
+    /// <summary>O banco de origem, quando a origem é só o servidor: escolhido da lista ou digitado.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Selection))]
+    [NotifyPropertyChangedFor(nameof(Selection), nameof(DestinationPreview))]
+    [NotifyCanExecuteChangedFor(nameof(ValidateCommand), nameof(ExecuteCommand), nameof(SaveAliasCommand))]
+    private string? _sourceDatabase;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Selection), nameof(CreatesNewDestination), nameof(DestinationPreview))]
     [NotifyCanExecuteChangedFor(nameof(ValidateCommand), nameof(ExecuteCommand))]
     private DatabaseConnectionItemViewModel? _selectedDestination;
+
+    /// <summary>O apelido escolhido: preenche origem, banco e anonimização, e nomeia o banco copiado.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Selection), nameof(DestinationPreview))]
+    [NotifyCanExecuteChangedFor(nameof(ValidateCommand), nameof(ExecuteCommand))]
+    private SavedDatabaseRow? _selectedSavedDatabase;
+
+    /// <summary>O apelido a salvar para a origem e o banco escolhidos.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SaveAliasCommand))]
+    private string _newAlias = string.Empty;
+
+    /// <summary>Por que a lista de bancos não veio; dá para digitar o nome mesmo assim.</summary>
+    [ObservableProperty]
+    private string? _databaseListMessage;
+
+    [ObservableProperty]
+    private string? _aliasMessage;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Selection), nameof(Anonymizes))]
@@ -115,6 +140,11 @@ public sealed partial class DatabaseCopyViewModel(
 
     public ObservableCollection<DatabaseCopyProfileRow> CopyProfiles { get; } = [];
 
+    public ObservableCollection<SavedDatabaseRow> SavedDatabases { get; } = [];
+
+    /// <summary>Os bancos do servidor da origem, quando ela é só o servidor.</summary>
+    public ObservableCollection<string> SourceDatabases { get; } = [];
+
     public ObservableCollection<string> Violations { get; } = [];
 
     public ObservableCollection<CheckItemViewModel> Checks { get; } = [];
@@ -129,6 +159,22 @@ public sealed partial class DatabaseCopyViewModel(
     public bool Anonymizes => SelectedOperation.Value == DatabaseOperationType.CopyAndAnonymize;
 
     public bool CanEdit => !IsRunning;
+
+    /// <summary>A origem é só o servidor: falta escolher o banco.</summary>
+    public bool NeedsSourceDatabase => SelectedSource is { HasDatabase: false };
+
+    /// <summary>O destino é só o servidor: a cópia cria um banco novo, com data e hora no nome.</summary>
+    public bool CreatesNewDestination => SelectedDestination is { HasDatabase: false };
+
+    /// <summary>"Será criado: lock_eco_core_1010_aaaaMMdd_HHmmss" — a data e a hora são as da execução.</summary>
+    public string? DestinationPreview =>
+        CreatesNewDestination && (SelectedSavedDatabase?.Alias ?? EffectiveSourceDatabase) is { Length: > 0 } prefix
+            ? $"Será criado: {SavedDatabase.CopyPrefix(prefix)}_aaaaMMdd_HHmmss (data e hora da execução)"
+            : null;
+
+    /// <summary>O banco de origem que vale: o fixo da conexão, ou o escolhido aqui.</summary>
+    private string? EffectiveSourceDatabase => SelectedSource?.Row.Database
+        ?? (string.IsNullOrWhiteSpace(SourceDatabase) ? null : SourceDatabase.Trim());
 
     public bool HasValidation => _validation is not null;
 
@@ -165,35 +211,201 @@ public sealed partial class DatabaseCopyViewModel(
                     RecreateDestination,
                     VerifyAfterRestore,
                     KeepAnonymizedArtifact && Anonymizes),
-                SelectedCopyProfile?.Id)
+                SelectedCopyProfile?.Id,
+                NeedsSourceDatabase ? EffectiveSourceDatabase : null,
+                SelectedSavedDatabase?.Id)
             : null;
 
     /// <summary>Terminou uma cópia — com qualquer desfecho. O histórico recarrega.</summary>
     public event Action? Finished;
 
+    /// <summary>Um apelido foi salvo: os seletores das outras abas recarregam.</summary>
+    public event Action? Changed;
+
     public void SetCatalog(
         IReadOnlyList<DatabaseConnectionItemViewModel> connections,
         IReadOnlyList<AnonymizationProfileRow> anonymizationProfiles,
-        IReadOnlyList<DatabaseCopyProfileRow> copyProfiles)
+        IReadOnlyList<DatabaseCopyProfileRow> copyProfiles,
+        IReadOnlyList<SavedDatabaseRow>? savedDatabases = null)
     {
         var source = SelectedSource?.Id;
         var destination = SelectedDestination?.Id;
         var profile = SelectedAnonymizationProfile?.Id;
+        var saved = _pendingSavedDatabase ?? SelectedSavedDatabase?.Id;
+        var database = SourceDatabase;
 
-        Replace(Connections, connections.Where(connection => !connection.IsDisabled));
-        Replace(AnonymizationProfiles, anonymizationProfiles.Where(item => item.IsEnabled));
-        Replace(CopyProfiles, copyProfiles.Where(item => item.IsEnabled));
+        _applyingSaved = true;
 
-        SelectedSource = Connections.FirstOrDefault(connection => connection.Id == source);
-        SelectedDestination = Connections.FirstOrDefault(connection => connection.Id == destination);
-        SelectedAnonymizationProfile = AnonymizationProfiles.FirstOrDefault(item => item.Id == profile);
+        try
+        {
+            Replace(Connections, connections.Where(connection => !connection.IsDisabled));
+            Replace(AnonymizationProfiles, anonymizationProfiles.Where(item => item.IsEnabled));
+            Replace(CopyProfiles, copyProfiles.Where(item => item.IsEnabled));
+            Replace(SavedDatabases, savedDatabases ?? []);
+
+            SelectedSource = Connections.FirstOrDefault(connection => connection.Id == source);
+            SourceDatabase = database;
+            SelectedDestination = Connections.FirstOrDefault(connection => connection.Id == destination);
+            SelectedAnonymizationProfile = AnonymizationProfiles.FirstOrDefault(item => item.Id == profile);
+            SelectedSavedDatabase = SavedDatabases.FirstOrDefault(item => item.Id == saved);
+        }
+        finally
+        {
+            _applyingSaved = false;
+            _pendingSavedDatabase = null;
+        }
+    }
+
+    /// <summary>
+    /// Preenche a tela com um apelido: a origem, o banco e a anonimização dele.
+    /// O destino fica como está — é escolhido a cada cópia.
+    /// </summary>
+    public void UseSavedDatabase(SavedDatabaseRow saved)
+    {
+        _applyingSaved = true;
+
+        try
+        {
+            SelectedSavedDatabase = SavedDatabases.FirstOrDefault(item => item.Id == saved.Id) ?? saved;
+            SelectedCopyProfile = null;
+            SelectedSource = Connections.FirstOrDefault(connection => connection.Id == saved.ConnectionId);
+            SourceDatabase = saved.DatabaseName;
+            SelectedOperation = Operations[saved.AnonymizationProfileId is null ? 0 : 1];
+            SelectedAnonymizationProfile = AnonymizationProfiles.FirstOrDefault(item => item.Id == saved.AnonymizationProfileId);
+            NewAlias = saved.Alias;
+        }
+        finally
+        {
+            _applyingSaved = false;
+        }
+    }
+
+    private bool _applyingSaved;
+
+    private Guid? _pendingSavedDatabase;
+
+    partial void OnSelectedSavedDatabaseChanged(SavedDatabaseRow? value)
+    {
+        if (value is not null && !_applyingSaved)
+        {
+            UseSavedDatabase(value);
+        }
+    }
+
+    partial void OnSelectedSourceChanged(DatabaseConnectionItemViewModel? value)
+    {
+        SourceDatabases.Clear();
+        DatabaseListMessage = null;
+
+        if (!_applyingSaved)
+        {
+            ForgetSavedDatabaseIfChanged();
+        }
+
+        if (value is { HasDatabase: false } && !IsRunning)
+        {
+            _ = LoadSourceDatabasesAsync(value);
+        }
+    }
+
+    partial void OnSourceDatabaseChanged(string? value)
+    {
+        if (!_applyingSaved)
+        {
+            ForgetSavedDatabaseIfChanged();
+        }
+    }
+
+    /// <summary>O apelido vale enquanto a origem e o banco forem os dele; mudou um dos dois, a escolha sai.</summary>
+    private void ForgetSavedDatabaseIfChanged()
+    {
+        if (SelectedSavedDatabase is { } saved
+            && (SelectedSource?.Id != saved.ConnectionId
+                || !string.Equals(EffectiveSourceDatabase, saved.DatabaseName, StringComparison.Ordinal)))
+        {
+            SelectedSavedDatabase = null;
+        }
+    }
+
+    /// <summary>A lista do servidor. Se não vier (sem acesso ao banco de manutenção), o nome pode ser digitado.</summary>
+    private async Task LoadSourceDatabasesAsync(DatabaseConnectionItemViewModel source)
+    {
+        try
+        {
+            var databases = await runner.RunAsync<ListServerDatabasesHandler, IReadOnlyList<string>>(
+                (handler, token) => handler.HandleAsync(new ListServerDatabases(source.Id), token), CancellationToken.None);
+
+            // A origem pode ter mudado enquanto o servidor respondia.
+            if (SelectedSource?.Id != source.Id)
+            {
+                return;
+            }
+
+            Replace(SourceDatabases, databases);
+            DatabaseListMessage = databases.Count == 0 ? "Nenhum banco encontrado no servidor; digite o nome." : null;
+        }
+        catch (DomainException exception)
+        {
+            DatabaseListMessage = $"{exception.Message} Digite o nome do banco.";
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "ServerDatabasesListFailed");
+            DatabaseListMessage = "Não foi possível listar os bancos do servidor; digite o nome.";
+        }
+    }
+
+    private bool CanSaveAlias() =>
+        !IsRunning && !IsBusy && SelectedSource is not null && !string.IsNullOrWhiteSpace(EffectiveSourceDatabase)
+        && !string.IsNullOrWhiteSpace(NewAlias);
+
+    /// <summary>
+    /// Salva a origem, o banco e a anonimização escolhidos com o apelido. Com
+    /// um apelido escolhido, atualiza aquele (renomear é isto); sem, cria.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanSaveAlias))]
+    public async Task SaveAliasAsync(CancellationToken cancellationToken = default)
+    {
+        AliasMessage = null;
+        ErrorMessage = null;
+
+        var command = new SaveSavedDatabase(
+            SelectedSavedDatabase?.Id,
+            NewAlias,
+            SelectedSource!.Id,
+            EffectiveSourceDatabase!,
+            Anonymizes ? SelectedAnonymizationProfile?.Id : null);
+
+        try
+        {
+            var id = await runner.RunAsync<SaveSavedDatabaseHandler, Guid>(
+                (handler, token) => handler.HandleAsync(command, token), cancellationToken);
+
+            _pendingSavedDatabase = id;
+            AliasMessage = $"Apelido {SavedDatabase.NormalizeAlias(NewAlias)} salvo.";
+            Changed?.Invoke();
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (DomainException exception)
+        {
+            ErrorMessage = exception.Message;
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "SavedDatabaseSaveFailed");
+            ErrorMessage = "Não foi possível salvar o apelido.";
+        }
     }
 
     /// <summary>Preenche a tela com um perfil de cópia — o "ECO Production → ECO Development" de sempre.</summary>
     public void UseProfile(DatabaseCopyProfileRow profile)
     {
         SelectedCopyProfile = profile;
+        SelectedSavedDatabase = null;
         SelectedSource = Connections.FirstOrDefault(connection => connection.Id == profile.SourceConnectionId);
+        SourceDatabase = profile.SourceDatabase;
         SelectedDestination = Connections.FirstOrDefault(connection => connection.Id == profile.DestinationConnectionId);
         SelectedOperation = Operations[profile.Options.RequireAnonymization ? 1 : 0];
         SelectedAnonymizationProfile = AnonymizationProfiles.FirstOrDefault(item => item.Id == profile.AnonymizationProfileId);
@@ -216,7 +428,8 @@ public sealed partial class DatabaseCopyViewModel(
 
     private DatabaseCopyProfileRow? _applying;
 
-    private bool CanValidate() => !IsBusy && !IsRunning && Selection is not null;
+    private bool CanValidate() =>
+        !IsBusy && !IsRunning && Selection is not null && (!NeedsSourceDatabase || EffectiveSourceDatabase is not null);
 
     [RelayCommand(CanExecute = nameof(CanValidate))]
     public async Task ValidateAsync(CancellationToken cancellationToken = default)
@@ -343,16 +556,22 @@ public sealed partial class DatabaseCopyViewModel(
             $"Destino:\n{validation.DestinationName}\n\n" +
             $"Perfil:\n{validation.AnonymizationProfileName ?? "—"}";
 
-        if (request.Options.RecreateDestination)
+        var drops = request.Options.RecreateDestination && !validation.NewDestinationDatabase;
+
+        if (validation.NewDestinationDatabase)
         {
-            message += $"\n\nO banco {validation.DestinationName} será apagado e criado de novo.";
+            message += $"\n\nUm banco novo será criado em {validation.DestinationName}.";
+        }
+        else if (drops)
+        {
+            message += $"\n\nO banco {validation.DestinationDatabase ?? validation.DestinationName} será apagado e criado de novo.";
         }
 
         return new ConfirmationRequest(
             "ATENÇÃO",
             message,
             "Confirmar operação",
-            IsIrreversible: request.Options.RecreateDestination,
+            IsIrreversible: drops,
             RequiredText: validation.RequiresTypedConfirmation ? validation.ConfirmationText : null);
     }
 
@@ -438,12 +657,15 @@ public sealed partial class DatabaseCopyViewModel(
         ResultMessage = result.Status switch
         {
             DatabaseOperationStatus.Succeeded when result.KeptArtifactPath is { } kept =>
-                $"✓ Cópia concluída. Dump anônimo mantido em {kept}.",
-            DatabaseOperationStatus.Succeeded => "✓ Cópia concluída. Arquivos temporários removidos.",
+                $"✓ Cópia concluída{Into(result)}. Dump anônimo mantido em {kept}.",
+            DatabaseOperationStatus.Succeeded => $"✓ Cópia concluída{Into(result)}. Arquivos temporários removidos.",
             DatabaseOperationStatus.Canceled => "✗ Cancelada. O destino pode ter ficado incompleto.",
             _ => "✗ " + (result.Error ?? "A cópia falhou."),
         };
     }
+
+    private static string Into(DatabaseCopyResult result) =>
+        result.DestinationDatabase is { } database ? $" em {database}" : string.Empty;
 
     private static void Replace<T>(ObservableCollection<T> target, IEnumerable<T> items)
     {

@@ -50,7 +50,7 @@ internal sealed class NpgsqlPostgresSessionFactory(
         {
             Host = connection.Host,
             Port = connection.Port,
-            Database = connection.Database,
+            Database = PgArguments.DatabaseOf(connection),
             Username = connection.Username,
             Password = secret,
             SslMode = SslMode(connection.SslMode),

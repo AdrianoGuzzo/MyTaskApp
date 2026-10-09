@@ -20,6 +20,13 @@ internal static class PostgresQueries
     public const string ServerInfo =
         "SELECT version(), current_user::text, current_database()::text, pg_database_size(current_database())";
 
+    /// <summary>
+    /// Os bancos em que se pode conectar (ADR-057), sem templates nem o de
+    /// manutenção: o que a cópia oferece para escolher numa conexão só de servidor.
+    /// </summary>
+    public const string Databases =
+        "SELECT datname::text FROM pg_database WHERE datallowconn AND NOT datistemplate AND datname <> 'postgres' ORDER BY 1";
+
     public const string Schemas =
         "SELECT n.nspname::text FROM pg_namespace n WHERE " + UserSchemas + " ORDER BY 1";
 
@@ -93,7 +100,7 @@ internal static class PostgresQueries
 
     public static IEnumerable<string> All() =>
     [
-        ServerInfo, Schemas, Tables, Privileges, Columns, ConstraintsByType, IndexCount, SequenceCount,
+        ServerInfo, Databases, Schemas, Tables, Privileges, Columns, ConstraintsByType, IndexCount, SequenceCount,
         PrimaryKey, AnonymizerAvailable, TransparentMasking, RoleIsMasked, AnonymizerFunctions, MaskingRules, EstimatedRows,
         CountRows("public.x"),
         Fingerprint(new ColumnReference("public", "x", "y"), ["id"], 10),

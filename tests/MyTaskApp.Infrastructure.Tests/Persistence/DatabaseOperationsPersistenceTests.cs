@@ -19,7 +19,7 @@ public class DatabaseOperationsPersistenceTests
 
     private static readonly ConnectionPermissions Everything = ConnectionPermissions.FromFlags(ConnectionPermission.All);
 
-    private static DatabaseConnection Connection(string name, DatabaseEnvironment environment, string database) =>
+    private static DatabaseConnection Connection(string name, DatabaseEnvironment environment, string? database) =>
         DatabaseConnection.Create(
             name, "192.168.15.112", 5432, database, "backup_user", environment, DatabaseSslMode.Require, "descrição", Everything, Now);
 
@@ -227,6 +227,124 @@ public class DatabaseOperationsPersistenceTests
         await log.RecordAsync(DatabaseOperationAudit.Start(DatabaseOperationType.Diagnose, null, null, null, null, "PC", "u", Now), Ct);
         await read.SaveChangesAsync(Ct);
         (await log.ListRecentAsync(1, Ct)).Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task AServerOnlyConnection_RoundTrips_WithoutADatabase()
+    {
+        await using var db = await new TempSqliteDatabase().MigrateAsync(Ct);
+        var server = Connection("ECO Servidor", DatabaseEnvironment.Production, null);
+        await SeedAsync(db, server);
+
+        await using var read = db.CreateContext();
+        var reloaded = await new DatabaseConnectionRepository(read).FindByIdAsync(server.Id, Ct);
+
+        reloaded!.Database.Should().BeNull();
+        reloaded.Snapshot().EndpointKey.Should().Be("192.168.15.112:5432/*");
+    }
+
+    [Fact]
+    public async Task AnAlias_RoundTrips_AndHoldsItsConnectionAndAnonymization()
+    {
+        await using var db = await new TempSqliteDatabase().MigrateAsync(Ct);
+        var server = Connection("ECO Servidor", DatabaseEnvironment.Production, null);
+        var masked = Connection("ECO Servidor (anon)", DatabaseEnvironment.Production, null);
+        var anonymization = AnonymizationProfile.Create("ECO 1010 LGPD", null, masked.Id, null, Now);
+        var saved = SavedDatabase.Create("lock_eco_core_1010", server.Id, "eco_core_1010", anonymization.Id, Now);
+        await SeedAsync(db, server, masked, anonymization, saved);
+
+        await using (var read = db.CreateContext())
+        {
+            var aliases = new SavedDatabaseRepository(read);
+            var reloaded = await aliases.FindByIdAsync(saved.Id, Ct);
+
+            reloaded!.Alias.Should().Be("lock_eco_core_1010");
+            reloaded.DatabaseName.Should().Be("eco_core_1010");
+            reloaded.ConnectionId.Should().Be(server.Id);
+            reloaded.AnonymizationProfileId.Should().Be(anonymization.Id);
+            reloaded.CreatedAt.Should().Be(Now);
+            (await aliases.ListAsync(Ct)).Should().ContainSingle();
+            (await aliases.AliasExistsAsync("LOCK_ECO_CORE_1010", null, Ct)).Should().BeTrue();
+            (await aliases.AliasExistsAsync("lock_eco_core_1010", saved.Id, Ct)).Should().BeFalse();
+            (await aliases.AnyUsesConnectionAsync(server.Id, Ct)).Should().BeTrue();
+            (await aliases.AnyUsesConnectionAsync(masked.Id, Ct)).Should().BeFalse();
+            (await aliases.AnyUsesAnonymizationProfileAsync(anonymization.Id, Ct)).Should().BeTrue();
+        }
+
+        // Restrict: a conexão não sai por baixo do apelido.
+        await using (var write = db.CreateContext())
+        {
+            write.Remove((await write.DatabaseConnections.SingleAsync(connection => connection.Id == server.Id, Ct))!);
+            await FluentActions.Awaiting(() => write.SaveChangesAsync(Ct)).Should().ThrowAsync<DbUpdateException>();
+        }
+
+        await using (var write = db.CreateContext())
+        {
+            var aliases = new SavedDatabaseRepository(write);
+            aliases.Remove((await aliases.FindByIdAsync(saved.Id, Ct))!);
+            await write.SaveChangesAsync(Ct);
+        }
+
+        await using var check = db.CreateContext();
+        (await check.SavedDatabases.CountAsync(Ct)).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task TheAliasIsUnique_IgnoringCase()
+    {
+        await using var db = await new TempSqliteDatabase().MigrateAsync(Ct);
+        var server = Connection("ECO Servidor", DatabaseEnvironment.Production, null);
+        await SeedAsync(db, server, SavedDatabase.Create("eco", server.Id, "eco_core_1010", null, Now));
+
+        await FluentActions.Awaiting(() => SeedAsync(db, SavedDatabase.Create("eco", server.Id, "eco_core_2020", null, Now)))
+            .Should().ThrowAsync<DbUpdateException>();
+    }
+
+    [Fact]
+    public async Task ACopyProfileAndTheAudit_KeepTheChosenDatabases()
+    {
+        await using var db = await new TempSqliteDatabase().MigrateAsync(Ct);
+        var server = Connection("ECO Servidor", DatabaseEnvironment.Production, null);
+        var local = Connection("Local", DatabaseEnvironment.Development, null);
+        var options = DatabaseCopyOptions.Default with { RequireAnonymization = false };
+        var copy = DatabaseCopyProfile.Create("ECO 1010 → Local", server.Id, local.Id, null, options, Now, "eco_core_1010");
+        var audit = DatabaseOperationAudit.Start(
+            DatabaseOperationType.Copy,
+            server.Snapshot().WithDatabase("eco_core_1010"),
+            local.Snapshot().WithDatabase("lock_eco_core_1010_20261008_184102"),
+            copy.Id, copy.Name, "PC", "adriano", Now);
+        await SeedAsync(db, server, local, copy, audit);
+
+        await using var read = db.CreateContext();
+        (await new DatabaseCopyProfileRepository(read).FindByIdAsync(copy.Id, Ct))!.SourceDatabase.Should().Be("eco_core_1010");
+        var reloaded = (await new EfDatabaseOperationAuditLog(read).ListRecentAsync(1, Ct)).Single();
+        reloaded.SourceDatabase.Should().Be("eco_core_1010");
+        reloaded.DestinationDatabase.Should().Be("lock_eco_core_1010_20261008_184102");
+    }
+
+    [Fact]
+    public async Task UpgradingFromDatabaseOperations_KeepsEveryConnectionsDatabase_AndItsProfiles()
+    {
+        await using var db = await new TempSqliteDatabase().MigrateToAsync("DatabaseOperations", Ct);
+        var production = Connection("ECO Produção", DatabaseEnvironment.Production, "eco_core");
+        var masked = Connection("ECO Produção (anon)", DatabaseEnvironment.Production, "eco_core");
+        var anonymization = AnonymizationProfile.Create("ECO LGPD", null, masked.Id, null, Now);
+        await SeedAsync(db, production, masked, anonymization);
+
+        // A coluna Database vira opcional: no SQLite, a tabela é recriada.
+        await db.MigrateAsync(Ct);
+
+        await using var read = db.CreateContext();
+        var connections = await read.DatabaseConnections.OrderBy(connection => connection.Name).ToListAsync(Ct);
+        connections.Select(connection => connection.Database).Should().Equal("eco_core", "eco_core");
+        (await read.AnonymizationProfiles.SingleAsync(Ct)).ConnectionId.Should().Be(masked.Id);
+        (await read.SavedDatabases.CountAsync(Ct)).Should().Be(0);
+
+        await using var command = read.Database.GetDbConnection().CreateCommand();
+        command.CommandText = "PRAGMA foreign_key_check";
+        await read.Database.OpenConnectionAsync(Ct);
+        await using var violations = await command.ExecuteReaderAsync(Ct);
+        (await violations.ReadAsync(Ct)).Should().BeFalse("a recriação da tabela não pode deixar chave órfã");
     }
 
     [Fact]
