@@ -8,6 +8,7 @@ using Microsoft.Extensions.Options;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Deadlines;
+using MyTaskApp.Application.DatabaseOperations;
 using MyTaskApp.Application.Development;
 using MyTaskApp.Application.External;
 using MyTaskApp.Application.External.Jira;
@@ -20,6 +21,7 @@ using MyTaskApp.Application.Sounds;
 using MyTaskApp.Application.StickyNotes;
 using MyTaskApp.Application.Tags;
 using MyTaskApp.Application.TimeTracking;
+using MyTaskApp.Domain.DatabaseOperations;
 using MyTaskApp.Infrastructure.Agents;
 using MyTaskApp.Infrastructure.Agents.ClaudeCode;
 using MyTaskApp.Infrastructure.FileSystem;
@@ -29,6 +31,7 @@ using MyTaskApp.Infrastructure.Jira;
 using MyTaskApp.Infrastructure.Persistence;
 using MyTaskApp.Infrastructure.Persistence.Queries;
 using MyTaskApp.Infrastructure.Persistence.Repositories;
+using MyTaskApp.Infrastructure.PostgreSql;
 using MyTaskApp.Infrastructure.Processes;
 using MyTaskApp.Infrastructure.Secrets;
 using MyTaskApp.Infrastructure.Sounds;
@@ -147,7 +150,9 @@ public static class DependencyInjection
         services.AddSingleton<AgentEventListener>();
         services.AddSingleton<IAgentEventEndpoint>(provider => provider.GetRequiredService<AgentEventListener>());
 
+        AddSecrets(services);
         AddJira(services, configuration);
+        AddDatabaseOperations(services, configuration);
 
         if (OperatingSystem.IsWindows())
         {
@@ -187,15 +192,6 @@ public static class DependencyInjection
             Path.Combine(UserDataLocation.Current.State, "jira.json"),
             provider.GetRequiredService<ILogger<JiraConnectionFile>>()));
 
-        if (OperatingSystem.IsWindows())
-        {
-            AddWindowsSecrets(services);
-        }
-        else
-        {
-            services.AddSingleton<ISecretStore, UnsupportedSecretStore>();
-        }
-
         services.AddSingleton<JiraAuthenticationService>();
         services.AddSingleton<IJiraAuthenticationService>(provider => provider.GetRequiredService<JiraAuthenticationService>());
         services.AddSingleton<IJiraAccess>(provider => provider.GetRequiredService<JiraAuthenticationService>());
@@ -205,6 +201,47 @@ public static class DependencyInjection
 
         // As convenções de branch são dado do usuário: no banco (ADR-014).
         services.AddScoped<IBranchConventionStore, BranchConventionStore>();
+    }
+
+    /// <summary>
+    /// Operações de banco PostgreSQL (ADR-056): o cadastro no SQLite do app e
+    /// a trilha de auditoria.
+    /// </summary>
+    private static void AddDatabaseOperations(IServiceCollection services, IConfiguration configuration)
+    {
+        var options = new DatabaseOperationsOptions();
+        configuration.GetSection(DatabaseOperationsOptions.SectionName).Bind(options);
+        services.AddSingleton(options);
+
+        services.AddScoped<IDatabaseConnectionRepository, DatabaseConnectionRepository>();
+        services.AddScoped<IAnonymizationProfileRepository, AnonymizationProfileRepository>();
+        services.AddScoped<IDatabaseCopyProfileRepository, DatabaseCopyProfileRepository>();
+        services.AddScoped<IDatabaseOperationAuditLog, EfDatabaseOperationAuditLog>();
+
+        // A política é do Domain; TryAdd para a Infrastructure subir sozinha nos testes.
+        services.TryAddSingleton<IDatabaseSecurityPolicy, DatabaseSecurityPolicy>();
+
+        // A senha: guardada pelo cofre do sistema, lida só aqui dentro.
+        services.AddSingleton<PostgresCredentialStore>();
+        services.AddSingleton<IDatabaseCredentialStore>(provider => provider.GetRequiredService<PostgresCredentialStore>());
+        services.AddSingleton<IPostgresPasswordReader>(provider => provider.GetRequiredService<PostgresCredentialStore>());
+
+        // Singleton por causa do cache: "Verificar novamente" é quem procura de novo.
+        services.AddSingleton<IPostgresToolLocator>(provider => PostgresToolLocator.ForCurrentSystem(
+            provider.GetRequiredService<IProcessRunner>(),
+            options,
+            provider.GetRequiredService<ILogger<PostgresToolLocator>>()));
+
+        services.AddSingleton<PgToolRunner>();
+        services.AddSingleton<IPostgresDumpService, PostgresDumpService>();
+        services.AddSingleton<IPostgresRestoreService, PostgresRestoreService>();
+        services.AddSingleton<IPostgresSessionFactory, NpgsqlPostgresSessionFactory>();
+        services.AddSingleton<IPostgresServerInspector, PostgresServerInspector>();
+        services.AddSingleton<IPostgresAnonymizerInspector, PostgresAnonymizerInspector>();
+
+        services.AddSingleton<IDatabaseOperationWorkspaceFactory>(provider => new DatabaseOperationWorkspaceFactory(
+            string.IsNullOrWhiteSpace(options.WorkspaceDirectory) ? UserDataLocation.Current.DatabaseOperations : options.WorkspaceDirectory,
+            provider.GetRequiredService<ILogger<DatabaseOperationWorkspaceFactory>>()));
     }
 
     private static HttpClient CreateJiraHttpClient()
@@ -220,6 +257,29 @@ public static class DependencyInjection
             typeof(DependencyInjection).Assembly.GetName().Version?.ToString(3)));
 
         return client;
+    }
+
+    /// <summary>
+    /// O cofre de segredos do app: o token do Jira (ADR-045) e as senhas das
+    /// conexões de banco (ADR-056). DPAPI no Windows, o chaveiro do sistema
+    /// pelo <c>secret-tool</c> no Linux; fora disso, recusar gravar.
+    /// </summary>
+    private static void AddSecrets(IServiceCollection services)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            AddWindowsSecrets(services);
+        }
+        else if (OperatingSystem.IsLinux())
+        {
+            services.AddSingleton<ISecretStore>(provider => SecretToolSecretStore.ForCurrentSystem(
+                provider.GetRequiredService<IProcessRunner>(),
+                provider.GetRequiredService<ILogger<SecretToolSecretStore>>()));
+        }
+        else
+        {
+            services.AddSingleton<ISecretStore, UnsupportedSecretStore>();
+        }
     }
 
     [SupportedOSPlatform("windows")]

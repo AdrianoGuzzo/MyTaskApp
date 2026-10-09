@@ -157,6 +157,15 @@ internal static class AppServices
             .AddSingleton<IntegrationsViewModel>()
             .AddSingleton<IntegrationsWindow>()
 
+            // Bancos de dados (ADR-056): janela única, com uma aba por ViewModel.
+            .AddSingleton<DatabaseConnectionsViewModel>()
+            .AddSingleton<DatabaseDiagnosticsViewModel>()
+            .AddSingleton<DatabaseCopyViewModel>()
+            .AddSingleton<DatabaseProfilesViewModel>()
+            .AddSingleton<DatabaseHistoryViewModel>()
+            .AddSingleton<DatabaseOperationsViewModel>()
+            .AddSingleton<DatabaseOperationsWindow>()
+
             // Sons dos avisos do agente (ADR-042): janela única, como as outras.
             .AddSingleton<AgentAlertSoundsViewModel>()
             .AddSingleton<AgentAlertSoundsWindow>()

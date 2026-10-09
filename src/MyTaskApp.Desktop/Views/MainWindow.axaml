@@ -260,6 +260,8 @@
                               Command="{Binding OpenSoundsCommand}" />
                     <MenuItem Header="Integrações…"
                               Command="{Binding OpenIntegrationsCommand}" />
+                    <MenuItem Header="Bancos de Dados…"
+                              Command="{Binding OpenDatabaseOperationsCommand}" />
                     <MenuItem Header="Gerenciamento de dados…"
                               Command="{Binding OpenDataManagementCommand}" />
 

@@ -551,6 +551,12 @@ public sealed partial class TodayViewModel(
     [RelayCommand]
     public void OpenIntegrations() => IntegrationsRequested?.Invoke();
 
+    /// <summary>Pede a janela de bancos de dados — conexões, cópia e anonimização (ADR-056).</summary>
+    public event Action? DatabaseOperationsRequested;
+
+    [RelayCommand]
+    public void OpenDatabaseOperations() => DatabaseOperationsRequested?.Invoke();
+
     /// <summary>Pede a janela de sons dos avisos do agente (ADR-042).</summary>
     public event Action? SoundsRequested;
 

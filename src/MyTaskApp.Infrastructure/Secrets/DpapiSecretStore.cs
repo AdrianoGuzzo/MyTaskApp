@@ -79,15 +79,7 @@ internal sealed partial class DpapiSecretStore(string directory, ILogger<DpapiSe
         return Task.CompletedTask;
     }
 
-    private string PathFor(string name)
-    {
-        if (name.Length == 0 || name.Any(c => !char.IsAsciiLetterOrDigit(c) && c != '-'))
-        {
-            throw new ArgumentException("Nome de segredo inválido.", nameof(name));
-        }
-
-        return Path.Combine(directory, name + ".bin");
-    }
+    private string PathFor(string name) => Path.Combine(directory, SecretName.Validate(name) + ".bin");
 
     private static unsafe byte[] Protect(byte[] plain)
     {

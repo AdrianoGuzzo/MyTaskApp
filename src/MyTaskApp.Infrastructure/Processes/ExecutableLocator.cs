@@ -31,6 +31,10 @@ internal sealed class ExecutableLocator(
     public string? Locate(IReadOnlyList<string> fileNames, IEnumerable<string> knownDirectories) =>
         Candidates(fileNames, knownDirectories).FirstOrDefault(fileExists);
 
+    /// <summary>Todos os candidatos que existem, na ordem de procura — para escolher entre versões instaladas lado a lado.</summary>
+    public IEnumerable<string> LocateAll(IReadOnlyList<string> fileNames, IEnumerable<string> knownDirectories) =>
+        Candidates(fileNames, knownDirectories).Where(fileExists);
+
     /// <summary>
     /// Cada pasta, na ordem do PATH, com cada nome — como o próprio shell
     /// procura: uma pasta anterior ganha de uma posterior, qualquer que seja a
