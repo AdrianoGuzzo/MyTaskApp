@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    O servidor MCP de verdade (ADR-059): Kestrel numa porta livre do loopback,
+    o cliente oficial do SDK falando com ele como o Claude Code fala, e por
+    trás a Application e a Infrastructure reais sobre um SQLite temporário.
+  -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MyTaskApp.Mcp\MyTaskApp.Mcp.csproj" />
+    <ProjectReference Include="..\..\src\MyTaskApp.Infrastructure\MyTaskApp.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ModelContextProtocol" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+  </ItemGroup>
+
+</Project>

@@ -120,7 +120,11 @@ public sealed class GetTodayBoardHandler(
         return new BoardTask(Describe(row, placement, timeProvider.GetUtcNow()), isCompleted);
     }
 
-    private TodayTask Describe(TodayOccurrenceRow row, TodayPlacement placement, DateTimeOffset nowUtc) =>
+    /// <summary>
+    /// A linha da tarefa como o quadro a desenha. <c>internal</c> para a busca de
+    /// tarefas (ADR-059) devolver a mesma linha, e não uma segunda tradução dela.
+    /// </summary>
+    internal TodayTask Describe(TodayOccurrenceRow row, TodayPlacement placement, DateTimeOffset nowUtc) =>
         Project((row, placement), nowUtc) with
         {
             ActiveAgents = Agents(row.ActiveAgents),
@@ -148,7 +152,8 @@ public sealed class GetTodayBoardHandler(
     /// </summary>
     private static int Slot(TodayOccurrenceRow row) => row.Position ?? int.MaxValue;
 
-    private TodayPlacement? Place(
+    /// <summary>A seção da linha hoje; <c>internal</c> pelo mesmo motivo de <see cref="Describe"/>.</summary>
+    internal TodayPlacement? Place(
         TodayOccurrenceRow row,
         DateOnly today,
         TimeOnly now,

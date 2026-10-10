@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    O servidor MCP local (ADR-059): o SDK oficial sobre Kestrel, só no loopback.
+    Conhece a Application e o Domain, e nada da tela: o Desktop liga e desliga,
+    e as ferramentas chamam os mesmos casos de uso da interface pelo IUseCaseRunner.
+  -->
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MyTaskApp.Application\MyTaskApp.Application.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ModelContextProtocol.AspNetCore" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="MyTaskApp.Mcp.Tests" />
+    <InternalsVisibleTo Include="MyTaskApp.Desktop.Tests" />
+  </ItemGroup>
+
+</Project>

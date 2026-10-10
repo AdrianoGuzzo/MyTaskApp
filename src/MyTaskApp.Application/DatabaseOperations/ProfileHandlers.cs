@@ -94,6 +94,13 @@ public sealed class SaveAnonymizationProfileHandler(
         var now = timeProvider.GetUtcNow();
         await connections.GetByIdAsync(command.ConnectionId, cancellationToken);
 
+        // O índice NOCASE recusaria do mesmo jeito, mas como DbUpdateException:
+        // quem salva merece a frase, como na conexão (ADR-059).
+        if (await AnonymizationProfileNames.TakenAsync(profiles, command.Name, command.Id, cancellationToken))
+        {
+            throw new DomainException($"Já existe um perfil de anonimização chamado {command.Name.Trim()}.");
+        }
+
         AnonymizationProfile profile;
 
         if (command.Id is { } id)

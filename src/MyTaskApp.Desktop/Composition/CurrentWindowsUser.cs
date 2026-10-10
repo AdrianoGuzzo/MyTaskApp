@@ -20,15 +20,18 @@ internal sealed class CurrentWindowsUser : ICurrentUser
         {
             var name = Environment.UserName;
 
-            Name = string.IsNullOrWhiteSpace(name) ? null : name.Trim();
+            _name = string.IsNullOrWhiteSpace(name) ? null : name.Trim();
         }
         catch (InvalidOperationException)
         {
             // Sem nome é um resultado válido, não uma falha: a auditoria grava
             // a operação do mesmo jeito, só sem autor.
-            Name = null;
+            _name = null;
         }
     }
 
-    public string? Name { get; }
+    private readonly string? _name;
+
+    /// <summary>A conta, com a origem quando a operação não veio da tela: "adria (MCP)" (ADR-059).</summary>
+    public string? Name => OperationOrigin.Describe(_name);
 }

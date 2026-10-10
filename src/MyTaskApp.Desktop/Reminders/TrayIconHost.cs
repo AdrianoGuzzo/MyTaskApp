@@ -21,7 +21,8 @@ internal sealed record TrayActions(
     Action UseCompact,
     Action Hide,
     Action NewStickyNote,
-    Action StickyNotes);
+    Action StickyNotes,
+    Action? McpServer = null);
 
 /// <summary>
 /// O ícone da bandeja: é o que permite fechar a janela e o app continuar
@@ -169,7 +170,15 @@ internal sealed class TrayIconHost(
         var exit = new NativeMenuItem("Sair");
         exit.Click += (_, _) => actions.Exit();
 
-        return
+        NativeMenuItem? mcp = null;
+
+        if (actions.McpServer is { } openMcp)
+        {
+            mcp = new NativeMenuItem("Servidor MCP…");
+            mcp.Click += (_, _) => openMcp();
+        }
+
+        NativeMenu menu =
         [
             open,
             newNote,
@@ -186,6 +195,14 @@ internal sealed class TrayIconHost(
             new NativeMenuItemSeparator(),
             exit,
         ];
+
+        // Junto das configurações, antes do separador do "Sair".
+        if (mcp is not null)
+        {
+            menu.Items.Insert(menu.Items.IndexOf(settings) + 1, mcp);
+        }
+
+        return menu;
     }
 
     private async Task PauseAsync()
