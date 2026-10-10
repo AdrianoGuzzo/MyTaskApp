@@ -13,6 +13,7 @@ using MyTaskApp.Application.External;
 using MyTaskApp.Application.External.Jira;
 using MyTaskApp.Application.History;
 using MyTaskApp.Application.Lifecycle;
+using MyTaskApp.Application.Mcp;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.QuickCommands;
 using MyTaskApp.Application.Reminders;
@@ -61,6 +62,13 @@ public static class DependencyInjection
         services.AddScoped<CancelOccurrenceHandler>();
         services.AddScoped<UpdateTaskHandler>();
         services.AddScoped<RescheduleOccurrenceHandler>();
+
+        // Busca e edição em lote, para quem não é a tela — o MCP (ADR-059).
+        services.AddScoped<SearchTasksHandler>();
+        services.AddScoped<GetTaskDetailsHandler>();
+        services.AddScoped<EditTaskHandler>();
+        services.AddScoped<CreateDetailedTaskHandler>();
+        services.AddScoped<GetTaskStatisticsHandler>();
 
         // Etiquetas (ADR-025).
         services.AddScoped<GetTagsHandler>();
@@ -207,6 +215,7 @@ public static class DependencyInjection
         services.AddScoped<UpdateTimeEntryHandler>();
         services.AddScoped<DeleteTimeEntryHandler>();
         services.AddScoped<GetTaskTimeLogHandler>();
+        services.AddScoped<TimeReportHandlers>();
 
         // O histórico dos últimos dias (ADR-053): só leitura, sobre o que já está gravado.
         services.AddScoped<GetActivityHistoryHandler>();
@@ -227,6 +236,14 @@ public static class DependencyInjection
         services.AddScoped<GetStickyNotesHandler>();
         services.AddScoped<GetStickyNoteHandler>();
         services.AddScoped<GetStartupStickyNotesHandler>();
+
+        // O servidor MCP local (ADR-059): a configuração e o token. O aviso
+        // de "mudou por fora" é um só para o app inteiro.
+        services.TryAddSingleton<IDataChangeNotifier, DataChangeNotifier>();
+        services.AddScoped<GetMcpServerSettingsHandler>();
+        services.AddScoped<UpdateMcpServerSettingsHandler>();
+        services.AddScoped<GetMcpAccessTokenHandler>();
+        services.AddScoped<RegenerateMcpAccessTokenHandler>();
 
         AddDatabaseOperations(services);
 
@@ -287,6 +304,17 @@ public static class DependencyInjection
         services.AddScoped<SuggestSensitiveColumnsHandler>();
         services.AddScoped<PreviewMaskingHandler>();
         services.AddScoped<GetSourceTablesHandler>();
+
+        // Editar por partes, validar, analisar e comparar (ADR-059).
+        services.AddScoped<AnonymizationProfileValidator>();
+        services.AddScoped<GetAnonymizationProfileHandler>();
+        services.AddScoped<ChangeAnonymizationProfileHandler>();
+        services.AddScoped<DuplicateAnonymizationProfileHandler>();
+        services.AddScoped<CompareAnonymizationProfilesHandler>();
+        services.AddScoped<ValidateAnonymizationProfileHandler>();
+        services.AddScoped<AnalyzeAnonymizationProfileHandler>();
+        services.AddScoped<DatabaseUsageHandlers>();
+        services.AddScoped<DuplicateDatabaseConnectionHandler>();
 
         services.AddScoped<GetDatabaseCopyProfilesHandler>();
         services.AddScoped<SaveDatabaseCopyProfileHandler>();

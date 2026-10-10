@@ -67,7 +67,7 @@ internal sealed class TodayQuery(MyTaskAppDbContext context) : ITodayQuery
     /// A linha inteira de cada ocorrência — definição, etiquetas, agentes,
     /// worktrees e tempo —, um lote por assunto, nunca uma consulta por linha.
     /// </summary>
-    private async Task<IReadOnlyList<TodayOccurrenceRow>> DescribeAsync(
+    internal async Task<IReadOnlyList<TodayOccurrenceRow>> DescribeAsync(
         List<TaskOccurrence> occurrences,
         CancellationToken cancellationToken)
     {

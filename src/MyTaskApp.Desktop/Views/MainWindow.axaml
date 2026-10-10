@@ -262,6 +262,8 @@
                               Command="{Binding OpenIntegrationsCommand}" />
                     <MenuItem Header="Bancos de Dados…"
                               Command="{Binding OpenDatabaseOperationsCommand}" />
+                    <MenuItem Header="Servidor MCP…"
+                              Command="{Binding OpenMcpServerCommand}" />
                     <MenuItem Header="Gerenciamento de dados…"
                               Command="{Binding OpenDataManagementCommand}" />
 

@@ -29,5 +29,6 @@ public interface ICurrentUser
 /// </remarks>
 public sealed class UnknownUser : ICurrentUser
 {
-    public string? Name => null;
+    /// <summary>Sem nome; mas a origem, se houver, ainda é sabida ("MCP", ADR-059).</summary>
+    public string? Name => OperationOrigin.Describe(null);
 }

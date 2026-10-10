@@ -557,6 +557,12 @@ public sealed partial class TodayViewModel(
     [RelayCommand]
     public void OpenDatabaseOperations() => DatabaseOperationsRequested?.Invoke();
 
+    /// <summary>Pede a janela do servidor MCP local (ADR-059).</summary>
+    public event Action? McpServerRequested;
+
+    [RelayCommand]
+    public void OpenMcpServer() => McpServerRequested?.Invoke();
+
     /// <summary>Pede a janela de sons dos avisos do agente (ADR-042).</summary>
     public event Action? SoundsRequested;
 

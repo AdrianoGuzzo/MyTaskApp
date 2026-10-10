@@ -14,6 +14,7 @@ using MyTaskApp.Desktop.Views;
 using MyTaskApp.Desktop.Widget;
 using MyTaskApp.Infrastructure;
 using MyTaskApp.Infrastructure.Storage;
+using MyTaskApp.Mcp.Hosting;
 using Microsoft.Extensions.Logging;
 using Serilog;
 
@@ -165,6 +166,12 @@ internal static class AppServices
             .AddSingleton<DatabaseHistoryViewModel>()
             .AddSingleton<DatabaseOperationsViewModel>()
             .AddSingleton<DatabaseOperationsWindow>()
+
+            // O servidor MCP local (ADR-059): o gerente é um só para o app, e a
+            // janela, única como as outras do menu.
+            .AddMcpServerHost()
+            .AddSingleton<McpServerViewModel>()
+            .AddSingleton<McpServerWindow>()
 
             // Sons dos avisos do agente (ADR-042): janela única, como as outras.
             .AddSingleton<AgentAlertSoundsViewModel>()

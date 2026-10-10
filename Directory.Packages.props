@@ -36,6 +36,13 @@
     <PackageVersion Include="Npgsql" Version="10.0.2" />
   </ItemGroup>
 
+  <ItemGroup Label="MCP">
+    <!-- O servidor MCP local (ADR-059): o SDK oficial, transporte Streamable HTTP. -->
+    <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="2.2.0" />
+    <!-- Só nos testes: o cliente oficial, para falar com o servidor como o Claude Code fala. -->
+    <PackageVersion Include="ModelContextProtocol" Version="2.2.0" />
+  </ItemGroup>
+
   <ItemGroup Label="Logging">
     <PackageVersion Include="Serilog" Version="4.4.0" />
     <PackageVersion Include="Serilog.Extensions.Hosting" Version="10.0.0" />

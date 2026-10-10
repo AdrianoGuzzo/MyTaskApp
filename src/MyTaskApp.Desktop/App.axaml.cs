@@ -4,6 +4,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using Microsoft.Extensions.DependencyInjection;
+using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Application.QuickCommands;
@@ -18,6 +19,7 @@ using MyTaskApp.Desktop.Theming;
 using MyTaskApp.Desktop.ViewModels;
 using MyTaskApp.Desktop.Views;
 using MyTaskApp.Desktop.Widget;
+using MyTaskApp.Mcp.Hosting;
 using Serilog;
 
 namespace MyTaskApp.Desktop;
@@ -101,6 +103,7 @@ public sealed partial class App : Avalonia.Application
                 SetUpAgentSessions(Services, todayViewModel);
                 SetUpCommandExecutions(Services);
                 SetUpTimeTracking(todayViewModel);
+                SetUpMcpServer(Services, todayViewModel);
                 ListenForSecondLaunch(Services, window);
 
                 // A moldura só sabe iniciar com o Windows depois de conhecer o
@@ -163,7 +166,8 @@ public sealed partial class App : Avalonia.Application
             UseCompact: () => OnUiThread(() => window.Chrome.UseMode("compact")),
             Hide: () => OnUiThread(window.HideAndRemember),
             NewStickyNote: () => OnUiThread(() => _ = services.GetRequiredService<StickyNoteWindowManager>().CreateNewAsync()),
-            StickyNotes: () => OnUiThread(() => ShowStickyNotes(services, window, StickyNoteScope.Active))));
+            StickyNotes: () => OnUiThread(() => ShowStickyNotes(services, window, StickyNoteScope.Active)),
+            McpServer: () => OnUiThread(() => ShowMcpServer(services, window))));
 
         window.Chrome.TrayAvailable = installed;
 
@@ -280,6 +284,7 @@ public sealed partial class App : Avalonia.Application
         todayViewModel.SoundsRequested += () => ShowAgentAlertSounds(services, window);
         todayViewModel.IntegrationsRequested += () => ShowIntegrations(services, window);
         todayViewModel.DatabaseOperationsRequested += () => ShowDatabaseOperations(services, window);
+        todayViewModel.McpServerRequested += () => ShowMcpServer(services, window);
 
         // Renomear, recolorir ou excluir muda as bolinhas de todo o painel; sem
         // isto a mudança só apareceria no refresh de 60 s.
@@ -403,6 +408,57 @@ public sealed partial class App : Avalonia.Application
         });
     }
 
+    /// <summary>
+    /// O servidor MCP local (ADR-059). Sobe sozinho só se habilitado e com
+    /// "iniciar com o app", fora da thread da tela. O que a IA grava aparece na
+    /// hora: o gateway avisa, e aqui o aviso vira a mesma recarga que a tela
+    /// faria — o quadro, a aba "Tempo" das janelas abertas e a de Bancos.
+    /// </summary>
+    private void SetUpMcpServer(IServiceProvider services, TodayViewModel todayViewModel)
+    {
+        services.GetRequiredService<IDataChangeNotifier>().Changed += areas => OnUiThread(() =>
+        {
+            if (areas.HasFlag(DataArea.Tasks) || areas.HasFlag(DataArea.Time))
+            {
+                _ = todayViewModel.LoadAsync(CancellationToken.None);
+
+                foreach (var notes in _notes.Values)
+                {
+                    if (notes.DataContext is TaskNotesViewModel { Time: { } time })
+                    {
+                        _ = time.ActivateAsync(CancellationToken.None);
+                    }
+                }
+            }
+
+            if (areas.HasFlag(DataArea.Databases)
+                && services.GetRequiredService<DatabaseOperationsWindow>() is { IsVisible: true } databases)
+            {
+                databases.Reveal();
+            }
+        });
+
+        var manager = services.GetRequiredService<IMcpServerManager>();
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var status = await manager.StartIfConfiguredAsync();
+
+                if (status.State is McpServerState.Error)
+                {
+                    Log.Warning("McpServerAutoStartFailed {Error}", status.Error);
+                }
+            }
+            catch (Exception exception)
+            {
+                // Um servidor que não subiu não derruba o app: a tela dele mostra o erro.
+                Log.Warning(exception, "McpServerAutoStartFailed");
+            }
+        });
+    }
+
     private void SetUpCommandExecutions(IServiceProvider services)
     {
         var monitor = services.GetRequiredService<CommandExecutionMonitor>();
@@ -455,6 +511,16 @@ public sealed partial class App : Avalonia.Application
     private static void ShowDatabaseOperations(IServiceProvider services, Window owner)
     {
         var window = services.GetRequiredService<DatabaseOperationsWindow>();
+
+        window.Show(owner);
+        window.Activate();
+        window.Reveal();
+    }
+
+    /// <summary>A janela do servidor MCP (ADR-059), aberta pelo menu e pela bandeja.</summary>
+    private static void ShowMcpServer(IServiceProvider services, Window owner)
+    {
+        var window = services.GetRequiredService<McpServerWindow>();
 
         window.Show(owner);
         window.Activate();
@@ -739,6 +805,11 @@ public sealed partial class App : Avalonia.Application
 
         _tray?.Dispose();
         _tray = null;
+
+        // Depois do ícone, que some na hora; o MCP pode levar até o limite de
+        // parada para soltar a porta, com quem estava no meio de uma chamada
+        // terminando (ADR-059).
+        services.GetRequiredService<McpServerManager>().Dispose();
 
         Services = null;
     }

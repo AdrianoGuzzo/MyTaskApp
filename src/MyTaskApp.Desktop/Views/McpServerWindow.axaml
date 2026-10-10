@@ -1,0 +1,275 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
+        xmlns:mcp="using:MyTaskApp.Mcp.Hosting"
+        x:Class="MyTaskApp.Desktop.Views.McpServerWindow"
+        x:DataType="vm:McpServerViewModel"
+        Title="Servidor MCP"
+        Width="600"
+        Height="720"
+        MinWidth="520"
+        MinHeight="480"
+        WindowStartupLocation="CenterOwner">
+
+  <!--
+    Servidor MCP local (ADR-059): habilitar, porta, iniciar e parar, o estado
+    real, o token, as instruções do cliente, as ferramentas e os logs recentes.
+    Só no 127.0.0.1, sempre com token.
+  -->
+
+  <Window.Styles>
+
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="{DynamicResource WidgetSurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetStrokeSoftBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetCardRadius}" />
+      <Setter Property="Padding" Value="14,12" />
+    </Style>
+
+    <Style Selector="TextBlock.sectionTitle">
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.meta">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style Selector="TextBlock.field">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextMidBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.mono">
+      <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, monospace" />
+      <Setter Property="FontSize" Value="12" />
+    </Style>
+
+    <!-- ● do estado: verde no ar, âmbar subindo ou descendo, vermelho em erro. -->
+    <Style Selector="TextBlock.state">
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+    </Style>
+    <Style Selector="TextBlock.state.running">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetSuccessBrush}" />
+    </Style>
+    <Style Selector="TextBlock.state.moving">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetCautionBrush}" />
+    </Style>
+    <Style Selector="TextBlock.state.failed">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetDangerBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.problem">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetDangerBrush}" />
+    </Style>
+
+  </Window.Styles>
+
+  <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+    <StackPanel Margin="16,14" Spacing="12">
+
+      <StackPanel Spacing="4">
+        <TextBlock Text="Servidor MCP" FontSize="18" FontWeight="SemiBold" />
+        <TextBlock Classes="meta"
+                   Text="Deixa um cliente de IA (como o Claude Code) consultar e alterar suas tarefas, horas e perfis de banco pelas mesmas regras da tela. Escuta só neste computador (127.0.0.1) e exige o token." />
+      </StackPanel>
+
+      <!-- ============================ ESTADO ============================ -->
+      <Border Classes="card">
+        <StackPanel Spacing="10">
+
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Classes="sectionTitle" Text="Estado" VerticalAlignment="Center" />
+            <TextBlock x:Name="StateText"
+                       Grid.Column="1"
+                       Classes="state"
+                       Classes.running="{Binding IsRunning}"
+                       Classes.moving="{Binding IsTransitioning}"
+                       Classes.failed="{Binding IsFailed}"
+                       Text="{Binding StateLabel, StringFormat='● {0}'}" />
+          </Grid>
+
+          <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+            <TextBlock Classes="field" Text="Endereço" VerticalAlignment="Center" />
+            <SelectableTextBlock x:Name="EndpointText"
+                                 Grid.Column="1"
+                                 Classes="mono"
+                                 VerticalAlignment="Center"
+                                 Text="{Binding EndpointText}" />
+            <Button Grid.Column="2" Content="Copiar endereço" Command="{Binding CopyEndpointCommand}" />
+          </Grid>
+
+          <TextBlock Classes="problem"
+                     FontSize="12"
+                     TextWrapping="Wrap"
+                     Text="{Binding Status.Error}"
+                     IsVisible="{Binding IsFailed}" />
+
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button x:Name="StartButton"
+                    Classes="accent"
+                    Content="Iniciar"
+                    IsVisible="{Binding !IsRunning}"
+                    IsEnabled="{Binding CanStart}"
+                    Command="{Binding StartCommand}" />
+            <Button x:Name="StopButton"
+                    Content="Parar"
+                    IsVisible="{Binding IsRunning}"
+                    IsEnabled="{Binding !IsBusy}"
+                    Command="{Binding StopCommand}" />
+          </StackPanel>
+
+          <TextBlock Classes="meta"
+                     Text="Habilite o servidor para poder iniciá-lo."
+                     IsVisible="{Binding !IsEnabled}" />
+        </StackPanel>
+      </Border>
+
+      <!-- ========================= CONFIGURAÇÃO ========================= -->
+      <Border Classes="card">
+        <StackPanel Spacing="10">
+          <TextBlock Classes="sectionTitle" Text="Configuração" />
+
+          <ToggleSwitch x:Name="EnabledSwitch"
+                        OnContent="Habilitado"
+                        OffContent="Desabilitado"
+                        IsChecked="{Binding IsEnabled}" />
+
+          <CheckBox x:Name="StartWithAppBox"
+                    Content="Iniciar junto com o MyTaskApp"
+                    IsChecked="{Binding StartWithApp}" />
+
+          <StackPanel Spacing="2">
+            <CheckBox x:Name="ReadOnlyBox"
+                      Content="Somente leitura"
+                      IsChecked="{Binding IsReadOnly}" />
+            <TextBlock Classes="meta"
+                       Margin="28,0,0,0"
+                       Text="O cliente só consulta: criar, editar, concluir, lançar horas e alterar perfis é recusado. Vale na hora, sem reiniciar." />
+          </StackPanel>
+
+          <StackPanel Spacing="3">
+            <TextBlock Classes="field" Text="Porta" />
+            <Grid ColumnDefinitions="120,Auto,Auto" ColumnSpacing="8">
+              <TextBox x:Name="PortBox" Text="{Binding PortText}" />
+              <Button Grid.Column="1" Content="Testar porta" IsEnabled="{Binding !IsBusy}" Command="{Binding TestPortCommand}" />
+              <Button Grid.Column="2" Content="Aplicar porta" IsEnabled="{Binding !IsBusy}" Command="{Binding ApplyPortCommand}" />
+            </Grid>
+            <TextBlock FontSize="12"
+                       TextWrapping="Wrap"
+                       Classes.problem="{Binding PortCheckFailed}"
+                       Text="{Binding PortCheckMessage}"
+                       IsVisible="{Binding PortCheckMessage, Converter={x:Static ObjectConverters.IsNotNull}}" />
+            <TextBlock Classes="meta" Text="{Binding PortHelp}" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <!-- ============================ CLIENTE ============================ -->
+      <Border Classes="card">
+        <StackPanel Spacing="10">
+          <TextBlock Classes="sectionTitle" Text="Conectar um cliente" />
+          <TextBlock Classes="meta"
+                     Text="O cliente precisa do endereço e do token no header Authorization. As instruções copiadas trazem o comando do Claude Code e o JSON dos outros clientes." />
+
+          <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8">
+            <TextBlock Classes="field" Text="Token" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Classes="mono" VerticalAlignment="Center" Text="{Binding TokenLabel}" />
+            <Button Grid.Column="2" Content="Copiar token" IsEnabled="{Binding IsEnabled}" Command="{Binding CopyTokenCommand}" />
+            <Button Grid.Column="3" Content="Gerar novo" IsEnabled="{Binding IsEnabled}" Command="{Binding RegenerateTokenCommand}" />
+          </Grid>
+
+          <Button x:Name="CopyConfigButton"
+                  HorizontalAlignment="Left"
+                  Content="Copiar configuração do cliente"
+                  IsEnabled="{Binding IsEnabled}"
+                  Command="{Binding CopyClientConfigCommand}" />
+        </StackPanel>
+      </Border>
+
+      <Border Padding="12,9"
+              CornerRadius="6"
+              Background="{DynamicResource SystemFillColorCriticalBackgroundBrush}"
+              IsVisible="{Binding ErrorMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
+        <TextBlock Text="{Binding ErrorMessage}" TextWrapping="Wrap" />
+      </Border>
+
+      <TextBlock Classes="meta"
+                 Text="{Binding StatusMessage}"
+                 IsVisible="{Binding StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+      <!-- ========================== FERRAMENTAS ========================== -->
+      <Expander HorizontalAlignment="Stretch">
+        <Expander.Header>
+          <TextBlock Classes="sectionTitle" Text="{Binding ToolCount, StringFormat='Ferramentas ({0})'}" />
+        </Expander.Header>
+        <ItemsControl ItemsSource="{Binding ToolGroups}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:McpToolGroup">
+              <StackPanel Spacing="2" Margin="0,4,0,8">
+                <TextBlock Classes="field" FontWeight="SemiBold" Text="{Binding Header}" />
+                <ItemsControl ItemsSource="{Binding Tools}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="mcp:McpToolDescriptor">
+                      <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" Margin="0,1">
+                        <TextBlock Classes="mono" Text="{Binding Name}" ToolTip.Tip="{Binding Description}" />
+                        <TextBlock Grid.Column="1" Classes="meta" VerticalAlignment="Center" Text="{Binding Title}" />
+                      </Grid>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </Expander>
+
+      <!-- ======================== LOGS RECENTES ======================== -->
+      <Border Classes="card">
+        <StackPanel Spacing="8">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Classes="sectionTitle" Text="Logs recentes" VerticalAlignment="Center" />
+            <Button Grid.Column="1" Content="Limpar" Command="{Binding ClearActivityCommand}" />
+          </Grid>
+          <TextBlock Classes="meta"
+                     Text="As últimas operações, sem os argumentos. O histórico completo fica no log do app."
+                     IsVisible="{Binding !HasActivity}" />
+          <ListBox x:Name="ActivityList"
+                   MaxHeight="220"
+                   ItemsSource="{Binding Activity}"
+                   SelectedItem="{Binding SelectedActivity}"
+                   IsVisible="{Binding HasActivity}">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:McpActivityRow">
+                <TextBlock Classes="mono"
+                           FontSize="11.5"
+                           Classes.problem="{Binding IsProblem}"
+                           TextTrimming="CharacterEllipsis"
+                           Text="{Binding Summary}" />
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+          <Border Padding="10,8"
+                  CornerRadius="6"
+                  Background="{DynamicResource WidgetSurfaceHoverBrush}"
+                  IsVisible="{Binding SelectedActivity, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <StackPanel Spacing="2">
+              <TextBlock Classes="field" Text="{Binding SelectedActivity.Operation}" FontWeight="SemiBold" />
+              <TextBlock Classes="meta" Text="{Binding SelectedActivity.Time, StringFormat='Hora: {0}'}" />
+              <TextBlock Classes="meta" Text="{Binding SelectedActivity.Outcome, StringFormat='Resultado: {0}'}" />
+              <TextBlock Classes="meta" Text="{Binding SelectedActivity.Elapsed, StringFormat='Duração: {0}'}" />
+              <SelectableTextBlock FontSize="12" TextWrapping="Wrap" Text="{Binding SelectedActivity.Detail}" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </Border>
+
+    </StackPanel>
+  </ScrollViewer>
+
+</Window>

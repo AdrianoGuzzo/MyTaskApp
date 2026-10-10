@@ -308,6 +308,37 @@ decisões em [ADR-056, ADR-057 e ADR-058](docs/ARCHITECTURE.md).
 - **Histórico** de todas as operações, inclusive as bloqueadas, sem senha nem
   dado de linha.
 
+### Servidor MCP: o app pelo Claude Code
+
+Em *☰ → Servidor MCP…*, o MyTaskApp liga um servidor
+[MCP](https://modelcontextprotocol.io) local. Um cliente de IA, como o Claude
+Code, passa a consultar e alterar suas tarefas, o cronômetro e os lançamentos
+de horas, as conexões de banco e os perfis de anonimização, pelas mesmas regras
+da tela. O guia completo, com as 81 ferramentas, está em
+[`docs/mcp-server.md`](docs/mcp-server.md), e a decisão no
+[ADR-059](docs/ARCHITECTURE.md).
+
+- **Só neste computador:** `http://127.0.0.1:5180/mcp`, porta configurável,
+  sempre com token (`Authorization: Bearer`) guardado no cofre do sistema.
+  Pedidos de navegador e `Host` estranho são recusados.
+- **Desligado por padrão.** Habilitar, iniciar e parar, iniciar com o app e
+  **somente leitura** ficam na tela, junto com o estado real, o endereço, o
+  token e as instruções do cliente prontas para copiar.
+- **As mesmas regras:** as ferramentas chamam os casos de uso da tela. Um
+  cronômetro só, sem sobreposição, prazo no futuro, a política de bancos.
+  Excluir manda para a lixeira, e a auditoria grava "(MCP)".
+- **Horas que batem:** relatórios por dia, tarefa, etiqueta, issue do Jira e
+  origem, a partir dos períodos gravados, com os ids de cada total.
+- **Anonimização por partes:** incluir, trocar ou remover uma regra com
+  pré-visualização e diff antes de gravar, validação contra o banco real (só
+  leitura) e uma análise que separa o comprovado do risco.
+- **Sem segredos e sem execução:** senha nunca entra nem sai, e não há SQL
+  livre, cópia nem comando do sistema pelo MCP.
+
+```bash
+claude mcp add --transport http mytaskapp http://127.0.0.1:5180/mcp   --header "Authorization: Bearer <token copiado da tela>"
+```
+
 ---
 
 ## Instalação
@@ -546,12 +577,13 @@ self-contained e empacotamento.
 
 ## Arquitetura
 
-Clean Architecture em quatro projetos, com dependências apontando para dentro:
+Clean Architecture em cinco projetos, com dependências apontando para dentro:
 
 ```
 Desktop ─────────────► Application ──► Domain
    │                       ▲
-   └──► Infrastructure ────┘
+   ├──► Infrastructure ────┤
+   └──► Mcp ───────────────┘
 ```
 
 | Projeto | Responsabilidade |
@@ -559,6 +591,7 @@ Desktop ─────────────► Application ──► Domain
 | **Domain** | Entidades e regras puras: `TaskItem` (a série) e `TaskOccurrence` (cada dia), lembretes, ciclo de vida, etiquetas, ambientes de desenvolvimento e sessões de agente. Sem dependências externas. |
 | **Application** | Casos de uso (sem mediador), agendadores sobre `TimeProvider` e portas (`ITaskItemRepository`, `IGitClient`, `IAgentCliProvider`, …). |
 | **Infrastructure** | EF Core + SQLite, Git, processos, terminal do Windows, listener dos hooks do Claude Code e sons. |
+| **Mcp** | O servidor MCP local (ADR-059): Kestrel no loopback, as ferramentas, resources e prompts, sobre os casos de uso da Application. |
 | **Desktop** | Avalonia + MVVM (CommunityToolkit.Mvvm), bandeja, temas, editor Markdown, corretor ortográfico e composição (DI + Serilog). |
 
 Algumas decisões que moldam o código:
@@ -605,6 +638,7 @@ Management).
 │   ├── MyTaskApp.Domain/            entidades e regras
 │   ├── MyTaskApp.Application/       casos de uso, agendadores, portas
 │   ├── MyTaskApp.Infrastructure/    EF Core/SQLite, Git, processos, Claude Code
+│   ├── MyTaskApp.Mcp/               servidor MCP local (Kestrel no loopback)
 │   └── MyTaskApp.Desktop/           app Avalonia (views, view models, temas)
 ├── tests/                           uma suíte por projeto + Packaging.Tests
 ├── installer/
@@ -616,6 +650,7 @@ Management).
 │   └── generate-icon-font.py        fonte de ícones embutida (ADR-046)
 ├── docs/
 │   ├── ARCHITECTURE.md              ADRs
+│   ├── mcp-server.md                servidor MCP: configuração e ferramentas
 │   └── release-process.md           versionamento e release
 ├── .github/workflows/               CI, título de PR, Release Please, release
 ├── Directory.Build.props            versão do produto e regras de build
@@ -688,7 +723,8 @@ fica em [`CHANGELOG.md`](CHANGELOG.md).
 
 | Documento | Conteúdo |
 |---|---|
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | decisões de arquitetura (ADR-001 a ADR-058), com o motivo de cada uma |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | decisões de arquitetura (ADR-001 a ADR-059), com o motivo de cada uma |
+| [`docs/mcp-server.md`](docs/mcp-server.md) | servidor MCP local: ativar, porta, token, Claude Code, as ferramentas, segurança e limitações |
 | [`docs/database-operations.md`](docs/database-operations.md) | conexões PostgreSQL, ambientes, ferramentas, máscaras, cópia anonimizada de produção e solução de problemas |
 | [`docs/jira-oauth-app.md`](docs/jira-oauth-app.md) | registrar o app OAuth do Jira e pôr as credenciais no build |
 | [`docs/release-process.md`](docs/release-process.md) | Conventional Commits, SemVer, pipeline de release, hotfix, verificação de versão |
