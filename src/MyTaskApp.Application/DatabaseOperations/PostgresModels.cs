@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Domain.DatabaseOperations;
 
 namespace MyTaskApp.Application.DatabaseOperations;
 
@@ -66,7 +67,37 @@ public sealed record PostgresClientTools(IReadOnlyList<PostgresToolStatus> Tools
         Tools.FirstOrDefault(status => status.Tool == tool)
         ?? new PostgresToolStatus(tool, PostgresToolNames.Of(tool), null, null, null);
 
+    /// <summary>
+    /// Cada conjunto instalado — a pasta de um <c>pg_dump</c> com versão lida —,
+    /// do mais novo ao mais antigo. <see cref="Tools"/> é o primeiro: o do diagnóstico.
+    /// </summary>
+    public IReadOnlyList<IReadOnlyList<PostgresToolStatus>> Sets { get; init; } = [];
+
     public bool AllFound => Tools.All(status => status.Found);
+
+    /// <summary>
+    /// O conjunto para copiar de um servidor: o de <b>menor</b> versão que ainda
+    /// lê a origem. O mais novo nem sempre serve: o <c>pg_restore</c> 17+ manda
+    /// <c>SET transaction_timeout</c>, que um servidor 16 ou mais antigo recusa —
+    /// e um pgAdmin 18 ao lado de um PostgreSQL 14 é comum. Sem a versão da
+    /// origem, ou sem conjunto que a leia, fica o mais novo.
+    /// </summary>
+    public PostgresClientTools ForSource(PostgresVersion? source)
+    {
+        if (source is null)
+        {
+            return this;
+        }
+
+        var fitting = Sets
+            .Select(set => (Set: set, Version: set.FirstOrDefault(status => status.Tool == PostgresTool.PgDump)?.Version))
+            .Where(candidate => candidate.Version is { } version && version.Major >= source.Major)
+            .OrderBy(candidate => candidate.Version)
+            .Select(candidate => candidate.Set)
+            .FirstOrDefault();
+
+        return fitting is null ? this : this with { Tools = fitting };
+    }
 
     public IReadOnlyList<string> Missing => Tools.Where(status => !status.Found).Select(status => status.Name).ToList();
 
@@ -121,27 +152,85 @@ public sealed record ServerPrivileges(
     public static ServerPrivileges None { get; } = new(false, false, false, 0, -1);
 }
 
-/// <summary>Uma regra de mascaramento como o servidor a tem (<c>pg_seclabels</c>).</summary>
-public sealed record ServerMaskingRule(string Schema, string Table, string Column, string Label)
+/// <summary>Uma coluna como a cópia mascarada a vê: tipo, se aceita NULL e se é gerada (essa o destino calcula sozinho).</summary>
+public sealed record SourceColumn(string Name, string DataType, bool IsNullable, bool IsGenerated);
+
+/// <summary>
+/// Uma tabela com linhas próprias (<c>relkind 'r'</c>): as comuns e as
+/// partições. <see cref="Root"/> é a tabela particionada de cima, quando é
+/// partição — as regras escritas para ela valem para as partições.
+/// </summary>
+public sealed record SourceTable(
+    string Schema,
+    string Table,
+    long Bytes,
+    long EstimatedRows,
+    IReadOnlyList<SourceColumn> Columns,
+    string? Root = null)
+{
+    public string QualifiedName => $"{Schema}.{Table}";
+}
+
+/// <summary>Como uma coluna participa de uma chave.</summary>
+public enum KeyRole
+{
+    Primary,
+
+    Unique,
+
+    /// <summary>A coluna que referencia outra tabela.</summary>
+    Foreign,
+
+    /// <summary>A coluna referenciada por uma FK de outra tabela.</summary>
+    Referenced,
+}
+
+public sealed record KeyColumn(string Schema, string Table, string Column, KeyRole Role)
 {
     public string ColumnKey => $"{Schema}.{Table}.{Column}";
 }
 
-/// <summary>O PostgreSQL Anonymizer no banco, visto pela conexão mascarada.</summary>
-public sealed record AnonymizerStatus(
-    bool Available,
-    string? AvailableVersion,
-    bool Installed,
-    string? InstalledVersion,
-    bool TransparentMaskingOn,
-    bool CurrentRoleMasked,
-    bool CanExecuteFunctions,
-    IReadOnlyList<ServerMaskingRule> Rules)
-{
-    public static AnonymizerStatus Unavailable { get; } = new(false, null, false, null, false, false, false, []);
+/// <summary>Uma FK de uma tabela para outra, pelo nome das duas ("public.pedidos" → "public.clientes").</summary>
+public sealed record ForeignKeyLink(string From, string To);
 
-    /// <summary>O dump anônimo por role mascarada é do 2.x; o 1.x fazia de outro jeito.</summary>
-    public bool IsSupportedVersion => PostgresVersion.TryParse(InstalledVersion) is { Major: >= 2 };
+/// <summary>O que a cópia mascarada precisa saber da origem antes de ler qualquer linha.</summary>
+public sealed record SourceCatalog(
+    IReadOnlyList<SourceTable> Tables,
+    IReadOnlyList<KeyColumn> Keys,
+    IReadOnlyList<ColumnInfo> AllColumns,
+    long LargeObjects)
+{
+    /// <summary>Quem referencia quem: uma tabela sem dados não pode ser referenciada por uma com dados.</summary>
+    public IReadOnlyList<ForeignKeyLink> ForeignKeys { get; init; } = [];
+}
+
+/// <summary>Uma coluna no SELECT da cópia: como está, ou mascarada.</summary>
+public sealed record MaskedColumnPlan(string Name, string DataType, MaskingMethod? Method = null, string? Argument = null)
+{
+    public bool IsMasked => Method is not null;
+}
+
+/// <summary>
+/// Uma tabela a copiar: as colunas na ordem, sem as geradas.
+/// <see cref="SkipData"/>: a tabela vai vazia — nenhuma linha sai da origem.
+/// </summary>
+public sealed record MaskedTablePlan(
+    string Schema,
+    string Table,
+    long Bytes,
+    IReadOnlyList<MaskedColumnPlan> Columns,
+    long EstimatedRows = 0,
+    bool SkipData = false)
+{
+    public string QualifiedName => $"{Schema}.{Table}";
+
+    public bool HasMaskedColumns => Columns.Any(column => column.IsMasked);
+}
+
+/// <summary>Uma coluna mascarada como o servidor devolveu, para a pré-visualização: nunca o valor real.</summary>
+public sealed record MaskedPreview(string Schema, string Table, string Column, IReadOnlyList<string?> Values)
+{
+    public string ColumnKey => $"{Schema}.{Table}.{Column}";
 }
 
 public sealed record ColumnInfo(string Schema, string Table, string Column, string DataType, string? Comment)
@@ -183,8 +272,6 @@ public sealed record ColumnFingerprint(ColumnReference Column, IReadOnlyDictiona
 /// <summary>O que se leu do índice de um dump (<c>pg_restore --list</c>).</summary>
 public sealed record ArchiveSummary(
     int TableDataEntries,
-    int SecurityLabelEntries,
-    bool HasAnonExtension,
     int IndexEntries,
     int ConstraintEntries,
     IReadOnlyList<string> Tables);

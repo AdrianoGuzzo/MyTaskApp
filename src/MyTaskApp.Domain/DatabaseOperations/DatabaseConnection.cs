@@ -43,7 +43,6 @@ public sealed class DatabaseConnection
         Id = id;
         Name = string.Empty;
         Host = string.Empty;
-        Database = string.Empty;
         Username = string.Empty;
         CreatedAt = createdAt;
         UpdatedAt = createdAt;
@@ -57,7 +56,11 @@ public sealed class DatabaseConnection
 
     public int Port { get; private set; }
 
-    public string Database { get; private set; }
+    /// <summary>
+    /// O banco fixo desta conexão, ou <c>null</c> quando ela é só o servidor
+    /// (ADR-057): aí o banco é escolhido na hora da cópia.
+    /// </summary>
+    public string? Database { get; private set; }
 
     public string Username { get; private set; }
 
@@ -110,7 +113,7 @@ public sealed class DatabaseConnection
         string name,
         string host,
         int port,
-        string database,
+        string? database,
         string username,
         DatabaseEnvironment environment,
         DatabaseSslMode sslMode,
@@ -128,7 +131,7 @@ public sealed class DatabaseConnection
         string name,
         string host,
         int port,
-        string database,
+        string? database,
         string username,
         DatabaseEnvironment environment,
         DatabaseSslMode sslMode,
@@ -194,7 +197,7 @@ public sealed class DatabaseConnection
         string name,
         string host,
         int port,
-        string database,
+        string? database,
         string username,
         DatabaseEnvironment environment,
         DatabaseSslMode sslMode,
@@ -216,17 +219,7 @@ public sealed class DatabaseConnection
             throw new DomainException("A porta fica entre 1 e 65535.");
         }
 
-        var normalizedDatabase = Identifier(database, MaxIdentifierLength, "o banco");
-
-        // Um "nome de banco" com '=' ou "postgresql://" é lido pelas
-        // ferramentas como connection string inteira — e poderia levar um
-        // restore para outro servidor, longe da política.
-        if (normalizedDatabase.Contains('=', StringComparison.Ordinal)
-            || normalizedDatabase.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase)
-            || normalizedDatabase.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
-        {
-            throw new DomainException("O nome do banco não pode ter '=' nem ser uma URL de conexão.");
-        }
+        var normalizedDatabase = string.IsNullOrWhiteSpace(database) ? null : DatabaseName(database);
         var normalizedUsername = Identifier(username, MaxIdentifierLength, "o usuário");
 
         if (!Enum.IsDefined(environment))
@@ -250,6 +243,33 @@ public sealed class DatabaseConnection
         SslMode = sslMode;
         Description = normalizedDescription;
         StoredPermissions = EnvironmentPolicy.For(environment).Clamp(requested.ToFlags());
+    }
+
+    /// <summary>
+    /// Um nome de banco que pode ir às ferramentas: o da conexão, o escolhido
+    /// na cópia, o de um apelido. Devolve o nome sem espaços nas pontas.
+    /// </summary>
+    public static string DatabaseName(string? value)
+    {
+        var normalized = Identifier(value, MaxIdentifierLength, "o banco");
+
+        // Um "nome de banco" com '=' ou "postgresql://" é lido pelas
+        // ferramentas como connection string inteira — e poderia levar um
+        // restore para outro servidor, longe da política.
+        if (normalized.Contains('=', StringComparison.Ordinal)
+            || normalized.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase)
+            || normalized.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new DomainException("O nome do banco não pode ter '=' nem ser uma URL de conexão.");
+        }
+
+        // "*" é a chave de "todos os bancos do servidor" (EndpointKey sem banco).
+        if (normalized == DatabaseConnectionSnapshot.AnyDatabase)
+        {
+            throw new DomainException("Informe o nome do banco.");
+        }
+
+        return normalized;
     }
 
     private static string Required(string? value, int maxLength, string what)
@@ -319,7 +339,7 @@ public sealed record DatabaseConnectionSnapshot(
     string Name,
     string Host,
     int Port,
-    string Database,
+    string? Database,
     string Username,
     DatabaseEnvironment Environment,
     DatabaseSslMode SslMode,
@@ -327,7 +347,13 @@ public sealed record DatabaseConnectionSnapshot(
     ConnectionPermissions Permissions,
     string? SecretReference)
 {
-    /// <summary>Host, porta e banco: duas conexões com a mesma chave são o mesmo banco, com qualquer usuário.</summary>
+    /// <summary>O sufixo da chave de uma conexão sem banco: vale por todos os bancos do servidor.</summary>
+    public const string AnyDatabase = "*";
+
+    /// <summary>
+    /// Host, porta e banco: duas conexões com a mesma chave são o mesmo banco, com qualquer usuário.
+    /// Sem banco, a chave é <c>host:porta/*</c> — o servidor inteiro.
+    /// </summary>
     public string EndpointKey => EndpointKeyOf(Host, Port, Database);
 
     /// <summary>Host e porta: o mesmo servidor.</summary>
@@ -335,6 +361,21 @@ public sealed record DatabaseConnectionSnapshot(
 
     public bool IsProtected => EnvironmentPolicy.IsProtected(Environment);
 
-    public static string EndpointKeyOf(string host, int port, string database) =>
-        $"{host.Trim().ToLowerInvariant()}:{port.ToString(CultureInfo.InvariantCulture)}/{database.Trim()}";
+    /// <summary>Se já há um banco: o da conexão, ou o escolhido na cópia (<see cref="WithDatabase"/>).</summary>
+    public bool HasDatabase => Database is not null;
+
+    /// <summary>A mesma conexão, apontada para <paramref name="database"/> — validado como o da própria conexão.</summary>
+    public DatabaseConnectionSnapshot WithDatabase(string database) =>
+        this with { Database = DatabaseConnection.DatabaseName(database) };
+
+    /// <summary>
+    /// Se esta conexão é uma das <paramref name="protectedEndpoints"/>: o mesmo
+    /// banco, ou qualquer banco de um servidor protegido por inteiro.
+    /// </summary>
+    public bool IsAmong(IReadOnlyCollection<string>? protectedEndpoints) =>
+        protectedEndpoints is not null
+        && (protectedEndpoints.Contains(EndpointKey) || protectedEndpoints.Contains(EndpointKeyOf(Host, Port, null)));
+
+    public static string EndpointKeyOf(string host, int port, string? database) =>
+        $"{host.Trim().ToLowerInvariant()}:{port.ToString(CultureInfo.InvariantCulture)}/{database?.Trim() ?? AnyDatabase}";
 }

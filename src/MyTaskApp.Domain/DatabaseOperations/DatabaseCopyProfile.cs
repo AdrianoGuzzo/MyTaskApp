@@ -47,6 +47,9 @@ public sealed class DatabaseCopyProfile
 
     public Guid SourceConnectionId { get; private set; }
 
+    /// <summary>O banco da origem, quando a conexão é só o servidor (ADR-057).</summary>
+    public string? SourceDatabase { get; private set; }
+
     public Guid DestinationConnectionId { get; private set; }
 
     public Guid? AnonymizationProfileId { get; private set; }
@@ -85,10 +88,12 @@ public sealed class DatabaseCopyProfile
         Guid destinationConnectionId,
         Guid? anonymizationProfileId,
         DatabaseCopyOptions options,
-        DateTimeOffset createdAt)
+        DateTimeOffset createdAt,
+        string? sourceDatabase = null)
     {
         var profile = new DatabaseCopyProfile(Guid.CreateVersion7(createdAt), createdAt) { IsEnabled = true };
         profile.Apply(name, sourceConnectionId, destinationConnectionId, anonymizationProfileId, options);
+        profile.SourceDatabase = OptionalDatabase(sourceDatabase);
         return profile;
     }
 
@@ -98,11 +103,17 @@ public sealed class DatabaseCopyProfile
         Guid destinationConnectionId,
         Guid? anonymizationProfileId,
         DatabaseCopyOptions options,
-        DateTimeOffset at)
+        DateTimeOffset at,
+        string? sourceDatabase = null)
     {
+        var normalizedDatabase = OptionalDatabase(sourceDatabase);
         Apply(name, sourceConnectionId, destinationConnectionId, anonymizationProfileId, options);
+        SourceDatabase = normalizedDatabase;
         UpdatedAt = at;
     }
+
+    private static string? OptionalDatabase(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : DatabaseConnection.DatabaseName(value);
 
     public void SetEnabled(bool enabled, DateTimeOffset at)
     {

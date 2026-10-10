@@ -11,8 +11,7 @@ namespace MyTaskApp.Infrastructure.PostgreSql;
 
 /// <summary>
 /// O que uma chamada de ferramenta pretende fazer — é o que a guarda julga.
-/// <see cref="Target"/> é o banco em que ela age; <see cref="Anonymous"/> diz
-/// se o dump sai pela role mascarada.
+/// <see cref="Target"/> é o banco em que ela age.
 /// </summary>
 internal sealed record PgInvocation(
     PostgresTool Tool,
@@ -20,7 +19,7 @@ internal sealed record PgInvocation(
     TimeSpan Timeout,
     DatabaseConnectionSnapshot? Target = null,
     IReadOnlyCollection<string>? ProtectedEndpoints = null,
-    bool Anonymous = false);
+    PostgresVersion? SourceVersion = null);
 
 /// <summary>O fim de uma ferramenta, com a saída padrão para quem lê dela (o <c>--list</c>).</summary>
 internal sealed record PgToolOutput(PgToolRun Run, string StandardOutput);
@@ -55,13 +54,19 @@ internal static class PostgresProcessGuard
                 {
                     violations.Add(new(SecurityViolationCode.MissingSource, "Dump sem conexão."));
                 }
+                else if (!source.HasDatabase)
+                {
+                    violations.Add(new(SecurityViolationCode.DatabaseNotChosen, $"{source.Name} é só o servidor: nenhum banco foi escolhido."));
+                }
                 else if (!source.Permissions.CanDump)
                 {
                     violations.Add(new(SecurityViolationCode.MissingPermission, $"{source.Name} não tem permissão para fazer dump."));
                 }
-                else if (source.Permissions.RequireAnonymization && !invocation.Anonymous)
+                else if (source.Permissions.RequireAnonymization && !IsStructureOnly(invocation.Arguments))
                 {
-                    violations.Add(new(SecurityViolationCode.PlainDumpFromProtectedSource, $"{source.Name} só sai por dump anônimo."));
+                    // Não confia em quem chamou: só a estrutura, pelos próprios argumentos (ADR-058).
+                    violations.Add(new(SecurityViolationCode.PlainDumpFromProtectedSource,
+                        $"{source.Name} exige anonimização: dela só sai a estrutura, e os dados mascarados na consulta."));
                 }
 
                 break;
@@ -86,6 +91,18 @@ internal static class PostgresProcessGuard
         }
     }
 
+    /// <summary>
+    /// A escrita da cópia mascarada no destino (ADR-058), que não é um processo:
+    /// o mesmo julgamento de um <c>pg_restore</c> naquele alvo.
+    /// </summary>
+    public static void CheckDestination(DatabaseConnectionSnapshot target, IReadOnlyCollection<string>? protectedEndpoints) =>
+        Check(new PgInvocation(PostgresTool.PgRestore, ["--dbname", target.Database ?? string.Empty], TimeSpan.Zero, target, protectedEndpoints));
+
+    /// <summary><c>--schema-only</c>, sem nada que traga dados de volta.</summary>
+    internal static bool IsStructureOnly(IReadOnlyList<string> arguments) =>
+        arguments.Contains("--schema-only")
+        && !arguments.Any(argument => argument is "--data-only" or "-a" or "--section" || argument.StartsWith("--section=", StringComparison.Ordinal));
+
     private static void CheckWritable(PgInvocation invocation, List<SecurityViolation> violations)
     {
         if (invocation.Target is not { } target)
@@ -94,7 +111,14 @@ internal static class PostgresProcessGuard
             return;
         }
 
-        if (target.IsProtected || invocation.ProtectedEndpoints?.Contains(target.EndpointKey) == true)
+        if (!target.HasDatabase)
+        {
+            violations.Add(new(SecurityViolationCode.DatabaseNotChosen, $"{target.Name} é só o servidor: nenhum banco foi escolhido."));
+            return;
+        }
+
+        // Uma produção sem banco protege o servidor inteiro (host:porta/*).
+        if (target.IsProtected || target.IsAmong(invocation.ProtectedEndpoints))
         {
             violations.Add(new(SecurityViolationCode.ProtectedTargetModification, $"{target.Name} é produção: nada é gravado nele."));
         }
@@ -111,7 +135,7 @@ internal static class PostgresProcessGuard
             violations.Add(new(SecurityViolationCode.MissingPermission, $"{target.Name} não permite esta operação."));
         }
 
-        if (invocation.Tool is PostgresTool.CreateDb or PostgresTool.DropDb && SystemDatabases.Contains(target.Database))
+        if (invocation.Tool is PostgresTool.CreateDb or PostgresTool.DropDb && SystemDatabases.Contains(target.Database!))
         {
             violations.Add(new(SecurityViolationCode.ProtectedSystemDatabase, $"{target.Database} é um banco do próprio servidor."));
         }
@@ -207,7 +231,8 @@ internal sealed class PgToolRunner(
     {
         PostgresProcessGuard.Check(invocation);
 
-        var tools = await locator.DetectAsync(refresh: false, cancellationToken);
+        // O conjunto que lê a origem; sem a versão dela, o mais novo.
+        var tools = (await locator.DetectAsync(refresh: false, cancellationToken)).ForSource(invocation.SourceVersion);
         var tool = tools.Find(invocation.Tool);
 
         if (!tool.Found)

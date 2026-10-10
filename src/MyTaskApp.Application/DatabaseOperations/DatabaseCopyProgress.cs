@@ -9,7 +9,7 @@ public enum DatabaseCopyStep
     ValidateSource = 0,
     ValidateDestination = 1,
     ValidatePermissions = 2,
-    ValidateAnonymizer = 3,
+    ValidateMasking = 3,
     Dump = 4,
     CheckArtifact = 5,
     PrepareDestination = 6,
@@ -31,36 +31,38 @@ public static class DatabaseCopySteps
     public static IReadOnlyList<DatabaseCopyStep> All { get; } = Enum.GetValues<DatabaseCopyStep>();
 
     /// <summary>
-    /// O nome da etapa na tela. No dump anônimo a anonimização acontece no
-    /// próprio servidor, durante o dump; a etapa seguinte confere que o arquivo
-    /// saiu sem as regras nem a extensão.
+    /// O nome da etapa na tela. Na cópia anonimizada (ADR-058), o dump é só da
+    /// estrutura, e a cópia dos dados — mascarados na consulta — acontece no lugar do restore.
     /// </summary>
     public static string Label(DatabaseCopyStep step, bool anonymizes = true) => step switch
     {
         DatabaseCopyStep.ValidateSource => "Validando origem",
         DatabaseCopyStep.ValidateDestination => "Validando destino",
         DatabaseCopyStep.ValidatePermissions => "Validando permissões",
-        DatabaseCopyStep.ValidateAnonymizer => "Validando Anonymizer",
-        DatabaseCopyStep.Dump => anonymizes ? "Gerando dump anônimo" : "Gerando dump",
-        DatabaseCopyStep.CheckArtifact => anonymizes ? "Anonimizando" : "Conferindo o dump",
+        DatabaseCopyStep.ValidateMasking => "Validando máscaras",
+        DatabaseCopyStep.Dump => anonymizes ? "Lendo a estrutura" : "Gerando dump",
+        DatabaseCopyStep.CheckArtifact => anonymizes ? "Conferindo a estrutura" : "Conferindo o dump",
         DatabaseCopyStep.PrepareDestination => "Preparando destino",
-        DatabaseCopyStep.Restore => "Restaurando",
+        DatabaseCopyStep.Restore => anonymizes ? "Copiando dados mascarados" : "Restaurando",
         DatabaseCopyStep.Verify => "Validando resultado",
         DatabaseCopyStep.Cleanup => "Limpando arquivos temporários",
         _ => step.ToString(),
     };
 
-    /// <summary>Quanto do total cada etapa vale. Dump e restore são quase tudo.</summary>
-    public static int Weight(DatabaseCopyStep step) => step switch
+    /// <summary>
+    /// Quanto do total cada etapa vale. Na cópia comum, dump e restore são quase
+    /// tudo; na anonimizada, o dump é só estrutura e a cópia dos dados pesa por ele.
+    /// </summary>
+    public static int Weight(DatabaseCopyStep step, bool anonymizes = false) => step switch
     {
         DatabaseCopyStep.ValidateSource => 3,
         DatabaseCopyStep.ValidateDestination => 3,
         DatabaseCopyStep.ValidatePermissions => 4,
-        DatabaseCopyStep.ValidateAnonymizer => 6,
-        DatabaseCopyStep.Dump => 40,
+        DatabaseCopyStep.ValidateMasking => 6,
+        DatabaseCopyStep.Dump => anonymizes ? 5 : 40,
         DatabaseCopyStep.CheckArtifact => 2,
         DatabaseCopyStep.PrepareDestination => 3,
-        DatabaseCopyStep.Restore => 30,
+        DatabaseCopyStep.Restore => anonymizes ? 65 : 30,
         DatabaseCopyStep.Verify => 7,
         DatabaseCopyStep.Cleanup => 2,
         _ => 0,
@@ -85,10 +87,13 @@ public sealed class CopyProgressEstimator
 
     private int _postDataSeen;
 
+    private readonly bool _anonymizes;
+
     private double _last;
 
-    public CopyProgressEstimator(IEnumerable<TableInfo> tables, int expectedPostDataItems = 0)
+    public CopyProgressEstimator(IEnumerable<TableInfo> tables, int expectedPostDataItems = 0, bool anonymizes = false)
     {
+        _anonymizes = anonymizes;
         _tableBytes = tables
             .GroupBy(table => table.QualifiedName, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => Math.Max(1, group.First().Bytes), StringComparer.Ordinal);
@@ -102,8 +107,8 @@ public sealed class CopyProgressEstimator
     /// <summary>O percentual com a etapa atual em <paramref name="fraction"/> (0 a 1).</summary>
     public double At(DatabaseCopyStep step, double fraction)
     {
-        var done = DatabaseCopySteps.All.Where(other => other < step).Sum(DatabaseCopySteps.Weight);
-        var value = done + DatabaseCopySteps.Weight(step) * Math.Clamp(fraction, 0, 1);
+        var done = DatabaseCopySteps.All.Where(other => other < step).Sum(other => DatabaseCopySteps.Weight(other, _anonymizes));
+        var value = done + DatabaseCopySteps.Weight(step, _anonymizes) * Math.Clamp(fraction, 0, 1);
         _last = Math.Max(_last, Math.Min(value, 99));
         return _last;
     }
@@ -127,6 +132,12 @@ public sealed class CopyProgressEstimator
             case (DatabaseCopyStep.Restore, PgToolEventKind.PostData):
                 _postDataSeen++;
                 break;
+        }
+
+        // Na cópia anonimizada, o restore anda pelas tabelas copiadas, e não pelos eventos do pg_restore.
+        if (_anonymizes)
+        {
+            return 0;
         }
 
         return step switch

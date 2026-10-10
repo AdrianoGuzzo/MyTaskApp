@@ -115,7 +115,7 @@ public class InfrastructureRegistrationTests : IDisposable
     [InlineData(typeof(IDatabaseCredentialStore))]
     [InlineData(typeof(IPostgresToolLocator))]
     [InlineData(typeof(IPostgresServerInspector))]
-    [InlineData(typeof(IPostgresAnonymizerInspector))]
+    [InlineData(typeof(IPostgresMaskedCopier))]
     [InlineData(typeof(IPostgresDumpService))]
     [InlineData(typeof(IPostgresRestoreService))]
     [InlineData(typeof(IDatabaseOperationWorkspaceFactory))]

@@ -6,57 +6,84 @@ namespace MyTaskApp.Domain.Tests.DatabaseOperations;
 /// <summary>Os perfis de anonimização e de cópia (ADR-056).</summary>
 public class ProfileTests
 {
-    private static readonly Guid Masked = Guid.CreateVersion7();
+    private static readonly Guid Columns = Guid.CreateVersion7();
 
-    private static AnonymizationRuleSpec Rule(string column, string expression = "anon.fake_email()", MaskingKind kind = MaskingKind.Function) =>
-        new("public", "clientes", column, kind, expression, ColumnSensitivity.High);
+    private static AnonymizationRuleSpec Rule(string column, MaskingMethod method = MaskingMethod.FakeEmail, string? argument = null) =>
+        new("public", "clientes", column, method, argument, ColumnSensitivity.High);
 
     [Fact]
-    public void AnAnonymizationProfile_StartsEnabled_WithTheDefaultPolicy()
+    public void AnAnonymizationProfile_StartsEnabled_AndEmpty()
     {
-        var profile = AnonymizationProfile.Create(" ECO LGPD ", null, Masked, null, Now);
+        var profile = AnonymizationProfile.Create(" ECO LGPD ", " LGPD ", Columns, Now);
 
         profile.Name.Should().Be("ECO LGPD");
-        profile.PolicyName.Should().Be("anon");
+        profile.Description.Should().Be("LGPD");
+        profile.ConnectionId.Should().Be(Columns);
         profile.IsEnabled.Should().BeTrue();
         profile.Rules.Should().BeEmpty();
-    }
 
-    [Theory]
-    [InlineData("", "anon", "nome")]
-    [InlineData("x", "Anon", "política")]
-    [InlineData("x", "anon; drop", "política")]
-    public void AnInvalidAnonymizationProfile_IsRefused(string name, string policy, string message)
-    {
-        FluentActions.Invoking(() => AnonymizationProfile.Create(name, null, Masked, policy, Now))
-            .Should().Throw<DomainException>().WithMessage($"*{message}*");
+        profile.Update("Outro", null, Columns, Now.AddMinutes(1));
+        profile.Name.Should().Be("Outro");
+        profile.UpdatedAt.Should().Be(Now.AddMinutes(1));
+
+        profile.SetEnabled(false, Now.AddMinutes(2));
+        profile.IsEnabled.Should().BeFalse();
     }
 
     [Fact]
-    public void AProfileNeedsTheMaskedConnection()
+    public void AnInvalidAnonymizationProfile_IsRefused()
     {
-        FluentActions.Invoking(() => AnonymizationProfile.Create("x", null, Guid.Empty, null, Now))
-            .Should().Throw<DomainException>().WithMessage("*conexão mascarada*");
+        FluentActions.Invoking(() => AnonymizationProfile.Create("", null, Columns, Now))
+            .Should().Throw<DomainException>().WithMessage("*nome*");
+        FluentActions.Invoking(() => AnonymizationProfile.Create(new string('x', 81), null, Columns, Now))
+            .Should().Throw<DomainException>().WithMessage("*80*");
+        FluentActions.Invoking(() => AnonymizationProfile.Create("x", new string('d', 501), Columns, Now))
+            .Should().Throw<DomainException>().WithMessage("*500*");
+        FluentActions.Invoking(() => AnonymizationProfile.Create("x", null, Guid.Empty, Now))
+            .Should().Throw<DomainException>().WithMessage("*ler as colunas*");
     }
 
     [Fact]
     public void Rules_AreReplacedAsAWhole()
     {
-        var profile = AnonymizationProfile.Create("x", "d", Masked, "anon", Now);
+        var profile = AnonymizationProfile.Create("x", "d", Columns, Now);
 
-        profile.ReplaceRules([Rule("email"), Rule("cpf", "anon.partial(cpf,2,$$*******$$,2)")], Now.AddMinutes(1));
+        profile.ReplaceRules([Rule("email"), Rule("cpf", MaskingMethod.Partial, " 0 , 2 ")], Now.AddMinutes(1));
         profile.Rules.Should().HaveCount(2);
         profile.Rules.Should().OnlyContain(rule => rule.ProfileId == profile.Id && rule.ConfirmedAt == Now.AddMinutes(1));
+        profile.Rules.Single(rule => rule.Column == "cpf").Argument.Should().Be("0,2");
+        profile.Rules.Single(rule => rule.Column == "email").TableKey.Should().Be("public.clientes");
 
-        profile.ReplaceRules([Rule("telefone", "NULL", MaskingKind.Value)], Now.AddMinutes(2));
+        profile.ReplaceRules([Rule("telefone", MaskingMethod.Null)], Now.AddMinutes(2));
         profile.Rules.Should().ContainSingle().Which.QualifiedName.Should().Be("public.clientes.telefone");
         profile.UpdatedAt.Should().Be(Now.AddMinutes(2));
     }
 
     [Fact]
+    public void SkippedTables_AreReplacedAsAWhole_AndValidated()
+    {
+        var profile = AnonymizationProfile.Create("x", null, Columns, Now);
+
+        profile.ReplaceSkippedTables([new SkippedTableSpec(" public ", "auditoria"), new SkippedTableSpec("logs", "Eventos")], Now.AddMinutes(1));
+        profile.SkippedTables.Select(table => table.TableKey).Should().Equal("public.auditoria", "logs.Eventos");
+        profile.SkippedTables.Should().OnlyContain(table => table.ProfileId == profile.Id && table.ConfirmedAt == Now.AddMinutes(1));
+        profile.UpdatedAt.Should().Be(Now.AddMinutes(1));
+
+        FluentActions.Invoking(() => profile.ReplaceSkippedTables(
+                [new SkippedTableSpec("public", "filas"), new SkippedTableSpec("public", "filas")], Now))
+            .Should().Throw<DomainException>().WithMessage("*duas vezes*");
+        FluentActions.Invoking(() => profile.ReplaceSkippedTables([new SkippedTableSpec("public", " ")], Now))
+            .Should().Throw<DomainException>().WithMessage("*tabela*");
+        profile.SkippedTables.Should().HaveCount(2, "uma lista inválida não muda nada");
+
+        profile.ReplaceSkippedTables([], Now.AddMinutes(2));
+        profile.SkippedTables.Should().BeEmpty();
+    }
+
+    [Fact]
     public void TheSameColumnTwice_IsRefused_AndNothingChanges()
     {
-        var profile = AnonymizationProfile.Create("x", null, Masked, null, Now);
+        var profile = AnonymizationProfile.Create("x", null, Columns, Now);
         profile.ReplaceRules([Rule("email")], Now);
 
         FluentActions.Invoking(() => profile.ReplaceRules([Rule("cpf"), Rule("cpf")], Now))
@@ -66,48 +93,69 @@ public class ProfileTests
     }
 
     [Theory]
-    [InlineData(MaskingKind.Function, "anon.anonymize_database()")]
-    [InlineData(MaskingKind.Function, "anon.anonymize_table('public.x')")]
-    [InlineData(MaskingKind.Function, "anon.shuffle_column('x','y','id')")]
-    [InlineData(MaskingKind.Function, "md5(email)")]
-    [InlineData(MaskingKind.Function, "anon.fake_email(); drop table x")]
-    [InlineData(MaskingKind.Function, "anon.fake_email() -- x")]
-    [InlineData(MaskingKind.Function, "anon.fake_email() /* x */")]
-    [InlineData(MaskingKind.Function, "")]
-    [InlineData(MaskingKind.Value, "email")]
-    [InlineData(MaskingKind.Value, "'aberto")]
-    public void UnsafeOrStaticMasks_AreRefused(MaskingKind kind, string expression)
+    [InlineData(MaskingMethod.Partial, null, "início,fim")]
+    [InlineData(MaskingMethod.Partial, "2", "início,fim")]
+    [InlineData(MaskingMethod.Partial, "-1,2", "início,fim")]
+    [InlineData(MaskingMethod.Partial, "0,51", "início,fim")]
+    [InlineData(MaskingMethod.Partial, "0,2); drop table x; --", "início,fim")]
+    [InlineData(MaskingMethod.FixedNumber, "abc", "número")]
+    [InlineData(MaskingMethod.FixedNumber, "1; drop table x", "número")]
+    [InlineData(MaskingMethod.DateShift, "0", "dias")]
+    [InlineData(MaskingMethod.DateShift, "3651", "dias")]
+    [InlineData(MaskingMethod.NumberNoise, "0", "ruído")]
+    [InlineData(MaskingMethod.NumberNoise, "101", "ruído")]
+    [InlineData(MaskingMethod.FixedText, "linha\nquebrada", "quebra")]
+    public void AnInvalidArgument_IsRefused(MaskingMethod method, string? argument, string message)
     {
-        var profile = AnonymizationProfile.Create("x", null, Masked, null, Now);
+        var profile = AnonymizationProfile.Create("x", null, Columns, Now);
 
-        FluentActions.Invoking(() => profile.ReplaceRules([Rule("email", expression, kind)], Now))
-            .Should().Throw<DomainException>();
+        FluentActions.Invoking(() => profile.ReplaceRules([Rule("campo", method, argument)], Now))
+            .Should().Throw<DomainException>().WithMessage($"*{message}*");
     }
 
     [Theory]
-    [InlineData(MaskingKind.Value, "NULL")]
-    [InlineData(MaskingKind.Value, "0")]
-    [InlineData(MaskingKind.Value, "'CONFIDENCIAL'")]
-    [InlineData(MaskingKind.Value, "'d''Ávila'")]
-    [InlineData(MaskingKind.Function, "anon.dummy_first_name()")]
-    public void SafeMasks_AreAccepted(MaskingKind kind, string expression)
+    [InlineData(MaskingMethod.Hash, "ignorado", null)]
+    [InlineData(MaskingMethod.FakeEmail, null, null)]
+    [InlineData(MaskingMethod.Null, null, null)]
+    [InlineData(MaskingMethod.FakeName, null, null)]
+    [InlineData(MaskingMethod.Partial, "3,0", "3,0")]
+    [InlineData(MaskingMethod.FixedText, " d'Ávila ", " d'Ávila ")]
+    [InlineData(MaskingMethod.FixedText, "", "")]
+    [InlineData(MaskingMethod.FixedNumber, " 12.50 ", "12.50")]
+    [InlineData(MaskingMethod.DateShift, "30", "30")]
+    [InlineData(MaskingMethod.NumberNoise, "20", "20")]
+    public void SafeMasks_AreAccepted_WithTheirNormalizedArgument(MaskingMethod method, string? argument, string? expected)
     {
-        var profile = AnonymizationProfile.Create("x", null, Masked, null, Now);
+        var profile = AnonymizationProfile.Create("x", null, Columns, Now);
 
-        profile.ReplaceRules([Rule("campo", expression, kind)], Now);
+        profile.ReplaceRules([Rule("campo", method, argument)], Now);
 
-        profile.Rules.Single().Expression.Should().Be(expression);
+        profile.Rules.Single().Method.Should().Be(method);
+        profile.Rules.Single().Argument.Should().Be(expected);
     }
 
     [Fact]
-    public void AnInvalidIdentifierInARule_IsRefused()
+    public void AnInvalidIdentifierOrMethodInARule_IsRefused()
     {
-        var profile = AnonymizationProfile.Create("x", null, Masked, null, Now);
+        var profile = AnonymizationProfile.Create("x", null, Columns, Now);
 
-        FluentActions.Invoking(() => profile.ReplaceRules([new AnonymizationRuleSpec("", "t", "c", MaskingKind.Function, "anon.fake_email()", ColumnSensitivity.Low)], Now))
+        FluentActions.Invoking(() => profile.ReplaceRules([new AnonymizationRuleSpec("", "t", "c", MaskingMethod.Hash, null, ColumnSensitivity.Low)], Now))
             .Should().Throw<DomainException>();
-        FluentActions.Invoking(() => profile.ReplaceRules([new AnonymizationRuleSpec("s", "t", new string('c', 64), MaskingKind.Function, "anon.fake_email()", ColumnSensitivity.Low)], Now))
+        FluentActions.Invoking(() => profile.ReplaceRules([new AnonymizationRuleSpec("s", "t", new string('c', 64), MaskingMethod.Hash, null, ColumnSensitivity.Low)], Now))
             .Should().Throw<DomainException>();
+        FluentActions.Invoking(() => profile.ReplaceRules([new AnonymizationRuleSpec("s", "t", "c", (MaskingMethod)99, null, ColumnSensitivity.Low)], Now))
+            .Should().Throw<DomainException>().WithMessage("*desconhecida*");
+        FluentActions.Invoking(() => profile.ReplaceRules([new AnonymizationRuleSpec("s", "t", "c", MaskingMethod.Hash, null, (ColumnSensitivity)9)], Now))
+            .Should().Throw<DomainException>();
+    }
+
+    [Fact]
+    public void TooManyRules_AreRefused()
+    {
+        var profile = AnonymizationProfile.Create("x", null, Columns, Now);
+        var rules = Enumerable.Range(0, AnonymizationProfile.MaxRules + 1).Select(index => Rule($"c{index}", MaskingMethod.Hash));
+
+        FluentActions.Invoking(() => profile.ReplaceRules(rules, Now)).Should().Throw<DomainException>().WithMessage("*2000*");
     }
 
     [Fact]

@@ -18,12 +18,14 @@ public sealed record DatabaseCopyValidation(
     DatabaseEnvironment DestinationEnvironment,
     bool RequiresProductionConfirmation,
     bool RequiresTypedConfirmation,
-    string ConfirmationText)
+    string ConfirmationText,
+    string? DestinationDatabase = null,
+    bool NewDestinationDatabase = false)
 {
     public bool CanRun => Decision.IsAllowed && Checks.All(check => check.Outcome != CheckOutcome.Fail);
 }
 
-/// <summary>A simulação completa de uma cópia, sem processo nenhum: política, ferramentas, servidores e Anonymizer.</summary>
+/// <summary>A simulação completa de uma cópia, sem processo nenhum: política, ferramentas, servidores e máscaras.</summary>
 public sealed record ValidateDatabaseCopy(DatabaseCopyRequest Request);
 
 public sealed class ValidateDatabaseCopyHandler(
@@ -31,8 +33,10 @@ public sealed class ValidateDatabaseCopyHandler(
     IDatabaseSecurityPolicy policy,
     IPostgresToolLocator locator,
     IPostgresServerInspector inspector,
-    IPostgresAnonymizationService anonymization)
+    IPostgresMaskedCopier copier)
 {
+    public const string MaskingCategory = "Máscaras";
+
     public async Task<DatabaseCopyValidation> HandleAsync(ValidateDatabaseCopy query, CancellationToken cancellationToken = default)
     {
         var plan = await planner.PlanAsync(query.Request, cancellationToken);
@@ -41,27 +45,19 @@ public sealed class ValidateDatabaseCopyHandler(
 
         if (decision.IsAllowed)
         {
-            var tools = await locator.DetectAsync(refresh: false, cancellationToken);
             var source = await inspector.TestAsync(plan.Source, cancellationToken: cancellationToken);
             var destination = await inspector.TestAsync(DatabaseCopyRun.Reachable(plan), cancellationToken: cancellationToken);
+            var tools = (await locator.DetectAsync(refresh: false, cancellationToken)).ForSource(source.ServerVersion);
 
             checks.Add(Connection("Origem", plan.Source, source));
             checks.Add(Connection("Destino", plan.Destination, destination));
-            checks.AddRange(PostgresCompatibility.Evaluate(tools, source.ServerVersion, destination.ServerVersion, plan.Anonymizes));
+            checks.AddRange(PostgresCompatibility.Evaluate(tools, source.ServerVersion, destination.ServerVersion));
 
-            if (plan is { Anonymizes: true, AnonymizationProfile: { } profile, MaskedConnection: { } masked } && source.Connected)
+            if (plan is { Anonymizes: true, AnonymizationProfile: { } profile } && source.Connected)
             {
-                var validation = await anonymization.ValidateAsync(profile, masked, cancellationToken);
-                checks.AddRange(validation.Problems().Select(problem =>
-                    new CheckResult("Anonymizer", "Perfil", CheckOutcome.Fail, problem)));
-
-                if (validation.UncoveredCandidates.Count > 0)
-                {
-                    checks.Add(new CheckResult("Anonymizer", "Colunas sem regra", CheckOutcome.Warning,
-                        $"{validation.UncoveredCandidates.Count} coluna(s) candidata(s) sem regra, {validation.UncoveredHigh} de alta probabilidade."));
-                }
-
-                decision = policy.Evaluate(plan.ToPolicyRequest(DatabaseCopyRun.ServerFacts(plan, validation)));
+                var validation = MaskingPlanner.Plan(profile, await copier.ReadCatalogAsync(plan.Source, cancellationToken));
+                checks.AddRange(MaskingChecks(validation));
+                decision = policy.Evaluate(plan.ToPolicyRequest(DatabaseCopyRun.SourceFacts(plan, validation)));
             }
         }
 
@@ -75,13 +71,48 @@ public sealed class ValidateDatabaseCopyHandler(
             plan.Destination.Environment,
             plan.Source.IsProtected,
             plan.SourceRules.RequiresTypedConfirmation,
-            plan.Source.Database);
+            plan.Source.Database ?? string.Empty,
+            plan.Destination.Database,
+            plan.NewDestinationDatabase);
     }
 
     private static CheckResult Connection(string side, DatabaseConnectionSnapshot connection, ServerDiagnostics result) =>
         result.Connected
             ? new CheckResult("Conexão", side, CheckOutcome.Pass, $"{connection.Name}: PostgreSQL {result.ServerVersion}")
             : new CheckResult("Conexão", side, CheckOutcome.Fail, $"{connection.Name}: {result.Error}");
+
+    /// <summary>O que a validação das máscaras disse, como itens do [Validar].</summary>
+    internal static IEnumerable<CheckResult> MaskingChecks(MaskingValidation validation)
+    {
+        if (validation.IsValid)
+        {
+            yield return new CheckResult(MaskingCategory, "Regras", CheckOutcome.Pass,
+                $"{validation.MaskedColumns} coluna(s) mascarada(s) no SELECT da cópia; nada instalado na origem.");
+        }
+
+        if (validation.SkippedTables > 0)
+        {
+            yield return new CheckResult(MaskingCategory, "Tabelas sem dados", CheckOutcome.Pass,
+                $"{validation.SkippedTables} tabela(s) vão vazias: a estrutura sim, nenhuma linha.");
+        }
+
+        foreach (var problem in validation.Problems)
+        {
+            yield return new CheckResult(MaskingCategory, "Regras", CheckOutcome.Fail, problem);
+        }
+
+        foreach (var warning in validation.Warnings)
+        {
+            yield return new CheckResult(MaskingCategory, "Aviso", CheckOutcome.Warning, warning);
+        }
+
+        if (validation.UncoveredCandidates.Count > 0)
+        {
+            yield return new CheckResult(MaskingCategory, "Colunas sem regra", CheckOutcome.Warning,
+                $"{validation.UncoveredCandidates.Count} coluna(s) candidata(s) sem regra, {validation.UncoveredHigh} de alta probabilidade: "
+                + string.Join(", ", validation.UncoveredCandidates.Take(5).Select(candidate => candidate.ColumnKey)) + ".");
+        }
+    }
 }
 
 /// <summary>
@@ -91,30 +122,33 @@ public sealed class ValidateDatabaseCopyHandler(
 /// </summary>
 public sealed record RunDatabaseCopy(DatabaseCopyRequest Request, bool ProductionConfirmed, string? TypedConfirmation = null);
 
-/// <summary>Como terminou: o estado de cada etapa, a verificação e o dump anônimo mantido, se foi.</summary>
+/// <summary>Como terminou: o estado de cada etapa, a verificação e o dump mantido, se foi.</summary>
 public sealed record DatabaseCopyResult(
     DatabaseOperationStatus Status,
     Guid? AuditId,
     IReadOnlyDictionary<DatabaseCopyStep, CommandStepState> Steps,
     VerificationReport? Verification,
     string? Error,
-    string? KeptArtifactPath)
+    string? KeptArtifactPath,
+    string? DestinationDatabase = null)
 {
     public bool Succeeded => Status == DatabaseOperationStatus.Succeeded;
 }
 
 /// <summary>
-/// O fluxo Copiar + Anonimizar (ADR-056), de ponta a ponta: validar origem,
-/// destino, política e Anonymizer; o canário; o dump anônimo num diretório
-/// isolado; conferir o arquivo; preparar o destino; restaurar; verificar;
-/// auditar; limpar — a limpeza sempre, com sucesso, falha ou cancelamento.
+/// O fluxo de cópia (ADR-056), de ponta a ponta: validar origem, destino e
+/// política; o dump num diretório isolado; conferir o arquivo; preparar o
+/// destino; restaurar; verificar; auditar; limpar — a limpeza sempre, com
+/// sucesso, falha ou cancelamento. Com anonimização (ADR-058), o dump é só da
+/// estrutura, e os dados vão da origem ao destino já mascarados no SELECT.
 /// </summary>
 public sealed class RunDatabaseCopyHandler(
     DatabaseCopyPlanner planner,
     IDatabaseSecurityPolicy policy,
     IPostgresToolLocator locator,
     IPostgresServerInspector inspector,
-    IPostgresAnonymizationService anonymization,
+    IPostgresMaskedCopier copier,
+    IMaskingVerifier verifier,
     IPostgresDumpService dumps,
     IPostgresRestoreService restores,
     IDatabaseOperationWorkspaceFactory workspaces,
@@ -161,7 +195,7 @@ public sealed class RunDatabaseCopyHandler(
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         var run = new DatabaseCopyRun(
-            plan, entry, policy, locator, inspector, anonymization, dumps, restores, workspaces, timeProvider, logger, progress);
+            plan, entry, policy, locator, inspector, copier, verifier, dumps, restores, workspaces, timeProvider, logger, progress);
 
         var result = await run.ExecuteAsync(cancellationToken);
 
@@ -186,7 +220,8 @@ public sealed class RunDatabaseCopyHandler(
         }
 
         if (plan.SourceRules.RequiresTypedConfirmation
-            && !string.Equals(command.TypedConfirmation?.Trim(), plan.Source.Database, StringComparison.Ordinal))
+            && (plan.Source.Database is null
+                || !string.Equals(command.TypedConfirmation?.Trim(), plan.Source.Database, StringComparison.Ordinal)))
         {
             return new SecurityViolation(
                 SecurityViolationCode.ConfirmationRequired,
@@ -204,7 +239,8 @@ internal sealed class DatabaseCopyRun(
     IDatabaseSecurityPolicy policy,
     IPostgresToolLocator locator,
     IPostgresServerInspector inspector,
-    IPostgresAnonymizationService anonymization,
+    IPostgresMaskedCopier copier,
+    IMaskingVerifier verifier,
     IPostgresDumpService dumps,
     IPostgresRestoreService restores,
     IDatabaseOperationWorkspaceFactory workspaces,
@@ -221,7 +257,7 @@ internal sealed class DatabaseCopyRun(
     private readonly Dictionary<DatabaseCopyStep, CommandStepState> _states =
         DatabaseCopySteps.All.ToDictionary(step => step, _ => CommandStepState.Waiting);
 
-    private CopyProgressEstimator _estimator = new([]);
+    private CopyProgressEstimator _estimator = new([], anonymizes: plan.Anonymizes);
 
     private DatabaseCopyStep _current = DatabaseCopyStep.ValidateSource;
 
@@ -235,24 +271,32 @@ internal sealed class DatabaseCopyRun(
 
     private ServerDiagnostics? _destinationServer;
 
+    /// <summary>A versão da origem: escolhe o conjunto de ferramentas do dump e do restore.</summary>
+    private PostgresVersion? SourceVersion => _sourceServer?.ServerVersion;
+
     private AnonymizationFacts _facts = plan.RegisteredFacts;
 
     private VerificationReport? _verification;
+
+    /// <summary>As tabelas e máscaras da cópia anonimizada, montadas na validação das máscaras.</summary>
+    private MaskingValidation? _masking;
+
+    /// <summary>A leitura da origem com o snapshot: aberta no dump da estrutura, fechada na limpeza.</summary>
+    private IMaskedCopySession? _session;
 
     private string ArchiveDirectory => Path.Combine(
         plan.Anonymizes ? _workspace!.AnonymizedDirectory : _workspace!.DumpDirectory,
         "archive");
 
-    /// <summary>Quando o destino vai ser recriado, o banco dele pode nem existir ainda: o teste vai ao banco de manutenção.</summary>
+    /// <summary>
+    /// Quando o destino vai ser criado (recriado, ou com nome gerado), o banco
+    /// dele pode nem existir ainda: o teste vai ao banco de manutenção.
+    /// </summary>
     public static DatabaseConnectionSnapshot Reachable(DatabaseCopyPlan plan) =>
-        plan.Request.Options.RecreateDestination ? plan.Destination with { Database = "postgres" } : plan.Destination;
+        plan.CreatesDestination ? plan.Destination with { Database = "postgres" } : plan.Destination;
 
-    public static AnonymizationFacts ServerFacts(DatabaseCopyPlan plan, AnonymizationValidation validation) =>
-        plan.RegisteredFacts.WithServer(
-            installed: validation.Status.Installed && validation.Status.IsSupportedVersion,
-            roleMasked: validation.Status.CurrentRoleMasked,
-            transparentOn: validation.Status.TransparentMaskingOn,
-            uncoveredHigh: validation.UncoveredHigh);
+    public static AnonymizationFacts SourceFacts(DatabaseCopyPlan plan, MaskingValidation validation) =>
+        plan.RegisteredFacts.WithSource(validation.Problems, validation.UncoveredHigh);
 
     public async Task<DatabaseCopyResult> ExecuteAsync(CancellationToken cancellationToken)
     {
@@ -265,7 +309,7 @@ internal sealed class DatabaseCopyRun(
             await ValidateSourceAsync(cancellationToken);
             await ValidateDestinationAsync(cancellationToken);
             await ValidatePermissionsAsync(cancellationToken);
-            await ValidateAnonymizerAsync(cancellationToken);
+            await ValidateMaskingAsync(cancellationToken);
             await DumpAsync(cancellationToken);
             await CheckArtifactAsync(cancellationToken);
             await PrepareDestinationAsync(cancellationToken);
@@ -303,6 +347,7 @@ internal sealed class DatabaseCopyRun(
         }
         finally
         {
+            await CloseSessionAsync();
             kept = await CleanupAsync(entry.Id);
         }
 
@@ -327,7 +372,8 @@ internal sealed class DatabaseCopyRun(
         await WriteMetadataAsync(status, kept);
         Report(DatabaseCopyStep.Cleanup, CommandStepState.Succeeded, _estimator.Complete(), status == DatabaseOperationStatus.Succeeded ? "Concluído." : error);
 
-        return new DatabaseCopyResult(status, entry.Id, new Dictionary<DatabaseCopyStep, CommandStepState>(_states), _verification, error, kept);
+        return new DatabaseCopyResult(
+            status, entry.Id, new Dictionary<DatabaseCopyStep, CommandStepState>(_states), _verification, error, kept, plan.Destination.Database);
     }
 
     private async Task ValidateSourceAsync(CancellationToken cancellationToken)
@@ -343,7 +389,7 @@ internal sealed class DatabaseCopyRun(
 
         entry.RecordServerVersions(source.ServerVersionText ?? source.ServerVersion?.ToString(), null);
         _tables = await inspector.ListTablesAsync(plan.Source, cancellationToken);
-        _estimator = new CopyProgressEstimator(_tables);
+        _estimator = new CopyProgressEstimator(_tables, anonymizes: plan.Anonymizes);
         _sourceServer = source;
 
         Done(DatabaseCopyStep.ValidateSource, $"PostgreSQL {source.ServerVersion}, {_tables.Count} tabela(s).");
@@ -371,17 +417,23 @@ internal sealed class DatabaseCopyRun(
 
         policy.Demand(plan.ToPolicyRequest(_facts));
 
-        _tools = await locator.DetectAsync(refresh: false, cancellationToken);
+        // O menor conjunto que lê a origem: o mais novo pode não restaurar num destino antigo.
+        _tools = (await locator.DetectAsync(refresh: false, cancellationToken)).ForSource(SourceVersion);
         entry.RecordTools(_tools.Describe(PostgresTool.PgDump, PostgresTool.PgRestore, PostgresTool.CreateDb, PostgresTool.DropDb));
 
-        if (plan.Request.Options.RecreateDestination
+        if (plan.DropsDestination
             && (!_tools.Find(PostgresTool.CreateDb).Found || !_tools.Find(PostgresTool.DropDb).Found))
         {
             throw new DomainException("Recriar o destino precisa de createdb e dropdb instalados.");
         }
 
+        if (plan.NewDestinationDatabase && !_tools.Find(PostgresTool.CreateDb).Found)
+        {
+            throw new DomainException("Criar o banco de destino precisa do createdb instalado.");
+        }
+
         var failures = PostgresCompatibility
-            .Evaluate(_tools, _sourceServer?.ServerVersion, _destinationServer?.ServerVersion, plan.Anonymizes)
+            .Evaluate(_tools, _sourceServer?.ServerVersion, _destinationServer?.ServerVersion)
             .Where(check => check.Outcome == CheckOutcome.Fail)
             .ToList();
 
@@ -393,39 +445,40 @@ internal sealed class DatabaseCopyRun(
         Done(DatabaseCopyStep.ValidatePermissions, _tools.Describe(PostgresTool.PgDump, PostgresTool.PgRestore));
     }
 
-    private async Task ValidateAnonymizerAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// As regras do perfil contra as colunas da origem (ADR-058): o que copiar,
+    /// como mascarar, e o que impede. Só catálogo — nenhuma linha é lida.
+    /// </summary>
+    private async Task ValidateMaskingAsync(CancellationToken cancellationToken)
     {
         if (!plan.Anonymizes)
         {
-            Skip(DatabaseCopyStep.ValidateAnonymizer, "Cópia sem anonimização.");
+            Skip(DatabaseCopyStep.ValidateMasking, "Cópia sem anonimização.");
             return;
         }
 
-        Begin(DatabaseCopyStep.ValidateAnonymizer, "Conferindo extensão, role mascarada e regras…");
+        Begin(DatabaseCopyStep.ValidateMasking, "Lendo as colunas da origem e conferindo as regras…");
 
         var profile = plan.AnonymizationProfile!;
-        var masked = plan.MaskedConnection!;
-        var validation = await anonymization.ValidateAsync(profile, masked, cancellationToken);
+        var validation = MaskingPlanner.Plan(profile, await copier.ReadCatalogAsync(plan.Source, cancellationToken));
 
         if (!validation.IsValid)
         {
-            throw new DomainException(string.Join(" ", validation.Problems()));
+            throw new DomainException(string.Join(" ", validation.Problems));
         }
 
-        _facts = ServerFacts(plan, validation);
+        _facts = SourceFacts(plan, validation);
         policy.Demand(plan.ToPolicyRequest(_facts));
-
-        Report(DatabaseCopyStep.ValidateAnonymizer, CommandStepState.Running, _estimator.At(DatabaseCopyStep.ValidateAnonymizer, 0.5),
-            "Lendo amostras pelas duas conexões para confirmar a máscara…");
-
-        if (!await anonymization.IsMaskingActiveAsync(profile, plan.Source, masked, cancellationToken))
-        {
-            throw new DomainException(
-                "A conexão mascarada devolveu os mesmos valores da origem: a máscara não está ativa para essa role. Nenhum dump foi feito.");
-        }
+        _masking = validation;
 
         entry.RecordAnonymization(profile.Name, validation.MaskedColumns);
-        Done(DatabaseCopyStep.ValidateAnonymizer, $"{validation.MaskedColumns} coluna(s) mascarada(s) no servidor.");
+
+        var summary = validation.SkippedTables == 0
+            ? $"{validation.MaskedColumns} coluna(s) mascarada(s) em {validation.Tables.Count} tabela(s)."
+            : $"{validation.MaskedColumns} coluna(s) mascarada(s) em {validation.Tables.Count} tabela(s), {validation.SkippedTables} sem dados.";
+        Done(DatabaseCopyStep.ValidateMasking, validation.Warnings.Count == 0
+            ? summary
+            : $"{summary} {string.Join(" ", validation.Warnings)}");
     }
 
     private async Task DumpAsync(CancellationToken cancellationToken)
@@ -433,6 +486,12 @@ internal sealed class DatabaseCopyRun(
         Begin(DatabaseCopyStep.Dump, "Preparando diretório temporário…");
 
         _workspace = await workspaces.CreateAsync(entry.Id, timeProvider.GetUtcNow(), cancellationToken);
+
+        if (plan.Anonymizes)
+        {
+            await DumpStructureAsync(cancellationToken);
+            return;
+        }
 
         var needed = (long)(_tables.Sum(table => table.Bytes) * DiskMargin);
 
@@ -443,86 +502,124 @@ internal sealed class DatabaseCopyRun(
         }
 
         var options = plan.Request.Options;
-        var connection = plan.Anonymizes ? plan.MaskedConnection! : plan.Source;
         var request = new PgDumpRequest(
-            connection,
+            plan.Source,
             ArchiveDirectory,
-            plan.Anonymizes,
             options.IncludeSchema,
             options.IncludeData,
             Jobs(options),
-            plan.ProtectedEndpoints);
+            plan.ProtectedEndpoints,
+            SourceVersion: SourceVersion);
 
-        var events = Forward(DatabaseCopyStep.Dump);
-
-        PgToolRun run;
-
-        if (plan.Anonymizes)
-        {
-            run = await anonymization.CreateAnonymousDumpAsync(plan.ToPolicyRequest(_facts), request, events, cancellationToken);
-        }
-        else
-        {
-            policy.Demand(new DatabaseOperationRequest(DatabaseOperationType.Dump, plan.Source, ProtectedEndpoints: plan.ProtectedEndpoints));
-            run = await dumps.DumpAsync(request, events, cancellationToken);
-        }
+        policy.Demand(new DatabaseOperationRequest(DatabaseOperationType.Dump, plan.Source, ProtectedEndpoints: plan.ProtectedEndpoints));
+        var run = await dumps.DumpAsync(request, Forward(DatabaseCopyStep.Dump), cancellationToken);
 
         EnsureSucceeded("pg_dump", run);
 
         var size = _workspace.SizeOf(ArchiveDirectory);
-        entry.RecordSizes(plan.Anonymizes ? null : size, plan.Anonymizes ? size : null);
+        entry.RecordSizes(size, null);
         Done(DatabaseCopyStep.Dump, $"{PostgresEnvironmentDiagnostics.FormatBytes(size)} em {Seconds(run.Duration)}.");
+    }
+
+    /// <summary>
+    /// A cópia anonimizada começa aqui: a leitura da origem abre a transação e
+    /// exporta o snapshot, e o <c>pg_dump --schema-only</c> lê a mesma foto.
+    /// Nenhuma linha vai para o disco — só a estrutura.
+    /// </summary>
+    private async Task DumpStructureAsync(CancellationToken cancellationToken)
+    {
+        Report(DatabaseCopyStep.Dump, CommandStepState.Running, _estimator.At(DatabaseCopyStep.Dump, 0.2), "Abrindo a leitura da origem…");
+        _session = await copier.OpenAsync(plan.Source, cancellationToken);
+
+        if (!plan.Request.Options.IncludeSchema)
+        {
+            Done(DatabaseCopyStep.Dump, "Só os dados: a estrutura do destino é mantida.");
+            return;
+        }
+
+        policy.Demand(new DatabaseOperationRequest(DatabaseOperationType.SchemaDump, plan.Source, ProtectedEndpoints: plan.ProtectedEndpoints));
+        var run = await dumps.DumpAsync(
+            new PgDumpRequest(plan.Source, ArchiveDirectory, IncludeSchema: true, IncludeData: false, 1, plan.ProtectedEndpoints, _session.SnapshotId, SourceVersion),
+            Forward(DatabaseCopyStep.Dump),
+            cancellationToken);
+
+        EnsureSucceeded("pg_dump", run);
+
+        var size = _workspace!.SizeOf(ArchiveDirectory);
+        entry.RecordSizes(null, size);
+        Done(DatabaseCopyStep.Dump, $"Estrutura: {PostgresEnvironmentDiagnostics.FormatBytes(size)} em {Seconds(run.Duration)}.");
     }
 
     private async Task CheckArtifactAsync(CancellationToken cancellationToken)
     {
+        if (plan.Anonymizes && !plan.Request.Options.IncludeSchema)
+        {
+            Skip(DatabaseCopyStep.CheckArtifact, "Sem estrutura para conferir.");
+            return;
+        }
+
         Begin(DatabaseCopyStep.CheckArtifact, "Lendo o índice do dump…");
 
         var summary = await dumps.ListArchiveAsync(ArchiveDirectory, cancellationToken);
 
-        if (plan.Anonymizes && (summary.SecurityLabelEntries > 0 || summary.HasAnonExtension))
+        // O arquivo da cópia anonimizada é só estrutura: uma linha de dado aqui seria dado real em disco.
+        if (plan.Anonymizes && summary.TableDataEntries > 0)
         {
-            throw new DomainException("O dump trouxe regras ou a extensão do anon; ele não será restaurado.");
+            throw new DomainException("O dump da estrutura trouxe dados de tabela; ele não será restaurado.");
         }
 
-        if (plan.Request.Options.IncludeData && summary.TableDataEntries == 0 && _tables.Count > 0)
+        if (!plan.Anonymizes && plan.Request.Options.IncludeData && summary.TableDataEntries == 0 && _tables.Count > 0)
         {
             throw new DomainException("O dump saiu sem dados de tabela nenhuma.");
         }
 
         _estimator.ExpectedPostDataItems = summary.IndexEntries + summary.ConstraintEntries;
         Done(DatabaseCopyStep.CheckArtifact, plan.Anonymizes
-            ? $"Dump anônimo com {summary.TableDataEntries} tabela(s) de dados, sem regras nem extensão."
+            ? $"Só estrutura, sem nenhuma linha: {summary.Tables.Count} tabela(s), {summary.IndexEntries} índice(s)."
             : $"{summary.TableDataEntries} tabela(s) de dados.");
     }
 
     private async Task PrepareDestinationAsync(CancellationToken cancellationToken)
     {
-        if (!plan.Request.Options.RecreateDestination)
+        if (!plan.CreatesDestination)
         {
             Skip(DatabaseCopyStep.PrepareDestination, "O banco de destino é mantido.");
             return;
         }
 
-        Begin(DatabaseCopyStep.PrepareDestination, $"Recriando {plan.Destination.Database}…");
+        // Um banco com nome gerado é novo: só se cria. dropdb nunca roda nele.
+        Begin(DatabaseCopyStep.PrepareDestination, plan.DropsDestination
+            ? $"Recriando {plan.Destination.Database}…"
+            : $"Criando {plan.Destination.Database}…");
 
-        policy.Demand(new DatabaseOperationRequest(
-            DatabaseOperationType.DropDatabase, Destination: plan.Destination, ProtectedEndpoints: plan.ProtectedEndpoints));
-        EnsureSucceeded("dropdb", await restores.DropDatabaseAsync(
-            plan.Destination,
-            plan.ProtectedEndpoints,
-            PostgresCompatibility.SupportsForceDrop(_destinationServer?.ServerVersion),
-            cancellationToken));
+        if (plan.DropsDestination)
+        {
+            policy.Demand(new DatabaseOperationRequest(
+                DatabaseOperationType.DropDatabase, Destination: plan.Destination, ProtectedEndpoints: plan.ProtectedEndpoints));
+            EnsureSucceeded("dropdb", await restores.DropDatabaseAsync(
+                plan.Destination,
+                plan.ProtectedEndpoints,
+                PostgresCompatibility.SupportsForceDrop(_destinationServer?.ServerVersion),
+                cancellationToken));
+        }
 
         policy.Demand(new DatabaseOperationRequest(
             DatabaseOperationType.CreateDatabase, Destination: plan.Destination, ProtectedEndpoints: plan.ProtectedEndpoints));
         EnsureSucceeded("createdb", await restores.CreateDatabaseAsync(plan.Destination, plan.ProtectedEndpoints, cancellationToken));
 
-        Done(DatabaseCopyStep.PrepareDestination, $"{plan.Destination.Database} recriado vazio.");
+        Done(DatabaseCopyStep.PrepareDestination, plan.DropsDestination
+            ? $"{plan.Destination.Database} recriado vazio."
+            : $"{plan.Destination.Database} criado vazio.");
     }
 
     private async Task RestoreAsync(CancellationToken cancellationToken)
     {
+        if (plan.Anonymizes)
+        {
+            await CopyMaskedAsync(cancellationToken);
+            return;
+        }
+
         Begin(DatabaseCopyStep.Restore, $"Restaurando em {plan.Destination.Name}…");
 
         policy.Demand(new DatabaseOperationRequest(
@@ -530,12 +627,130 @@ internal sealed class DatabaseCopyRun(
 
         var options = plan.Request.Options;
         var run = await restores.RestoreAsync(
-            new PgRestoreRequest(plan.Destination, ArchiveDirectory, options.IncludeSchema, options.IncludeData, Jobs(options), plan.ProtectedEndpoints),
+            new PgRestoreRequest(plan.Destination, ArchiveDirectory, options.IncludeSchema, options.IncludeData, Jobs(options), plan.ProtectedEndpoints, SourceVersion: SourceVersion),
             Forward(DatabaseCopyStep.Restore),
             cancellationToken);
 
         EnsureSucceeded("pg_restore", run);
         Done(DatabaseCopyStep.Restore, $"Concluído em {Seconds(run.Duration)}.");
+    }
+
+    /// <summary>
+    /// A cópia mascarada (ADR-058): a estrutura sem índices nem chaves; os dados
+    /// tabela por tabela, mascarados no SELECT da origem; depois os índices, as
+    /// chaves e o valor das sequences.
+    /// </summary>
+    private async Task CopyMaskedAsync(CancellationToken cancellationToken)
+    {
+        Begin(DatabaseCopyStep.Restore, $"Copiando para {plan.Destination.Name}…");
+
+        var options = plan.Request.Options;
+
+        if (options.IncludeSchema)
+        {
+            await RestoreSectionAsync(RestoreSection.PreData, 0, cancellationToken);
+        }
+
+        if (options.IncludeData)
+        {
+            var copied = await CopyTablesAsync(cancellationToken);
+            entry.RecordRows(copied);
+        }
+
+        if (options.IncludeSchema)
+        {
+            await RestoreSectionAsync(RestoreSection.PostData, 0.85, cancellationToken);
+        }
+
+        if (options.IncludeData)
+        {
+            var sequences = await _session!.CopySequencesAsync(cancellationToken);
+            Report(DatabaseCopyStep.Restore, CommandStepState.Running, _estimator.At(DatabaseCopyStep.Restore, 0.99),
+                $"{sequences} sequence(s) acertada(s).");
+        }
+
+        Done(DatabaseCopyStep.Restore, _masking!.SkippedTables == 0
+            ? $"{_masking.Tables.Count} tabela(s) copiada(s), {_masking.MaskedColumns} coluna(s) mascarada(s)."
+            : $"{_masking.Tables.Count - _masking.SkippedTables} tabela(s) copiada(s), {_masking.SkippedTables} sem dados, " +
+              $"{_masking.MaskedColumns} coluna(s) mascarada(s).");
+    }
+
+    private async Task RestoreSectionAsync(RestoreSection section, double startFraction, CancellationToken cancellationToken)
+    {
+        Report(DatabaseCopyStep.Restore, CommandStepState.Running, _estimator.At(DatabaseCopyStep.Restore, startFraction),
+            section == RestoreSection.PreData ? "Criando as tabelas…" : "Criando índices, chaves e triggers…");
+
+        policy.Demand(new DatabaseOperationRequest(
+            DatabaseOperationType.Restore, Destination: plan.Destination, ProtectedEndpoints: plan.ProtectedEndpoints));
+
+        var run = await restores.RestoreAsync(
+            new PgRestoreRequest(plan.Destination, ArchiveDirectory, true, false, 1, plan.ProtectedEndpoints, section, SourceVersion),
+            Forward(DatabaseCopyStep.Restore),
+            cancellationToken);
+
+        EnsureSucceeded("pg_restore", run);
+    }
+
+    private async Task<long> CopyTablesAsync(CancellationToken cancellationToken)
+    {
+        // As tabelas sem dados já existem desde o pre-data: nenhuma linha delas é lida.
+        var tables = _masking!.Tables.Where(table => !table.SkipData).ToList();
+        var totalBytes = Math.Max(1, tables.Sum(table => Math.Max(1, table.Bytes)));
+        var doneBytes = 0L;
+        var copied = 0L;
+
+        // A política de novo, agora com o pedido inteiro: origem, destino e o que as colunas disseram.
+        policy.Demand(new DatabaseOperationRequest(
+            DatabaseOperationType.MaskedDataCopy,
+            plan.Source,
+            plan.Destination,
+            _facts,
+            plan.Request.Options,
+            plan.ProtectedEndpoints,
+            plan.NewDestinationDatabase));
+        await _session!.ConnectDestinationAsync(plan.Destination, plan.ProtectedEndpoints, cancellationToken);
+
+        foreach (var table in tables)
+        {
+            var weight = Math.Max(1, table.Bytes);
+            var before = doneBytes;
+
+            void Progress(long rows)
+            {
+                var within = table.EstimatedRows > 0 ? Math.Min(1, (double)rows / table.EstimatedRows) : 0;
+                var fraction = 0.1 + (0.75 * (before + (weight * within)) / totalBytes);
+                Report(DatabaseCopyStep.Restore, CommandStepState.Running, _estimator.At(DatabaseCopyStep.Restore, fraction));
+            }
+
+            Report(DatabaseCopyStep.Restore, CommandStepState.Running,
+                _estimator.At(DatabaseCopyStep.Restore, 0.1 + (0.75 * before / totalBytes)),
+                table.HasMaskedColumns ? $"{table.QualifiedName} (mascarada)…" : $"{table.QualifiedName}…");
+
+            copied += await _session.CopyTableAsync(table, Progress, cancellationToken);
+            doneBytes += weight;
+        }
+
+        return copied;
+    }
+
+    private async Task CloseSessionAsync()
+    {
+        if (_session is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _session.DisposeAsync();
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            // Fechar falhou (conexão já caída): a transação de leitura morre com ela.
+            logger.LogWarning("MaskedCopySessionCloseFailed {AuditId} {Error}", entry.Id, exception.GetType().Name);
+        }
+
+        _session = null;
     }
 
     private async Task VerifyAsync(CancellationToken cancellationToken)
@@ -556,15 +771,23 @@ internal sealed class DatabaseCopyRun(
 
         if (plan.Request.Options.IncludeData)
         {
-            var tables = _tables.Select(table => table.QualifiedName).ToList();
+            var notCompared = _masking?.NotCompared ?? [];
+            var tables = _tables.Select(table => table.QualifiedName).Where(table => !notCompared.Contains(table)).ToList();
             var before = await inspector.CountRowsAsync(plan.Source, tables, ExactCountLimit, cancellationToken);
             var after = await inspector.CountRowsAsync(plan.Destination, tables, ExactCountLimit, cancellationToken);
             checks.Add(VerificationEvaluator.CompareRows(before, after));
             entry.RecordRows(after.Where(count => !count.IsEstimate).Sum(count => count.Rows));
 
-            if (plan is { Anonymizes: true, AnonymizationProfile: { } profile })
+            if (_masking?.Tables.Where(table => table.SkipData).Select(table => table.QualifiedName).ToList() is { Count: > 0 } skipped)
             {
-                checks.AddRange(await anonymization.VerifyResultAsync(profile, plan.Source, plan.Destination, cancellationToken));
+                // Só o destino: a origem não precisa ser contada para saber que o destino tem de estar vazio.
+                checks.Add(VerificationEvaluator.CompareSkipped(
+                    await inspector.CountRowsAsync(plan.Destination, skipped, ExactCountLimit, cancellationToken)));
+            }
+
+            if (plan.Anonymizes && _masking is { } masking)
+            {
+                checks.AddRange(await verifier.VerifyAsync(masking.Tables, plan.Source, plan.Destination, cancellationToken));
             }
         }
 

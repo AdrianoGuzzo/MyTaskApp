@@ -47,8 +47,8 @@ internal static partial class PgVerboseOutputParser
 
 /// <summary>
 /// Lê o índice de um dump (<c>pg_restore --list</c>) sem restaurar nada:
-/// quantas tabelas têm dados, e se vieram regras ou a extensão do anon —
-/// que um dump anônimo não pode trazer.
+/// quantas tabelas têm dados — que o dump só da estrutura, da cópia
+/// anonimizada, não pode ter —, índices e constraints.
 /// </summary>
 internal static partial class PgArchiveListParser
 {
@@ -56,7 +56,6 @@ internal static partial class PgArchiveListParser
     [
         "TABLE DATA",
         "FK CONSTRAINT",
-        "SECURITY LABEL",
         "SEQUENCE SET",
         "SEQUENCE OWNED BY",
         "DEFAULT ACL",
@@ -66,8 +65,7 @@ internal static partial class PgArchiveListParser
     public static ArchiveSummary Parse(string listing)
     {
         var tables = new List<string>();
-        int tableData = 0, labels = 0, indexes = 0, constraints = 0;
-        var anon = false;
+        int tableData = 0, indexes = 0, constraints = 0;
 
         foreach (var raw in listing.Split('\n'))
         {
@@ -95,9 +93,6 @@ internal static partial class PgArchiveListParser
 
                     break;
 
-                case "SECURITY LABEL":
-                    labels++;
-                    break;
 
                 case "INDEX":
                     indexes++;
@@ -107,15 +102,10 @@ internal static partial class PgArchiveListParser
                 case "FK CONSTRAINT":
                     constraints++;
                     break;
-
-                case "EXTENSION" when tokens.Length >= 2 && tokens[1] == "anon":
-                case "SCHEMA" when tokens.Length >= 2 && tokens[1] == "anon":
-                    anon = true;
-                    break;
             }
         }
 
-        return new ArchiveSummary(tableData, labels, anon, indexes, constraints, tables);
+        return new ArchiveSummary(tableData, indexes, constraints, tables);
     }
 
     // 3420; 0 16385 TABLE DATA public clientes postgres

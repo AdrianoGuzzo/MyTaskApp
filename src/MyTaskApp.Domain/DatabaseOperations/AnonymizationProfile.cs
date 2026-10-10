@@ -1,5 +1,3 @@
-using System.Text.RegularExpressions;
-
 namespace MyTaskApp.Domain.DatabaseOperations;
 
 /// <summary>
@@ -10,44 +8,49 @@ public sealed record AnonymizationRuleSpec(
     string Schema,
     string Table,
     string Column,
-    MaskingKind Kind,
-    string Expression,
+    MaskingMethod Method,
+    string? Argument,
     ColumnSensitivity Sensitivity);
 
+/// <summary>Uma tabela que vai para o destino vazia: a estrutura sim, as linhas não.</summary>
+public sealed record SkippedTableSpec(string Schema, string Table);
+
 /// <summary>
-/// Um perfil de anonimização (ADR-056): a política do PostgreSQL Anonymizer
-/// que o dump anônimo usa, com as regras que o usuário confirmou.
+/// Um perfil de anonimização (ADR-058): as colunas de um banco que saem
+/// mascaradas, e como. Nada disso vai para o servidor de origem: o app monta
+/// o SELECT da cópia com as máscaras, e o dado real não sai de lá.
 /// </summary>
 /// <remarks>
 /// <para>
-/// <see cref="ConnectionId"/> é a conexão <b>mascarada</b>: o mesmo banco da
-/// origem, com uma role marcada <c>MASKED</c> no servidor. O <c>pg_dump</c>
-/// feito por ela já sai anonimizado — o dado bruto de produção nunca chega ao
-/// disco desta máquina.
+/// <see cref="ConnectionId"/> é a conexão de onde as colunas são lidas para
+/// sugerir e pré-visualizar — em geral, a própria origem. O vínculo "este
+/// banco usa este perfil" fica no apelido (ADR-057).
 /// </para>
 /// <para>
-/// As regras daqui não são aplicadas pelo app: produção não sofre alteração.
-/// Elas geram o script <c>SECURITY LABEL</c> que o DBA executa, e são
-/// conferidas contra o que o servidor tem antes de cada cópia.
+/// <see cref="SkippedTables"/>: tabelas cujas linhas não saem da origem —
+/// nem mascaradas. A tabela é criada no destino, com índices e chaves, e
+/// fica vazia. Serve para logs, auditoria, filas, ou dados pessoais que o
+/// desenvolvimento não precisa.
 /// </para>
 /// </remarks>
-public sealed partial class AnonymizationProfile
+public sealed class AnonymizationProfile
 {
     public const int MaxNameLength = 80;
 
     public const int MaxDescriptionLength = 500;
 
-    public const string DefaultPolicyName = "anon";
-
     public const int MaxRules = 2000;
 
+    public const int MaxSkippedTables = 2000;
+
     private readonly List<AnonymizationRule> _rules = [];
+
+    private readonly List<AnonymizationSkippedTable> _skippedTables = [];
 
     private AnonymizationProfile(Guid id, DateTimeOffset createdAt)
     {
         Id = id;
         Name = string.Empty;
-        PolicyName = DefaultPolicyName;
         CreatedAt = createdAt;
         UpdatedAt = createdAt;
     }
@@ -58,11 +61,8 @@ public sealed partial class AnonymizationProfile
 
     public string? Description { get; private set; }
 
-    /// <summary>A conexão com a role mascarada, por onde sai o dump anônimo.</summary>
+    /// <summary>A conexão de onde ler as colunas (sugestões e pré-visualização).</summary>
     public Guid ConnectionId { get; private set; }
-
-    /// <summary>O provedor de <c>SECURITY LABEL</c>: <c>anon</c>, ou outra política do Anonymizer 2.x.</summary>
-    public string PolicyName { get; private set; }
 
     public bool IsEnabled { get; private set; }
 
@@ -72,21 +72,23 @@ public sealed partial class AnonymizationProfile
 
     public IReadOnlyList<AnonymizationRule> Rules => _rules;
 
+    /// <summary>As tabelas que vão vazias para o destino; vale também para as partições de uma tabela particionada.</summary>
+    public IReadOnlyList<AnonymizationSkippedTable> SkippedTables => _skippedTables;
+
     public static AnonymizationProfile Create(
         string name,
         string? description,
         Guid connectionId,
-        string? policyName,
         DateTimeOffset createdAt)
     {
         var profile = new AnonymizationProfile(Guid.CreateVersion7(createdAt), createdAt) { IsEnabled = true };
-        profile.Apply(name, description, connectionId, policyName);
+        profile.Apply(name, description, connectionId);
         return profile;
     }
 
-    public void Update(string name, string? description, Guid connectionId, string? policyName, DateTimeOffset at)
+    public void Update(string name, string? description, Guid connectionId, DateTimeOffset at)
     {
-        Apply(name, description, connectionId, policyName);
+        Apply(name, description, connectionId);
         UpdatedAt = at;
     }
 
@@ -132,7 +134,38 @@ public sealed partial class AnonymizationProfile
         UpdatedAt = confirmedAt;
     }
 
-    private void Apply(string name, string? description, Guid connectionId, string? policyName)
+    /// <summary>
+    /// O conjunto inteiro de tabelas sem dados, como confirmado agora. Atômico,
+    /// como as regras: a mesma tabela duas vezes é erro.
+    /// </summary>
+    public void ReplaceSkippedTables(IEnumerable<SkippedTableSpec> specs, DateTimeOffset confirmedAt)
+    {
+        var tables = new List<AnonymizationSkippedTable>();
+        var keys = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var spec in specs)
+        {
+            var table = AnonymizationSkippedTable.Create(Id, spec, confirmedAt);
+
+            if (!keys.Add(table.TableKey))
+            {
+                throw new DomainException($"A tabela {table.TableKey} aparece duas vezes nas tabelas sem dados.");
+            }
+
+            tables.Add(table);
+        }
+
+        if (tables.Count > MaxSkippedTables)
+        {
+            throw new DomainException($"Um perfil tem no máximo {MaxSkippedTables} tabelas sem dados.");
+        }
+
+        _skippedTables.Clear();
+        _skippedTables.AddRange(tables);
+        UpdatedAt = confirmedAt;
+    }
+
+    private void Apply(string name, string? description, Guid connectionId)
     {
         var normalizedName = name?.Trim();
 
@@ -155,32 +188,21 @@ public sealed partial class AnonymizationProfile
 
         if (connectionId == Guid.Empty)
         {
-            throw new DomainException("Escolha a conexão mascarada do perfil.");
-        }
-
-        var normalizedPolicy = string.IsNullOrWhiteSpace(policyName) ? DefaultPolicyName : policyName.Trim();
-
-        if (!PolicyNamePattern().IsMatch(normalizedPolicy))
-        {
-            throw new DomainException("O nome da política só aceita letras minúsculas, dígitos e sublinhado.");
+            throw new DomainException("Escolha a conexão de onde ler as colunas.");
         }
 
         Name = normalizedName;
         Description = normalizedDescription;
         ConnectionId = connectionId;
-        PolicyName = normalizedPolicy;
     }
-
-    [GeneratedRegex("^[a-z_][a-z0-9_]{0,62}$", RegexOptions.CultureInvariant)]
-    private static partial Regex PolicyNamePattern();
 }
 
 /// <summary>Uma coluna mascarada de um <see cref="AnonymizationProfile"/>.</summary>
-public sealed partial class AnonymizationRule
+public sealed class AnonymizationRule
 {
     public const int MaxIdentifierLength = DatabaseConnection.MaxIdentifierLength;
 
-    public const int MaxExpressionLength = 500;
+    public const int MaxArgumentLength = MaskingCatalog.MaxFixedTextLength;
 
     // Exigido pela materialização do EF Core.
     private AnonymizationRule()
@@ -188,7 +210,6 @@ public sealed partial class AnonymizationRule
         Schema = string.Empty;
         Table = string.Empty;
         Column = string.Empty;
-        Expression = string.Empty;
     }
 
     public Guid Id { get; private set; }
@@ -201,10 +222,10 @@ public sealed partial class AnonymizationRule
 
     public string Column { get; private set; }
 
-    public MaskingKind Kind { get; private set; }
+    public MaskingMethod Method { get; private set; }
 
-    /// <summary><c>anon.fake_email()</c> numa função; <c>NULL</c> ou um literal num valor.</summary>
-    public string Expression { get; private set; }
+    /// <summary>O parâmetro da máscara, já validado: "0,2", "365", um texto fixo. <c>null</c> quando ela não pede.</summary>
+    public string? Argument { get; private set; }
 
     /// <summary>O que a sugestão achou quando o usuário confirmou; só informativo.</summary>
     public ColumnSensitivity Sensitivity { get; private set; }
@@ -213,8 +234,10 @@ public sealed partial class AnonymizationRule
 
     public string QualifiedName => $"{Schema}.{Table}.{Column}";
 
-    /// <summary>Para comparar com o servidor: identificadores do PostgreSQL diferenciam maiúsculas quando citados.</summary>
+    /// <summary>Identificadores do PostgreSQL diferenciam maiúsculas quando citados: a chave compara exato.</summary>
     public string ColumnKey => QualifiedName;
+
+    public string TableKey => $"{Schema}.{Table}";
 
     internal static AnonymizationRule Create(Guid profileId, AnonymizationRuleSpec spec, DateTimeOffset confirmedAt)
     {
@@ -222,17 +245,15 @@ public sealed partial class AnonymizationRule
         var table = Identifier(spec.Table, "a tabela");
         var column = Identifier(spec.Column, "a coluna");
 
-        if (!Enum.IsDefined(spec.Kind))
+        if (!Enum.IsDefined(spec.Method))
         {
-            throw new DomainException("Tipo de mascaramento desconhecido.");
+            throw new DomainException("Máscara desconhecida.");
         }
 
         if (!Enum.IsDefined(spec.Sensitivity))
         {
             throw new DomainException("Sensibilidade desconhecida.");
         }
-
-        var expression = ValidExpression(spec.Kind, spec.Expression, $"{schema}.{table}.{column}");
 
         return new AnonymizationRule
         {
@@ -241,60 +262,14 @@ public sealed partial class AnonymizationRule
             Schema = schema,
             Table = table,
             Column = column,
-            Kind = spec.Kind,
-            Expression = expression,
+            Method = spec.Method,
+            Argument = MaskingCatalog.NormalizeArgument(spec.Method, spec.Argument, $"{schema}.{table}.{column}"),
             Sensitivity = spec.Sensitivity,
             ConfirmedAt = confirmedAt,
         };
     }
 
-    /// <summary>
-    /// A expressão vai para dentro de um <c>SECURITY LABEL</c> que o DBA roda
-    /// como superusuário: só função do <c>anon</c>, ou um literal; nada de
-    /// <c>;</c> nem comentário, que fechariam o comando e abririam outro.
-    /// </summary>
-    internal static string ValidExpression(MaskingKind kind, string? expression, string column)
-    {
-        var normalized = expression?.Trim();
-
-        if (string.IsNullOrEmpty(normalized))
-        {
-            throw new DomainException($"Informe a máscara de {column}.");
-        }
-
-        if (normalized.Length > MaxExpressionLength)
-        {
-            throw new DomainException($"A máscara de {column} passa de {MaxExpressionLength} caracteres.");
-        }
-
-        if (normalized.Contains(';', StringComparison.Ordinal)
-            || normalized.Contains("--", StringComparison.Ordinal)
-            || normalized.Contains("/*", StringComparison.Ordinal)
-            || normalized.Any(char.IsControl))
-        {
-            throw new DomainException($"A máscara de {column} tem caracteres não permitidos.");
-        }
-
-        var valid = kind switch
-        {
-            MaskingKind.Function => FunctionPattern().IsMatch(normalized) && !IsStaticMasking(normalized),
-            MaskingKind.Value => ValuePattern().IsMatch(normalized),
-            _ => false,
-        };
-
-        return valid
-            ? normalized
-            : throw new DomainException(kind == MaskingKind.Function
-                ? $"A máscara de {column} deve ser uma função do anon, como anon.fake_email()."
-                : $"A máscara de {column} deve ser NULL, um número ou um texto entre aspas simples.");
-    }
-
-    /// <summary>Mascaramento estático reescreve o banco: nunca vira regra (ADR-056).</summary>
-    private static bool IsStaticMasking(string expression) =>
-        expression.StartsWith("anon.anonymize_", StringComparison.OrdinalIgnoreCase)
-        || expression.StartsWith("anon.shuffle_column", StringComparison.OrdinalIgnoreCase);
-
-    private static string Identifier(string? value, string what)
+    internal static string Identifier(string? value, string what)
     {
         var normalized = value?.Trim();
 
@@ -310,10 +285,37 @@ public sealed partial class AnonymizationRule
 
         return normalized;
     }
+}
 
-    [GeneratedRegex(@"^anon\.[a-z_][a-z0-9_]*\(.*\)$", RegexOptions.CultureInvariant | RegexOptions.Singleline)]
-    private static partial Regex FunctionPattern();
+/// <summary>Uma tabela de um <see cref="AnonymizationProfile"/> que vai vazia para o destino.</summary>
+public sealed class AnonymizationSkippedTable
+{
+    // Exigido pela materialização do EF Core.
+    private AnonymizationSkippedTable()
+    {
+        Schema = string.Empty;
+        Table = string.Empty;
+    }
 
-    [GeneratedRegex(@"^(?:NULL|-?\d+(?:\.\d+)?|'(?:[^']|'')*')$", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
-    private static partial Regex ValuePattern();
+    public Guid Id { get; private set; }
+
+    public Guid ProfileId { get; private set; }
+
+    public string Schema { get; private set; }
+
+    public string Table { get; private set; }
+
+    public DateTimeOffset ConfirmedAt { get; private set; }
+
+    /// <summary>"public.auditoria": exato, como os identificadores citados do PostgreSQL.</summary>
+    public string TableKey => $"{Schema}.{Table}";
+
+    internal static AnonymizationSkippedTable Create(Guid profileId, SkippedTableSpec spec, DateTimeOffset confirmedAt) => new()
+    {
+        Id = Guid.CreateVersion7(confirmedAt),
+        ProfileId = profileId,
+        Schema = AnonymizationRule.Identifier(spec.Schema, "o schema"),
+        Table = AnonymizationRule.Identifier(spec.Table, "a tabela"),
+        ConfirmedAt = confirmedAt,
+    };
 }

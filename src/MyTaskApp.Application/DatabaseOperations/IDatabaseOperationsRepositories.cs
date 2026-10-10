@@ -49,6 +49,26 @@ public interface IDatabaseCopyProfileRepository
     void Remove(DatabaseCopyProfile profile);
 }
 
+/// <summary>Os apelidos de banco de origem (ADR-057).</summary>
+public interface ISavedDatabaseRepository
+{
+    Task AddAsync(SavedDatabase saved, CancellationToken cancellationToken = default);
+
+    Task<SavedDatabase?> FindByIdAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>Todos, por apelido.</summary>
+    Task<IReadOnlyList<SavedDatabase>> ListAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Outro apelido igual, sem diferenciar maiúsculas.</summary>
+    Task<bool> AliasExistsAsync(string alias, Guid? exceptId, CancellationToken cancellationToken = default);
+
+    Task<bool> AnyUsesConnectionAsync(Guid connectionId, CancellationToken cancellationToken = default);
+
+    Task<bool> AnyUsesAnonymizationProfileAsync(Guid anonymizationProfileId, CancellationToken cancellationToken = default);
+
+    void Remove(SavedDatabase saved);
+}
+
 /// <summary>A trilha das operações de banco (ADR-056). Só se acrescenta; nada é editado por fora da entidade.</summary>
 public interface IDatabaseOperationAuditLog
 {
@@ -82,4 +102,11 @@ internal static class DatabaseOperationsRepositoryExtensions
         CancellationToken cancellationToken) =>
         await profiles.FindByIdAsync(id, cancellationToken)
         ?? throw new DomainException("Perfil de cópia não encontrado.");
+
+    public static async Task<SavedDatabase> GetByIdAsync(
+        this ISavedDatabaseRepository savedDatabases,
+        Guid id,
+        CancellationToken cancellationToken) =>
+        await savedDatabases.FindByIdAsync(id, cancellationToken)
+        ?? throw new DomainException("Apelido não encontrado.");
 }

@@ -11,7 +11,7 @@ public sealed record DatabaseConnectionRow(
     string Name,
     string Host,
     int Port,
-    string Database,
+    string? Database,
     string Username,
     DatabaseEnvironment Environment,
     DatabaseSslMode SslMode,
@@ -68,7 +68,7 @@ public sealed record SaveDatabaseConnection(
     string Name,
     string Host,
     int Port,
-    string Database,
+    string? Database,
     string Username,
     DatabaseEnvironment Environment,
     DatabaseSslMode SslMode,
@@ -149,6 +149,7 @@ public sealed class DeleteDatabaseConnectionHandler(
     IDatabaseConnectionRepository connections,
     IAnonymizationProfileRepository anonymizationProfiles,
     IDatabaseCopyProfileRepository copyProfiles,
+    ISavedDatabaseRepository savedDatabases,
     IDatabaseCredentialStore credentials,
     IUnitOfWork unitOfWork,
     ILogger<DeleteDatabaseConnectionHandler> logger)
@@ -161,6 +162,11 @@ public sealed class DeleteDatabaseConnectionHandler(
             || await anonymizationProfiles.AnyUsesConnectionAsync(connection.Id, cancellationToken))
         {
             throw new DomainException($"{connection.Name} é usada por um perfil. Exclua ou altere o perfil antes.");
+        }
+
+        if (await savedDatabases.AnyUsesConnectionAsync(connection.Id, cancellationToken))
+        {
+            throw new DomainException($"{connection.Name} é usada por um apelido. Exclua ou altere o apelido antes.");
         }
 
         var reference = connection.SecretReference;
@@ -182,7 +188,7 @@ public sealed record TestDatabaseConnection(
     string Name,
     string Host,
     int Port,
-    string Database,
+    string? Database,
     string Username,
     DatabaseEnvironment Environment,
     DatabaseSslMode SslMode,
@@ -223,5 +229,26 @@ public sealed class TestDatabaseConnectionHandler(
         var result = await inspector.TestAsync(snapshot, command.Password, cancellationToken);
         logger.LogInformation("DatabaseConnectionTested {ConnectionId} {Connected}", snapshot.Id, result.Connected);
         return result;
+    }
+}
+
+/// <summary>Os bancos do servidor de uma conexão salva — para escolher na cópia (ADR-057).</summary>
+public sealed record ListServerDatabases(Guid ConnectionId);
+
+public sealed class ListServerDatabasesHandler(
+    IDatabaseConnectionRepository connections,
+    IPostgresServerInspector inspector,
+    IDatabaseSecurityPolicy policy,
+    ILogger<ListServerDatabasesHandler> logger)
+{
+    public async Task<IReadOnlyList<string>> HandleAsync(ListServerDatabases query, CancellationToken cancellationToken = default)
+    {
+        var snapshot = (await connections.GetByIdAsync(query.ConnectionId, cancellationToken)).Snapshot();
+
+        policy.Demand(new DatabaseOperationRequest(DatabaseOperationType.TestConnection, snapshot));
+
+        var databases = await inspector.ListDatabasesAsync(snapshot, cancellationToken);
+        logger.LogInformation("ServerDatabasesListed {ConnectionId} {Count}", snapshot.Id, databases.Count);
+        return databases;
     }
 }

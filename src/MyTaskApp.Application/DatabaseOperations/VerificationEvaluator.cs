@@ -110,6 +110,19 @@ public static class VerificationEvaluator
     }
 
     /// <summary>
+    /// As tabelas sem dados precisam ter chegado vazias: uma linha que seja
+    /// quer dizer que algo saiu da origem sem dever.
+    /// </summary>
+    public static CheckResult CompareSkipped(IReadOnlyList<RowCount> destination)
+    {
+        var filled = destination.Where(count => count.Rows > 0).Select(count => $"{count.Table}: {count.Rows}").ToList();
+
+        return filled.Count == 0
+            ? new CheckResult(Rows, "Tabelas sem dados", CheckOutcome.Pass, $"{destination.Count} tabela(s) vazia(s) no destino, como pedido.")
+            : new CheckResult(Rows, "Tabelas sem dados", CheckOutcome.Fail, $"Deviam estar vazias: {string.Join("; ", filled.Take(10))}.");
+    }
+
+    /// <summary>
     /// Uma coluna mascarada não pode ter chegado igual à origem. Pareia pela
     /// chave (hash), conta os valores não nulos idênticos.
     /// </summary>
@@ -151,12 +164,12 @@ public static class VerificationEvaluator
             : new CheckResult(SensitiveData, name, CheckOutcome.Pass, $"{compared - equal} de {compared} valores diferentes da origem.");
     }
 
-    /// <summary>
-    /// Antes do dump: a mesma coluna lida pela conexão normal e pela mascarada.
-    /// Iguais em tudo = a role não está mascarando, e o dump sairia com os dados reais.
-    /// </summary>
-    public static bool MaskingIsActive(ColumnFingerprint real, ColumnFingerprint masked) =>
-        CompareSensitive(real, masked).Outcome != CheckOutcome.Fail;
+    /// <summary>Uma máscara fixa (texto, número, nulo) tem de estar em todas as linhas do destino.</summary>
+    public static CheckResult CompareFixed(ColumnReference column, long notMasked) =>
+        notMasked == 0
+            ? new CheckResult(SensitiveData, column.ColumnKey, CheckOutcome.Pass, "Todas as linhas com o valor da máscara.")
+            : new CheckResult(SensitiveData, column.ColumnKey, CheckOutcome.Fail,
+                $"{notMasked.ToString(CultureInfo.InvariantCulture)} linha(s) sem a máscara.");
 
     private static CheckResult CompareSets(string category, string name, IReadOnlyList<string> source, IReadOnlyList<string> destination)
     {

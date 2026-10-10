@@ -10,8 +10,8 @@ public sealed record ColumnSuggestion(
     string Column,
     string DataType,
     ColumnSensitivity Sensitivity,
-    MaskingKind Kind,
-    string Expression,
+    MaskingMethod Method,
+    string? Argument,
     string Reason)
 {
     public string ColumnKey => $"{Schema}.{Table}.{Column}";
@@ -23,48 +23,43 @@ public sealed record ColumnSuggestion(
 /// uma tabela de produtos não é dado pessoal, e é o usuário quem sabe disso.
 /// </summary>
 /// <remarks>
-/// As máscaras sugeridas são do PostgreSQL Anonymizer 2.x
-/// (<c>anon.partial</c>, <c>anon.partial_email</c>, <c>anon.dummy_*</c>,
-/// <c>anon.random_*</c>). Confira os nomes na versão instalada antes de
-/// confirmar; o script gerado falha no <c>SECURITY LABEL</c> se uma função não existir.
+/// A máscara sugerida é do catálogo (ADR-058) e cabe no tipo da coluna: um
+/// CPF guardado como número não recebe a máscara parcial de texto.
 /// </remarks>
 public static class SensitiveColumnClassifier
 {
     private static readonly Pattern[] Patterns =
     [
         // Alta: identifica a pessoa sozinho, ou dá acesso a algo.
-        new(ColumnSensitivity.High, ["cpf"], [], "CPF", col => $"anon.partial({col},0,$$*********$$,2)"),
-        new(ColumnSensitivity.High, ["cnpj"], [], "CNPJ", col => $"anon.partial({col},0,$$************$$,2)"),
-        new(ColumnSensitivity.High, ["rg"], [], "RG", col => $"anon.partial({col},0,$$*******$$,2)"),
-        new(ColumnSensitivity.High, ["mail"], ["email"], "e-mail", col => $"anon.partial_email({col})", ExpectsText: true),
+        new(ColumnSensitivity.High, ["cpf"], [], "CPF", MaskingMethod.Partial, "0,2"),
+        new(ColumnSensitivity.High, ["cnpj"], [], "CNPJ", MaskingMethod.Partial, "0,2"),
+        new(ColumnSensitivity.High, ["rg"], [], "RG", MaskingMethod.Partial, "0,2"),
+        new(ColumnSensitivity.High, ["mail"], ["email"], "e-mail", MaskingMethod.FakeEmail, ExpectsText: true),
         new(ColumnSensitivity.High, ["fone", "phone", "tel"], ["telefone", "celular", "phone", "whatsapp"], "telefone",
-            col => $"anon.partial({col},2,$$*******$$,2)"),
-        new(ColumnSensitivity.High, ["pwd", "hash"], ["password", "senha", "passwd"], "senha", _ => "anon.random_string(16)", ExpectsText: true),
-        new(ColumnSensitivity.High, [], ["token", "secret", "apikey"], "segredo", _ => "anon.random_string(16)", ExpectsText: true),
+            MaskingMethod.Partial, "2,2"),
+        new(ColumnSensitivity.High, ["pwd", "hash"], ["password", "senha", "passwd"], "senha", MaskingMethod.Hash, ExpectsText: true),
+        new(ColumnSensitivity.High, [], ["token", "secret", "apikey"], "segredo", MaskingMethod.Hash, ExpectsText: true),
         new(ColumnSensitivity.High, ["iban", "pix"], ["cartao", "creditcard", "cardnumber", "numerocartao", "contabancaria", "accountnumber"],
-            "dado financeiro", col => $"anon.partial({col},0,$$************$$,4)"),
-        new(ColumnSensitivity.High, ["passaporte", "passport", "cnh", "ssn", "pis", "nis"], [], "documento",
-            col => $"anon.partial({col},0,$$******$$,2)"),
+            "dado financeiro", MaskingMethod.Partial, "0,4"),
+        new(ColumnSensitivity.High, ["passaporte", "passport", "cnh", "ssn", "pis", "nis"], [], "documento", MaskingMethod.Partial, "0,2"),
 
         // Média: identifica junto com outra coisa.
         new(ColumnSensitivity.Medium, ["nome", "name", "sobrenome", "surname"], ["firstname", "lastname", "fullname", "nomecompleto"],
-            "nome", _ => "anon.dummy_name()", ExpectsText: true),
+            "nome", MaskingMethod.FakeName, ExpectsText: true),
         new(ColumnSensitivity.Medium, ["endereco", "address", "logradouro", "rua", "street", "bairro"], ["endereco", "logradouro"],
-            "endereço", _ => "anon.dummy_street_name()", ExpectsText: true),
-        new(ColumnSensitivity.Medium, ["cep", "zip", "zipcode", "postal"], [], "CEP", _ => "anon.dummy_zip_code()"),
-        new(ColumnSensitivity.Medium, ["dob"], ["nascimento", "birth", "aniversario"], "data de nascimento", _ => "anon.random_date()"),
-        new(ColumnSensitivity.Medium, ["ip"], ["ipaddress", "enderecoip"], "endereço IP", _ => "NULL", MaskingKind.Value),
-        new(ColumnSensitivity.Medium, [], ["salario", "salary", "remuneracao"], "salário", col => $"anon.noise({col}, 0.2)"),
+            "endereço", MaskingMethod.FixedText, "Rua Exemplo, 100", ExpectsText: true),
+        new(ColumnSensitivity.Medium, ["cep", "zip", "zipcode", "postal"], [], "CEP", MaskingMethod.Partial, "5,0"),
+        new(ColumnSensitivity.Medium, ["dob"], ["nascimento", "birth", "aniversario"], "data de nascimento", MaskingMethod.DateShift, "365"),
+        new(ColumnSensitivity.Medium, ["ip"], ["ipaddress", "enderecoip"], "endereço IP", MaskingMethod.Null),
+        new(ColumnSensitivity.Medium, [], ["salario", "salary", "remuneracao"], "salário", MaskingMethod.NumberNoise, "20"),
 
         // Baixa: raramente sozinha, mas costuma andar junto.
-        new(ColumnSensitivity.Low, ["cidade", "city", "municipio"], [], "cidade", _ => "anon.dummy_city_name()", ExpectsText: true),
-        new(ColumnSensitivity.Low, ["genero", "gender", "sexo"], [], "gênero", _ => "NULL", MaskingKind.Value, ExpectsText: true),
+        new(ColumnSensitivity.Low, ["cidade", "city", "municipio"], [], "cidade", MaskingMethod.FixedText, "Cidade Exemplo", ExpectsText: true),
+        new(ColumnSensitivity.Low, ["genero", "gender", "sexo"], [], "gênero", MaskingMethod.Null, ExpectsText: true),
         new(ColumnSensitivity.Low, ["obs", "observacao", "notes", "nota", "comentario", "comment"], ["observacao", "comentario"],
-            "texto livre", _ => "anon.lorem_ipsum(words := 5)", ExpectsText: true),
-        new(ColumnSensitivity.Low, ["lat", "latitude", "lng", "lon", "longitude"], [], "localização", col => $"anon.noise({col}, 0.1)"),
+            "texto livre", MaskingMethod.FixedText, "(removido)", ExpectsText: true),
+        new(ColumnSensitivity.Low, ["lat", "latitude", "lng", "lon", "longitude"], [], "localização", MaskingMethod.NumberNoise, "10"),
     ];
-
-    private static readonly string[] TextTypes = ["text", "character", "varchar", "char", "citext", "bpchar", "json"];
 
     private static readonly string[] SensitiveComments = ["pii", "lgpd", "gdpr", "sensível", "sensivel", "sensitive", "pessoal", "personal"];
 
@@ -79,6 +74,7 @@ public static class SensitiveColumnClassifier
     {
         var tokens = Tokens(column.Column);
         var compact = string.Concat(tokens);
+        var type = MaskingCatalog.ValueTypeOf(column.DataType);
         var marked = column.Comment is { } comment
             && SensitiveComments.Any(word => comment.Contains(word, StringComparison.OrdinalIgnoreCase));
 
@@ -90,7 +86,7 @@ public static class SensitiveColumnClassifier
             }
 
             // "nome_id" inteiro não é um nome: o que espera texto perde um grau fora de texto.
-            var sensitivity = !pattern.ExpectsText || IsText(column.DataType)
+            var sensitivity = !pattern.ExpectsText || type == MaskedValueType.Text
                 ? pattern.Sensitivity
                 : Lower(pattern.Sensitivity);
 
@@ -107,22 +103,40 @@ public static class SensitiveColumnClassifier
             var reason = marked
                 ? $"Parece {pattern.Reason}; o comentário da coluna a marca como dado pessoal."
                 : $"Parece {pattern.Reason}.";
+            var (method, argument) = Fit(pattern.Method, pattern.Argument, type);
 
             return new ColumnSuggestion(
-                column.Schema,
-                column.Table,
-                column.Column,
-                column.DataType,
-                sensitivity.Value,
-                pattern.Kind,
-                pattern.Expression(Identifier(column.Column)),
-                reason);
+                column.Schema, column.Table, column.Column, column.DataType, sensitivity.Value, method, argument, reason);
         }
 
-        return marked
-            ? new ColumnSuggestion(column.Schema, column.Table, column.Column, column.DataType, ColumnSensitivity.High,
-                MaskingKind.Function, "anon.random_string(12)", "O comentário da coluna a marca como dado pessoal.")
-            : null;
+        if (!marked)
+        {
+            return null;
+        }
+
+        var (fallback, fallbackArgument) = Fit(MaskingMethod.Hash, null, type);
+        return new ColumnSuggestion(column.Schema, column.Table, column.Column, column.DataType, ColumnSensitivity.High,
+            fallback, fallbackArgument, "O comentário da coluna a marca como dado pessoal.");
+    }
+
+    /// <summary>
+    /// A máscara do padrão, se couber no tipo; senão, a mais segura para o tipo:
+    /// hash no texto, zero no número, data deslocada na data, vazio no resto.
+    /// </summary>
+    internal static (MaskingMethod Method, string? Argument) Fit(MaskingMethod method, string? argument, MaskedValueType type)
+    {
+        if (MaskingCatalog.Fits(method, type))
+        {
+            return (method, argument);
+        }
+
+        return type switch
+        {
+            MaskedValueType.Text => (MaskingMethod.Hash, null),
+            MaskedValueType.Number => (MaskingMethod.FixedNumber, "0"),
+            MaskedValueType.Temporal => (MaskingMethod.DateShift, "365"),
+            _ => (MaskingMethod.Null, null),
+        };
     }
 
     /// <summary>"dataNascimento", "data_nascimento", "DATA-NASCIMENTO" → [data, nascimento].</summary>
@@ -167,9 +181,6 @@ public static class SensitiveColumnClassifier
             .Where(c => System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.NonSpacingMark)
             .ToArray());
 
-    private static bool IsText(string dataType) =>
-        TextTypes.Any(type => dataType.Contains(type, StringComparison.OrdinalIgnoreCase));
-
     private static ColumnSensitivity? Lower(ColumnSensitivity sensitivity) => sensitivity switch
     {
         ColumnSensitivity.High => ColumnSensitivity.Medium,
@@ -177,19 +188,13 @@ public static class SensitiveColumnClassifier
         _ => null,
     };
 
-    /// <summary>A coluna dentro da expressão sugerida: entre aspas se precisar.</summary>
-    private static string Identifier(string column) =>
-        column.All(c => char.IsAsciiLetterLower(c) || char.IsAsciiDigit(c) || c == '_') && !char.IsAsciiDigit(column[0])
-            ? column
-            : MaskingScriptBuilder.QuoteIdentifier(column);
-
     private sealed record Pattern(
         ColumnSensitivity Sensitivity,
         string[] WholeTokens,
         string[] Fragments,
         string Reason,
-        Func<string, string> Expression,
-        MaskingKind Kind = MaskingKind.Function,
+        MaskingMethod Method,
+        string? Argument = null,
         bool ExpectsText = false)
     {
         public bool Matches(IReadOnlyList<string> tokens, string compact) =>

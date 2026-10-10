@@ -16,10 +16,12 @@ namespace MyTaskApp.Infrastructure.PostgreSql;
 /// pacote <c>postgresql-client</c> instalam.
 /// </para>
 /// <para>
-/// <b>Um conjunto só.</b> Com o PostgreSQL 14 no PATH e o 17 instalado ao
+/// <b>Um conjunto por vez.</b> Com o PostgreSQL 14 no PATH e o 17 instalado ao
 /// lado, misturar <c>pg_dump</c> 17 com <c>pg_restore</c> 14 dá um arquivo
-/// que o restore não lê. Por isso a pasta preferida é a do <c>pg_dump</c> de
-/// maior versão, e as outras ferramentas vêm dela quando existem lá.
+/// que o restore não lê. Por isso cada pasta com <c>pg_dump</c> vira um
+/// conjunto, e as outras ferramentas vêm dela quando existem lá. O diagnóstico
+/// mostra o mais novo; a cópia usa o menor que lê a origem
+/// (<see cref="PostgresClientTools.ForSource"/>).
 /// </para>
 /// </remarks>
 internal sealed class PostgresToolLocator(
@@ -79,21 +81,40 @@ internal sealed class PostgresToolLocator(
         var known = KnownDirectories().ToList();
         var versions = new Dictionary<string, (PostgresVersion? Version, string? Text)>(isWindows ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
 
-        // A pasta do pg_dump mais novo manda: as outras ferramentas vêm dela.
-        string? preferred = null;
-        PostgresVersion? best = null;
+        // Cada pasta com um pg_dump de versão legível é um conjunto: as outras ferramentas vêm dela.
+        var folders = new List<(string Directory, PostgresVersion Version)>();
+        var comparer = isWindows ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
         foreach (var dump in _locator.LocateAll(FileNames(PostgresTool.PgDump), known))
         {
             var version = await VersionOfAsync(dump, versions, cancellationToken);
 
-            if (version.Version is { } found && (best is null || found.CompareTo(best) > 0))
+            if (version.Version is { } found
+                && Path.GetDirectoryName(dump) is { } directory
+                && !folders.Any(folder => comparer.Equals(folder.Directory, directory)))
             {
-                best = found;
-                preferred = Path.GetDirectoryName(dump);
+                folders.Add((directory, found));
             }
         }
 
+        var sets = new List<IReadOnlyList<PostgresToolStatus>>();
+
+        // OrderByDescending é estável: entre versões iguais, fica a primeira achada.
+        foreach (var (directory, _) in folders.OrderByDescending(folder => folder.Version))
+        {
+            sets.Add(await SetFromAsync(directory, known, versions, cancellationToken));
+        }
+
+        var newest = sets.Count > 0 ? sets[0] : await SetFromAsync(null, known, versions, cancellationToken);
+        return new PostgresClientTools(newest, PostgresInstallGuides.For(isWindows, environment)) { Sets = sets };
+    }
+
+    private async Task<IReadOnlyList<PostgresToolStatus>> SetFromAsync(
+        string? preferred,
+        List<string> known,
+        Dictionary<string, (PostgresVersion? Version, string? Text)> versions,
+        CancellationToken cancellationToken)
+    {
         var tools = new List<PostgresToolStatus>();
 
         foreach (var tool in Enum.GetValues<PostgresTool>())
@@ -112,7 +133,7 @@ internal sealed class PostgresToolLocator(
             tools.Add(new PostgresToolStatus(tool, PostgresToolNames.Of(tool), path, version.Version, version.Text));
         }
 
-        return new PostgresClientTools(tools, PostgresInstallGuides.For(isWindows, environment));
+        return tools;
     }
 
     private async Task<(PostgresVersion? Version, string? Text)> VersionOfAsync(

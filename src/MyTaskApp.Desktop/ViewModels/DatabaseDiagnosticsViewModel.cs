@@ -11,7 +11,7 @@ namespace MyTaskApp.Desktop.ViewModels;
 
 /// <summary>
 /// A aba "Diagnóstico" — "PostgreSQL Environment" (ADR-056): as ferramentas
-/// desta máquina, o servidor e o Anonymizer de uma conexão, item por item,
+/// desta máquina e o servidor de uma conexão, item por item,
 /// com as instruções quando falta algo.
 /// </summary>
 public sealed partial class DatabaseDiagnosticsViewModel(
@@ -45,8 +45,6 @@ public sealed partial class DatabaseDiagnosticsViewModel(
 
     public ObservableCollection<CheckItemViewModel> Server { get; } = [];
 
-    public ObservableCollection<CheckItemViewModel> Anonymizer { get; } = [];
-
     public ObservableCollection<string> InstallSteps { get; } = [];
 
     public ObservableCollection<string> CheckCommands { get; } = [];
@@ -54,8 +52,6 @@ public sealed partial class DatabaseDiagnosticsViewModel(
     public bool HasMissingTools => ToolsMissing;
 
     public bool HasServer => Server.Count > 0;
-
-    public bool HasAnonymizer => Anonymizer.Count > 0;
 
     public void SetConnections(IReadOnlyList<DatabaseConnectionItemViewModel> connections)
     {
@@ -121,7 +117,7 @@ public sealed partial class DatabaseDiagnosticsViewModel(
 
         await TryAsync(
             async () => report = await runner.RunAsync<DiagnoseDatabaseHandler, EnvironmentDiagnosticsReport>(
-                (handler, token) => handler.HandleAsync(new DiagnoseDatabase(connection.Id, null, refresh), token), cancellationToken),
+                (handler, token) => handler.HandleAsync(new DiagnoseDatabase(connection.Id, refresh), token), cancellationToken),
             "Não foi possível diagnosticar a conexão.");
 
         if (report is not null)
@@ -138,7 +134,6 @@ public sealed partial class DatabaseDiagnosticsViewModel(
         if (includeServer)
         {
             Fill(Server, report.Server);
-            Fill(Anonymizer, report.Anonymizer);
         }
 
         Platform = report.Guide.Platform;
@@ -146,7 +141,6 @@ public sealed partial class DatabaseDiagnosticsViewModel(
         Fill(InstallSteps, report.Guide.Steps);
         Fill(CheckCommands, report.Guide.CheckCommands);
         OnPropertyChanged(nameof(HasServer));
-        OnPropertyChanged(nameof(HasAnonymizer));
     }
 
     private static void Fill(ObservableCollection<CheckItemViewModel> target, IEnumerable<CheckResult> checks)
