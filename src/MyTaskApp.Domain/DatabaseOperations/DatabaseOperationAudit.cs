@@ -54,6 +54,12 @@ public sealed class DatabaseOperationAudit
 
     public string? DestinationConnectionName { get; private set; }
 
+    /// <summary>O banco copiado — numa conexão só de servidor, o escolhido na cópia (ADR-057).</summary>
+    public string? SourceDatabase { get; private set; }
+
+    /// <summary>O banco que recebeu a cópia; com nome gerado, <c>apelido_yyyyMMdd_HHmmss</c>.</summary>
+    public string? DestinationDatabase { get; private set; }
+
     /// <summary>O perfil de cópia, quando a operação veio de um.</summary>
     public Guid? ProfileId { get; private set; }
 
@@ -115,6 +121,8 @@ public sealed class DatabaseOperationAudit
             SourceConnectionName = Clean(source?.Name, MaxNameLength),
             DestinationConnectionId = destination?.Id,
             DestinationConnectionName = Clean(destination?.Name, MaxNameLength),
+            SourceDatabase = Clean(source?.Database, DatabaseConnection.MaxIdentifierLength),
+            DestinationDatabase = Clean(destination?.Database, DatabaseConnection.MaxIdentifierLength),
             ProfileId = profileId,
             ProfileName = Clean(profileName, MaxNameLength),
             StartedAt = startedAt,

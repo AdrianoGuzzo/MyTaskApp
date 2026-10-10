@@ -68,6 +68,41 @@ public class PostgresToolLocatorTests
     }
 
     [Fact]
+    public async Task EveryInstalledSet_IsKept_AndACopyUsesTheOldestThatReadsTheSource()
+    {
+        // O caso real: o PostgreSQL 14 instalado, e o pgAdmin 18 com as ferramentas dele.
+        _directories[@"C:\Program Files\PostgreSQL"] = [@"C:\Program Files\PostgreSQL\14"];
+        Install(@"C:\Program Files\PostgreSQL\14\bin", 14, AllWindowsTools);
+        Install(@"C:\Program Files\pgAdmin 4\runtime", 18, "psql.exe", "pg_dump.exe", "pg_restore.exe");
+
+        var tools = await Locator().DetectAsync(refresh: true, Ct);
+
+        tools.Find(PostgresTool.PgRestore).Path.Should().Contain("pgAdmin", "o diagnóstico mostra o mais novo");
+        tools.Sets.Select(set => set.Single(tool => tool.Tool == PostgresTool.PgDump).Version!.Major).Should().Equal(18, 14);
+
+        var forFourteen = tools.ForSource(new PostgresVersion(14, 10));
+        forFourteen.Find(PostgresTool.PgDump).Path.Should().Be(@"C:\Program Files\PostgreSQL\14\bin\pg_dump.exe");
+        forFourteen.Find(PostgresTool.PgRestore).Path.Should().Be(@"C:\Program Files\PostgreSQL\14\bin\pg_restore.exe");
+        forFourteen.Sets.Should().HaveCount(2);
+
+        tools.ForSource(new PostgresVersion(16, 4)).Find(PostgresTool.PgRestore).Version!.Major.Should().Be(18);
+
+        // O pgAdmin não traz createdb: ele vem de outra pasta, como antes.
+        tools.ForSource(new PostgresVersion(16, 4)).Find(PostgresTool.CreateDb).Path.Should().Contain(@"\14\bin");
+    }
+
+    [Fact]
+    public async Task WithoutASetThatReadsTheSource_OrWithoutItsVersion_TheNewestStays()
+    {
+        Install(@"C:\Program Files\pgAdmin 4\runtime", 16, AllWindowsTools);
+
+        var tools = await Locator().DetectAsync(refresh: true, Ct);
+
+        tools.ForSource(new PostgresVersion(17, 0)).Should().BeSameAs(tools);
+        tools.ForSource(null).Should().BeSameAs(tools);
+    }
+
+    [Fact]
     public async Task ToolsMissingFromThePreferredFolder_ComeFromElsewhere_AndMissingOnesSaySo()
     {
         _directories[@"C:\Program Files\PostgreSQL"] = [@"C:\Program Files\PostgreSQL\17"];
@@ -186,18 +221,14 @@ public class PgOutputParsersTests
         summary.Tables.Should().Equal("public.clientes", "public.pedidos");
         summary.IndexEntries.Should().Be(1);
         summary.ConstraintEntries.Should().Be(2);
-        summary.SecurityLabelEntries.Should().Be(0);
-        summary.HasAnonExtension.Should().BeFalse();
     }
 
     [Fact]
-    public void LabelsAndTheAnonExtension_AreSpotted()
+    public void AStructureOnlyListing_HasNoTableData()
     {
-        var summary = PgArchiveListParser.Parse(Listing + "\r\n3280; 3079 16384 EXTENSION - anon \r\n3290; 3596 0 SECURITY LABEL public COLUMN clientes.email postgres\r\n");
+        var structure = string.Join("\n", Listing.Split('\n').Where(line => !line.Contains("TABLE DATA", StringComparison.Ordinal)));
 
-        summary.HasAnonExtension.Should().BeTrue();
-        summary.SecurityLabelEntries.Should().Be(1);
-        PgArchiveListParser.Parse("3281; 2615 16383 SCHEMA - anon postgres").HasAnonExtension.Should().BeTrue();
+        PgArchiveListParser.Parse(structure).TableDataEntries.Should().Be(0);
     }
 }
 
@@ -215,9 +246,9 @@ public partial class PostgresQueriesTests
     }
 
     [Fact]
-    public void NoQuery_CallsStaticMasking()
+    public void NoQuery_TouchesAnExtension()
     {
-        PostgresQueries.All().Should().NotContain(sql => sql.Contains("anonymize", StringComparison.OrdinalIgnoreCase));
+        PostgresQueries.All().Should().NotContain(sql => sql.Contains("anon.", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -262,6 +293,34 @@ public class PostgresInspectorsTests
         result.Privileges.CanReadAllData.Should().BeTrue();
         result.Privileges.CanCreateDatabase.Should().BeTrue();
         _sessions.Opened.Single().Password!.Reveal().Should().Be("digitada");
+    }
+
+    [Fact]
+    public async Task TestingAServerOnlyConnection_GoesThroughTheMaintenanceDatabase_WithoutItsSchemas()
+    {
+        _sessions
+            .Answer(PostgresQueries.ServerInfo, ["PostgreSQL 16.4 on x86_64", "backup_user", "postgres", 7000L])
+            .Answer(PostgresQueries.Privileges, [false, false, -1, true, 0L]);
+
+        var result = await Inspector().TestAsync(Connection(DatabaseEnvironment.Production, database: null), cancellationToken: Ct);
+
+        result.Connected.Should().BeTrue();
+        result.Schemas.Should().BeEmpty();
+        result.TableCount.Should().Be(0);
+        _sessions.Opened.Single().Connection.Database.Should().Be("postgres");
+        _sessions.Queries.Select(query => query.Sql).Should().NotContain([PostgresQueries.Schemas, PostgresQueries.Tables]);
+    }
+
+    [Fact]
+    public async Task TheServerDatabases_AreListed_FromTheMaintenanceDatabase()
+    {
+        _sessions.Answer(PostgresQueries.Databases, ["eco_core_1010"], ["eco_core_2020"]);
+
+        var databases = await Inspector().ListDatabasesAsync(Connection(DatabaseEnvironment.Production, database: null), Ct);
+
+        databases.Should().Equal("eco_core_1010", "eco_core_2020");
+        _sessions.Opened.Single().Connection.Database.Should().Be("postgres");
+        PostgresQueries.Databases.Should().Contain("NOT datistemplate").And.Contain("datallowconn");
     }
 
     [Fact]
@@ -346,38 +405,18 @@ public class PostgresInspectorsTests
     }
 
     [Fact]
-    public async Task TheAnonymizer_IsReadFromTheCatalog()
+    public async Task FixedMasks_AreCountedOnTheDestination()
     {
-        _sessions
-            .Answer(PostgresQueries.AnonymizerAvailable, ["2.1.0", "2.1.0"])
-            .Answer(PostgresQueries.TransparentMasking, ["on"])
-            .Answer(PostgresQueries.RoleIsMasked, [true])
-            .Answer(PostgresQueries.AnonymizerFunctions, [true])
-            .Answer(PostgresQueries.MaskingRules, ["public", "clientes", "email", "MASKED WITH FUNCTION anon.partial_email(email)"]);
+        _sessions.AnswerWhen(sql => sql.StartsWith("SELECT count(*) FROM \"public\".\"clientes\"", StringComparison.Ordinal), _ => [[4L]]);
 
-        var status = await new PostgresAnonymizerInspector(_sessions).GetStatusAsync(Connection(DatabaseEnvironment.Production), "anon", Ct);
+        var count = await Inspector().CountNotMaskedAsync(
+            Connection(DatabaseEnvironment.Development, "eco_dev"),
+            new ColumnReference("public", "clientes", "obs"),
+            new MaskedColumnPlan("obs", "text", MaskingMethod.FixedText, "(removido)"),
+            Ct);
 
-        status.Installed.Should().BeTrue();
-        status.IsSupportedVersion.Should().BeTrue();
-        status.TransparentMaskingOn.Should().BeTrue();
-        status.CurrentRoleMasked.Should().BeTrue();
-        status.CanExecuteFunctions.Should().BeTrue();
-        status.Rules.Single().ColumnKey.Should().Be("public.clientes.email");
-        _sessions.Queries.Single(query => query.Sql == PostgresQueries.MaskingRules).Parameters.Should().Equal("anon");
-    }
-
-    [Fact]
-    public async Task WithoutTheExtension_TheAnonymizerSaysSo()
-    {
-        var inspector = new PostgresAnonymizerInspector(_sessions);
-
-        (await inspector.GetStatusAsync(Connection(DatabaseEnvironment.Production), "anon", Ct)).Should().Be(AnonymizerStatus.Unavailable);
-
-        _sessions.Answer(PostgresQueries.AnonymizerAvailable, ["2.1.0", null]);
-        var available = await inspector.GetStatusAsync(Connection(DatabaseEnvironment.Production), "anon", Ct);
-        available.Available.Should().BeTrue();
-        available.Installed.Should().BeFalse();
-        available.AvailableVersion.Should().Be("2.1.0");
+        count.Should().Be(4);
+        _sessions.Queries.Single().Sql.Should().EndWith("WHERE \"obs\" IS DISTINCT FROM CAST('(removido)' AS text)");
     }
 
     [Fact]

@@ -11,13 +11,21 @@ public sealed record AnonymizationRuleRow(
     string Schema,
     string Table,
     string Column,
-    MaskingKind Kind,
-    string Expression,
+    MaskingMethod Method,
+    string? Argument,
     ColumnSensitivity Sensitivity)
 {
     public string ColumnKey => $"{Schema}.{Table}.{Column}";
 
-    public AnonymizationRuleSpec ToSpec() => new(Schema, Table, Column, Kind, Expression, Sensitivity);
+    public AnonymizationRuleSpec ToSpec() => new(Schema, Table, Column, Method, Argument, Sensitivity);
+}
+
+/// <summary>Uma tabela que vai vazia para o destino.</summary>
+public sealed record SkippedTableRow(string Schema, string Table)
+{
+    public string TableKey => $"{Schema}.{Table}";
+
+    public SkippedTableSpec ToSpec() => new(Schema, Table);
 }
 
 public sealed record AnonymizationProfileRow(
@@ -25,10 +33,12 @@ public sealed record AnonymizationProfileRow(
     string Name,
     string? Description,
     Guid ConnectionId,
-    string PolicyName,
     bool IsEnabled,
     IReadOnlyList<AnonymizationRuleRow> Rules,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt)
+{
+    public IReadOnlyList<SkippedTableRow> SkippedTables { get; init; } = [];
+}
 
 public sealed record GetAnonymizationProfiles;
 
@@ -44,25 +54,33 @@ public sealed class GetAnonymizationProfilesHandler(IAnonymizationProfileReposit
         profile.Name,
         profile.Description,
         profile.ConnectionId,
-        profile.PolicyName,
         profile.IsEnabled,
         profile.Rules
             .OrderBy(rule => rule.Schema, StringComparer.Ordinal)
             .ThenBy(rule => rule.Table, StringComparer.Ordinal)
             .ThenBy(rule => rule.Column, StringComparer.Ordinal)
-            .Select(rule => new AnonymizationRuleRow(rule.Schema, rule.Table, rule.Column, rule.Kind, rule.Expression, rule.Sensitivity))
+            .Select(rule => new AnonymizationRuleRow(rule.Schema, rule.Table, rule.Column, rule.Method, rule.Argument, rule.Sensitivity))
             .ToList(),
-        profile.UpdatedAt);
+        profile.UpdatedAt)
+    {
+        SkippedTables = profile.SkippedTables
+            .OrderBy(table => table.Schema, StringComparer.Ordinal)
+            .ThenBy(table => table.Table, StringComparer.Ordinal)
+            .Select(table => new SkippedTableRow(table.Schema, table.Table))
+            .ToList(),
+    };
 }
 
-/// <summary>Criar ou editar um perfil, com o conjunto inteiro de regras confirmadas.</summary>
+/// <summary>Criar ou editar um perfil, com o conjunto inteiro de regras confirmadas e de tabelas sem dados.</summary>
 public sealed record SaveAnonymizationProfile(
     Guid? Id,
     string Name,
     string? Description,
     Guid ConnectionId,
-    string? PolicyName,
-    IReadOnlyList<AnonymizationRuleRow> Rules);
+    IReadOnlyList<AnonymizationRuleRow> Rules)
+{
+    public IReadOnlyList<SkippedTableRow> SkippedTables { get; init; } = [];
+}
 
 public sealed class SaveAnonymizationProfileHandler(
     IAnonymizationProfileRepository profiles,
@@ -81,18 +99,20 @@ public sealed class SaveAnonymizationProfileHandler(
         if (command.Id is { } id)
         {
             profile = await profiles.GetByIdAsync(id, cancellationToken);
-            profile.Update(command.Name, command.Description, command.ConnectionId, command.PolicyName, now);
+            profile.Update(command.Name, command.Description, command.ConnectionId, now);
         }
         else
         {
-            profile = AnonymizationProfile.Create(command.Name, command.Description, command.ConnectionId, command.PolicyName, now);
+            profile = AnonymizationProfile.Create(command.Name, command.Description, command.ConnectionId, now);
             await profiles.AddAsync(profile, cancellationToken);
         }
 
         profile.ReplaceRules(command.Rules.Select(rule => rule.ToSpec()), now);
+        profile.ReplaceSkippedTables(command.SkippedTables.Select(table => table.ToSpec()), now);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        logger.LogInformation("AnonymizationProfileSaved {ProfileId} {Rules}", profile.Id, profile.Rules.Count);
+        logger.LogInformation(
+            "AnonymizationProfileSaved {ProfileId} {Rules} {SkippedTables}", profile.Id, profile.Rules.Count, profile.SkippedTables.Count);
         return profile.Id;
     }
 }
@@ -117,6 +137,7 @@ public sealed record DeleteAnonymizationProfile(Guid Id);
 public sealed class DeleteAnonymizationProfileHandler(
     IAnonymizationProfileRepository profiles,
     IDatabaseCopyProfileRepository copyProfiles,
+    ISavedDatabaseRepository savedDatabases,
     IUnitOfWork unitOfWork)
 {
     public async Task HandleAsync(DeleteAnonymizationProfile command, CancellationToken cancellationToken = default)
@@ -128,13 +149,21 @@ public sealed class DeleteAnonymizationProfileHandler(
             throw new DomainException($"{profile.Name} é usado por um perfil de cópia. Altere ou exclua o perfil de cópia antes.");
         }
 
+        if (await savedDatabases.AnyUsesAnonymizationProfileAsync(profile.Id, cancellationToken))
+        {
+            throw new DomainException($"{profile.Name} é usado por um apelido. Altere ou exclua o apelido antes.");
+        }
+
         profiles.Remove(profile);
         await unitOfWork.SaveChangesAsync(cancellationToken);
     }
 }
 
-/// <summary>As colunas que parecem dado pessoal na conexão, para o usuário confirmar ou descartar.</summary>
-public sealed record SuggestSensitiveColumns(Guid ConnectionId);
+/// <summary>
+/// As colunas que parecem dado pessoal na conexão, para o usuário confirmar ou
+/// descartar. <see cref="Database"/>: o banco, quando a conexão é só o servidor.
+/// </summary>
+public sealed record SuggestSensitiveColumns(Guid ConnectionId, string? Database = null);
 
 public sealed class SuggestSensitiveColumnsHandler(
     IDatabaseConnectionRepository connections,
@@ -145,7 +174,9 @@ public sealed class SuggestSensitiveColumnsHandler(
         SuggestSensitiveColumns query,
         CancellationToken cancellationToken = default)
     {
-        var connection = (await connections.GetByIdAsync(query.ConnectionId, cancellationToken)).Snapshot();
+        var connection = DatabaseChoice.Resolve(
+            (await connections.GetByIdAsync(query.ConnectionId, cancellationToken)).Snapshot(),
+            query.Database);
         policy.Demand(new DatabaseOperationRequest(DatabaseOperationType.InspectDatabase, connection));
 
         var columns = await inspector.ListColumnsAsync(connection, cancellationToken);
@@ -153,36 +184,102 @@ public sealed class SuggestSensitiveColumnsHandler(
     }
 }
 
-/// <summary>O script <c>SECURITY LABEL</c> do perfil, para o DBA. O app não o executa.</summary>
-public sealed record GenerateMaskingScript(Guid ProfileId);
+/// <summary>
+/// As tabelas do banco, para escolher as que vão sem dados. Uma tabela
+/// particionada aparece uma vez, somando as partições. Só catálogo.
+/// </summary>
+public sealed record GetSourceTables(Guid ConnectionId, string? Database = null);
 
-public sealed class GenerateMaskingScriptHandler(
-    IAnonymizationProfileRepository profiles,
-    IDatabaseConnectionRepository connections,
-    TimeProvider timeProvider)
+public sealed record SourceTableRow(string Schema, string Table, long EstimatedRows, long Bytes, int Partitions)
 {
-    public async Task<string> HandleAsync(GenerateMaskingScript query, CancellationToken cancellationToken = default)
+    public string TableKey => $"{Schema}.{Table}";
+}
+
+public sealed class GetSourceTablesHandler(
+    IDatabaseConnectionRepository connections,
+    IPostgresMaskedCopier copier,
+    IDatabaseSecurityPolicy policy)
+{
+    public async Task<IReadOnlyList<SourceTableRow>> HandleAsync(GetSourceTables query, CancellationToken cancellationToken = default)
     {
-        var profile = await profiles.GetByIdAsync(query.ProfileId, cancellationToken);
-        var masked = await connections.GetByIdAsync(profile.ConnectionId, cancellationToken);
-        return MaskingScriptBuilder.Build(profile, masked.Username, masked.Database, timeProvider.GetUtcNow());
+        var connection = DatabaseChoice.Resolve(
+            (await connections.GetByIdAsync(query.ConnectionId, cancellationToken)).Snapshot(),
+            query.Database);
+        policy.Demand(new DatabaseOperationRequest(DatabaseOperationType.InspectDatabase, connection));
+
+        var catalog = await copier.ReadCatalogAsync(connection, cancellationToken);
+
+        return catalog.Tables
+            .GroupBy(table => table.Root ?? table.QualifiedName, StringComparer.Ordinal)
+            .Select(group =>
+            {
+                var first = group.First();
+                var (schema, table) = first.Root is { } root ? Split(root) : (first.Schema, first.Table);
+                return new SourceTableRow(
+                    schema,
+                    table,
+                    group.Sum(part => part.EstimatedRows),
+                    group.Sum(part => part.Bytes),
+                    first.Root is null ? 0 : group.Count());
+            })
+            .OrderBy(row => row.Schema, StringComparer.Ordinal)
+            .ThenBy(row => row.Table, StringComparer.Ordinal)
+            .ToList();
+    }
+
+    /// <summary>"public.pedidos" → ("public", "pedidos"), como o catálogo monta o nome da raiz.</summary>
+    private static (string Schema, string Table) Split(string qualified)
+    {
+        var dot = qualified.IndexOf('.', StringComparison.Ordinal);
+        return dot < 0 ? ("public", qualified) : (qualified[..dot], qualified[(dot + 1)..]);
     }
 }
 
-public sealed record ValidateAnonymizationProfile(Guid ProfileId);
-
-public sealed class ValidateAnonymizationProfileHandler(
-    IAnonymizationProfileRepository profiles,
-    IDatabaseConnectionRepository connections,
-    IPostgresAnonymizationService anonymization)
+/// <summary>
+/// Pré-visualizar as máscaras antes de salvar (ADR-058): as regras da tela
+/// contra as colunas do banco, e algumas linhas de cada coluna já mascaradas
+/// pelo servidor. Só o valor mascarado volta — nunca o real.
+/// </summary>
+public sealed record PreviewMasking(
+    Guid ConnectionId,
+    string? Database,
+    IReadOnlyList<AnonymizationRuleRow> Rules,
+    int Rows = 5)
 {
-    public async Task<AnonymizationValidation> HandleAsync(
-        ValidateAnonymizationProfile query,
-        CancellationToken cancellationToken = default)
+    /// <summary>As tabelas sem dados da tela: uma FK que elas quebrariam aparece como problema.</summary>
+    public IReadOnlyList<SkippedTableRow> SkippedTables { get; init; } = [];
+}
+
+public sealed record MaskingPreviewResult(
+    IReadOnlyList<string> Problems,
+    IReadOnlyList<MaskedPreview> Columns);
+
+public sealed class PreviewMaskingHandler(
+    IDatabaseConnectionRepository connections,
+    IPostgresMaskedCopier copier,
+    IDatabaseSecurityPolicy policy,
+    TimeProvider timeProvider)
+{
+    public async Task<MaskingPreviewResult> HandleAsync(PreviewMasking query, CancellationToken cancellationToken = default)
     {
-        var profile = await profiles.GetByIdAsync(query.ProfileId, cancellationToken);
-        var masked = await connections.GetByIdAsync(profile.ConnectionId, cancellationToken);
-        return await anonymization.ValidateAsync(profile, masked.Snapshot(), cancellationToken);
+        var connection = DatabaseChoice.Resolve(
+            (await connections.GetByIdAsync(query.ConnectionId, cancellationToken)).Snapshot(),
+            query.Database);
+        policy.Demand(new DatabaseOperationRequest(DatabaseOperationType.InspectDatabase, connection));
+
+        // Um perfil de passagem, só para validar as regras do jeito que vão ser gravadas.
+        var draft = AnonymizationProfile.Create("Pré-visualização", null, connection.Id, timeProvider.GetUtcNow());
+        draft.ReplaceRules(query.Rules.Select(rule => rule.ToSpec()), timeProvider.GetUtcNow());
+        draft.ReplaceSkippedTables(query.SkippedTables.Select(table => table.ToSpec()), timeProvider.GetUtcNow());
+
+        var catalog = await copier.ReadCatalogAsync(connection, cancellationToken);
+        var validation = MaskingPlanner.Plan(draft, catalog);
+        var tables = validation.Tables.Where(table => table.HasMaskedColumns).ToList();
+        var preview = tables.Count == 0
+            ? []
+            : await copier.PreviewAsync(connection, tables, Math.Clamp(query.Rows, 1, 20), cancellationToken);
+
+        return new MaskingPreviewResult(validation.Problems, preview);
     }
 }
 
@@ -196,7 +293,8 @@ public sealed record DatabaseCopyProfileRow(
     Guid? AnonymizationProfileId,
     DatabaseCopyOptions Options,
     bool IsEnabled,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    string? SourceDatabase = null);
 
 public sealed record GetDatabaseCopyProfiles;
 
@@ -214,7 +312,8 @@ public sealed class GetDatabaseCopyProfilesHandler(IDatabaseCopyProfileRepositor
                 profile.AnonymizationProfileId,
                 profile.Options,
                 profile.IsEnabled,
-                profile.UpdatedAt))
+                profile.UpdatedAt,
+                profile.SourceDatabase))
             .ToList();
 }
 
@@ -224,7 +323,8 @@ public sealed record SaveDatabaseCopyProfile(
     Guid SourceConnectionId,
     Guid DestinationConnectionId,
     Guid? AnonymizationProfileId,
-    DatabaseCopyOptions Options);
+    DatabaseCopyOptions Options,
+    string? SourceDatabase = null);
 
 /// <summary>
 /// Grava o perfil e já o julga pela política com as conexões de hoje: um
@@ -266,11 +366,12 @@ public sealed class SaveDatabaseCopyProfileHandler(
         if (command.Id is { } id)
         {
             profile = await profiles.GetByIdAsync(id, cancellationToken);
-            profile.Update(command.Name, source.Id, destination.Id, command.AnonymizationProfileId, command.Options, now);
+            profile.Update(command.Name, source.Id, destination.Id, command.AnonymizationProfileId, command.Options, now, command.SourceDatabase);
         }
         else
         {
-            profile = DatabaseCopyProfile.Create(command.Name, source.Id, destination.Id, command.AnonymizationProfileId, command.Options, now);
+            profile = DatabaseCopyProfile.Create(
+                command.Name, source.Id, destination.Id, command.AnonymizationProfileId, command.Options, now, command.SourceDatabase);
             await profiles.AddAsync(profile, cancellationToken);
         }
 
@@ -316,7 +417,7 @@ public sealed class DetectPostgresToolsHandler(IPostgresEnvironmentDiagnostics d
 }
 
 /// <summary>Diagnóstico completo de uma conexão. Com perfil, o Anonymizer é visto pela política dele.</summary>
-public sealed record DiagnoseDatabase(Guid ConnectionId, string? PolicyName, bool Refresh);
+public sealed record DiagnoseDatabase(Guid ConnectionId, bool Refresh);
 
 public sealed class DiagnoseDatabaseHandler(
     IDatabaseConnectionRepository connections,
@@ -327,7 +428,6 @@ public sealed class DiagnoseDatabaseHandler(
         var connection = await connections.GetByIdAsync(query.ConnectionId, cancellationToken);
         return await diagnostics.DiagnoseAsync(
             connection.Snapshot(),
-            string.IsNullOrWhiteSpace(query.PolicyName) ? AnonymizationProfile.DefaultPolicyName : query.PolicyName,
             query.Refresh,
             cancellationToken);
     }
@@ -352,7 +452,9 @@ public sealed record DatabaseOperationRow(
     long? AnonymousDumpSize,
     int? MaskedColumnsCount,
     string? Summary,
-    string? Error);
+    string? Error,
+    string? SourceDatabase = null,
+    string? DestinationDatabase = null);
 
 public sealed record GetDatabaseOperationHistory(int Limit = 100);
 
@@ -381,7 +483,9 @@ public sealed class GetDatabaseOperationHistoryHandler(IDatabaseOperationAuditLo
                 entry.AnonymousDumpSize,
                 entry.MaskedColumnsCount,
                 entry.Summary,
-                entry.Error))
+                entry.Error,
+                entry.SourceDatabase,
+                entry.DestinationDatabase))
             .ToList();
 }
 
@@ -497,5 +601,23 @@ public sealed class DatabaseOperationGate
                 gate._live.Remove(operationId);
             }
         }
+    }
+}
+
+/// <summary>O banco de uma leitura: o fixo da conexão, ou o informado quando ela é só o servidor (ADR-057).</summary>
+internal static class DatabaseChoice
+{
+    public static DatabaseConnectionSnapshot Resolve(DatabaseConnectionSnapshot connection, string? chosen)
+    {
+        if (connection.Database is { } fixedDatabase)
+        {
+            return string.IsNullOrWhiteSpace(chosen) || string.Equals(fixedDatabase, chosen.Trim(), StringComparison.Ordinal)
+                ? connection
+                : throw new DomainException($"{connection.Name} só acessa o banco {fixedDatabase}.");
+        }
+
+        return string.IsNullOrWhiteSpace(chosen)
+            ? throw new DomainException($"{connection.Name} é só o servidor: informe o banco.")
+            : connection.WithDatabase(chosen);
     }
 }

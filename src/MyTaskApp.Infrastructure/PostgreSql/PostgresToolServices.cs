@@ -25,7 +25,7 @@ internal sealed class PostgresDumpService(PgToolRunner runner, DatabaseOperation
                 options.DumpTimeout,
                 request.Connection,
                 request.ProtectedEndpoints,
-                request.Anonymous),
+                request.SourceVersion),
             progress,
             cancellationToken);
 
@@ -50,7 +50,13 @@ internal sealed class PostgresRestoreService(PgToolRunner runner, DatabaseOperat
 {
     public async Task<PgToolRun> RestoreAsync(PgRestoreRequest request, IProgress<PgToolEvent>? progress, CancellationToken cancellationToken = default) =>
         (await runner.RunAsync(
-            new PgInvocation(PostgresTool.PgRestore, PgArguments.Restore(request), options.RestoreTimeout, request.Target, request.ProtectedEndpoints),
+            new PgInvocation(
+                PostgresTool.PgRestore,
+                PgArguments.Restore(request),
+                options.RestoreTimeout,
+                request.Target,
+                request.ProtectedEndpoints,
+                request.SourceVersion),
             progress,
             cancellationToken)).Run;
 

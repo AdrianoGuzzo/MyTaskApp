@@ -32,11 +32,15 @@ internal sealed class AnonymizationProfileRepository(MyTaskAppDbContext context)
     public Task<AnonymizationProfile?> FindByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         context.AnonymizationProfiles
             .Include(profile => profile.Rules)
+            .Include(profile => profile.SkippedTables)
+            .AsSplitQuery()
             .SingleOrDefaultAsync(profile => profile.Id == id, cancellationToken);
 
     public async Task<IReadOnlyList<AnonymizationProfile>> ListAsync(CancellationToken cancellationToken = default) =>
         await context.AnonymizationProfiles
             .Include(profile => profile.Rules)
+            .Include(profile => profile.SkippedTables)
+            .AsSplitQuery()
             .OrderBy(profile => profile.Name)
             .ToListAsync(cancellationToken);
 
@@ -66,6 +70,30 @@ internal sealed class DatabaseCopyProfileRepository(MyTaskAppDbContext context) 
         context.DatabaseCopyProfiles.AnyAsync(profile => profile.AnonymizationProfileId == anonymizationProfileId, cancellationToken);
 
     public void Remove(DatabaseCopyProfile profile) => context.DatabaseCopyProfiles.Remove(profile);
+}
+
+internal sealed class SavedDatabaseRepository(MyTaskAppDbContext context) : ISavedDatabaseRepository
+{
+    public async Task AddAsync(SavedDatabase saved, CancellationToken cancellationToken = default) =>
+        await context.SavedDatabases.AddAsync(saved, cancellationToken);
+
+    public Task<SavedDatabase?> FindByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
+        context.SavedDatabases.SingleOrDefaultAsync(saved => saved.Id == id, cancellationToken);
+
+    public async Task<IReadOnlyList<SavedDatabase>> ListAsync(CancellationToken cancellationToken = default) =>
+        await context.SavedDatabases.OrderBy(saved => saved.Alias).ToListAsync(cancellationToken);
+
+    // A coluna é NOCASE: a comparação no SQL já ignora maiúsculas.
+    public Task<bool> AliasExistsAsync(string alias, Guid? exceptId, CancellationToken cancellationToken = default) =>
+        context.SavedDatabases.AnyAsync(saved => saved.Alias == alias.Trim() && saved.Id != exceptId, cancellationToken);
+
+    public Task<bool> AnyUsesConnectionAsync(Guid connectionId, CancellationToken cancellationToken = default) =>
+        context.SavedDatabases.AnyAsync(saved => saved.ConnectionId == connectionId, cancellationToken);
+
+    public Task<bool> AnyUsesAnonymizationProfileAsync(Guid anonymizationProfileId, CancellationToken cancellationToken = default) =>
+        context.SavedDatabases.AnyAsync(saved => saved.AnonymizationProfileId == anonymizationProfileId, cancellationToken);
+
+    public void Remove(SavedDatabase saved) => context.SavedDatabases.Remove(saved);
 }
 
 internal sealed class EfDatabaseOperationAuditLog(MyTaskAppDbContext context) : IDatabaseOperationAuditLog

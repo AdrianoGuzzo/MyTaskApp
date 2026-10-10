@@ -20,6 +20,13 @@ internal static class PostgresQueries
     public const string ServerInfo =
         "SELECT version(), current_user::text, current_database()::text, pg_database_size(current_database())";
 
+    /// <summary>
+    /// Os bancos em que se pode conectar (ADR-057), sem templates nem o de
+    /// manutenção: o que a cópia oferece para escolher numa conexão só de servidor.
+    /// </summary>
+    public const string Databases =
+        "SELECT datname::text FROM pg_database WHERE datallowconn AND NOT datistemplate AND datname <> 'postgres' ORDER BY 1";
+
     public const string Schemas =
         "SELECT n.nspname::text FROM pg_namespace n WHERE " + UserSchemas + " ORDER BY 1";
 
@@ -61,31 +68,61 @@ internal static class PostgresQueries
         "WHERE i.indrelid = to_regclass($1) AND i.indisprimary " +
         "ORDER BY array_position(i.indkey::int2[], a.attnum)";
 
-    public const string AnonymizerAvailable =
-        "SELECT default_version, installed_version FROM pg_available_extensions WHERE name = 'anon'";
+    /// <summary>
+    /// As tabelas com linhas próprias (<c>relkind 'r'</c>: as comuns e as
+    /// partições), com a tabela particionada de cima de cada partição (ADR-058).
+    /// </summary>
+    public const string CopyTables =
+        "SELECT n.nspname::text, c.relname::text, pg_total_relation_size(c.oid), greatest(c.reltuples, 0)::bigint, " +
+        "CASE WHEN c.relispartition THEN (SELECT rn.nspname::text || '.' || rc.relname::text FROM pg_class rc " +
+        "JOIN pg_namespace rn ON rn.oid = rc.relnamespace WHERE rc.oid = pg_partition_root(c.oid)) END " +
+        "FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace " +
+        "WHERE c.relkind = 'r' AND " + UserSchemas + " ORDER BY 1, 2";
 
-    public const string TransparentMasking =
-        "SELECT coalesce(current_setting('anon.transparent_dynamic_masking', true), '')";
+    /// <summary>As colunas dessas tabelas: tipo, se aceita NULL e se é gerada.</summary>
+    public const string CopyColumns =
+        "SELECT n.nspname::text, c.relname::text, a.attname::text, format_type(a.atttypid, a.atttypmod), NOT a.attnotnull, a.attgenerated <> '' " +
+        "FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid JOIN pg_namespace n ON n.oid = c.relnamespace " +
+        "WHERE c.relkind = 'r' AND a.attnum > 0 AND NOT a.attisdropped AND " + UserSchemas + " " +
+        "ORDER BY 1, 2, a.attnum";
 
     /// <summary>
-    /// $1 = o provedor da política (<c>anon</c>). Role é objeto compartilhado
-    /// do cluster: o rótulo dela fica em <c>pg_shseclabel</c>, não em <c>pg_seclabel</c>.
+    /// As colunas que são chave: <c>p</c> primária, <c>u</c> em índice único,
+    /// <c>f</c> que referencia outra tabela, <c>r</c> referenciada por uma FK.
     /// </summary>
-    public const string RoleIsMasked =
-        "SELECT EXISTS (SELECT 1 FROM pg_shseclabel s JOIN pg_roles r ON r.oid = s.objoid " +
-        "WHERE s.classoid = 'pg_authid'::regclass AND s.provider = $1 AND r.rolname = current_user AND upper(s.label) = 'MASKED')";
+    public const string KeyColumns =
+        "SELECT n.nspname::text, c.relname::text, a.attname::text, CASE WHEN i.indisprimary THEN 'p' ELSE 'u' END " +
+        "FROM pg_index i JOIN pg_class c ON c.oid = i.indrelid JOIN pg_namespace n ON n.oid = c.relnamespace " +
+        "JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY (i.indkey) " +
+        "WHERE i.indisunique AND " + UserSchemas + " " +
+        "UNION ALL " +
+        "SELECT n.nspname::text, c.relname::text, a.attname::text, 'f' " +
+        "FROM pg_constraint con JOIN pg_class c ON c.oid = con.conrelid JOIN pg_namespace n ON n.oid = c.relnamespace " +
+        "JOIN pg_attribute a ON a.attrelid = con.conrelid AND a.attnum = ANY (con.conkey) " +
+        "WHERE con.contype = 'f' AND " + UserSchemas + " " +
+        "UNION ALL " +
+        "SELECT n.nspname::text, c.relname::text, a.attname::text, 'r' " +
+        "FROM pg_constraint con JOIN pg_class c ON c.oid = con.confrelid JOIN pg_namespace n ON n.oid = c.relnamespace " +
+        "JOIN pg_attribute a ON a.attrelid = con.confrelid AND a.attnum = ANY (con.confkey) " +
+        "WHERE con.contype = 'f' AND " + UserSchemas;
 
-    public const string AnonymizerFunctions =
-        "SELECT EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace " +
-        "WHERE n.nspname = 'anon' AND has_function_privilege(p.oid, 'EXECUTE'))";
+    /// <summary>Quem referencia quem, tabela a tabela: uma tabela sem dados não pode ser referenciada por uma com dados.</summary>
+    public const string ForeignKeyTables =
+        "SELECT DISTINCT n.nspname::text || '.' || c.relname::text, tn.nspname::text || '.' || tc.relname::text " +
+        "FROM pg_constraint con JOIN pg_class c ON c.oid = con.conrelid JOIN pg_namespace n ON n.oid = c.relnamespace " +
+        "JOIN pg_class tc ON tc.oid = con.confrelid JOIN pg_namespace tn ON tn.oid = tc.relnamespace " +
+        "WHERE con.contype = 'f' AND con.conrelid <> con.confrelid AND " + UserSchemas;
 
-    /// <summary>As regras por coluna. $1 = o provedor. Lido do catálogo base, igual no 1.x e no 2.x.</summary>
-    public const string MaskingRules =
-        "SELECT n.nspname::text, c.relname::text, a.attname::text, s.label FROM pg_seclabel s " +
-        "JOIN pg_class c ON s.classoid = 'pg_class'::regclass AND s.objoid = c.oid " +
-        "JOIN pg_namespace n ON n.oid = c.relnamespace " +
-        "JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = s.objsubid " +
-        "WHERE s.provider = $1 AND s.objsubid > 0 ORDER BY 1, 2, 3";
+    /// <summary>Objetos grandes não vão por COPY: a cópia mascarada avisa que ficam de fora.</summary>
+    public const string LargeObjects = "SELECT count(*) FROM pg_largeobject_metadata";
+
+    /// <summary>O valor atual de cada sequence; <c>NULL</c> quando nunca foi usada ou falta permissão.</summary>
+    public const string SequenceValues =
+        "SELECT schemaname::text, sequencename::text, last_value FROM pg_sequences " +
+        "WHERE schemaname NOT LIKE 'pg\\_%' AND schemaname <> 'information_schema' AND last_value IS NOT NULL";
+
+    /// <summary>A foto da transação de leitura, para o <c>pg_dump --snapshot</c> ver o mesmo instante.</summary>
+    public const string ExportSnapshot = "SELECT pg_export_snapshot()";
 
     /// <summary>Estimativa do catálogo, para decidir se vale contar de verdade. $1 = tabela citada.</summary>
     public const string EstimatedRows =
@@ -93,8 +130,8 @@ internal static class PostgresQueries
 
     public static IEnumerable<string> All() =>
     [
-        ServerInfo, Schemas, Tables, Privileges, Columns, ConstraintsByType, IndexCount, SequenceCount,
-        PrimaryKey, AnonymizerAvailable, TransparentMasking, RoleIsMasked, AnonymizerFunctions, MaskingRules, EstimatedRows,
+        ServerInfo, Databases, Schemas, Tables, Privileges, Columns, ConstraintsByType, IndexCount, SequenceCount,
+        PrimaryKey, CopyTables, CopyColumns, KeyColumns, ForeignKeyTables, LargeObjects, SequenceValues, ExportSnapshot, EstimatedRows,
         CountRows("public.x"),
         Fingerprint(new ColumnReference("public", "x", "y"), ["id"], 10),
     ];
@@ -104,8 +141,8 @@ internal static class PostgresQueries
     {
         var dot = qualified.IndexOf('.', StringComparison.Ordinal);
         return dot < 0
-            ? MaskingScriptBuilder.QuoteIdentifier(qualified)
-            : $"{MaskingScriptBuilder.QuoteIdentifier(qualified[..dot])}.{MaskingScriptBuilder.QuoteIdentifier(qualified[(dot + 1)..])}";
+            ? SqlQuoting.QuoteIdentifier(qualified)
+            : $"{SqlQuoting.QuoteIdentifier(qualified[..dot])}.{SqlQuoting.QuoteIdentifier(qualified[(dot + 1)..])}";
     }
 
     public static string CountRows(string qualifiedTable) => $"SELECT count(*) FROM {QuoteTable(qualifiedTable)}";
@@ -116,9 +153,9 @@ internal static class PostgresQueries
     /// </summary>
     public static string Fingerprint(ColumnReference column, IReadOnlyList<string> primaryKey, int limit)
     {
-        var key = string.Join(", ", primaryKey.Select(MaskingScriptBuilder.QuoteIdentifier));
-        var table = $"{MaskingScriptBuilder.QuoteIdentifier(column.Schema)}.{MaskingScriptBuilder.QuoteIdentifier(column.Table)}";
-        var value = MaskingScriptBuilder.QuoteIdentifier(column.Column);
+        var key = string.Join(", ", primaryKey.Select(SqlQuoting.QuoteIdentifier));
+        var table = $"{SqlQuoting.QuoteIdentifier(column.Schema)}.{SqlQuoting.QuoteIdentifier(column.Table)}";
+        var value = SqlQuoting.QuoteIdentifier(column.Column);
 
         return $"SELECT md5($1 || ROW({key})::text), md5($1 || ({value})::text) FROM {table} " +
                $"ORDER BY {key} LIMIT {limit.ToString(CultureInfo.InvariantCulture)}";

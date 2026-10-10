@@ -22,7 +22,7 @@ public sealed partial class DatabaseOperationsWindow : Window
                 options.IncludeSchema && options.IncludeData ? "estrutura e dados" : options.IncludeSchema ? "só estrutura" : "só dados",
                 options.RecreateDestination ? "recria o destino" : null,
                 options.VerifyAfterRestore ? "verifica" : null,
-                options.KeepAnonymizedArtifact ? "mantém o dump anônimo" : null,
+                options.KeepAnonymizedArtifact ? "mantém o dump da estrutura" : null,
             }.OfType<string>()));
 
     public DatabaseOperationsWindow() => InitializeComponent();

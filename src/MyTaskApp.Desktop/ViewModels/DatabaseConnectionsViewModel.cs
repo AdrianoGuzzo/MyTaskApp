@@ -192,7 +192,7 @@ public sealed partial class DatabaseConnectionsViewModel(
         Name = row.Name;
         Host = row.Host;
         Port = row.Port.ToString(CultureInfo.InvariantCulture);
-        Database = row.Database;
+        Database = row.Database ?? string.Empty;
         Username = row.Username;
         Description = row.Description ?? string.Empty;
         Password = string.Empty;
@@ -214,8 +214,7 @@ public sealed partial class DatabaseConnectionsViewModel(
         !string.IsNullOrWhiteSpace(Name) && CanTest();
 
     private bool CanTest() =>
-        !string.IsNullOrWhiteSpace(Host) && !string.IsNullOrWhiteSpace(Database)
-        && !string.IsNullOrWhiteSpace(Username) && int.TryParse(Port, CultureInfo.InvariantCulture, out _);
+        !string.IsNullOrWhiteSpace(Host) && !string.IsNullOrWhiteSpace(Username) && int.TryParse(Port, CultureInfo.InvariantCulture, out _);
 
     [RelayCommand(CanExecute = nameof(CanSave))]
     public async Task SaveAsync(CancellationToken cancellationToken = default)
@@ -279,7 +278,9 @@ public sealed partial class DatabaseConnectionsViewModel(
 
         TestSucceeded = result.Connected;
         TestResult = result.Connected
-            ? $"✓ Conectado como {result.CurrentUser} em {result.Database} — PostgreSQL {result.ServerVersion}."
+            ? string.IsNullOrWhiteSpace(Database)
+                ? $"✓ Conectado como {result.CurrentUser} ao servidor — PostgreSQL {result.ServerVersion}. O banco é escolhido na cópia."
+                : $"✓ Conectado como {result.CurrentUser} em {result.Database} — PostgreSQL {result.ServerVersion}."
             : $"✗ {result.Error}";
     }
 

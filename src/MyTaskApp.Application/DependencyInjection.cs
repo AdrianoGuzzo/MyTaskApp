@@ -263,7 +263,7 @@ public static class DependencyInjection
         services.TryAddSingleton<DatabaseOperationGate>();
 
         services.AddScoped<IPostgresEnvironmentDiagnostics, PostgresEnvironmentDiagnostics>();
-        services.AddScoped<IPostgresAnonymizationService, PostgresAnonymizationService>();
+        services.AddScoped<IMaskingVerifier, MaskingVerifier>();
         services.AddScoped<DatabaseCopyPlanner>();
 
         services.AddScoped<GetDatabaseConnectionsHandler>();
@@ -271,6 +271,11 @@ public static class DependencyInjection
         services.AddScoped<SetDatabaseConnectionEnabledHandler>();
         services.AddScoped<DeleteDatabaseConnectionHandler>();
         services.AddScoped<TestDatabaseConnectionHandler>();
+        services.AddScoped<ListServerDatabasesHandler>();
+
+        services.AddScoped<GetSavedDatabasesHandler>();
+        services.AddScoped<SaveSavedDatabaseHandler>();
+        services.AddScoped<DeleteSavedDatabaseHandler>();
 
         services.AddScoped<DetectPostgresToolsHandler>();
         services.AddScoped<DiagnoseDatabaseHandler>();
@@ -280,8 +285,8 @@ public static class DependencyInjection
         services.AddScoped<SetAnonymizationProfileEnabledHandler>();
         services.AddScoped<DeleteAnonymizationProfileHandler>();
         services.AddScoped<SuggestSensitiveColumnsHandler>();
-        services.AddScoped<GenerateMaskingScriptHandler>();
-        services.AddScoped<ValidateAnonymizationProfileHandler>();
+        services.AddScoped<PreviewMaskingHandler>();
+        services.AddScoped<GetSourceTablesHandler>();
 
         services.AddScoped<GetDatabaseCopyProfilesHandler>();
         services.AddScoped<SaveDatabaseCopyProfileHandler>();

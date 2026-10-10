@@ -26,7 +26,8 @@ internal sealed class DatabaseConnectionConfiguration : IEntityTypeConfiguration
         builder.HasIndex(connection => connection.Name).IsUnique();
 
         builder.Property(connection => connection.Host).IsRequired().HasMaxLength(DatabaseConnection.MaxHostLength);
-        builder.Property(connection => connection.Database).IsRequired().HasMaxLength(DatabaseConnection.MaxIdentifierLength);
+        // Nulo = a conexão é só o servidor; o banco é escolhido na cópia (ADR-057).
+        builder.Property(connection => connection.Database).HasMaxLength(DatabaseConnection.MaxIdentifierLength);
         builder.Property(connection => connection.Username).IsRequired().HasMaxLength(DatabaseConnection.MaxIdentifierLength);
         builder.Property(connection => connection.Description).HasMaxLength(DatabaseConnection.MaxDescriptionLength);
         builder.Property(connection => connection.SecretReference).HasMaxLength(DatabaseConnection.MaxSecretReferenceLength);
@@ -62,7 +63,6 @@ internal sealed class AnonymizationProfileConfiguration : IEntityTypeConfigurati
         builder.HasIndex(profile => profile.Name).IsUnique();
 
         builder.Property(profile => profile.Description).HasMaxLength(AnonymizationProfile.MaxDescriptionLength);
-        builder.Property(profile => profile.PolicyName).IsRequired().HasMaxLength(DatabaseConnection.MaxIdentifierLength);
 
         // A conexão mascarada não sai enquanto um perfil depender dela: excluir
         // a conexão não pode deixar um perfil apontando para nada.
@@ -84,6 +84,34 @@ internal sealed class AnonymizationProfileConfiguration : IEntityTypeConfigurati
         builder.Navigation(profile => profile.Rules)
             .HasField("_rules")
             .UsePropertyAccessMode(PropertyAccessMode.Field);
+
+        builder.HasMany(profile => profile.SkippedTables)
+            .WithOne()
+            .HasForeignKey(table => table.ProfileId)
+            .IsRequired()
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Navigation(profile => profile.SkippedTables)
+            .HasField("_skippedTables")
+            .UsePropertyAccessMode(PropertyAccessMode.Field);
+    }
+}
+
+internal sealed class AnonymizationSkippedTableConfiguration : IEntityTypeConfiguration<AnonymizationSkippedTable>
+{
+    public void Configure(EntityTypeBuilder<AnonymizationSkippedTable> builder)
+    {
+        builder.ToTable("AnonymizationSkippedTables");
+
+        builder.HasKey(table => table.Id);
+        builder.Property(table => table.Id).ValueGeneratedNever();
+
+        builder.Property(table => table.Schema).IsRequired().HasMaxLength(AnonymizationRule.MaxIdentifierLength);
+        builder.Property(table => table.Table).IsRequired().HasMaxLength(AnonymizationRule.MaxIdentifierLength);
+        builder.Property(table => table.ConfirmedAt).HasConversion(UtcInstantConverter.Instance).IsRequired();
+
+        // Identificadores citados no PostgreSQL diferenciam maiúsculas: sem NOCASE aqui.
+        builder.HasIndex(table => new { table.ProfileId, table.Schema, table.Table }).IsUnique();
     }
 }
 
@@ -99,8 +127,8 @@ internal sealed class AnonymizationRuleConfiguration : IEntityTypeConfiguration<
         builder.Property(rule => rule.Schema).IsRequired().HasMaxLength(AnonymizationRule.MaxIdentifierLength);
         builder.Property(rule => rule.Table).IsRequired().HasMaxLength(AnonymizationRule.MaxIdentifierLength);
         builder.Property(rule => rule.Column).IsRequired().HasMaxLength(AnonymizationRule.MaxIdentifierLength);
-        builder.Property(rule => rule.Expression).IsRequired().HasMaxLength(AnonymizationRule.MaxExpressionLength);
-        builder.Property(rule => rule.Kind).HasConversion<int>();
+        builder.Property(rule => rule.Argument).HasMaxLength(AnonymizationRule.MaxArgumentLength);
+        builder.Property(rule => rule.Method).HasConversion<int>();
         builder.Property(rule => rule.Sensitivity).HasConversion<int>();
         builder.Property(rule => rule.ConfirmedAt).HasConversion(UtcInstantConverter.Instance).IsRequired();
 
@@ -124,6 +152,8 @@ internal sealed class DatabaseCopyProfileConfiguration : IEntityTypeConfiguratio
             .UseCollation("NOCASE");
 
         builder.HasIndex(profile => profile.Name).IsUnique();
+
+        builder.Property(profile => profile.SourceDatabase).HasMaxLength(DatabaseConnection.MaxIdentifierLength);
 
         // Restrict nos três: o perfil é cadastro do usuário, e sumir com ele
         // porque uma conexão saiu seria surpresa. Quem exclui avisa antes.
@@ -167,6 +197,8 @@ internal sealed class DatabaseOperationAuditConfiguration : IEntityTypeConfigura
 
         builder.Property(audit => audit.SourceConnectionName).HasMaxLength(DatabaseOperationAudit.MaxNameLength);
         builder.Property(audit => audit.DestinationConnectionName).HasMaxLength(DatabaseOperationAudit.MaxNameLength);
+        builder.Property(audit => audit.SourceDatabase).HasMaxLength(DatabaseConnection.MaxIdentifierLength);
+        builder.Property(audit => audit.DestinationDatabase).HasMaxLength(DatabaseConnection.MaxIdentifierLength);
         builder.Property(audit => audit.ProfileName).HasMaxLength(DatabaseOperationAudit.MaxNameLength);
         builder.Property(audit => audit.AnonymizationProfile).HasMaxLength(DatabaseOperationAudit.MaxNameLength);
         builder.Property(audit => audit.Host).IsRequired().HasMaxLength(DatabaseOperationAudit.MaxNameLength);
@@ -187,5 +219,42 @@ internal sealed class DatabaseOperationAuditConfiguration : IEntityTypeConfigura
         builder.HasIndex(audit => audit.Status)
             .HasDatabaseName("IX_DatabaseOperationAudits_Running")
             .HasFilter("\"Status\" = 1");
+    }
+}
+
+/// <summary>Os apelidos de banco de origem (ADR-057).</summary>
+internal sealed class SavedDatabaseConfiguration : IEntityTypeConfiguration<SavedDatabase>
+{
+    public void Configure(EntityTypeBuilder<SavedDatabase> builder)
+    {
+        builder.ToTable("SavedDatabases");
+
+        builder.HasKey(saved => saved.Id);
+        builder.Property(saved => saved.Id).ValueGeneratedNever();
+
+        // O domínio já grava em minúsculas; NOCASE garante o único mesmo numa linha editada à mão.
+        builder.Property(saved => saved.Alias)
+            .IsRequired()
+            .HasMaxLength(SavedDatabase.MaxAliasLength)
+            .UseCollation("NOCASE");
+
+        builder.HasIndex(saved => saved.Alias).IsUnique();
+
+        builder.Property(saved => saved.DatabaseName).IsRequired().HasMaxLength(DatabaseConnection.MaxIdentifierLength);
+
+        // Restrict, como nos perfis de cópia: quem exclui a conexão ou a anonimização avisa antes.
+        builder.HasOne<DatabaseConnection>()
+            .WithMany()
+            .HasForeignKey(saved => saved.ConnectionId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne<AnonymizationProfile>()
+            .WithMany()
+            .HasForeignKey(saved => saved.AnonymizationProfileId)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Property(saved => saved.CreatedAt).HasConversion(UtcInstantConverter.Instance).IsRequired();
+        builder.Property(saved => saved.UpdatedAt).HasConversion(UtcInstantConverter.Instance).IsRequired();
     }
 }

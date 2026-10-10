@@ -130,10 +130,10 @@ public class DatabaseCatalogHandlersTests
     public async Task AConnectionUsedByAProfile_CannotBeDeleted()
     {
         var handler = new DeleteDatabaseConnectionHandler(
-            Catalog.Connections, Catalog.AnonymizationProfiles, Catalog.CopyProfiles, _scenario.Credentials, Catalog,
+            Catalog.Connections, Catalog.AnonymizationProfiles, Catalog.CopyProfiles, Catalog.SavedDatabases, _scenario.Credentials, Catalog,
             NullLogger<DeleteDatabaseConnectionHandler>.Instance);
 
-        await FluentActions.Awaiting(() => handler.HandleAsync(new DeleteDatabaseConnection(_scenario.Masked.Id), Ct))
+        await FluentActions.Awaiting(() => handler.HandleAsync(new DeleteDatabaseConnection(_scenario.Production.Id), Ct))
             .Should().ThrowAsync<DomainException>().WithMessage("*perfil*");
 
         Catalog.CopyProfiles.Items.Add(DatabaseCopyProfile.Create("x", _scenario.Production.Id, _scenario.Development.Id,
@@ -147,7 +147,7 @@ public class DatabaseCatalogHandlersTests
     {
         var id = await SaveHandler().HandleAsync(NewConnection(), Ct);
         var handler = new DeleteDatabaseConnectionHandler(
-            Catalog.Connections, Catalog.AnonymizationProfiles, Catalog.CopyProfiles, _scenario.Credentials, Catalog,
+            Catalog.Connections, Catalog.AnonymizationProfiles, Catalog.CopyProfiles, Catalog.SavedDatabases, _scenario.Credentials, Catalog,
             NullLogger<DeleteDatabaseConnectionHandler>.Instance);
 
         await handler.HandleAsync(new DeleteDatabaseConnection(id), Ct);
@@ -213,14 +213,69 @@ public class DatabaseCatalogHandlersTests
             Catalog.AnonymizationProfiles, Catalog.Connections, Catalog, _scenario.Clock, NullLogger<SaveAnonymizationProfileHandler>.Instance);
 
         var id = await handler.HandleAsync(new SaveAnonymizationProfile(
-            null, "Outro LGPD", null, _scenario.Masked.Id, null,
-            [new AnonymizationRuleRow("public", "clientes", "email", MaskingKind.Function, "anon.partial_email(email)", ColumnSensitivity.High)]), Ct);
+            null, "Outro LGPD", null, _scenario.Production.Id,
+            [new AnonymizationRuleRow("public", "clientes", "cpf", MaskingMethod.Partial, "3,2", ColumnSensitivity.High)]), Ct);
 
         var rows = await new GetAnonymizationProfilesHandler(Catalog.AnonymizationProfiles).HandleAsync(new GetAnonymizationProfiles(), Ct);
-        rows.Single(row => row.Id == id).Rules.Should().ContainSingle().Which.ColumnKey.Should().Be("public.clientes.email");
+        var rule = rows.Single(row => row.Id == id).Rules.Should().ContainSingle().Subject;
+        rule.ColumnKey.Should().Be("public.clientes.cpf");
+        rule.Method.Should().Be(MaskingMethod.Partial);
+        rule.Argument.Should().Be("3,2");
 
-        await handler.HandleAsync(new SaveAnonymizationProfile(id, "Outro LGPD", "d", _scenario.Masked.Id, "anon", []), Ct);
+        await handler.HandleAsync(new SaveAnonymizationProfile(id, "Outro LGPD", "d", _scenario.Production.Id, []), Ct);
         Catalog.AnonymizationProfiles.Items.Single(profile => profile.Id == id).Rules.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task SkippedTables_AreSavedWithTheProfile_AndComeBackInTheRow()
+    {
+        var handler = new SaveAnonymizationProfileHandler(
+            Catalog.AnonymizationProfiles, Catalog.Connections, Catalog, _scenario.Clock, NullLogger<SaveAnonymizationProfileHandler>.Instance);
+
+        var id = await handler.HandleAsync(new SaveAnonymizationProfile(null, "Com logs vazios", null, _scenario.Production.Id, [])
+        {
+            SkippedTables = [new SkippedTableRow("public", "logs"), new SkippedTableRow("audit", "eventos")],
+        }, Ct);
+
+        var row = (await new GetAnonymizationProfilesHandler(Catalog.AnonymizationProfiles).HandleAsync(new GetAnonymizationProfiles(), Ct))
+            .Single(profile => profile.Id == id);
+        row.SkippedTables.Select(table => table.TableKey).Should().Equal("audit.eventos", "public.logs");
+    }
+
+    [Fact]
+    public async Task TheSourceTables_ShowAPartitionedTableOnce_WithItsPartsAdded()
+    {
+        _scenario.Copier.Catalog = new SourceCatalog(
+        [
+            new SourceTable("public", "clientes", 100, 10, []),
+            new SourceTable("public", "eventos_2025", 30, 3, [], "public.eventos"),
+            new SourceTable("public", "eventos_2026", 70, 7, [], "public.eventos"),
+        ], [], [], 0);
+
+        var rows = await new GetSourceTablesHandler(Catalog.Connections, _scenario.Copier, _scenario.Policy)
+            .HandleAsync(new GetSourceTables(_scenario.Production.Id), Ct);
+
+        rows.Should().Equal(
+            new SourceTableRow("public", "clientes", 10, 100, 0),
+            new SourceTableRow("public", "eventos", 10, 100, 2));
+    }
+
+    [Fact]
+    public async Task ThePreview_SaysWhichForeignKeyASkippedTableWouldBreak()
+    {
+        _scenario.Copier.Catalog = FakeMaskedCopier.DefaultCatalog() with
+        {
+            ForeignKeys = [new ForeignKeyLink("public.pedidos", "public.clientes")],
+        };
+
+        var result = await PreviewHandler().HandleAsync(new PreviewMasking(_scenario.Production.Id, null,
+            [new AnonymizationRuleRow("public", "clientes", "email", MaskingMethod.FakeEmail, null, ColumnSensitivity.High)])
+        {
+            SkippedTables = [new SkippedTableRow("public", "clientes")],
+        }, Ct);
+
+        result.Problems.Should().ContainSingle().Which.Should().Contain("public.pedidos tem FK para public.clientes");
+        _scenario.Copier.Previews.Should().BeEmpty("a tabela sem dados não tem coluna mascarada para mostrar");
     }
 
     [Fact]
@@ -229,14 +284,14 @@ public class DatabaseCatalogHandlersTests
         var handler = new SaveAnonymizationProfileHandler(
             Catalog.AnonymizationProfiles, Catalog.Connections, Catalog, _scenario.Clock, NullLogger<SaveAnonymizationProfileHandler>.Instance);
 
-        await FluentActions.Awaiting(() => handler.HandleAsync(new SaveAnonymizationProfile(null, "x", null, Guid.CreateVersion7(), null, []), Ct))
+        await FluentActions.Awaiting(() => handler.HandleAsync(new SaveAnonymizationProfile(null, "x", null, Guid.CreateVersion7(), []), Ct))
             .Should().ThrowAsync<DomainException>();
     }
 
     [Fact]
     public async Task AnAnonymizationProfileInUse_CannotBeDeleted_ButAFreeOneCan()
     {
-        var handler = new DeleteAnonymizationProfileHandler(Catalog.AnonymizationProfiles, Catalog.CopyProfiles, Catalog);
+        var handler = new DeleteAnonymizationProfileHandler(Catalog.AnonymizationProfiles, Catalog.CopyProfiles, Catalog.SavedDatabases, Catalog);
         Catalog.CopyProfiles.Items.Add(DatabaseCopyProfile.Create("x", _scenario.Production.Id, _scenario.Development.Id,
             _scenario.Profile.Id, DatabaseCopyOptions.Default, DatabaseCopyScenario.Now));
 
@@ -267,43 +322,46 @@ public class DatabaseCatalogHandlersTests
         _scenario.Inspector.Calls.Should().NotContain(call => call.StartsWith("fingerprint", StringComparison.Ordinal));
     }
 
-    [Fact]
-    public async Task TheScript_UsesTheMaskedRoleAndDatabase()
-    {
-        var script = await new GenerateMaskingScriptHandler(Catalog.AnonymizationProfiles, Catalog.Connections, _scenario.Clock)
-            .HandleAsync(new GenerateMaskingScript(_scenario.Profile.Id), Ct);
+    private PreviewMaskingHandler PreviewHandler() => new(Catalog.Connections, _scenario.Copier, _scenario.Policy, _scenario.Clock);
 
-        script.Should().Contain("ON ROLE \"dump_anon\"").And.Contain("\"eco_core\"");
+    [Fact]
+    public async Task ThePreview_ShowsOnlyMaskedValues_OfTheMarkedColumns()
+    {
+        var result = await PreviewHandler().HandleAsync(new PreviewMasking(_scenario.Production.Id, null,
+        [
+            new AnonymizationRuleRow("public", "clientes", "email", MaskingMethod.FakeEmail, null, ColumnSensitivity.High),
+        ], Rows: 3), Ct);
+
+        result.Problems.Should().BeEmpty();
+        var column = result.Columns.Should().ContainSingle().Subject;
+        column.ColumnKey.Should().Be("public.clientes.email");
+        column.Values.Should().Equal("m1", "m2", "m3");
+
+        // Só a tabela com coluna mascarada vai ao servidor.
+        _scenario.Copier.Previews.Single().Tables.Select(table => table.Table).Should().Equal("clientes");
     }
 
     [Fact]
-    public async Task ValidatingAProfile_ComparesItWithTheServer()
+    public async Task ThePreview_SaysWhatDoesNotFit_AndReadsNothingWhenNothingIsMasked()
     {
-        _scenario.Anonymizer.Status = FakeAnonymizerInspector.Healthy(
-            new ServerMaskingRule("public", "clientes", "email", "MASKED WITH FUNCTION anon.fake_email()"),
-            new ServerMaskingRule("public", "outra", "nome", "MASKED WITH VALUE NULL"));
+        var result = await PreviewHandler().HandleAsync(new PreviewMasking(_scenario.Production.Id, null,
+        [
+            new AnonymizationRuleRow("public", "clientes", "id", MaskingMethod.Hash, null, ColumnSensitivity.Low),
+            new AnonymizationRuleRow("public", "sumiu", "x", MaskingMethod.Hash, null, ColumnSensitivity.Low),
+        ]), Ct);
 
-        var validation = await new ValidateAnonymizationProfileHandler(Catalog.AnonymizationProfiles, Catalog.Connections, _scenario.Anonymization())
-            .HandleAsync(new ValidateAnonymizationProfile(_scenario.Profile.Id), Ct);
-
-        validation.IsValid.Should().BeFalse();
-        validation.MissingOnServer.Should().Equal("public.clientes.cpf");
-        validation.DifferentOnServer.Should().Equal("public.clientes.email");
-        validation.ExtraOnServer.Should().Equal("public.outra.nome");
-        validation.Problems().Should().HaveCount(2);
+        result.Problems.Should().Contain(problem => problem.Contains("public.clientes.id"));
+        result.Problems.Should().Contain(problem => problem.Contains("public.sumiu.x não existe"));
     }
 
     [Fact]
-    public async Task LabelsDifferingOnlyInSpacingOrCase_StillMatch()
+    public async Task ThePreview_OfAnInvalidArgument_IsADomainError()
     {
-        _scenario.Anonymizer.Status = FakeAnonymizerInspector.Healthy(
-            new ServerMaskingRule("public", "clientes", "email", "masked with function   anon.partial_email(email)"),
-            new ServerMaskingRule("public", "clientes", "cpf", "MASKED WITH FUNCTION anon.partial(cpf,0,$$*********$$,2)"));
+        await FluentActions.Awaiting(() => PreviewHandler().HandleAsync(new PreviewMasking(_scenario.Production.Id, null,
+            [new AnonymizationRuleRow("public", "clientes", "cpf", MaskingMethod.Partial, "abc", ColumnSensitivity.High)]), Ct))
+            .Should().ThrowAsync<DomainException>().WithMessage("*início,fim*");
 
-        var validation = await _scenario.Anonymization().ValidateAsync(_scenario.Profile, _scenario.Masked.Snapshot(), Ct);
-
-        validation.IsValid.Should().BeTrue();
-        validation.MaskedColumns.Should().Be(2);
+        _scenario.Copier.Previews.Should().BeEmpty();
     }
 
     // --- Perfis de cópia -------------------------------------------------------
@@ -418,7 +476,8 @@ public class ValidateDatabaseCopyHandlerTests
         validation.DestinationName.Should().Be("ECO Desenvolvimento");
         validation.AnonymizationProfileName.Should().Be("ECO LGPD");
         validation.ConfirmationText.Should().Be("eco_core");
-        _scenario.Tools.Calls.Should().BeEmpty();
+        validation.Checks.Should().Contain(check => check.Category == ValidateDatabaseCopyHandler.MaskingCategory && check.Outcome == CheckOutcome.Pass);
+        _scenario.Tools.Calls.Should().Equal("catalog:ECO Produção:eco_core");
     }
 
     [Fact]
@@ -435,14 +494,33 @@ public class ValidateDatabaseCopyHandlerTests
     }
 
     [Fact]
-    public async Task TheServerFacts_AreJudgedToo()
+    public async Task MasksThatDoNotFitTheSource_AreJudgedToo()
     {
-        _scenario.Anonymizer.Status = FakeAnonymizerInspector.Healthy() with { CurrentRoleMasked = false };
+        _scenario.Profile.ReplaceRules(
+            [new AnonymizationRuleSpec("public", "clientes", "id", MaskingMethod.FixedNumber, "0", ColumnSensitivity.Low)], DatabaseCopyScenario.Now);
 
         var validation = await _scenario.ValidateHandler().HandleAsync(new ValidateDatabaseCopy(_scenario.Request()), Ct);
 
-        validation.Decision.Has(SecurityViolationCode.MaskedRoleNotVerified).Should().BeTrue();
+        validation.Decision.Has(SecurityViolationCode.MaskingRulesInvalid).Should().BeTrue();
+        validation.Checks.Should().Contain(check => check.Outcome == CheckOutcome.Fail && check.Detail!.Contains("é chave"));
         validation.CanRun.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task UncoveredColumnsAndLargeObjects_AreWarnings()
+    {
+        var catalog = FakeMaskedCopier.DefaultCatalog();
+        _scenario.Copier.Catalog = catalog with
+        {
+            AllColumns = [.. catalog.AllColumns, new ColumnInfo("public", "clientes", "telefone", "text", null)],
+            LargeObjects = 2,
+        };
+
+        var validation = await _scenario.ValidateHandler().HandleAsync(new ValidateDatabaseCopy(_scenario.Request()), Ct);
+
+        validation.CanRun.Should().BeTrue();
+        validation.Checks.Should().Contain(check => check.Name == "Colunas sem regra" && check.Detail!.Contains("public.clientes.telefone"));
+        validation.Checks.Should().Contain(check => check.Name == "Aviso" && check.Detail!.Contains("objeto(s) grande(s)"));
     }
 
     [Fact]
@@ -455,19 +533,9 @@ public class ValidateDatabaseCopyHandlerTests
 
         validation.CanRun.Should().BeFalse();
         validation.Checks.Should().Contain(check => check.Name == "Destino" && check.Outcome == CheckOutcome.Fail);
-        validation.Checks.Should().Contain(check => check.Name == "Dump anônimo" && check.Outcome == CheckOutcome.Fail);
+        validation.Checks.Should().Contain(check => check.Name == "pg_dump × origem" && check.Outcome == CheckOutcome.Fail);
     }
 
-    [Fact]
-    public async Task UncoveredColumns_AreAWarning()
-    {
-        _scenario.Inspector.Columns = [.. _scenario.Inspector.Columns, new ColumnInfo("public", "clientes", "telefone", "text", null)];
-
-        var validation = await _scenario.ValidateHandler().HandleAsync(new ValidateDatabaseCopy(_scenario.Request()), Ct);
-
-        validation.Checks.Should().Contain(check => check.Name == "Colunas sem regra" && check.Outcome == CheckOutcome.Warning);
-        validation.CanRun.Should().BeTrue();
-    }
 
     [Fact]
     public async Task CriticalProduction_AsksForTheTypedName()

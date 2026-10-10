@@ -45,7 +45,9 @@ public static class DatabaseLabels
         DatabaseOperationType.Copy => "Copiar",
         DatabaseOperationType.CopyAndAnonymize => "Copiar + Anonimizar",
         DatabaseOperationType.Dump => "Dump",
-        DatabaseOperationType.AnonymousDump => "Dump anônimo",
+        DatabaseOperationType.AnonymousDump => "Dump anônimo (Anonymizer)",
+        DatabaseOperationType.SchemaDump => "Dump da estrutura",
+        DatabaseOperationType.MaskedDataCopy => "Cópia mascarada",
         DatabaseOperationType.Restore => "Restore",
         DatabaseOperationType.CreateDatabase => "Criar banco",
         DatabaseOperationType.DropDatabase => "Apagar banco",
@@ -107,8 +109,13 @@ public sealed class DatabaseConnectionItemViewModel(DatabaseConnectionRow row)
 
     public bool IsDevelopment => Row.Environment == DatabaseEnvironment.Development;
 
-    /// <summary>"backup_user@192.168.15.112:5432/eco_core".</summary>
-    public string Endpoint => string.Create(CultureInfo.InvariantCulture, $"{Row.Username}@{Row.Host}:{Row.Port}/{Row.Database}");
+    /// <summary>"backup_user@192.168.15.112:5432/eco_core"; só o servidor, "…:5432 (banco na cópia)".</summary>
+    public string Endpoint => Row.Database is { } database
+        ? string.Create(CultureInfo.InvariantCulture, $"{Row.Username}@{Row.Host}:{Row.Port}/{database}")
+        : string.Create(CultureInfo.InvariantCulture, $"{Row.Username}@{Row.Host}:{Row.Port} (banco na cópia)");
+
+    /// <summary>Tem banco fixo; sem ele, a conexão é só o servidor e o banco é escolhido na cópia (ADR-057).</summary>
+    public bool HasDatabase => Row.Database is not null;
 
     public string PasswordLabel => Row.HasPassword ? "Senha guardada ✓" : "Sem senha guardada";
 
@@ -119,6 +126,22 @@ public sealed class DatabaseConnectionItemViewModel(DatabaseConnectionRow row)
     public bool HasDescription => !string.IsNullOrWhiteSpace(Row.Description);
 
     public override string ToString() => $"{Name} ({Badge})";
+}
+
+/// <summary>Um apelido na lista: "lock_eco_core_1010 — ECO Produção / eco_core_1010 · Anon ECO".</summary>
+public sealed class SavedDatabaseItemViewModel(SavedDatabaseRow row, string connectionName, string? anonymizationName)
+{
+    public SavedDatabaseRow Row { get; } = row;
+
+    public Guid Id => Row.Id;
+
+    public string Alias => Row.Alias;
+
+    public string Detail => anonymizationName is null
+        ? $"{connectionName} / {Row.DatabaseName} · sem anonimização"
+        : $"{connectionName} / {Row.DatabaseName} · {anonymizationName}";
+
+    public override string ToString() => Alias;
 }
 
 /// <summary>Uma permissão no formulário da conexão: travada quando o ambiente decide por ela.</summary>
@@ -198,6 +221,22 @@ public sealed partial class DatabaseCopyStepViewModel(DatabaseCopyStep step, str
     public bool HasDetail => !string.IsNullOrWhiteSpace(Detail);
 }
 
+/// <summary>Uma coluna na pré-visualização: "public.clientes.email → user_3fa9…@exemplo.invalid · …".</summary>
+public sealed class MaskedPreviewItemViewModel(MaskedPreview preview)
+{
+    public string ColumnKey => preview.ColumnKey;
+
+    public string Values => preview.Values.Count == 0
+        ? "(tabela vazia)"
+        : string.Join("  ·  ", preview.Values.Select(value => value ?? "NULL"));
+}
+
+/// <summary>Uma máscara do catálogo no ComboBox de cada linha: o nome, e a explicação no tooltip.</summary>
+public sealed record MaskingChoice(MaskingMethod Method, string Label, string Description)
+{
+    public override string ToString() => Label;
+}
+
 /// <summary>Uma regra de mascaramento no editor do perfil: sugerida, ou confirmada.</summary>
 public sealed partial class AnonymizationRuleItemViewModel : ObservableObject
 {
@@ -207,8 +246,8 @@ public sealed partial class AnonymizationRuleItemViewModel : ObservableObject
         Table = rule.Table;
         Column = rule.Column;
         Sensitivity = rule.Sensitivity;
-        _kind = rule.Kind;
-        _expression = rule.Expression;
+        _method = rule.Method;
+        _argument = rule.Argument ?? MaskingCatalog.Of(rule.Method).DefaultArgument ?? string.Empty;
         _isConfirmed = confirmed;
         Reason = reason;
     }
@@ -223,6 +262,50 @@ public sealed partial class AnonymizationRuleItemViewModel : ObservableObject
 
     public string SensitivityLabel => DatabaseLabels.Sensitivity(Sensitivity);
 
+    /// <summary>O que a probabilidade quer dizer — a sugestão é só pelo nome e tipo da coluna, nunca pelos dados.</summary>
+    public string SensitivityHint => Sensitivity switch
+    {
+        ColumnSensitivity.High => "Alta: o nome e o tipo indicam dado pessoal quase certo (CPF, e-mail, telefone…). Marque, salvo engano.",
+        ColumnSensitivity.Medium => "Média: costuma ser dado pessoal (nome, endereço, data de nascimento…). Confira a tabela.",
+        _ => "Baixa: pode ser dado pessoal, mas muitas vezes não é. Marque só se souber que é.",
+    };
+
+    /// <summary>O catálogo de máscaras (ADR-058), como o ComboBox de cada linha mostra.</summary>
+    public static IReadOnlyList<MaskingChoice> Methods { get; } =
+        MaskingCatalog.All.Select(info => new MaskingChoice(info.Method, info.Label, info.Description)).ToList();
+
+    public MaskingChoice SelectedMethod
+    {
+        get => Methods.First(choice => choice.Method == Method);
+        set
+        {
+            if (value is not null)
+            {
+                Method = value.Method;
+            }
+        }
+    }
+
+    public MaskingMethodInfo MethodInfo => MaskingCatalog.Of(Method);
+
+    /// <summary>O que a máscara faz, com exemplo — o tooltip da linha.</summary>
+    public string MethodDescription => MethodInfo.Description;
+
+    /// <summary>Só algumas máscaras pedem parâmetro: início e fim, texto, dias, %.</summary>
+    public bool NeedsArgument => MethodInfo.NeedsArgument;
+
+    public string ArgumentLabel => MethodInfo.ArgumentLabel ?? string.Empty;
+
+    /// <summary>Some com o filtro; "Selecionar todas" só alcança as visíveis.</summary>
+    [ObservableProperty]
+    private bool _isShown = true;
+
+    /// <summary>Filtro por schema, tabela, coluna ou motivo, sem diferenciar maiúsculas.</summary>
+    public bool Matches(string filter) =>
+        string.IsNullOrEmpty(filter)
+        || ColumnKey.Contains(filter, StringComparison.OrdinalIgnoreCase)
+        || Reason?.Contains(filter, StringComparison.OrdinalIgnoreCase) == true;
+
     public bool IsHigh => Sensitivity == ColumnSensitivity.High;
 
     public bool IsMedium => Sensitivity == ColumnSensitivity.Medium;
@@ -231,23 +314,75 @@ public sealed partial class AnonymizationRuleItemViewModel : ObservableObject
 
     public string ColumnKey => $"{Schema}.{Table}.{Column}";
 
+    public string TableKey => $"{Schema}.{Table}";
+
+    /// <summary>A tabela desta coluna vai sem dados: nenhuma linha sai, e a máscara não chega a ser usada.</summary>
     [ObservableProperty]
-    private MaskingKind _kind;
+    private bool _isTableSkipped;
 
     [ObservableProperty]
-    private string _expression;
+    [NotifyPropertyChangedFor(nameof(SelectedMethod), nameof(MethodInfo), nameof(MethodDescription), nameof(NeedsArgument), nameof(ArgumentLabel))]
+    private MaskingMethod _method;
+
+    /// <summary>O parâmetro como digitado; a validação de verdade é a do domínio, ao salvar.</summary>
+    [ObservableProperty]
+    private string _argument;
 
     /// <summary>Só o que o usuário marcou vira regra: a sugestão é palpite pelo nome da coluna.</summary>
     [ObservableProperty]
     private bool _isConfirmed;
 
-    public bool IsValue
+    /// <summary>Trocou a máscara: o parâmetro volta ao padrão da nova, que tem outro formato.</summary>
+    partial void OnMethodChanged(MaskingMethod value) => Argument = MaskingCatalog.Of(value).DefaultArgument ?? string.Empty;
+
+    public AnonymizationRuleRow ToRow() =>
+        new(Schema, Table, Column, Method, NeedsArgument ? Argument : null, Sensitivity);
+}
+
+/// <summary>
+/// Uma tabela do banco no perfil de anonimização: marcada, vai vazia para o
+/// destino — a estrutura sim, nenhuma linha. Sem <see cref="Size"/> quando
+/// veio do perfil salvo e o banco ainda não foi lido.
+/// </summary>
+public sealed partial class SkippedTableItemViewModel(string schema, string table, bool skipped, SourceTableRow? source = null) : ObservableObject
+{
+    public string Schema { get; } = schema;
+
+    public string Table { get; } = table;
+
+    public string TableKey => $"{Schema}.{Table}";
+
+    public SourceTableRow? Source { get; private set; } = source;
+
+    /// <summary>"≈ 1.200.000 linhas · 340 MB · 12 partições": o tamanho ajuda a achar logs e auditoria.</summary>
+    public string Size => Source is not { } row
+        ? "não lido do banco ainda"
+        : string.Join(" · ", new[]
+        {
+            $"≈ {row.EstimatedRows.ToString("N0", DatabaseLabels.Culture)} linha(s)",
+            PostgresEnvironmentDiagnostics.FormatBytes(row.Bytes),
+            row.Partitions > 0 ? $"{row.Partitions} partição(ões)" : null,
+        }.Where(part => part is not null));
+
+    [ObservableProperty]
+    private bool _isSkipped = skipped;
+
+    /// <summary>Some com o filtro.</summary>
+    [ObservableProperty]
+    private bool _isShown = true;
+
+    public bool Matches(string filter) =>
+        string.IsNullOrEmpty(filter) || TableKey.Contains(filter, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>O banco foi lido de novo: o tamanho aparece, a marcação fica.</summary>
+    public void Refresh(SourceTableRow row)
     {
-        get => Kind == MaskingKind.Value;
-        set => Kind = value ? MaskingKind.Value : MaskingKind.Function;
+        Source = row;
+        OnPropertyChanged(nameof(Source));
+        OnPropertyChanged(nameof(Size));
     }
 
-    public AnonymizationRuleRow ToRow() => new(Schema, Table, Column, Kind, Expression, Sensitivity);
+    public SkippedTableRow ToRow() => new(Schema, Table);
 }
 
 /// <summary>Uma operação no histórico.</summary>
@@ -255,7 +390,12 @@ public sealed class DatabaseOperationItemViewModel(DatabaseOperationRow row)
 {
     public DatabaseOperationRow Row { get; } = row;
 
-    public string Title => $"{DatabaseLabels.Operation(Row.OperationType)}: {Row.Source ?? "—"} → {Row.Destination ?? "—"}";
+    /// <summary>"Copiar + Anonimizar: ECO Produção/eco_core_1010 → Local/lock_eco_core_1010_20261009_143000".</summary>
+    public string Title =>
+        $"{DatabaseLabels.Operation(Row.OperationType)}: {Side(Row.Source, Row.SourceDatabase)} → {Side(Row.Destination, Row.DestinationDatabase)}";
+
+    private static string Side(string? connection, string? database) =>
+        database is null ? connection ?? "—" : $"{connection ?? "—"}/{database}";
 
     public string Status => DatabaseLabels.Status(Row.Status);
 
@@ -272,7 +412,7 @@ public sealed class DatabaseOperationItemViewModel(DatabaseOperationRow row)
         Row.Duration is { } duration ? FormatDuration(duration) : null,
         Row.AnonymizationProfile is { } profile ? $"perfil {profile}" : null,
         Row.MaskedColumnsCount is { } masked ? $"{masked} coluna(s) mascarada(s)" : null,
-        Row.AnonymousDumpSize is { } size ? $"dump anônimo {PostgresEnvironmentDiagnostics.FormatBytes(size)}" : null,
+        Row.AnonymousDumpSize is { } size ? $"estrutura {PostgresEnvironmentDiagnostics.FormatBytes(size)}" : null,
         Row.ToolVersions,
     }.OfType<string>());
 

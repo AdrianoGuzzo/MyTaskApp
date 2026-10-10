@@ -33,7 +33,10 @@ public enum DatabaseOperationType
     /// <summary>Dump com os dados como estão. Proibido para quem exige anonimização.</summary>
     Dump = 3,
 
-    /// <summary>Dump feito por uma role mascarada: o dado sai anonimizado do servidor.</summary>
+    /// <summary>
+    /// Dump pela role mascarada do PostgreSQL Anonymizer (ADR-056). Substituído
+    /// pela cópia mascarada na consulta (ADR-058); fica para o histórico antigo.
+    /// </summary>
     AnonymousDump = 4,
 
     Restore = 5,
@@ -58,6 +61,12 @@ public enum DatabaseOperationType
 
     /// <summary>SQL livre. O app não tem console; existe para a política recusar com nome.</summary>
     ExecuteSql = 13,
+
+    /// <summary><c>pg_dump --schema-only</c>: só a estrutura, nenhuma linha. Permitido mesmo de quem exige anonimização.</summary>
+    SchemaDump = 14,
+
+    /// <summary>Os dados de uma tabela, mascarados no SELECT da origem e gravados no destino por COPY (ADR-058).</summary>
+    MaskedDataCopy = 15,
 }
 
 /// <summary>Como terminou uma operação de banco. Os valores vão para o banco: não reordene.</summary>
@@ -93,15 +102,6 @@ public enum DatabaseSslMode
     Disable = 4,
 }
 
-/// <summary>Como uma coluna é mascarada pelo PostgreSQL Anonymizer. Os valores vão para o banco: não reordene.</summary>
-public enum MaskingKind
-{
-    /// <summary><c>MASKED WITH FUNCTION anon.xxx(...)</c>.</summary>
-    Function = 1,
-
-    /// <summary><c>MASKED WITH VALUE ...</c>: um literal ou <c>NULL</c>.</summary>
-    Value = 2,
-}
 
 /// <summary>
 /// O quanto uma coluna parece dado pessoal. Só sugestão: quem confirma é o

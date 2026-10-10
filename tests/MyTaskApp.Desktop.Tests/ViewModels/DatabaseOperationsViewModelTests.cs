@@ -26,15 +26,24 @@ internal static class DatabaseScreen
     public static readonly DatabaseConnectionRow Critical = Row("ECO Crítico", DatabaseEnvironment.CriticalProduction, "eco_crit");
 
     public static readonly AnonymizationProfileRow Profile = new(
-        Guid.CreateVersion7(), "ECO LGPD", null, Masked.Id, "anon", true,
-        [new AnonymizationRuleRow("public", "clientes", "email", MaskingKind.Function, "anon.partial_email(email)", ColumnSensitivity.High)],
+        Guid.CreateVersion7(), "ECO LGPD", null, Production.Id, true,
+        [new AnonymizationRuleRow("public", "clientes", "email", MaskingMethod.FakeEmail, null, ColumnSensitivity.High)],
         Now);
 
     public static readonly DatabaseCopyProfileRow CopyProfile = new(
         Guid.CreateVersion7(), "ECO Production → ECO Development", Production.Id, Development.Id, Profile.Id,
         DatabaseCopyOptions.Default with { KeepAnonymizedArtifact = true }, true, Now);
 
-    public static DatabaseConnectionRow Row(string name, DatabaseEnvironment environment, string database, bool hasPassword = false) => new(
+    /// <summary>Uma conexão só de servidor (ADR-057): o banco é escolhido na cópia.</summary>
+    public static readonly DatabaseConnectionRow Server = Row("ECO Servidor", DatabaseEnvironment.Production, null, hasPassword: true);
+
+    /// <summary>O servidor local, sem banco: a cópia cria um banco novo com data e hora no nome.</summary>
+    public static readonly DatabaseConnectionRow LocalServer = Row("Local", DatabaseEnvironment.Development, null);
+
+    public static readonly SavedDatabaseRow Saved = new(
+        Guid.CreateVersion7(), "lock_eco_core_1010", Server.Id, "eco_core_1010", Profile.Id, Now);
+
+    public static DatabaseConnectionRow Row(string name, DatabaseEnvironment environment, string? database, bool hasPassword = false) => new(
         Guid.CreateVersion7(), name, "192.168.15.112", 5432, database, "backup_user", environment, DatabaseSslMode.Prefer, null, true,
         ConnectionPermissions.FromFlags(EnvironmentPolicy.For(environment).Defaults), hasPassword, Now);
 
@@ -45,6 +54,8 @@ internal static class DatabaseScreen
         runner.ResultsByHandler[typeof(GetDatabaseConnectionsHandler)] = (IReadOnlyList<DatabaseConnectionRow>)[Production, Masked, Development, Critical];
         runner.ResultsByHandler[typeof(GetAnonymizationProfilesHandler)] = (IReadOnlyList<AnonymizationProfileRow>)[Profile];
         runner.ResultsByHandler[typeof(GetDatabaseCopyProfilesHandler)] = (IReadOnlyList<DatabaseCopyProfileRow>)[CopyProfile];
+        runner.ResultsByHandler[typeof(GetSavedDatabasesHandler)] = (IReadOnlyList<SavedDatabaseRow>)[];
+        runner.ResultsByHandler[typeof(GetSourceTablesHandler)] = (IReadOnlyList<SourceTableRow>)[];
         runner.ResultsByHandler[typeof(GetDatabaseOperationHistoryHandler)] = (IReadOnlyList<DatabaseOperationRow>)
         [
             new DatabaseOperationRow(Guid.CreateVersion7(), DatabaseOperationType.CopyAndAnonymize, DatabaseOperationStatus.Succeeded,
@@ -64,7 +75,6 @@ internal static class DatabaseScreen
             new CheckResult(EnvironmentDiagnosticsReport.ClientToolsCategory, "pg_dump", missing ? CheckOutcome.Fail : CheckOutcome.Pass, missing ? "Não encontrado." : "17.2"),
         ],
         withServer ? [new CheckResult(EnvironmentDiagnosticsReport.ServerCategory, "Connection", CheckOutcome.Pass, "backup_user@eco_core")] : [],
-        withServer ? [new CheckResult(EnvironmentDiagnosticsReport.AnonymizerCategory, "Columns without masking policy", CheckOutcome.Warning, "1 coluna")] : [],
         new PostgresInstallGuide("Windows", ["winget install PostgreSQL.PostgreSQL.17"], ["where.exe pg_dump", "pg_dump --version"]));
 
     public static DatabaseOperationsViewModel Screen(
@@ -80,7 +90,7 @@ internal static class DatabaseScreen
             new DatabaseConnectionsViewModel(runner, confirmation, NullLogger<DatabaseConnectionsViewModel>.Instance),
             new DatabaseDiagnosticsViewModel(runner, clipboard, NullLogger<DatabaseDiagnosticsViewModel>.Instance),
             new DatabaseCopyViewModel(runner, confirmation, NullLogger<DatabaseCopyViewModel>.Instance),
-            new DatabaseProfilesViewModel(runner, confirmation, clipboard, NullLogger<DatabaseProfilesViewModel>.Instance),
+            new DatabaseProfilesViewModel(runner, confirmation, NullLogger<DatabaseProfilesViewModel>.Instance),
             new DatabaseHistoryViewModel(runner, NullLogger<DatabaseHistoryViewModel>.Instance),
             NullLogger<DatabaseOperationsViewModel>.Instance);
     }
@@ -681,7 +691,7 @@ public class DatabaseDiagnosticsViewModelTests
     }
 
     [Fact]
-    public async Task Diagnosing_FillsServerAndAnonymizer()
+    public async Task Diagnosing_FillsTheServer()
     {
         var viewModel = ViewModel();
         _runner.ResultsByHandler[typeof(DiagnoseDatabaseHandler)] = DatabaseScreen.Report(withServer: true);
@@ -689,9 +699,7 @@ public class DatabaseDiagnosticsViewModelTests
         await viewModel.DiagnoseAsync(Ct);
 
         viewModel.Server.Should().ContainSingle().Which.IsPass.Should().BeTrue();
-        viewModel.Anonymizer.Should().ContainSingle().Which.Glyph.Should().Be("⚠");
         viewModel.HasServer.Should().BeTrue();
-        viewModel.HasAnonymizer.Should().BeTrue();
         viewModel.StatusMessage.Should().Be("Tudo certo.");
 
         await viewModel.RefreshAsync(Ct);
@@ -741,7 +749,7 @@ public class DatabaseProfilesViewModelTests
 
     private DatabaseProfilesViewModel ViewModel()
     {
-        var viewModel = new DatabaseProfilesViewModel(_runner, _confirmation, _clipboard, NullLogger<DatabaseProfilesViewModel>.Instance);
+        var viewModel = new DatabaseProfilesViewModel(_runner, _confirmation, NullLogger<DatabaseProfilesViewModel>.Instance);
         viewModel.SetCatalog(
             new[] { DatabaseScreen.Production, DatabaseScreen.Masked, DatabaseScreen.Development }.Select(row => new DatabaseConnectionItemViewModel(row)).ToList(),
             [DatabaseScreen.Profile],
@@ -756,8 +764,8 @@ public class DatabaseProfilesViewModelTests
         viewModel.EditAnonymizationProfile(DatabaseScreen.Profile);
         _runner.ResultsByHandler[typeof(SuggestSensitiveColumnsHandler)] = (IReadOnlyList<ColumnSuggestion>)
         [
-            new ColumnSuggestion("public", "clientes", "email", "text", ColumnSensitivity.High, MaskingKind.Function, "anon.partial_email(email)", "Parece e-mail."),
-            new ColumnSuggestion("public", "clientes", "nome", "text", ColumnSensitivity.Medium, MaskingKind.Function, "anon.dummy_name()", "Parece nome."),
+            new ColumnSuggestion("public", "clientes", "email", "text", ColumnSensitivity.High, MaskingMethod.FakeEmail, null, "Parece e-mail."),
+            new ColumnSuggestion("public", "clientes", "nome", "text", ColumnSensitivity.Medium, MaskingMethod.FakeName, null, "Parece nome."),
         ];
 
         await viewModel.SuggestColumnsAsync(Ct);
@@ -767,6 +775,7 @@ public class DatabaseProfilesViewModelTests
         suggestion.IsConfirmed.Should().BeFalse();
         suggestion.SensitivityLabel.Should().Be("Média probabilidade");
         suggestion.Reason.Should().Be("Parece nome.");
+        suggestion.Method.Should().Be(MaskingMethod.FakeName);
         viewModel.RulesSummary.Should().Be("1 de 2 coluna(s) confirmada(s).");
         viewModel.StatusMessage.Should().Contain("1 possível");
     }
@@ -779,67 +788,59 @@ public class DatabaseProfilesViewModelTests
 
         viewModel.NewAnonymizationProfile();
         viewModel.AnonymizationName = "Outro";
-        viewModel.MaskedConnection = viewModel.Connections[1];
+        viewModel.ColumnsConnection = viewModel.Connections[1];
         viewModel.Rules.Add(new AnonymizationRuleItemViewModel(
-            new AnonymizationRuleRow("public", "t", "a", MaskingKind.Function, "anon.hash(a)", ColumnSensitivity.High), confirmed: true));
+            new AnonymizationRuleRow("public", "t", "a", MaskingMethod.Partial, "1,1", ColumnSensitivity.High), confirmed: true));
         viewModel.Rules.Add(new AnonymizationRuleItemViewModel(
-            new AnonymizationRuleRow("public", "t", "b", MaskingKind.Function, "anon.hash(b)", ColumnSensitivity.Low), confirmed: false));
+            new AnonymizationRuleRow("public", "t", "b", MaskingMethod.Hash, null, ColumnSensitivity.Low), confirmed: false));
 
         await viewModel.SaveAnonymizationProfileAsync(Ct);
 
         viewModel.Rules.Should().ContainSingle().Which.Column.Should().Be("a");
         viewModel.IsEditingAnonymization.Should().BeTrue();
-        viewModel.StatusMessage.Should().Contain("script");
+        viewModel.StatusMessage.Should().Contain("Nada foi instalado");
     }
 
     [Fact]
-    public async Task TheScript_IsGenerated_AndCopied()
+    public async Task ThePreview_ShowsMaskedValues_OrWhatDoesNotFit()
     {
         var viewModel = ViewModel();
         viewModel.EditAnonymizationProfile(DatabaseScreen.Profile);
-        _runner.ResultsByHandler[typeof(GenerateMaskingScriptHandler)] = "SECURITY LABEL FOR anon ON ROLE \"dump_anon\" IS 'MASKED';";
+        viewModel.PreviewCommand.CanExecute(null).Should().BeTrue();
+        _runner.ResultsByHandler[typeof(PreviewMaskingHandler)] = new MaskingPreviewResult(
+            [], [new MaskedPreview("public", "clientes", "email", ["user_1@exemplo.invalid", null])]);
 
-        await viewModel.GenerateScriptAsync(Ct);
-        await viewModel.CopyScriptAsync();
+        await viewModel.PreviewAsync(Ct);
 
-        viewModel.HasScript.Should().BeTrue();
-        _clipboard.LastWritten.Should().Contain("SECURITY LABEL");
-        viewModel.StatusMessage.Should().Contain("DBA");
+        viewModel.HasPreview.Should().BeTrue();
+        var preview = viewModel.Previews.Should().ContainSingle().Subject;
+        preview.ColumnKey.Should().Be("public.clientes.email");
+        preview.Values.Should().Be("user_1@exemplo.invalid  ·  NULL");
+        viewModel.StatusMessage.Should().Contain("não saiu de lá");
+
+        _runner.ResultsByHandler[typeof(PreviewMaskingHandler)] = new MaskingPreviewResult(["public.clientes.id é chave (PK ou FK)."], []);
+        await viewModel.PreviewAsync(Ct);
+
+        viewModel.Previews.Should().BeEmpty();
+        viewModel.PreviewProblems.Should().ContainSingle().Which.Should().Contain("é chave");
+        viewModel.StatusMessage.Should().BeNull();
+
+        viewModel.NewAnonymizationProfile();
+        viewModel.HasPreview.Should().BeFalse();
+        viewModel.PreviewCommand.CanExecute(null).Should().BeFalse("sem conexão nem coluna marcada");
     }
 
     [Fact]
-    public async Task ValidatingOnTheServer_ListsTheFindings()
+    public async Task APreviewThatFails_SaysSo()
     {
         var viewModel = ViewModel();
         viewModel.EditAnonymizationProfile(DatabaseScreen.Profile);
-        _runner.ResultsByHandler[typeof(ValidateAnonymizationProfileHandler)] = new AnonymizationValidation(
-            new AnonymizerStatus(true, "2.1.0", true, "2.1.0", false, false, true, []),
-            ["public.clientes.email"],
-            [],
-            ["public.x.y"],
-            [new ColumnSuggestion("public", "clientes", "cpf", "text", ColumnSensitivity.High, MaskingKind.Function, "anon.hash(cpf)", "Parece CPF.")]);
+        _runner.FailuresByHandler[typeof(PreviewMaskingHandler)] = new InvalidOperationException("x");
 
-        await viewModel.ValidateOnServerAsync(Ct);
+        await viewModel.PreviewAsync(Ct);
 
-        viewModel.ServerFindings.Should().Contain(finding => finding.StartsWith("✗ Regras do perfil que o servidor não tem"));
-        viewModel.ServerFindings.Should().Contain(finding => finding.Contains("transparent_dynamic_masking"));
-        viewModel.ServerFindings.Should().Contain(finding => finding.Contains("MASKED"));
-        viewModel.ServerFindings.Should().Contain(finding => finding.Contains("public.x.y"));
-        viewModel.ServerFindings.Should().Contain(finding => finding.Contains("1 coluna(s) candidata(s)"));
-    }
-
-    [Fact]
-    public async Task AHealthyServer_SaysSo()
-    {
-        var viewModel = ViewModel();
-        viewModel.EditAnonymizationProfile(DatabaseScreen.Profile);
-        _runner.ResultsByHandler[typeof(ValidateAnonymizationProfileHandler)] = new AnonymizationValidation(
-            new AnonymizerStatus(true, "2.1.0", true, "2.1.0", true, true, true, [new ServerMaskingRule("public", "clientes", "email", "MASKED WITH FUNCTION anon.partial_email(email)")]),
-            [], [], [], []);
-
-        await viewModel.ValidateOnServerAsync(Ct);
-
-        viewModel.ServerFindings.Should().ContainSingle().Which.Should().StartWith("✓");
+        viewModel.ErrorMessage.Should().Be("Não foi possível pré-visualizar as máscaras.");
+        viewModel.HasPreview.Should().BeFalse();
     }
 
     [Fact]
@@ -886,15 +887,20 @@ public class DatabaseProfilesViewModelTests
     }
 
     [Fact]
-    public void ARule_CanSwitchToAValue()
+    public void ARule_KeepsItsArgumentOnlyWhenTheMaskNeedsOne()
     {
         var rule = new AnonymizationRuleItemViewModel(
-            new AnonymizationRuleRow("s", "t", "c", MaskingKind.Function, "anon.hash(c)", ColumnSensitivity.High), confirmed: true);
+            new AnonymizationRuleRow("s", "t", "c", MaskingMethod.Hash, null, ColumnSensitivity.High), confirmed: true);
 
-        rule.IsValue = true;
+        rule.NeedsArgument.Should().BeFalse();
+        rule.ToRow().Argument.Should().BeNull();
 
-        rule.Kind.Should().Be(MaskingKind.Value);
-        rule.ToRow().Kind.Should().Be(MaskingKind.Value);
+        rule.Method = MaskingMethod.Partial;
+
+        rule.NeedsArgument.Should().BeTrue();
+        rule.ArgumentLabel.Should().Be("Manter início,fim");
+        rule.Argument.Should().Be("0,2", "o padrão da máscara nova");
+        rule.ToRow().Should().Be(new AnonymizationRuleRow("s", "t", "c", MaskingMethod.Partial, "0,2", ColumnSensitivity.High));
         rule.IsHigh.Should().BeTrue();
     }
 }

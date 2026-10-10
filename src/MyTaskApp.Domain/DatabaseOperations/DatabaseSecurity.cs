@@ -1,6 +1,6 @@
 namespace MyTaskApp.Domain.DatabaseOperations;
 
-/// <summary>Por que a política recusou. Cada código é uma regra do ADR-056.</summary>
+/// <summary>Por que a política recusou. Cada código é uma regra do ADR-056 (e da ADR-058, para as máscaras).</summary>
 public enum SecurityViolationCode
 {
     MissingSource = 1,
@@ -21,12 +21,9 @@ public enum SecurityViolationCode
     AnonymizationProfileMissing,
     AnonymizationProfileDisabled,
     AnonymizationProfileEmpty,
-    DumpConnectionMissing,
-    DumpConnectionNotSameDatabase,
-    DumpConnectionDisabled,
-    MaskedRoleNotVerified,
-    TransparentMaskingOff,
-    AnonymizerUnavailable,
+
+    /// <summary>Alguma regra não cabe no banco de origem: coluna que sumiu, tipo errado, chave, único (ADR-058).</summary>
+    MaskingRulesInvalid,
     UncoveredHighCandidates,
     VerificationRequired,
     KeepArtifactForbidden,
@@ -38,6 +35,9 @@ public enum SecurityViolationCode
 
     /// <summary>Cópia de produção sem a confirmação explícita (ou, na crítica, sem o nome digitado).</summary>
     ConfirmationRequired,
+
+    /// <summary>A conexão é só o servidor (ADR-057) e nenhum banco foi escolhido.</summary>
+    DatabaseNotChosen,
 }
 
 public sealed record SecurityViolation(SecurityViolationCode Code, string Message);
@@ -55,30 +55,26 @@ public sealed record SecurityDecision(IReadOnlyList<SecurityViolation> Violation
 }
 
 /// <summary>
-/// O que se sabe da anonimização de uma cópia. Os fatos do servidor
-/// (<see cref="ServerChecked"/>) chegam depois de consultá-lo; antes disso, a
-/// política julga só o cadastro, e julga de novo com os fatos.
+/// O que se sabe da anonimização de uma cópia. O julgamento das regras contra
+/// as colunas da origem (<see cref="SourceChecked"/>) chega depois de ler o
+/// catálogo; antes disso, a política julga só o cadastro, e julga de novo com os fatos.
 /// </summary>
 public sealed record AnonymizationFacts(
     bool ProfileExists,
     bool ProfileEnabled,
     int RuleCount,
-    bool ServerChecked = false,
-    bool AnonymizerInstalled = false,
-    bool RoleIsMasked = false,
-    bool TransparentMaskingOn = false,
+    bool SourceChecked = false,
+    IReadOnlyList<string>? RuleProblems = null,
     int UncoveredHighCandidates = 0)
 {
     public static AnonymizationFacts None { get; } = new(false, false, 0);
 
-    /// <summary>Os mesmos fatos do cadastro, agora com o que o servidor respondeu.</summary>
-    public AnonymizationFacts WithServer(bool installed, bool roleMasked, bool transparentOn, int uncoveredHigh) =>
+    /// <summary>Os mesmos fatos do cadastro, agora com o que as colunas da origem disseram.</summary>
+    public AnonymizationFacts WithSource(IReadOnlyList<string> ruleProblems, int uncoveredHigh) =>
         this with
         {
-            ServerChecked = true,
-            AnonymizerInstalled = installed,
-            RoleIsMasked = roleMasked,
-            TransparentMaskingOn = transparentOn,
+            SourceChecked = true,
+            RuleProblems = ruleProblems,
             UncoveredHighCandidates = uncoveredHigh,
         };
 }
@@ -87,16 +83,17 @@ public sealed record AnonymizationFacts(
 /// Uma operação a julgar. As conexões vêm do banco do app, lidas pelo handler
 /// — nunca da tela. <see cref="ProtectedEndpoints"/> são as chaves de todo
 /// banco cadastrado como produção: um destino "Desenvolvimento" que aponte
-/// para um deles é produção com outro rótulo.
+/// para um deles é produção com outro rótulo. <see cref="NewDestinationDatabase"/>
+/// é a cópia para um banco novo, com nome gerado (ADR-057): só cria, nunca apaga.
 /// </summary>
 public sealed record DatabaseOperationRequest(
     DatabaseOperationType Operation,
     DatabaseConnectionSnapshot? Source = null,
     DatabaseConnectionSnapshot? Destination = null,
-    DatabaseConnectionSnapshot? DumpConnection = null,
     AnonymizationFacts? Anonymization = null,
     DatabaseCopyOptions? Options = null,
-    IReadOnlyCollection<string>? ProtectedEndpoints = null);
+    IReadOnlyCollection<string>? ProtectedEndpoints = null,
+    bool NewDestinationDatabase = false);
 
 /// <summary>Recusa da política de segurança. É um <see cref="DomainException"/>: a mensagem é para o usuário.</summary>
 public sealed class DatabaseSecurityException(SecurityDecision decision) : DomainException(
@@ -176,17 +173,30 @@ public sealed class DatabaseSecurityPolicy : IDatabaseSecurityPolicy
                 {
                     violations.Add(
                         SecurityViolationCode.PlainDumpFromProtectedSource,
-                        $"{dumped.Name} exige anonimização: só o dump anônimo é permitido.");
+                        $"{dumped.Name} exige anonimização: os dados só saem mascarados.");
                 }
 
                 break;
 
-            case DatabaseOperationType.AnonymousDump:
-                if (CheckSource(request.Source, violations) is { } anonymized)
+            // Só a estrutura: nenhuma linha sai, então vale mesmo para quem exige anonimização.
+            case DatabaseOperationType.SchemaDump:
+                CheckSource(request.Source, violations);
+                break;
+
+            // Os dados de uma tabela, com as máscaras no SELECT: lê a origem, grava no destino.
+            case DatabaseOperationType.MaskedDataCopy:
+                if (CheckSource(request.Source, violations) is { } masked)
                 {
-                    CheckAnonymization(request, anonymized, violations);
+                    CheckAnonymization(request, masked, violations);
                 }
 
+                CheckWritableTarget(request, ConnectionPermission.Restore, "receber os dados", violations);
+                break;
+
+            case DatabaseOperationType.AnonymousDump:
+                violations.Add(
+                    SecurityViolationCode.UnsupportedOperation,
+                    "O dump pelo PostgreSQL Anonymizer não existe mais: a cópia mascara os dados na consulta.");
                 break;
 
             case DatabaseOperationType.Restore:
@@ -241,7 +251,11 @@ public sealed class DatabaseSecurityPolicy : IDatabaseSecurityPolicy
             violations.Add(SecurityViolationCode.NothingToCopy, "Escolha copiar a estrutura, os dados ou os dois.");
         }
 
-        if (destination is not null && options.RecreateDestination)
+        if (destination is not null && request.NewDestinationDatabase)
+        {
+            RequirePermission(destination, ConnectionPermission.CreateDatabase, "criar o banco", violations);
+        }
+        else if (destination is not null && options.RecreateDestination)
         {
             RequirePermission(destination, ConnectionPermission.DropDatabase, "apagar o banco para recriá-lo", violations);
             RequirePermission(destination, ConnectionPermission.CreateDatabase, "criar o banco", violations);
@@ -251,6 +265,11 @@ public sealed class DatabaseSecurityPolicy : IDatabaseSecurityPolicy
         {
             return;
         }
+
+        // Até aqui, uma conexão sem banco ainda pode ser julgada (permissões,
+        // ambiente). Para copiar, os dois lados precisam do banco resolvido.
+        RequireDatabase(source, "origem", violations);
+        RequireDatabase(destination, "destino", violations);
 
         var sourceRules = EnvironmentPolicy.For(source.Environment);
 
@@ -325,52 +344,16 @@ public sealed class DatabaseSecurityPolicy : IDatabaseSecurityPolicy
                 "O perfil de anonimização não tem nenhuma regra confirmada.");
         }
 
-        if (request.DumpConnection is not { } dump)
-        {
-            violations.Add(SecurityViolationCode.DumpConnectionMissing, "O perfil não tem a conexão mascarada.");
-        }
-        else
-        {
-            if (dump.EndpointKey != source.EndpointKey)
-            {
-                violations.Add(
-                    SecurityViolationCode.DumpConnectionNotSameDatabase,
-                    $"A conexão mascarada ({dump.Name}) não aponta para o mesmo banco da origem ({source.Name}).");
-            }
-
-            if (!dump.IsEnabled)
-            {
-                violations.Add(SecurityViolationCode.DumpConnectionDisabled, $"A conexão {dump.Name} está desativada.");
-            }
-
-            RequirePermission(dump, ConnectionPermission.Dump, "fazer dump", violations);
-        }
-
-        if (!facts.ServerChecked)
+        if (!facts.SourceChecked)
         {
             return;
         }
 
-        if (!facts.AnonymizerInstalled)
+        if (facts.RuleProblems is { Count: > 0 } problems)
         {
             violations.Add(
-                SecurityViolationCode.AnonymizerUnavailable,
-                "O PostgreSQL Anonymizer 2.x não está instalado no banco de origem.");
-            return;
-        }
-
-        if (!facts.RoleIsMasked)
-        {
-            violations.Add(
-                SecurityViolationCode.MaskedRoleNotVerified,
-                "O usuário da conexão mascarada não está marcado como MASKED no servidor.");
-        }
-
-        if (!facts.TransparentMaskingOn)
-        {
-            violations.Add(
-                SecurityViolationCode.TransparentMaskingOff,
-                "anon.transparent_dynamic_masking está desligado: o dump sairia com os dados reais.");
+                SecurityViolationCode.MaskingRulesInvalid,
+                "As máscaras não cabem no banco de origem: " + string.Join(" ", problems));
         }
 
         if (facts.UncoveredHighCandidates > 0 && EnvironmentPolicy.For(source.Environment).BlocksOnUncoveredHighCandidates)
@@ -437,12 +420,30 @@ public sealed class DatabaseSecurityPolicy : IDatabaseSecurityPolicy
         string action,
         Violations violations)
     {
-        if (CheckDestination(request, violations, permission, action) is { } target
-            && SystemDatabases.Contains(target.Database))
+        if (CheckDestination(request, violations, permission, action) is not { } target)
+        {
+            return;
+        }
+
+        if (target.Database is not { } database)
+        {
+            RequireDatabase(target, "destino", violations);
+        }
+        else if (SystemDatabases.Contains(database))
         {
             violations.Add(
                 SecurityViolationCode.ProtectedSystemDatabase,
-                $"{target.Database} é um banco do próprio servidor e não pode ser alterado.");
+                $"{database} é um banco do próprio servidor e não pode ser alterado.");
+        }
+    }
+
+    private static void RequireDatabase(DatabaseConnectionSnapshot connection, string side, Violations violations)
+    {
+        if (!connection.HasDatabase)
+        {
+            violations.Add(
+                SecurityViolationCode.DatabaseNotChosen,
+                $"{connection.Name} é só o servidor: escolha o banco de {side}.");
         }
     }
 
@@ -481,12 +482,12 @@ public sealed class DatabaseSecurityPolicy : IDatabaseSecurityPolicy
         {
             violations.Add(
                 SecurityViolationCode.DestinationMatchesProtectedEndpoint,
-                $"{destination.Name} aponta para o mesmo banco de uma conexão de produção.");
+                $"{destination.Name} aponta para o mesmo banco (ou servidor) de uma conexão de produção.");
         }
     }
 
     private static bool IsProtectedEndpoint(DatabaseOperationRequest request, DatabaseConnectionSnapshot target) =>
-        request.ProtectedEndpoints?.Contains(target.EndpointKey) == true;
+        target.IsAmong(request.ProtectedEndpoints);
 
     private static DatabaseConnectionSnapshot? RequireTarget(DatabaseOperationRequest request, Violations violations)
     {

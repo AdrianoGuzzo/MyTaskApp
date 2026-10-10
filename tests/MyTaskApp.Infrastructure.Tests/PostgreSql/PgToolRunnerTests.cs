@@ -31,23 +31,63 @@ public class PgToolRunnerTests
             InheritedVariables = () => ["PATH", "PGSERVICE", "PGPASSWORD", "pghost"],
         };
 
-    private static PgDumpRequest Dump(DatabaseConnectionSnapshot connection, bool anonymous) =>
-        new(connection, @"C:\ws\anonymized\archive", anonymous, true, true, 4, []);
+    private static PgDumpRequest Dump(DatabaseConnectionSnapshot connection) =>
+        new(connection, @"C:\ws\anonymized\archive", true, true, 4, []);
+
+    [Fact]
+    public async Task TheSourceVersion_PicksTheSetThatRuns()
+    {
+        var newest = Tools(@"C:\pgadmin\runtime");
+        var fourteen = Tools(@"C:\pg\14\bin").Tools.Select(tool => tool with { Version = new PostgresVersion(14, 22) }).ToList();
+        var installed = newest with
+        {
+            Tools = newest.Tools.Select(tool => tool with { Version = new PostgresVersion(18, 4) }).ToList(),
+            Sets = [newest.Tools.Select(tool => tool with { Version = new PostgresVersion(18, 4) }).ToList(), fourteen],
+        };
+        var runner = new PgToolRunner(_processes, new StaticToolLocator(installed), new StaticPasswordReader(), _options, _log.For<PgToolRunner>());
+        var target = Connection(DatabaseEnvironment.Development);
+
+        await runner.RunAsync(new PgInvocation(PostgresTool.PgRestore, ["--list", "x"], TimeSpan.FromMinutes(1), target, [], new PostgresVersion(14, 10)), null, Ct);
+        await runner.RunAsync(new PgInvocation(PostgresTool.PgRestore, ["--list", "x"], TimeSpan.FromMinutes(1), target, []), null, Ct);
+
+        _processes.Requests.Select(request => request.FileName).Should().Equal(
+            @"C:\pg\14\bin\pg_restore.exe",
+            @"C:\pgadmin\runtime\pg_restore.exe");
+    }
 
     // --- Argumentos -------------------------------------------------------------
 
     [Fact]
-    public void TheAnonymousDump_UsesDirectoryFormat_Jobs_AndLeavesTheAnonOut()
+    public void TheStructureDump_UsesDirectoryFormat_AndTheSnapshot()
     {
-        var arguments = PgArguments.Dump(Dump(Connection(DatabaseEnvironment.Production), anonymous: true), 60);
+        var request = Dump(Connection(DatabaseEnvironment.Production)) with { IncludeData = false, Jobs = 1, Snapshot = "00000003-0000001B-1" };
 
-        arguments.Should().Equal(
+        PgArguments.Dump(request, 60).Should().Equal(
             "--host", "192.168.15.112", "--port", "5432", "--username", "backup_user",
             "--dbname", "eco_core",
             "--format=directory", "--file", @"C:\ws\anonymized\archive",
-            "--jobs", "4", "--verbose", "--no-password", "--lock-wait-timeout=60s",
+            "--jobs", "1", "--verbose", "--no-password", "--lock-wait-timeout=60s",
             "--no-subscriptions", "--no-publications",
-            "--no-security-labels", "--exclude-extension=anon");
+            "--schema-only", "--snapshot=00000003-0000001B-1");
+    }
+
+    [Theory]
+    [InlineData("00000003-0000001B")]
+    [InlineData("1-2-3")]
+    public void AWellFormedSnapshot_IsAccepted(string snapshot)
+    {
+        PgArguments.Dump(Dump(Connection(DatabaseEnvironment.Development)) with { Snapshot = snapshot }, 60)
+            .Should().Contain($"--snapshot={snapshot}");
+    }
+
+    [Theory]
+    [InlineData("x; --dbname=prod")]
+    [InlineData("--help")]
+    [InlineData("")]
+    public void AStrangeSnapshot_NeverBecomesAnArgument(string snapshot)
+    {
+        FluentActions.Invoking(() => PgArguments.Dump(Dump(Connection(DatabaseEnvironment.Development)) with { Snapshot = snapshot }, 60))
+            .Should().Throw<DomainException>();
     }
 
     [Fact]
@@ -55,9 +95,19 @@ public class PgToolRunnerTests
     {
         var connection = Connection(DatabaseEnvironment.Development);
 
-        PgArguments.Dump(Dump(connection, false) with { IncludeData = false }, 60).Should().Contain("--schema-only");
-        PgArguments.Dump(Dump(connection, false) with { IncludeSchema = false }, 60).Should().Contain("--data-only");
-        PgArguments.Dump(Dump(connection, false), 60).Should().NotContain(["--schema-only", "--data-only", "--exclude-extension=anon"]);
+        PgArguments.Dump(Dump(connection) with { IncludeData = false }, 60).Should().Contain("--schema-only");
+        PgArguments.Dump(Dump(connection) with { IncludeSchema = false }, 60).Should().Contain("--data-only");
+        PgArguments.Dump(Dump(connection), 60).Should().NotContain(["--schema-only", "--data-only", "--exclude-extension=anon", "--no-security-labels"]);
+    }
+
+    [Fact]
+    public void TheRestore_CanRunOneSectionAtATime()
+    {
+        var request = new PgRestoreRequest(Connection(DatabaseEnvironment.Development, "eco_dev"), @"C:\ws\a", true, false, 1, []);
+
+        PgArguments.Restore(request with { Section = RestoreSection.PreData }).Should().Contain("--section=pre-data").And.NotContain("--schema-only");
+        PgArguments.Restore(request with { Section = RestoreSection.PostData }).Should().Contain("--section=post-data");
+        PgArguments.Restore(request).Should().Contain("--schema-only").And.NotContain(argument => argument.StartsWith("--section", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -88,7 +138,7 @@ public class PgToolRunnerTests
     [Fact]
     public async Task ThePassword_GoesOnlyThroughTheEnvironment()
     {
-        await Runner().RunAsync(new PgInvocation(PostgresTool.PgDump, PgArguments.Dump(Dump(Connection(DatabaseEnvironment.Development), false), 60),
+        await Runner().RunAsync(new PgInvocation(PostgresTool.PgDump, PgArguments.Dump(Dump(Connection(DatabaseEnvironment.Development)), 60),
             TimeSpan.FromMinutes(1), Connection(DatabaseEnvironment.Development)), null, Ct);
 
         var request = _processes.Requests.Single();
@@ -245,17 +295,99 @@ public class PgToolRunnerTests
         _processes.Requests.Should().BeEmpty();
     }
 
+    [Theory]
+    [MemberData(nameof(WritingTools))]
+    public async Task NothingThatWrites_StartsOnAServerWithoutADatabase(PostgresTool tool)
+    {
+        var server = Connection(DatabaseEnvironment.Development, database: null);
+
+        var refusal = await FluentActions.Awaiting(() => Runner().RunAsync(new PgInvocation(tool, ["x"], TimeSpan.FromMinutes(1), server), null, Ct))
+            .Should().ThrowAsync<DatabaseSecurityException>();
+
+        refusal.Which.Decision.Has(SecurityViolationCode.DatabaseNotChosen).Should().BeTrue();
+        _processes.Requests.Should().BeEmpty();
+    }
+
+    [Theory]
+    [MemberData(nameof(WritingTools))]
+    public async Task AProductionServer_ProtectsEveryDatabaseOnIt(PostgresTool tool)
+    {
+        var productionServer = Connection(DatabaseEnvironment.Production, database: null);
+        var sameServer = Connection(DatabaseEnvironment.Development, "copia_local");
+
+        await FluentActions.Awaiting(() => Runner().RunAsync(
+                new PgInvocation(tool, ["x"], TimeSpan.FromMinutes(1), sameServer, [productionServer.EndpointKey]), null, Ct))
+            .Should().ThrowAsync<DatabaseSecurityException>();
+
+        _processes.Requests.Should().BeEmpty();
+    }
+
     [Fact]
-    public void APlainDumpOfASourceThatDemandsAnonymization_IsStopped()
+    public void ADumpOfAServerWithoutADatabase_IsStopped()
+    {
+        var server = Connection(DatabaseEnvironment.Development, database: null);
+
+        FluentActions.Invoking(() => PostgresProcessGuard.Check(new PgInvocation(PostgresTool.PgDump, ["x"], TimeSpan.Zero, server)))
+            .Should().Throw<DatabaseSecurityException>().Which.Decision.Has(SecurityViolationCode.DatabaseNotChosen).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Arguments_NeverGoOutWithoutADatabase()
+    {
+        // Sem --dbname, o libpq cairia no banco com o nome do usuário — longe da política.
+        var server = Connection(DatabaseEnvironment.Development, database: null);
+
+        FluentActions.Invoking(() => PgArguments.Dump(Dump(server), 30)).Should().Throw<DatabaseSecurityException>();
+        FluentActions.Invoking(() => PgArguments.Restore(new PgRestoreRequest(server, @"C:\ws\a", true, true, 2, [])))
+            .Should().Throw<DatabaseSecurityException>();
+        FluentActions.Invoking(() => PgArguments.CreateDatabase(server)).Should().Throw<DatabaseSecurityException>();
+        FluentActions.Invoking(() => PgArguments.DropDatabase(server, force: false)).Should().Throw<DatabaseSecurityException>();
+
+        PgArguments.CreateDatabase(server.WithDatabase("lock_eco_core_1010_20261009_143000"))
+            .Should().EndWith("lock_eco_core_1010_20261009_143000");
+    }
+
+    [Fact]
+    public async Task ASession_NeverOpensWithoutADatabase()
+    {
+        var sessions = new NpgsqlPostgresSessionFactory(
+            new StaticPasswordReader(), _options, Microsoft.Extensions.Logging.Abstractions.NullLogger<NpgsqlPostgresSessionFactory>.Instance);
+
+        await FluentActions.Awaiting(() => sessions.OpenAsync(Connection(DatabaseEnvironment.Development, database: null), null, Ct))
+            .Should().ThrowAsync<DatabaseSecurityException>();
+    }
+
+    [Fact]
+    public void ADumpWithDataOfASourceThatDemandsAnonymization_IsStopped_ButItsStructureIsNot()
     {
         var source = Connection(DatabaseEnvironment.Production) with
         {
             Permissions = ConnectionPermissions.FromFlags(ConnectionPermission.Read | ConnectionPermission.Dump | ConnectionPermission.RequireAnonymization),
         };
 
-        FluentActions.Invoking(() => PostgresProcessGuard.Check(new PgInvocation(PostgresTool.PgDump, ["x"], TimeSpan.Zero, source)))
-            .Should().Throw<DatabaseSecurityException>().Which.Decision.Has(SecurityViolationCode.PlainDumpFromProtectedSource).Should().BeTrue();
-        FluentActions.Invoking(() => PostgresProcessGuard.Check(new PgInvocation(PostgresTool.PgDump, ["x"], TimeSpan.Zero, source, Anonymous: true)))
+        foreach (var arguments in (string[][])[["x"], ["--schema-only", "--data-only"], ["--schema-only", "--section=data"], ["--schema-only", "--section", "data"], ["--schema-only", "-a"]])
+        {
+            FluentActions.Invoking(() => PostgresProcessGuard.Check(new PgInvocation(PostgresTool.PgDump, arguments, TimeSpan.Zero, source)))
+                .Should().Throw<DatabaseSecurityException>(string.Join(" ", arguments))
+                .Which.Decision.Has(SecurityViolationCode.PlainDumpFromProtectedSource).Should().BeTrue();
+        }
+
+        FluentActions.Invoking(() => PostgresProcessGuard.Check(new PgInvocation(PostgresTool.PgDump, ["--dbname", "eco", "--schema-only"], TimeSpan.Zero, source)))
+            .Should().NotThrow();
+    }
+
+    [Fact]
+    public void TheMaskedCopyDestination_IsJudgedLikeARestore()
+    {
+        var production = Connection(DatabaseEnvironment.Production, database: null);
+
+        FluentActions.Invoking(() => PostgresProcessGuard.CheckDestination(Connection(DatabaseEnvironment.Production, "x"), []))
+            .Should().Throw<DatabaseSecurityException>();
+        FluentActions.Invoking(() => PostgresProcessGuard.CheckDestination(Connection(DatabaseEnvironment.Development, "copia"), [production.EndpointKey]))
+            .Should().Throw<DatabaseSecurityException>();
+        FluentActions.Invoking(() => PostgresProcessGuard.CheckDestination(Connection(DatabaseEnvironment.Development, database: null), []))
+            .Should().Throw<DatabaseSecurityException>().Which.Decision.Has(SecurityViolationCode.DatabaseNotChosen).Should().BeTrue();
+        FluentActions.Invoking(() => PostgresProcessGuard.CheckDestination(Connection(DatabaseEnvironment.Development, "copia"), []))
             .Should().NotThrow();
     }
 
@@ -326,7 +458,7 @@ public class PgToolRunnerTests
 
         try
         {
-            var run = await new PostgresDumpService(Runner(), _options).DumpAsync(Dump(connection, false) with { OutputDirectory = output }, null, Ct);
+            var run = await new PostgresDumpService(Runner(), _options).DumpAsync(Dump(connection) with { OutputDirectory = output }, null, Ct);
 
             run.Succeeded.Should().BeTrue();
             Directory.Exists(Path.GetDirectoryName(output)).Should().BeTrue();

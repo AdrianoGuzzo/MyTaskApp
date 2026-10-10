@@ -14,6 +14,8 @@ internal sealed class FakeDatabaseCatalog : IUnitOfWork
 
     public FakeCopyProfileRepository CopyProfiles { get; } = new();
 
+    public FakeSavedDatabaseRepository SavedDatabases { get; } = new();
+
     public FakeDatabaseAuditLog Audit { get; } = new();
 
     public FakeDatabaseCatalog() => Connections = new FakeConnectionRepository();
@@ -108,6 +110,35 @@ internal sealed class FakeCopyProfileRepository : IDatabaseCopyProfileRepository
         Task.FromResult(Items.Any(profile => profile.AnonymizationProfileId == anonymizationProfileId));
 
     public void Remove(DatabaseCopyProfile profile) => Items.Remove(profile);
+}
+
+internal sealed class FakeSavedDatabaseRepository : ISavedDatabaseRepository
+{
+    public List<SavedDatabase> Items { get; } = [];
+
+    public Task AddAsync(SavedDatabase saved, CancellationToken cancellationToken = default)
+    {
+        Items.Add(saved);
+        return Task.CompletedTask;
+    }
+
+    public Task<SavedDatabase?> FindByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Items.FirstOrDefault(saved => saved.Id == id));
+
+    public Task<IReadOnlyList<SavedDatabase>> ListAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<SavedDatabase>>(Items.OrderBy(saved => saved.Alias, StringComparer.Ordinal).ToList());
+
+    public Task<bool> AliasExistsAsync(string alias, Guid? exceptId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Items.Any(saved =>
+            string.Equals(saved.Alias, alias.Trim(), StringComparison.OrdinalIgnoreCase) && saved.Id != exceptId));
+
+    public Task<bool> AnyUsesConnectionAsync(Guid connectionId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Items.Any(saved => saved.ConnectionId == connectionId));
+
+    public Task<bool> AnyUsesAnonymizationProfileAsync(Guid anonymizationProfileId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Items.Any(saved => saved.AnonymizationProfileId == anonymizationProfileId));
+
+    public void Remove(SavedDatabase saved) => Items.Remove(saved);
 }
 
 internal sealed class FakeDatabaseAuditLog : IDatabaseOperationAuditLog
@@ -206,6 +237,9 @@ internal sealed class FakeServerInspector : IPostgresServerInspector
         new("public", "pedidos", 2_000_000, 5000),
     ];
 
+    /// <summary>Linhas de uma tabela numa conexão (pelo nome); sem resposta, 10 dos dois lados.</summary>
+    public Func<string, string, long?>? RowsOf { get; set; }
+
     public IReadOnlyList<ColumnInfo> Columns { get; set; } =
     [
         new("public", "clientes", "id", "integer", null),
@@ -231,7 +265,7 @@ internal sealed class FakeServerInspector : IPostgresServerInspector
 
     public Exception? Failure { get; set; }
 
-    public static ServerDiagnostics Connected(string version = "16.4") => new(
+    public static ServerDiagnostics Connected(string version = "17.4") => new(
         true,
         null,
         $"PostgreSQL {version} on x86_64",
@@ -251,9 +285,19 @@ internal sealed class FakeServerInspector : IPostgresServerInspector
         return Task.FromResult(Diagnostics.TryGetValue(connection.Name, out var result) ? result : Connected());
     }
 
+    /// <summary>Os bancos do servidor, para a escolha numa conexão só de servidor (ADR-057).</summary>
+    public IReadOnlyList<string> Databases { get; set; } = ["eco_core_1010", "eco_core_2020"];
+
+    public Task<IReadOnlyList<string>> ListDatabasesAsync(DatabaseConnectionSnapshot connection, CancellationToken cancellationToken = default)
+    {
+        Calls.Add($"databases:{connection.Name}");
+        ThrowIfFailing();
+        return Task.FromResult(Databases);
+    }
+
     public Task<IReadOnlyList<ColumnInfo>> ListColumnsAsync(DatabaseConnectionSnapshot connection, CancellationToken cancellationToken = default)
     {
-        Calls.Add($"columns:{connection.Name}");
+        Calls.Add($"columns:{connection.Name}:{connection.Database}");
         ThrowIfFailing();
         return Task.FromResult(Columns);
     }
@@ -277,7 +321,9 @@ internal sealed class FakeServerInspector : IPostgresServerInspector
         CancellationToken cancellationToken = default)
     {
         Calls.Add($"rows:{connection.Name}");
-        return Task.FromResult<IReadOnlyList<RowCount>>(tables.Select(table => new RowCount(table, 10, false)).ToList());
+        return Task.FromResult<IReadOnlyList<RowCount>>(tables
+            .Select(table => new RowCount(table, RowsOf?.Invoke(connection.Name, table) ?? 10, false))
+            .ToList());
     }
 
     public Task<ColumnFingerprint> FingerprintAsync(
@@ -299,6 +345,19 @@ internal sealed class FakeServerInspector : IPostgresServerInspector
         return Task.FromResult(new ColumnFingerprint(column, values));
     }
 
+    /// <summary>Linhas sem a máscara fixa, por coluna; o padrão é zero — a cópia que deu certo.</summary>
+    public Dictionary<string, long> NotMasked { get; } = [];
+
+    public Task<long> CountNotMaskedAsync(
+        DatabaseConnectionSnapshot connection,
+        ColumnReference column,
+        MaskedColumnPlan mask,
+        CancellationToken cancellationToken = default)
+    {
+        Calls.Add($"notmasked:{connection.Name}:{column.ColumnKey}");
+        return Task.FromResult(NotMasked.GetValueOrDefault(column.ColumnKey));
+    }
+
     private void ThrowIfFailing()
     {
         if (Failure is not null)
@@ -308,28 +367,136 @@ internal sealed class FakeServerInspector : IPostgresServerInspector
     }
 }
 
-internal sealed class FakeAnonymizerInspector : IPostgresAnonymizerInspector
+/// <summary>
+/// A cópia mascarada sem servidor (ADR-058): o catálogo de duas tabelas, e a
+/// sessão que anota cada passo na mesma lista das ferramentas — para a ordem
+/// entre <c>pg_dump</c>, COPY e <c>pg_restore</c> aparecer junta.
+/// </summary>
+internal sealed class FakeMaskedCopier(List<string> calls) : IPostgresMaskedCopier
 {
-    public AnonymizerStatus Status { get; set; } = Healthy();
+    public const string Snapshot = "00000003-0000001B-1";
 
-    public static AnonymizerStatus Healthy(params ServerMaskingRule[] rules) => new(
-        true,
-        "2.1.0",
-        true,
-        "2.1.0",
-        true,
-        true,
-        true,
-        rules.Length > 0
-            ? rules
-            :
+    public SourceCatalog Catalog { get; set; } = DefaultCatalog();
+
+    /// <summary>A mesma lista das ferramentas.</summary>
+    public List<string> Calls => calls;
+
+    public List<MaskedTablePlan> Copied { get; } = [];
+
+    public List<(string Table, IReadOnlyList<MaskedTablePlan> Tables, int Rows)> Previews { get; } = [];
+
+    /// <summary>Lançada ao copiar esta tabela.</summary>
+    public (string Table, Exception Failure)? CopyFailure { get; set; }
+
+    /// <summary>Chamado no meio da cópia — para cancelar enquanto ela roda.</summary>
+    public Action? DuringCopy { get; set; }
+
+    public DatabaseConnectionSnapshot? Destination { get; private set; }
+
+    public bool Closed { get; private set; }
+
+    public static SourceCatalog DefaultCatalog() => new(
+        [
+            new SourceTable("public", "clientes", 8_000_000, 1000,
             [
-                new ServerMaskingRule("public", "clientes", "email", "MASKED WITH FUNCTION anon.partial_email(email)"),
-                new ServerMaskingRule("public", "clientes", "cpf", "MASKED WITH FUNCTION anon.partial(cpf,0,$$*********$$,2)"),
-            ]);
+                new SourceColumn("id", "integer", false, false),
+                new SourceColumn("email", "text", true, false),
+                new SourceColumn("cpf", "character varying(14)", true, false),
+                new SourceColumn("nome_busca", "text", true, true),
+            ]),
+            new SourceTable("public", "pedidos", 2_000_000, 5000,
+            [
+                new SourceColumn("id", "integer", false, false),
+                new SourceColumn("cliente_id", "integer", false, false),
+                new SourceColumn("valor", "numeric", false, false),
+            ]),
+        ],
+        [
+            new KeyColumn("public", "clientes", "id", KeyRole.Primary),
+            new KeyColumn("public", "clientes", "id", KeyRole.Referenced),
+            new KeyColumn("public", "pedidos", "id", KeyRole.Primary),
+            new KeyColumn("public", "pedidos", "cliente_id", KeyRole.Foreign),
+        ],
+        [
+            new ColumnInfo("public", "clientes", "id", "integer", null),
+            new ColumnInfo("public", "clientes", "email", "text", null),
+            new ColumnInfo("public", "clientes", "cpf", "character varying", null),
+            new ColumnInfo("public", "pedidos", "valor", "numeric", null),
+        ],
+        0);
 
-    public Task<AnonymizerStatus> GetStatusAsync(DatabaseConnectionSnapshot connection, string policyName, CancellationToken cancellationToken = default) =>
-        Task.FromResult(Status);
+    public Task<SourceCatalog> ReadCatalogAsync(DatabaseConnectionSnapshot source, CancellationToken cancellationToken = default)
+    {
+        calls.Add($"catalog:{source.Name}:{source.Database}");
+        return Task.FromResult(Catalog);
+    }
+
+    public Task<IReadOnlyList<MaskedPreview>> PreviewAsync(
+        DatabaseConnectionSnapshot source,
+        IReadOnlyList<MaskedTablePlan> tables,
+        int rows,
+        CancellationToken cancellationToken = default)
+    {
+        Previews.Add((source.Name, tables, rows));
+
+        return Task.FromResult<IReadOnlyList<MaskedPreview>>(tables
+            .SelectMany(table => table.Columns.Where(column => column.IsMasked)
+                .Select(column => new MaskedPreview(table.Schema, table.Table, column.Name,
+                    Enumerable.Range(1, rows).Select(index => (string?)$"m{index}").ToList())))
+            .ToList());
+    }
+
+    public Task<IMaskedCopySession> OpenAsync(DatabaseConnectionSnapshot source, CancellationToken cancellationToken = default)
+    {
+        calls.Add($"open:{source.Name}:{source.Database}");
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult<IMaskedCopySession>(new Session(this));
+    }
+
+    private sealed class Session(FakeMaskedCopier owner) : IMaskedCopySession
+    {
+        public string SnapshotId => Snapshot;
+
+        public Task ConnectDestinationAsync(
+            DatabaseConnectionSnapshot destination,
+            IReadOnlyCollection<string> protectedEndpoints,
+            CancellationToken cancellationToken = default)
+        {
+            owner.Calls.Add($"connect:{destination.Database}");
+            owner.Destination = destination;
+            return Task.CompletedTask;
+        }
+
+        public Task<long> CopyTableAsync(MaskedTablePlan table, Action<long>? rows, CancellationToken cancellationToken = default)
+        {
+            owner.Calls.Add($"copy:{table.QualifiedName}");
+            owner.Copied.Add(table);
+            owner.DuringCopy?.Invoke();
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (owner.CopyFailure is { } failure && failure.Table == table.QualifiedName)
+            {
+                throw failure.Failure;
+            }
+
+            rows?.Invoke(5);
+            rows?.Invoke(10);
+            return Task.FromResult(10L);
+        }
+
+        public Task<int> CopySequencesAsync(CancellationToken cancellationToken = default)
+        {
+            owner.Calls.Add("sequences");
+            return Task.FromResult(2);
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            owner.Calls.Add("close");
+            owner.Closed = true;
+            return ValueTask.CompletedTask;
+        }
+    }
 }
 
 /// <summary>pg_dump/pg_restore/createdb/dropdb sem processo: anota a ordem e responde o roteiro.</summary>
@@ -349,7 +516,12 @@ internal sealed class FakePgTools : IPostgresDumpService, IPostgresRestoreServic
 
     public PgToolRun CreateResult { get; set; } = Ok();
 
-    public ArchiveSummary Archive { get; set; } = new(2, 0, false, 3, 3, ["public.clientes", "public.pedidos"]);
+    public ArchiveSummary Archive { get; set; } = new(2, 3, 3, ["public.clientes", "public.pedidos"]);
+
+    /// <summary>O índice do dump só da estrutura: sem dados. Trocar para simular um dump que trouxe linha.</summary>
+    public ArchiveSummary SchemaArchive { get; set; } = new(0, 3, 3, []);
+
+    private bool _schemaOnly;
 
     public bool DropForced { get; private set; }
 
@@ -360,8 +532,9 @@ internal sealed class FakePgTools : IPostgresDumpService, IPostgresRestoreServic
 
     public Task<PgToolRun> DumpAsync(PgDumpRequest request, IProgress<PgToolEvent>? progress, CancellationToken cancellationToken = default)
     {
-        Calls.Add(request.Anonymous ? "anonymous-dump" : "dump");
+        Calls.Add(request.SchemaOnly ? "schema-dump" : "dump");
         Dumps.Add(request);
+        _schemaOnly = request.SchemaOnly;
         cancellationToken.ThrowIfCancellationRequested();
         progress?.Report(new PgToolEvent(new CommandOutputLine("pg_dump: dumping contents of table \"public.clientes\"", true), PgToolEventKind.TableData, "public.clientes"));
         progress?.Report(new PgToolEvent(new CommandOutputLine("pg_dump: dumping contents of table \"public.pedidos\"", true), PgToolEventKind.TableData, "public.pedidos"));
@@ -371,12 +544,17 @@ internal sealed class FakePgTools : IPostgresDumpService, IPostgresRestoreServic
     public Task<ArchiveSummary> ListArchiveAsync(string archiveDirectory, CancellationToken cancellationToken = default)
     {
         Calls.Add("list");
-        return Task.FromResult(Archive);
+        return Task.FromResult(_schemaOnly ? SchemaArchive : Archive);
     }
 
     public Task<PgToolRun> RestoreAsync(PgRestoreRequest request, IProgress<PgToolEvent>? progress, CancellationToken cancellationToken = default)
     {
-        Calls.Add("restore");
+        Calls.Add(request.Section switch
+        {
+            RestoreSection.PreData => "restore:pre-data",
+            RestoreSection.PostData => "restore:post-data",
+            _ => "restore",
+        });
         Restores.Add(request);
         DuringRestore?.Invoke();
         cancellationToken.ThrowIfCancellationRequested();
@@ -467,9 +645,9 @@ internal sealed class DatabaseCopyScenario
 
     public FakeServerInspector Inspector { get; } = new();
 
-    public FakeAnonymizerInspector Anonymizer { get; } = new();
-
     public FakePgTools Tools { get; } = new();
+
+    public FakeMaskedCopier Copier { get; }
 
     public FakeWorkspaceFactory Workspaces { get; } = new();
 
@@ -481,8 +659,6 @@ internal sealed class DatabaseCopyScenario
 
     public DatabaseConnection Production { get; }
 
-    public DatabaseConnection Masked { get; }
-
     public DatabaseConnection Development { get; }
 
     public AnonymizationProfile Profile { get; }
@@ -490,20 +666,19 @@ internal sealed class DatabaseCopyScenario
     public DatabaseCopyScenario(DatabaseEnvironment sourceEnvironment = DatabaseEnvironment.Production)
     {
         var everything = ConnectionPermissions.FromFlags(ConnectionPermission.All);
+        Copier = new FakeMaskedCopier(Tools.Calls);
         Production = DatabaseConnection.Create("ECO Produção", "192.168.15.112", 5432, "eco_core", "backup_user",
-            sourceEnvironment, DatabaseSslMode.Prefer, null, everything, Now);
-        Masked = DatabaseConnection.Create("ECO Produção (anon)", "192.168.15.112", 5432, "eco_core", "dump_anon",
             sourceEnvironment, DatabaseSslMode.Prefer, null, everything, Now);
         Development = DatabaseConnection.Create("ECO Desenvolvimento", "localhost", 5432, "eco_dev", "postgres",
             sourceEnvironment == DatabaseEnvironment.CriticalProduction ? DatabaseEnvironment.Test : DatabaseEnvironment.Development,
             DatabaseSslMode.Prefer, null, everything with { RequireAnonymization = false }, Now);
-        Catalog.Connections.Seed(Production, Masked, Development);
+        Catalog.Connections.Seed(Production, Development);
 
-        Profile = AnonymizationProfile.Create("ECO LGPD", null, Masked.Id, "anon", Now);
+        Profile = AnonymizationProfile.Create("ECO LGPD", null, Production.Id, Now);
         Profile.ReplaceRules(
         [
-            new AnonymizationRuleSpec("public", "clientes", "email", MaskingKind.Function, "anon.partial_email(email)", ColumnSensitivity.High),
-            new AnonymizationRuleSpec("public", "clientes", "cpf", MaskingKind.Function, "anon.partial(cpf,0,$$*********$$,2)", ColumnSensitivity.High),
+            new AnonymizationRuleSpec("public", "clientes", "email", MaskingMethod.FakeEmail, null, ColumnSensitivity.High),
+            new AnonymizationRuleSpec("public", "clientes", "cpf", MaskingMethod.Partial, "0,2", ColumnSensitivity.High),
         ], Now);
         Catalog.AnonymizationProfiles.Items.Add(Profile);
         Inspector.DestinationId = Development.Id;
@@ -512,16 +687,18 @@ internal sealed class DatabaseCopyScenario
     public DatabaseCopyRequest Request(DatabaseCopyOptions? options = null, DatabaseOperationType operation = DatabaseOperationType.CopyAndAnonymize) =>
         new(Production.Id, Development.Id, operation, Profile.Id, options ?? DatabaseCopyOptions.Default);
 
-    public DatabaseCopyPlanner Planner() => new(Catalog.Connections, Catalog.AnonymizationProfiles, Catalog.CopyProfiles);
+    public DatabaseCopyPlanner Planner() =>
+        new(Catalog.Connections, Catalog.AnonymizationProfiles, Catalog.CopyProfiles, Catalog.SavedDatabases, Clock);
 
-    public PostgresAnonymizationService Anonymization() => new(Anonymizer, Inspector, Tools, Policy);
+    public MaskingVerifier Verifier() => new(Inspector, Policy);
 
     public RunDatabaseCopyHandler RunHandler() => new(
         Planner(),
         Policy,
         Locator,
         Inspector,
-        Anonymization(),
+        Copier,
+        Verifier(),
         Tools,
         Tools,
         Workspaces,
@@ -532,7 +709,7 @@ internal sealed class DatabaseCopyScenario
         Clock,
         Microsoft.Extensions.Logging.Abstractions.NullLogger<RunDatabaseCopyHandler>.Instance);
 
-    public ValidateDatabaseCopyHandler ValidateHandler() => new(Planner(), Policy, Locator, Inspector, Anonymization());
+    public ValidateDatabaseCopyHandler ValidateHandler() => new(Planner(), Policy, Locator, Inspector, Copier);
 }
 
 /// <summary>Junta os avisos de progresso numa lista, na mesma thread.</summary>

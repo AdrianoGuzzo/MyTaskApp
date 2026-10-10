@@ -76,11 +76,12 @@ public class ApplicationRegistrationTests
             .AddSingleton<IDatabaseConnectionRepository>(database.Catalog.Connections)
             .AddSingleton<IAnonymizationProfileRepository>(database.Catalog.AnonymizationProfiles)
             .AddSingleton<IDatabaseCopyProfileRepository>(database.Catalog.CopyProfiles)
+            .AddSingleton<ISavedDatabaseRepository>(database.Catalog.SavedDatabases)
             .AddSingleton<IDatabaseOperationAuditLog>(database.Catalog.Audit)
             .AddSingleton<IDatabaseCredentialStore>(database.Credentials)
             .AddSingleton<IPostgresToolLocator>(database.Locator)
             .AddSingleton<IPostgresServerInspector>(database.Inspector)
-            .AddSingleton<IPostgresAnonymizerInspector>(database.Anonymizer)
+            .AddSingleton<IPostgresMaskedCopier>(database.Copier)
             .AddSingleton<IPostgresDumpService>(database.Tools)
             .AddSingleton<IPostgresRestoreService>(database.Tools)
             .AddSingleton<IDatabaseOperationWorkspaceFactory>(database.Workspaces)
@@ -234,8 +235,8 @@ public class ApplicationRegistrationTests
     [InlineData(typeof(SetAnonymizationProfileEnabledHandler))]
     [InlineData(typeof(DeleteAnonymizationProfileHandler))]
     [InlineData(typeof(SuggestSensitiveColumnsHandler))]
-    [InlineData(typeof(GenerateMaskingScriptHandler))]
-    [InlineData(typeof(ValidateAnonymizationProfileHandler))]
+    [InlineData(typeof(PreviewMaskingHandler))]
+    [InlineData(typeof(GetSourceTablesHandler))]
     [InlineData(typeof(GetDatabaseCopyProfilesHandler))]
     [InlineData(typeof(SaveDatabaseCopyProfileHandler))]
     [InlineData(typeof(SetDatabaseCopyProfileEnabledHandler))]
