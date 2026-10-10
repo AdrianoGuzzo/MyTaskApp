@@ -1228,6 +1228,31 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("MyTaskApp.Infrastructure.Persistence.McpServerSettingsRow", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Port")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("ReadOnly")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("StartWithApp")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("McpServerSettings", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_McpServerSettings_SingleRow", "Id = 1");
+                        });
+                });
+
             modelBuilder.Entity("MyTaskApp.Infrastructure.Persistence.ReminderSettingsRow", b =>
                 {
                     b.Property<int>("Id")

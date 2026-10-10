@@ -149,8 +149,21 @@ internal sealed class AlertPresenter(
             digest.IsUrgent))).GetTask();
 
     /// <summary>Explícito: a assinatura é a mesma do lembrete, e a chave não.</summary>
-    Task IDeadlineAlertPresenter.DismissAsync(Guid occurrenceId, CancellationToken cancellationToken) =>
-        Dispatcher.UIThread.InvokeAsync(() => Close((true, occurrenceId))).GetTask();
+    /// <remarks>
+    /// Fora da thread da tela — o servidor MCP mudando o prazo (ADR-059) —, só
+    /// enfileira e volta. Esperar aqui seria esperar a tela segurando a
+    /// transação do SQLite, enquanto a tela espera o mesmo banco.
+    /// </remarks>
+    Task IDeadlineAlertPresenter.DismissAsync(Guid occurrenceId, CancellationToken cancellationToken)
+    {
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Post(() => Close((true, occurrenceId)));
+            return Task.CompletedTask;
+        }
+
+        return Dispatcher.UIThread.InvokeAsync(() => Close((true, occurrenceId))).GetTask();
+    }
 
     /// <summary>
     /// Um aviso de prazo por ocorrência, atualizado no lugar: o degrau seguinte

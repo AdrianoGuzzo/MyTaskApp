@@ -14,12 +14,14 @@ using MyTaskApp.Application.External;
 using MyTaskApp.Application.External.Jira;
 using MyTaskApp.Application.History;
 using MyTaskApp.Application.Lifecycle;
+using MyTaskApp.Application.Mcp;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.QuickCommands;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Application.Sounds;
 using MyTaskApp.Application.StickyNotes;
 using MyTaskApp.Application.Tags;
+using MyTaskApp.Application.Tasks;
 using MyTaskApp.Application.TimeTracking;
 using MyTaskApp.Domain.DatabaseOperations;
 using MyTaskApp.Infrastructure.Agents;
@@ -28,6 +30,7 @@ using MyTaskApp.Infrastructure.FileSystem;
 using MyTaskApp.Infrastructure.Git;
 using MyTaskApp.Infrastructure.GitHub;
 using MyTaskApp.Infrastructure.Jira;
+using MyTaskApp.Infrastructure.Mcp;
 using MyTaskApp.Infrastructure.Persistence;
 using MyTaskApp.Infrastructure.Persistence.Queries;
 using MyTaskApp.Infrastructure.Persistence.Repositories;
@@ -64,6 +67,7 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();
         services.AddScoped<IDatabaseInitializer, DatabaseInitializer>();
         services.AddScoped<ITodayQuery, TodayQuery>();
+        services.AddScoped<ITaskSearchQuery, TaskSearchQuery>();
         services.AddScoped<IReminderSettingsStore, ReminderSettingsStore>();
         services.AddScoped<IDueReminderQuery, DueReminderQuery>();
 
@@ -82,6 +86,7 @@ public static class DependencyInjection
         // Tempo trabalhado (ADR-052).
         services.AddScoped<ITimeEntryRepository, TimeEntryRepository>();
         services.AddScoped<IActiveTimerQuery, ActiveTimerQuery>();
+        services.AddScoped<ITimeEntryReportQuery, TimeEntryReportQuery>();
 
         // O histórico dos últimos dias (ADR-053): uma projeção, sem tabela.
         services.AddScoped<IActivityHistoryQuery, ActivityHistoryQuery>();
@@ -149,6 +154,10 @@ public static class DependencyInjection
             provider.GetRequiredService<ILogger<ClaudeCodeHooks>>()));
         services.AddSingleton<AgentEventListener>();
         services.AddSingleton<IAgentEventEndpoint>(provider => provider.GetRequiredService<AgentEventListener>());
+
+        // O servidor MCP local (ADR-059): a configuração no banco, o token no cofre.
+        services.AddScoped<IMcpServerSettingsStore, McpServerSettingsStore>();
+        services.AddSingleton<IMcpAccessTokenStore, McpAccessTokenStore>();
 
         AddSecrets(services);
         AddJira(services, configuration);

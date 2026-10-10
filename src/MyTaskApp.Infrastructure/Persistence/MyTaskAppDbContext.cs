@@ -91,6 +91,9 @@ public sealed class MyTaskAppDbContext(DbContextOptions<MyTaskAppDbContext> opti
     /// <summary>Os avisos de prazo e o horário padrão do prazo (ADR-050).</summary>
     internal DbSet<DeadlineSettingsRow> DeadlineSettings => Set<DeadlineSettingsRow>();
 
+    /// <summary>Habilitado, porta, iniciar com o app e somente leitura do servidor MCP (ADR-059).</summary>
+    internal DbSet<McpServerSettingsRow> McpServerSettings => Set<McpServerSettingsRow>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder) =>
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(MyTaskAppDbContext).Assembly);
 }

@@ -7,7 +7,7 @@ namespace MyTaskApp.Infrastructure.Persistence.Queries;
 internal sealed class ChecklistArchiveQuery(MyTaskAppDbContext context) : IChecklistArchiveQuery
 {
     /// <summary>Barra invertida escapa o curinga que o usuário digitou.</summary>
-    private const string LikeEscape = "\\";
+    internal const string LikeEscape = "\\";
 
     public async Task<IReadOnlyList<ChecklistSummaryRow>> SearchAsync(
         ChecklistScope scope,
@@ -78,7 +78,7 @@ internal sealed class ChecklistArchiveQuery(MyTaskAppDbContext context) : ICheck
     /// escapados: quem procura por "50%" quer o texto, não "qualquer coisa
     /// depois de 50".
     /// </summary>
-    private static string? BuildPattern(string? search)
+    internal static string? BuildPattern(string? search)
     {
         var term = search?.Trim();
 

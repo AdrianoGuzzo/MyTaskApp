@@ -6,8 +6,8 @@
     E o mesmo portao do CI (.github/workflows/ci.yml chama este script): se
     passa aqui, passa la. O minimo mora so aqui, nos parametros abaixo.
 
-    Os cinco projetos de teste geram um coverage.cobertura.xml cada um
-    (coverage.runsettings); o ReportGenerator junta os cinco. Uma linha
+    Os seis projetos de teste geram um coverage.cobertura.xml cada um
+    (coverage.runsettings); o ReportGenerator junta os seis. Uma linha
     coberta por qualquer suite conta como coberta.
 
     Saidas, em artifacts/coverage:

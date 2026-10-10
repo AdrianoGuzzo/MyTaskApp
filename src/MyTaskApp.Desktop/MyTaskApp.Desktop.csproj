@@ -17,6 +17,8 @@
   <ItemGroup>
     <ProjectReference Include="..\MyTaskApp.Application\MyTaskApp.Application.csproj" />
     <ProjectReference Include="..\MyTaskApp.Infrastructure\MyTaskApp.Infrastructure.csproj" />
+    <!-- O servidor MCP local (ADR-059): Kestrel no loopback, dentro deste processo. -->
+    <ProjectReference Include="..\MyTaskApp.Mcp\MyTaskApp.Mcp.csproj" />
   </ItemGroup>
 
   <ItemGroup>

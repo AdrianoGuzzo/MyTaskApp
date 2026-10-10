@@ -5,12 +5,14 @@ using MyTaskApp.Application;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Commands;
+using MyTaskApp.Application.Deadlines;
 using MyTaskApp.Application.DatabaseOperations;
 using MyTaskApp.Application.Development;
 using MyTaskApp.Application.External;
 using MyTaskApp.Application.External.Jira;
 using MyTaskApp.Application.History;
 using MyTaskApp.Application.Lifecycle;
+using MyTaskApp.Application.Mcp;
 using MyTaskApp.Application.Tasks;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.QuickCommands;
@@ -85,6 +87,13 @@ public class ApplicationRegistrationTests
             .AddSingleton<IPostgresDumpService>(database.Tools)
             .AddSingleton<IPostgresRestoreService>(database.Tools)
             .AddSingleton<IDatabaseOperationWorkspaceFactory>(database.Workspaces)
+            // O servidor MCP (ADR-059): configuração, token e as consultas novas.
+            .AddSingleton<IMcpServerSettingsStore>(new FakeMcpServerSettingsStore())
+            .AddSingleton<IMcpAccessTokenStore>(new FakeMcpAccessTokenStore())
+            .AddSingleton<ITaskSearchQuery>(new FakeTaskSearchQuery())
+            // A edição em lote chama o SetDeadlineHandler, que lê a configuração de prazos.
+            .AddSingleton<IDeadlineSettingsStore>(new FakeDeadlineSettingsStore())
+            .AddSingleton<ITimeEntryReportQuery>(new FakeTimeEntryReportQuery())
             // Normalmente vem do composition root do Desktop (ADR-012).
             .AddSingleton<IUseCaseRunner>(new CountingUseCaseRunner())
             .AddApplication()
@@ -245,6 +254,24 @@ public class ApplicationRegistrationTests
     [InlineData(typeof(RunDatabaseCopyHandler))]
     [InlineData(typeof(GetDatabaseOperationHistoryHandler))]
     [InlineData(typeof(RecoverInterruptedDatabaseOperationsHandler))]
+    [InlineData(typeof(SearchTasksHandler))]
+    [InlineData(typeof(GetTaskDetailsHandler))]
+    [InlineData(typeof(EditTaskHandler))]
+    [InlineData(typeof(CreateDetailedTaskHandler))]
+    [InlineData(typeof(GetTaskStatisticsHandler))]
+    [InlineData(typeof(TimeReportHandlers))]
+    [InlineData(typeof(GetMcpServerSettingsHandler))]
+    [InlineData(typeof(UpdateMcpServerSettingsHandler))]
+    [InlineData(typeof(GetMcpAccessTokenHandler))]
+    [InlineData(typeof(RegenerateMcpAccessTokenHandler))]
+    [InlineData(typeof(GetAnonymizationProfileHandler))]
+    [InlineData(typeof(ChangeAnonymizationProfileHandler))]
+    [InlineData(typeof(DuplicateAnonymizationProfileHandler))]
+    [InlineData(typeof(CompareAnonymizationProfilesHandler))]
+    [InlineData(typeof(ValidateAnonymizationProfileHandler))]
+    [InlineData(typeof(AnalyzeAnonymizationProfileHandler))]
+    [InlineData(typeof(DatabaseUsageHandlers))]
+    [InlineData(typeof(DuplicateDatabaseConnectionHandler))]
     public void EveryUseCase_CanBeResolved(Type handlerType)
     {
         using var provider = BuildProvider();
