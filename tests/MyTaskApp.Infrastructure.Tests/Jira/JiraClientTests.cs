@@ -116,16 +116,27 @@ public sealed class JiraClientTests : IAsyncDisposable
         await using var jira = new JiraHarness();
         jira.Options.RequestTimeoutSeconds = 2;
         await jira.ConnectWithApiTokenAsync(Ct);
+
+        // O Jira só responde depois do teste: com um atraso fixo, um CI lento
+        // atrasava o disparo do timeout e a resposta chegava antes dele.
+        var gate = new TaskCompletionSource();
         jira.Server.On("/rest/api/3/search/jql", _ =>
         {
-            Thread.Sleep(TimeSpan.FromSeconds(4));
+            gate.Task.Wait(TimeSpan.FromSeconds(30));
             return FakeJiraServer.Json(HttpStatusCode.OK, SearchResponse);
         });
 
-        var search = () => new JiraTaskSearchProvider(jira.Client).SearchAsync("corrigir erro", Ct);
+        try
+        {
+            var search = () => new JiraTaskSearchProvider(jira.Client).SearchAsync("corrigir erro", Ct);
 
-        (await search.Should().ThrowAsync<ExternalTaskUnavailableException>())
-            .Which.Failure.Should().Be(ExternalTaskFailure.Unavailable);
+            (await search.Should().ThrowAsync<ExternalTaskUnavailableException>())
+                .Which.Failure.Should().Be(ExternalTaskFailure.Unavailable);
+        }
+        finally
+        {
+            gate.SetResult();
+        }
     }
 
     [Fact]
