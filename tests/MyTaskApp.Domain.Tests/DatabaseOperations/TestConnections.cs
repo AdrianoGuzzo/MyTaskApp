@@ -37,13 +37,10 @@ internal static class TestConnections
         ConnectionPermissions? permissions = null) =>
         Connection(environment, name, host, database, username, permissions).Snapshot();
 
-    /// <summary>A role mascarada do mesmo banco da origem.</summary>
-    public static DatabaseConnectionSnapshot MaskedOf(DatabaseConnectionSnapshot source) =>
-        Snapshot(source.Environment, source.Name + " (anon)", source.Host, source.Database, "dump_anon");
-
+    /// <summary>Um perfil com regras, já conferido contra as colunas da origem (ADR-058).</summary>
     public static AnonymizationFacts VerifiedAnonymization(int uncoveredHigh = 0) =>
         new AnonymizationFacts(ProfileExists: true, ProfileEnabled: true, RuleCount: 3)
-            .WithServer(installed: true, roleMasked: true, transparentOn: true, uncoveredHigh);
+            .WithSource([], uncoveredHigh);
 
     public static DatabaseOperationRequest CopyAndAnonymize(
         DatabaseConnectionSnapshot source,
@@ -54,7 +51,6 @@ internal static class TestConnections
             DatabaseOperationType.CopyAndAnonymize,
             source,
             destination,
-            MaskedOf(source),
             facts ?? VerifiedAnonymization(),
             options ?? DatabaseCopyOptions.Default,
             source.IsProtected ? [source.EndpointKey] : []);

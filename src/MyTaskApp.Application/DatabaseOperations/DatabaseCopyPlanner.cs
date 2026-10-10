@@ -28,7 +28,6 @@ public sealed record DatabaseCopyPlan(
     DatabaseCopyRequest Request,
     DatabaseConnectionSnapshot Source,
     DatabaseConnectionSnapshot Destination,
-    DatabaseConnectionSnapshot? MaskedConnection,
     AnonymizationProfile? AnonymizationProfile,
     string? CopyProfileName,
     IReadOnlyCollection<string> ProtectedEndpoints,
@@ -53,7 +52,6 @@ public sealed record DatabaseCopyPlan(
         Request.Operation,
         Source,
         Destination,
-        MaskedConnection,
         facts ?? RegisteredFacts,
         Request.Options,
         ProtectedEndpoints,
@@ -102,20 +100,12 @@ public sealed class DatabaseCopyPlanner(
         }
 
         AnonymizationProfile? profile = null;
-        DatabaseConnectionSnapshot? masked = null;
 
+        // As regras valem para o banco escolhido na origem: o SELECT da cópia é montado nele (ADR-058).
         if (request.AnonymizationProfileId is { } profileId && request.Operation == DatabaseOperationType.CopyAndAnonymize)
         {
             profile = await anonymizationProfiles.FindByIdAsync(profileId, cancellationToken)
                 ?? throw new DomainException("Perfil de anonimização não encontrado.");
-            masked = all.FirstOrDefault(connection => connection.Id == profile.ConnectionId)?.Snapshot();
-
-            // Uma conexão mascarada só de servidor lê o mesmo banco da origem.
-            // Com banco fixo, fica como está — e a política recusa se não for o mesmo.
-            if (masked is { HasDatabase: false } && source.Database is { } sourceDatabase)
-            {
-                masked = masked.WithDatabase(sourceDatabase);
-            }
         }
 
         var newDestination = !destination.HasDatabase;
@@ -139,7 +129,7 @@ public sealed class DatabaseCopyPlanner(
             .Select(connection => connection.Snapshot().EndpointKey)
             .ToHashSet(StringComparer.Ordinal);
 
-        return new DatabaseCopyPlan(request, source, destination, masked, profile, copyProfileName, protectedEndpoints, newDestination);
+        return new DatabaseCopyPlan(request, source, destination, profile, copyProfileName, protectedEndpoints, newDestination);
     }
 
     private static DatabaseConnectionSnapshot ResolveSource(DatabaseConnectionSnapshot source, string? chosen)

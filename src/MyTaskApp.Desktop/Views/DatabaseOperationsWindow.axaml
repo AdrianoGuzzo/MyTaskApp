@@ -379,13 +379,6 @@
                   <ItemsControl ItemsSource="{Binding Server}" ItemTemplate="{StaticResource CheckLine}" />
                 </StackPanel>
               </Border>
-
-              <Border Classes="card" IsVisible="{Binding HasAnonymizer}">
-                <StackPanel Spacing="4">
-                  <TextBlock Classes="sectionTitle" Text="PostgreSQL Anonymizer" />
-                  <ItemsControl ItemsSource="{Binding Anonymizer}" ItemTemplate="{StaticResource CheckLine}" />
-                </StackPanel>
-              </Border>
             </StackPanel>
           </ScrollViewer>
         </DockPanel>
@@ -469,7 +462,7 @@
                   <CheckBox Margin="0,0,16,0" Content="Recriar o destino" IsChecked="{Binding RecreateDestination}"
                             IsVisible="{Binding !CreatesNewDestination}" />
                   <CheckBox Margin="0,0,16,0" Content="Verificar depois do restore" IsChecked="{Binding VerifyAfterRestore}" />
-                  <CheckBox Margin="0,0,16,0" Content="Manter o dump anônimo" IsChecked="{Binding KeepAnonymizedArtifact}" IsVisible="{Binding Anonymizes}" />
+                  <CheckBox Margin="0,0,16,0" Content="Manter o dump da estrutura" IsChecked="{Binding KeepAnonymizedArtifact}" IsVisible="{Binding Anonymizes}" />
                 </WrapPanel>
 
                 <!-- Guardar origem + banco + anonimização com um apelido, para a próxima cópia. -->
@@ -618,7 +611,7 @@
                     <CheckBox Margin="0,0,12,0" Content="Dados" IsChecked="{Binding CopyIncludeData}" />
                     <CheckBox Margin="0,0,12,0" Content="Recriar o destino" IsChecked="{Binding CopyRecreateDestination}" />
                     <CheckBox Margin="0,0,12,0" Content="Verificar depois" IsChecked="{Binding CopyVerifyAfterRestore}" />
-                    <CheckBox Margin="0,0,12,0" Content="Manter o dump anônimo" IsChecked="{Binding CopyKeepAnonymizedArtifact}" />
+                    <CheckBox Margin="0,0,12,0" Content="Manter o dump da estrutura" IsChecked="{Binding CopyKeepAnonymizedArtifact}" />
                   </WrapPanel>
                   <Button HorizontalAlignment="Right" Classes="accent" Content="Salvar perfil" Command="{Binding SaveCopyProfileCommand}" />
                 </StackPanel>
@@ -682,21 +675,49 @@
                     <TextBlock Classes="sectionTitle" Text="{Binding AnonymizationFormTitle}" />
                     <Button Grid.Column="1" Classes="rowAction" Content="Novo" Command="{Binding NewAnonymizationProfileCommand}" />
                   </Grid>
-                  <Grid ColumnDefinitions="*,8,*,8,120" RowDefinitions="Auto,Auto">
+                  <Grid ColumnDefinitions="*,8,*" RowDefinitions="Auto,Auto">
                     <TextBlock Classes="field" Text="Nome" />
                     <TextBox Grid.Row="1" PlaceholderText="ECO LGPD" Text="{Binding AnonymizationName}" />
-                    <TextBlock Grid.Column="2" Classes="field" Text="Conexão mascarada (role MASKED) ⓘ"
-                               ToolTip.Tip="A conexão com o usuário marcado como MASKED no servidor. O dump sai por ela, já com as colunas mascaradas: o dado real nunca chega a esta máquina." />
-                    <ComboBox Grid.Row="1" Grid.Column="2" HorizontalAlignment="Stretch"
-                              ItemsSource="{Binding Connections}" SelectedItem="{Binding MaskedConnection}" />
-                    <TextBlock Grid.Column="4" Classes="field" Text="Política ⓘ"
-                               ToolTip.Tip="O provedor do SECURITY LABEL no PostgreSQL Anonymizer. Quase sempre é anon; só mude se o DBA criou outra política." />
-                    <TextBox Grid.Row="1" Grid.Column="4" Text="{Binding PolicyName}" />
+                    <TextBlock Grid.Column="2" Classes="field" Text="Conexão para ler as colunas ⓘ"
+                               ToolTip.Tip="De onde o app lê o nome e o tipo das colunas para sugerir e pré-visualizar — em geral, a própria origem. Nada é instalado nem alterado nela." />
+                    <ComboBox Grid.Row="1" Grid.Column="2" x:Name="ColumnsConnectionBox" HorizontalAlignment="Stretch"
+                              ItemsSource="{Binding Connections}" SelectedItem="{Binding ColumnsConnection}" />
                   </Grid>
                   <TextBox PlaceholderText="Descrição" Text="{Binding AnonymizationDescription}" />
                   <StackPanel Spacing="3" IsVisible="{Binding NeedsProfileDatabase}">
-                    <TextBlock Classes="field" Text="Banco (para sugerir colunas, gerar o script e validar)" />
+                    <TextBlock Classes="field" Text="Banco (para sugerir colunas e pré-visualizar)" />
                     <TextBox x:Name="ProfileDatabaseBox" PlaceholderText="eco_core_1010" Text="{Binding ProfileDatabase}" />
+                  </StackPanel>
+
+                  <!-- Tabelas sem dados: a estrutura vai, as linhas não. -->
+                  <StackPanel Spacing="4" Margin="0,6,0,0">
+                    <TextBlock Text="Tabelas sem dados" FontWeight="SemiBold" />
+                    <TextBlock Classes="meta" TextWrapping="Wrap"
+                               Text="Marcada, a tabela é criada no destino com índices e chaves, mas vazia: nenhuma linha dela sai da origem, nem mascarada. Bom para logs, auditoria, filas e tabelas grandes que o desenvolvimento não usa." />
+                    <TextBlock Classes="meta" IsVisible="{Binding !HasTables}"
+                               Text="Nenhuma tabela ainda. Clique em Sugerir colunas: a lista de tabelas vem junto." />
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10" IsVisible="{Binding HasTables}">
+                      <TextBox x:Name="TableFilterBox" PlaceholderText="Filtrar tabelas por schema ou nome" Text="{Binding TableFilter}" />
+                      <TextBlock Grid.Column="1" x:Name="TablesSummaryText" Classes="meta" VerticalAlignment="Center" Text="{Binding TablesSummary}" />
+                    </Grid>
+                    <Border Classes="help" IsVisible="{Binding HasTables}" Padding="6,4">
+                      <ScrollViewer MaxHeight="220" HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl x:Name="SkippedTableList" ItemsSource="{Binding Tables}">
+                          <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:SkippedTableItemViewModel">
+                              <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" IsVisible="{Binding IsShown}" Margin="0,1">
+                                <CheckBox IsChecked="{Binding IsSkipped}" VerticalAlignment="Center"
+                                          ToolTip.Tip="Marcada: a tabela vai vazia para o destino. Desmarcada: as linhas vão, com as máscaras das colunas." />
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                  <TextBlock Classes="code" Text="{Binding TableKey}" />
+                                  <TextBlock Classes="meta" Text="{Binding Size}" />
+                                </StackPanel>
+                              </Grid>
+                            </DataTemplate>
+                          </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                      </ScrollViewer>
+                    </Border>
                   </StackPanel>
 
                   <Grid ColumnDefinitions="*,Auto" Margin="0,6,0,0">
@@ -705,22 +726,23 @@
                       <TextBlock Classes="meta" Text="Marque as colunas com dado pessoal. Só as marcadas viram regra ao salvar." />
                     </StackPanel>
                     <Button Grid.Column="1" Content="Sugerir colunas" Command="{Binding SuggestColumnsCommand}" VerticalAlignment="Top"
-                            ToolTip.Tip="Lê só o nome e o tipo das colunas do banco (nunca os dados) e lista as que parecem dado pessoal. Elas chegam desmarcadas." />
+                            ToolTip.Tip="Lê só o nome e o tipo das colunas do banco (nunca os dados) e lista as que parecem dado pessoal, desmarcadas. A lista de tabelas, acima, vem junto." />
                   </Grid>
 
                   <Border x:Name="RuleHelp" Classes="help">
                     <StackPanel Spacing="3">
                       <TextBlock FontWeight="SemiBold" Text="Como funciona" />
-                      <TextBlock Text="☑ Marcada: a coluna é mascarada. No dump ela sai com o valor da máscara, e não o real." />
+                      <TextBlock Text="Nada é instalado no banco de origem. Na cópia, o app lê cada tabela com um SELECT que já troca as colunas marcadas: o dado real não sai do servidor." />
+                      <TextBlock Text="☑ Marcada: a coluna chega ao destino com o valor da máscara, e não o real." />
                       <TextBlock Text="☐ Desmarcada: a coluna vai para o destino como está, e não é gravada no perfil." />
                       <TextBlock Text="Probabilidade: um palpite pelo nome e tipo da coluna. Alta quase sempre é dado pessoal; baixa, confira antes." />
-                      <TextBlock Text="Máscara: Função gera um valor falso por linha (ex.: anon.fake_email()); Valor fixo põe o mesmo valor em todas (NULL, 0 ou 'texto')." />
-                      <TextBlock Text="Depois de salvar: Gerar script → o DBA executa no banco de origem → Validar no servidor confere se as regras estão lá." />
+                      <TextBlock Text="Máscara: passe o mouse sobre ela para ver o que faz. Hash e E-mail falso mantêm valores únicos; as outras podem repetir." />
+                      <TextBlock Text="Chaves (PK e FK) não se mascaram: quebrariam as ligações entre as tabelas. Use Pré-visualizar para conferir antes de salvar." />
                     </StackPanel>
                   </Border>
 
                   <TextBlock Classes="meta" IsVisible="{Binding !HasRules}"
-                             Text="Nenhuma coluna ainda. Escolha a conexão mascarada e clique em Sugerir colunas." />
+                             Text="Nenhuma coluna ainda. Escolha a conexão para ler as colunas e clique em Sugerir colunas." />
 
                   <!-- Barra da lista: selecionar todas (as visíveis), atalho das de alta e filtro. -->
                   <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="10" IsVisible="{Binding HasRules}">
@@ -738,67 +760,79 @@
 
                   <TextBlock x:Name="RuleSelectionSummary" Classes="meta" Text="{Binding SelectionSummary}" IsVisible="{Binding HasRules}" />
 
-                  <Grid ColumnDefinitions="64,210,140,*,110" ColumnSpacing="6" IsVisible="{Binding HasRules}">
+                  <Grid ColumnDefinitions="64,210,140,150,*" ColumnSpacing="6" IsVisible="{Binding HasRules}">
                     <TextBlock Classes="columnHeader" Text="MASCARAR" />
                     <TextBlock Grid.Column="1" Classes="columnHeader" Text="COLUNA" />
                     <TextBlock Grid.Column="2" Classes="columnHeader" Text="PROBABILIDADE ⓘ"
                                ToolTip.Tip="Palpite pelo nome e tipo da coluna, nunca pelos dados. Alta: quase certo. Média: costuma ser. Baixa: confira." />
-                    <TextBlock Grid.Column="3" Classes="columnHeader" Text="MÁSCARA (O QUE VAI NO LUGAR DO DADO) ⓘ"
-                               ToolTip.Tip="Função: uma função do anon, chamada para cada linha. Valor fixo: NULL, um número ou um texto entre aspas simples." />
-                    <TextBlock Grid.Column="4" Classes="columnHeader" Text="TIPO" />
+                    <TextBlock Grid.Column="3" Classes="columnHeader" Text="MÁSCARA ⓘ"
+                               ToolTip.Tip="O que vai no lugar do dado. Passe o mouse em cada uma para ver o que faz." />
+                    <TextBlock Grid.Column="4" Classes="columnHeader" Text="PARÂMETRO" />
                   </Grid>
 
                   <ItemsControl x:Name="RuleList" ItemsSource="{Binding Rules}">
                     <ItemsControl.ItemTemplate>
                       <DataTemplate x:DataType="vm:AnonymizationRuleItemViewModel">
                         <Grid Classes="ruleRow" Classes.unconfirmed="{Binding !IsConfirmed}" IsVisible="{Binding IsShown}"
-                              ColumnDefinitions="64,210,140,*,110" ColumnSpacing="6" Margin="0,2">
+                              ColumnDefinitions="64,210,140,150,*" ColumnSpacing="6" Margin="0,2">
                           <CheckBox IsChecked="{Binding IsConfirmed}" HorizontalAlignment="Center"
                                     ToolTip.Tip="Marcada: esta coluna é mascarada no dump. Desmarcada: vai para o destino como está." />
                           <StackPanel Grid.Column="1" VerticalAlignment="Center">
                             <TextBlock Classes="code" Text="{Binding ColumnKey}" />
                             <TextBlock Classes="meta" Text="{Binding Reason}" />
+                            <TextBlock Classes="meta" IsVisible="{Binding IsTableSkipped}"
+                                       Text="Tabela sem dados: nenhuma linha sai, a máscara não é usada." />
                           </StackPanel>
                           <Border Grid.Column="2" Classes="badge" Classes.production="{Binding IsHigh}" Classes.staging="{Binding IsMedium}"
                                   HorizontalAlignment="Left" ToolTip.Tip="{Binding SensitivityHint}">
                             <TextBlock Text="{Binding SensitivityLabel}" />
                           </Border>
-                          <TextBox Grid.Column="3" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="11.5"
-                                   Text="{Binding Expression}" PlaceholderText="{Binding ExpressionPlaceholder}" />
-                          <ComboBox Grid.Column="4" HorizontalAlignment="Stretch"
-                                    ItemsSource="{x:Static vm:AnonymizationRuleItemViewModel.Kinds}" SelectedItem="{Binding SelectedKind}"
-                                    ToolTip.Tip="Função: um valor falso por linha (MASKED WITH FUNCTION). Valor fixo: o mesmo valor em todas as linhas (MASKED WITH VALUE)." />
+                          <ComboBox Grid.Column="3" HorizontalAlignment="Stretch"
+                                    ItemsSource="{x:Static vm:AnonymizationRuleItemViewModel.Methods}" SelectedItem="{Binding SelectedMethod}"
+                                    ToolTip.Tip="{Binding MethodDescription}">
+                            <ComboBox.ItemTemplate>
+                              <DataTemplate x:DataType="vm:MaskingChoice">
+                                <TextBlock Text="{Binding Label}" ToolTip.Tip="{Binding Description}" />
+                              </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                          </ComboBox>
+                          <TextBox Grid.Column="4" Text="{Binding Argument}" IsVisible="{Binding NeedsArgument}"
+                                   PlaceholderText="{Binding ArgumentLabel}" ToolTip.Tip="{Binding ArgumentLabel}" />
                         </Grid>
                       </DataTemplate>
                     </ItemsControl.ItemTemplate>
                   </ItemsControl>
 
                   <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
-                    <Button Content="Validar no servidor" Command="{Binding ValidateOnServerCommand}"
-                            ToolTip.Tip="Confere no servidor: o Anonymizer instalado, o usuário MASKED, o mascaramento ligado e as regras do perfil iguais às do banco. Use depois que o DBA executar o script." />
-                    <Button Content="Gerar script" Command="{Binding GenerateScriptCommand}"
-                            ToolTip.Tip="Gera os SECURITY LABEL das colunas marcadas, para o DBA executar no banco de origem. O app não executa nada em produção." />
+                    <Button x:Name="PreviewButton" Content="Pré-visualizar" Command="{Binding PreviewCommand}"
+                            ToolTip.Tip="Lê algumas linhas das colunas marcadas já mascaradas pelo servidor, com o mesmo SELECT da cópia. O valor real não chega à tela." />
                     <Button Classes="accent" Content="Salvar perfil" Command="{Binding SaveAnonymizationProfileCommand}"
                             ToolTip.Tip="Grava o perfil com as colunas marcadas. As desmarcadas saem da lista." />
                   </StackPanel>
 
-                  <ItemsControl ItemsSource="{Binding ServerFindings}" IsVisible="{Binding HasServerFindings}">
-                    <ItemsControl.ItemTemplate>
-                      <DataTemplate x:DataType="x:String">
-                        <TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="12" />
-                      </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                  </ItemsControl>
-
-                  <StackPanel Spacing="4" IsVisible="{Binding HasScript}">
-                    <Grid ColumnDefinitions="*,Auto">
-                      <TextBlock Classes="meta" VerticalAlignment="Center"
-                                 Text="Script para o DBA executar no banco de origem. O app não o executa: produção não é alterada daqui." />
-                      <Button Grid.Column="1" Content="Copiar" Command="{Binding CopyScriptCommand}" />
-                    </Grid>
-                    <TextBox IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap" MaxHeight="260"
-                             FontFamily="Cascadia Mono, Consolas, monospace" FontSize="11.5" Text="{Binding Script}" />
-                  </StackPanel>
+                  <!-- A pré-visualização: só valores mascarados, ou o que impede as máscaras. -->
+                  <Border x:Name="PreviewPanel" Classes="help" IsVisible="{Binding HasPreview}">
+                    <StackPanel Spacing="3">
+                      <TextBlock FontWeight="SemiBold" Text="Pré-visualização (já mascarado pelo servidor)" />
+                      <ItemsControl ItemsSource="{Binding PreviewProblems}">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="x:String">
+                            <TextBlock Classes="error" Text="{Binding StringFormat='⛔ {0}'}" />
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                      <ItemsControl ItemsSource="{Binding Previews}">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="vm:MaskedPreviewItemViewModel">
+                            <Grid ColumnDefinitions="220,*" ColumnSpacing="8">
+                              <TextBlock Classes="code" Text="{Binding ColumnKey}" />
+                              <TextBlock Grid.Column="1" Classes="code" Text="{Binding Values}" TextWrapping="Wrap" />
+                            </Grid>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </StackPanel>
+                  </Border>
                 </StackPanel>
               </Border>
             </Grid>

@@ -63,7 +63,6 @@ internal sealed class AnonymizationProfileConfiguration : IEntityTypeConfigurati
         builder.HasIndex(profile => profile.Name).IsUnique();
 
         builder.Property(profile => profile.Description).HasMaxLength(AnonymizationProfile.MaxDescriptionLength);
-        builder.Property(profile => profile.PolicyName).IsRequired().HasMaxLength(DatabaseConnection.MaxIdentifierLength);
 
         // A conexão mascarada não sai enquanto um perfil depender dela: excluir
         // a conexão não pode deixar um perfil apontando para nada.
@@ -85,6 +84,34 @@ internal sealed class AnonymizationProfileConfiguration : IEntityTypeConfigurati
         builder.Navigation(profile => profile.Rules)
             .HasField("_rules")
             .UsePropertyAccessMode(PropertyAccessMode.Field);
+
+        builder.HasMany(profile => profile.SkippedTables)
+            .WithOne()
+            .HasForeignKey(table => table.ProfileId)
+            .IsRequired()
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Navigation(profile => profile.SkippedTables)
+            .HasField("_skippedTables")
+            .UsePropertyAccessMode(PropertyAccessMode.Field);
+    }
+}
+
+internal sealed class AnonymizationSkippedTableConfiguration : IEntityTypeConfiguration<AnonymizationSkippedTable>
+{
+    public void Configure(EntityTypeBuilder<AnonymizationSkippedTable> builder)
+    {
+        builder.ToTable("AnonymizationSkippedTables");
+
+        builder.HasKey(table => table.Id);
+        builder.Property(table => table.Id).ValueGeneratedNever();
+
+        builder.Property(table => table.Schema).IsRequired().HasMaxLength(AnonymizationRule.MaxIdentifierLength);
+        builder.Property(table => table.Table).IsRequired().HasMaxLength(AnonymizationRule.MaxIdentifierLength);
+        builder.Property(table => table.ConfirmedAt).HasConversion(UtcInstantConverter.Instance).IsRequired();
+
+        // Identificadores citados no PostgreSQL diferenciam maiúsculas: sem NOCASE aqui.
+        builder.HasIndex(table => new { table.ProfileId, table.Schema, table.Table }).IsUnique();
     }
 }
 
@@ -100,8 +127,8 @@ internal sealed class AnonymizationRuleConfiguration : IEntityTypeConfiguration<
         builder.Property(rule => rule.Schema).IsRequired().HasMaxLength(AnonymizationRule.MaxIdentifierLength);
         builder.Property(rule => rule.Table).IsRequired().HasMaxLength(AnonymizationRule.MaxIdentifierLength);
         builder.Property(rule => rule.Column).IsRequired().HasMaxLength(AnonymizationRule.MaxIdentifierLength);
-        builder.Property(rule => rule.Expression).IsRequired().HasMaxLength(AnonymizationRule.MaxExpressionLength);
-        builder.Property(rule => rule.Kind).HasConversion<int>();
+        builder.Property(rule => rule.Argument).HasMaxLength(AnonymizationRule.MaxArgumentLength);
+        builder.Property(rule => rule.Method).HasConversion<int>();
         builder.Property(rule => rule.Sensitivity).HasConversion<int>();
         builder.Property(rule => rule.ConfirmedAt).HasConversion(UtcInstantConverter.Instance).IsRequired();
 

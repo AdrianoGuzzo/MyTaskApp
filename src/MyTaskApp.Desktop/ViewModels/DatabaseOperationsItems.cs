@@ -45,7 +45,9 @@ public static class DatabaseLabels
         DatabaseOperationType.Copy => "Copiar",
         DatabaseOperationType.CopyAndAnonymize => "Copiar + Anonimizar",
         DatabaseOperationType.Dump => "Dump",
-        DatabaseOperationType.AnonymousDump => "Dump anônimo",
+        DatabaseOperationType.AnonymousDump => "Dump anônimo (Anonymizer)",
+        DatabaseOperationType.SchemaDump => "Dump da estrutura",
+        DatabaseOperationType.MaskedDataCopy => "Cópia mascarada",
         DatabaseOperationType.Restore => "Restore",
         DatabaseOperationType.CreateDatabase => "Criar banco",
         DatabaseOperationType.DropDatabase => "Apagar banco",
@@ -219,6 +221,22 @@ public sealed partial class DatabaseCopyStepViewModel(DatabaseCopyStep step, str
     public bool HasDetail => !string.IsNullOrWhiteSpace(Detail);
 }
 
+/// <summary>Uma coluna na pré-visualização: "public.clientes.email → user_3fa9…@exemplo.invalid · …".</summary>
+public sealed class MaskedPreviewItemViewModel(MaskedPreview preview)
+{
+    public string ColumnKey => preview.ColumnKey;
+
+    public string Values => preview.Values.Count == 0
+        ? "(tabela vazia)"
+        : string.Join("  ·  ", preview.Values.Select(value => value ?? "NULL"));
+}
+
+/// <summary>Uma máscara do catálogo no ComboBox de cada linha: o nome, e a explicação no tooltip.</summary>
+public sealed record MaskingChoice(MaskingMethod Method, string Label, string Description)
+{
+    public override string ToString() => Label;
+}
+
 /// <summary>Uma regra de mascaramento no editor do perfil: sugerida, ou confirmada.</summary>
 public sealed partial class AnonymizationRuleItemViewModel : ObservableObject
 {
@@ -228,8 +246,8 @@ public sealed partial class AnonymizationRuleItemViewModel : ObservableObject
         Table = rule.Table;
         Column = rule.Column;
         Sensitivity = rule.Sensitivity;
-        _kind = rule.Kind;
-        _expression = rule.Expression;
+        _method = rule.Method;
+        _argument = rule.Argument ?? MaskingCatalog.Of(rule.Method).DefaultArgument ?? string.Empty;
         _isConfirmed = confirmed;
         Reason = reason;
     }
@@ -252,27 +270,31 @@ public sealed partial class AnonymizationRuleItemViewModel : ObservableObject
         _ => "Baixa: pode ser dado pessoal, mas muitas vezes não é. Marque só se souber que é.",
     };
 
-    /// <summary>As duas formas de mascarar, como o ComboBox de cada linha mostra.</summary>
-    public static IReadOnlyList<Choice<MaskingKind>> Kinds { get; } =
-    [
-        new(MaskingKind.Function, "Função"),
-        new(MaskingKind.Value, "Valor fixo"),
-    ];
+    /// <summary>O catálogo de máscaras (ADR-058), como o ComboBox de cada linha mostra.</summary>
+    public static IReadOnlyList<MaskingChoice> Methods { get; } =
+        MaskingCatalog.All.Select(info => new MaskingChoice(info.Method, info.Label, info.Description)).ToList();
 
-    public Choice<MaskingKind> SelectedKind
+    public MaskingChoice SelectedMethod
     {
-        get => Kinds.First(choice => choice.Value == Kind);
+        get => Methods.First(choice => choice.Method == Method);
         set
         {
             if (value is not null)
             {
-                Kind = value.Value;
+                Method = value.Method;
             }
         }
     }
 
-    /// <summary>O exemplo da expressão muda com o tipo: função do anon, ou um valor que vai igual em toda linha.</summary>
-    public string ExpressionPlaceholder => Kind == MaskingKind.Value ? "NULL, 0 ou 'CONFIDENCIAL'" : "anon.fake_email()";
+    public MaskingMethodInfo MethodInfo => MaskingCatalog.Of(Method);
+
+    /// <summary>O que a máscara faz, com exemplo — o tooltip da linha.</summary>
+    public string MethodDescription => MethodInfo.Description;
+
+    /// <summary>Só algumas máscaras pedem parâmetro: início e fim, texto, dias, %.</summary>
+    public bool NeedsArgument => MethodInfo.NeedsArgument;
+
+    public string ArgumentLabel => MethodInfo.ArgumentLabel ?? string.Empty;
 
     /// <summary>Some com o filtro; "Selecionar todas" só alcança as visíveis.</summary>
     [ObservableProperty]
@@ -292,24 +314,75 @@ public sealed partial class AnonymizationRuleItemViewModel : ObservableObject
 
     public string ColumnKey => $"{Schema}.{Table}.{Column}";
 
+    public string TableKey => $"{Schema}.{Table}";
+
+    /// <summary>A tabela desta coluna vai sem dados: nenhuma linha sai, e a máscara não chega a ser usada.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsValue), nameof(SelectedKind), nameof(ExpressionPlaceholder))]
-    private MaskingKind _kind;
+    private bool _isTableSkipped;
 
     [ObservableProperty]
-    private string _expression;
+    [NotifyPropertyChangedFor(nameof(SelectedMethod), nameof(MethodInfo), nameof(MethodDescription), nameof(NeedsArgument), nameof(ArgumentLabel))]
+    private MaskingMethod _method;
+
+    /// <summary>O parâmetro como digitado; a validação de verdade é a do domínio, ao salvar.</summary>
+    [ObservableProperty]
+    private string _argument;
 
     /// <summary>Só o que o usuário marcou vira regra: a sugestão é palpite pelo nome da coluna.</summary>
     [ObservableProperty]
     private bool _isConfirmed;
 
-    public bool IsValue
+    /// <summary>Trocou a máscara: o parâmetro volta ao padrão da nova, que tem outro formato.</summary>
+    partial void OnMethodChanged(MaskingMethod value) => Argument = MaskingCatalog.Of(value).DefaultArgument ?? string.Empty;
+
+    public AnonymizationRuleRow ToRow() =>
+        new(Schema, Table, Column, Method, NeedsArgument ? Argument : null, Sensitivity);
+}
+
+/// <summary>
+/// Uma tabela do banco no perfil de anonimização: marcada, vai vazia para o
+/// destino — a estrutura sim, nenhuma linha. Sem <see cref="Size"/> quando
+/// veio do perfil salvo e o banco ainda não foi lido.
+/// </summary>
+public sealed partial class SkippedTableItemViewModel(string schema, string table, bool skipped, SourceTableRow? source = null) : ObservableObject
+{
+    public string Schema { get; } = schema;
+
+    public string Table { get; } = table;
+
+    public string TableKey => $"{Schema}.{Table}";
+
+    public SourceTableRow? Source { get; private set; } = source;
+
+    /// <summary>"≈ 1.200.000 linhas · 340 MB · 12 partições": o tamanho ajuda a achar logs e auditoria.</summary>
+    public string Size => Source is not { } row
+        ? "não lido do banco ainda"
+        : string.Join(" · ", new[]
+        {
+            $"≈ {row.EstimatedRows.ToString("N0", DatabaseLabels.Culture)} linha(s)",
+            PostgresEnvironmentDiagnostics.FormatBytes(row.Bytes),
+            row.Partitions > 0 ? $"{row.Partitions} partição(ões)" : null,
+        }.Where(part => part is not null));
+
+    [ObservableProperty]
+    private bool _isSkipped = skipped;
+
+    /// <summary>Some com o filtro.</summary>
+    [ObservableProperty]
+    private bool _isShown = true;
+
+    public bool Matches(string filter) =>
+        string.IsNullOrEmpty(filter) || TableKey.Contains(filter, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>O banco foi lido de novo: o tamanho aparece, a marcação fica.</summary>
+    public void Refresh(SourceTableRow row)
     {
-        get => Kind == MaskingKind.Value;
-        set => Kind = value ? MaskingKind.Value : MaskingKind.Function;
+        Source = row;
+        OnPropertyChanged(nameof(Source));
+        OnPropertyChanged(nameof(Size));
     }
 
-    public AnonymizationRuleRow ToRow() => new(Schema, Table, Column, Kind, Expression, Sensitivity);
+    public SkippedTableRow ToRow() => new(Schema, Table);
 }
 
 /// <summary>Uma operação no histórico.</summary>
@@ -339,7 +412,7 @@ public sealed class DatabaseOperationItemViewModel(DatabaseOperationRow row)
         Row.Duration is { } duration ? FormatDuration(duration) : null,
         Row.AnonymizationProfile is { } profile ? $"perfil {profile}" : null,
         Row.MaskedColumnsCount is { } masked ? $"{masked} coluna(s) mascarada(s)" : null,
-        Row.AnonymousDumpSize is { } size ? $"dump anônimo {PostgresEnvironmentDiagnostics.FormatBytes(size)}" : null,
+        Row.AnonymousDumpSize is { } size ? $"estrutura {PostgresEnvironmentDiagnostics.FormatBytes(size)}" : null,
         Row.ToolVersions,
     }.OfType<string>());
 

@@ -657,7 +657,7 @@ public sealed partial class DatabaseCopyViewModel(
         ResultMessage = result.Status switch
         {
             DatabaseOperationStatus.Succeeded when result.KeptArtifactPath is { } kept =>
-                $"✓ Cópia concluída{Into(result)}. Dump anônimo mantido em {kept}.",
+                $"✓ Cópia concluída{Into(result)}. Dump da estrutura mantido em {kept}.",
             DatabaseOperationStatus.Succeeded => $"✓ Cópia concluída{Into(result)}. Arquivos temporários removidos.",
             DatabaseOperationStatus.Canceled => "✗ Cancelada. O destino pode ter ficado incompleto.",
             _ => "✗ " + (result.Error ?? "A cópia falhou."),

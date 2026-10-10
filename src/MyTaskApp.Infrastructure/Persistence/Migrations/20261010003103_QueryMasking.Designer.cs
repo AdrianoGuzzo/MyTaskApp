@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MyTaskApp.Infrastructure.Persistence;
 
@@ -10,9 +11,11 @@ using MyTaskApp.Infrastructure.Persistence;
 namespace MyTaskApp.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(MyTaskAppDbContext))]
-    partial class MyTaskAppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261010003103_QueryMasking")]
+    partial class QueryMasking
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
@@ -393,35 +396,6 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("AnonymizationRules", (string)null);
-                });
-
-            modelBuilder.Entity("MyTaskApp.Domain.DatabaseOperations.AnonymizationSkippedTable", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("TEXT");
-
-                    b.Property<long>("ConfirmedAt")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<Guid>("ProfileId")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Schema")
-                        .IsRequired()
-                        .HasMaxLength(63)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Table")
-                        .IsRequired()
-                        .HasMaxLength(63)
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProfileId", "Schema", "Table")
-                        .IsUnique();
-
-                    b.ToTable("AnonymizationSkippedTables", (string)null);
                 });
 
             modelBuilder.Entity("MyTaskApp.Domain.DatabaseOperations.DatabaseConnection", b =>
@@ -1335,15 +1309,6 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("MyTaskApp.Domain.DatabaseOperations.AnonymizationSkippedTable", b =>
-                {
-                    b.HasOne("MyTaskApp.Domain.DatabaseOperations.AnonymizationProfile", null)
-                        .WithMany("SkippedTables")
-                        .HasForeignKey("ProfileId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("MyTaskApp.Domain.DatabaseOperations.DatabaseCopyProfile", b =>
                 {
                     b.HasOne("MyTaskApp.Domain.DatabaseOperations.AnonymizationProfile", null)
@@ -1636,8 +1601,6 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MyTaskApp.Domain.DatabaseOperations.AnonymizationProfile", b =>
                 {
                     b.Navigation("Rules");
-
-                    b.Navigation("SkippedTables");
                 });
 
             modelBuilder.Entity("MyTaskApp.Domain.Tags.Tag", b =>

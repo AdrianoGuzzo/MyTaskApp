@@ -135,7 +135,7 @@ internal sealed class PostgresServerInspector(
     {
         await using var session = await sessions.OpenAsync(connection, null, cancellationToken);
 
-        var table = $"{MaskingScriptBuilder.QuoteIdentifier(column.Schema)}.{MaskingScriptBuilder.QuoteIdentifier(column.Table)}";
+        var table = $"{SqlQuoting.QuoteIdentifier(column.Schema)}.{SqlQuoting.QuoteIdentifier(column.Table)}";
         var key = (await session.QueryAsync(PostgresQueries.PrimaryKey, [table], cancellationToken)).Select(row => Text(row[0])).ToList();
 
         if (key.Count == 0)
@@ -153,6 +153,16 @@ internal sealed class PostgresServerInspector(
         return new ColumnFingerprint(column, values);
     }
 
+    public async Task<long> CountNotMaskedAsync(
+        DatabaseConnectionSnapshot connection,
+        ColumnReference column,
+        MaskedColumnPlan mask,
+        CancellationToken cancellationToken = default)
+    {
+        await using var session = await sessions.OpenAsync(connection, null, cancellationToken);
+        return Number((await session.QueryAsync(MaskedSelectBuilder.CountNotMasked(column, mask), [], cancellationToken)).Single()[0]);
+    }
+
     private static DatabaseConnectionSnapshot Maintenance(DatabaseConnectionSnapshot connection) =>
         connection.HasDatabase ? connection : connection with { Database = PgArguments.MaintenanceDatabase };
 
@@ -161,51 +171,4 @@ internal sealed class PostgresServerInspector(
     internal static long Number(object? value) => value is null ? 0 : Convert.ToInt64(value, CultureInfo.InvariantCulture);
 
     internal static bool Flag(object? value) => value is true;
-}
-
-/// <summary>O PostgreSQL Anonymizer pelo catálogo (ADR-056). Nenhuma função do anon é chamada aqui.</summary>
-internal sealed class PostgresAnonymizerInspector(IPostgresSessionFactory sessions) : IPostgresAnonymizerInspector
-{
-    public async Task<AnonymizerStatus> GetStatusAsync(
-        DatabaseConnectionSnapshot connection,
-        string policyName,
-        CancellationToken cancellationToken = default)
-    {
-        await using var session = await sessions.OpenAsync(connection, null, cancellationToken);
-
-        var available = (await session.QueryAsync(PostgresQueries.AnonymizerAvailable, [], cancellationToken)).FirstOrDefault();
-
-        if (available is null)
-        {
-            return AnonymizerStatus.Unavailable;
-        }
-
-        var installed = available[1] as string;
-
-        if (installed is null)
-        {
-            return AnonymizerStatus.Unavailable with { Available = true, AvailableVersion = available[0] as string };
-        }
-
-        var transparent = PostgresServerInspector.Text((await session.QueryAsync(PostgresQueries.TransparentMasking, [], cancellationToken)).Single()[0]);
-        var masked = PostgresServerInspector.Flag((await session.QueryAsync(PostgresQueries.RoleIsMasked, [policyName], cancellationToken)).Single()[0]);
-        var functions = PostgresServerInspector.Flag((await session.QueryAsync(PostgresQueries.AnonymizerFunctions, [], cancellationToken)).Single()[0]);
-        var rules = (await session.QueryAsync(PostgresQueries.MaskingRules, [policyName], cancellationToken))
-            .Select(row => new ServerMaskingRule(
-                PostgresServerInspector.Text(row[0]),
-                PostgresServerInspector.Text(row[1]),
-                PostgresServerInspector.Text(row[2]),
-                PostgresServerInspector.Text(row[3])))
-            .ToList();
-
-        return new AnonymizerStatus(
-            true,
-            available[0] as string,
-            true,
-            installed,
-            transparent is "on" or "true" or "1",
-            masked,
-            functions,
-            rules);
-    }
 }

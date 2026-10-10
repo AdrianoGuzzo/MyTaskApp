@@ -263,7 +263,7 @@ public static class DependencyInjection
         services.TryAddSingleton<DatabaseOperationGate>();
 
         services.AddScoped<IPostgresEnvironmentDiagnostics, PostgresEnvironmentDiagnostics>();
-        services.AddScoped<IPostgresAnonymizationService, PostgresAnonymizationService>();
+        services.AddScoped<IMaskingVerifier, MaskingVerifier>();
         services.AddScoped<DatabaseCopyPlanner>();
 
         services.AddScoped<GetDatabaseConnectionsHandler>();
@@ -285,8 +285,8 @@ public static class DependencyInjection
         services.AddScoped<SetAnonymizationProfileEnabledHandler>();
         services.AddScoped<DeleteAnonymizationProfileHandler>();
         services.AddScoped<SuggestSensitiveColumnsHandler>();
-        services.AddScoped<GenerateMaskingScriptHandler>();
-        services.AddScoped<ValidateAnonymizationProfileHandler>();
+        services.AddScoped<PreviewMaskingHandler>();
+        services.AddScoped<GetSourceTablesHandler>();
 
         services.AddScoped<GetDatabaseCopyProfilesHandler>();
         services.AddScoped<SaveDatabaseCopyProfileHandler>();

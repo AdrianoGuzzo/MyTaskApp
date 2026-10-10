@@ -116,12 +116,13 @@ public class DatabaseOperationsPersistenceTests
     {
         await using var db = await new TempSqliteDatabase().MigrateAsync(Ct);
         var masked = Connection("ECO Produção (anon)", DatabaseEnvironment.Production, "eco_core");
-        var profile = AnonymizationProfile.Create("ECO LGPD", "LGPD", masked.Id, "anon", Now);
+        var profile = AnonymizationProfile.Create("ECO LGPD", "LGPD", masked.Id, Now);
         profile.ReplaceRules(
         [
-            new AnonymizationRuleSpec("public", "clientes", "email", MaskingKind.Function, "anon.fake_email()", ColumnSensitivity.High),
-            new AnonymizationRuleSpec("public", "clientes", "obs", MaskingKind.Value, "NULL", ColumnSensitivity.Low),
+            new AnonymizationRuleSpec("public", "clientes", "email", MaskingMethod.FakeEmail, null, ColumnSensitivity.High),
+            new AnonymizationRuleSpec("public", "clientes", "obs", MaskingMethod.FixedText, "(removido)", ColumnSensitivity.Low),
         ], Now);
+        profile.ReplaceSkippedTables([new SkippedTableSpec("public", "auditoria"), new SkippedTableSpec("public", "Auditoria")], Now);
         await SeedAsync(db, masked, profile);
 
         await using (var read = db.CreateContext())
@@ -132,16 +133,26 @@ public class DatabaseOperationsPersistenceTests
             reloaded!.Rules.Should().HaveCount(2);
             reloaded.Rules.Select(rule => rule.QualifiedName).Should().BeEquivalentTo("public.clientes.email", "public.clientes.obs");
             reloaded.Rules.Single(rule => rule.Column == "email").Sensitivity.Should().Be(ColumnSensitivity.High);
+            reloaded.Rules.Single(rule => rule.Column == "email").Method.Should().Be(MaskingMethod.FakeEmail);
+            reloaded.Rules.Single(rule => rule.Column == "obs").Should().Match<AnonymizationRule>(
+                rule => rule.Method == MaskingMethod.FixedText && rule.Argument == "(removido)");
             (await profiles.ListAsync(Ct)).Single().Rules.Should().HaveCount(2);
             (await profiles.AnyUsesConnectionAsync(masked.Id, Ct)).Should().BeTrue();
 
-            reloaded.ReplaceRules([new AnonymizationRuleSpec("public", "clientes", "cpf", MaskingKind.Function, "anon.hash(cpf)", ColumnSensitivity.High)], Now);
+            // Maiúsculas contam: "Auditoria" citada é outra tabela no PostgreSQL.
+            reloaded.SkippedTables.Select(table => table.TableKey).Should().BeEquivalentTo("public.auditoria", "public.Auditoria");
+            (await profiles.ListAsync(Ct)).Single().SkippedTables.Should().HaveCount(2);
+
+            reloaded.ReplaceRules([new AnonymizationRuleSpec("public", "clientes", "cpf", MaskingMethod.Partial, "0,2", ColumnSensitivity.High)], Now);
+            reloaded.ReplaceSkippedTables([new SkippedTableSpec("logs", "eventos")], Now);
             await read.SaveChangesAsync(Ct);
         }
 
         await using (var read = db.CreateContext())
         {
             (await read.Set<AnonymizationRule>().CountAsync(Ct)).Should().Be(1);
+            (await read.Set<AnonymizationSkippedTable>().Select(table => table.Schema + "." + table.Table).ToListAsync(Ct))
+                .Should().Equal("logs.eventos");
             var profiles = new AnonymizationProfileRepository(read);
             profiles.Remove((await profiles.FindByIdAsync(profile.Id, Ct))!);
             await read.SaveChangesAsync(Ct);
@@ -149,6 +160,7 @@ public class DatabaseOperationsPersistenceTests
 
         await using var check = db.CreateContext();
         (await check.Set<AnonymizationRule>().CountAsync(Ct)).Should().Be(0);
+        (await check.Set<AnonymizationSkippedTable>().CountAsync(Ct)).Should().Be(0, "as tabelas sem dados saem com o perfil");
     }
 
     [Fact]
@@ -179,7 +191,7 @@ public class DatabaseOperationsPersistenceTests
         var production = Connection("ECO Produção", DatabaseEnvironment.Production, "eco_core");
         var masked = Connection("ECO Produção (anon)", DatabaseEnvironment.Production, "eco_core");
         var development = Connection("ECO Desenvolvimento", DatabaseEnvironment.Development, "eco_dev");
-        var anonymization = AnonymizationProfile.Create("ECO LGPD", null, masked.Id, null, Now);
+        var anonymization = AnonymizationProfile.Create("ECO LGPD", null, masked.Id, Now);
         var options = DatabaseCopyOptions.Default with { KeepAnonymizedArtifact = true };
         var copy = DatabaseCopyProfile.Create("ECO Production → ECO Development", production.Id, development.Id, anonymization.Id, options, Now);
         await SeedAsync(db, production, masked, development, anonymization, copy);
@@ -249,7 +261,7 @@ public class DatabaseOperationsPersistenceTests
         await using var db = await new TempSqliteDatabase().MigrateAsync(Ct);
         var server = Connection("ECO Servidor", DatabaseEnvironment.Production, null);
         var masked = Connection("ECO Servidor (anon)", DatabaseEnvironment.Production, null);
-        var anonymization = AnonymizationProfile.Create("ECO 1010 LGPD", null, masked.Id, null, Now);
+        var anonymization = AnonymizationProfile.Create("ECO 1010 LGPD", null, masked.Id, Now);
         var saved = SavedDatabase.Create("lock_eco_core_1010", server.Id, "eco_core_1010", anonymization.Id, Now);
         await SeedAsync(db, server, masked, anonymization, saved);
 
@@ -328,8 +340,8 @@ public class DatabaseOperationsPersistenceTests
         await using var db = await new TempSqliteDatabase().MigrateToAsync("DatabaseOperations", Ct);
         var production = Connection("ECO Produção", DatabaseEnvironment.Production, "eco_core");
         var masked = Connection("ECO Produção (anon)", DatabaseEnvironment.Production, "eco_core");
-        var anonymization = AnonymizationProfile.Create("ECO LGPD", null, masked.Id, null, Now);
-        await SeedAsync(db, production, masked, anonymization);
+        await SeedAsync(db, production, masked);
+        await InsertOldProfileAsync(db, Guid.CreateVersion7(), masked.Id, []);
 
         // A coluna Database vira opcional: no SQLite, a tabela é recriada.
         await db.MigrateAsync(Ct);
@@ -345,6 +357,74 @@ public class DatabaseOperationsPersistenceTests
         await read.Database.OpenConnectionAsync(Ct);
         await using var violations = await command.ExecuteReaderAsync(Ct);
         (await violations.ReadAsync(Ct)).Should().BeFalse("a recriação da tabela não pode deixar chave órfã");
+    }
+
+    [Fact]
+    public async Task UpgradingFromSavedDatabases_TurnsTheAnonymizerExpressions_IntoCatalogMasks()
+    {
+        await using var db = await new TempSqliteDatabase().MigrateToAsync("SavedDatabases", Ct);
+        var source = Connection("ECO Produção", DatabaseEnvironment.Production, "eco_core");
+        await SeedAsync(db, source);
+        var profileId = Guid.CreateVersion7();
+        await InsertOldProfileAsync(db, profileId, source.Id,
+        [
+            ("email", 1, "anon.partial_email(email)"),
+            ("cpf", 1, "anon.partial(cpf,0,$$*********$$,2)"),
+            ("telefone", 1, "anon.partial(telefone,2,$$*******$$,2)"),
+            ("nome", 1, "anon.dummy_first_name()"),
+            ("nascimento", 1, "anon.random_date()"),
+            ("salario", 1, "anon.noise(salario, 0.2)"),
+            ("cidade", 1, "anon.dummy_city_name()"),
+            ("ip", 2, "NULL"),
+            ("obs", 2, "'d''Ávila'"),
+            ("nota", 2, "0"),
+        ]);
+
+        await db.MigrateAsync(Ct);
+
+        await using var read = db.CreateContext();
+        var rules = (await read.AnonymizationProfiles.Include(profile => profile.Rules).SingleAsync(Ct)).Rules
+            .ToDictionary(rule => rule.Column, rule => (rule.Method, rule.Argument));
+
+        rules.Should().BeEquivalentTo(new Dictionary<string, (MaskingMethod, string?)>
+        {
+            ["email"] = (MaskingMethod.FakeEmail, null),
+            ["cpf"] = (MaskingMethod.Partial, "0,2"),
+            ["telefone"] = (MaskingMethod.Partial, "2,2"),
+            ["nome"] = (MaskingMethod.FakeName, null),
+            ["nascimento"] = (MaskingMethod.DateShift, "365"),
+            ["salario"] = (MaskingMethod.NumberNoise, "20"),
+            ["cidade"] = (MaskingMethod.Hash, null),
+            ["ip"] = (MaskingMethod.Null, null),
+            ["obs"] = (MaskingMethod.FixedText, "d'Ávila"),
+            ["nota"] = (MaskingMethod.FixedNumber, "0"),
+        });
+    }
+
+    /// <summary>Um perfil como as versões com o PostgreSQL Anonymizer gravavam: com política e expressões.</summary>
+    private static async Task InsertOldProfileAsync(
+        TempSqliteDatabase db,
+        Guid profileId,
+        Guid connectionId,
+        IReadOnlyList<(string Column, int Kind, string Expression)> rules)
+    {
+        await using var context = db.CreateContext();
+        var ticks = Now.UtcTicks;
+
+        await context.Database.ExecuteSqlRawAsync(
+            "INSERT INTO \"AnonymizationProfiles\" (\"Id\", \"Name\", \"Description\", \"ConnectionId\", \"PolicyName\", \"IsEnabled\", \"CreatedAt\", \"UpdatedAt\") " +
+            "VALUES ({0}, 'ECO LGPD', NULL, {1}, 'anon', 1, {2}, {2})",
+            [profileId.ToString().ToUpperInvariant(), connectionId.ToString().ToUpperInvariant(), ticks],
+            Ct);
+
+        foreach (var (column, kind, expression) in rules)
+        {
+            await context.Database.ExecuteSqlRawAsync(
+                "INSERT INTO \"AnonymizationRules\" (\"Id\", \"ProfileId\", \"Schema\", \"Table\", \"Column\", \"Kind\", \"Expression\", \"Sensitivity\", \"ConfirmedAt\") " +
+                "VALUES ({0}, {1}, 'public', 'clientes', {2}, {3}, {4}, 3, {5})",
+                [Guid.CreateVersion7().ToString().ToUpperInvariant(), profileId.ToString().ToUpperInvariant(), column, kind, expression, ticks],
+                Ct);
+        }
     }
 
     [Fact]

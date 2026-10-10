@@ -2,16 +2,16 @@
 
 Este guia cobre a janela *☰ → Bancos de Dados…*. Ela cadastra conexões
 PostgreSQL por ambiente e copia Produção para Desenvolvimento, Teste ou
-Homologação. Os dados chegam anonimizados pelo [PostgreSQL Anonymizer], e a
-janela registra auditoria, mostra o progresso e confere o resultado. A decisão
-de arquitetura está no [ADR-056](ARCHITECTURE.md).
+Homologação. Os dados chegam anonimizados, mascarados na própria consulta à
+origem, sem nada instalado nela. A janela registra auditoria, mostra o
+progresso e confere o resultado. As decisões de arquitetura estão nos
+[ADR-056, ADR-057 e ADR-058](ARCHITECTURE.md).
 
 O ponto central: **Produção nunca é alterada a partir do app**. O app não faz
 `INSERT`, `UPDATE`, `DELETE`, DDL, restore, `createdb`/`dropdb` nem
 mascaramento estático em uma conexão de produção. Ele também não deixa os
 dados saírem de produção sem anonimização.
 
-[PostgreSQL Anonymizer]: https://postgresql-anonymizer.readthedocs.io/
 
 ## Sumário
 
@@ -19,9 +19,9 @@ dados saírem de produção sem anonimização.
 - [Conexões](#conexões)
 - [Ambientes e política de segurança](#ambientes-e-política-de-segurança)
 - [Ferramentas do PostgreSQL](#ferramentas-do-postgresql)
-- [PostgreSQL Anonymizer](#postgresql-anonymizer)
-- [Configurar o Anonymizer (DBA)](#configurar-o-anonymizer-dba)
+- [Como a anonimização funciona](#como-a-anonimização-funciona)
 - [Regras de mascaramento](#regras-de-mascaramento)
+  - [Tabelas sem dados](#tabelas-sem-dados)
 - [Copiar Produção → Desenvolvimento](#copiar-produção--desenvolvimento)
 - [Banco escolhido na cópia e apelidos](#banco-escolhido-na-cópia-e-apelidos)
 - [Verificação depois do restore](#verificação-depois-do-restore)
@@ -39,7 +39,7 @@ A feature segue as mesmas camadas do resto do app:
 | Camada | O que tem |
 |---|---|
 | **Domain** (`Domain/DatabaseOperations`) | `DatabaseConnection` (sem senha), `AnonymizationProfile` e as regras, `DatabaseCopyProfile`, `DatabaseOperationAudit`, a política por ambiente (`EnvironmentPolicy`), a política central (`IDatabaseSecurityPolicy`), a máscara de segredos (`SensitiveText`) e o gerador do script do DBA (`MaskingScriptBuilder`) |
-| **Application** (`Application/DatabaseOperations`) | as portas (`IPostgresToolLocator`, `IPostgresServerInspector`, `IPostgresAnonymizerInspector`, `IPostgresDumpService`, `IPostgresRestoreService`, `IDatabaseCredentialStore`, `IDatabaseOperationWorkspaceFactory`), os casos de uso, o diagnóstico (`IPostgresEnvironmentDiagnostics`), a anonimização (`IPostgresAnonymizationService`) e o fluxo de cópia (`RunDatabaseCopyHandler`) |
+| **Application** (`Application/DatabaseOperations`) | as portas (`IPostgresToolLocator`, `IPostgresServerInspector`, `IPostgresMaskedCopier`, `IPostgresDumpService`, `IPostgresRestoreService`, `IDatabaseCredentialStore`, `IDatabaseOperationWorkspaceFactory`), os casos de uso, o diagnóstico (`IPostgresEnvironmentDiagnostics`), as máscaras (`MaskingPlanner`, `IMaskingVerifier`) e o fluxo de cópia (`RunDatabaseCopyHandler`) |
 | **Infrastructure** (`Infrastructure/PostgreSql`) | o localizador das ferramentas, o `PgToolRunner` (a única porta para `pg_dump`/`pg_restore`/`createdb`/`dropdb`, com a guarda que recusa escrita em produção), as consultas pelo Npgsql em sessão somente leitura, o cofre das senhas e os diretórios temporários |
 | **Desktop** | a janela `DatabaseOperationsWindow`, com uma aba por ViewModel |
 
@@ -105,7 +105,7 @@ Critical Production é mais restritiva que Production em cinco pontos:
 
 - só alimenta Test e Staging;
 - a verificação depois do restore é obrigatória;
-- o dump anônimo não pode ser mantido;
+- o dump da estrutura não pode ser mantido;
 - a confirmação exige digitar o nome do banco;
 - colunas de alta probabilidade de dado pessoal sem regra bloqueiam a cópia.
 
@@ -124,7 +124,7 @@ operação, ambiente, permissões e anonimização. Exemplos:
 | Development / Test / Staging → Production | proibido |
 | Critical Production → Development | proibido |
 | restore, `createdb`, `dropdb` em Production | proibido |
-| dump simples (não anônimo) de Production | proibido |
+| dump com dados de Production (só a estrutura sai: `--schema-only`) | proibido |
 | SQL livre ou mascaramento estático em Production | proibido |
 | destino "Development" apontando para o mesmo host/porta/banco de uma conexão de produção | proibido |
 | `dropdb`/`createdb` em `postgres`, `template0`, `template1` | proibido |
@@ -153,8 +153,8 @@ servidor local**: elas falam com o servidor remoto.
 
 | Ferramenta | Uso |
 |---|---|
-| `pg_dump` | o dump (formato diretório, em paralelo com `--jobs`) |
-| `pg_restore` | o restore, e `--list` para conferir o dump |
+| `pg_dump` | o dump (formato diretório, em paralelo com `--jobs`); na cópia anonimizada, só a estrutura |
+| `pg_restore` | o restore (na cópia anonimizada, antes e depois dos dados), e `--list` para conferir o dump |
 | `createdb` / `dropdb` | recriar o destino |
 | `psql`, `pg_isready` | só detectados e mostrados no diagnóstico |
 
@@ -166,16 +166,22 @@ A aba **Diagnóstico** procura em vários lugares:
 - **Linux:** o PATH, `/usr/lib/postgresql/<versão>/bin`, `/usr/pgsql-<versão>/bin`,
   `/usr/local/pgsql/bin` e `/usr/bin`.
 
-Ela roda `--version` em cada ferramenta e prefere o conjunto da pasta do
-`pg_dump` mais novo, para não misturar versões.
+Ela roda `--version` em cada ferramenta. Cada pasta com um `pg_dump` vira um
+**conjunto**, e as ferramentas de uma cópia vêm todas do mesmo conjunto, para
+não misturar versões:
+
+- o **Diagnóstico** mostra o conjunto mais novo;
+- a **cópia** usa o **menor conjunto que ainda lê a origem**. Com o PostgreSQL
+  14 e o pgAdmin 18 instalados, uma origem 14 usa as ferramentas 14. O
+  Diagnóstico de uma conexão mostra as que uma cópia dela usaria.
 
 ### Regras de versão
 
 | Regra | Por quê |
 |---|---|
 | `pg_dump` ≥ versão do servidor de origem | um `pg_dump` mais antigo recusa o servidor |
-| `pg_dump` ≥ 17 para o dump anônimo | `--exclude-extension` (tira o anon do arquivo) chegou no 17 |
 | `pg_restore` ≥ `pg_dump` | o formato do arquivo |
+| `pg_restore` 17+ só para destino 17+ | ele manda `SET transaction_timeout`, que um servidor 16 ou mais antigo recusa: o [Validar] para antes do dump |
 | destino mais antigo que a origem | aviso: o restore pode falhar em recursos novos |
 | `dropdb --force` | só com servidor 13 ou mais novo |
 
@@ -233,78 +239,77 @@ pg_restore --version
 pg_isready --version
 ```
 
-## PostgreSQL Anonymizer
+## Como a anonimização funciona
 
-A anonimização é um **dump anônimo**, com o PostgreSQL Anonymizer **2.x** em
-*transparent dynamic masking*:
+**Nada é instalado no banco de origem.** A cópia anonimizada mascara os dados
+na própria consulta (ADR-058):
 
-- No banco de origem, o DBA marca um usuário como `MASKED` e define, por
-  coluna, como ela é mascarada (`SECURITY LABEL`).
-- Tudo o que esse usuário lê já sai mascarado pelo servidor. O `pg_dump` feito
-  por ele grava dados anonimizados, e **o dado bruto de produção nunca chega ao
-  disco desta máquina**.
-- O app não altera produção. Ele não roda `anon.anonymize_database()`, que é
-  mascaramento estático e reescreve os dados do próprio banco. A política o
-  proíbe em produção, e o app não tem esse caminho.
-
-O app trabalha com **duas conexões para o mesmo banco** de produção:
-
-| Conexão | Para quê |
-|---|---|
-| **ECO Produção** (`backup_user`) | a origem: inspeção, conferência de estrutura e contagem, verificação |
-| **ECO Produção (anon)** (`dump_anon`, role `MASKED`) | o dump anônimo; é a conexão do **perfil de anonimização** |
-
-A política confere que as duas apontam para o mesmo host, porta e banco.
-
-O **Anonymizer 1.x** é detectado e recusado com instruções, porque o dump
-anônimo por role mascarada é do 2.x.
-
-## Configurar o Anonymizer (DBA)
-
-Os passos abaixo são feitos **pelo DBA**, no servidor de produção, uma vez. O
-app gera o script de regras, mas não o executa.
-
-1. **Instalar a extensão** no servidor (pacote `postgresql_anonymizer` do
-   PGDG, imagem Docker ou código fonte; veja a
-   [documentação](https://postgresql-anonymizer.readthedocs.io/en/latest/INSTALL/)).
-   Depois, no banco:
+1. **Estrutura.** O app abre uma transação **somente leitura** na origem, exporta
+   o snapshot (`pg_export_snapshot()`) e roda `pg_dump --schema-only
+   --snapshot=…`. Vão para o disco só tabelas, índices e chaves; nenhuma linha.
+2. **Dados.** Para cada tabela, o app roda na origem, na mesma transação:
 
    ```sql
-   ALTER DATABASE eco_core SET session_preload_libraries = 'anon';
-   CREATE EXTENSION IF NOT EXISTS anon;
+   COPY (SELECT id,
+                CAST(… 'user_' || left(md5(lower(email::text)), 12) || '@exemplo.invalid' … AS text),
+                CAST(… left(cpf, 0) || repeat('*', …) || right(cpf, 2) … AS character varying(14)),
+                criado
+         FROM ONLY public.clientes) TO STDOUT
    ```
 
-2. **Ligar o mascaramento transparente** no banco:
+   e grava o resultado no destino por `COPY public.clientes (…) FROM STDIN`. O
+   valor real é trocado **dentro do servidor de origem**: não chega ao disco
+   nem à memória do app.
+3. **Índices e chaves** são criados depois dos dados (`pg_restore
+   --section=post-data`), e cada sequence continua de onde a origem parou
+   (`setval`).
 
-   ```sql
-   ALTER DATABASE eco_core SET anon.transparent_dynamic_masking TO true;
-   ```
+As máscaras são montadas pelo app a partir de um **catálogo fixo**, só com
+funções nativas do PostgreSQL (`md5`, `left`, `right`, `repeat`, `CASE`). O
+usuário escolhe a máscara; não escreve SQL.
 
-3. **Criar o usuário do dump anônimo** e marcá-lo como mascarado:
+| Máscara | O que faz | Mantém únicos? | Cabe em |
+|---|---|---|---|
+| Hash | 16 caracteres do md5 do valor | sim | texto |
+| E-mail falso | `user_<código>@exemplo.invalid` | sim | texto |
+| Parcial | mantém N caracteres do começo e M do fim; o meio vira `*` | não | texto |
+| Nome falso | nome e sobrenome de uma lista fixa | não | texto |
+| Texto fixo | o mesmo texto em todas as linhas | não | texto |
+| Número fixo | o mesmo número em todas as linhas | não | número |
+| Vazio (NULL) | apaga o valor | não | qualquer coluna que aceite NULL |
+| Data deslocada | move a data até ±N dias | não | data, timestamp |
+| Ruído numérico | varia o número até ±N% | não | número |
 
-   ```sql
-   CREATE ROLE dump_anon LOGIN PASSWORD '…';
-   GRANT pg_read_all_data TO dump_anon;           -- PostgreSQL 14+
-   SECURITY LABEL FOR anon ON ROLE dump_anon IS 'MASKED';
-   ```
+As máscaras variáveis são **determinísticas**: o mesmo valor vira sempre o
+mesmo mascarado. Um e-mail que aparece em duas tabelas continua batendo.
 
-   O `pg_dump --jobs N` abre N+1 conexões. Confira o `CONNECTION LIMIT` do
-   usuário e o `max_connections` do servidor.
+O que a validação recusa, antes de qualquer processo:
 
-4. **Aplicar as regras de mascaramento** com o script gerado pelo app (abaixo).
+- **Chave não se mascara.** Uma coluna de PK ou FK mascarada quebraria as
+  ligações entre as tabelas. Quem identifica a pessoa é o CPF ou o e-mail, não
+  o id.
+- **Índice único** só aceita Hash ou E-mail falso, que não repetem valores.
+- **Tipo errado**, como uma máscara de texto num CPF guardado como número.
+- **Vazio** numa coluna `NOT NULL`.
+- **Coluna gerada**: o destino a calcula sozinho a partir das colunas já
+  mascaradas.
+- **Coluna que não existe mais** na origem.
 
-5. Na aba **Diagnóstico** do app, com a conexão mascarada, confira:
-   - ✓ Extension installed
-   - ✓ Extension enabled
-   - ✓ Masked role
-   - ✓ Masking rules detected
+Uma regra escrita para uma tabela particionada vale para todas as partições.
+Objetos grandes (`pg_largeobject`) não vão por `COPY`: a validação avisa, e
+eles ficam de fora.
+
+> Versões anteriores usavam o PostgreSQL Anonymizer, com um usuário `MASKED` e
+> `SECURITY LABEL` no banco de origem. Esse caminho saiu. Os perfis existentes
+> foram convertidos para as máscaras do catálogo na atualização (ADR-058).
 
 ## Regras de mascaramento
 
 Na aba **Perfis → Anonymization Profiles**:
 
-1. Crie o perfil (ex.: **ECO LGPD**), escolhendo a **conexão mascarada** e a
-   política (`anon`, o padrão).
+1. Crie o perfil (ex.: **ECO LGPD**) e escolha a **conexão para ler as
+   colunas**, em geral a própria origem. Se ela for só o servidor, informe o
+   banco.
 2. Clique em **Sugerir colunas**. O app lê só o nome, o tipo e o comentário
    das colunas, sem ler nenhum dado, e sugere possíveis dados sensíveis:
    - **Alta probabilidade:** CPF, CNPJ, RG, e-mail, telefone, senha, token,
@@ -313,7 +318,8 @@ Na aba **Perfis → Anonymization Profiles**:
    - **Baixa:** cidade, gênero, texto livre, latitude/longitude.
 
    Um comentário de coluna com "LGPD", "PII" ou "dado pessoal" sobe a coluna
-   para alta.
+   para alta. A máscara sugerida cabe no tipo: um CPF guardado como número
+   recebe Número fixo, e não Parcial.
 3. **As sugestões chegam desmarcadas.** Uma coluna `name` numa tabela de
    produtos não é dado pessoal, e só você sabe disso. Marque o que é de fato
    dado pessoal, ajuste a máscara se quiser e salve. Só o que foi marcado vira
@@ -323,30 +329,44 @@ Na aba **Perfis → Anonymization Profiles**:
 
    | Controle | O que faz |
    |---|---|
-   | ☑ Mascarar | marcada, a coluna sai mascarada no dump; desmarcada, vai como está e sai da lista ao salvar |
+   | ☑ Mascarar | marcada, a coluna chega ao destino mascarada; desmarcada, vai como está e sai da lista ao salvar |
    | Probabilidade | o palpite pelo nome e tipo da coluna (o tooltip explica cada nível) |
-   | Máscara | o que vai no lugar do dado: uma função do `anon` ou um valor |
-   | Tipo | **Função**: um valor falso por linha (`MASKED WITH FUNCTION`). **Valor fixo**: o mesmo valor em todas as linhas, `NULL`, um número ou `'texto'` (`MASKED WITH VALUE`) |
+   | Máscara | uma do catálogo; o tooltip diz o que cada uma faz |
+   | Parâmetro | só nas que pedem: início,fim da Parcial, o texto, os dias, o % |
    | Selecionar todas | marca as colunas visíveis; com todas marcadas, desmarca. Com só algumas marcadas, completa |
    | Marcar alta probabilidade | marca as visíveis de alta, sem desmarcar as outras |
    | Filtro | por schema, tabela, coluna ou motivo. "Selecionar todas" e o atalho valem só para o que aparece |
 
    A contagem ("12 de 40 coluna(s) marcada(s) para mascarar") acompanha cada
    clique e avisa quantas o filtro escondeu.
-4. **Gerar script → Copiar** e entregue ao DBA. O script tem uma linha
-   `SECURITY LABEL FOR anon ON COLUMN … IS 'MASKED WITH FUNCTION …'` por
-   regra, com aspas tratadas para nomes estranhos.
-5. Depois que o DBA rodar o script, use **Validar no servidor**. O app compara
-   o perfil com o que o servidor tem (`pg_seclabel`) e aponta:
-   - regras que faltam no servidor;
-   - regras diferentes;
-   - regras a mais;
-   - colunas candidatas ainda sem regra.
+4. **Pré-visualizar** roda o mesmo SELECT da cópia com `LIMIT 5` e mostra só os
+   valores mascarados de cada coluna marcada, ou o que impede a máscara
+   (chave, tipo, NOT NULL, FK de uma tabela sem dados). O valor real não chega
+   à tela.
 
-As máscaras sugeridas usam funções do Anonymizer 2.x (`anon.partial`,
-`anon.partial_email`, `anon.dummy_*`, `anon.random_*`, `anon.noise`). Confira os
-nomes na versão instalada antes de confirmar. Expressões com `;`, comentário
-ou `anon.anonymize_*` são recusadas.
+### Tabelas sem dados
+
+Acima das colunas, a lista **Tabelas sem dados** traz as tabelas do banco
+(lidas junto com **Sugerir colunas**), com o número aproximado de linhas, o
+tamanho e as partições. Uma tabela marcada:
+
+- é criada no destino com índices, chaves e triggers, mas **vazia**: nenhuma
+  linha dela sai da origem, nem mascarada;
+- dispensa máscara: uma coluna sensível dela conta como protegida, e uma regra
+  já salva para ela fica sem uso (a linha avisa);
+- se for particionada, leva todas as partições junto.
+
+Serve para logs, auditoria, filas, histórico e tabelas grandes que o
+desenvolvimento não usa: a cópia fica menor e mais rápida.
+
+**Uma tabela sem dados não pode ser referenciada por uma com dados.** As FKs
+são criadas depois das linhas: com `clientes` vazia, cada pedido apontaria para
+um cliente que não existe, e a FK falharia no destino. A validação recusa
+antes, dizendo qual tabela marcar também. O contrário vale: `auditoria` pode ir
+vazia mesmo apontando para `clientes`.
+
+A verificação confere as duas coisas: as outras tabelas com as mesmas linhas
+da origem, e as sem dados **vazias** no destino.
 
 ## Copiar Produção → Desenvolvimento
 
@@ -369,7 +389,7 @@ Na aba **Copiar Banco**, clique em **Usar** no perfil (ou escolha os campos à
 mão), depois:
 
 1. **[Validar]** faz a simulação completa, sem processo nenhum: política,
-   ferramentas, conexões, versões e Anonymizer. Mostra as violações e os
+   ferramentas, conexões, versões e máscaras. Mostra as violações e os
    avisos.
 2. **[Executar]** só acende depois de validar **a mesma** seleção.
 3. Com origem em produção, aparece a confirmação:
@@ -407,17 +427,17 @@ mão), depois:
    | Validando origem | conecta, lê a versão e o tamanho das tabelas |
    | Validando destino | conecta (ao banco `postgres`, se o destino vai ser recriado) |
    | Validando permissões | política e versões das ferramentas |
-   | Validando Anonymizer | extensão 2.x, transparent masking, role `MASKED`, regras do perfil iguais às do servidor; e o **canário**, descrito abaixo |
-   | Gerando dump anônimo | `pg_dump -Fd --jobs N` pela conexão mascarada, com `--no-security-labels --exclude-extension=anon` |
-   | Anonimizando | confere o índice do dump: sem `SECURITY LABEL`, sem a extensão anon, com dados |
+   | Validando máscaras | lê as colunas da origem (só o catálogo) e confere cada regra: tipo, chave, único, NOT NULL |
+   | Lendo a estrutura | abre a leitura da origem com o snapshot e roda `pg_dump --schema-only --snapshot=…` |
+   | Conferindo a estrutura | o índice do dump não pode ter nenhuma linha de dado |
    | Preparando destino | `dropdb --if-exists [--force]` e `createdb --template=template0`; num banco novo (destino sem banco), só o `createdb` |
-   | Restaurando | `pg_restore --no-owner --no-privileges --no-security-labels --exit-on-error --jobs N` |
+   | Copiando dados mascarados | `pg_restore --section=pre-data`; `COPY (SELECT … mascarado) TO STDOUT` → `COPY … FROM STDIN` por tabela; `pg_restore --section=post-data`; `setval` das sequences |
    | Validando resultado | a verificação (abaixo) |
    | Limpando arquivos temporários | sempre, com sucesso, falha ou cancelamento |
 
-   O **canário** lê as mesmas linhas pela conexão normal e pela mascarada,
-   comparando hashes salgados. Se vierem iguais, a máscara não está ativa, e a
-   cópia para **antes de existir qualquer dump**.
+   Numa cópia sem anonimização (Desenvolvimento → Teste, por exemplo), as
+   etapas são as de sempre: `pg_dump -Fd --jobs N` com os dados,
+   `pg_restore --no-owner --no-privileges --exit-on-error --jobs N`.
 
 **Cancelar** mata o processo em andamento e limpa os temporários. O destino
 pode ficar incompleto: rode de novo com "Recriar o destino".
@@ -465,15 +485,9 @@ preencha **Salvar como** (por exemplo `lock_eco_core_1010`) e clique em
 - Uma conexão ou um perfil de anonimização usado por um apelido não pode ser
   excluído antes do apelido.
 
-**Anonimização por banco.** O perfil de anonimização continua ligado a uma
-conexão mascarada (role `MASKED`):
-
-- Se a mascarada for só o servidor, a cópia lê pelo **mesmo banco escolhido na
-  origem**.
-- Em **Perfis**, um campo **Banco** aparece para sugerir colunas, gerar o
-  script do DBA e validar no servidor.
-- Ao salvar o apelido, o app confere que a anonimização lê o mesmo servidor da
-  origem (e o mesmo banco, se a mascarada tiver um fixo).
+**Anonimização por banco.** O apelido guarda qual perfil vale para aquele
+banco. As regras são conferidas contra as colunas do banco escolhido a cada
+cópia: uma coluna que mudou de tipo ou sumiu aparece no [Validar].
 
 ## Verificação depois do restore
 
@@ -493,7 +507,7 @@ Sensitive Data: PASS
 Result: SUCCESS
 ```
 
-- **Estrutura:** schemas (sem o `anon`), tabelas, constraints por tipo, índices
+- **Estrutura:** schemas, tabelas, constraints por tipo, índices
   e sequences.
 - **Linhas:** `count(*)` em cada tabela. Acima de 1 milhão de linhas
   estimadas, vale a estimativa do catálogo, e o item vira aviso.
@@ -502,6 +516,9 @@ Result: SUCCESS
   O app pareia pela chave e conta os valores iguais:
   - 100% iguais à origem: **FAIL**, porque a máscara não foi aplicada;
   - mais da metade iguais: aviso.
+
+  Nas máscaras fixas (texto, número, vazio), o destino precisa ter o valor da
+  máscara em **todas** as linhas; uma só que escape é **FAIL**.
 
   Nenhum valor real chega ao app nem ao log.
 
@@ -541,8 +558,8 @@ Cada execução tem um diretório isolado:
 ```text
 %LOCALAPPDATA%\MyTaskApp\database-operations\      (Linux: ~/.local/share/MyTaskApp/database-operations/)
   operation-20261008-184102/
-    dump/          ← dump sem anonimização (só em cópia de Dev/Test; num fluxo de produção fica vazio)
-    anonymized/    ← o dump anônimo
+    dump/          ← dump com dados (só em cópia de Dev/Test; num fluxo de produção fica vazio)
+    anonymized/    ← na cópia anonimizada, o dump só da estrutura — nenhuma linha
     logs/
     metadata.json  ← o que sobra no fim
 ```
@@ -552,16 +569,16 @@ Cada execução tem um diretório isolado:
 - No Linux as pastas nascem com modo `700`.
 - **No fim:**
   - `dump/` e `logs/` são apagados sempre;
-  - `anonymized/` também, a não ser que o perfil peça **Manter o dump anônimo**
-    (proibido em Critical Production);
+  - `anonymized/` também, a não ser que o perfil peça **Manter o dump da
+    estrutura** (proibido em Critical Production);
   - fica só o `metadata.json`, sem dado nem segredo.
 - Uma **varredura** na abertura da janela apaga o que uma queda do app tenha
   deixado.
 
 A **auditoria** fica na aba **Histórico**. Ela registra tipo, origem, destino,
 perfis, início, fim, duração, status, erro (mascarado), máquina, usuário,
-versões das ferramentas e dos servidores, linhas, tamanho do dump anônimo e
-colunas mascaradas.
+versões das ferramentas e dos servidores, linhas, tamanho do dump da estrutura
+e colunas mascaradas.
 
 - As recusas da política também entram, como *Blocked*.
 - Uma operação que o app não terminou (queda) vira *Interrupted* na volta.
@@ -589,16 +606,15 @@ O número de processos paralelos (`--jobs`) é o número de núcleos, até 4.
 | Sintoma | Causa e o que fazer |
 |---|---|
 | ✗ `pg_dump` não encontrado | Instale as ferramentas cliente ([Instalação](#instalação)) e clique em **Verificar novamente**. |
-| "O dump anônimo precisa do pg_dump 17" | O `--exclude-extension` é do 17. Instale as ferramentas 17 ou mais novas; elas leem servidores antigos. |
 | "pg_dump … é mais antigo que o servidor de origem" | Instale as ferramentas da versão do servidor (ou mais nova). |
+| `unrecognized configuration parameter "transaction_timeout"` / "pg_restore 18 não restaura no PostgreSQL 14" | Só havia ferramentas 17+ para um destino 16 ou mais antigo. Instale as ferramentas cliente da versão da origem (ex.: `winget install PostgreSQL.PostgreSQL.14`, ou só "Command Line Tools" no instalador): a cópia passa a usá-las sozinha, mesmo com o pgAdmin mais novo instalado. |
 | "Guardar credenciais com segurança precisa do secret-tool" (Linux) | `sudo apt install libsecret-tools` (ou `libsecret` no Fedora), com uma sessão gráfica e o chaveiro destravado. |
-| "O usuário da conexão mascarada não está marcado como MASKED" | `SECURITY LABEL FOR anon ON ROLE dump_anon IS 'MASKED';` no banco de origem. |
-| "anon.transparent_dynamic_masking está desligado" | `ALTER DATABASE … SET anon.transparent_dynamic_masking TO true;` e reconecte. |
-| "Regras do perfil que o servidor não tem" | Gere o script do perfil e peça ao DBA para rodá-lo. Depois, **Validar no servidor**. |
-| "A conexão mascarada devolveu os mesmos valores da origem" | O canário pegou uma máscara inativa: role sem `MASKED`, TDM desligado ou regra em outra coluna. Nenhum dump foi feito. |
-| "versão 1.x … atualize para 2.x" | O dump anônimo por role mascarada é do Anonymizer 2. |
-| "A conexão mascarada não aponta para o mesmo banco da origem" | Host, porta e banco das duas conexões precisam ser iguais (o usuário é que muda). |
-| `permission denied for table …` no dump | O usuário mascarado precisa ler todas as tabelas: `GRANT pg_read_all_data TO dump_anon;` (PostgreSQL 14+). O Diagnóstico mostra quantas tabelas estão sem `SELECT`. |
+| "… é chave (PK ou FK)" | Tire a regra da coluna de chave; mascare o dado pessoal (CPF, e-mail), não o id. |
+| "… tem índice único, e a máscara … repete valores" | Use Hash ou E-mail falso nessa coluna. |
+| "… é bigint: a máscara … não serve" | Escolha uma máscara do tipo da coluna (Número fixo, Ruído). |
+| "O dump da estrutura trouxe dados" | Não deveria acontecer: o dump é `--schema-only`. Nada foi restaurado; reporte. |
+| `permission denied for table …` na cópia | O usuário da origem precisa ler todas as tabelas: `GRANT pg_read_all_data TO …;` (PostgreSQL 14+). O Diagnóstico mostra quantas tabelas estão sem `SELECT`. |
+| `COPY` falha numa tabela | A mensagem diz qual. A cópia para ali, sem criar índices nem chaves; rode de novo depois de corrigir. |
 | `too many connections` | O `--jobs` abre várias conexões; aumente o limite do usuário ou do servidor. |
 | `pg_restore … already exists` | O destino tinha objetos; marque **Recriar o destino**. |
 | "Espaço insuficiente" | O dump pode precisar de até 1,2× o tamanho do banco. Libere espaço ou aponte `WorkspaceDirectory` para outro disco. |
@@ -608,8 +624,9 @@ O número de processos paralelos (`--jobs`) é o número de núcleos, até 4.
 ### Teste de integração com PostgreSQL real
 
 Os testes automáticos usam fakes. Para rodar também contra um servidor de
-verdade, use um servidor **descartável**, como um container. O teste cria e
-apaga dois bancos:
+verdade, use um servidor **descartável**, como um container, da mesma versão
+das ferramentas cliente instaladas (ou mais antiga). Os testes criam e apagam
+bancos de teste, e cobrem a cópia comum e a mascarada:
 
 ```bash
 docker run -d --name pg-teste -e POSTGRES_PASSWORD=teste -p 55432:5432 postgres:17
@@ -617,4 +634,6 @@ export MYTASKAPP_TEST_POSTGRES="Host=localhost;Port=55432;Username=postgres;Pass
 dotnet test tests/MyTaskApp.Infrastructure.Tests --filter "FullyQualifiedName~PostgresIntegrationTests"
 ```
 
-Sem a variável, o teste se dispensa.
+Sem a variável, o teste se dispensa. Os testes escolhem as ferramentas como a
+cópia: o menor conjunto instalado que lê o servidor de teste. Para forçar uma
+pasta, aponte `MYTASKAPP_TEST_PG_BIN` para ela.

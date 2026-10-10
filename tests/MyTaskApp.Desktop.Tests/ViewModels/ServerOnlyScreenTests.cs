@@ -280,7 +280,7 @@ public class ServerOnlyScreenTests
 
     private DatabaseProfilesViewModel Profiles()
     {
-        var viewModel = new DatabaseProfilesViewModel(_runner, _confirmation, new FakeClipboardWriter(), NullLogger<DatabaseProfilesViewModel>.Instance);
+        var viewModel = new DatabaseProfilesViewModel(_runner, _confirmation, NullLogger<DatabaseProfilesViewModel>.Instance);
         viewModel.SetCatalog(
             new[] { DatabaseScreen.Production, DatabaseScreen.Server, DatabaseScreen.LocalServer }.Select(row => new DatabaseConnectionItemViewModel(row)).ToList(),
             [DatabaseScreen.Profile],
@@ -326,9 +326,9 @@ public class ServerOnlyScreenTests
     {
         var viewModel = Profiles();
 
-        viewModel.MaskedConnection = viewModel.Connections.Single(item => item.Id == DatabaseScreen.Server.Id);
+        viewModel.ColumnsConnection = viewModel.Connections.Single(item => item.Id == DatabaseScreen.Server.Id);
         viewModel.NeedsProfileDatabase.Should().BeTrue();
-        viewModel.MaskedConnection = viewModel.Connections.Single(item => item.Id == DatabaseScreen.Production.Id);
+        viewModel.ColumnsConnection = viewModel.Connections.Single(item => item.Id == DatabaseScreen.Production.Id);
         viewModel.NeedsProfileDatabase.Should().BeFalse();
 
         viewModel.CopySource = viewModel.Connections.Single(item => item.Id == DatabaseScreen.Server.Id);
@@ -347,7 +347,7 @@ public class ServerOnlyScreenTests
         _runner.Handlers[typeof(SuggestSensitiveColumnsHandler)] = new SuggestSensitiveColumnsHandler(
             new CapturingConnections(DatabaseScreen.Server), new CapturingInspector(query => sent = query), new DatabaseSecurityPolicy());
         var viewModel = Profiles();
-        viewModel.MaskedConnection = viewModel.Connections.Single(item => item.Id == DatabaseScreen.Server.Id);
+        viewModel.ColumnsConnection = viewModel.Connections.Single(item => item.Id == DatabaseScreen.Server.Id);
         viewModel.ProfileDatabase = "eco_core_1010";
 
         await viewModel.SuggestColumnsAsync(Ct);
@@ -409,7 +409,8 @@ public class ServerOnlyScreenTests
             "Copiar: ECO Servidor/eco_core_1010 → Local/lock_eco_core_1010_20261009_143000");
     }
 
-    private sealed class CapturingConnections(DatabaseConnectionRow row) : IDatabaseConnectionRepository
+    /// <summary>Uma conexão só, devolvida para qualquer id. Também serve à tela de tabelas sem dados.</summary>
+    internal sealed class CapturingConnections(DatabaseConnectionRow row) : IDatabaseConnectionRepository
     {
         private readonly DatabaseConnection _connection = DatabaseConnection.Create(
             row.Name, row.Host, row.Port, row.Database, row.Username, row.Environment, row.SslMode, null, row.Permissions, DatabaseScreen.Now);
@@ -443,6 +444,10 @@ public class ServerOnlyScreenTests
             throw new NotSupportedException();
 
         public Task<IReadOnlyList<string>> ListDatabasesAsync(DatabaseConnectionSnapshot connection, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<long> CountNotMaskedAsync(
+            DatabaseConnectionSnapshot connection, ColumnReference column, MaskedColumnPlan mask, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
         public Task<IReadOnlyList<TableInfo>> ListTablesAsync(DatabaseConnectionSnapshot connection, CancellationToken cancellationToken = default) =>

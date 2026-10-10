@@ -37,7 +37,20 @@ public class RunDatabaseCopyHandlerTests
 
         result.Succeeded.Should().BeTrue(result.Error);
         result.Steps.Values.Should().OnlyContain(state => state == CommandStepState.Succeeded);
-        _scenario.Tools.Calls.Should().Equal("anonymous-dump", "list", "dropdb:eco_dev", "createdb:eco_dev", "restore");
+        _scenario.Tools.Calls.Should().Equal(
+            "catalog:ECO Produção:eco_core",
+            "open:ECO Produção:eco_core",
+            "schema-dump",
+            "list",
+            "dropdb:eco_dev",
+            "createdb:eco_dev",
+            "restore:pre-data",
+            "connect:eco_dev",
+            "copy:public.clientes",
+            "copy:public.pedidos",
+            "restore:post-data",
+            "sequences",
+            "close");
 
         progress.Items.Where(item => item.State == CommandStepState.Running).Select(item => item.Step).Distinct()
             .Should().BeInAscendingOrder();
@@ -48,19 +61,62 @@ public class RunDatabaseCopyHandlerTests
     }
 
     [Fact]
-    public async Task TheDump_GoesThroughTheMaskedConnection_IntoTheAnonymizedFolder()
+    public async Task OnlyTheStructure_IsDumped_FromTheSameSnapshotAsTheData()
     {
         await RunAsync();
 
         var dump = _scenario.Tools.Dumps.Should().ContainSingle().Subject;
-        dump.Anonymous.Should().BeTrue();
-        dump.Connection.Id.Should().Be(_scenario.Masked.Id);
+        dump.SchemaOnly.Should().BeTrue("nenhuma linha de produção vai para o disco");
+        dump.Snapshot.Should().Be(FakeMaskedCopier.Snapshot);
+        dump.Connection.Id.Should().Be(_scenario.Production.Id);
         dump.OutputDirectory.Should().Contain("anonymized");
         dump.ProtectedEndpoints.Should().Contain(_scenario.Production.Snapshot().EndpointKey);
 
-        var restore = _scenario.Tools.Restores.Should().ContainSingle().Subject;
-        restore.Target.Id.Should().Be(_scenario.Development.Id);
-        restore.ArchiveDirectory.Should().Be(dump.OutputDirectory);
+        _scenario.Tools.Restores.Select(restore => restore.Section).Should().Equal(RestoreSection.PreData, RestoreSection.PostData);
+        _scenario.Tools.Restores.Should().OnlyContain(restore => restore.Target.Id == _scenario.Development.Id && restore.ArchiveDirectory == dump.OutputDirectory);
+    }
+
+    [Fact]
+    public async Task ASkippedTable_IsCreatedButNotCopied_AndMustArriveEmpty()
+    {
+        _scenario.Profile.ReplaceSkippedTables([new SkippedTableSpec("public", "pedidos")], DatabaseCopyScenario.Now);
+        _scenario.Inspector.RowsOf = (connection, table) => connection == "ECO Desenvolvimento" && table == "public.pedidos" ? 0 : null;
+
+        var result = await RunAsync();
+
+        result.Error.Should().BeNull();
+        _scenario.Copier.Copied.Select(table => table.Table).Should().Equal("clientes");
+        _scenario.Tools.Restores.Select(restore => restore.Section).Should().Equal(RestoreSection.PreData, RestoreSection.PostData);
+        result.Steps[DatabaseCopyStep.Verify].Should().Be(CommandStepState.Succeeded);
+        result.Verification!.Checks.Should().Contain(check => check.Name == "Tabelas sem dados" && check.Outcome == CheckOutcome.Pass);
+        result.Verification.Checks.Single(check => check.Name == "Linhas por tabela").Detail.Should().Contain("1 tabela(s)");
+    }
+
+    [Fact]
+    public async Task ASkippedTable_WithRowsInTheDestination_FailsTheVerification()
+    {
+        _scenario.Profile.ReplaceSkippedTables([new SkippedTableSpec("public", "pedidos")], DatabaseCopyScenario.Now);
+
+        var result = await RunAsync();
+
+        result.Steps[DatabaseCopyStep.Verify].Should().Be(CommandStepState.Failed);
+        result.Verification!.Checks.Single(check => check.Name == "Tabelas sem dados").Detail.Should().Contain("public.pedidos: 10");
+    }
+
+    [Fact]
+    public async Task TheData_IsCopiedMaskedInTheSelect_WithoutGeneratedColumns()
+    {
+        await RunAsync();
+
+        var clientes = _scenario.Copier.Copied.Single(table => table.Table == "clientes");
+        clientes.Columns.Select(column => column.Name).Should().Equal("id", "email", "cpf");
+        clientes.Columns.Single(column => column.Name == "email").Method.Should().Be(MaskingMethod.FakeEmail);
+        clientes.Columns.Single(column => column.Name == "cpf").Should().Match<MaskedColumnPlan>(
+            column => column.Method == MaskingMethod.Partial && column.Argument == "0,2");
+        clientes.Columns.Single(column => column.Name == "id").IsMasked.Should().BeFalse();
+        _scenario.Copier.Copied.Single(table => table.Table == "pedidos").HasMaskedColumns.Should().BeFalse();
+        _scenario.Copier.Destination!.Id.Should().Be(_scenario.Development.Id);
+        _scenario.Copier.Closed.Should().BeTrue();
     }
 
     [Fact]
@@ -78,9 +134,9 @@ public class RunDatabaseCopyHandlerTests
         entry.AnonymizationProfile.Should().Be("ECO LGPD");
         entry.MaskedColumnsCount.Should().Be(2);
         entry.ToolVersions.Should().Contain("pg_dump 17.2");
-        entry.SourceDatabaseVersion.Should().Contain("16.4");
-        entry.AnonymousDumpSize.Should().Be(4096);
-        entry.DumpSize.Should().BeNull("o dump bruto de produção não existe");
+        entry.SourceDatabaseVersion.Should().Contain("17.4");
+        entry.AnonymousDumpSize.Should().Be(4096, "o tamanho do dump da estrutura");
+        entry.DumpSize.Should().BeNull("o dump com dados de produção não existe");
         entry.RowsProcessed.Should().Be(20);
         entry.User.Should().Be("adriano");
         entry.Summary.Should().Contain("Result: SUCCESS");
@@ -175,91 +231,104 @@ public class RunDatabaseCopyHandlerTests
     }
 
     [Fact]
-    public async Task AMaskedRoleThatIsNotMasked_StopsBeforeTheDump()
+    public async Task AMaskThatDoesNotFitTheColumn_StopsBeforeAnything()
     {
-        _scenario.Anonymizer.Status = FakeAnonymizerInspector.Healthy() with { CurrentRoleMasked = false };
+        var catalog = FakeMaskedCopier.DefaultCatalog();
+        var clientes = catalog.Tables[0] with
+        {
+            Columns = [.. catalog.Tables[0].Columns.Select(column => column.Name == "cpf" ? column with { DataType = "bigint" } : column)],
+        };
+        _scenario.Copier.Catalog = catalog with { Tables = [clientes, catalog.Tables[1]] };
 
         var result = await RunAsync();
 
         result.Status.Should().Be(DatabaseOperationStatus.Failed);
-        result.Steps[DatabaseCopyStep.ValidateAnonymizer].Should().Be(CommandStepState.Failed);
+        result.Steps[DatabaseCopyStep.ValidateMasking].Should().Be(CommandStepState.Failed);
         result.Steps[DatabaseCopyStep.Dump].Should().Be(CommandStepState.NotRun);
-        _scenario.Tools.Calls.Should().BeEmpty();
-    }
-
-    [Fact]
-    public async Task TransparentMaskingOff_StopsBeforeTheDump()
-    {
-        _scenario.Anonymizer.Status = FakeAnonymizerInspector.Healthy() with { TransparentMaskingOn = false };
-
-        var result = await RunAsync();
-
-        result.Error.Should().Contain("transparent_dynamic_masking");
-        _scenario.Tools.Calls.Should().BeEmpty();
-    }
-
-    [Fact]
-    public async Task RulesMissingOnTheServer_StopBeforeTheDump()
-    {
-        _scenario.Anonymizer.Status = FakeAnonymizerInspector.Healthy(
-            new ServerMaskingRule("public", "clientes", "email", "MASKED WITH FUNCTION anon.partial_email(email)"));
-
-        var result = await RunAsync();
-
-        result.Error.Should().Contain("public.clientes.cpf");
-        _scenario.Tools.Calls.Should().BeEmpty();
-    }
-
-    [Fact]
-    public async Task AnAnonymizerOneX_IsNotSupported()
-    {
-        _scenario.Anonymizer.Status = FakeAnonymizerInspector.Healthy() with { InstalledVersion = "1.3.2" };
-
-        var result = await RunAsync();
-
-        result.Error.Should().Contain("2.x");
-        _scenario.Tools.Calls.Should().BeEmpty();
-    }
-
-    [Fact]
-    public async Task TheCanary_AbortsWhenTheMaskedConnectionSeesTheRealData()
-    {
-        _scenario.Inspector.Unmasked.Add(_scenario.Masked.Id);
-
-        var result = await RunAsync();
-
-        result.Status.Should().Be(DatabaseOperationStatus.Failed);
-        result.Error.Should().Contain("Nenhum dump foi feito");
-        _scenario.Tools.Calls.Should().BeEmpty();
+        result.Error.Should().Contain("public.clientes.cpf é bigint");
+        _scenario.Tools.Calls.Should().Equal("catalog:ECO Produção:eco_core");
         _scenario.Workspaces.Created.Should().BeEmpty();
     }
 
     [Fact]
-    public async Task ADumpCarryingTheAnonRules_IsNotRestored_AndIsCleaned()
+    public async Task MaskingAKey_OrAMissingColumn_IsRefused()
     {
-        _scenario.Tools.Archive = _scenario.Tools.Archive with { SecurityLabelEntries = 3 };
+        _scenario.Profile.ReplaceRules(
+        [
+            new AnonymizationRuleSpec("public", "pedidos", "cliente_id", MaskingMethod.FixedNumber, "0", ColumnSensitivity.Low),
+            new AnonymizationRuleSpec("public", "clientes", "sumiu", MaskingMethod.Hash, null, ColumnSensitivity.Low),
+        ], DatabaseCopyScenario.Now);
+
+        var result = await RunAsync();
+
+        result.Error.Should().Contain("public.pedidos.cliente_id é chave").And.Contain("public.clientes.sumiu não existe");
+        _scenario.Tools.Calls.Should().NotContain(call => call.StartsWith("open", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task LargeObjects_AreAWarning_NotAStop()
+    {
+        _scenario.Copier.Catalog = FakeMaskedCopier.DefaultCatalog() with { LargeObjects = 3 };
+        var progress = new ProgressLog<DatabaseCopyProgress>();
+
+        var result = await RunAsync(progress: progress);
+
+        result.Succeeded.Should().BeTrue(result.Error);
+        progress.Items.Should().Contain(item => item.Step == DatabaseCopyStep.ValidateMasking && item.Detail!.Contains("3 objeto(s) grande(s)"));
+    }
+
+    [Fact]
+    public async Task AStructureDumpThatBroughtData_IsNotRestored_AndTheSessionCloses()
+    {
+        _scenario.Tools.SchemaArchive = _scenario.Tools.SchemaArchive with { TableDataEntries = 1 };
 
         var result = await RunAsync();
 
         result.Steps[DatabaseCopyStep.CheckArtifact].Should().Be(CommandStepState.Failed);
-        _scenario.Tools.Calls.Should().NotContain("restore").And.NotContain(call => call.StartsWith("dropdb", StringComparison.Ordinal));
+        result.Error.Should().Contain("trouxe dados");
+        _scenario.Tools.Calls.Should().NotContain(call => call.StartsWith("restore", StringComparison.Ordinal) || call.StartsWith("dropdb", StringComparison.Ordinal));
+        _scenario.Copier.Closed.Should().BeTrue();
         _scenario.Workspaces.Created.Single().CleanedKeepingAnonymized.Should().BeFalse();
     }
 
     [Fact]
-    public async Task ADumpWithTheAnonExtension_IsNotRestored()
+    public async Task AFailedTableCopy_FailsTheCopy_WithoutTheIndexes()
     {
-        _scenario.Tools.Archive = _scenario.Tools.Archive with { HasAnonExtension = true };
+        _scenario.Copier.CopyFailure = ("public.pedidos", new DomainException("public.pedidos: valor fora do tipo"));
 
-        (await RunAsync()).Steps[DatabaseCopyStep.CheckArtifact].Should().Be(CommandStepState.Failed);
+        var result = await RunAsync();
+
+        result.Status.Should().Be(DatabaseOperationStatus.Failed);
+        result.Steps[DatabaseCopyStep.Restore].Should().Be(CommandStepState.Failed);
+        result.Error.Should().Contain("public.pedidos");
+        _scenario.Tools.Calls.Should().NotContain("restore:post-data");
+        _scenario.Copier.Closed.Should().BeTrue();
     }
 
     [Fact]
-    public async Task AnEmptyDump_IsNotRestored()
+    public async Task Canceling_DuringTheCopy_StopsAndClosesTheSession()
     {
-        _scenario.Tools.Archive = _scenario.Tools.Archive with { TableDataEntries = 0 };
+        using var cancel = CancellationTokenSource.CreateLinkedTokenSource(Ct);
+        _scenario.Copier.DuringCopy = cancel.Cancel;
 
-        (await RunAsync()).Error.Should().Contain("sem dados");
+        var result = await RunAsync(cancellationToken: cancel.Token);
+
+        result.Status.Should().Be(DatabaseOperationStatus.Canceled);
+        result.Steps[DatabaseCopyStep.Restore].Should().Be(CommandStepState.Canceled);
+        _scenario.Copier.Copied.Should().ContainSingle();
+        _scenario.Copier.Closed.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task DataOnly_KeepsTheDestinationStructure()
+    {
+        var result = await RunAsync(_scenario.Request(DatabaseCopyOptions.Default with { IncludeSchema = false, RecreateDestination = false }));
+
+        result.Succeeded.Should().BeTrue(result.Error);
+        result.Steps[DatabaseCopyStep.CheckArtifact].Should().Be(CommandStepState.NotRun);
+        _scenario.Tools.Dumps.Should().BeEmpty();
+        _scenario.Tools.Calls.Should().NotContain(call => call.StartsWith("restore", StringComparison.Ordinal));
+        _scenario.Copier.Copied.Should().HaveCount(2);
     }
 
     // --- Falhas, cancelamento e tempo -----------------------------------------------
@@ -357,6 +426,7 @@ public class RunDatabaseCopyHandlerTests
     public async Task OldTools_AreRefused_BeforeTheDump()
     {
         _scenario.Locator.Tools = FakeToolLocator.WithVersion(16, 4);
+        _scenario.Inspector.Diagnostics["ECO Produção"] = FakeServerInspector.Connected("17.1");
 
         var result = await RunAsync();
 
@@ -374,13 +444,21 @@ public class RunDatabaseCopyHandlerTests
     }
 
     [Fact]
-    public async Task NotEnoughDisk_IsRefused_BeforeTheDump()
+    public async Task NotEnoughDisk_IsRefused_BeforeAPlainDump_ButTheMaskedCopyNeedsNoDisk()
     {
         _scenario.Workspaces.AvailableBytes = 1024;
 
-        var result = await RunAsync();
+        (await RunAsync()).Succeeded.Should().BeTrue("só a estrutura vai para o disco");
 
-        result.Error.Should().Contain("Espaço insuficiente");
+        var test = DatabaseConnection.Create("ECO Teste", "localhost", 5432, "eco_test", "postgres",
+            DatabaseEnvironment.Test, DatabaseSslMode.Prefer, null, ConnectionPermissions.FromFlags(ConnectionPermission.All), DatabaseCopyScenario.Now);
+        _scenario.Catalog.Connections.Seed(test);
+        _scenario.Tools.Calls.Clear();
+
+        var plain = await RunAsync(new DatabaseCopyRequest(
+            _scenario.Development.Id, test.Id, DatabaseOperationType.Copy, null, DatabaseCopyOptions.Default with { RequireAnonymization = false }), confirmed: false);
+
+        plain.Error.Should().Contain("Espaço insuficiente");
         _scenario.Tools.Calls.Should().BeEmpty();
     }
 
@@ -409,18 +487,53 @@ public class RunDatabaseCopyHandlerTests
         var result = await RunAsync(_scenario.Request(DatabaseCopyOptions.Default with { RecreateDestination = false }));
 
         result.Steps[DatabaseCopyStep.PrepareDestination].Should().Be(CommandStepState.NotRun);
-        _scenario.Tools.Calls.Should().Equal("anonymous-dump", "list", "restore");
+        _scenario.Tools.Calls.Should().NotContain(call => call.StartsWith("dropdb", StringComparison.Ordinal) || call.StartsWith("createdb", StringComparison.Ordinal));
         _scenario.Inspector.Calls.Should().Contain("test:ECO Desenvolvimento:eco_dev");
     }
 
     [Fact]
     public async Task ForceDrop_DependsOnTheDestinationVersion()
     {
+        _scenario.Locator.Tools = FakeToolLocator.WithVersion(14, 22);
+        _scenario.Inspector.Diagnostics["ECO Produção"] = FakeServerInspector.Connected("14.10");
         _scenario.Inspector.Diagnostics["ECO Desenvolvimento"] = FakeServerInspector.Connected("12.9");
 
         await RunAsync();
 
+        _scenario.Tools.Calls.Should().Contain(call => call.StartsWith("dropdb", StringComparison.Ordinal));
         _scenario.Tools.DropForced.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task TheCopy_UsesTheOldestToolSetThatReadsTheSource_ForTheDumpAndTheRestore()
+    {
+        // O pgAdmin 18 instalado ao lado do PostgreSQL 14: o 18 não restaura num servidor 14.
+        var eighteen = FakeToolLocator.WithVersion(18, 4);
+        var fourteen = FakeToolLocator.WithVersion(14, 22);
+        _scenario.Locator.Tools = eighteen with { Sets = [eighteen.Tools, fourteen.Tools] };
+        _scenario.Inspector.Diagnostics["ECO Produção"] = FakeServerInspector.Connected("14.10");
+        _scenario.Inspector.Diagnostics["ECO Desenvolvimento"] = FakeServerInspector.Connected("14.10");
+
+        var result = await RunAsync();
+
+        result.Error.Should().BeNull();
+        _scenario.Catalog.Audit.Entries.Single().ToolVersions.Should().Contain("pg_dump 14.22").And.NotContain("18.4");
+        _scenario.Tools.Dumps.Should().NotBeEmpty().And.OnlyContain(dump => dump.SourceVersion == new PostgresVersion(14, 10));
+        _scenario.Tools.Restores.Should().NotBeEmpty().And.OnlyContain(restore => restore.SourceVersion == new PostgresVersion(14, 10));
+    }
+
+    [Fact]
+    public async Task OnlyANewerRestore_ForAnOlderDestination_IsRefusedBeforeTheDump()
+    {
+        _scenario.Locator.Tools = FakeToolLocator.WithVersion(18, 4);
+        _scenario.Inspector.Diagnostics["ECO Produção"] = FakeServerInspector.Connected("14.10");
+        _scenario.Inspector.Diagnostics["ECO Desenvolvimento"] = FakeServerInspector.Connected("14.10");
+
+        var result = await RunAsync();
+
+        result.Steps[DatabaseCopyStep.ValidatePermissions].Should().Be(CommandStepState.Failed);
+        result.Error.Should().Contain("transaction_timeout");
+        _scenario.Tools.Calls.Should().BeEmpty();
     }
 
     [Fact]
@@ -471,10 +584,12 @@ public class RunDatabaseCopyHandlerTests
         var result = await RunAsync(request, confirmed: false);
 
         result.Succeeded.Should().BeTrue(result.Error);
-        result.Steps[DatabaseCopyStep.ValidateAnonymizer].Should().Be(CommandStepState.NotRun);
+        result.Steps[DatabaseCopyStep.ValidateMasking].Should().Be(CommandStepState.NotRun);
         var dump = _scenario.Tools.Dumps.Single();
-        dump.Anonymous.Should().BeFalse();
+        dump.SchemaOnly.Should().BeFalse();
+        dump.Snapshot.Should().BeNull();
         dump.OutputDirectory.Should().Contain("dump");
+        _scenario.Copier.Copied.Should().BeEmpty();
         _scenario.Catalog.Audit.Entries.Single().DumpSize.Should().Be(4096);
     }
 
@@ -486,6 +601,8 @@ public class RunDatabaseCopyHandlerTests
         result.Succeeded.Should().BeTrue(result.Error);
         _scenario.Inspector.Calls.Should().NotContain(call => call.StartsWith("rows:", StringComparison.Ordinal));
         _scenario.Tools.Dumps.Single().Jobs.Should().Be(1);
+        _scenario.Copier.Copied.Should().BeEmpty();
+        _scenario.Tools.Calls.Should().NotContain("sequences");
     }
 
     [Fact]

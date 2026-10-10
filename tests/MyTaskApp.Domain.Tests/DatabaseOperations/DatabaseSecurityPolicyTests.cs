@@ -154,19 +154,45 @@ public class DatabaseSecurityPolicyTests
     }
 
     [Fact]
-    public void APlainDumpOfProduction_IsRefused_ButTheAnonymousOneIsNot()
+    public void APlainDumpOfProduction_IsRefused_ButItsStructureIsNot()
     {
         var source = Snapshot(DatabaseEnvironment.Production);
 
         _policy.Evaluate(new DatabaseOperationRequest(DatabaseOperationType.Dump, source))
             .Has(SecurityViolationCode.PlainDumpFromProtectedSource).Should().BeTrue();
 
+        // Só a estrutura: nenhuma linha sai (ADR-058).
+        _policy.Evaluate(new DatabaseOperationRequest(DatabaseOperationType.SchemaDump, source)).IsAllowed.Should().BeTrue();
+        _policy.Evaluate(new DatabaseOperationRequest(DatabaseOperationType.SchemaDump, source with { IsEnabled = false }))
+            .Has(SecurityViolationCode.SourceDisabled).Should().BeTrue();
+    }
+
+    [Fact]
+    public void TheOldAnonymousDump_IsNoLongerAnOperation()
+    {
+        _policy.Evaluate(new DatabaseOperationRequest(DatabaseOperationType.AnonymousDump, Snapshot(DatabaseEnvironment.Production)))
+            .Has(SecurityViolationCode.UnsupportedOperation).Should().BeTrue();
+    }
+
+    [Fact]
+    public void TheMaskedDataCopy_ReadsTheSource_AndWritesOnlyANonProductionDestination()
+    {
+        var source = Snapshot(DatabaseEnvironment.Production, database: "p");
+        var destination = Snapshot(DatabaseEnvironment.Development, database: "d");
+
         _policy.Evaluate(new DatabaseOperationRequest(
-                DatabaseOperationType.AnonymousDump,
-                source,
-                DumpConnection: MaskedOf(source),
-                Anonymization: VerifiedAnonymization()))
+                DatabaseOperationType.MaskedDataCopy, source, destination, VerifiedAnonymization(), ProtectedEndpoints: [source.EndpointKey]))
             .IsAllowed.Should().BeTrue();
+
+        _policy.Evaluate(new DatabaseOperationRequest(DatabaseOperationType.MaskedDataCopy, source, Snapshot(DatabaseEnvironment.Production, database: "x"),
+                VerifiedAnonymization()))
+            .Has(SecurityViolationCode.DestinationIsProduction).Should().BeTrue();
+
+        _policy.Evaluate(new DatabaseOperationRequest(DatabaseOperationType.MaskedDataCopy, source, destination, AnonymizationFacts.None))
+            .Has(SecurityViolationCode.AnonymizationProfileMissing).Should().BeTrue();
+
+        _policy.Evaluate(new DatabaseOperationRequest(DatabaseOperationType.MaskedDataCopy, Destination: destination))
+            .Has(SecurityViolationCode.MissingSource).Should().BeTrue();
     }
 
     [Fact]
@@ -224,54 +250,23 @@ public class DatabaseSecurityPolicyTests
     }
 
     [Fact]
-    public void AMaskedConnectionOnAnotherDatabase_IsRefused()
+    public void MasksThatDoNotFitTheSource_AreRefused_WithTheReasons()
     {
-        var source = Snapshot(DatabaseEnvironment.Production, database: "eco_core");
-        var request = CopyAndAnonymize(source, Snapshot(DatabaseEnvironment.Development, database: "d")) with
-        {
-            DumpConnection = Snapshot(DatabaseEnvironment.Production, database: "outro_banco", username: "dump_anon"),
-        };
-
-        _policy.Evaluate(request).Has(SecurityViolationCode.DumpConnectionNotSameDatabase).Should().BeTrue();
-    }
-
-    [Fact]
-    public void WithoutAMaskedConnection_TheCopyIsRefused()
-    {
-        var request = CopyAndAnonymize(
-            Snapshot(DatabaseEnvironment.Production, database: "p"),
-            Snapshot(DatabaseEnvironment.Development, database: "d")) with { DumpConnection = null };
-
-        _policy.Evaluate(request).Has(SecurityViolationCode.DumpConnectionMissing).Should().BeTrue();
-    }
-
-    [Fact]
-    public void ADisabledMaskedConnection_IsRefused()
-    {
-        var source = Snapshot(DatabaseEnvironment.Production, database: "p");
-        var masked = MaskedOf(source) with { IsEnabled = false };
-        var request = CopyAndAnonymize(source, Snapshot(DatabaseEnvironment.Development, database: "d")) with { DumpConnection = masked };
-
-        _policy.Evaluate(request).Has(SecurityViolationCode.DumpConnectionDisabled).Should().BeTrue();
-    }
-
-    [Theory]
-    [InlineData(false, true, true, SecurityViolationCode.AnonymizerUnavailable)]
-    [InlineData(true, false, true, SecurityViolationCode.MaskedRoleNotVerified)]
-    [InlineData(true, true, false, SecurityViolationCode.TransparentMaskingOff)]
-    public void WhatTheServerSays_CanStillRefuse(bool installed, bool masked, bool transparent, SecurityViolationCode expected)
-    {
-        var facts = new AnonymizationFacts(true, true, 3).WithServer(installed, masked, transparent, uncoveredHigh: 0);
+        var facts = new AnonymizationFacts(true, true, 3).WithSource(
+            ["public.clientes.id é chave (PK ou FK).", "public.x.y não existe no banco de origem."], uncoveredHigh: 0);
         var request = CopyAndAnonymize(
             Snapshot(DatabaseEnvironment.Production, database: "p"),
             Snapshot(DatabaseEnvironment.Development, database: "d"),
             facts);
 
-        _policy.Evaluate(request).Has(expected).Should().BeTrue();
+        var decision = _policy.Evaluate(request);
+
+        decision.Has(SecurityViolationCode.MaskingRulesInvalid).Should().BeTrue();
+        decision.Describe().Should().Contain("é chave").And.Contain("não existe");
     }
 
     [Fact]
-    public void BeforeAskingTheServer_OnlyTheRegistrationIsJudged()
+    public void BeforeReadingTheSource_OnlyTheRegistrationIsJudged()
     {
         var request = CopyAndAnonymize(
             Snapshot(DatabaseEnvironment.Production, database: "p"),

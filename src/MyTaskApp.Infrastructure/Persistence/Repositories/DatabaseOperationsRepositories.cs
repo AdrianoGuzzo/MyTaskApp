@@ -32,11 +32,15 @@ internal sealed class AnonymizationProfileRepository(MyTaskAppDbContext context)
     public Task<AnonymizationProfile?> FindByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         context.AnonymizationProfiles
             .Include(profile => profile.Rules)
+            .Include(profile => profile.SkippedTables)
+            .AsSplitQuery()
             .SingleOrDefaultAsync(profile => profile.Id == id, cancellationToken);
 
     public async Task<IReadOnlyList<AnonymizationProfile>> ListAsync(CancellationToken cancellationToken = default) =>
         await context.AnonymizationProfiles
             .Include(profile => profile.Rules)
+            .Include(profile => profile.SkippedTables)
+            .AsSplitQuery()
             .OrderBy(profile => profile.Name)
             .ToListAsync(cancellationToken);
 

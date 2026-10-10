@@ -18,8 +18,7 @@ public class AnonymizationRulesScreenTests
 
     private DatabaseProfilesViewModel ViewModel()
     {
-        var viewModel = new DatabaseProfilesViewModel(_runner, new FakeConfirmationDialog(), new FakeClipboardWriter(),
-            NullLogger<DatabaseProfilesViewModel>.Instance);
+        var viewModel = new DatabaseProfilesViewModel(_runner, new FakeConfirmationDialog(), NullLogger<DatabaseProfilesViewModel>.Instance);
         viewModel.SetCatalog(
             new[] { DatabaseScreen.Production, DatabaseScreen.Masked }.Select(row => new DatabaseConnectionItemViewModel(row)).ToList(),
             [DatabaseScreen.Profile],
@@ -33,7 +32,7 @@ public class AnonymizationRulesScreenTests
     }
 
     private static AnonymizationRuleItemViewModel Rule(string table, string column, ColumnSensitivity sensitivity, bool confirmed = false, string? reason = null) =>
-        new(new AnonymizationRuleRow("public", table, column, MaskingKind.Function, $"anon.hash({column})", sensitivity), confirmed, reason);
+        new(new AnonymizationRuleRow("public", table, column, MaskingMethod.Hash, null, sensitivity), confirmed, reason);
 
     [Fact]
     public void SelectAll_MarksEverything_ThenUnmarks()
@@ -147,24 +146,26 @@ public class AnonymizationRulesScreenTests
     }
 
     [Fact]
-    public void TheKind_IsChosenByName_AndTheExampleFollowsIt()
+    public void TheMask_IsChosenByName_AndExplainsItself()
     {
         var rule = Rule("clientes", "email", ColumnSensitivity.High);
         var notified = new List<string?>();
         rule.PropertyChanged += (_, change) => notified.Add(change.PropertyName);
 
-        rule.SelectedKind.Label.Should().Be("Função");
-        rule.ExpressionPlaceholder.Should().Contain("anon.");
+        rule.SelectedMethod.Label.Should().Be("Hash");
+        rule.MethodDescription.Should().Contain("únicos");
+        AnonymizationRuleItemViewModel.Methods.Should().HaveCount(Enum.GetValues<MaskingMethod>().Length);
+        AnonymizationRuleItemViewModel.Methods[0].ToString().Should().Be("Hash");
 
-        rule.SelectedKind = AnonymizationRuleItemViewModel.Kinds.Single(choice => choice.Value == MaskingKind.Value);
+        rule.SelectedMethod = AnonymizationRuleItemViewModel.Methods.Single(choice => choice.Method == MaskingMethod.FixedText);
 
-        rule.Kind.Should().Be(MaskingKind.Value);
-        rule.IsValue.Should().BeTrue();
-        rule.ExpressionPlaceholder.Should().Contain("NULL");
-        notified.Should().Contain([nameof(rule.IsValue), nameof(rule.SelectedKind), nameof(rule.ExpressionPlaceholder)]);
+        rule.Method.Should().Be(MaskingMethod.FixedText);
+        rule.NeedsArgument.Should().BeTrue();
+        rule.Argument.Should().Be("(removido)");
+        notified.Should().Contain([nameof(rule.SelectedMethod), nameof(rule.MethodDescription), nameof(rule.NeedsArgument), nameof(rule.Argument)]);
 
-        rule.SelectedKind = null!;
-        rule.Kind.Should().Be(MaskingKind.Value, "o ComboBox limpo não troca o tipo");
+        rule.SelectedMethod = null!;
+        rule.Method.Should().Be(MaskingMethod.FixedText, "o ComboBox limpo não troca a máscara");
     }
 
     [Theory]

@@ -271,10 +271,10 @@ branch. Detalhes em [ADR-045](docs/ARCHITECTURE.md).
 
 Em *☰ → Bancos de Dados…*, o MyTaskApp cadastra conexões PostgreSQL por
 ambiente e copia Produção para Desenvolvimento, Teste ou Homologação. Os dados
-chegam anonimizados pelo PostgreSQL Anonymizer. Produção nunca é alterada a
-partir do app. O guia completo está em
-[`docs/database-operations.md`](docs/database-operations.md), e as decisões em
-[ADR-056 e ADR-057](docs/ARCHITECTURE.md).
+chegam anonimizados, mascarados na própria consulta à origem, sem nada
+instalado nela. Produção nunca é alterada a partir do app. O guia completo
+está em [`docs/database-operations.md`](docs/database-operations.md), e as
+decisões em [ADR-056, ADR-057 e ADR-058](docs/ARCHITECTURE.md).
 
 - **Conexões por ambiente**, com o badge PRODUCTION / STAGING / TEST /
   DEVELOPMENT. A senha vai para o cofre do sistema (DPAPI no Windows, chaveiro
@@ -287,16 +287,20 @@ partir do app. O guia completo está em
   `dropdb`, SQL livre nem mascaramento estático. As permissões são travadas
   pelo ambiente, e a política vale nos casos de uso e de novo antes de cada
   processo, não só na tela.
-- **Dump anônimo:** o `pg_dump` roda com uma role `MASKED` do Anonymizer 2.x, e
-  o dado bruto de produção nunca chega ao disco. Antes do dump, um canário
-  confere que a máscara está mesmo ativa.
+- **Mascarado na consulta:** cada tabela sai da origem por um `COPY (SELECT …)`
+  que já troca as colunas sensíveis, em sessão somente leitura, direto para o
+  destino. O dado real não sai do servidor de produção, e nada é instalado lá.
+  Só a estrutura (`pg_dump --schema-only`) vai para o disco.
 - **Diagnóstico:** `psql`, `pg_dump`, `pg_restore`, `pg_isready`, `createdb` e
-  `dropdb` com versão e compatibilidade, mais o servidor e o Anonymizer, com
-  instruções quando falta algo.
+  `dropdb` com versão e compatibilidade, mais o servidor, com instruções quando
+  falta algo.
 - **Perfis:** a cópia "ECO Production → ECO Development" é cadastrada uma vez.
   O perfil de anonimização sugere colunas sensíveis (alta, média ou baixa
-  probabilidade), só grava o que você confirma e gera o script `SECURITY LABEL`
-  para o DBA.
+  probabilidade), com uma máscara de um catálogo fixo (hash, e-mail falso,
+  parcial, nome falso, texto/número fixo, vazio, data deslocada, ruído), só
+  grava o que você confirma e pré-visualiza os valores já mascarados. Tabelas
+  marcadas como **sem dados** (logs, auditoria) vão vazias: a estrutura sim,
+  nenhuma linha.
 - **Copiar Banco:** [Validar] antes de [Executar], confirmação explícita de
   produção, barra, etapas e logs ao vivo. No fim, o relatório de verificação
   (estrutura, linhas e dados sensíveis diferentes da origem). Os temporários
@@ -447,7 +451,7 @@ argumento que o instalador grava na chave `Run` do Windows.
 |---|---|---|
 | [.NET SDK](https://dotnet.microsoft.com/download) | **10.0.401** (fixado em `global.json`) | tudo |
 | Git | qualquer recente | aba Desenvolvimento e testes de Git |
-| Ferramentas cliente do PostgreSQL | 17 ou mais novas | só para usar *Bancos de Dados…*; os testes não precisam ([instalação](docs/database-operations.md#instalação)) |
+| Ferramentas cliente do PostgreSQL | a versão do servidor de origem, ou mais nova | só para usar *Bancos de Dados…*; os testes não precisam ([instalação](docs/database-operations.md#instalação)) |
 | Inno Setup 6 | `winget install -e --id JRSoftware.InnoSetup` | só para gerar o instalador Windows |
 
 As ferramentas locais (`dotnet-ef` e `reportgenerator`) ficam em
@@ -684,8 +688,8 @@ fica em [`CHANGELOG.md`](CHANGELOG.md).
 
 | Documento | Conteúdo |
 |---|---|
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | decisões de arquitetura (ADR-001 a ADR-057), com o motivo de cada uma |
-| [`docs/database-operations.md`](docs/database-operations.md) | conexões PostgreSQL, ambientes, ferramentas, PostgreSQL Anonymizer, cópia anonimizada de produção e solução de problemas |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | decisões de arquitetura (ADR-001 a ADR-058), com o motivo de cada uma |
+| [`docs/database-operations.md`](docs/database-operations.md) | conexões PostgreSQL, ambientes, ferramentas, máscaras, cópia anonimizada de produção e solução de problemas |
 | [`docs/jira-oauth-app.md`](docs/jira-oauth-app.md) | registrar o app OAuth do Jira e pôr as credenciais no build |
 | [`docs/release-process.md`](docs/release-process.md) | Conventional Commits, SemVer, pipeline de release, hotfix, verificação de versão |
 | [`installer/README.md`](installer/README.md) | instaladores Windows e Linux, parâmetros, atualização, teste de fumaça |

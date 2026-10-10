@@ -19,8 +19,6 @@ public class ServerOnlyCopyTests
 
     private readonly DatabaseConnection _server;
 
-    private readonly DatabaseConnection _maskedServer;
-
     private readonly DatabaseConnection _local;
 
     private readonly AnonymizationProfile _profile;
@@ -32,17 +30,15 @@ public class ServerOnlyCopyTests
 
         _server = DatabaseConnection.Create("ECO Servidor", "10.0.0.5", 5432, null, "backup_user",
             DatabaseEnvironment.Production, DatabaseSslMode.Prefer, null, everything, now);
-        _maskedServer = DatabaseConnection.Create("ECO Servidor (anon)", "10.0.0.5", 5432, null, "dump_anon",
-            DatabaseEnvironment.Production, DatabaseSslMode.Prefer, null, everything, now);
         _local = DatabaseConnection.Create("Local", "localhost", 5432, null, "postgres",
             DatabaseEnvironment.Development, DatabaseSslMode.Prefer, null, everything with { RequireAnonymization = false }, now);
-        Catalog.Connections.Seed(_server, _maskedServer, _local);
+        Catalog.Connections.Seed(_server, _local);
 
-        _profile = AnonymizationProfile.Create("ECO 1010 LGPD", null, _maskedServer.Id, "anon", now);
+        _profile = AnonymizationProfile.Create("ECO 1010 LGPD", null, _server.Id, now);
         _profile.ReplaceRules(
         [
-            new AnonymizationRuleSpec("public", "clientes", "email", MaskingKind.Function, "anon.partial_email(email)", ColumnSensitivity.High),
-            new AnonymizationRuleSpec("public", "clientes", "cpf", MaskingKind.Function, "anon.partial(cpf,0,$$*********$$,2)", ColumnSensitivity.High),
+            new AnonymizationRuleSpec("public", "clientes", "email", MaskingMethod.FakeEmail, null, ColumnSensitivity.High),
+            new AnonymizationRuleSpec("public", "clientes", "cpf", MaskingMethod.Partial, "0,2", ColumnSensitivity.High),
         ], now);
         Catalog.AnonymizationProfiles.Items.Add(_profile);
         _scenario.Inspector.DestinationId = _local.Id;
@@ -68,13 +64,12 @@ public class ServerOnlyCopyTests
     // --- O plano ------------------------------------------------------------------
 
     [Fact]
-    public async Task ThePlan_ResolvesTheChosenDatabase_OnSourceAndMaskedConnection()
+    public async Task ThePlan_ResolvesTheChosenDatabase()
     {
         var plan = await _scenario.Planner().PlanAsync(Request(), Ct);
 
         plan.Source.Database.Should().Be("eco_core_1010");
-        plan.MaskedConnection!.Database.Should().Be("eco_core_1010");
-        plan.MaskedConnection.EndpointKey.Should().Be(plan.Source.EndpointKey);
+        plan.AnonymizationProfile!.Id.Should().Be(_profile.Id);
         plan.ProtectedEndpoints.Should().Contain("10.0.0.5:5432/*");
     }
 
@@ -171,11 +166,23 @@ public class ServerOnlyCopyTests
 
         result.Succeeded.Should().BeTrue(result.Error);
         result.DestinationDatabase.Should().Be("lock_eco_core_1010_20261008_184102");
-        _scenario.Tools.Calls.Should().Equal("anonymous-dump", "list", "createdb:lock_eco_core_1010_20261008_184102", "restore");
+        _scenario.Tools.Calls.Should().Equal(
+            "catalog:ECO Servidor:eco_core_1010",
+            "open:ECO Servidor:eco_core_1010",
+            "schema-dump",
+            "list",
+            "createdb:lock_eco_core_1010_20261008_184102",
+            "restore:pre-data",
+            "connect:lock_eco_core_1010_20261008_184102",
+            "copy:public.clientes",
+            "copy:public.pedidos",
+            "restore:post-data",
+            "sequences",
+            "close");
 
         _scenario.Tools.Dumps.Single().Connection.Should().Match<DatabaseConnectionSnapshot>(
-            connection => connection.Id == _maskedServer.Id && connection.Database == "eco_core_1010");
-        _scenario.Tools.Restores.Single().Target.Database.Should().Be("lock_eco_core_1010_20261008_184102");
+            connection => connection.Id == _server.Id && connection.Database == "eco_core_1010");
+        _scenario.Tools.Restores.Should().OnlyContain(restore => restore.Target.Database == "lock_eco_core_1010_20261008_184102");
 
         var entry = Catalog.Audit.Entries.Single();
         entry.SourceDatabase.Should().Be("eco_core_1010");
@@ -277,11 +284,20 @@ public class ServerOnlyCopyTests
     }
 
     [Fact]
-    public async Task AnAlias_WhoseAnonymizationReadsAnotherServer_IsRefused()
+    public async Task AnAlias_WithAnUnknownAnonymization_IsRefused()
     {
         await FluentActions.Awaiting(() => SaveHandler().HandleAsync(
-                new SaveSavedDatabase(null, "eco", _server.Id, "eco_core_1010", _scenario.Profile.Id), Ct))
-            .Should().ThrowAsync<DomainException>().WithMessage("*mesmo servidor*");
+                new SaveSavedDatabase(null, "eco", _server.Id, "eco_core_1010", Guid.CreateVersion7()), Ct))
+            .Should().ThrowAsync<DomainException>().WithMessage("*anonimização*");
+    }
+
+    [Fact]
+    public async Task AnAlias_MayUseAProfileReadFromAnotherConnection()
+    {
+        // As regras são julgadas contra as colunas da origem a cada cópia (ADR-058), não aqui.
+        await SaveHandler().HandleAsync(new SaveSavedDatabase(null, "eco", _server.Id, "eco_core_1010", _scenario.Profile.Id), Ct);
+
+        Catalog.SavedDatabases.Items.Should().ContainSingle().Which.AnonymizationProfileId.Should().Be(_scenario.Profile.Id);
     }
 
     [Fact]
@@ -295,19 +311,6 @@ public class ServerOnlyCopyTests
         Catalog.SavedDatabases.Items.Should().ContainSingle();
     }
 
-    [Fact]
-    public async Task AnAnonymizationForAnotherDatabase_IsRefused()
-    {
-        var fixedMasked = DatabaseConnection.Create("ECO 2020 (anon)", "10.0.0.5", 5432, "eco_core_2020", "dump_anon",
-            DatabaseEnvironment.Production, DatabaseSslMode.Prefer, null, ConnectionPermissions.FromFlags(ConnectionPermission.All), DatabaseCopyScenario.Now);
-        Catalog.Connections.Seed(fixedMasked);
-        var profile = AnonymizationProfile.Create("ECO 2020 LGPD", null, fixedMasked.Id, "anon", DatabaseCopyScenario.Now);
-        Catalog.AnonymizationProfiles.Items.Add(profile);
-
-        await FluentActions.Awaiting(() => SaveHandler().HandleAsync(
-                new SaveSavedDatabase(null, "eco", _server.Id, "eco_core_1010", profile.Id), Ct))
-            .Should().ThrowAsync<DomainException>().WithMessage("*eco_core_2020*");
-    }
 
     [Fact]
     public async Task AConnectionThatCannotBeASource_CannotHaveAnAlias()
@@ -343,8 +346,9 @@ public class ServerOnlyCopyTests
         var deleteProfile = new DeleteAnonymizationProfileHandler(
             Catalog.AnonymizationProfiles, Catalog.CopyProfiles, Catalog.SavedDatabases, Catalog);
 
+        // _server também é a conexão de leitura do perfil: a primeira recusa é pelo perfil.
         await FluentActions.Awaiting(() => deleteConnection.HandleAsync(new DeleteDatabaseConnection(_server.Id), Ct))
-            .Should().ThrowAsync<DomainException>().WithMessage("*apelido*");
+            .Should().ThrowAsync<DomainException>().WithMessage("*usada por um*");
         await FluentActions.Awaiting(() => deleteProfile.HandleAsync(new DeleteAnonymizationProfile(_profile.Id), Ct))
             .Should().ThrowAsync<DomainException>().WithMessage("*apelido*");
     }
@@ -356,33 +360,25 @@ public class ServerOnlyCopyTests
     {
         var handler = new SuggestSensitiveColumnsHandler(Catalog.Connections, _scenario.Inspector, _scenario.Policy);
 
-        await FluentActions.Awaiting(() => handler.HandleAsync(new SuggestSensitiveColumns(_maskedServer.Id), Ct))
+        await FluentActions.Awaiting(() => handler.HandleAsync(new SuggestSensitiveColumns(_server.Id), Ct))
             .Should().ThrowAsync<DomainException>().WithMessage("*informe o banco*");
 
-        await handler.HandleAsync(new SuggestSensitiveColumns(_maskedServer.Id, "eco_core_1010"), Ct);
-        _scenario.Inspector.Calls.Should().Contain("columns:ECO Servidor (anon):eco_core_1010");
+        await handler.HandleAsync(new SuggestSensitiveColumns(_server.Id, "eco_core_1010"), Ct);
+        _scenario.Inspector.Calls.Should().Contain("columns:ECO Servidor:eco_core_1010");
     }
 
     [Fact]
-    public async Task TheMaskingScript_UsesTheChosenDatabase()
+    public async Task ThePreview_OnAServer_ReadsTheChosenDatabase()
     {
-        var handler = new GenerateMaskingScriptHandler(Catalog.AnonymizationProfiles, Catalog.Connections, _scenario.Clock);
+        var handler = new PreviewMaskingHandler(Catalog.Connections, _scenario.Copier, _scenario.Policy, _scenario.Clock);
+        var rules = _profile.Rules.Select(rule => new AnonymizationRuleRow(rule.Schema, rule.Table, rule.Column, rule.Method, rule.Argument, rule.Sensitivity)).ToList();
 
-        var script = await handler.HandleAsync(new GenerateMaskingScript(_profile.Id, "eco_core_1010"), Ct);
+        await FluentActions.Awaiting(() => handler.HandleAsync(new PreviewMasking(_server.Id, null, rules), Ct))
+            .Should().ThrowAsync<DomainException>().WithMessage("*informe o banco*");
 
-        script.Should().Contain("\"eco_core_1010\"");
-    }
-
-    [Fact]
-    public async Task ValidatingAProfile_OnAServer_ReadsTheChosenDatabase()
-    {
-        var handler = new ValidateAnonymizationProfileHandler(Catalog.AnonymizationProfiles, Catalog.Connections, _scenario.Anonymization());
-
-        await FluentActions.Awaiting(() => handler.HandleAsync(new ValidateAnonymizationProfile(_profile.Id), Ct))
-            .Should().ThrowAsync<DomainException>();
-
-        var validation = await handler.HandleAsync(new ValidateAnonymizationProfile(_profile.Id, "eco_core_1010"), Ct);
-        validation.MaskedColumns.Should().Be(2);
+        var preview = await handler.HandleAsync(new PreviewMasking(_server.Id, "eco_core_1010", rules), Ct);
+        preview.Columns.Select(column => column.ColumnKey).Should().Equal("public.clientes.email", "public.clientes.cpf");
+        _scenario.Tools.Calls.Should().Contain("catalog:ECO Servidor:eco_core_1010");
     }
 
     [Fact]

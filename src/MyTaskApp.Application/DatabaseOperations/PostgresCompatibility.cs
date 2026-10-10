@@ -17,20 +17,21 @@ public sealed record CheckResult(string Category, string Name, CheckOutcome Outc
 /// </summary>
 public static class PostgresCompatibility
 {
-    /// <summary><c>--exclude-extension</c>, que tira o anon do dump anônimo, chegou no pg_dump 17.</summary>
-    public const int MinimumAnonymousDumpMajor = 17;
-
-    /// <summary>O dump anônimo por role mascarada é do Anonymizer 2.</summary>
-    public const int MinimumAnonymizerMajor = 2;
 
     /// <summary><c>dropdb --force</c> existe desde o PostgreSQL 13.</summary>
     public const int MinimumForceDropMajor = 13;
 
+    /// <summary>
+    /// O <c>pg_restore</c> 17 passou a mandar <c>SET transaction_timeout = 0</c>,
+    /// e o parâmetro só existe a partir do servidor 17: num mais antigo, o
+    /// restore para na primeira linha.
+    /// </summary>
+    public const int TransactionTimeoutMajor = 17;
+
     public static IReadOnlyList<CheckResult> Evaluate(
         PostgresClientTools tools,
         PostgresVersion? sourceServer,
-        PostgresVersion? destinationServer,
-        bool anonymous)
+        PostgresVersion? destinationServer)
     {
         const string category = "Compatibilidade";
         var results = new List<CheckResult>();
@@ -56,11 +57,6 @@ public static class PostgresCompatibility
                     $"pg_dump {dumpVersion} é mais antigo que o servidor de origem (PostgreSQL {source}). Instale as ferramentas {source.Major} ou mais novas."));
         }
 
-        if (anonymous && dump.Version is { } anonymousDump && anonymousDump.Major < MinimumAnonymousDumpMajor)
-        {
-            results.Add(new(category, "Dump anônimo", CheckOutcome.Fail,
-                $"O dump anônimo precisa do pg_dump {MinimumAnonymousDumpMajor} ou mais novo (--exclude-extension); achado {anonymousDump}."));
-        }
 
         if (dump.Version is { } producer && restore.Version is { } consumer)
         {
@@ -68,6 +64,16 @@ public static class PostgresCompatibility
                 ? new(category, "pg_restore × pg_dump", CheckOutcome.Pass)
                 : new(category, "pg_restore × pg_dump", CheckOutcome.Fail,
                     $"pg_restore {consumer} não lê dumps do pg_dump {producer}."));
+        }
+
+        if (restore.Version is { } restorer && destinationServer is { } target
+            && restorer.Major >= TransactionTimeoutMajor && target.Major < TransactionTimeoutMajor)
+        {
+            results.Add(new(category, "pg_restore × destino", CheckOutcome.Fail,
+                $"pg_restore {restorer} não restaura no PostgreSQL {target}: ele manda SET transaction_timeout, que só existe a partir do 17. " +
+                (sourceServer is { Major: < TransactionTimeoutMajor } origin
+                    ? $"Instale as ferramentas cliente {origin.Major} (as da origem): o app usa o menor conjunto instalado que lê a origem."
+                    : $"Use um destino PostgreSQL {TransactionTimeoutMajor} ou mais novo.")));
         }
 
         if (sourceServer is { } from && destinationServer is { } to && to.Major < from.Major)

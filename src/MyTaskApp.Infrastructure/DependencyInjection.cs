@@ -238,7 +238,7 @@ public static class DependencyInjection
         services.AddSingleton<IPostgresRestoreService, PostgresRestoreService>();
         services.AddSingleton<IPostgresSessionFactory, NpgsqlPostgresSessionFactory>();
         services.AddSingleton<IPostgresServerInspector, PostgresServerInspector>();
-        services.AddSingleton<IPostgresAnonymizerInspector, PostgresAnonymizerInspector>();
+        services.AddSingleton<IPostgresMaskedCopier, NpgsqlMaskedCopier>();
 
         services.AddSingleton<IDatabaseOperationWorkspaceFactory>(provider => new DatabaseOperationWorkspaceFactory(
             string.IsNullOrWhiteSpace(options.WorkspaceDirectory) ? UserDataLocation.Current.DatabaseOperations : options.WorkspaceDirectory,

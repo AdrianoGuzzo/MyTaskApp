@@ -42,9 +42,9 @@ public sealed record SaveSavedDatabase(
     Guid? AnonymizationProfileId);
 
 /// <summary>
-/// Grava o apelido conferindo o cadastro de hoje: a conexão pode ser origem, o
-/// banco cabe nela, e a anonimização lê o mesmo servidor. O resto — produção,
-/// destino, Anonymizer no servidor — é da política, a cada cópia.
+/// Grava o apelido conferindo o cadastro de hoje: a conexão pode ser origem e
+/// o banco cabe nela. O resto — produção, destino, se as máscaras cabem nas
+/// colunas — é da política e da validação, a cada cópia.
 /// </summary>
 public sealed class SaveSavedDatabaseHandler(
     ISavedDatabaseRepository savedDatabases,
@@ -78,20 +78,10 @@ public sealed class SaveSavedDatabaseHandler(
             throw new DomainException($"{connection.Name} só acessa o banco {fixedDatabase}.");
         }
 
+        // As regras são julgadas contra as colunas da origem a cada cópia (ADR-058); aqui, só que o perfil existe.
         if (command.AnonymizationProfileId is { } profileId)
         {
-            var profile = await anonymizationProfiles.GetByIdAsync(profileId, cancellationToken);
-            var masked = await connections.FindByIdAsync(profile.ConnectionId, cancellationToken);
-
-            if (masked is null || masked.Snapshot().ServerKey != connection.ServerKey)
-            {
-                throw new DomainException($"A anonimização {profile.Name} não lê o mesmo servidor de {connection.Name}.");
-            }
-
-            if (masked.Database is { } maskedDatabase && !string.Equals(maskedDatabase, database, StringComparison.Ordinal))
-            {
-                throw new DomainException($"A anonimização {profile.Name} é do banco {maskedDatabase}, não de {database}.");
-            }
+            await anonymizationProfiles.GetByIdAsync(profileId, cancellationToken);
         }
 
         SavedDatabase saved;

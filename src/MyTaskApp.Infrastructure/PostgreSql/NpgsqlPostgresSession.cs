@@ -46,21 +46,7 @@ internal sealed class NpgsqlPostgresSessionFactory(
         CancellationToken cancellationToken = default)
     {
         var secret = password?.Reveal() ?? await passwords.ReadAsync(connection.SecretReference, cancellationToken);
-        var builder = new NpgsqlConnectionStringBuilder
-        {
-            Host = connection.Host,
-            Port = connection.Port,
-            Database = PgArguments.DatabaseOf(connection),
-            Username = connection.Username,
-            Password = secret,
-            SslMode = SslMode(connection.SslMode),
-            Timeout = options.ConnectTimeoutSeconds,
-            CommandTimeout = options.QueryTimeoutSeconds,
-            Pooling = false,
-            ApplicationName = "MyTaskApp",
-            Options = "-c default_transaction_read_only=on",
-            IncludeErrorDetail = false,
-        };
+        var builder = Builder(connection, secret, options, readOnly: true, options.QueryTimeoutSeconds);
 
         var npgsql = new NpgsqlConnection(builder.ConnectionString);
 
@@ -75,6 +61,41 @@ internal sealed class NpgsqlPostgresSessionFactory(
             logger.LogWarning("PostgresConnectFailed {ConnectionId} {SqlState}", connection.Id, (exception as PostgresException)?.SqlState);
             throw Presentable(exception, secret);
         }
+    }
+
+    /// <summary>
+    /// A conexão como o app sempre abre: sem pool, sem detalhe de erro (que traz
+    /// valor de linha), e só leitura quando é origem. A cópia mascarada usa a
+    /// mesma receita, com tempo limite de dump em vez do de consulta.
+    /// </summary>
+    internal static NpgsqlConnectionStringBuilder Builder(
+        DatabaseConnectionSnapshot connection,
+        string? secret,
+        DatabaseOperationsOptions options,
+        bool readOnly,
+        int commandTimeoutSeconds)
+    {
+        var builder = new NpgsqlConnectionStringBuilder
+        {
+            Host = connection.Host,
+            Port = connection.Port,
+            Database = PgArguments.DatabaseOf(connection),
+            Username = connection.Username,
+            Password = secret,
+            SslMode = SslMode(connection.SslMode),
+            Timeout = options.ConnectTimeoutSeconds,
+            CommandTimeout = commandTimeoutSeconds,
+            Pooling = false,
+            ApplicationName = "MyTaskApp",
+            IncludeErrorDetail = false,
+        };
+
+        if (readOnly)
+        {
+            builder.Options = "-c default_transaction_read_only=on";
+        }
+
+        return builder;
     }
 
     internal static DomainException Presentable(Exception exception, string? secret)
