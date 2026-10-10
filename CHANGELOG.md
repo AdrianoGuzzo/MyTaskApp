@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.10.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.9.0...v1.10.0) (2026-10-10)
+
+
+### Added
+
+* banco escolhido na cópia e anonimização na própria consulta ([#69](https://github.com/AdrianoGuzzo/MyTaskApp/issues/69)) ([d277ae6](https://github.com/AdrianoGuzzo/MyTaskApp/commit/d277ae697b761248ba7bfd7cc9683970514cc309))
+* servidor MCP local para operar tarefas, horas e perfis de banco pelo Claude Code ([#71](https://github.com/AdrianoGuzzo/MyTaskApp/issues/71)) ([2ef6cf6](https://github.com/AdrianoGuzzo/MyTaskApp/commit/2ef6cf6b47d95a448f8f750902783f602c538a0c))
+
 ## [1.9.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.8.0...v1.9.0) (2026-10-09)
 
 
