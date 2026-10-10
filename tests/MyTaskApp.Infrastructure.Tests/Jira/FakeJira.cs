@@ -49,7 +49,10 @@ internal sealed class FakeJiraServer : HttpMessageHandler
         {
             if (_routes[index].Matches(request))
             {
-                return _routes[index].Respond(request);
+                // Como a rede de verdade: cancelar ou estourar o tempo larga a
+                // espera sem depender de a resposta lenta terminar antes.
+                var respond = _routes[index].Respond;
+                return await Task.Run(() => respond(request), CancellationToken.None).WaitAsync(cancellationToken);
             }
         }
 
