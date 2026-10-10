@@ -59,9 +59,24 @@ internal sealed class TempSqliteDatabase : IAsyncDisposable
 
         await Task.Yield();
 
-        if (File.Exists(_path))
+        // No runner do CI o antivírus/indexador às vezes abre o .db recém-criado
+        // e o Delete falha com "being used by another process". Tenta por um
+        // tempo e, se não der, deixa o arquivo na pasta temporária: é limpeza,
+        // não pode derrubar um teste que já passou.
+        for (var attempt = 1; File.Exists(_path); attempt++)
         {
-            File.Delete(_path);
+            try
+            {
+                File.Delete(_path);
+            }
+            catch (IOException) when (attempt < 20)
+            {
+                await Task.Delay(100);
+            }
+            catch (IOException)
+            {
+                return;
+            }
         }
     }
 }
