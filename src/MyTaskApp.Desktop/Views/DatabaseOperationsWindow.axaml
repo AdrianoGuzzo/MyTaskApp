@@ -55,6 +55,33 @@
       <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
+    <!-- O quadro de ajuda das regras: explica o que cada controle faz, sem esconder em tooltip. -->
+    <Style Selector="Border.help">
+      <Setter Property="Background" Value="{DynamicResource WidgetAccentSoftBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetAccentLineBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Padding" Value="10,8" />
+    </Style>
+
+    <Style Selector="Border.help TextBlock">
+      <Setter Property="FontSize" Value="11.5" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextMidBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.columnHeader">
+      <Setter Property="FontSize" Value="10.5" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- Coluna desmarcada vai como está: a linha apaga para não parecer escolhida. -->
+    <Style Selector="Grid.ruleRow.unconfirmed">
+      <Setter Property="Opacity" Value="0.55" />
+    </Style>
+
     <Style Selector="TextBlock.code">
       <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, Menlo, monospace" />
       <Setter Property="FontSize" Value="11.5" />
@@ -658,10 +685,12 @@
                   <Grid ColumnDefinitions="*,8,*,8,120" RowDefinitions="Auto,Auto">
                     <TextBlock Classes="field" Text="Nome" />
                     <TextBox Grid.Row="1" PlaceholderText="ECO LGPD" Text="{Binding AnonymizationName}" />
-                    <TextBlock Grid.Column="2" Classes="field" Text="Conexão mascarada (role MASKED)" />
+                    <TextBlock Grid.Column="2" Classes="field" Text="Conexão mascarada (role MASKED) ⓘ"
+                               ToolTip.Tip="A conexão com o usuário marcado como MASKED no servidor. O dump sai por ela, já com as colunas mascaradas: o dado real nunca chega a esta máquina." />
                     <ComboBox Grid.Row="1" Grid.Column="2" HorizontalAlignment="Stretch"
                               ItemsSource="{Binding Connections}" SelectedItem="{Binding MaskedConnection}" />
-                    <TextBlock Grid.Column="4" Classes="field" Text="Política" />
+                    <TextBlock Grid.Column="4" Classes="field" Text="Política ⓘ"
+                               ToolTip.Tip="O provedor do SECURITY LABEL no PostgreSQL Anonymizer. Quase sempre é anon; só mude se o DBA criou outra política." />
                     <TextBox Grid.Row="1" Grid.Column="4" Text="{Binding PolicyName}" />
                   </Grid>
                   <TextBox PlaceholderText="Descrição" Text="{Binding AnonymizationDescription}" />
@@ -670,39 +699,87 @@
                     <TextBox x:Name="ProfileDatabaseBox" PlaceholderText="eco_core_1010" Text="{Binding ProfileDatabase}" />
                   </StackPanel>
 
-                  <Grid ColumnDefinitions="*,Auto">
+                  <Grid ColumnDefinitions="*,Auto" Margin="0,6,0,0">
                     <StackPanel>
-                      <TextBlock Text="Possible sensitive data" FontWeight="SemiBold" />
-                      <TextBlock Classes="meta" Text="Sugestões só pelo nome e tipo das colunas. Marque o que é de fato dado pessoal; o resto não é gravado." />
+                      <TextBlock Text="Colunas a mascarar" FontWeight="SemiBold" />
+                      <TextBlock Classes="meta" Text="Marque as colunas com dado pessoal. Só as marcadas viram regra ao salvar." />
                     </StackPanel>
-                    <Button Grid.Column="1" Content="Sugerir colunas" Command="{Binding SuggestColumnsCommand}" VerticalAlignment="Top" />
+                    <Button Grid.Column="1" Content="Sugerir colunas" Command="{Binding SuggestColumnsCommand}" VerticalAlignment="Top"
+                            ToolTip.Tip="Lê só o nome e o tipo das colunas do banco (nunca os dados) e lista as que parecem dado pessoal. Elas chegam desmarcadas." />
                   </Grid>
 
-                  <TextBlock Classes="meta" Text="{Binding RulesSummary}" IsVisible="{Binding HasRules}" />
+                  <Border x:Name="RuleHelp" Classes="help">
+                    <StackPanel Spacing="3">
+                      <TextBlock FontWeight="SemiBold" Text="Como funciona" />
+                      <TextBlock Text="☑ Marcada: a coluna é mascarada. No dump ela sai com o valor da máscara, e não o real." />
+                      <TextBlock Text="☐ Desmarcada: a coluna vai para o destino como está, e não é gravada no perfil." />
+                      <TextBlock Text="Probabilidade: um palpite pelo nome e tipo da coluna. Alta quase sempre é dado pessoal; baixa, confira antes." />
+                      <TextBlock Text="Máscara: Função gera um valor falso por linha (ex.: anon.fake_email()); Valor fixo põe o mesmo valor em todas (NULL, 0 ou 'texto')." />
+                      <TextBlock Text="Depois de salvar: Gerar script → o DBA executa no banco de origem → Validar no servidor confere se as regras estão lá." />
+                    </StackPanel>
+                  </Border>
+
+                  <TextBlock Classes="meta" IsVisible="{Binding !HasRules}"
+                             Text="Nenhuma coluna ainda. Escolha a conexão mascarada e clique em Sugerir colunas." />
+
+                  <!-- Barra da lista: selecionar todas (as visíveis), atalho das de alta e filtro. -->
+                  <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="10" IsVisible="{Binding HasRules}">
+                    <!-- OneWay + comando: parcial vira "marcar todas", e não "desmarcar". -->
+                    <CheckBox x:Name="SelectAllRules" Content="Selecionar todas"
+                              IsChecked="{Binding AllShownConfirmed, Mode=OneWay}" IsThreeState="False"
+                              Command="{Binding ToggleAllShownCommand}" IsEnabled="{Binding HasShownRules}"
+                              ToolTip.Tip="Marca (ou desmarca) todas as colunas visíveis. Com filtro, só as que aparecem." />
+                    <Button Grid.Column="1" Classes="rowAction" Content="Marcar alta probabilidade"
+                            Command="{Binding ConfirmHighProbabilityCommand}" VerticalAlignment="Center"
+                            ToolTip.Tip="Marca as colunas visíveis de alta probabilidade, sem desmarcar as outras." />
+                    <TextBox Grid.Column="2" x:Name="RuleFilterBox" PlaceholderText="Filtrar por schema, tabela ou coluna"
+                             Text="{Binding RuleFilter}" />
+                  </Grid>
+
+                  <TextBlock x:Name="RuleSelectionSummary" Classes="meta" Text="{Binding SelectionSummary}" IsVisible="{Binding HasRules}" />
+
+                  <Grid ColumnDefinitions="64,210,140,*,110" ColumnSpacing="6" IsVisible="{Binding HasRules}">
+                    <TextBlock Classes="columnHeader" Text="MASCARAR" />
+                    <TextBlock Grid.Column="1" Classes="columnHeader" Text="COLUNA" />
+                    <TextBlock Grid.Column="2" Classes="columnHeader" Text="PROBABILIDADE ⓘ"
+                               ToolTip.Tip="Palpite pelo nome e tipo da coluna, nunca pelos dados. Alta: quase certo. Média: costuma ser. Baixa: confira." />
+                    <TextBlock Grid.Column="3" Classes="columnHeader" Text="MÁSCARA (O QUE VAI NO LUGAR DO DADO) ⓘ"
+                               ToolTip.Tip="Função: uma função do anon, chamada para cada linha. Valor fixo: NULL, um número ou um texto entre aspas simples." />
+                    <TextBlock Grid.Column="4" Classes="columnHeader" Text="TIPO" />
+                  </Grid>
 
                   <ItemsControl x:Name="RuleList" ItemsSource="{Binding Rules}">
                     <ItemsControl.ItemTemplate>
                       <DataTemplate x:DataType="vm:AnonymizationRuleItemViewModel">
-                        <Grid ColumnDefinitions="Auto,210,130,*,Auto" ColumnSpacing="6" Margin="0,2">
-                          <CheckBox IsChecked="{Binding IsConfirmed}" />
+                        <Grid Classes="ruleRow" Classes.unconfirmed="{Binding !IsConfirmed}" IsVisible="{Binding IsShown}"
+                              ColumnDefinitions="64,210,140,*,110" ColumnSpacing="6" Margin="0,2">
+                          <CheckBox IsChecked="{Binding IsConfirmed}" HorizontalAlignment="Center"
+                                    ToolTip.Tip="Marcada: esta coluna é mascarada no dump. Desmarcada: vai para o destino como está." />
                           <StackPanel Grid.Column="1" VerticalAlignment="Center">
                             <TextBlock Classes="code" Text="{Binding ColumnKey}" />
                             <TextBlock Classes="meta" Text="{Binding Reason}" />
                           </StackPanel>
-                          <Border Grid.Column="2" Classes="badge" Classes.production="{Binding IsHigh}" Classes.staging="{Binding IsMedium}" HorizontalAlignment="Left">
+                          <Border Grid.Column="2" Classes="badge" Classes.production="{Binding IsHigh}" Classes.staging="{Binding IsMedium}"
+                                  HorizontalAlignment="Left" ToolTip.Tip="{Binding SensitivityHint}">
                             <TextBlock Text="{Binding SensitivityLabel}" />
                           </Border>
-                          <TextBox Grid.Column="3" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="11.5" Text="{Binding Expression}" />
-                          <CheckBox Grid.Column="4" Content="valor" IsChecked="{Binding IsValue}" ToolTip.Tip="MASKED WITH VALUE em vez de FUNCTION" />
+                          <TextBox Grid.Column="3" FontFamily="Cascadia Mono, Consolas, monospace" FontSize="11.5"
+                                   Text="{Binding Expression}" PlaceholderText="{Binding ExpressionPlaceholder}" />
+                          <ComboBox Grid.Column="4" HorizontalAlignment="Stretch"
+                                    ItemsSource="{x:Static vm:AnonymizationRuleItemViewModel.Kinds}" SelectedItem="{Binding SelectedKind}"
+                                    ToolTip.Tip="Função: um valor falso por linha (MASKED WITH FUNCTION). Valor fixo: o mesmo valor em todas as linhas (MASKED WITH VALUE)." />
                         </Grid>
                       </DataTemplate>
                     </ItemsControl.ItemTemplate>
                   </ItemsControl>
 
                   <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
-                    <Button Content="Validar no servidor" Command="{Binding ValidateOnServerCommand}" />
-                    <Button Content="Gerar script" Command="{Binding GenerateScriptCommand}" />
-                    <Button Classes="accent" Content="Salvar perfil" Command="{Binding SaveAnonymizationProfileCommand}" />
+                    <Button Content="Validar no servidor" Command="{Binding ValidateOnServerCommand}"
+                            ToolTip.Tip="Confere no servidor: o Anonymizer instalado, o usuário MASKED, o mascaramento ligado e as regras do perfil iguais às do banco. Use depois que o DBA executar o script." />
+                    <Button Content="Gerar script" Command="{Binding GenerateScriptCommand}"
+                            ToolTip.Tip="Gera os SECURITY LABEL das colunas marcadas, para o DBA executar no banco de origem. O app não executa nada em produção." />
+                    <Button Classes="accent" Content="Salvar perfil" Command="{Binding SaveAnonymizationProfileCommand}"
+                            ToolTip.Tip="Grava o perfil com as colunas marcadas. As desmarcadas saem da lista." />
                   </StackPanel>
 
                   <ItemsControl ItemsSource="{Binding ServerFindings}" IsVisible="{Binding HasServerFindings}">

@@ -244,6 +244,46 @@ public sealed partial class AnonymizationRuleItemViewModel : ObservableObject
 
     public string SensitivityLabel => DatabaseLabels.Sensitivity(Sensitivity);
 
+    /// <summary>O que a probabilidade quer dizer — a sugestão é só pelo nome e tipo da coluna, nunca pelos dados.</summary>
+    public string SensitivityHint => Sensitivity switch
+    {
+        ColumnSensitivity.High => "Alta: o nome e o tipo indicam dado pessoal quase certo (CPF, e-mail, telefone…). Marque, salvo engano.",
+        ColumnSensitivity.Medium => "Média: costuma ser dado pessoal (nome, endereço, data de nascimento…). Confira a tabela.",
+        _ => "Baixa: pode ser dado pessoal, mas muitas vezes não é. Marque só se souber que é.",
+    };
+
+    /// <summary>As duas formas de mascarar, como o ComboBox de cada linha mostra.</summary>
+    public static IReadOnlyList<Choice<MaskingKind>> Kinds { get; } =
+    [
+        new(MaskingKind.Function, "Função"),
+        new(MaskingKind.Value, "Valor fixo"),
+    ];
+
+    public Choice<MaskingKind> SelectedKind
+    {
+        get => Kinds.First(choice => choice.Value == Kind);
+        set
+        {
+            if (value is not null)
+            {
+                Kind = value.Value;
+            }
+        }
+    }
+
+    /// <summary>O exemplo da expressão muda com o tipo: função do anon, ou um valor que vai igual em toda linha.</summary>
+    public string ExpressionPlaceholder => Kind == MaskingKind.Value ? "NULL, 0 ou 'CONFIDENCIAL'" : "anon.fake_email()";
+
+    /// <summary>Some com o filtro; "Selecionar todas" só alcança as visíveis.</summary>
+    [ObservableProperty]
+    private bool _isShown = true;
+
+    /// <summary>Filtro por schema, tabela, coluna ou motivo, sem diferenciar maiúsculas.</summary>
+    public bool Matches(string filter) =>
+        string.IsNullOrEmpty(filter)
+        || ColumnKey.Contains(filter, StringComparison.OrdinalIgnoreCase)
+        || Reason?.Contains(filter, StringComparison.OrdinalIgnoreCase) == true;
+
     public bool IsHigh => Sensitivity == ColumnSensitivity.High;
 
     public bool IsMedium => Sensitivity == ColumnSensitivity.Medium;
@@ -253,6 +293,7 @@ public sealed partial class AnonymizationRuleItemViewModel : ObservableObject
     public string ColumnKey => $"{Schema}.{Table}.{Column}";
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsValue), nameof(SelectedKind), nameof(ExpressionPlaceholder))]
     private MaskingKind _kind;
 
     [ObservableProperty]

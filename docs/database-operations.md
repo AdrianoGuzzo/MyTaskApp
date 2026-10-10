@@ -318,6 +318,21 @@ Na aba **Perfis → Anonymization Profiles**:
    produtos não é dado pessoal, e só você sabe disso. Marque o que é de fato
    dado pessoal, ajuste a máscara se quiser e salve. Só o que foi marcado vira
    regra.
+
+   Na lista de **Colunas a mascarar**:
+
+   | Controle | O que faz |
+   |---|---|
+   | ☑ Mascarar | marcada, a coluna sai mascarada no dump; desmarcada, vai como está e sai da lista ao salvar |
+   | Probabilidade | o palpite pelo nome e tipo da coluna (o tooltip explica cada nível) |
+   | Máscara | o que vai no lugar do dado: uma função do `anon` ou um valor |
+   | Tipo | **Função**: um valor falso por linha (`MASKED WITH FUNCTION`). **Valor fixo**: o mesmo valor em todas as linhas, `NULL`, um número ou `'texto'` (`MASKED WITH VALUE`) |
+   | Selecionar todas | marca as colunas visíveis; com todas marcadas, desmarca. Com só algumas marcadas, completa |
+   | Marcar alta probabilidade | marca as visíveis de alta, sem desmarcar as outras |
+   | Filtro | por schema, tabela, coluna ou motivo. "Selecionar todas" e o atalho valem só para o que aparece |
+
+   A contagem ("12 de 40 coluna(s) marcada(s) para mascarar") acompanha cada
+   clique e avisa quantas o filtro escondeu.
 4. **Gerar script → Copiar** e entregue ao DBA. O script tem uma linha
    `SECURITY LABEL FOR anon ON COLUMN … IS 'MASKED WITH FUNCTION …'` por
    regra, com aspas tratadas para nomes estranhos.

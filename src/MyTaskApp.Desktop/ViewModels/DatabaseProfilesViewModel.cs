@@ -112,13 +112,23 @@ public sealed partial class DatabaseProfilesViewModel(
     [NotifyPropertyChangedFor(nameof(HasScript))]
     private string? _script;
 
+    /// <summary>Filtra a lista de colunas por schema, tabela, coluna ou motivo. "Selecionar todas" vale só para as visíveis.</summary>
+    [ObservableProperty]
+    private string _ruleFilter = string.Empty;
+
+    private ObservableCollection<AnonymizationRuleItemViewModel>? _rules;
+
     public ObservableCollection<DatabaseConnectionItemViewModel> Connections { get; } = [];
 
     public ObservableCollection<DatabaseCopyProfileRow> CopyProfiles { get; } = [];
 
     public ObservableCollection<AnonymizationProfileRow> AnonymizationProfiles { get; } = [];
 
-    public ObservableCollection<AnonymizationRuleItemViewModel> Rules { get; } = [];
+    /// <summary>
+    /// As colunas do perfil: as já confirmadas e as sugestões. Marcar ou
+    /// desmarcar uma delas atualiza a contagem e o "Selecionar todas".
+    /// </summary>
+    public ObservableCollection<AnonymizationRuleItemViewModel> Rules => _rules ??= TrackRules();
 
     public ObservableCollection<SavedDatabaseItemViewModel> SavedDatabases { get; } = [];
 
@@ -146,6 +156,42 @@ public sealed partial class DatabaseProfilesViewModel(
 
     public string RulesSummary =>
         $"{Rules.Count(rule => rule.IsConfirmed)} de {Rules.Count} coluna(s) confirmada(s).";
+
+    private IEnumerable<AnonymizationRuleItemViewModel> ShownRules => Rules.Where(rule => rule.IsShown);
+
+    /// <summary>
+    /// O estado do "Selecionar todas": marcado com todas as visíveis marcadas,
+    /// vazio com nenhuma, e indeterminado (—) no meio.
+    /// </summary>
+    public bool? AllShownConfirmed
+    {
+        get
+        {
+            var shown = ShownRules.ToList();
+
+            if (shown.Count == 0 || shown.All(rule => !rule.IsConfirmed))
+            {
+                return false;
+            }
+
+            return shown.All(rule => rule.IsConfirmed) ? true : null;
+        }
+    }
+
+    public bool HasShownRules => ShownRules.Any();
+
+    /// <summary>"12 de 40 colunas serão mascaradas" — e quantas o filtro escondeu.</summary>
+    public string SelectionSummary
+    {
+        get
+        {
+            var confirmed = Rules.Count(rule => rule.IsConfirmed);
+            var hidden = Rules.Count(rule => !rule.IsShown);
+            var summary = $"{confirmed} de {Rules.Count} coluna(s) marcada(s) para mascarar.";
+
+            return hidden == 0 ? summary : $"{summary} {hidden} escondida(s) pelo filtro.";
+        }
+    }
 
     /// <summary>Algo foi salvo ou excluído: os seletores das outras abas recarregam.</summary>
     public event Action? Changed;
@@ -292,6 +338,7 @@ public sealed partial class DatabaseProfilesViewModel(
         MaskedConnection = null;
         PolicyName = AnonymizationProfile.DefaultPolicyName;
         Script = null;
+        RuleFilter = string.Empty;
         Rules.Clear();
         ServerFindings.Clear();
         NotifyRules();
@@ -306,9 +353,85 @@ public sealed partial class DatabaseProfilesViewModel(
         MaskedConnection = Connections.FirstOrDefault(connection => connection.Id == profile.ConnectionId);
         PolicyName = profile.PolicyName;
         Script = null;
+        RuleFilter = string.Empty;
         ServerFindings.Clear();
         Replace(Rules, profile.Rules.Select(rule => new AnonymizationRuleItemViewModel(rule, confirmed: true)));
         NotifyRules();
+    }
+
+    /// <summary>
+    /// "Selecionar todas": com todas as visíveis marcadas, desmarca; senão
+    /// (nenhuma ou só algumas), marca todas. O filtro limita o alcance.
+    /// </summary>
+    [RelayCommand]
+    public void ToggleAllShown()
+    {
+        var target = AllShownConfirmed != true;
+
+        foreach (var rule in ShownRules)
+        {
+            rule.IsConfirmed = target;
+        }
+
+        NotifyRules();
+    }
+
+    /// <summary>Marca as visíveis de alta probabilidade, sem mexer nas outras.</summary>
+    [RelayCommand]
+    public void ConfirmHighProbability()
+    {
+        foreach (var rule in ShownRules.Where(rule => rule.IsHigh))
+        {
+            rule.IsConfirmed = true;
+        }
+
+        NotifyRules();
+    }
+
+    partial void OnRuleFilterChanged(string value) => ApplyRuleFilter();
+
+    private void ApplyRuleFilter()
+    {
+        var filter = RuleFilter.Trim();
+
+        foreach (var rule in Rules)
+        {
+            rule.IsShown = rule.Matches(filter);
+        }
+
+        NotifyRules();
+    }
+
+    private ObservableCollection<AnonymizationRuleItemViewModel> TrackRules()
+    {
+        var rules = new ObservableCollection<AnonymizationRuleItemViewModel>();
+
+        rules.CollectionChanged += (_, change) =>
+        {
+            foreach (var rule in change.OldItems?.OfType<AnonymizationRuleItemViewModel>() ?? [])
+            {
+                rule.PropertyChanged -= OnRuleChanged;
+            }
+
+            foreach (var rule in change.NewItems?.OfType<AnonymizationRuleItemViewModel>() ?? [])
+            {
+                rule.PropertyChanged += OnRuleChanged;
+                rule.IsShown = rule.Matches(RuleFilter.Trim());
+            }
+
+            // Clear() não lista os itens que saíram; quem fica sem lista não avisa mais ninguém.
+            NotifyRules();
+        };
+
+        return rules;
+    }
+
+    private void OnRuleChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs change)
+    {
+        if (change.PropertyName is nameof(AnonymizationRuleItemViewModel.IsConfirmed))
+        {
+            NotifyRules();
+        }
     }
 
     private bool CanSuggest() => MaskedConnection is not null;
@@ -503,6 +626,9 @@ public sealed partial class DatabaseProfilesViewModel(
     {
         OnPropertyChanged(nameof(HasRules));
         OnPropertyChanged(nameof(RulesSummary));
+        OnPropertyChanged(nameof(SelectionSummary));
+        OnPropertyChanged(nameof(AllShownConfirmed));
+        OnPropertyChanged(nameof(HasShownRules));
     }
 
     private async Task<bool> TryAsync(Func<Task> operation, string fallbackMessage)
