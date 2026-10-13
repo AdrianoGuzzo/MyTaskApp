@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Domain.Tags;
 using MyTaskApp.Domain.Tasks;
 using MyTaskApp.Infrastructure.Persistence.Queries;
@@ -156,7 +157,7 @@ public class TagPersistenceTests
         await SeedAsync(db, urgent, finance, tagged, plain);
 
         await using var context = db.CreateContext();
-        var rows = await new TodayQuery(context).GetCandidatesAsync(Today, Ct);
+        var rows = await new TodayQuery(context).GetCandidatesAsync(Today, PlacementFilter.All, Ct);
 
         rows.Single(row => row.Title == "Pagar boleto").Tags!
             .Select(tag => (tag.Name, tag.ColorHex))
@@ -180,7 +181,7 @@ public class TagPersistenceTests
         }
 
         await using var context = db.CreateContext();
-        var rows = await new TodayQuery(context).GetCandidatesAsync(Today, Ct);
+        var rows = await new TodayQuery(context).GetCandidatesAsync(Today, PlacementFilter.All, Ct);
 
         rows.Single().Tags.Should().ContainSingle()
             .Which.Should().Be(new MyTaskApp.Application.Planning.TagBadge(urgent.Id, "Prioridade", "#F97316"));
@@ -199,7 +200,7 @@ public class TagPersistenceTests
         await SeedAsync(db, urgent, finance, first, second);
 
         await using var context = db.CreateContext();
-        var list = await new TagQuery(context).ListAsync(Ct);
+        var list = await new TagQuery(context).ListAsync(PlacementFilter.All, [], Ct);
 
         list.Select(tag => (tag.Name, tag.UsageCount))
             .Should().Equal(("Financeiro", 1), ("Urgente", 2));

@@ -8,6 +8,7 @@ using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Deadlines;
 using MyTaskApp.Application.Development;
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Application.External;
 using MyTaskApp.Application.External.Jira;
 using MyTaskApp.Application.Lifecycle;
@@ -21,6 +22,7 @@ using MyTaskApp.Desktop.Composition;
 using MyTaskApp.Desktop.Views;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.Deadlines;
+using MyTaskApp.Domain.Devices;
 using MyTaskApp.Domain.External;
 using MyTaskApp.Domain.Lifecycle;
 using MyTaskApp.Domain.Planning;
@@ -37,6 +39,9 @@ public sealed record SectionReorder(TodaySectionViewModel Section, int From, int
 /// <summary>Um atalho de prazo pedido no menu de uma linha (ADR-050).</summary>
 public sealed record DeadlineShortcutRequest(TaskRowViewModel Row, DeadlineShortcut Shortcut);
 
+/// <summary>Um lugar no menu "Onde aparece" da linha (ADR-062).</summary>
+public sealed record PlacementChoice(TaskRowViewModel Row, string Label, DevicePlacement Placement, bool IsCurrent);
+
 /// <summary>
 /// Tela "Hoje" (§9). Não decide o que é atrasado nem o que é "agora" — isso é do
 /// domínio. Aqui só apresenta o resultado e traduz falha em mensagem.
@@ -50,7 +55,9 @@ public sealed partial class TodayViewModel(
     IShellLauncher? shell = null,
     // O relógio do cronômetro é do app, não do quadro: a janela da tarefa lê o
     // mesmo. Opcional para os testes que não falam de tempo (ADR-052).
-    ActiveTimerViewModel? activeTimer = null) : ObservableObject, IDisposable
+    ActiveTimerViewModel? activeTimer = null,
+    // Quem é "este computador" (ADR-062). Sem ele, a lista é a de sempre.
+    DevicePlacementState? placements = null) : ObservableObject, IDisposable
 {
     /// <summary>
     /// O rótulo "aguardando há N minutos" envelhece sozinho, então o quadro
@@ -108,6 +115,19 @@ public sealed partial class TodayViewModel(
 
     /// <summary>O cronômetro que corre, com o relógio que a linha e a faixa desenham (ADR-052).</summary>
     public ActiveTimerViewModel ActiveTimer { get; } = activeTimer ?? new ActiveTimerViewModel(timeProvider);
+
+    /// <summary>De qual computador a lista mostra, e para onde vai a captura (ADR-062).</summary>
+    public DeviceViewSelectorViewModel Devices { get; } = new(placements);
+
+    /// <summary>A troca de visão recarrega a lista; ligada uma vez, na primeira carga.</summary>
+    private bool _devicesWired;
+
+    /// <summary>O último envio, para o "Desfazer" da mensagem (ADR-062).</summary>
+    private (Guid TaskId, DevicePlacement Placement)? _undoPlacement;
+
+    /// <summary>A mensagem é de um envio: o "Desfazer" aparece junto.</summary>
+    [ObservableProperty]
+    private bool _canUndoPlacement;
 
     /// <summary>
     /// A linha do cronômetro, se ela estiver na tela. Sem ela — tarefa de amanhã,
@@ -359,17 +379,28 @@ public sealed partial class TodayViewModel(
             return;
         }
 
+        if (!_devicesWired)
+        {
+            _devicesWired = true;
+            Devices.ViewChanged += (_, _) => _ = LoadAsync(CancellationToken.None);
+            History.FollowDevices(Devices);
+        }
+
         TodayBoard? board = null;
+        var view = Devices.View;
 
         var loaded = await TryAsync(
             async () => board = await runner.RunAsync<GetTodayBoardHandler, TodayBoard>(
-                (handler, token) => handler.HandleAsync(token),
+                (handler, token) => handler.HandleAsync(view, token),
                 cancellationToken),
             "Não foi possível carregar suas tarefas.");
 
         if (loaded)
         {
+            // Um ciclo de sincronização pode ter trazido um computador novo.
+            Devices.Refresh();
             Show(board!);
+            AnnounceArrivals(board!);
 
             // Sem await: o Git é lento perto do banco, e a lista não espera por
             // ele — as cores chegam quando ele responder.
@@ -387,10 +418,11 @@ public sealed partial class TodayViewModel(
         var text = CaptureText;
         var tagIds = CaptureTags.SelectedIds;
         var links = LinkedCaptureIssues();
+        var target = Devices.CaptureTarget;
 
         var captured = await TryAsync(
             () => runner.RunAsync<QuickCaptureHandler>(
-                (handler, token) => handler.HandleAsync(new QuickCapture(text, tagIds, links), token),
+                (handler, token) => handler.HandleAsync(new QuickCapture(text, tagIds, links, target?.Placement), token),
                 cancellationToken),
             "Não foi possível salvar o que você escreveu.");
 
@@ -407,7 +439,16 @@ public sealed partial class TodayViewModel(
         _captureLinks.Clear();
         CaptureSuggestions.Reset();
         CaptureText = string.Empty;
+
+        // O destino volta para este computador: mandar para o outro é exceção,
+        // e a próxima anotação do dia quase sempre é daqui (ADR-062).
+        Devices.ResetCaptureTarget();
         await LoadAsync(cancellationToken);
+
+        if (target?.Placement is { IsEverywhere: false })
+        {
+            StatusMessage = $"Enviada para {DeviceName(target.Placement)}.";
+        }
     }
 
     /// <summary>
@@ -947,6 +988,155 @@ public sealed partial class TodayViewModel(
     }
 
     /// <summary>
+    /// Os lugares que o menu "Onde aparece" oferece para a linha (ADR-062): este
+    /// computador, todos, e cada outro computador da conta. O atual vem marcado.
+    /// </summary>
+    public IReadOnlyList<PlacementChoice> PlacementChoices(TaskRowViewModel row) =>
+        [
+            .. PlacementOptions.For(placements, row.Placement)
+                .Select(option => new PlacementChoice(row, option.Label, option.Placement, option.IsCurrent)),
+        ];
+
+    /// <summary>
+    /// Leva a tarefa para outro computador, para todos, ou de volta para este
+    /// (ADR-062). Saindo da lista daqui, a mensagem oferece desfazer.
+    /// </summary>
+    [RelayCommand]
+    public async Task PlaceAsync(PlacementChoice choice, CancellationToken cancellationToken)
+    {
+        if (choice.IsCurrent)
+        {
+            return;
+        }
+
+        PlaceResult? result = null;
+
+        var placed = await TryAsync(
+            async () => result = await runner.RunAsync<PlaceTaskHandler, PlaceResult>(
+                (handler, token) => handler.HandleAsync(new PlaceTask(choice.Row.TaskId, choice.Placement), token),
+                cancellationToken),
+            "Não foi possível mudar onde a tarefa aparece.");
+
+        if (!placed)
+        {
+            return;
+        }
+
+        await LoadAsync(cancellationToken);
+
+        StatusMessage = result!.LeftThisComputer
+            ? $"Enviada para {result.Destination}."
+            : $"Agora aparece em {result.Destination}.";
+
+        _undoPlacement = result.Previous is { } previous ? (choice.Row.TaskId, previous) : null;
+        CanUndoPlacement = _undoPlacement is not null;
+    }
+
+    /// <summary>Volta a tarefa para onde estava antes do último envio.</summary>
+    [RelayCommand]
+    public async Task UndoPlaceAsync(CancellationToken cancellationToken)
+    {
+        if (_undoPlacement is not { } undo)
+        {
+            return;
+        }
+
+        var undone = await TryAsync(
+            () => runner.RunAsync<PlaceTaskHandler, PlaceResult>(
+                (handler, token) => handler.HandleAsync(new PlaceTask(undo.TaskId, undo.Placement), token),
+                cancellationToken),
+            "Não foi possível desfazer.");
+
+        if (undone)
+        {
+            await LoadAsync(cancellationToken);
+        }
+    }
+
+    partial void OnStatusMessageChanged(string? value)
+    {
+        // Qualquer mensagem nova encerra o "Desfazer" da anterior.
+        if (CanUndoPlacement)
+        {
+            _undoPlacement = null;
+            CanUndoPlacement = false;
+        }
+    }
+
+    /// <summary>
+    /// "Chegou 1 tarefa de Notebook." quando aparece no quadro uma tarefa que
+    /// ainda não tinha sido vista chegando (ADR-062). Só as novas: o refresh de
+    /// 60 s não repete o aviso.
+    /// </summary>
+    private void AnnounceArrivals(TodayBoard board)
+    {
+        var fresh = board.Arrived.Where(task => _announcedArrivals.Add(task.TaskId)).ToList();
+
+        // A primeira carga só aprende o que já estava lá: abrir o app não é "chegou agora".
+        if (!_arrivalsPrimed)
+        {
+            _arrivalsPrimed = true;
+            return;
+        }
+
+        if (fresh.Count == 0)
+        {
+            return;
+        }
+
+        var from = fresh
+            .Select(task => task.ReceivedFromDeviceId is { } id ? placements?.NicknameOf(id) : null)
+            .Distinct()
+            .ToList();
+
+        var origin = from is [{ } single] ? $" de {single}" : " de outro computador";
+
+        StatusMessage = fresh.Count == 1
+            ? $"Chegou 1 tarefa{origin}."
+            : $"Chegaram {fresh.Count} tarefas{origin}.";
+    }
+
+    private readonly HashSet<Guid> _announcedArrivals = [];
+
+    private bool _arrivalsPrimed;
+
+    private string DeviceName(DevicePlacement placement) =>
+        placements?.Describe(placement) ?? DevicePlacementState.UnknownComputer;
+
+    /// <summary>
+    /// O selo de lugar da linha (ADR-062). A compartilhada mostra sempre, porque
+    /// mexer nela muda nos dois computadores. A de outro computador só aparece
+    /// quando o seletor mostra mais do que este, e então diz qual. A daqui não
+    /// precisa dizer nada, a não ser em "Todos".
+    /// </summary>
+    private string? PlacementLabel(DevicePlacement? placement)
+    {
+        if (placements is not { IsActive: true } || placement is null)
+        {
+            return null;
+        }
+
+        if (placement.IsEverywhere)
+        {
+            return "⇄ todos os computadores";
+        }
+
+        if (placements.IsHere(placement.DeviceId))
+        {
+            return Devices.View.Kind == Application.Devices.DeviceViewKind.All ? "este computador" : null;
+        }
+
+        return $"→ {DeviceName(placement)}";
+    }
+
+    private string? ArrivalLabel(TodayTask task) =>
+        task.ReceivedAt is null
+            ? null
+            : task.ReceivedFromDeviceId is { } from && placements?.NicknameOf(from) is { } nickname
+                ? $"Chegou de {nickname}"
+                : "Chegou de outro computador";
+
+    /// <summary>
     /// Manda para a lixeira (§4). O prazo exibido na confirmacao e lido do banco
     /// na hora: uma mensagem com "30 dias" fixo mentiria para quem mudou a
     /// configuracao.
@@ -1356,7 +1546,7 @@ public sealed partial class TodayViewModel(
             return;
         }
 
-        var worktrees = new[] { board.Overdue, board.Now, board.Today, board.Unscheduled, board.Completed }
+        var worktrees = new[] { board.Arrived, board.Overdue, board.Now, board.Today, board.Unscheduled, board.Completed }
             .SelectMany(tasks => tasks)
             .SelectMany(task => task.Worktrees ?? [])
             .DistinctBy(worktree => worktree.DevelopmentId)
@@ -1479,6 +1669,10 @@ public sealed partial class TodayViewModel(
     private void ShowSections(TodayBoard board)
     {
         Sections.Clear();
+
+        // CHEGARAM (ADR-062): o que outro computador mandou para cá, no topo,
+        // até ser aberto. Ordem de chegada, sem arrasto.
+        AddSection("CHEGARAM DE OUTRO COMPUTADOR", TodaySection.Arrived, board.Arrived, isCompleted: false, fixedOrder: true);
         AddSection("ATRASADAS", TodaySection.Overdue, board.Overdue, isCompleted: false);
         AddSection("AGORA", TodaySection.Now, board.Now, isCompleted: false);
         AddSection("HOJE", TodaySection.Today, board.Today, isCompleted: false);
@@ -1514,7 +1708,7 @@ public sealed partial class TodayViewModel(
         // precisa mais ser lembrada. Do quadro, e não das seções: esconder as
         // concluídas não pode fazer a borda delas voltar a pulsar.
         _seenAgentAlerts.IntersectWith(
-            new[] { board.Overdue, board.Now, board.Today, board.Deadlines, board.Unscheduled, board.Completed }
+            new[] { board.Arrived, board.Overdue, board.Now, board.Today, board.Deadlines, board.Unscheduled, board.Completed }
                 .SelectMany(tasks => tasks)
                 .SelectMany(task => (task.ActiveAgents ?? []).Select(agent => new AgentAlertKey(
                     task.TaskId, agent.DevelopmentId, agent.Activity, agent.ActivityChangedAt))));
@@ -1595,6 +1789,7 @@ public sealed partial class TodayViewModel(
             tasks.Select(task =>
             {
                 var row = new TaskRowViewModel(task, isCompleted, fixedOrder);
+                row.ShowPlacement(PlacementLabel(task.Placement), ArrivalLabel(task));
                 row.Worktree.Apply(_worktreeSync);
                 row.Worktree.ApplyPullRequests(_worktreePullRequests);
                 row.ApplySeenAgentAlerts(_seenAgentAlerts);

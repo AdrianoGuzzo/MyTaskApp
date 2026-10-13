@@ -137,6 +137,33 @@ public sealed class RemoteChangeApplierTests : IAsyncLifetime
         (await PlacementInBAsync(task.Id)).Should().BeNull();
     }
 
+    [Fact]
+    public async Task AMoveFromAnotherComputer_IsReported_AndRearmsTheReminder()
+    {
+        var task = TaskItem.Create("Pagar boleto", Now, placement: DevicePlacement.On(_a.Device.DeviceId));
+        await _a.SaveAsync(context => context.Add(task), Ct);
+        await _b.ApplyAsync(await _a.PageFromOutboxAsync(Ct), Ct);
+        var current = await _a.ProjectAllAsync(Ct);
+        var sentToB = SyncValue.Object(
+            (SyncFields.Placement.Kind, SyncValue.Integer((long)PlacementKind.Device)),
+            (SyncFields.Placement.DeviceId, SyncValue.Guid(_b.Device.DeviceId)));
+
+        var result = await _b.ApplyAsync(
+            [WithAllTaskFields(
+                Change(SyncEntityTypes.Task, task.Id, 2, new() { [SyncFields.Task.Placement] = sentToB }) with { UpdatedByDeviceId = _a.Device.DeviceId },
+                current,
+                task.Id)],
+            Ct,
+            cursor: "c2");
+
+        var move = result.Moves.Should().ContainSingle().Subject;
+        move.Before.Should().Be(DevicePlacement.On(_a.Device.DeviceId));
+        move.After.Should().Be(DevicePlacement.On(_b.Device.DeviceId));
+        move.ByDeviceId.Should().Be(_a.Device.DeviceId);
+        move.IsNew.Should().BeFalse();
+        result.RearmTaskIds.Should().Contain(task.Id);
+    }
+
     private async Task<DevicePlacement?> PlacementInBAsync(Guid taskId)
     {
         await using var read = _b.Database.CreateContext();

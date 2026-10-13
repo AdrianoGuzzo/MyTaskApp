@@ -465,9 +465,42 @@ public sealed partial class SyncViewModel : ObservableObject
     private SyncConflictItem ToItem(SyncConflictView view) => new(
         view,
         $"{Describe(view.EntityType, view.EntityLabel)} — {FieldLabel(view.Field)}",
-        Show(view.LocalValue),
-        view.ServerValue is null ? "(excluído)" : Show(view.ServerValue),
+        ShowField(view.Field, view.LocalValue),
+        view.ServerValue is null ? "(excluído)" : ShowField(view.Field, view.ServerValue),
         view.DetectedAt.ToLocalTime().ToString("dd/MM HH:mm", CultureInfo.CurrentCulture) + " · " + ReasonLabel(view.Reason));
+
+    /// <summary>
+    /// O "onde aparece" (ADR-062) é um objeto no fio: aparece como o lugar, com
+    /// o apelido do computador, e não como JSON.
+    /// </summary>
+    private string ShowField(string field, string? json)
+    {
+        if (field != SyncFields.Task.Placement || json is null)
+        {
+            return Show(json);
+        }
+
+        try
+        {
+            var value = SyncValue.Parse(json);
+
+            if (SyncValue.IsNull(value))
+            {
+                return "todos os computadores";
+            }
+
+            var kind = SyncValue.ReadInteger(SyncValue.Member(value, SyncFields.Placement.Kind));
+            var device = SyncValue.ReadGuid(SyncValue.Member(value, SyncFields.Placement.DeviceId));
+
+            return kind == (long)Domain.Devices.PlacementKind.Everywhere
+                ? "todos os computadores"
+                : device == _account.DeviceId ? "este computador" : $"só em {NicknameOf(device)}";
+        }
+        catch (Exception exception) when (exception is JsonException or InvalidOperationException or FormatException)
+        {
+            return Show(json);
+        }
+    }
 
     private string NicknameOf(Guid? deviceId) =>
         Devices.FirstOrDefault(device => device.Device.DeviceId == deviceId)?.Device.Nickname ?? "outro computador";
@@ -541,6 +574,7 @@ public sealed partial class SyncViewModel : ObservableObject
         SyncFields.TagDirectory.Alias => "alias",
         SyncFields.StickyNote.Content => "texto",
         SyncFields.TimeEntry.Note => "nota",
+        SyncFields.Task.Placement => "onde aparece",
         _ => field,
     };
 

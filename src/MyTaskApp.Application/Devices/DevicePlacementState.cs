@@ -106,6 +106,13 @@ public sealed class DevicePlacementState(IDeviceIdentity device, SyncDeviceDirec
                 .OrderBy(info => info.Nickname, StringComparer.CurrentCultureIgnoreCase)]
             : [];
 
+    /// <summary>
+    /// A conta já teve outro computador, ativo ou revogado: é o que faz o
+    /// seletor aparecer. Com o único outro revogado, as tarefas que ficaram
+    /// nele só se acham em "Todos".
+    /// </summary>
+    public bool HasOtherComputers => IsActive && directory.Devices.Keys.Any(id => !IsHere(id));
+
     public bool IsKnownActiveDevice(Guid deviceId) =>
         IsHere(deviceId) || OtherDevices.Any(info => info.DeviceId == deviceId);
 

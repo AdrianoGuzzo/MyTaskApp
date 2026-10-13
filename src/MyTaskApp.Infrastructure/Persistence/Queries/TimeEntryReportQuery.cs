@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.TimeTracking;
 
@@ -19,7 +20,7 @@ internal sealed class TimeEntryReportQuery(MyTaskAppDbContext context) : ITimeEn
             from entry in context.TimeEntries.AsNoTracking()
             join occurrence in context.Occurrences.AsNoTracking()
                 on entry.TaskOccurrenceId equals occurrence.Id
-            join task in context.Tasks.AsNoTracking()
+            join task in context.Tasks.AsNoTracking().VisibleIn(criteria.Placement ?? PlacementFilter.All)
                 on occurrence.TaskItemId equals task.Id
             select new { Entry = entry, Task = task };
 

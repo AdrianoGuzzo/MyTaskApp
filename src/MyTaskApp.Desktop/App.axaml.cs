@@ -646,6 +646,13 @@ public sealed partial class App : Avalonia.Application
                 () => _ = todayViewModel.LoadAsync(CancellationToken.None));
         }
 
+        // Mandar para outro computador tira a linha daqui; abrir a que chegou apaga o destaque (ADR-062).
+        if (viewModel.Placement is { } placement)
+        {
+            placement.Changed += () => Dispatcher.UIThread.Post(
+                () => _ = todayViewModel.LoadAsync(CancellationToken.None));
+        }
+
         // As etiquetas mudam as bolinhas da linha (ADR-025).
         if (viewModel.Tags is { } tags)
         {

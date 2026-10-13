@@ -4,6 +4,7 @@ using MyTaskApp.Application.Deadlines;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Domain.Agents;
 using MyTaskApp.Domain.Deadlines;
+using MyTaskApp.Domain.Devices;
 using MyTaskApp.Domain.External;
 using MyTaskApp.Domain.Reminders;
 using MyTaskApp.Domain.Tasks;
@@ -72,6 +73,33 @@ public sealed class TaskRowViewModel : ObservableObject
         External = task.External;
 
         WorktreeChoices = Worktree.Worktrees.Select(worktree => new TaskWorktreeChoice(this, worktree)).ToList();
+
+        Placement = task.Placement;
+        HasArrived = task.ReceivedAt is not null;
+    }
+
+    /// <summary>Em qual computador a tarefa aparece; <c>null</c> = legado, em todos (ADR-062).</summary>
+    public DevicePlacement? Placement { get; }
+
+    /// <summary>Outro computador mandou para cá e ela ainda não foi aberta.</summary>
+    public bool HasArrived { get; }
+
+    /// <summary>"⇄ todos os computadores", "→ Notebook": onde a tarefa está, quando importa dizer.</summary>
+    public string? PlacementLabel { get; private set; }
+
+    public bool HasPlacementLabel => PlacementLabel is not null;
+
+    /// <summary>"Chegou do Trabalho": o destaque de quem recebeu.</summary>
+    public string? ArrivalLabel { get; private set; }
+
+    /// <summary>O quadro escreve o lugar e a chegada com os apelidos que conhece.</summary>
+    public void ShowPlacement(string? placementLabel, string? arrivalLabel)
+    {
+        PlacementLabel = placementLabel;
+        ArrivalLabel = arrivalLabel;
+        OnPropertyChanged(nameof(PlacementLabel));
+        OnPropertyChanged(nameof(HasPlacementLabel));
+        OnPropertyChanged(nameof(ArrivalLabel));
     }
 
     /// <summary>

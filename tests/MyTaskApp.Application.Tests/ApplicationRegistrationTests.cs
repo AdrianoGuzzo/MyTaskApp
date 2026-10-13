@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Application;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
@@ -360,6 +361,7 @@ public class ApplicationRegistrationTests
 
         public Task<IReadOnlyList<TodayOccurrenceRow>> GetCandidatesAsync(
             DateOnly today,
+            PlacementFilter placement,
             CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<TodayOccurrenceRow>>([]);
     }

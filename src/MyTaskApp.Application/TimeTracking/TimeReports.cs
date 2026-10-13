@@ -1,3 +1,4 @@
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.TimeTracking;
@@ -24,7 +25,8 @@ public sealed record GetTimeEntries(
     bool? Running = null,
     bool IncludeTrashed = false,
     int Limit = GetTimeEntries.DefaultLimit,
-    int Offset = 0)
+    int Offset = 0,
+    DeviceView? Device = null)
 {
     public const int DefaultLimit = 100;
 
@@ -93,7 +95,8 @@ public sealed record GetTimeSummary(
     string? ExternalKey = null,
     TimeEntrySource? Source = null,
     bool IncludeRunning = true,
-    bool IncludeTrashed = false);
+    bool IncludeTrashed = false,
+    DeviceView? Device = null);
 
 /// <param name="EntryIds">Os períodos que somam este total — de onde ele veio.</param>
 public sealed record TimeSummaryGroup(
@@ -129,7 +132,8 @@ public sealed record TimeEntryReportCriteria(
     string? ExternalKey = null,
     TimeEntrySource? Source = null,
     bool? Running = null,
-    bool IncludeTrashed = false);
+    bool IncludeTrashed = false,
+    PlacementFilter? Placement = null);
 
 public sealed record TimeEntryReportRow(
     Guid EntryId,
@@ -161,8 +165,13 @@ public interface ITimeEntryReportQuery
 public sealed class TimeReportHandlers(
     ITimeEntryReportQuery query,
     IUserClock clock,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider,
+    DevicePlacementState? placements = null)
 {
+    /// <summary>As horas seguem a tarefa: só as das tarefas que aparecem na visão (ADR-062).</summary>
+    private PlacementFilter Filter(DeviceView? device) =>
+        placements?.Filter(device ?? DeviceView.Here) ?? PlacementFilter.All;
+
     public async Task<TimeEntryReport> HandleAsync(GetTimeEntries request, CancellationToken cancellationToken = default)
     {
         if (request.Limit is < 1 or > GetTimeEntries.MaxLimit)
@@ -187,7 +196,8 @@ public sealed class TimeReportHandlers(
                 ExternalKey: TimeReport.NormalizeKey(request.ExternalKey),
                 Source: request.Source,
                 Running: request.Running,
-                IncludeTrashed: request.IncludeTrashed),
+                IncludeTrashed: request.IncludeTrashed,
+                Placement: request.TaskId is null ? Filter(request.Device) : null),
             cancellationToken);
 
         var items = rows.Select(row => Describe(row, window, now)).ToList();
@@ -233,7 +243,8 @@ public sealed class TimeReportHandlers(
                 ExternalKey: TimeReport.NormalizeKey(request.ExternalKey),
                 Source: request.Source,
                 Running: request.IncludeRunning ? null : false,
-                IncludeTrashed: request.IncludeTrashed),
+                IncludeTrashed: request.IncludeTrashed,
+                Placement: request.TaskId is null ? Filter(request.Device) : null),
             cancellationToken);
 
         var items = rows.Select(row => Describe(row, window, now)).Where(item => item.DurationInRange > TimeSpan.Zero).ToList();

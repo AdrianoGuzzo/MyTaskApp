@@ -280,9 +280,11 @@ public sealed class RemoteRefetcher(
             var fetched = await api.FetchAsync(workspaceId, new FetchRequest(chunk), cancellationToken);
             var result = await applier.ApplyAsync(fetched.Changes, nextCursor: null, isolateFailures: true, cancellationToken);
 
-            if (result.TaskIds.Count > 0)
+            if (result.TaskIds.Count > 0 || result.MergedTagIds?.Count > 0)
             {
-                await reconcile.HandleAsync(new ReconcileAfterRemoteChange(result.TaskIds, result.RearmTaskIds), cancellationToken);
+                await reconcile.HandleAsync(
+                    new ReconcileAfterRemoteChange(result.TaskIds, result.RearmTaskIds, result.Moves, result.MergedTagIds),
+                    cancellationToken);
             }
 
             notifier.NotifyChanged(result.Areas);

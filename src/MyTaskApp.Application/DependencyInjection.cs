@@ -63,6 +63,9 @@ public static class DependencyInjection
         // Onde cada tarefa aparece (ADR-062): quem é "este computador".
         services.TryAddSingleton<DevicePlacementState>();
         services.AddScoped<SettleDevicePlacementsHandler>();
+        services.AddScoped<PlaceTaskHandler>();
+        services.AddScoped<PlaceTagHandler>();
+        services.AddScoped<AcknowledgeArrivalHandler>();
 
         services.TryAddSingleton<SyncEngine>();
         services.TryAddSingleton<ISyncCycleRunner>(provider => provider.GetRequiredService<SyncEngine>());

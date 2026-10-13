@@ -2,6 +2,7 @@ using MyTaskApp.Application.Deadlines;
 using MyTaskApp.Application.TimeTracking;
 using MyTaskApp.Domain.Agents;
 using MyTaskApp.Domain.Deadlines;
+using MyTaskApp.Domain.Devices;
 using MyTaskApp.Domain.External;
 using MyTaskApp.Domain.Reminders;
 using MyTaskApp.Domain.Tasks;
@@ -66,7 +67,12 @@ public sealed record TodayTask(
     /// O início do cronômetro que corre nesta ocorrência; <c>null</c> = parado.
     /// O relógio da linha é <c>agora − isto</c>, calculado na tela.
     /// </summary>
-    DateTimeOffset? TimerStartedAt = null);
+    DateTimeOffset? TimerStartedAt = null,
+    /// <summary>Em qual computador a tarefa aparece; <c>null</c> = legado, em todos (ADR-062).</summary>
+    DevicePlacement? Placement = null,
+    /// <summary>Quando outro computador a mandou para cá; <c>null</c> = não chegou agora.</summary>
+    DateTimeOffset? ReceivedAt = null,
+    Guid? ReceivedFromDeviceId = null);
 
 /// <summary>Um worktree da tarefa, com o nome do repositório para a linha e o balão.</summary>
 public sealed record TaskWorktree(
@@ -107,6 +113,12 @@ public sealed record TodayBoard(
     public IReadOnlyList<TodayTask> Deadlines { get; init; } = [];
 
     /// <summary>
+    /// CHEGARAM (ADR-062): pendentes que outro computador mandou para cá e que
+    /// ainda não foram abertas. Ficam só aqui até abrir, e não nas outras seções.
+    /// </summary>
+    public IReadOnlyList<TodayTask> Arrived { get; init; } = [];
+
+    /// <summary>
     /// O cronômetro que corre no app, esteja a tarefa no quadro ou não (ADR-052):
     /// uma tarefa marcada para amanhã também pode estar sendo trabalhada hoje, e
     /// o HUD esconde parte das seções. <c>null</c> = nenhum.
@@ -114,11 +126,11 @@ public sealed record TodayBoard(
     public ActiveTimerView? ActiveTimer { get; init; }
 
     public int TotalVisible =>
-        Overdue.Count + Now.Count + Today.Count + Deadlines.Count + Unscheduled.Count + Completed.Count;
+        Arrived.Count + Overdue.Count + Now.Count + Today.Count + Deadlines.Count + Unscheduled.Count + Completed.Count;
 
-    /// <summary>Tarefa com prazo é trabalho aberto, então PRAZOS conta.</summary>
+    /// <summary>Tarefa com prazo é trabalho aberto, então PRAZOS conta; a que chegou também.</summary>
     public int RemainingCount =>
-        Overdue.Count + Now.Count + Today.Count + Deadlines.Count + Unscheduled.Count;
+        Arrived.Count + Overdue.Count + Now.Count + Today.Count + Deadlines.Count + Unscheduled.Count;
 
     /// <summary>O resumo de prazos do §11, contado sobre todas as seções abertas.</summary>
     public DeadlineSummary DeadlineSummary => DeadlineSummary.Of(

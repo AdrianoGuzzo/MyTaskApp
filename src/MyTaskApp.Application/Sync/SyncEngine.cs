@@ -237,7 +237,7 @@ public sealed class SyncEngine(
             var result = await ApplyPageAsync(page, cursor, cancellationToken);
             pulled |= result.Applied > 0;
 
-            await AfterLocalChangesAsync(result.TaskIds, result.RearmTaskIds, result.Areas, cancellationToken);
+            await AfterLocalChangesAsync(result.TaskIds, result.RearmTaskIds, result.Areas, cancellationToken, result.Moves, result.MergedTagIds);
 
             if (!page.HasMore)
             {
@@ -272,14 +272,17 @@ public sealed class SyncEngine(
         IReadOnlyList<Guid> taskIds,
         IReadOnlyList<Guid> rearmTaskIds,
         DataArea areas,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyList<PlacementMove>? moves = null,
+        IReadOnlyList<Guid>? mergedTagIds = null)
     {
-        if (taskIds.Count > 0)
+        if (taskIds.Count > 0 || mergedTagIds?.Count > 0)
         {
             await runner.RunAsync<ReconcileAfterRemoteChangeHandler>(
-                (handler, token) => handler.HandleAsync(new ReconcileAfterRemoteChange(taskIds, rearmTaskIds), token),
+                (handler, token) => handler.HandleAsync(new ReconcileAfterRemoteChange(taskIds, rearmTaskIds, moves, mergedTagIds), token),
                 cancellationToken);
         }
+
 
         if (areas != DataArea.None)
         {

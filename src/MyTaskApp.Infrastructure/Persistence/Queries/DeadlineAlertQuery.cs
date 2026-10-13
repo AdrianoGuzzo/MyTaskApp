@@ -1,19 +1,23 @@
 using Microsoft.EntityFrameworkCore;
 using MyTaskApp.Application.Deadlines;
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Domain.Tasks;
 
 namespace MyTaskApp.Infrastructure.Persistence.Queries;
 
-internal sealed class DeadlineAlertQuery(MyTaskAppDbContext context) : IDeadlineAlertQuery
+internal sealed class DeadlineAlertQuery(MyTaskAppDbContext context, DevicePlacementState? placements = null) : IDeadlineAlertQuery
 {
     public async Task<IReadOnlyList<DeadlineCandidateRow>> GetCandidatesAsync(
         CancellationToken cancellationToken = default)
     {
+        // Tarefa de outro computador cobra lá, não aqui (ADR-062).
+        var tasks = context.Tasks.VisibleIn(placements?.HereFilter ?? PlacementFilter.All);
+
         // Cai no índice parcial IX_TaskOccurrences_Deadline.
         var occurrences = await context.Occurrences
             .AsNoTracking()
             // Guardado não cobra prazo, pelo mesmo motivo do DueReminderQuery.
-            .Where(occurrence => context.Tasks.Any(task =>
+            .Where(occurrence => tasks.Any(task =>
                 task.Id == occurrence.TaskItemId
                 && task.ArchivedAt == null
                 && task.DeletedAt == null))

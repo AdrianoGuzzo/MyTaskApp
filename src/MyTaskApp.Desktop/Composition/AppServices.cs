@@ -189,6 +189,7 @@ internal static class AppServices
             // duas acima: sao duas telas diferentes para dois checklists
             // diferentes, e o truque do "X que esconde" so faz sentido para
             // quem tem uma instancia so.
+            .AddTransient<TaskPlacementViewModel>()
             .AddTransient<TaskNotesViewModel>()
 
             // O cartão da issue do Jira na janela da tarefa (ADR-045): um por janela.

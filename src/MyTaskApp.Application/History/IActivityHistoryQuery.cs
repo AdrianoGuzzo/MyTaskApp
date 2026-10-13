@@ -1,3 +1,4 @@
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Domain.Planning;
 
 namespace MyTaskApp.Application.History;
@@ -12,10 +13,12 @@ public interface IActivityHistoryQuery
     /// <summary>
     /// As conclusões em <c>[<paramref name="since"/>, <paramref name="until"/>)</c>
     /// e os períodos de trabalho que encostam nesse intervalo — inclusive o que
-    /// começou antes e o que ainda corre. Só o intervalo, nunca o banco inteiro.
+    /// começou antes e o que ainda corre. Só o intervalo, nunca o banco inteiro,
+    /// e só as tarefas que aparecem em <paramref name="placement"/> (ADR-062).
     /// </summary>
     Task<ActivityHistoryRows> GetAsync(
         DateTimeOffset since,
         DateTimeOffset until,
+        PlacementFilter placement,
         CancellationToken cancellationToken = default);
 }

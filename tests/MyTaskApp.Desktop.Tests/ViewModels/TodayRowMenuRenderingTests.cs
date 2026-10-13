@@ -90,6 +90,7 @@ public class TodayRowMenuRenderingTests
             "Abrir Claude Code",
             "Abrir terminal no worktree",
             "Abrir pasta do worktree",
+            "Onde aparece…",
             "Arquivar",
             "Mover para a lixeira…");
     }
@@ -123,11 +124,13 @@ public class TodayRowMenuRenderingTests
 
         // "Abrir Claude Code", o terminal e a pasta são clique de code-behind:
         // podem precisar perguntar o ambiente (ADR-036, ADR-045). O prazo é um
-        // submenu, conferido no teste seguinte.
+        // submenu, conferido no teste seguinte. "Onde aparece…" monta as
+        // escolhas com os computadores da conta, na hora (ADR-062).
         var items = OpenRowMenu(window).Items.OfType<MenuItem>()
             .Where(item => !item.Classes.Contains("startAgent")
                 && !item.Classes.Contains("worktreeAction")
-                && !item.Classes.Contains("deadline"))
+                && !item.Classes.Contains("deadline")
+                && !item.Classes.Contains("placement"))
             .ToList();
 
         items.Should().NotBeEmpty().And.AllSatisfy(item =>

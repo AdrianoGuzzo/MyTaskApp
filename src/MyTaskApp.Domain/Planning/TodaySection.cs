@@ -15,4 +15,10 @@ public enum TodaySection
     /// coisas (ADR-050).
     /// </summary>
     Deadlines = 5,
+
+    /// <summary>
+    /// CHEGARAM: outro computador mandou para cá e ainda ninguém abriu
+    /// (ADR-062). Com ou sem data: quem mandou quer que ela seja vista.
+    /// </summary>
+    Arrived = 6,
 }

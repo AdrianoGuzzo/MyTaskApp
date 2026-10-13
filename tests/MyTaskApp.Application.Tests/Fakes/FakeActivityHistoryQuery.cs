@@ -1,3 +1,4 @@
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Application.History;
 using MyTaskApp.Domain.Planning;
 
@@ -18,6 +19,7 @@ internal sealed class FakeActivityHistoryQuery : IActivityHistoryQuery
     public Task<ActivityHistoryRows> GetAsync(
         DateTimeOffset since,
         DateTimeOffset until,
+        PlacementFilter placement,
         CancellationToken cancellationToken = default)
     {
         Requested = (since, until);

@@ -1,3 +1,4 @@
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Domain.Lifecycle;
 
 namespace MyTaskApp.Application.Lifecycle;
@@ -8,10 +9,12 @@ namespace MyTaskApp.Application.Lifecycle;
 /// <c>null</c> traz tudo. Chega em dias, e não como instante, para que "agora"
 /// continue vindo do <c>TimeProvider</c> e não do relógio da tela.
 /// </param>
+/// <param name="Device">De qual computador (ADR-062); <c>null</c> = este e as compartilhadas.</param>
 public sealed record GetChecklistArchive(
     ChecklistScope Scope,
     string? Search = null,
-    int? WithinDays = null);
+    int? WithinDays = null,
+    DeviceView? Device = null);
 
 /// <summary>
 /// O que a tela precisa desenhar de uma vez. A política vem junto porque
@@ -28,7 +31,8 @@ public sealed record ChecklistArchiveView(
 public sealed class GetChecklistArchiveHandler(
     IChecklistArchiveQuery query,
     IDataRetentionSettingsStore settings,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider,
+    DevicePlacementState? placements = null)
 {
     public async Task<ChecklistArchiveView> HandleAsync(
         GetChecklistArchive command,
@@ -43,6 +47,7 @@ public sealed class GetChecklistArchiveHandler(
         var items = await query.SearchAsync(
             command.Scope,
             command.Search,
+            placements?.Filter(command.Device ?? DeviceView.Here) ?? PlacementFilter.All,
             since,
             cancellationToken);
 
