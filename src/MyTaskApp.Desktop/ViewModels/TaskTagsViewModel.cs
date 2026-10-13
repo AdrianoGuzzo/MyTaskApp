@@ -154,6 +154,12 @@ public sealed partial class TaskTagsViewModel : ObservableObject
         ShowSelected(ids);
     }
 
+    /// <summary>
+    /// Troca as marcadas pelo que o banco tem agora, sem contar como mudança: é
+    /// a releitura de quem ficou aberto enquanto outra tela mexia na tarefa.
+    /// </summary>
+    public void ShowCurrent(IReadOnlyCollection<Guid> ids) => ShowSelected(ids);
+
     partial void OnSearchTextChanged(string value) => Filter();
 
     private void ShowSelected(IReadOnlyCollection<Guid> ids)

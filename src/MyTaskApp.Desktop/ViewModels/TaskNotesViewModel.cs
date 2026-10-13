@@ -54,7 +54,8 @@ public sealed partial class TaskNotesViewModel(
     ILogger<TaskNotesViewModel> logger,
     TaskIssueViewModel? issue = null,
     TaskDeadlineViewModel? deadline = null,
-    TaskTimeLogViewModel? time = null) : ObservableObject
+    TaskTimeLogViewModel? time = null,
+    TaskTagEditorViewModel? tags = null) : ObservableObject
 {
     public const int NotesTab = 0;
 
@@ -156,6 +157,12 @@ public sealed partial class TaskNotesViewModel(
     /// </summary>
     public TaskTimeLogViewModel? Time { get; } = time;
 
+    /// <summary>
+    /// As etiquetas, abaixo do título. Gravam a cada marca, fora do "Salvar".
+    /// Opcional pelo mesmo motivo do <see cref="Issue"/>.
+    /// </summary>
+    public TaskTagEditorViewModel? Tags { get; } = tags;
+
     public bool IsNotesTab => SelectedTabIndex == NotesTab;
 
     /// <summary>O ponto avisa, da outra aba, que a anotação tem texto não salvo.</summary>
@@ -247,6 +254,7 @@ public sealed partial class TaskNotesViewModel(
 
         Deadline?.Load(row);
         Time?.Load(row);
+        Tags?.Load(row);
 
         if (Issue is { } card)
         {

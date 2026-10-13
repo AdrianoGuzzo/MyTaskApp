@@ -317,6 +317,18 @@ public sealed partial class TaskNotesWindow : Window
         }
     }
 
+    /// <summary>
+    /// O seletor de etiquetas lê a lista a cada abertura, como o da linha: uma
+    /// etiqueta criada agora mesmo já aparece.
+    /// </summary>
+    private void OnTagsFlyoutOpened(object? sender, EventArgs e)
+    {
+        if (ViewModel?.Tags is { } tags)
+        {
+            tags.OpenCommand.Execute(null);
+        }
+    }
+
     /// <summary>Clique numa issue da busca: vincula. No pressionar, como as outras listas.</summary>
     private void OnIssueSuggestionPressed(object? sender, PointerPressedEventArgs e)
     {

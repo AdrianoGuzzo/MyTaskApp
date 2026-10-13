@@ -606,6 +606,14 @@ public sealed partial class App : Avalonia.Application
                 () => _ = todayViewModel.LoadAsync(CancellationToken.None));
         }
 
+        // As etiquetas mudam as bolinhas da linha (ADR-025).
+        if (viewModel.Tags is { } tags)
+        {
+            tags.Changed += () => Dispatcher.UIThread.Post(
+                () => _ = todayViewModel.LoadAsync(CancellationToken.None));
+            tags.ManageRequested += () => ShowTags(services, notes);
+        }
+
         _notes[row.TaskId] = notes;
         notes.Closed += (_, _) =>
         {

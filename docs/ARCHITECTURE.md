@@ -1483,6 +1483,18 @@ capturas, o `Changed` da janela "Etiquetas…" também relê a lista para ela
 bolinhas em vez de recusar a próxima captura, e uma renomeada troca de nome e
 cor. Se a captura falhar, texto e etiquetas ficam, para tentar de novo.
 
+**Etiquetar na janela da tarefa.** Logo abaixo do título editável, as
+etiquetas aparecem como **pílulas com o nome**, porque ali há largura, ao
+contrário da linha de 360px. O botão "Etiquetas" abre o mesmo seletor
+(`TaskTagEditorViewModel`). Ele **grava a cada marca**, como o da linha e o card
+do prazo (ADR-050), e fica **fora do "Salvar"**, que é do título e da anotação:
+um "Cancelar" não desfaz etiqueta. Ao abrir, o seletor relê também **as
+etiquetas da tarefa** (`GetBoardTask`), e não só a lista de todas. A janela
+fica aberta por horas e `SetTaskTags` grava o conjunto inteiro, então marcar
+sobre um retrato velho desfaria em silêncio o que a linha mudou nesse
+meio-tempo. Com a tarefa concluída, a janela é somente leitura: as pílulas
+ficam, sem "×" nem seletor.
+
 **Janela singleton, com o "X" que esconde** (ADR-020), aberta pelo menu ⋯ do
 cabeçalho ou pelo link do seletor vazio. Ela recarrega a cada abertura porque a
 contagem de uso muda enquanto está escondida. Cada mudança dispara `Changed`, e
