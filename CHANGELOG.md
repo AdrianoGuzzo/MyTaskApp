@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.12.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.11.0...v1.12.0) (2026-10-13)
+
+
+### Added
+
+* sincronização opcional entre computadores (ADR-061) ([#76](https://github.com/AdrianoGuzzo/MyTaskApp/issues/76)) ([77a46ae](https://github.com/AdrianoGuzzo/MyTaskApp/commit/77a46aed9b9e74196cbcc8f735ef845bd6e4dda6))
+
 ## [1.11.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.10.0...v1.11.0) (2026-10-13)
 
 
