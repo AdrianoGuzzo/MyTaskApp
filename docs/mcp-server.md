@@ -465,7 +465,7 @@ vez de ganhar uma implementação paralela:
 
 ```powershell
 dotnet test tests/MyTaskApp.Mcp.Tests            # o servidor de verdade, com o cliente oficial
-dotnet test MyTaskApp.slnx                       # tudo
+dotnet test MyTaskApp.slnx                       # todo o desktop
 ```
 
 `MyTaskApp.Mcp.Tests` sobe o Kestrel numa porta livre e fala com ele pelo

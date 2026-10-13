@@ -5756,6 +5756,11 @@ fora de escopo.
 - `ExecuteUpdate`/`ExecuteDelete` continuam proibidos fora de `Sync` e do
   servidor (`NoBulkWritesTests`): uma escrita em lote passaria por fora da
   captura.
+- O servidor tem solution própria, `MyTaskApp.Server.slnx`, no mesmo
+  repositório. `MyTaskApp.slnx` ficou só com o desktop. `Sync.Contracts` está
+  nas duas. A do servidor lista Domain, Application e Infrastructure só porque
+  o ponta a ponta sobe dois desktops reais. O CI e o `coverage.ps1` compilam e
+  testam as duas.
 - O CI ganhou o job `server-integration` no ubuntu, com PostgreSQL por
   Testcontainers. No Windows, esses testes pulam, e a cobertura do desktop vem
   dos testes de captura, aplicação, cliente e motor sobre SQLite.

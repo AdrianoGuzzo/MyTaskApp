@@ -5,7 +5,7 @@
 
   O limite minimo NAO fica aqui: o coverlet.collector nao sabe reprovar. Quem
   reprova e o scripts/coverage.ps1, depois de o ReportGenerator juntar os
-  relatorios dos seis projetos de teste.
+  relatorios de todos os projetos de teste, das duas solutions.
 -->
 <RunSettings>
   <DataCollectionRunSettings>

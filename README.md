@@ -519,6 +519,17 @@ dotnet tool restore
 
 ### Compilar e rodar
 
+O repositório tem duas solutions:
+
+| Solution | O que tem |
+|---|---|
+| `MyTaskApp.slnx` | o app desktop: Domain, Application, Infrastructure, Mcp, Desktop e os testes deles |
+| `MyTaskApp.Server.slnx` | o servidor de sincronização opcional ([guia](docs/sync-server.md)): Server.Api, Server.Application, Server.Infrastructure e os testes deles |
+
+`MyTaskApp.Sync.Contracts` está nas duas, porque é o contrato entre elas. A do
+servidor também lista Domain, Application e Infrastructure, numa pasta
+`desktop`: os testes ponta a ponta sobem dois desktops inteiros contra a API.
+
 ```bash
 dotnet build MyTaskApp.slnx
 dotnet run --project src/MyTaskApp.Desktop
@@ -548,7 +559,8 @@ CI.
 ### Testes
 
 ```bash
-dotnet test MyTaskApp.slnx
+dotnet test MyTaskApp.slnx          # desktop
+dotnet test MyTaskApp.Server.slnx   # servidor de sincronização
 ```
 
 As suítes usam xUnit v3, AwesomeAssertions e NSubstitute:

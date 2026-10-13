@@ -9,12 +9,23 @@ para quem desenvolve a sincronização.
 
 ## Projetos
 
+O servidor tem uma solution própria, `MyTaskApp.Server.slnx`, separada da do
+desktop (`MyTaskApp.slnx`). Abra só ela para trabalhar no servidor:
+
+```powershell
+dotnet build MyTaskApp.Server.slnx
+```
+
 | Projeto | O que tem |
 |---|---|
 | `src/MyTaskApp.Sync.Contracts` | rotas, DTOs, registro dos tipos e campos, validação. Compartilhado com o desktop |
 | `src/MyTaskApp.Server.Application` | a política de mescla, o push, o pull e os dispositivos, sem banco |
 | `src/MyTaskApp.Server.Infrastructure` | `ServerDbContext` (Identity, OpenIddict, chaves do DataProtection, sincronização) e as migrations |
 | `src/MyTaskApp.Server.Api` | o host: Google, OpenIddict, endpoints, rate limit, logs, `Dockerfile` |
+
+A solution também traz Domain, Application e Infrastructure do desktop, numa
+pasta `desktop`. Só os testes ponta a ponta usam esses projetos, para subir dois
+desktops inteiros contra a API. O servidor não referencia nenhum deles.
 
 ## 1. Cliente OAuth no Google Cloud
 
@@ -223,6 +234,7 @@ Sem a propriedade, o app de release não oferece sincronização. A janela diz
 ## 6. Testes
 
 ```powershell
+dotnet test MyTaskApp.Server.slnx                        # tudo do servidor
 dotnet test tests/MyTaskApp.Server.Application.Tests     # sem banco
 dotnet test tests/MyTaskApp.Server.IntegrationTests      # PostgreSQL real
 ```

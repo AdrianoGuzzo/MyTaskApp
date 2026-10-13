@@ -22,13 +22,21 @@ jobs:
         with:
           global-json-file: global.json
 
+      # Duas solutions: o desktop (MyTaskApp.slnx) e o servidor de
+      # sincronização (MyTaskApp.Server.slnx). O CI compila e testa as duas.
       - name: Restaurar
-        run: dotnet restore MyTaskApp.slnx
+        shell: bash # -e: a primeira solution que falhar reprova o passo
+        run: |
+          dotnet restore MyTaskApp.slnx
+          dotnet restore MyTaskApp.Server.slnx
 
       # TreatWarningsAsErrors=true: um aviso novo reprova aqui, não na máquina
       # de quem for gerar a release.
       - name: Compilar
-        run: dotnet build MyTaskApp.slnx -c Release --no-restore
+        shell: bash
+        run: |
+          dotnet build MyTaskApp.slnx -c Release --no-restore
+          dotnet build MyTaskApp.Server.slnx -c Release --no-restore
 
       # Testes + cobertura + portão num passo só: é o mesmo script que roda
       # local (scripts/coverage.ps1), e o mínimo mora nele. Reprova se algum

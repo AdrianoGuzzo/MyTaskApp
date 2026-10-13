@@ -6,9 +6,10 @@
     E o mesmo portao do CI (.github/workflows/ci.yml chama este script): se
     passa aqui, passa la. O minimo mora so aqui, nos parametros abaixo.
 
-    Os seis projetos de teste geram um coverage.cobertura.xml cada um
-    (coverage.runsettings); o ReportGenerator junta os seis. Uma linha
-    coberta por qualquer suite conta como coberta.
+    Roda as duas solutions, a do desktop (MyTaskApp.slnx) e a do servidor
+    (MyTaskApp.Server.slnx). Cada projeto de teste gera um
+    coverage.cobertura.xml (coverage.runsettings); o ReportGenerator junta
+    todos. Uma linha coberta por qualquer suite conta como coberta.
 
     Saidas, em artifacts/coverage:
       report/index.html  relatorio navegavel, linha a linha
@@ -47,7 +48,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $root = Split-Path -Parent $PSScriptRoot
-$solution = Join-Path $root 'MyTaskApp.slnx'
+$solutions = @('MyTaskApp.slnx', 'MyTaskApp.Server.slnx') | ForEach-Object { Join-Path $root $_ }
 $settings = Join-Path $root 'coverage.runsettings'
 $outDir = Join-Path $root 'artifacts/coverage'
 $rawDir = Join-Path $outDir 'raw'
@@ -62,19 +63,23 @@ function Format-Percent([double]$value) {
 # Relatorio velho misturado com o novo daria um numero que ninguem mediu.
 if (Test-Path $outDir) { Remove-Item $outDir -Recurse -Force }
 
-$testArgs = @(
-    'test', $solution,
-    '-c', $Configuration,
-    '--nologo',
-    '--settings', $settings,
-    '--collect', 'XPlat Code Coverage',
-    '--results-directory', $rawDir,
-    '--logger', 'trx'
-)
-if ($NoBuild) { $testArgs += '--no-build' }
+$testsFailed = $false
+foreach ($solution in $solutions) {
+    $testArgs = @(
+        'test', $solution,
+        '-c', $Configuration,
+        '--nologo',
+        '--settings', $settings,
+        '--collect', 'XPlat Code Coverage',
+        '--results-directory', $rawDir,
+        '--logger', 'trx'
+    )
+    if ($NoBuild) { $testArgs += '--no-build' }
 
-& dotnet @testArgs
-$testsFailed = $LASTEXITCODE -ne 0
+    # Uma solution vermelha nao impede a outra de rodar: o relatorio sai inteiro.
+    & dotnet @testArgs
+    if ($LASTEXITCODE -ne 0) { $testsFailed = $true }
+}
 
 # Mesmo com teste vermelho o relatorio sai: ajuda a ver o que ficou de fora.
 $reports = Get-ChildItem $rawDir -Recurse -Filter 'coverage.cobertura.xml' -ErrorAction SilentlyContinue
