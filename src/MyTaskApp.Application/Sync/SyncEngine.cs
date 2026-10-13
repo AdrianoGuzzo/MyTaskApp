@@ -1,6 +1,7 @@
 using System.Reflection;
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Sync.Contracts;
 
 namespace MyTaskApp.Application.Sync;
@@ -114,15 +115,24 @@ public sealed class SyncEngine(
         try
         {
             await api.HelloAsync(Hello(), cancellationToken);
-            directory.Update(await api.DevicesAsync(cancellationToken));
+            await RefreshDevicesAsync(cancellationToken);
 
             if (state.ClientSchemaVersion < SyncSchema.Current)
             {
                 await JoinAsync(workspaceId, state, cancellationToken);
             }
 
+            // O legado criado aqui ganha lugar antes do push, e sobe junto (ADR-062).
+            await SettleAsync(cancellationToken);
+
             var pushed = await PushAllAsync(workspaceId, cancellationToken);
             var pulled = await PullAllAsync(workspaceId, cancellationToken);
+
+            // O que chegou agora pode ser legado de um id antigo daqui: sobe no próximo ciclo.
+            if (pulled)
+            {
+                await SettleAsync(cancellationToken);
+            }
 
             await StoreAsync(store => store.RecordSuccessAsync(pushed, pulled, cancellationToken), cancellationToken);
 
@@ -299,6 +309,27 @@ public sealed class SyncEngine(
         return blocked
             ? new SyncCycleResult(SyncCycleStatus.Blocked, Message: exception.Message)
             : new SyncCycleResult(SyncCycleStatus.Transient, exception.RetryAfter, exception.Message);
+    }
+
+    /// <summary>Os apelidos, em memória e gravados: o "Enviar para" precisa deles sem rede (ADR-062).</summary>
+    private async Task RefreshDevicesAsync(CancellationToken cancellationToken)
+    {
+        var devices = await api.DevicesAsync(cancellationToken);
+        directory.Update(devices);
+        await StoreAsync(store => store.SaveKnownDevicesAsync(devices, cancellationToken), cancellationToken);
+    }
+
+    private async Task SettleAsync(CancellationToken cancellationToken)
+    {
+        var settled = await runner.RunAsync<SettleDevicePlacementsHandler, int>(
+            (handler, token) => handler.HandleAsync(token),
+            cancellationToken);
+
+        if (settled > 0)
+        {
+            logger.LogInformation("SyncPlacementsSettled {Count}", settled);
+            notifier.NotifyChanged(DataArea.Tasks | DataArea.Tags);
+        }
     }
 
     private Task<SyncLocalState> ReadAsync(CancellationToken cancellationToken) =>

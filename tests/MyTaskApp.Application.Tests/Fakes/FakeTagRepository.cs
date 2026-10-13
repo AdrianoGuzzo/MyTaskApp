@@ -41,6 +41,9 @@ internal sealed class FakeTagRepository : ITagRepository, IUnitOfWork
             string.Equals(tag.Name, name, StringComparison.OrdinalIgnoreCase)
             && tag.Id != exceptId));
 
+    public Task<Tag?> FindByNameAsync(string name, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_tags.Values.FirstOrDefault(tag => string.Equals(tag.Name, name, StringComparison.OrdinalIgnoreCase)));
+
     public Task<IReadOnlyCollection<Guid>> FindExistingIdsAsync(
         IReadOnlyCollection<Guid> ids,
         CancellationToken cancellationToken = default) =>

@@ -9,6 +9,7 @@ using MyTaskApp.Application.Configuration;
 using MyTaskApp.Application.DatabaseOperations;
 using MyTaskApp.Application.Deadlines;
 using MyTaskApp.Application.Development;
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Application.External;
 using MyTaskApp.Application.External.Jira;
 using MyTaskApp.Application.History;
@@ -58,6 +59,11 @@ public static class DependencyInjection
         services.TryAddSingleton<ISyncTrigger, SyncTrigger>();
         services.TryAddScoped<ICommandReviewGate, NoCommandReviewGate>();
         services.TryAddSingleton<SyncDeviceDirectory>();
+
+        // Onde cada tarefa aparece (ADR-062): quem é "este computador".
+        services.TryAddSingleton<DevicePlacementState>();
+        services.AddScoped<SettleDevicePlacementsHandler>();
+
         services.TryAddSingleton<SyncEngine>();
         services.TryAddSingleton<ISyncCycleRunner>(provider => provider.GetRequiredService<SyncEngine>());
         services.TryAddSingleton(provider => new SyncScheduler(

@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Application.Tasks;
@@ -32,7 +33,8 @@ public sealed class ConvertStickyNoteToTaskHandler(
     ICurrentUser currentUser,
     IUserClock clock,
     TimeProvider timeProvider,
-    ILogger<ConvertStickyNoteToTaskHandler> logger)
+    ILogger<ConvertStickyNoteToTaskHandler> logger,
+    DevicePlacementState? placements = null)
 {
     public async Task<ConvertStickyNoteToTaskResult> HandleAsync(
         ConvertStickyNoteToTask command,
@@ -71,6 +73,8 @@ public sealed class ConvertStickyNoteToTaskHandler(
                 draft.Description,
                 schedule: TaskSchedule.On(clock.Today),
                 reminder: reminder),
+            // O post-it é de todos; a tarefa que nasce dele, deste computador (ADR-062).
+            placements.ForNew(null),
             cancellationToken);
 
         task.SetTags(tagIds);

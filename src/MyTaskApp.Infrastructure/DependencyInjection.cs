@@ -10,6 +10,7 @@ using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Deadlines;
 using MyTaskApp.Application.DatabaseOperations;
 using MyTaskApp.Application.Development;
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Application.External;
 using MyTaskApp.Application.External.Jira;
 using MyTaskApp.Application.History;
@@ -73,6 +74,11 @@ public static class DependencyInjection
         services.AddScoped<IRemoteChangeApplier, RemoteChangeApplier>();
         services.AddScoped<ISyncReconciler, SyncReconciler>();
         services.AddScoped<ISyncLocalStore, SyncLocalStore>();
+        services.AddScoped<IPendingPlacementQuery, PendingPlacementQuery>();
+
+        // Da Application, mas a ligação com a conta é lida aqui (ADR-062).
+        services.TryAddSingleton<SyncDeviceDirectory>();
+        services.TryAddSingleton<DevicePlacementState>();
 
         // Depois do padrão da Application (que deixa tudo passar): com a
         // sincronização, comando que veio de outro computador espera revisão.

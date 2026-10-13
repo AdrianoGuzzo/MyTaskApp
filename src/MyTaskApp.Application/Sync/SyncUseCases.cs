@@ -88,12 +88,17 @@ public sealed class SyncAccountService(
             ?? throw new DomainException("A conta não tem um espaço de dados. Tente de novo em instantes.");
 
         await api.HelloAsync(SyncEngine.Hello(), cancellationToken);
-        directory.Update(await api.DevicesAsync(cancellationToken));
+        var devices = await api.DevicesAsync(cancellationToken);
+        directory.Update(devices);
 
         await runner.RunAsync<ISyncLocalStore>(
-            (store, token) => store.LinkAsync(
-                new SyncAccountLink(me.User.Id, me.User.DisplayName, me.User.Email, workspace.Id, device.DeviceId, authenticator.ServerBaseUrl!),
-                token),
+            async (store, token) =>
+            {
+                await store.LinkAsync(
+                    new SyncAccountLink(me.User.Id, me.User.DisplayName, me.User.Email, workspace.Id, device.DeviceId, authenticator.ServerBaseUrl!),
+                    token);
+                await store.SaveKnownDevicesAsync(devices, token);
+            },
             cancellationToken);
 
         logger.LogInformation("SyncConnected {WorkspaceId}", workspace.Id);
@@ -124,6 +129,7 @@ public sealed class SyncAccountService(
     {
         var devices = await api.DevicesAsync(cancellationToken);
         directory.Update(devices);
+        await runner.RunAsync<ISyncLocalStore>((store, token) => store.SaveKnownDevicesAsync(devices, token), cancellationToken);
         return devices;
     }
 

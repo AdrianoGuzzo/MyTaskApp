@@ -18,6 +18,9 @@ public interface ITagRepository
         Guid? exceptId = null,
         CancellationToken cancellationToken = default);
 
+    /// <summary>A etiqueta com este nome, sem diferenciar maiúsculas.</summary>
+    Task<Tag?> FindByNameAsync(string name, CancellationToken cancellationToken = default);
+
     /// <summary>Quais dos ids informados existem, numa consulta só.</summary>
     Task<IReadOnlyCollection<Guid>> FindExistingIdsAsync(
         IReadOnlyCollection<Guid> ids,
