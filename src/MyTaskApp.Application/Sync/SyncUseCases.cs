@@ -301,7 +301,7 @@ public sealed class ApproveCommandReviewHandler(ISyncLocalStore store)
         store.MarkCommandReviewedAsync(command.EntityType, command.EntityId, cancellationToken);
 }
 
-/// <summary>De onde veio a tarefa, para a linha da janela: "Criada no Notebook · 12/10 · alterada no Desktop".</summary>
+/// <summary>De onde veio a tarefa, para a linha da janela: "Criada em Notebook · 12/10 · alterada por último em Desktop".</summary>
 public sealed record TaskOriginView(string CreatedOn, DateTimeOffset? CreatedAt, string? UpdatedOn, DateTimeOffset? UpdatedAt);
 
 public sealed record GetTaskOrigin(Guid TaskId);

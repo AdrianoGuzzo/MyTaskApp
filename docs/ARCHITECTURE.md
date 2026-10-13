@@ -15,7 +15,11 @@ havia mais de um caminho razoável.
 | xUnit | **v3** (3.2.2) | obrigatório: `Avalonia.Headless.XUnit` depende de `xunit.v3.extensibility.core` |
 | Asserts | AwesomeAssertions 9.6.0 | ver ADR-006 |
 | Avalonia.Controls.ColorPicker | 12.1.2 | só o `ColorView` da janela de etiquetas (ADR-025) |
-| Npgsql | 10.0.2 | só o ADO.NET, para as consultas de leitura das operações de banco (ADR-056); o EF continua só SQLite |
+| Npgsql | 10.0.3 | o ADO.NET das operações de banco (ADR-056); subiu de 10.0.2 porque o provider do EF exige |
+| Npgsql.EntityFrameworkCore.PostgreSQL | 10.0.3 | só o servidor de sincronização (ADR-060); o desktop continua só SQLite |
+| ASP.NET Core Identity + Google + DataProtection.EF | 10.0.12 | contas do servidor de sincronização, só por login externo (ADR-060) |
+| OpenIddict | 7.7.2 | servidor OAuth do desktop: code + PKCE, refresh rotativo, revogação (ADR-060) |
+| Testcontainers.PostgreSql | 4.16.0 | testes do servidor contra PostgreSQL real; pulam sem Docker |
 
 Versões centralizadas em `Directory.Packages.props` (Central Package Management).
 `Avalonia.Diagnostics` **não existe** na linha 12.x (parou na 11.3.22); DevTools
@@ -5411,3 +5415,189 @@ A revisão achou mais quatro pontos, e todos entraram:
   busca e relatório.
 - **Desktop:** a tela com gerente falso, a janela headless, a bandeja e o
   composition root real.
+
+## ADR-060 — Sincronização opcional: outbox local, mescla por campo no servidor
+
+**Contexto:** o usuário quer as mesmas tarefas em vários computadores, sem
+perder o que o app é hoje: local, rápido e inteiro sem rede. As exigências:
+
+- a sincronização é **opcional**: sem conta, nada muda e nada é gravado;
+- nada de senha, token ou connection string sai do computador;
+- caminho de pasta de um computador nunca sobrescreve o de outro;
+- login pelo Google, sem segredo dentro do executável do desktop;
+- dispositivos com apelido e revogação, e isolamento entre contas.
+
+O guia de uso e o fluxo estão em [`sync.md`](sync.md). O servidor, a
+configuração e a implantação estão em [`sync-server.md`](sync-server.md).
+
+**Decisão:** um servidor próprio (ASP.NET Core + PostgreSQL), opcional. No
+desktop, um **outbox** gravado na mesma transação da mudança, e um ciclo
+push → pull por polling. O servidor é a autoridade da ordem: ele **mescla por
+campo** e decide o conflito pela versão dele, e não pelo relógio de ninguém.
+
+### Alternativas
+
+- **CRDT por campo** (LWW-register, OR-set). Converge sem servidor central, mas
+  o "vencedor" seria o relógio de um computador, e o perdedor sumiria sem
+  aviso. Pediria ainda metadados por campo em todas as tabelas do SQLite. O
+  pedido é ver o que perdeu, e o servidor já existe para a conta.
+- **Last-write-wins pela data de alteração.** Simples, mas o relógio do
+  notebook atrasado ganharia ou perderia por acaso, e a edição de outro campo
+  seria apagada junto.
+- **Mescla arbitrada pelo servidor (escolhida).** O servidor guarda, por
+  campo, a versão e o dispositivo da última escrita. Uma operação diz em que
+  versão se baseou. Campo que ninguém mexeu depois dessa versão é aplicado.
+  Campo que outro dispositivo mexeu volta recusado, com o valor do servidor, e
+  vira conflito visível no dispositivo que perdeu. A sincronização nunca
+  trava.
+- **Banco compartilhado** (Litestream, réplica do SQLite, pasta na nuvem). Não
+  separa o que é de cada máquina (caminhos, janelas, segredos) e corrompe com
+  dois escritores.
+
+### Classificação dos dados
+
+Cada tipo sincronizado tem um mapa explícito de campos no
+`MyTaskApp.Sync.Contracts`: nome, tipo, nulidade, tamanho, imutável, política
+de conflito, referências e chave única. Do lado do desktop, cada coluna do EF
+é **compartilhada** ou **só local**. Um teste percorre todas as colunas
+mapeadas e falha com coluna sem classificação, inclusive em owned types.
+
+Dado que nunca sai da máquina não está no mapa e, portanto, não tem como sair.
+A tabela completa está em [`sync.md`](sync.md#o-que-sincroniza). As decisões
+que mudam o domínio são mínimas:
+
+- **`TagDirectory.Path` passa a ser anulável:** "não mapeado neste computador".
+  A migration `TagDirectoryPathOptional` recria a tabela sem perder linhas.
+- **`TaskDevelopmentStatus.NotCreatedHere`:** o ambiente veio de outro
+  computador. "Iniciar implementação" o cria aqui.
+- **`TaskItem.ReconcileDerivedState()`:** depois de uma mudança remota,
+  recalcula a conclusão e o estado dos lembretes, sem regra paralela.
+
+### Captura: interceptor, retrato e outbox
+
+Nenhum caso de uso muda. Um `SaveChangesInterceptor` (`SyncCaptureInterceptor`)
+funciona assim:
+
+- só age com a instalação ligada a uma conta (`SyncCaptureSwitch`);
+- usa o change tracker para achar as raízes tocadas. Cada raiz é projetada
+  pelo mapa e comparada com o **retrato** guardado em `SyncEntityStates`. Isso
+  resolve owned substituído e listas reaproveitadas por posição, que o change
+  tracker sozinho descreve mal;
+- grava a operação no `SyncOutbox` **no mesmo `SaveChanges`**, portanto na
+  mesma transação, inclusive dentro de `ExecuteInTransactionAsync`;
+- junta duas edições seguidas numa operação ainda não tentada;
+- de uma exclusão, manda só a raiz. As cascatas são do servidor;
+- não captura o cronômetro enquanto ele roda (`EndedAt == null`).
+
+A origem da tarefa (quem criou, quando, quem mexeu por último) mora em
+`SyncEntityStates`, e não nas tabelas de domínio.
+
+### Aplicação remota: SQL pelos metadados do EF
+
+O que chega do servidor é escrito pelo `SqlRowWriter`: SQL parametrizado,
+montado a partir dos metadados do EF (nome de coluna e conversores de ticks,
+enum, `DateOnly`). Esse caminho:
+
+- não passa pelos guards do domínio, que recusariam estado legítimo vindo de
+  outro computador (uma tarefa concluída lá, um alias já mudado);
+- não precisa dos construtores privados;
+- não passa pelo interceptor, então não gera operação de volta. Um
+  `SyncSuppression` (`AsyncLocal`) é a segunda barreira;
+- não tem as colunas locais no mapa, então é impossível escrever um caminho
+  vindo de fora. Linha nova recebe os padrões locais: pasta nula, ambiente
+  "não criado aqui", post-it fechado.
+
+Cada página é uma transação SQLite que também avança o cursor. Se uma página
+falha três vezes, ela é aplicada linha a linha, com savepoint, e a linha ruim
+fica marcada para "Tentar de novo" via `/fetch`. Campo com operação local
+pendente mantém o valor local.
+
+### Servidor
+
+- **Cursor denso.** O push trava a linha do workspace (`SELECT … FOR UPDATE`)
+  e numera cada mudança com `LastSeq + 1`. O número confirma em ordem, e
+  nenhum leitor pula uma transação lenta. O pull lê as entidades compactadas
+  por `LastSeq`. O pai vai junto se ainda não foi entregue, e a ocorrência
+  anda com a tarefa. O cursor é opaco, e um cursor à frente do servidor
+  (backup restaurado) recebe 410, e o cliente recomeça do zero.
+- **Idempotência.** `ProcessedOperations` guarda o resultado de cada `OpId`,
+  com o hash do pedido. O reenvio devolve o mesmo resultado como duplicado, e o
+  mesmo `OpId` com outro conteúdo é recusado.
+- **Exclusão não ressuscita.** Excluir vira tombstone, propagado pelas
+  referências. Update em tombstone volta `entity_deleted`. Só associações
+  (tarefa ↔ etiqueta, com id UUIDv5 determinístico) podem reviver.
+- **Isolamento.** Toda referência precisa existir **no mesmo workspace**. Quem
+  não é membro recebe 404. O `device_id` da operação tem de ser o do token.
+
+### Autenticação
+
+- O Identity só aceita login externo (Google, com `prompt=select_account`). O
+  cookie dele vive 10 minutos e só serve para atravessar o
+  `/connect/authorize`. **A API nunca aceita cookie**, só Bearer, então não há
+  CSRF possível nela. O logout por formulário tem antiforgery.
+- O OpenIddict é o servidor OAuth do desktop:
+  - cliente público `mytaskapp-desktop`, sem secret;
+  - authorization code com **PKCE S256 obrigatório** (o `plain` foi removido);
+  - redirect exato em `127.0.0.1:47833`;
+  - access token de 15 min e refresh rotativo de 30 dias;
+  - uma autorização por dispositivo, com a claim `device_id`, e validação da
+    autorização a cada chamada. Revogar o dispositivo derruba os tokens dele
+    na hora.
+- O token do Google nunca é token da API.
+- O desktop guarda o refresh token no cofre do sistema e o access token só na
+  memória. A renovação é serializada, e um 401 renova uma vez e tenta de novo.
+  Um dispositivo revogado que tenta entrar recebe `device_revoked` e volta
+  como dispositivo novo.
+- Rate limit: login por IP, sincronização em token bucket por usuário, resto
+  da API por usuário. O 429 traz `Retry-After`, que o agendador respeita como
+  piso.
+- Logs sem token, código, query nem corpo, no servidor e no desktop. Um teste
+  procura tokens no log do servidor.
+
+### Comandos de outro computador
+
+O texto de um comando é dado compartilhado, mas rodá-lo é deste computador. Um
+comando global, do diretório ou do ambiente alterado por **outro**
+dispositivo passa pelo `ICommandReviewGate` antes da primeira execução. Ele é
+chamado pelos três caminhos de execução, e a janela de Sincronização mostra o
+texto inteiro e a origem.
+
+Executar comandos remotamente, terminais remotos e envio de arquivos ficam
+fora de escopo.
+
+### Desktop: agendador e tela
+
+- O `SyncScheduler` roda 3 s depois de uma mudança local, a cada 60 s e na
+  hora com "Sincronizar agora". É execução única. Falha passageira espera com
+  *full jitter* entre 2 s e 5 min. Bloqueado (login vencido, dispositivo
+  revogado, app velho), ele só acorda com um aviso.
+- A janela "Sincronização…" mostra conta, estado, conflitos, falhas, comandos a
+  revisar e dispositivos. A janela da tarefa mostra a origem.
+- O `DeviceId` fica em `%LOCALAPPDATA%`, fora do banco: um banco copiado para
+  outra máquina não se passa pela original.
+
+### Consequências
+
+- O desktop ganhou quatro tabelas (`SyncFoundation`, aditiva) e uma coluna
+  anulável. Instalação sem conta não grava nada nelas.
+- Toda coluna nova num tipo sincronizado exige decidir "vai ou fica", e o
+  teste de classificação lembra.
+- `ExecuteUpdate`/`ExecuteDelete` continuam proibidos fora de `Sync` e do
+  servidor (`NoBulkWritesTests`): uma escrita em lote passaria por fora da
+  captura.
+- O CI ganhou o job `server-integration` no ubuntu, com PostgreSQL por
+  Testcontainers. No Windows, esses testes pulam, e a cobertura do desktop vem
+  dos testes de captura, aplicação, cliente e motor sobre SQLite.
+
+**Testes:**
+
+- **Contratos:** JSON, UUIDv5, coerência do registro e validação.
+- **Server.Application:** mescla, push, pull e dispositivos, em memória.
+- **Server.IntegrationTests:** PostgreSQL real, a API pelo HTTP (PKCE, tokens,
+  revogação, isolamento, rate limit, logs) e o ponta a ponta com dois desktops
+  inteiros: origem, mescla, conflito e reaplicação, exclusão sem ressurreição,
+  resposta perdida e reinício, diretório por computador, instalação existente,
+  revogação, token vencido no meio do ciclo e isolamento entre contas.
+- **Infrastructure:** captura, aplicação remota, cliente HTTP e motor contra um
+  servidor roteirizado.
+- **Desktop:** a janela, a linha de origem e o composition root real.
