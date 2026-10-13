@@ -198,6 +198,9 @@ internal static class AppServices
             // A aba "Tempo" da janela da tarefa (ADR-052): uma por janela.
             .AddTransient<TaskTimeLogViewModel>()
 
+            // As etiquetas no cabeçalho da janela da tarefa (ADR-025): uma por janela.
+            .AddTransient<TaskTagEditorViewModel>()
+
             // A aba Desenvolvimento de cada anotação (ADR-027): uma por janela,
             // como a própria anotação, com um ambiente por repositório (ADR-031).
             .AddTransient<TaskDevelopmentsViewModel>()

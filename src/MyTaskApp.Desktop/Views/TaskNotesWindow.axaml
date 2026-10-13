@@ -89,6 +89,81 @@
     </Style>
 
     <!--
+      Etiquetas (ADR-025): pílula, bolinha e seletor iguais aos da lista
+      (TodayView), para a mesma etiqueta não ter dois desenhos.
+    -->
+    <Style Selector="Border.tagChip">
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetPillRadius}" />
+      <Setter Property="Padding" Value="8,2,3,2" />
+      <Setter Property="Margin" Value="0,0,6,6" />
+    </Style>
+
+    <Style Selector="Border.tagChip TextBlock">
+      <Setter Property="FontSize" Value="11.5" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Button.tagRemove">
+      <Setter Property="FontFamily" Value="{StaticResource WidgetIconFont}" />
+      <Setter Property="FontSize" Value="8" />
+      <Setter Property="Padding" Value="3" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- Discreto como os botões do card da issue: o título é o assunto. -->
+    <Style Selector="Button.addTag">
+      <Setter Property="FontSize" Value="11.5" />
+      <Setter Property="Padding" Value="8,3" />
+      <Setter Property="Margin" Value="0,0,0,6" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="VerticalAlignment" Value="Top" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetStrokeBrush}" />
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetPillRadius}" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextMidBrush}" />
+    </Style>
+
+    <Style Selector="Button.addTag:pointerover">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.addTagGlyph">
+      <Setter Property="FontFamily" Value="{StaticResource WidgetIconFont}" />
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Ellipse.tagDot">
+      <Setter Property="Width" Value="8" />
+      <Setter Property="Height" Value="8" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="CheckBox.tagOption">
+      <Setter Property="MinHeight" Value="28" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+
+    <Style Selector="TextBlock.tagHint">
+      <Setter Property="FontSize" Value="11.5" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+    </Style>
+
+    <Style Selector="Button.tagManage">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Padding" Value="0,2" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetAccentBrush}" />
+    </Style>
+
+    <!--
       Botão da barra de formatação. Mesma receita do Button.chrome: o fundo do
       hover mora no ContentPresenter do template, senão o tema Fluent repinta
       por cima do Setter do Background.
@@ -812,6 +887,118 @@
                      Text="{Binding TitleError}"
                      Foreground="{DynamicResource WidgetDangerBrush}"
                      IsVisible="{Binding TitleError, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+          <!--
+            As etiquetas (ADR-025), com o nome por extenso: aqui há largura, ao
+            contrário das bolinhas da linha. O seletor é o mesmo da linha e grava
+            a cada marca, fora do "Salvar" — que é do título e da anotação.
+          -->
+          <ContentControl x:Name="TagSection"
+                          Margin="0,4,0,2"
+                          Content="{Binding Tags}"
+                          IsVisible="{Binding Tags.IsVisible, FallbackValue=False}">
+            <ContentControl.ContentTemplate>
+              <DataTemplate x:DataType="vm:TaskTagEditorViewModel">
+                <WrapPanel>
+                  <ItemsControl ItemsSource="{Binding Tags.Selected}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <WrapPanel />
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:TagChipViewModel">
+                        <Border Classes="tagChip" Background="{Binding Fill}">
+                          <StackPanel Orientation="Horizontal" Spacing="4">
+                            <TextBlock Text="{Binding Name}"
+                                       Foreground="{Binding Foreground}"
+                                       MaxWidth="220"
+                                       TextTrimming="CharacterEllipsis" />
+                            <Button Classes="tagRemove"
+                                    Content="&#xE711;"
+                                    Foreground="{Binding Foreground}"
+                                    ToolTip.Tip="Remover esta etiqueta"
+                                    IsVisible="{Binding #Root.((vm:TaskNotesViewModel)DataContext).Tags.IsEditable, FallbackValue=False}"
+                                    Command="{Binding #Root.((vm:TaskNotesViewModel)DataContext).Tags.RemoveTagCommand}"
+                                    CommandParameter="{Binding}" />
+                          </StackPanel>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+
+                  <Button x:Name="TagPickerButton"
+                          Classes="addTag"
+                          ToolTip.Tip="Escolher as etiquetas desta tarefa"
+                          IsVisible="{Binding IsEditable}">
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                      <TextBlock Classes="addTagGlyph" Text="&#xE8EC;" />
+                      <TextBlock Text="Etiquetas" />
+                    </StackPanel>
+                    <Button.Flyout>
+                      <Flyout Placement="BottomEdgeAlignedLeft" Opened="OnTagsFlyoutOpened">
+                        <StackPanel Width="260" Margin="2" Spacing="8">
+
+                          <TextBlock Text="{Binding Tags.Heading}" FontWeight="SemiBold" />
+
+                          <TextBox FontSize="12"
+                                   PlaceholderText="Pesquisar etiqueta…"
+                                   Text="{Binding Tags.SearchText}"
+                                   IsVisible="{Binding !Tags.HasNoTagsAtAll}" />
+
+                          <TextBlock Classes="tagHint"
+                                     Text="Carregando…"
+                                     IsVisible="{Binding Tags.IsLoading}" />
+
+                          <ScrollViewer MaxHeight="240" HorizontalScrollBarVisibility="Disabled">
+                            <ItemsControl ItemsSource="{Binding Tags.Options}">
+                              <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:TagOptionViewModel">
+                                  <CheckBox Classes="tagOption"
+                                            IsChecked="{Binding IsSelected, Mode=OneWay}"
+                                            Command="{Binding #Root.((vm:TaskNotesViewModel)DataContext).Tags.ToggleTagCommand}"
+                                            CommandParameter="{Binding}">
+                                    <StackPanel Orientation="Horizontal" Spacing="7">
+                                      <Ellipse Classes="tagDot" Fill="{Binding Tag.Fill}" />
+                                      <TextBlock Text="{Binding Tag.Name}"
+                                                 FontSize="12"
+                                                 VerticalAlignment="Center"
+                                                 TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                  </CheckBox>
+                                </DataTemplate>
+                              </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                          </ScrollViewer>
+
+                          <TextBlock Classes="tagHint"
+                                     Text="Nada encontrado."
+                                     IsVisible="{Binding Tags.HasNoMatches}" />
+
+                          <TextBlock Classes="tagHint"
+                                     Text="Nenhuma etiqueta ainda. Crie a primeira para começar a organizar."
+                                     IsVisible="{Binding Tags.HasNoTagsAtAll}" />
+
+                          <TextBlock Text="{Binding Tags.ErrorMessage}"
+                                     FontSize="11.5"
+                                     TextWrapping="Wrap"
+                                     Foreground="{DynamicResource WidgetDangerBrush}"
+                                     IsVisible="{Binding Tags.ErrorMessage, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+                          <Button HorizontalAlignment="Left"
+                                  Classes="tagManage"
+                                  Content="Gerenciar etiquetas…"
+                                  Command="{Binding ManageCommand}" />
+
+                        </StackPanel>
+                      </Flyout>
+                    </Button.Flyout>
+                  </Button>
+                </WrapPanel>
+              </DataTemplate>
+            </ContentControl.ContentTemplate>
+          </ContentControl>
+
           <TextBlock Classes="pageHint"
                      Text="Anote aqui o que mais precisa saber sobre esta tarefa."
                      IsVisible="{Binding IsEditable}" />
