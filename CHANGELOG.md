@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.13.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.12.0...v1.13.0) (2026-10-13)
+
+
+### Added
+
+* cada computador com a sua lista, e enviar ou compartilhar a tarefa entre eles (ADR-062) ([#78](https://github.com/AdrianoGuzzo/MyTaskApp/issues/78)) ([7455470](https://github.com/AdrianoGuzzo/MyTaskApp/commit/74554707950f0ce7fe43b72235e65064d8393850))
+
 ## [1.12.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.11.0...v1.12.0) (2026-10-13)
 
 
