@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using MyTaskApp.Application.Commands;
 using MyTaskApp.Application.QuickCommands;
 using MyTaskApp.Domain.Commands;
 
@@ -9,15 +10,19 @@ namespace MyTaskApp.Desktop.ViewModels;
 /// <summary>Um parâmetro a preencher antes de executar (ADR-051).</summary>
 public sealed partial class QuickCommandFieldViewModel : ObservableObject
 {
-    public QuickCommandFieldViewModel(CommandParameterSpec spec)
+    public QuickCommandFieldViewModel(CommandParameterSpec spec, IReadOnlyList<CommandPlaceholder>? placeholders = null)
     {
         Spec = spec;
+        Placeholders = new PlaceholderCompletionViewModel { Items = placeholders ?? CommandPlaceholders.Variables() };
         _value = spec.Type == CommandParameterType.Choice
             ? spec.DefaultValue ?? spec.Choices.FirstOrDefault() ?? string.Empty
             : spec.DefaultValue ?? string.Empty;
     }
 
     public CommandParameterSpec Spec { get; }
+
+    /// <summary>O <c>{</c> do campo: os apelidos de banco e as variáveis, com o valor deste ambiente (ADR-060).</summary>
+    public PlaceholderCompletionViewModel Placeholders { get; }
 
     public string Name => Spec.Name;
 
@@ -52,7 +57,8 @@ public sealed partial class QuickCommandPromptViewModel : ObservableObject
     public QuickCommandPromptViewModel(QuickCommandPlan plan)
     {
         _plan = plan;
-        Fields = [.. plan.Entry.Parameters.Select(spec => new QuickCommandFieldViewModel(spec))];
+        var placeholders = plan.Placeholders;
+        Fields = [.. plan.Entry.Parameters.Select(spec => new QuickCommandFieldViewModel(spec, placeholders))];
 
         foreach (var field in Fields)
         {

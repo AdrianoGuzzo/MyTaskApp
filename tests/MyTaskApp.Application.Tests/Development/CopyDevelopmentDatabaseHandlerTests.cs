@@ -63,6 +63,7 @@ public class CopyDevelopmentDatabaseHandlerTests
     private CopyDevelopmentDatabaseHandler Handler() => new(
         _tasks,
         _scenario.Catalog.Connections,
+        _scenario.Catalog.SavedDatabases,
         _scenario.RunHandler(),
         _tasks,
         _scenario.Clock,
@@ -93,6 +94,24 @@ public class CopyDevelopmentDatabaseHandlerTests
 
         result.Development.Database!.Name.Should().Be("eco_core_1010_20261008_184102");
         _tasks.SaveCount.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public async Task ACopyFromAnAlias_RecordsTheAlias_ThatNamesTheVariable()
+    {
+        Ready();
+        var saved = SavedDatabase.Create("lock_eco_core_1010", _server.Id, "eco_core_1010", _profile.Id, DatabaseCopyScenario.Now);
+        _scenario.Catalog.SavedDatabases.Items.Add(saved);
+
+        var result = await Handler().HandleAsync(
+            new CopyDevelopmentDatabase(_task.Id, DevelopmentId, Request() with { SavedDatabaseId = saved.Id }, ProductionConfirmed: true),
+            null,
+            Ct);
+
+        result.Copy.Succeeded.Should().BeTrue(result.Copy.Error);
+        _task.Developments[0].Database!.Alias.Should().Be("lock_eco_core_1010");
+        _task.Developments[0].Database!.Name.Should().Be("lock_eco_core_1010_20261008_184102");
+        result.Development.Database!.Alias.Should().Be("lock_eco_core_1010");
     }
 
     [Fact]

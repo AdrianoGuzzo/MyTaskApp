@@ -5502,6 +5502,44 @@ Não há cópia padrão por diretório: o usuário escolhe a cada ambiente.
 - **A dica da lista pós-Worktree** não pede mais `worktree=…` nem
   `database=…`: as variáveis de contexto ficam no texto, como na execução.
 
+### `{apelido}` e o autocompletar com `{`
+
+O nome do apelido de banco também é variável: `{lock_eco_core_1010}` vale o
+banco copiado quando a cópia do ambiente veio daquele apelido. O retrato do
+banco guarda o apelido (`Database_Alias`, migration `DevelopmentDatabaseAlias`).
+Continua um banco por ambiente.
+
+- **Variável de runtime.** Os apelidos só existem no cadastro, então o
+  `CommandContext` ganhou `DatabaseAliasVariable`: nomes fora da lista fixa,
+  com valor, adiados ou indisponíveis com motivo.
+  - O apelido da cópia vale o nome do banco, mesmo que tenha saído do cadastro.
+  - Os outros dizem de onde o banco veio ("veio do apelido X", "não veio de
+    um apelido", "não tem banco copiado").
+  - Uma variável fixa com o mesmo nome (`database`, `branch`…) vence.
+  - O resolvedor passou a olhar `context.Knows(nome)`, e não só a lista fixa.
+    Por isso o apelido tem a mesma conferência de motivo e de caractere
+    perigoso, na entrada literal, no `@global` e no valor explícito.
+- **Nome de apelido nunca é parâmetro.** O editor de comandos globais grava
+  uma definição para todo `{nome}`, então "o parâmetro declarado vence" não
+  funcionaria.
+  - `ParametersOf` exclui os apelidos, e o comando rápido não pede o valor.
+  - O editor não cria a linha de parâmetro.
+  - Só o `nome=valor` explícito vence.
+  - Um parâmetro antigo com o nome de um apelido criado depois passa a ser
+    preenchido pelo ambiente.
+- **Antes do worktree,** `ValidateCommandEntries` recebe o apelido da cópia
+  marcada (o apelido escolhido, ou o do perfil, se existir). Ele fica adiado
+  como `{database}`, e os outros são recusados com o motivo.
+- **O `{`.** `AliasCompletion.FindToken` ganhou o gatilho.
+  - O `{` vale em qualquer lugar da linha, menos depois de `$` e `@`
+    (`${env:X}`, `HEAD@{1}`).
+  - Aceitar engole o `}` que já estava depois do cursor.
+  - A fonte é `PlaceholderCompletionViewModel`, com a lista de
+    `CommandPlaceholders`: os apelidos primeiro, depois as variáveis.
+  - Na lista pós-Worktree é um segundo popup na mesma caixa do `@`. Na
+    janela de parâmetros é o `ParameterValueBox`, com o valor de cada
+    variável neste ambiente.
+
 ### Fechar a janela e o app
 
 - A janela da tarefa **não fecha** com cópia em andamento. Ela mostra a aba e

@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Commands;
+using MyTaskApp.Application.DatabaseOperations;
 using MyTaskApp.Application.Development;
 using MyTaskApp.Desktop.Composition;
 using MyTaskApp.Desktop.Development;
@@ -1421,6 +1422,20 @@ public sealed partial class TaskDevelopmentViewModel(
             // Sem a lista, o autocomplete só não abre; digitar o comando continua valendo.
             logger.LogWarning(exception, "DevelopmentCommandsLoadFailed");
         }
+
+        try
+        {
+            // Os apelidos de banco viram {apelido} na dica e no { (ADR-060).
+            var aliases = await runner.RunAsync<GetSavedDatabasesHandler, IReadOnlyList<SavedDatabaseRow>>(
+                (handler, token) => handler.HandleAsync(new GetSavedDatabases(), token),
+                cancellationToken);
+
+            Commands.SetDatabaseAliases(aliases);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.LogWarning(exception, "DatabaseAliasesLoadFailed");
+        }
     }
 
     private async Task<bool> SaveCommandsCoreAsync()
@@ -1466,7 +1481,8 @@ public sealed partial class TaskDevelopmentViewModel(
         try
         {
             await runner.RunAsync<ValidateCommandEntriesHandler, IReadOnlyList<ResolvedCommand>>(
-                (handler, token) => handler.HandleAsync(new ValidateCommandEntries(entries, Database.CopyOnCreate), token),
+                (handler, token) => handler.HandleAsync(
+                    new ValidateCommandEntries(entries, Database.CopyOnCreate, Database.ScheduledAlias), token),
                 CancellationToken.None);
 
             return true;

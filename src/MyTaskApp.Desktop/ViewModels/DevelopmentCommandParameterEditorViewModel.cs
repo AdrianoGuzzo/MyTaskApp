@@ -57,11 +57,18 @@ public sealed partial class DevelopmentCommandParameterEditorViewModel : Observa
             .Select(variable => variable.Placeholder))
         + ". Caminho com espaço vai entre aspas: code \"{worktree}\". "
         + "{database…} só existe com um banco copiado para o ambiente, e também vale no valor de um parâmetro: "
-        + "@configura nomebanco={database}.";
+        + "@configura nomebanco={database}. O nome de um apelido de banco, como {lock_eco_core_1010}, "
+        + "vale o banco copiado daquele apelido.";
 
-    /// <summary>Os <c>{nome}</c> que o usuário preenche: as variáveis de contexto ficam de fora.</summary>
-    public static IReadOnlyList<string> UserParameters(string? command) =>
-        [.. CommandParameters.Names(command).Where(name => !CommandVariables.IsContextName(name))];
+    /// <summary>
+    /// Os <c>{nome}</c> que o usuário preenche: as variáveis de contexto ficam de
+    /// fora, e os apelidos de banco também — <c>{lock_eco_core_1010}</c> é o
+    /// banco copiado (ADR-060).
+    /// </summary>
+    public static IReadOnlyList<string> UserParameters(string? command, IReadOnlyCollection<string>? databaseAliases = null) =>
+        [.. CommandParameters.Names(command).Where(name =>
+            !CommandVariables.IsContextName(name)
+            && databaseAliases?.Contains(name, StringComparer.OrdinalIgnoreCase) != true)];
 
     /// <summary>
     /// Uma linha por <c>{nome}</c> do texto. Com <paramref name="saved"/>, parte
@@ -70,13 +77,14 @@ public sealed partial class DevelopmentCommandParameterEditorViewModel : Observa
     public static void Sync(
         ObservableCollection<DevelopmentCommandParameterEditorViewModel> editors,
         string? command,
-        IReadOnlyList<CommandParameterSpec>? saved)
+        IReadOnlyList<CommandParameterSpec>? saved,
+        IReadOnlyCollection<string>? databaseAliases = null)
     {
         var current = editors.ToDictionary(editor => editor.Name, StringComparer.OrdinalIgnoreCase);
 
         editors.Clear();
 
-        foreach (var name in UserParameters(command))
+        foreach (var name in UserParameters(command, databaseAliases))
         {
             var spec = saved?.FirstOrDefault(item => string.Equals(item.Name, name, StringComparison.OrdinalIgnoreCase));
 

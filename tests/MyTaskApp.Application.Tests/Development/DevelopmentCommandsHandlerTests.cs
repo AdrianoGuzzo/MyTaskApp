@@ -23,6 +23,7 @@ public class DevelopmentCommandsHandlerTests
 
     private readonly FakeTaskItemRepository _tasks = new();
     private readonly FakeDevelopmentCommandRepository _globals = new();
+    private readonly FakeSavedDatabaseRepository _aliases = new();
     private readonly FakeCommandExecutor _executor = new();
     private readonly FakeDirectoryProbe _disk = new();
     private readonly List<CommandStepProgress> _progress = [];
@@ -46,7 +47,7 @@ public class DevelopmentCommandsHandlerTests
     }
 
     private RunDevelopmentCommandsHandler Runner() =>
-        new(_tasks, _globals, _executor, _disk, NullLogger<RunDevelopmentCommandsHandler>.Instance);
+        new(_tasks, _globals, _aliases, _executor, _disk, NullLogger<RunDevelopmentCommandsHandler>.Instance);
 
     private Task<CommandRunSummary> RunAsync(CancellationToken? cancellationToken = null) =>
         Runner().HandleAsync(
@@ -206,7 +207,7 @@ public class DevelopmentCommandsHandlerTests
     [Fact]
     public async Task Validate_AcceptsAliasesThatExist_AndLiterals()
     {
-        var resolved = await new ValidateCommandEntriesHandler(_globals).HandleAsync(
+        var resolved = await new ValidateCommandEntriesHandler(_globals, _aliases).HandleAsync(
             new ValidateCommandEntries(["@restore", "git status"]), Ct);
 
         resolved.Select(step => step.Command).Should().Equal("dotnet restore", "git status");
@@ -215,7 +216,7 @@ public class DevelopmentCommandsHandlerTests
     [Fact]
     public async Task Validate_NamesEveryMissingAlias()
     {
-        var validate = () => new ValidateCommandEntriesHandler(_globals).HandleAsync(
+        var validate = () => new ValidateCommandEntriesHandler(_globals, _aliases).HandleAsync(
             new ValidateCommandEntries(["@restore", "@sumiu", "@outro"]), Ct);
 
         await validate.Should().ThrowAsync<DomainException>().WithMessage("*@sumiu, @outro não existem*");
@@ -226,9 +227,9 @@ public class DevelopmentCommandsHandlerTests
     {
         _globals.Seed("@eco-sync", "eco-sync {nomebanco} -Dev");
 
-        var ok = await new ValidateCommandEntriesHandler(_globals).HandleAsync(
+        var ok = await new ValidateCommandEntriesHandler(_globals, _aliases).HandleAsync(
             new ValidateCommandEntries(["@eco-sync nomebanco=MeuBanco"]), Ct);
-        var validate = () => new ValidateCommandEntriesHandler(_globals).HandleAsync(
+        var validate = () => new ValidateCommandEntriesHandler(_globals, _aliases).HandleAsync(
             new ValidateCommandEntries(["@restore", "@eco-sync", "@sumiu"]), Ct);
 
         ok.Single().Command.Should().Be("eco-sync MeuBanco -Dev");

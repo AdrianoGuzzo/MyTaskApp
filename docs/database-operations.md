@@ -523,6 +523,7 @@ comandos o recebem nestas variáveis:
 | `{database.host}` | o servidor da conexão de destino |
 | `{database.port}` | a porta dela |
 | `{database.user}` | o usuário dela |
+| `{apelido}` (ex.: `{lock_eco_core_1010}`) | o banco copiado, quando a cópia veio daquele apelido |
 
 Valem nos comandos pós-Worktree, nos comandos globais chamados por `@` e nos
 comandos rápidos:
@@ -531,7 +532,18 @@ comandos rápidos:
 configura-ambiente {database}                      direto na lista pós-Worktree
 @configura-ambiente nomebanco={database}           um comando pronto com parâmetro
 psql -h {database.host} -p {database.port} -U {database.user} -d {database}
+configura-ambiente {lock_eco_core_1010}            o nome do apelido também serve
 ```
+
+- **Digite `{`** na lista pós-Worktree ou num campo da janela de parâmetros:
+  aparece a lista com os apelidos de banco e as variáveis do ambiente, e
+  Enter ou Tab insere o `{nome}` já fechado. Na janela de parâmetros, cada um
+  vem com o valor que vai entrar.
+- `{apelido}` vale só o apelido de onde a cópia do ambiente veio. Outro
+  apelido, ou um ambiente sem banco, faz o comando parar dizendo de onde o
+  banco veio. Um comando global com `{lock_eco_core_1010}` não pede valor:
+  o nome do apelido é sempre o banco copiado, a não ser que a chamada passe
+  `lock_eco_core_1010=outro_valor`.
 
 - Num comando rápido com parâmetro, digite `{database}` no valor, ou deixe
   `{database}` como **valor padrão** do parâmetro: a prévia já mostra o nome

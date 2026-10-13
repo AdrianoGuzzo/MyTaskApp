@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MyTaskApp.Application.Commands;
+using MyTaskApp.Application.DatabaseOperations;
 using MyTaskApp.Domain.Commands;
 
 namespace MyTaskApp.Desktop.ViewModels;
@@ -19,9 +20,13 @@ public sealed partial class PostWorktreeCommandItemViewModel : ObservableObject
         _owner = owner;
         _text = text;
         Completion = new CommandCompletionViewModel(owner.Catalog) { IsEnabled = owner.CanEdit };
+        Placeholders = new PlaceholderCompletionViewModel { IsEnabled = owner.CanEdit, Items = owner.PlaceholderItems };
     }
 
     public CommandCompletionViewModel Completion { get; }
+
+    /// <summary>O <c>{</c> desta linha: os apelidos de banco e as variáveis (ADR-060).</summary>
+    public PlaceholderCompletionViewModel Placeholders { get; }
 
     public CommandOutputViewModel Output { get; } = new();
 
@@ -74,22 +79,13 @@ public sealed partial class PostWorktreeCommandItemViewModel : ObservableObject
                     : null;
             }
 
-            var expansion = CommandAliasResolver.Expand(row.Command, Text.Trim()[alias.Length..], FilledWhenRunning);
+            var expansion = CommandAliasResolver.Expand(row.Command, Text.Trim()[alias.Length..], _owner.FilledWhenRunning);
 
             return expansion.IsComplete
                 ? $"→ {expansion.Command}"
                 : $"⚠ Falta preencher: {string.Join(' ', expansion.Missing.Select(name => $"{name}=…"))}";
         }
     }
-
-    /// <summary>
-    /// As variáveis que o ambiente preenche na hora de rodar — <c>{worktree}</c>,
-    /// <c>{database}</c>… — não são parâmetro em falta: ficam no texto da dica.
-    /// <c>{tag}</c> fica de fora: aqui ninguém a preenche. Se o banco não for
-    /// copiado, quem avisa é a validação do "Iniciar implementação" (ADR-060).
-    /// </summary>
-    private static readonly CommandContext FilledWhenRunning = CommandContext.Deferred(
-        CommandVariables.All.Select(variable => variable.Name).Where(name => name != CommandVariables.Tag));
 
     public bool HasHint => Hint is not null;
 
@@ -186,6 +182,44 @@ public sealed partial class PostWorktreeCommandsViewModel : ObservableObject
     public DevelopmentCommandCatalog Catalog { get; }
 
     public ObservableCollection<PostWorktreeCommandItemViewModel> Items { get; } = [];
+
+    /// <summary>O que o <c>{</c> oferece: os apelidos de banco primeiro, depois as variáveis (ADR-060).</summary>
+    public IReadOnlyList<CommandPlaceholder> PlaceholderItems { get; private set; } = CommandPlaceholders.Variables();
+
+    /// <summary>
+    /// As variáveis que o ambiente preenche na hora de rodar — <c>{worktree}</c>,
+    /// <c>{database}</c>, <c>{apelido}</c>… — não são parâmetro em falta: ficam
+    /// no texto da dica. <c>{tag}</c> fica de fora: aqui ninguém a preenche. Se o
+    /// banco não for copiado, quem avisa é a validação do "Iniciar
+    /// implementação" (ADR-060).
+    /// </summary>
+    internal CommandContext FilledWhenRunning { get; private set; } = DeferredWith([]);
+
+    /// <summary>Os apelidos de banco cadastrados: viram <c>{apelido}</c> na dica e no <c>{</c>.</summary>
+    public void SetDatabaseAliases(IReadOnlyList<SavedDatabaseRow> aliases)
+    {
+        PlaceholderItems =
+        [
+            .. aliases.Select(alias => new CommandPlaceholder(
+                alias.Alias,
+                $"{CommandPlaceholders.AliasDescription} · {alias.DatabaseName}",
+                IsDatabaseAlias: true)),
+            .. CommandPlaceholders.Variables(),
+        ];
+        FilledWhenRunning = DeferredWith(aliases.Select(alias => alias.Alias));
+
+        foreach (var item in Items)
+        {
+            item.Placeholders.Items = PlaceholderItems;
+            item.RefreshHint();
+        }
+    }
+
+    private static CommandContext DeferredWith(IEnumerable<string> aliases) =>
+        CommandContext.Deferred(
+            CommandVariables.All.Select(variable => variable.Name).Where(name => name != CommandVariables.Tag),
+            new Dictionary<string, string>(),
+            [.. aliases.Select(alias => new DatabaseAliasVariable(alias))]);
 
     /// <summary>A lista global já chegou: sem ela, "não existe" seria mentira.</summary>
     public bool CatalogLoaded { get; private set; }
@@ -490,6 +524,7 @@ public sealed partial class PostWorktreeCommandsViewModel : ObservableObject
         foreach (var item in Items)
         {
             item.Completion.IsEnabled = CanEdit;
+            item.Placeholders.IsEnabled = CanEdit;
             item.RefreshEditable();
         }
     }

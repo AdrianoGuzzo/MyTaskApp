@@ -59,6 +59,12 @@ public sealed class TaskDevelopmentDatabase
 
     public DateTimeOffset CopiedAt { get; private set; }
 
+    /// <summary>
+    /// O apelido de onde a cópia veio (ADR-057), ou <c>null</c>. É o
+    /// <c>{lock_eco_core_1010}</c> que os comandos trocam pelo <see cref="Name"/>.
+    /// </summary>
+    public string? Alias { get; private set; }
+
     public static TaskDevelopmentDatabase Create(
         Guid connectionId,
         string? connectionName,
@@ -67,7 +73,8 @@ public sealed class TaskDevelopmentDatabase
         string? username,
         string? name,
         Guid? auditId,
-        DateTimeOffset copiedAt)
+        DateTimeOffset copiedAt,
+        string? alias = null)
     {
         if (connectionId == Guid.Empty)
         {
@@ -87,7 +94,10 @@ public sealed class TaskDevelopmentDatabase
             Required(username, DatabaseConnection.MaxIdentifierLength, "o usuário"),
             DatabaseConnection.DatabaseName(name ?? string.Empty),
             auditId == Guid.Empty ? null : auditId,
-            copiedAt);
+            copiedAt)
+        {
+            Alias = string.IsNullOrWhiteSpace(alias) ? null : SavedDatabase.NormalizeAlias(alias),
+        };
     }
 
     private static string Required(string? value, int maxLength, string what)

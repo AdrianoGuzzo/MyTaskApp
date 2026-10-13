@@ -48,9 +48,15 @@ public sealed record DevelopmentCommandRow(
             command.TagDirectoryId);
 
     /// <summary>A definição de cada <c>{nome}</c> do texto (ver <see cref="DevelopmentCommand.ParametersOf"/>).</summary>
-    public IReadOnlyList<CommandParameterSpec> ParametersOf(string text) =>
+    /// <param name="databaseAliases">
+    /// Os apelidos de banco (ADR-060): <c>{lock_eco_core_1010}</c> é o banco
+    /// copiado, e não um parâmetro — mesmo que o editor tenha gravado uma
+    /// definição para ele.
+    /// </param>
+    public IReadOnlyList<CommandParameterSpec> ParametersOf(string text, IReadOnlyCollection<string>? databaseAliases = null) =>
         [.. CommandParameters.Names(text)
-            .Where(name => !CommandVariables.IsContextName(name))
+            .Where(name => !CommandVariables.IsContextName(name)
+                           && databaseAliases?.Contains(name, StringComparer.OrdinalIgnoreCase) != true)
             .Select(name => (Parameters ?? []).FirstOrDefault(
                                 spec => string.Equals(spec.Name, name, StringComparison.OrdinalIgnoreCase))
                             ?? CommandParameterSpec.Plain(name))];

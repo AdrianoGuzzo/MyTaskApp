@@ -14,7 +14,9 @@ public sealed record DevelopmentDatabaseView(
     string Username,
     string ConnectionName,
     Guid ConnectionId,
-    DateTimeOffset CopiedAt)
+    DateTimeOffset CopiedAt,
+    /// <summary>O apelido de onde a cópia veio; é também o nome da variável, <c>{alias}</c>.</summary>
+    string? Alias = null)
 {
     public static DevelopmentDatabaseView? From(TaskDevelopmentDatabase? database) =>
         database is null
@@ -26,7 +28,8 @@ public sealed record DevelopmentDatabaseView(
                 database.Username,
                 database.ConnectionName,
                 database.ConnectionId,
-                database.CopiedAt);
+                database.CopiedAt,
+                database.Alias);
 }
 
 /// <summary>
@@ -97,6 +100,7 @@ public sealed record DevelopmentDatabaseCopyResult(DatabaseCopyResult Copy, Task
 public sealed class CopyDevelopmentDatabaseHandler(
     ITaskItemRepository tasks,
     IDatabaseConnectionRepository connections,
+    ISavedDatabaseRepository savedDatabases,
     RunDatabaseCopyHandler copy,
     IUnitOfWork unitOfWork,
     TimeProvider timeProvider,
@@ -126,6 +130,11 @@ public sealed class CopyDevelopmentDatabaseHandler(
         var destination = await connections.FindByIdAsync(command.Request.DestinationConnectionId, CancellationToken.None)
             ?? throw new DomainException("A conexão de destino não existe mais. O banco foi criado, mas não ficou no ambiente.");
 
+        // O apelido nomeia a variável {apelido}; apagado no meio da cópia, a cópia fica sem ele.
+        var alias = command.Request.SavedDatabaseId is { } savedId
+            ? (await savedDatabases.FindByIdAsync(savedId, CancellationToken.None))?.Alias
+            : null;
+
         task.SetDevelopmentDatabase(
             command.DevelopmentId,
             TaskDevelopmentDatabase.Create(
@@ -136,7 +145,8 @@ public sealed class CopyDevelopmentDatabaseHandler(
                 destination.Username,
                 name,
                 result.AuditId,
-                timeProvider.GetUtcNow()));
+                timeProvider.GetUtcNow(),
+                alias));
 
         // O banco já existe no servidor: registrar não pode ser cancelado.
         await unitOfWork.SaveChangesAsync(CancellationToken.None);

@@ -94,6 +94,10 @@ internal sealed class TaskDevelopmentConfiguration : IEntityTypeConfiguration<Ta
             database.Property(value => value.AuditId)
                 .HasColumnName("Database_AuditId");
 
+            database.Property(value => value.Alias)
+                .HasColumnName("Database_Alias")
+                .HasMaxLength(SavedDatabase.MaxAliasLength);
+
             database.Property(value => value.CopiedAt)
                 .HasColumnName("Database_CopiedAt")
                 .HasConversion(UtcInstantConverter.Instance)

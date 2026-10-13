@@ -253,7 +253,8 @@ public static class CommandAliasResolver
             explicitValues[name] = expanded.Command!;
         }
 
-        var used = CommandVariables.Used(command);
+        // As variáveis que o contexto conhece: as fixas e os apelidos de banco (ADR-060).
+        var used = Known(command, context);
 
         foreach (var name in used)
         {
@@ -302,7 +303,7 @@ public static class CommandAliasResolver
     /// </summary>
     public static AliasExpansion FillContext(string text, CommandContext context)
     {
-        foreach (var name in CommandVariables.Used(text))
+        foreach (var name in Known(text, context))
         {
             if (context.UnavailableReason(name) is { } reason)
             {
@@ -318,6 +319,9 @@ public static class CommandAliasResolver
 
         return new AliasExpansion(CommandVariables.Fill(text, context.ValueOf), []);
     }
+
+    private static List<string> Known(string text, CommandContext context) =>
+        [.. CommandVariables.Placeholders(text).Where(context.Knows)];
 
     private static string UnavailableMessage(string name, string reason) =>
         $"a variável {{{name}}} não tem valor: {reason}";

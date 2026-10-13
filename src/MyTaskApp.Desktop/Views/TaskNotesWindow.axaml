@@ -1959,6 +1959,7 @@
                       <SelectableTextBlock Classes="code" x:Name="DatabaseName" Text="{Binding Current.Name, FallbackValue=''}" />
                       <TextBlock Classes="hint" TextWrapping="Wrap" Text="{Binding DatabaseServer}" />
                       <TextBlock Classes="hint" Text="{Binding CopiedAtText}" />
+                      <TextBlock x:Name="DatabaseVariablesText" Classes="hint" TextWrapping="Wrap" Text="{Binding VariablesText}" />
                     </StackPanel>
 
                     <TextBlock x:Name="NoDatabaseText"

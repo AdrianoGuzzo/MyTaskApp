@@ -280,7 +280,8 @@ public class TaskDevelopmentPersistenceTests
         {
             var task = await new TaskItemRepository(write).FindByIdAsync(seeded.Id, Ct);
             task!.SetDevelopmentDatabase(task.Developments[0].Id, TaskDevelopmentDatabase.Create(
-                connectionId, "Local", "localhost", 5433, "postgres", "eco_core_20261013_101500", auditId, Now.AddMinutes(5)));
+                connectionId, "Local", "localhost", 5433, "postgres", "eco_core_20261013_101500", auditId, Now.AddMinutes(5),
+                "lock_eco_core"));
             await write.SaveChangesAsync(Ct);
         }
 
@@ -297,6 +298,7 @@ public class TaskDevelopmentPersistenceTests
             database.Name.Should().Be("eco_core_20261013_101500");
             database.AuditId.Should().Be(auditId);
             database.CopiedAt.Should().Be(Now.AddMinutes(5));
+            database.Alias.Should().Be("lock_eco_core");
         }
 
         await using (var write = db.CreateContext())
@@ -311,5 +313,6 @@ public class TaskDevelopmentPersistenceTests
         var replaced = (await new TaskItemRepository(last).FindByIdAsync(seeded.Id, Ct))!.Developments.Single().Database!;
         replaced.Name.Should().Be("eco_core_20261013_120000");
         replaced.AuditId.Should().BeNull();
+        replaced.Alias.Should().BeNull("a cópia nova não veio de apelido");
     }
 }

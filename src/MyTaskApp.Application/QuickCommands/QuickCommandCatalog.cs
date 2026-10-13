@@ -87,9 +87,11 @@ public static class QuickCommandCatalog
     /// Os globais e os comandos só dos diretórios que casaram (ADR-055): a
     /// associação diz qual é qual, e os dois viram botão do mesmo jeito.
     /// </param>
+    /// <param name="databaseAliases">Os apelidos de banco: viram o banco copiado, e não parâmetro (ADR-060).</param>
     public static IReadOnlyList<QuickCommandEntry> Entries(
         IReadOnlyList<CommandDirectoryMatch> matches,
-        IReadOnlyList<DevelopmentCommandRow> commands)
+        IReadOnlyList<DevelopmentCommandRow> commands,
+        IReadOnlyCollection<string>? databaseAliases = null)
     {
         var entries = new List<QuickCommandEntry>();
         var seen = new HashSet<Guid>();
@@ -120,7 +122,7 @@ public static class QuickCommandCatalog
                     Combine(match.Offset, folder),
                     global.KeepTerminalOpen,
                     global.RequiresConfirmation,
-                    global.ParametersOf(template),
+                    global.ParametersOf(template, databaseAliases),
                     match.Directory.TagName,
                     match.Directory.Alias,
                     binding.IsCustomized));
@@ -134,7 +136,10 @@ public static class QuickCommandCatalog
     /// "+ Executar comando…": qualquer global, como cadastrado, a partir da raiz
     /// do worktree. O <c>{tag}</c> é a etiqueta do primeiro diretório que casou.
     /// </summary>
-    public static QuickCommandEntry AdHoc(DevelopmentCommandRow global, IReadOnlyList<CommandDirectoryMatch> matches) =>
+    public static QuickCommandEntry AdHoc(
+        DevelopmentCommandRow global,
+        IReadOnlyList<CommandDirectoryMatch> matches,
+        IReadOnlyCollection<string>? databaseAliases = null) =>
         new(
             global.Id,
             null,
@@ -145,7 +150,7 @@ public static class QuickCommandCatalog
             global.WorkingDirectory,
             global.KeepTerminalOpen,
             global.RequiresConfirmation,
-            global.ParametersOf(global.Command),
+            global.ParametersOf(global.Command, databaseAliases),
             matches.Count > 0 ? matches[0].Directory.TagName : null,
             matches.Count > 0 ? matches[0].Directory.Alias : null,
             false);

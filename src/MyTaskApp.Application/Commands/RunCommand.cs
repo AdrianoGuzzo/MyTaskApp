@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.DatabaseOperations;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.Commands;
 
@@ -66,10 +67,22 @@ internal static class GlobalCommandLookup
 /// Um banco será copiado para o ambiente antes dos comandos (ADR-060): só então
 /// <c>{database}</c> e as irmãs podem aparecer na lista.
 /// </param>
-public sealed record ValidateCommandEntries(IReadOnlyList<string> Entries, bool DatabaseScheduled = false);
+/// <param name="DatabaseAlias">
+/// O apelido de onde a cópia agendada vem: <c>{apelido}</c> fica para a
+/// execução; os outros apelidos são recusados com o motivo.
+/// </param>
+public sealed record ValidateCommandEntries(
+    IReadOnlyList<string> Entries,
+    bool DatabaseScheduled = false,
+    string? DatabaseAlias = null);
 
-public sealed class ValidateCommandEntriesHandler(IDevelopmentCommandRepository commands)
+public sealed class ValidateCommandEntriesHandler(
+    IDevelopmentCommandRepository commands,
+    ISavedDatabaseRepository savedDatabases)
 {
+    private const string NoCopyReason =
+        "nenhum banco será copiado para este ambiente. Marque \"Copiar banco para este ambiente\" ou tire a variável.";
+
     /// <summary>
     /// O worktree ainda não existe: as variáveis dele não podem faltar, e ficam
     /// para a execução (ADR-051). <c>{tag}</c> não: a lista pós-Worktree não vem
@@ -79,26 +92,46 @@ public sealed class ValidateCommandEntriesHandler(IDevelopmentCommandRepository 
         .Select(variable => variable.Name)
         .Where(name => name != CommandVariables.Tag && !CommandVariables.DatabaseNames.Contains(name))];
 
-    private static readonly CommandContext BeforeTheWorktree = CommandContext.Deferred(
-        WorktreeVariables,
-        CommandContext.DatabaseUnavailable(
-            "nenhum banco será copiado para este ambiente. Marque \"Copiar banco para este ambiente\" ou tire a variável."));
-
-    /// <summary>Com a cópia marcada, o banco também fica para a execução.</summary>
-    private static readonly CommandContext BeforeTheWorktreeAndTheCopy = CommandContext.Deferred(
-        WorktreeVariables.Concat(CommandVariables.DatabaseNames));
-
     public async Task<IReadOnlyList<ResolvedCommand>> HandleAsync(
         ValidateCommandEntries query,
         CancellationToken cancellationToken = default)
     {
         var globals = await GlobalCommandLookup.LoadAsync(commands, cancellationToken);
-        var context = query.DatabaseScheduled ? BeforeTheWorktreeAndTheCopy : BeforeTheWorktree;
-        var resolved = CommandAliasResolver.Resolve(query.Entries, globals, context);
+        var aliases = await DatabaseAliasNames.ListAsync(savedDatabases, cancellationToken);
+        var resolved = CommandAliasResolver.Resolve(query.Entries, globals, ContextFor(query, aliases));
 
         GlobalCommandLookup.EnsureResolved(resolved);
 
         return resolved;
+    }
+
+    /// <summary>Com a cópia marcada, o banco — e o apelido dela — também ficam para a execução.</summary>
+    private static CommandContext ContextFor(ValidateCommandEntries query, IReadOnlyList<string> aliases)
+    {
+        var scheduledAlias = query.DatabaseScheduled ? query.DatabaseAlias : null;
+
+        var otherReason = !query.DatabaseScheduled
+            ? NoCopyReason
+            : scheduledAlias is null
+                ? "a cópia marcada não vem de um apelido. Use {database}, ou escolha a cópia por este apelido."
+                : $"a cópia marcada vem do apelido {scheduledAlias}. Use {{{scheduledAlias}}} ou {{database}}.";
+
+        var aliasVariables = aliases
+            .Where(alias => !string.Equals(alias, scheduledAlias, StringComparison.OrdinalIgnoreCase))
+            .Select(alias => new DatabaseAliasVariable(alias, UnavailableReason: otherReason))
+            .ToList();
+
+        if (scheduledAlias is not null)
+        {
+            aliasVariables.Add(new DatabaseAliasVariable(scheduledAlias));
+        }
+
+        return query.DatabaseScheduled
+            ? CommandContext.Deferred(
+                WorktreeVariables.Concat(CommandVariables.DatabaseNames),
+                new Dictionary<string, string>(),
+                aliasVariables)
+            : CommandContext.Deferred(WorktreeVariables, CommandContext.DatabaseUnavailable(NoCopyReason), aliasVariables);
     }
 }
 

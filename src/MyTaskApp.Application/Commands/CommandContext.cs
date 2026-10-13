@@ -21,6 +21,12 @@ namespace MyTaskApp.Application.Commands;
 /// (ADR-060) — o comando é recusado com a explicação, em vez de levar
 /// <c>{database}</c> cru ao shell.
 /// </para>
+/// <para>
+/// Os <b>apelidos de banco</b> também são variáveis, mas só existem em runtime:
+/// <c>{lock_eco_core_1010}</c> vale o banco copiado quando a cópia do ambiente
+/// veio daquele apelido, e os outros apelidos ficam indisponíveis com o motivo
+/// (ADR-060). Uma variável fixa com o mesmo nome vence.
+/// </para>
 /// </remarks>
 public sealed class CommandContext
 {
@@ -32,16 +38,20 @@ public sealed class CommandContext
 
     private readonly Dictionary<string, string> _unavailable;
 
+    private readonly HashSet<string> _aliases = new(StringComparer.OrdinalIgnoreCase);
+
     /// <param name="values">Nome da variável → valor; <c>null</c> é adiado.</param>
     /// <param name="windows">
     /// Qual shell recebe a linha, para saber o que ele interpretaria. Padrão: o
     /// sistema em que o app roda.
     /// </param>
     /// <param name="unavailable">Nome da variável → por que este ambiente não a tem.</param>
+    /// <param name="aliases">Os apelidos de banco, cada um com valor, adiado ou indisponível.</param>
     public CommandContext(
         IEnumerable<KeyValuePair<string, string?>> values,
         bool? windows = null,
-        IEnumerable<KeyValuePair<string, string>>? unavailable = null)
+        IEnumerable<KeyValuePair<string, string>>? unavailable = null,
+        IEnumerable<DatabaseAliasVariable>? aliases = null)
     {
         _values = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
         _unavailable = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -62,6 +72,24 @@ public sealed class CommandContext
             }
         }
 
+        foreach (var alias in aliases ?? [])
+        {
+            // A variável fixa vence: um apelido "database" não troca o {database}.
+            if (CommandVariables.IsContextName(alias.Name) || !_aliases.Add(alias.Name))
+            {
+                continue;
+            }
+
+            if (alias.UnavailableReason is { } reason)
+            {
+                _unavailable[alias.Name] = reason;
+            }
+            else
+            {
+                _values[alias.Name] = alias.Value;
+            }
+        }
+
         IsWindows = windows ?? OperatingSystem.IsWindows();
     }
 
@@ -75,12 +103,21 @@ public sealed class CommandContext
         new(names.Select(name => new KeyValuePair<string, string?>(name, null)));
 
     /// <summary>Como <see cref="Deferred(IEnumerable{string})"/>, com as que este ambiente não terá.</summary>
-    public static CommandContext Deferred(IEnumerable<string> names, IReadOnlyDictionary<string, string> unavailable) =>
-        new(names.Select(name => new KeyValuePair<string, string?>(name, null)), unavailable: unavailable);
+    public static CommandContext Deferred(
+        IEnumerable<string> names,
+        IReadOnlyDictionary<string, string> unavailable,
+        IEnumerable<DatabaseAliasVariable>? aliases = null) =>
+        new(names.Select(name => new KeyValuePair<string, string?>(name, null)), unavailable: unavailable, aliases: aliases);
 
     /// <summary>Tudo o que o ambiente da tarefa sabe dizer.</summary>
     /// <param name="tagName">A etiqueta do diretório que ofereceu o comando; sem ela, <c>{tag}</c> fica sem valor.</param>
-    public static CommandContext For(TaskItem task, TaskDevelopment development, string? tagName, bool? windows = null)
+    /// <param name="aliases">Os apelidos de banco cadastrados, para valerem como <c>{apelido}</c>.</param>
+    public static CommandContext For(
+        TaskItem task,
+        TaskDevelopment development,
+        string? tagName,
+        bool? windows = null,
+        IEnumerable<string>? aliases = null)
     {
         var values = new Dictionary<string, string?>
         {
@@ -100,9 +137,11 @@ public sealed class CommandContext
             values[CommandVariables.Tag] = tagName;
         }
 
+        var aliasVariables = AliasesFor(development.Database, aliases ?? []);
+
         if (development.Database is not { } database)
         {
-            return new CommandContext(values, windows, DatabaseUnavailable(NoDatabaseReason));
+            return new CommandContext(values, windows, DatabaseUnavailable(NoDatabaseReason), aliasVariables);
         }
 
         values[CommandVariables.Database] = database.Name;
@@ -111,7 +150,36 @@ public sealed class CommandContext
         values[CommandVariables.DatabasePort] = database.Port.ToString(CultureInfo.InvariantCulture);
         values[CommandVariables.DatabaseUser] = database.Username;
 
-        return new CommandContext(values, windows);
+        return new CommandContext(values, windows, aliases: aliasVariables);
+    }
+
+    /// <summary>
+    /// Cada apelido como variável: o da cópia do ambiente vale o banco criado;
+    /// os outros explicam de onde o banco veio. O apelido da cópia vale mesmo
+    /// que tenha saído do cadastro depois.
+    /// </summary>
+    public static IReadOnlyList<DatabaseAliasVariable> AliasesFor(TaskDevelopmentDatabase? database, IEnumerable<string> aliases)
+    {
+        var variables = new List<DatabaseAliasVariable>();
+
+        if (database?.Alias is { } current)
+        {
+            variables.Add(new DatabaseAliasVariable(current, database.Name));
+        }
+
+        var reason = database switch
+        {
+            null => NoDatabaseReason,
+            { Alias: { } copied } =>
+                $"o banco deste ambiente veio do apelido {copied}. Use {{{copied}}} ou {{database}}, ou copie deste apelido.",
+            _ => $"o banco deste ambiente ({database.Name}) não veio de um apelido. Use {{database}}, ou copie deste apelido.",
+        };
+
+        variables.AddRange(aliases
+            .Where(alias => !string.Equals(alias, database?.Alias, StringComparison.OrdinalIgnoreCase))
+            .Select(alias => new DatabaseAliasVariable(alias, UnavailableReason: reason)));
+
+        return variables;
     }
 
     /// <summary>Só o worktree: "Testar" na janela de globais roda numa pasta escolhida.</summary>
@@ -133,6 +201,12 @@ public sealed class CommandContext
     /// <summary>O contexto conhece a variável, com ou sem valor (adiada).</summary>
     public bool Provides(string name) => _values.ContainsKey(name);
 
+    /// <summary>O nome é de uma variável — fixa, ou um apelido de banco — e não de um parâmetro do usuário.</summary>
+    public bool Knows(string name) => CommandVariables.IsContextName(name) || _aliases.Contains(name);
+
+    /// <summary>Os apelidos de banco que este contexto trata como variável.</summary>
+    public IReadOnlyCollection<string> DatabaseAliases => _aliases;
+
     /// <summary>O valor, ou <c>null</c> se a variável é adiada ou desconhecida.</summary>
     public string? ValueOf(string name) => _values.GetValueOrDefault(name);
 
@@ -142,3 +216,9 @@ public sealed class CommandContext
     private static string FolderName(string path) =>
         Path.GetFileName(path.TrimEnd('\\', '/')) is { Length: > 0 } name ? name : path;
 }
+
+/// <summary>
+/// Um apelido de banco como variável (ADR-060): com <see cref="Value"/>, ou
+/// adiado (sem os dois), ou indisponível com o motivo.
+/// </summary>
+public sealed record DatabaseAliasVariable(string Name, string? Value = null, string? UnavailableReason = null);

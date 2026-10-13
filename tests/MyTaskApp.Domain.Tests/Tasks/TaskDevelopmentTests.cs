@@ -402,6 +402,15 @@ public class TaskDevelopmentTests
             .Should().NotThrow("o banco já existe no servidor");
     }
 
+    [Fact]
+    public void TheAlias_IsNormalized_AndBlankIsNone()
+    {
+        TaskDevelopmentDatabase.Create(Guid.CreateVersion7(), "Local", "localhost", 5432, "dev", "eco", null, Now, " Lock_ECO ")
+            .Alias.Should().Be("lock_eco");
+        TaskDevelopmentDatabase.Create(Guid.CreateVersion7(), "Local", "localhost", 5432, "dev", "eco", null, Now, "  ")
+            .Alias.Should().BeNull();
+    }
+
     [Theory]
     [InlineData("", "localhost", 5432, "postgres", "Local", "*banco*")]
     [InlineData("eco", "", 5432, "postgres", "Local", "*servidor*")]

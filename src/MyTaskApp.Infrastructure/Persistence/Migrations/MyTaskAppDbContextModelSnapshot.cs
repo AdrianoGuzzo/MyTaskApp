@@ -1448,6 +1448,11 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                             b1.Property<Guid>("TaskDevelopmentId")
                                 .HasColumnType("TEXT");
 
+                            b1.Property<string>("Alias")
+                                .HasMaxLength(47)
+                                .HasColumnType("TEXT")
+                                .HasColumnName("Database_Alias");
+
                             b1.Property<Guid?>("AuditId")
                                 .HasColumnType("TEXT")
                                 .HasColumnName("Database_AuditId");

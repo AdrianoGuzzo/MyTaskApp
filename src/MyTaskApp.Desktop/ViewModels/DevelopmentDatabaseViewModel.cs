@@ -125,7 +125,7 @@ public sealed partial class DevelopmentDatabaseViewModel(
 
     /// <summary>O banco copiado para o ambiente; <c>null</c> = nenhum ainda.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasDatabase), nameof(DatabaseServer), nameof(CopiedAtText), nameof(CopyActionLabel))]
+    [NotifyPropertyChangedFor(nameof(HasDatabase), nameof(DatabaseServer), nameof(CopiedAtText), nameof(CopyActionLabel), nameof(VariablesText))]
     [NotifyCanExecuteChangedFor(nameof(CopyNameCommand))]
     private DevelopmentDatabaseView? _current;
 
@@ -261,6 +261,13 @@ public sealed partial class DevelopmentDatabaseViewModel(
         ? string.Create(CultureInfo.InvariantCulture, $"{database.Host}:{database.Port} · usuário {database.Username} · {database.ConnectionName}")
         : null;
 
+    /// <summary>"Nos comandos: {database} ou {lock_eco_core_1010}" — o nome é a variável.</summary>
+    public string? VariablesText => Current is { } database
+        ? database.Alias is { } alias
+            ? $"Nos comandos: {{database}} ou {{{alias}}} (copiado do apelido {alias})"
+            : "Nos comandos: {database}"
+        : null;
+
     public string? CopiedAtText => Current is { } database
         ? "Copiado em " + database.CopiedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm", CultureInfo.GetCultureInfo("pt-BR"))
         : null;
@@ -272,6 +279,14 @@ public sealed partial class DevelopmentDatabaseViewModel(
         "Os comandos pós-Worktree rodam depois da cópia e recebem o banco em {database} "
         + "({database.host}, {database.port}, {database.user}). Num comando pronto com parâmetro: "
         + "@configura-ambiente nomebanco={database}.";
+
+    /// <summary>
+    /// O apelido de onde a cópia marcada vem — o que <c>{apelido}</c> vai valer
+    /// (ADR-060). <c>null</c> sem cópia marcada, ou num perfil sem apelido.
+    /// </summary>
+    public string? ScheduledAlias => !CopyOnCreate || Selection is null
+        ? null
+        : ByProfile ? ProfileAlias?.Alias : SelectedSavedDatabase?.Alias;
 
     /// <summary>O pedido de cópia da escolha atual; <c>null</c> enquanto falta algo.</summary>
     public DatabaseCopyRequest? Selection => ByProfile ? ProfileRequest() : AliasRequest();

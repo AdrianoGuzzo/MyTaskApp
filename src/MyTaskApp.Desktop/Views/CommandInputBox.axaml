@@ -27,7 +27,7 @@
                MaxLength="2000"
                Text="{Binding Text}"
                IsEnabled="{Binding IsEditable}"
-               PlaceholderText="dotnet restore, ou @ para um comando global" />
+               PlaceholderText="dotnet restore, @ para um comando global, { para banco e variáveis" />
 
       <Button Grid.Column="2"
               Content="↑"
@@ -82,6 +82,37 @@
                                FontFamily="Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace"
                                TextTrimming="CharacterEllipsis"
                                Text="{Binding Command}" />
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </Border>
+    </Popup>
+
+    <!-- O { (ADR-060): os apelidos de banco e as variáveis, em qualquer lugar da linha. -->
+    <Popup x:Name="PlaceholderPopup"
+           PlacementTarget="{Binding #CommandBox}"
+           Placement="Bottom"
+           IsLightDismissEnabled="True"
+           IsOpen="{Binding Placeholders.IsCompletionOpen, Mode=TwoWay}">
+      <Border Classes="aliasList">
+        <ScrollViewer MaxHeight="280" HorizontalScrollBarVisibility="Disabled">
+          <ItemsControl x:Name="PlaceholderList" ItemsSource="{Binding Placeholders.Suggestions}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:PlaceholderSuggestionViewModel">
+                <Border Classes="aliasItem"
+                        Classes.selected="{Binding IsSelected}"
+                        ToolTip.Tip="{Binding Placeholder.Description}"
+                        PointerPressed="OnPlaceholderPressed">
+                  <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+                    <TextBlock Grid.Column="0" Classes="aliasName" Text="{Binding Text}" />
+                    <TextBlock Grid.Column="1"
+                               Classes="aliasPath"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis"
+                               Text="{Binding Detail}" />
                   </Grid>
                 </Border>
               </DataTemplate>
