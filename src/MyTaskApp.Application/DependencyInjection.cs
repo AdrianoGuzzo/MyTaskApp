@@ -66,6 +66,7 @@ public static class DependencyInjection
             provider.GetRequiredService<TimeProvider>(),
             provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<SyncScheduler>>()));
         services.TryAddSingleton<SyncAccountService>();
+        services.TryAddSingleton<ISyncAccount>(provider => provider.GetRequiredService<SyncAccountService>());
         services.AddScoped<ReconcileAfterRemoteChangeHandler>();
         services.AddScoped<RemoteRefetcher>();
         services.AddScoped<GetSyncStatusHandler>();

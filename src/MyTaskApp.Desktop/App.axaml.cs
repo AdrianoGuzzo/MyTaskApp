@@ -287,6 +287,7 @@ public sealed partial class App : Avalonia.Application
         todayViewModel.IntegrationsRequested += () => ShowIntegrations(services, window);
         todayViewModel.DatabaseOperationsRequested += () => ShowDatabaseOperations(services, window);
         todayViewModel.McpServerRequested += () => ShowMcpServer(services, window);
+        todayViewModel.SyncRequested += () => ShowSync(services, window);
 
         // Renomear, recolorir ou excluir muda as bolinhas de todo o painel; sem
         // isto a mudança só apareceria no refresh de 60 s.
@@ -428,6 +429,24 @@ public sealed partial class App : Avalonia.Application
     {
         services.GetRequiredService<IDataChangeNotifier>().Changed += areas => OnUiThread(() =>
         {
+            // Etiquetas e post-its que chegam de outro computador (ADR-060):
+            // as bolinhas da lista e os post-its abertos se redesenham.
+            if (areas.HasFlag(DataArea.Tags))
+            {
+                _ = todayViewModel.LoadAsync(CancellationToken.None);
+                _ = services.GetRequiredService<StickyNoteWindowManager>().RefreshAllAsync();
+
+                if (services.GetRequiredService<TagsWindow>() is { IsVisible: true } tags)
+                {
+                    tags.Reveal();
+                }
+            }
+
+            if (areas.HasFlag(DataArea.StickyNotes))
+            {
+                _ = services.GetRequiredService<StickyNoteWindowManager>().RefreshAllAsync();
+            }
+
             if (areas.HasFlag(DataArea.Tasks) || areas.HasFlag(DataArea.Time))
             {
                 _ = todayViewModel.LoadAsync(CancellationToken.None);
@@ -531,6 +550,16 @@ public sealed partial class App : Avalonia.Application
     private static void ShowMcpServer(IServiceProvider services, Window owner)
     {
         var window = services.GetRequiredService<McpServerWindow>();
+
+        window.Show(owner);
+        window.Activate();
+        window.Reveal();
+    }
+
+    /// <summary>A janela da sincronização (ADR-060), aberta pelo menu.</summary>
+    private static void ShowSync(IServiceProvider services, Window owner)
+    {
+        var window = services.GetRequiredService<SyncWindow>();
 
         window.Show(owner);
         window.Activate();

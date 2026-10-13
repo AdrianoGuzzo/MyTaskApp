@@ -264,6 +264,8 @@
                               Command="{Binding OpenDatabaseOperationsCommand}" />
                     <MenuItem Header="Servidor MCP…"
                               Command="{Binding OpenMcpServerCommand}" />
+                    <MenuItem Header="Sincronização…"
+                              Command="{Binding OpenSyncCommand}" />
                     <MenuItem Header="Gerenciamento de dados…"
                               Command="{Binding OpenDataManagementCommand}" />
 

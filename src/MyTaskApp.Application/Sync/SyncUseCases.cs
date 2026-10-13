@@ -6,6 +6,30 @@ using MyTaskApp.Sync.Contracts.Definitions;
 
 namespace MyTaskApp.Application.Sync;
 
+/// <summary>A conta da sincronização vista pela tela.</summary>
+public interface ISyncAccount
+{
+    bool IsAvailable { get; }
+
+    Uri? Server { get; }
+
+    Guid DeviceId { get; }
+
+    Task<SyncAuthorization> BeginConnectAsync(CancellationToken cancellationToken);
+
+    Task DisconnectAsync(CancellationToken cancellationToken);
+
+    Task SetEnabledAsync(bool enabled, CancellationToken cancellationToken);
+
+    void SyncNow();
+
+    Task<IReadOnlyList<DeviceInfo>> ListDevicesAsync(CancellationToken cancellationToken);
+
+    Task RenameDeviceAsync(Guid deviceId, string nickname, CancellationToken cancellationToken);
+
+    Task RevokeDeviceAsync(Guid deviceId, CancellationToken cancellationToken);
+}
+
 /// <summary>
 /// A conta da sincronização vista pela tela (ADR-060): conectar pelo
 /// navegador, desconectar, ligar e desligar, e os dispositivos. Singleton,
@@ -18,7 +42,7 @@ public sealed class SyncAccountService(
     IDeviceIdentity device,
     SyncScheduler scheduler,
     SyncDeviceDirectory directory,
-    ILogger<SyncAccountService> logger)
+    ILogger<SyncAccountService> logger) : ISyncAccount
 {
     public bool IsAvailable => authenticator.IsAvailable;
 

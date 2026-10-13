@@ -1,0 +1,267 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
+        x:Class="MyTaskApp.Desktop.Views.SyncWindow"
+        x:DataType="vm:SyncViewModel"
+        x:Name="Root"
+        Title="Sincronização"
+        Width="620"
+        Height="760"
+        MinWidth="520"
+        MinHeight="480"
+        WindowStartupLocation="CenterOwner">
+
+  <!--
+    Sincronização (ADR-060): a conta, o estado, os conflitos, as falhas, os
+    comandos que chegaram de outro computador e os dispositivos. Opcional: sem
+    conta, o app continua inteiro, só local.
+  -->
+
+  <Window.Styles>
+
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="{DynamicResource WidgetSurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetStrokeSoftBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetCardRadius}" />
+      <Setter Property="Padding" Value="14,12" />
+    </Style>
+
+    <Style Selector="TextBlock.sectionTitle">
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.meta">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style Selector="TextBlock.field">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextMidBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.problem">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetDangerBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.caution">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetCautionBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.mono">
+      <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, monospace" />
+      <Setter Property="FontSize" Value="12" />
+    </Style>
+
+  </Window.Styles>
+
+  <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+    <StackPanel Margin="16,14" Spacing="12">
+
+      <StackPanel Spacing="4">
+        <TextBlock Text="Sincronização" FontSize="18" FontWeight="SemiBold" />
+        <TextBlock Classes="meta"
+                   Text="Usa as mesmas tarefas, etiquetas, horas e post-its em vários computadores. Caminhos de pasta, conexões de banco, senhas e o estado das janelas nunca saem deste computador." />
+      </StackPanel>
+
+      <!-- ===================== SEM SERVIDOR NA BUILD ===================== -->
+      <Border Classes="card" IsVisible="{Binding IsUnavailable}">
+        <TextBlock Classes="meta"
+                   Text="Esta versão do MyTaskApp não tem um servidor de sincronização configurado. Tudo funciona normalmente, só neste computador." />
+      </Border>
+
+      <!-- ============================== CONTA ============================== -->
+      <Border Classes="card" IsVisible="{Binding IsAvailable}">
+        <StackPanel Spacing="10">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Classes="sectionTitle" Text="Conta" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Classes="meta" VerticalAlignment="Center" Text="{Binding ServerText, StringFormat='Servidor: {0}'}" />
+          </Grid>
+
+          <TextBlock x:Name="StateText" FontWeight="SemiBold" TextWrapping="Wrap"
+                     Classes.caution="{Binding NeedsAttention}"
+                     Text="{Binding StateLabel}" />
+
+          <TextBlock x:Name="UserText" Text="{Binding UserText}" IsVisible="{Binding IsLinked}" />
+
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button x:Name="ConnectButton"
+                    Classes="accent"
+                    Content="{Binding ConnectLabel}"
+                    IsVisible="{Binding CanConnect}"
+                    Command="{Binding ConnectCommand}" />
+            <Button Content="Cancelar"
+                    IsVisible="{Binding IsConnecting}"
+                    Command="{Binding CancelConnectCommand}" />
+            <Button x:Name="DisconnectButton"
+                    Content="Desconectar"
+                    IsVisible="{Binding IsLinked}"
+                    IsEnabled="{Binding !IsBusy}"
+                    Command="{Binding DisconnectCommand}" />
+          </StackPanel>
+
+          <TextBlock Classes="meta"
+                     Text="O login abre no navegador, pela conta Google. O MyTaskApp não vê sua senha, e nada daqui é apagado ao desconectar." />
+        </StackPanel>
+      </Border>
+
+      <!-- ========================== SINCRONIZAÇÃO ========================== -->
+      <Border Classes="card" IsVisible="{Binding IsLinked}">
+        <StackPanel Spacing="10">
+          <TextBlock Classes="sectionTitle" Text="Sincronização" />
+
+          <ToggleSwitch x:Name="EnabledSwitch"
+                        OnContent="Ligada"
+                        OffContent="Pausada"
+                        IsChecked="{Binding IsEnabled}" />
+
+          <TextBlock x:Name="LastSyncText" Classes="meta" Text="{Binding LastSyncText}" />
+
+          <TextBlock Classes="problem"
+                     FontSize="12"
+                     TextWrapping="Wrap"
+                     Text="{Binding LastErrorText}"
+                     IsVisible="{Binding LastErrorText, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button x:Name="SyncNowButton" Content="Sincronizar agora" IsEnabled="{Binding IsEnabled}" Command="{Binding SyncNowCommand}" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <Border Padding="12,9"
+              CornerRadius="6"
+              Background="{DynamicResource SystemFillColorCriticalBackgroundBrush}"
+              IsVisible="{Binding ErrorMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
+        <TextBlock x:Name="ErrorText" Text="{Binding ErrorMessage}" TextWrapping="Wrap" />
+      </Border>
+
+      <TextBlock x:Name="StatusText"
+                 Classes="meta"
+                 Text="{Binding StatusMessage}"
+                 IsVisible="{Binding StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+      <!-- ============================ CONFLITOS ============================ -->
+      <Border Classes="card" IsVisible="{Binding HasConflicts}">
+        <StackPanel Spacing="8">
+          <TextBlock Classes="sectionTitle" Text="Conflitos" />
+          <TextBlock Classes="meta"
+                     Text="O mesmo campo mudou em outro computador antes: vale o que chegou primeiro ao servidor. O seu valor ficou guardado aqui." />
+          <ItemsControl x:Name="ConflictList" ItemsSource="{Binding Conflicts}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:SyncConflictItem">
+                <Border Padding="0,6" BorderBrush="{DynamicResource WidgetStrokeSoftBrush}" BorderThickness="0,0,0,1">
+                  <StackPanel Spacing="3">
+                    <TextBlock FontWeight="SemiBold" TextWrapping="Wrap" Text="{Binding Title}" />
+                    <TextBlock Classes="meta" Text="{Binding When}" />
+                    <TextBlock TextWrapping="Wrap" FontSize="12" Text="{Binding Local, StringFormat='Seu valor: {0}'}" />
+                    <TextBlock TextWrapping="Wrap" FontSize="12" Text="{Binding Server, StringFormat='Valor da conta: {0}'}" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <Button Content="Reaplicar o meu"
+                              Command="{Binding #Root.((vm:SyncViewModel)DataContext).ReapplyCommand}"
+                              CommandParameter="{Binding}" />
+                      <Button Content="Descartar"
+                              Command="{Binding #Root.((vm:SyncViewModel)DataContext).DismissCommand}"
+                              CommandParameter="{Binding}" />
+                    </StackPanel>
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+
+      <!-- ============================== FALHAS ============================== -->
+      <Border Classes="card" IsVisible="{Binding HasFailures}">
+        <StackPanel Spacing="8">
+          <TextBlock Classes="sectionTitle" Text="Falhas" />
+          <ItemsControl ItemsSource="{Binding Failures}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:SyncFailureItem">
+                <Border Padding="0,6" BorderBrush="{DynamicResource WidgetStrokeSoftBrush}" BorderThickness="0,0,0,1">
+                  <StackPanel Spacing="3">
+                    <TextBlock FontWeight="SemiBold" TextWrapping="Wrap" Text="{Binding Title}" />
+                    <TextBlock Classes="problem" FontSize="12" TextWrapping="Wrap" Text="{Binding Reason}" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <Button Content="Tentar de novo"
+                              Command="{Binding #Root.((vm:SyncViewModel)DataContext).RetryFailureCommand}"
+                              CommandParameter="{Binding}" />
+                      <Button Content="Descartar a minha alteração"
+                              Command="{Binding #Root.((vm:SyncViewModel)DataContext).DiscardFailureCommand}"
+                              CommandParameter="{Binding}" />
+                    </StackPanel>
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" IsVisible="{Binding HasReceivedFailures}">
+            <TextBlock TextWrapping="Wrap" VerticalAlignment="Center" FontSize="12"
+                       Text="{Binding ReceivedFailures, StringFormat='{}{0} mudança(s) da conta não entraram neste computador.'}" />
+            <Button Grid.Column="1" Content="Tentar de novo" Command="{Binding RetryReceivedCommand}" />
+          </Grid>
+        </StackPanel>
+      </Border>
+
+      <!-- ======================== COMANDOS RECEBIDOS ======================== -->
+      <Border Classes="card" IsVisible="{Binding HasReviews}">
+        <StackPanel Spacing="8">
+          <TextBlock Classes="sectionTitle" Text="Comandos recebidos" />
+          <TextBlock Classes="meta"
+                     Text="Estes comandos foram criados ou mudados em outro computador. Eles só rodam aqui depois de você conferir o texto." />
+          <ItemsControl x:Name="ReviewList" ItemsSource="{Binding Reviews}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:SyncReviewItem">
+                <Border Padding="0,6" BorderBrush="{DynamicResource WidgetStrokeSoftBrush}" BorderThickness="0,0,0,1">
+                  <StackPanel Spacing="3">
+                    <TextBlock FontWeight="SemiBold" Text="{Binding View.Label}" />
+                    <TextBlock Classes="meta" Text="{Binding From, StringFormat='Veio de: {0}'}" />
+                    <SelectableTextBlock Classes="mono" TextWrapping="Wrap" Text="{Binding View.CommandText}" />
+                    <Button HorizontalAlignment="Left"
+                            Content="Revisei e libero"
+                            Command="{Binding #Root.((vm:SyncViewModel)DataContext).ApproveReviewCommand}"
+                            CommandParameter="{Binding}" />
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+
+      <!-- =========================== DISPOSITIVOS =========================== -->
+      <Border Classes="card" IsVisible="{Binding HasDevices}">
+        <StackPanel Spacing="8">
+          <TextBlock Classes="sectionTitle" Text="Dispositivos" />
+          <ItemsControl x:Name="DeviceList" ItemsSource="{Binding Devices}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:SyncDeviceItem">
+                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Margin="0,4">
+                  <StackPanel Spacing="2">
+                    <TextBox Text="{Binding Nickname}" IsEnabled="{Binding !IsRevoked}" MaxLength="60" />
+                    <TextBlock Classes="meta" Text="{Binding Details}" />
+                  </StackPanel>
+                  <Button Grid.Column="1" VerticalAlignment="Top" Content="Salvar apelido"
+                          IsVisible="{Binding !IsRevoked}"
+                          Command="{Binding #Root.((vm:SyncViewModel)DataContext).RenameDeviceCommand}"
+                          CommandParameter="{Binding}" />
+                  <Button Grid.Column="2" VerticalAlignment="Top" Content="Revogar"
+                          IsVisible="{Binding CanRevoke}"
+                          Command="{Binding #Root.((vm:SyncViewModel)DataContext).RevokeDeviceCommand}"
+                          CommandParameter="{Binding}" />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+
+    </StackPanel>
+  </ScrollViewer>
+
+</Window>

@@ -172,6 +172,8 @@ internal static class AppServices
             .AddMcpServerHost()
             .AddSingleton<McpServerViewModel>()
             .AddSingleton<McpServerWindow>()
+            .AddSingleton<SyncViewModel>()
+            .AddSingleton<SyncWindow>()
 
             // Sons dos avisos do agente (ADR-042): janela única, como as outras.
             .AddSingleton<AgentAlertSoundsViewModel>()

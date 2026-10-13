@@ -88,6 +88,9 @@ public sealed partial class TaskNotesWindow : Window
         // mudado em outra janela enquanto esta estava aberta.
         Activated += (_, _) =>
         {
+            // De onde veio a tarefa (ADR-060), também para a concluída.
+            _ = ViewModel?.LoadOriginAsync();
+
             if (ViewModel is { IsEditable: true } viewModel)
             {
                 _ = viewModel.LoadAliasesAsync(CancellationToken.None);
