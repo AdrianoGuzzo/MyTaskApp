@@ -25,7 +25,10 @@ com o cliente do Google, as variáveis e a implantação, está em
   ("Tentar de novo").
 - **Comandos recebidos.** Comandos criados ou mudados em outro computador. Eles
   só rodam aqui depois de "Revisei e libero", com o texto inteiro à vista.
-- **Dispositivos.** Apelido editável, "este computador" e "Revogar".
+- **Dispositivos.** Apelido editável, "este computador" e "Revogar". O apelido
+  começa como "computador (usuário do Windows)", como `DESKTOP-XYZ (ana)`: cada
+  login do Windows tem banco, dispositivo e token próprios, então dois logins na
+  mesma máquina são dois dispositivos da conta.
 
 Na janela da tarefa, abaixo do título, aparece "Criada em Notebook · 12/10/2026
 14:30 · alterada por último neste computador". A linha só existe para tarefas

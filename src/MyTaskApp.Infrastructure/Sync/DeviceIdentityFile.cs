@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Sync;
+using MyTaskApp.Sync.Contracts;
 
 namespace MyTaskApp.Infrastructure.Sync;
 
@@ -28,7 +29,26 @@ internal sealed class DeviceIdentityFile(string folder, ILogger<DeviceIdentityFi
         }
     }
 
-    public string DefaultNickname => Environment.MachineName;
+    public string DefaultNickname => NicknameFor(Environment.MachineName, Environment.UserName);
+
+    /// <summary>
+    /// Computador e usuário do Windows: dois logins na mesma máquina são dois
+    /// dispositivos, e só o nome da máquina os deixaria iguais na lista. O
+    /// servidor descarta apelido acima do limite, então o corte é aqui, no usuário.
+    /// </summary>
+    internal static string NicknameFor(string machine, string? user)
+    {
+        if (string.IsNullOrWhiteSpace(user))
+        {
+            return machine;
+        }
+
+        var nickname = $"{machine} ({user.Trim()})";
+
+        return nickname.Length <= SyncSchema.MaxNicknameLength
+            ? nickname
+            : nickname[..(SyncSchema.MaxNicknameLength - 1)] + ")";
+    }
 
     public void Rotate()
     {

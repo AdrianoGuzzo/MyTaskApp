@@ -4,6 +4,7 @@ using MyTaskApp.Domain.Tags;
 using MyTaskApp.Domain.Tasks;
 using MyTaskApp.Infrastructure.Sync;
 using MyTaskApp.Infrastructure.Tests.Persistence;
+using MyTaskApp.Sync.Contracts;
 
 namespace MyTaskApp.Infrastructure.Tests.Sync;
 
@@ -41,8 +42,28 @@ public sealed class SyncFoundationTests : IDisposable
         var identity = new DeviceIdentityFile(_folder, NullLogger<DeviceIdentityFile>.Instance);
         _ = identity.DeviceId;
 
-        identity.DefaultNickname.Should().Be(Environment.MachineName);
+        identity.DefaultNickname.Should().Be($"{Environment.MachineName} ({Environment.UserName})");
         File.ReadAllText(Path.Combine(_folder, DeviceIdentityFile.FileName)).Should().NotContain(Environment.MachineName);
+    }
+
+    [Theory]
+    [InlineData(null, "PC")]
+    [InlineData("", "PC")]
+    [InlineData("  ", "PC")]
+    [InlineData("ana", "PC (ana)")]
+    [InlineData(" ana ", "PC (ana)")]
+    public void TheNickname_IsTheMachineAndTheWindowsUser(string? user, string expected)
+    {
+        DeviceIdentityFile.NicknameFor("PC", user).Should().Be(expected);
+    }
+
+    [Fact]
+    public void ALongWindowsUser_IsCutToTheLimit_KeepingTheMachine()
+    {
+        var nickname = DeviceIdentityFile.NicknameFor("DESKTOP-XYZ", new string('a', 100));
+
+        nickname.Should().HaveLength(SyncSchema.MaxNicknameLength);
+        nickname.Should().StartWith("DESKTOP-XYZ (a").And.EndWith("a)");
     }
 
     [Fact]
