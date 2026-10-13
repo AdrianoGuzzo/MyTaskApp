@@ -1,0 +1,21 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MyTaskApp.Server.Api/MyTaskApp.Server.Api.csproj" />
+    <Project Path="src/MyTaskApp.Server.Application/MyTaskApp.Server.Application.csproj" />
+    <Project Path="src/MyTaskApp.Server.Infrastructure/MyTaskApp.Server.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/shared/">
+    <Project Path="src/MyTaskApp.Sync.Contracts/MyTaskApp.Sync.Contracts.csproj" />
+  </Folder>
+  <!-- Os testes ponta a ponta sobem dois desktops inteiros contra o servidor. -->
+  <Folder Name="/desktop/">
+    <Project Path="src/MyTaskApp.Application/MyTaskApp.Application.csproj" />
+    <Project Path="src/MyTaskApp.Domain/MyTaskApp.Domain.csproj" />
+    <Project Path="src/MyTaskApp.Infrastructure/MyTaskApp.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MyTaskApp.Server.Application.Tests/MyTaskApp.Server.Application.Tests.csproj" />
+    <Project Path="tests/MyTaskApp.Server.IntegrationTests/MyTaskApp.Server.IntegrationTests.csproj" />
+    <Project Path="tests/MyTaskApp.Sync.Contracts.Tests/MyTaskApp.Sync.Contracts.Tests.csproj" />
+  </Folder>
+</Solution>

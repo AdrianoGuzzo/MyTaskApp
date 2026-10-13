@@ -888,6 +888,13 @@
                      Foreground="{DynamicResource WidgetDangerBrush}"
                      IsVisible="{Binding TitleError, Converter={x:Static ObjectConverters.IsNotNull}}" />
 
+          <!-- De onde veio (ADR-061): só aparece para tarefa que passou pela sincronização. -->
+          <TextBlock x:Name="OriginText"
+                     Classes="pageHint"
+                     TextWrapping="Wrap"
+                     Text="{Binding OriginText}"
+                     IsVisible="{Binding OriginText, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
           <!--
             As etiquetas (ADR-025), com o nome por extenso: aqui há largura, ao
             contrário das bolinhas da linha. O seletor é o mesmo da linha e grava

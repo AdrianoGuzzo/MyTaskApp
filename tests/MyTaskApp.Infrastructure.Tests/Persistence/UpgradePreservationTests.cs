@@ -250,6 +250,7 @@ public class UpgradePreservationTests
             await new DatabaseInitializer(
                 context,
                 Options.Create(options),
+                new global::MyTaskApp.Infrastructure.Sync.Capture.SyncCaptureSwitch(),
                 NullLogger<DatabaseInitializer>.Instance).InitializeAsync(Ct);
 
             var path = options.ResolveFullPath();

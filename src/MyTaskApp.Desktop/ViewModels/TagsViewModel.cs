@@ -638,7 +638,7 @@ public sealed partial class TagsViewModel(
 
         item.DirectoryCount = rows.Count;
 
-        foreach (var directory in item.Directories.ToList())
+        foreach (var directory in item.Directories.Where(directory => !directory.IsUnmapped).ToList())
         {
             try
             {

@@ -393,15 +393,16 @@ public sealed class TaskItem
         GetDevelopment(developmentId).MarkRemoved(at);
 
     /// <summary>
-    /// Tira da lista um ambiente que não tem mais worktree: falhou ou foi
-    /// removido. Sem a guarda da lista principal, como a remoção — um checklist
-    /// arquivado ainda pode arrumar a sua lista (ADR-031).
+    /// Tira da lista um ambiente que não tem worktree neste computador: falhou,
+    /// foi removido ou veio de outro computador sem ser criado aqui. Sem a
+    /// guarda da lista principal, como a remoção — um checklist arquivado ainda
+    /// pode arrumar a sua lista (ADR-031).
     /// </summary>
     public void ForgetDevelopment(Guid developmentId)
     {
         var development = GetDevelopment(developmentId);
 
-        if (development.Status is not (TaskDevelopmentStatus.Error or TaskDevelopmentStatus.Removed))
+        if (development.Status is not (TaskDevelopmentStatus.Error or TaskDevelopmentStatus.Removed or TaskDevelopmentStatus.NotCreatedHere))
         {
             throw new DomainException(
                 "Só um ambiente que falhou ou teve o worktree removido pode sair da lista.");
@@ -775,6 +776,31 @@ public sealed class TaskItem
     /// não tem data de conclusão e portanto nunca é arquivado sozinho. Arquivar
     /// o que foi desistido continua sendo escolha do usuário.
     /// </remarks>
+    /// <summary>
+    /// Recalcula o que é derivado depois que o estado chegou de fora — de outro
+    /// computador, pela sincronização (ADR-061), sem passar pelas transições.
+    /// <see cref="ConcludedAt"/> volta a bater com as ocorrências, e nenhum
+    /// lembrete fica armado onde a regra local não deixaria: fora da lista
+    /// principal ou em ocorrência que já não está pendente. Rearmar as pendentes
+    /// é da Application, que tem o relógio do usuário.
+    /// </summary>
+    /// <remarks>
+    /// Mexe só no que é local (a conclusão derivada e o estado dos lembretes),
+    /// então não gera alteração para enviar de volta.
+    /// </remarks>
+    public void ReconcileDerivedState()
+    {
+        RefreshConclusion();
+
+        foreach (var occurrence in _occurrences)
+        {
+            if (IsOutOfTheMainList || occurrence.Status is not TaskItemStatus.Pending)
+            {
+                occurrence.DisarmReminder();
+            }
+        }
+    }
+
     private void RefreshConclusion()
     {
         if (_occurrences.Exists(occurrence => occurrence.Status is TaskItemStatus.Pending))

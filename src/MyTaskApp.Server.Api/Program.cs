@@ -1,0 +1,35 @@
+using MyTaskApp.Server.Api;
+using Serilog;
+using Serilog.Events;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Log sem segredo: o caminho da requisição (sem a query), o status e o tempo.
+// O OpenIddict e o ASP.NET ficam em Warning; o detalhe deles traria
+// parâmetros do protocolo para o log. Só o Serilog escreve no console; os
+// provedores registrados depois (os testes) recebem os mesmos eventos.
+builder.Logging.ClearProviders();
+builder.Host.UseSerilog(
+    (context, logger) => logger
+        .ReadFrom.Configuration(context.Configuration)
+        .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
+        .MinimumLevel.Override("Microsoft.EntityFrameworkCore", LogEventLevel.Warning)
+        .MinimumLevel.Override("OpenIddict", LogEventLevel.Warning)
+        .Enrich.FromLogContext()
+        .WriteTo.Console(),
+    writeToProviders: true);
+
+builder.WebHost.ConfigureKestrel(kestrel => kestrel.Limits.MaxRequestBodySize = 1024 * 1024);
+
+builder.Services.AddSyncServer(builder.Configuration, builder.Environment);
+
+var app = builder.Build();
+
+app.UseMiddleware<RequestLog>();
+app.UseSyncServer();
+
+await app.MigrateIfConfiguredAsync();
+await app.RunAsync();
+
+/// <summary>A entrada do servidor; parcial para o <c>WebApplicationFactory</c> dos testes.</summary>
+public partial class Program;

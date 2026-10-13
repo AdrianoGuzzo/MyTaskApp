@@ -23,7 +23,10 @@ public sealed partial class TagDirectoryItemViewModel(TagListItemViewModel owner
 
     public string Alias => Row.Alias;
 
-    public string Path => Row.Path;
+    public string Path => Row.Path ?? string.Empty;
+
+    /// <summary>Veio de outro computador e ainda não tem pasta aqui: editar e preencher o caminho mapeia (ADR-061).</summary>
+    public bool IsUnmapped => !Row.IsMapped;
 
     public string? Name => Row.Name;
 
@@ -97,13 +100,14 @@ public sealed partial class TagDirectoryItemViewModel(TagListItemViewModel owner
 
     public bool IsFound => Exists is true;
 
-    public bool IsMissing => Exists is false;
+    public bool IsMissing => Exists is false && !IsUnmapped;
 
-    public string ExistenceTip => Exists switch
+    public string ExistenceTip => (IsUnmapped, Exists) switch
     {
-        true => "Pasta encontrada",
-        false => "Pasta não encontrada — o caminho continua salvo e pode ser usado",
-        null => "Conferindo a pasta…",
+        (true, _) => "Não mapeado neste computador — edite e escolha a pasta",
+        (_, true) => "Pasta encontrada",
+        (_, false) => "Pasta não encontrada — o caminho continua salvo e pode ser usado",
+        (_, null) => "Conferindo a pasta…",
     };
 
     /// <summary>

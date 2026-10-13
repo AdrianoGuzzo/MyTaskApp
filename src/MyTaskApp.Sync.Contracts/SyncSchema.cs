@@ -1,0 +1,72 @@
+namespace MyTaskApp.Sync.Contracts;
+
+/// <summary>
+/// A versão do contrato. Sobe quando entra um tipo de entidade ou um campo que
+/// um cliente antigo não saberia guardar; o servidor recusa (426) quem estiver
+/// abaixo de <see cref="MinimumClient"/>.
+/// </summary>
+/// <remarks>
+/// Campo desconhecido não quebra ninguém: o servidor guarda o JSON como veio e
+/// o cliente mais velho ignora o que não conhece. Por isso a maioria das
+/// mudanças cabe na mesma versão.
+/// </remarks>
+public static class SyncSchema
+{
+    public const int Current = 1;
+
+    public const int MinimumClient = 1;
+
+    /// <summary>O escopo OAuth que dá acesso à API de sincronização.</summary>
+    public const string Scope = "sync";
+
+    /// <summary>O cliente OAuth público do desktop (sem secret; PKCE obrigatório).</summary>
+    public const string DesktopClientId = "mytaskapp-desktop";
+
+    /// <summary>A claim e o parâmetro de autorização que carregam o dispositivo.</summary>
+    public const string DeviceIdClaim = "device_id";
+
+    /// <summary>O apelido sugerido pelo desktop na autorização (o nome da máquina).</summary>
+    public const string DeviceNameParameter = "device_name";
+
+    public const int MaxNicknameLength = 60;
+
+    public const int MaxOperationsPerPush = 100;
+
+    public const int DefaultPullLimit = 200;
+
+    public const int MaxPullLimit = 500;
+
+    public const int MaxFetchEntities = 100;
+}
+
+/// <summary>As rotas da API v1, relativas à raiz do servidor.</summary>
+public static class ApiRoutes
+{
+    public const string Prefix = "/api/v1";
+
+    public const string Me = Prefix + "/me";
+
+    public const string Workspaces = Prefix + "/workspaces";
+
+    public const string Devices = Prefix + "/devices";
+
+    public const string CurrentDevice = Devices + "/current";
+
+    public static string Device(Guid deviceId) => $"{Devices}/{deviceId:D}";
+
+    public static string RevokeDevice(Guid deviceId) => $"{Device(deviceId)}/revoke";
+
+    public static string Push(Guid workspaceId) => $"{Workspaces}/{workspaceId:D}/sync/push";
+
+    public static string Pull(Guid workspaceId) => $"{Workspaces}/{workspaceId:D}/sync/pull";
+
+    public static string Fetch(Guid workspaceId) => $"{Workspaces}/{workspaceId:D}/sync/fetch";
+
+    public static string Status(Guid workspaceId) => $"{Workspaces}/{workspaceId:D}/sync/status";
+
+    public const string Authorize = "/connect/authorize";
+
+    public const string Token = "/connect/token";
+
+    public const string Revocation = "/connect/revoke";
+}

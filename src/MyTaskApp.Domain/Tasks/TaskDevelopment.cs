@@ -20,6 +20,13 @@ public enum TaskDevelopmentStatus
 
     /// <summary>O worktree foi removido; a branch continua no repositório.</summary>
     Removed = 4,
+
+    /// <summary>
+    /// O ambiente veio de outro computador pela sincronização (ADR-061): a
+    /// branch é a mesma, mas o repositório e o worktree de lá não valem aqui.
+    /// Sem caminhos até alguém "Criar aqui", que é o <c>BeginDevelopment</c> de sempre.
+    /// </summary>
+    NotCreatedHere = 5,
 }
 
 /// <summary>

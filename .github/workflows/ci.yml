@@ -22,13 +22,21 @@ jobs:
         with:
           global-json-file: global.json
 
+      # Duas solutions: o desktop (MyTaskApp.slnx) e o servidor de
+      # sincronização (MyTaskApp.Server.slnx). O CI compila e testa as duas.
       - name: Restaurar
-        run: dotnet restore MyTaskApp.slnx
+        shell: bash # -e: a primeira solution que falhar reprova o passo
+        run: |
+          dotnet restore MyTaskApp.slnx
+          dotnet restore MyTaskApp.Server.slnx
 
       # TreatWarningsAsErrors=true: um aviso novo reprova aqui, não na máquina
       # de quem for gerar a release.
       - name: Compilar
-        run: dotnet build MyTaskApp.slnx -c Release --no-restore
+        shell: bash
+        run: |
+          dotnet build MyTaskApp.slnx -c Release --no-restore
+          dotnet build MyTaskApp.Server.slnx -c Release --no-restore
 
       # Testes + cobertura + portão num passo só: é o mesmo script que roda
       # local (scripts/coverage.ps1), e o mínimo mora nele. Reprova se algum
@@ -65,6 +73,34 @@ jobs:
         with:
           header: coverage
           path: artifacts/coverage/summary.md
+
+  # O servidor de sincronização contra PostgreSQL de verdade (ADR-061). No
+  # Windows esses testes pulam: o runner não roda contêiner Linux. Aqui o
+  # Testcontainers sobe o postgres:17 e eles rodam de fato.
+  server-integration:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Testar o servidor de sincronização
+        run: >
+          dotnet test tests/MyTaskApp.Server.IntegrationTests/MyTaskApp.Server.IntegrationTests.csproj
+          -c Release
+          --logger "trx;LogFileName=server-integration.trx"
+          --results-directory artifacts/server-integration
+
+      - name: Publicar resultados
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-integration-results
+          path: artifacts/server-integration/*.trx
+          if-no-files-found: ignore
 
   # O publish self-contained é o que o instalador empacota. Quebrar aqui
   # significa release quebrada, e é barato descobrir antes da tag.

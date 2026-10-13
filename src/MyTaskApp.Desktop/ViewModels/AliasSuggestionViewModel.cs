@@ -10,7 +10,8 @@ public sealed partial class AliasSuggestionViewModel(TagDirectoryRow row, bool? 
 
     public string Alias => Row.Alias;
 
-    public string Path => Row.Path;
+    /// <summary>A lista do autocomplete só traz pastas mapeadas aqui (ADR-061).</summary>
+    public string Path => Row.Path ?? string.Empty;
 
     public TagChipViewModel Tag { get; } = new(row.TagId, row.TagName, row.TagColorHex);
 

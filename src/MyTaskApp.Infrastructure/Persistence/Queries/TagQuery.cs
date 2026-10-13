@@ -35,7 +35,8 @@ internal sealed class TagQuery(MyTaskAppDbContext context) : ITagQuery
         ListDirectoriesAsync(
             context.Tags.Where(tag => context.TaskItemTags.Any(
                 link => link.TaskItemId == taskId && link.TagId == tag.Id)),
-            cancellationToken);
+            cancellationToken,
+            mappedOnly: true);
 
     /// <remarks>Ordena no cliente: o EF não traduz ordenação depois da projeção no record.</remarks>
     public async Task<IReadOnlyList<TagDirectoryCommandRow>> ListDirectoryCommandsAsync(
@@ -66,7 +67,7 @@ internal sealed class TagQuery(MyTaskAppDbContext context) : ITagQuery
 
         var directories = await context.TagDirectories
             .AsNoTracking()
-            .Where(directory => directoryIds.Contains(directory.Id))
+            .Where(directory => directoryIds.Contains(directory.Id) && directory.Path != null)
             .Join(
                 context.Tags,
                 directory => directory.TagId,
@@ -84,7 +85,7 @@ internal sealed class TagQuery(MyTaskAppDbContext context) : ITagQuery
                     directory.TagId,
                     directory.TagName,
                     directory.Alias,
-                    directory.Path,
+                    directory.Path!,
                     [.. commands.Where(row => row.DirectoryId == directory.Id).OrderBy(row => row.Order)])),
         ];
     }
@@ -116,12 +117,17 @@ internal sealed class TagQuery(MyTaskAppDbContext context) : ITagQuery
     /// </remarks>
     private async Task<IReadOnlyList<TagDirectoryRow>> ListDirectoriesAsync(
         IQueryable<Domain.Tags.Tag> tags,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool mappedOnly = false)
     {
+        var directories = mappedOnly
+            ? context.TagDirectories.Where(directory => directory.Path != null)
+            : context.TagDirectories;
+
         var rows = await tags
             .AsNoTracking()
             .Join(
-                context.TagDirectories,
+                directories,
                 tag => tag.Id,
                 directory => directory.TagId,
                 (tag, directory) => new TagDirectoryRow(
