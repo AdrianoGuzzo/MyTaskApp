@@ -9,7 +9,7 @@ using MyTaskApp.Server.Infrastructure.Persistence;
 namespace MyTaskApp.Server.Api;
 
 /// <summary>
-/// O login pelo navegador (ADR-060): o Google diz quem é a pessoa, e o
+/// O login pelo navegador (ADR-061): o Google diz quem é a pessoa, e o
 /// Identity abre uma sessão curta, só para o <c>/connect/authorize</c> emitir o
 /// código do desktop. Nada do Google vira token desta API.
 /// </summary>

@@ -47,7 +47,7 @@ internal sealed class TableMapper<TEntity>(
 }
 
 /// <summary>
-/// Todas as tabelas que sincronizam (ADR-060). A lista de "local" é tão
+/// Todas as tabelas que sincronizam (ADR-061). A lista de "local" é tão
 /// importante quanto a de colunas: é ela que diz, por escrito, que o caminho
 /// do diretório, a posição na lista e o estado da janela não saem daqui.
 /// </summary>
@@ -245,6 +245,17 @@ internal static class SyncMappers
             nameof(TaskDevelopment.Status),
             nameof(TaskDevelopment.StatusChangedAt),
             nameof(TaskDevelopment.FailureReason),
+
+            // O banco copiado (ADR-060) está num servidor visto deste computador.
+            "Database.ConnectionId",
+            "Database.ConnectionName",
+            "Database.Host",
+            "Database.Port",
+            "Database.Username",
+            "Database.Name",
+            "Database.AuditId",
+            "Database.CopiedAt",
+            "Database.Alias",
         ])
     {
         Lists =

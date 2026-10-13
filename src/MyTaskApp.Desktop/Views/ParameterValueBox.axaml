@@ -1,0 +1,57 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
+             x:Class="MyTaskApp.Desktop.Views.ParameterValueBox"
+             x:DataType="vm:QuickCommandFieldViewModel">
+
+  <!--
+    O valor de um parâmetro do comando rápido, com o { (ADR-060): os apelidos
+    de banco e as variáveis do ambiente, cada um com o valor que vai entrar.
+  -->
+
+  <Panel>
+    <TextBox x:Name="ValueBox"
+             FontSize="12"
+             MaxLength="500"
+             PlaceholderText="{Binding Placeholder}"
+             Text="{Binding Value}" />
+
+    <Popup x:Name="PlaceholderPopup"
+           PlacementTarget="{Binding #ValueBox}"
+           Placement="Bottom"
+           IsLightDismissEnabled="True"
+           IsOpen="{Binding Placeholders.IsCompletionOpen, Mode=TwoWay}">
+      <Border Classes="aliasList"
+              Padding="4"
+              CornerRadius="6"
+              Background="{DynamicResource WidgetSurfaceBrush}"
+              BorderBrush="{DynamicResource WidgetStrokeSoftBrush}"
+              BorderThickness="1">
+        <ScrollViewer MaxHeight="240" HorizontalScrollBarVisibility="Disabled">
+          <ItemsControl x:Name="PlaceholderList" ItemsSource="{Binding Placeholders.Suggestions}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:PlaceholderSuggestionViewModel">
+                <Border Classes="aliasItem"
+                        Classes.selected="{Binding IsSelected}"
+                        Padding="8,4"
+                        CornerRadius="4"
+                        ToolTip.Tip="{Binding Placeholder.Description}"
+                        PointerPressed="OnPlaceholderPressed">
+                  <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+                    <TextBlock Grid.Column="0" FontSize="12" FontWeight="SemiBold" Text="{Binding Text}" />
+                    <TextBlock Grid.Column="1"
+                               FontSize="11.5"
+                               Opacity="0.75"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis"
+                               Text="{Binding Detail}" />
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </Border>
+    </Popup>
+  </Panel>
+</UserControl>

@@ -3,7 +3,7 @@ using System.Reflection;
 namespace MyTaskApp.Infrastructure.Sync.Http;
 
 /// <summary>
-/// O servidor de sincronização e os limites das chamadas (ADR-060).
+/// O servidor de sincronização e os limites das chamadas (ADR-061).
 /// </summary>
 /// <remarks>
 /// <para>

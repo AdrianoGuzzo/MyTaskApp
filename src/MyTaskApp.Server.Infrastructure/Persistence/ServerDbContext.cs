@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 namespace MyTaskApp.Server.Infrastructure.Persistence;
 
 /// <summary>
-/// O banco do servidor (ADR-060): contas (Identity), o servidor OAuth
+/// O banco do servidor (ADR-061): contas (Identity), o servidor OAuth
 /// (OpenIddict), as chaves do DataProtection e a sincronização.
 /// </summary>
 public sealed class ServerDbContext(DbContextOptions<ServerDbContext> options)

@@ -23,7 +23,7 @@ using MyTaskApp.Sync.Contracts.Definitions;
 namespace MyTaskApp.Infrastructure.Tests.Sync;
 
 /// <summary>
-/// O que chega do servidor entrando no SQLite (ADR-060): dois bancos, A e B.
+/// O que chega do servidor entrando no SQLite (ADR-061): dois bancos, A e B.
 /// O outbox de A é a página que B aplica.
 /// </summary>
 public sealed class RemoteChangeApplierTests : IAsyncLifetime

@@ -9,7 +9,7 @@ using static OpenIddict.Abstractions.OpenIddictConstants;
 namespace MyTaskApp.Server.Api;
 
 /// <summary>
-/// A API v1 (ADR-060). Só Bearer do OpenIddict: o cookie da sessão de login
+/// A API v1 (ADR-061). Só Bearer do OpenIddict: o cookie da sessão de login
 /// nunca autoriza nada aqui. Toda rota passa pela conferência do dispositivo
 /// (não revogado), e as do workspace pela de membro.
 /// </summary>

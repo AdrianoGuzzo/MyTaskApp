@@ -7,7 +7,7 @@ using MyTaskApp.Sync.Contracts.Definitions;
 namespace MyTaskApp.Server.Application;
 
 /// <summary>
-/// O push (ADR-060): um lote de operações numa transação, com o workspace
+/// O push (ADR-061): um lote de operações numa transação, com o workspace
 /// travado. A ordem do lote é a ordem de aplicação, e cada mudança recebe a
 /// próxima posição do log — densa, sem buraco, porque só um push por vez
 /// escreve no workspace.

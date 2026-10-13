@@ -4,7 +4,7 @@ using MyTaskApp.Sync.Contracts.Definitions;
 
 namespace MyTaskApp.Application.Tests.Sync;
 
-/// <summary>O que o portão de revisão confere numa execução (ADR-060): os globais chamados por @alias.</summary>
+/// <summary>O que o portão de revisão confere numa execução (ADR-061): os globais chamados por @alias.</summary>
 public sealed class CommandReviewSourcesTests
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 13, 12, 0, 0, TimeSpan.Zero);

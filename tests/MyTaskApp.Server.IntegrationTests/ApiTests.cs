@@ -10,7 +10,7 @@ using MyTaskApp.Sync.Contracts.Definitions;
 namespace MyTaskApp.Server.IntegrationTests;
 
 /// <summary>
-/// A API de verdade, pelo HTTP (ADR-060): o login do desktop com PKCE, os
+/// A API de verdade, pelo HTTP (ADR-061): o login do desktop com PKCE, os
 /// tokens, a revogação, o isolamento e o que nunca pode ir para o log.
 /// </summary>
 public sealed class ApiTests(PostgresFixture postgres) : IAsyncLifetime

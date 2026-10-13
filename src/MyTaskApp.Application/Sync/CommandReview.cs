@@ -10,7 +10,7 @@ public sealed record CommandSource(string EntityType, Guid EntityId);
 
 /// <summary>
 /// Texto de comando que veio de outro computador não roda aqui sem alguém
-/// olhar antes (ADR-060). Uma conta invadida poderia mandar um comando para
+/// olhar antes (ADR-061). Uma conta invadida poderia mandar um comando para
 /// todas as máquinas do usuário; este portão é o que impede isso.
 /// </summary>
 public interface ICommandReviewGate

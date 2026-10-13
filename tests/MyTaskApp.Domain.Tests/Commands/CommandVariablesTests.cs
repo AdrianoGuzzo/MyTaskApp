@@ -10,12 +10,18 @@ public class CommandVariablesTests
     [InlineData("Worktree.Path")]
     [InlineData("task.title")]
     [InlineData("tag")]
+    [InlineData("database")]
+    [InlineData("Database.Host")]
+    [InlineData("database.port")]
+    [InlineData("database.user")]
+    [InlineData("database.name")]
     public void TheContextNames_AreKnown_IgnoringCase(string name) =>
         CommandVariables.IsContextName(name).Should().BeTrue();
 
     [Theory]
     [InlineData("project")]
     [InlineData("task")]
+    [InlineData("database.password")]
     [InlineData(null)]
     public void OtherNames_AreUserParameters(string? name) =>
         CommandVariables.IsContextName(name).Should().BeFalse();

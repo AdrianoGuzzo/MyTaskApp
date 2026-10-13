@@ -17,7 +17,7 @@ using MyTaskApp.Infrastructure.Sync.Http;
 namespace MyTaskApp.Server.IntegrationTests;
 
 /// <summary>
-/// Um desktop inteiro contra a API de verdade (ADR-060): Application e
+/// Um desktop inteiro contra a API de verdade (ADR-061): Application e
 /// Infrastructure sobre um SQLite em pasta própria, o login pelo "navegador"
 /// do <see cref="ApiFactory"/> e a volta pela porta de loopback real. Só a
 /// rede é trocada — pelo servidor em memória, com uma tomada que o teste puxa.

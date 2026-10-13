@@ -31,7 +31,7 @@ public interface ISyncAccount
 }
 
 /// <summary>
-/// A conta da sincronização vista pela tela (ADR-060): conectar pelo
+/// A conta da sincronização vista pela tela (ADR-061): conectar pelo
 /// navegador, desconectar, ligar e desligar, e os dispositivos. Singleton,
 /// porque o login espera o navegador por minutos, fora de qualquer escopo.
 /// </summary>

@@ -123,7 +123,9 @@ public sealed record TaskDevelopmentView(
     IReadOnlyList<string>? Commands = null,
     string? AgentPrompt = null,
     /// <summary>A tag de onde a branch partiu (ADR-043); <c>null</c> = a ponta de <see cref="SourceBranch"/>.</summary>
-    string? SourceTag = null)
+    string? SourceTag = null,
+    /// <summary>O banco copiado para o ambiente (ADR-060); <c>null</c> = nenhum.</summary>
+    DevelopmentDatabaseView? Database = null)
 {
     public bool HasSourceTag => SourceTag is not null;
 
@@ -140,7 +142,8 @@ public sealed record TaskDevelopmentView(
             development.FailureReason,
             development.Commands.Select(command => command.Command).ToList(),
             development.AgentPrompt,
-            development.SourceTag);
+            development.SourceTag,
+            DevelopmentDatabaseView.From(development.Database));
 }
 
 internal static class ProgressExtensions

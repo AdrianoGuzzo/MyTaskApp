@@ -3,7 +3,7 @@ using MyTaskApp.Desktop.ViewModels;
 
 namespace MyTaskApp.Desktop.Tests.ViewModels;
 
-/// <summary>A linha "Criada em … · alterada por último em …" no cabeçalho da tarefa (ADR-060).</summary>
+/// <summary>A linha "Criada em … · alterada por último em …" no cabeçalho da tarefa (ADR-061).</summary>
 public class TaskOriginTextTests
 {
     private static readonly DateTimeOffset Created = new(2026, 10, 12, 14, 30, 0, TimeSpan.Zero);

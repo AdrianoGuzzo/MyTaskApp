@@ -16,7 +16,7 @@ internal sealed class RemoteValueException(string message) : Exception(message);
 
 /// <summary>
 /// Escreve uma linha que veio do servidor direto nas colunas, por SQL com
-/// parâmetros (ADR-060). Os nomes das colunas e os conversores (ticks em UTC,
+/// parâmetros (ADR-061). Os nomes das colunas e os conversores (ticks em UTC,
 /// enum como número) saem do próprio modelo do EF, então o formato no disco é
 /// o mesmo que o EF gravaria.
 /// </summary>

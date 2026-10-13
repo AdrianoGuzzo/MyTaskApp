@@ -4,7 +4,7 @@ using MyTaskApp.Sync.Contracts.Definitions;
 
 namespace MyTaskApp.Server.Application.Tests;
 
-/// <summary>A política de conflito campo a campo (ADR-060), sem banco e sem relógio.</summary>
+/// <summary>A política de conflito campo a campo (ADR-061), sem banco e sem relógio.</summary>
 public sealed class FieldMergePolicyTests
 {
     private static readonly Guid DeviceA = Guid.CreateVersion7();

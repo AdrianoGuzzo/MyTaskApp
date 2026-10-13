@@ -13,7 +13,7 @@ using MyTaskApp.Sync.Contracts.Definitions;
 namespace MyTaskApp.Infrastructure.Tests.Sync;
 
 /// <summary>
-/// A captura em outbox (ADR-060): cada SaveChanges de negócio vira operação no
+/// A captura em outbox (ADR-061): cada SaveChanges de negócio vira operação no
 /// mesmo SaveChanges, só com os campos compartilhados que mudaram.
 /// </summary>
 public sealed class SyncCaptureInterceptorTests : IAsyncLifetime

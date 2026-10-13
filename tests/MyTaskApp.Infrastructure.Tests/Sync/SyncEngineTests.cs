@@ -12,7 +12,7 @@ using MyTaskApp.Sync.Contracts.Definitions;
 namespace MyTaskApp.Infrastructure.Tests.Sync;
 
 /// <summary>
-/// O ciclo inteiro do desktop (ADR-060) sobre SQLite de verdade, com um
+/// O ciclo inteiro do desktop (ADR-061) sobre SQLite de verdade, com um
 /// servidor roteirizado: offline, reinício, timeout depois do commit,
 /// primeira conexão, conflitos e falhas.
 /// </summary>

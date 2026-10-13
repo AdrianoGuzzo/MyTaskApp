@@ -66,7 +66,7 @@ jobs:
           header: coverage
           path: artifacts/coverage/summary.md
 
-  # O servidor de sincronização contra PostgreSQL de verdade (ADR-060). No
+  # O servidor de sincronização contra PostgreSQL de verdade (ADR-061). No
   # Windows esses testes pulam: o runner não roda contêiner Linux. Aqui o
   # Testcontainers sobe o postgres:17 e eles rodam de fato.
   server-integration:

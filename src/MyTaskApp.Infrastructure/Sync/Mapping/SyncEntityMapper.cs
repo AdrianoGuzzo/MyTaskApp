@@ -30,7 +30,7 @@ internal sealed record SyncChildList(
     Func<JsonElement, int, Guid, IReadOnlyDictionary<string, object?>> Row);
 
 /// <summary>
-/// A ponte entre uma entidade do domínio e o contrato (ADR-060): o que sai e o
+/// A ponte entre uma entidade do domínio e o contrato (ADR-061): o que sai e o
 /// que fica. É uma <b>lista de permissão</b> — só as propriedades em
 /// <see cref="Columns"/> viajam — e o teste de completude exige que toda
 /// propriedade mapeada esteja aqui ou em <see cref="LocalProperties"/>.

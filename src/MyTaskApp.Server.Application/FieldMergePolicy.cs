@@ -13,7 +13,7 @@ public sealed record FieldMerge(
     SyncError? Error);
 
 /// <summary>
-/// A política de conflito (ADR-060), campo a campo, sem relógio de ninguém:
+/// A política de conflito (ADR-061), campo a campo, sem relógio de ninguém:
 /// quem decide é a versão que o servidor deu a cada escrita.
 /// </summary>
 /// <remarks>

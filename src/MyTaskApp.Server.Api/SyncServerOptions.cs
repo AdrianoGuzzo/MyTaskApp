@@ -1,7 +1,7 @@
 namespace MyTaskApp.Server.Api;
 
 /// <summary>
-/// A configuração do servidor (ADR-060). Os segredos — client secret do
+/// A configuração do servidor (ADR-061). Os segredos — client secret do
 /// Google, certificados do OpenIddict, senha do banco — vêm de variáveis de
 /// ambiente ou do user-secrets, nunca do repositório.
 /// </summary>
@@ -44,7 +44,7 @@ public sealed class SyncServerOptions
     public CertificateOptions? EncryptionCertificate { get; set; }
 }
 
-/// <summary>Os limites por janela de um minuto (ADR-060).</summary>
+/// <summary>Os limites por janela de um minuto (ADR-061).</summary>
 public sealed class RateLimitOptions
 {
     /// <summary>Login e emissão de token, por IP.</summary>

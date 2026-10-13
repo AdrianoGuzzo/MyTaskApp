@@ -3,7 +3,7 @@ using MyTaskApp.Domain.Tasks;
 namespace MyTaskApp.Domain.Tests.Tasks;
 
 /// <summary>
-/// O recálculo depois de um estado que chegou de outro computador (ADR-060).
+/// O recálculo depois de um estado que chegou de outro computador (ADR-061).
 /// O estado incoerente de verdade só nasce no banco, e é testado na
 /// Infrastructure; aqui ficam as regras da raiz.
 /// </summary>

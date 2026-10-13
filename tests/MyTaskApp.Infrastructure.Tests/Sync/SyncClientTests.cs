@@ -11,7 +11,7 @@ using MyTaskApp.Sync.Contracts;
 namespace MyTaskApp.Infrastructure.Tests.Sync;
 
 /// <summary>
-/// O cliente do desktop (ADR-060): o login pelo navegador com PKCE, a
+/// O cliente do desktop (ADR-061): o login pelo navegador com PKCE, a
 /// renovação serializada, a classificação dos erros e o log sem segredo.
 /// </summary>
 public sealed class SyncClientTests : IDisposable

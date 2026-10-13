@@ -9,7 +9,7 @@ using MyTaskApp.Sync.Contracts.Definitions;
 namespace MyTaskApp.Server.IntegrationTests;
 
 /// <summary>
-/// A sincronização do servidor sobre PostgreSQL de verdade (ADR-060): a
+/// A sincronização do servidor sobre PostgreSQL de verdade (ADR-061): a
 /// transação, a trava do workspace, os índices e o <c>jsonb</c>.
 /// </summary>
 public sealed class ServerPersistenceTests(PostgresFixture postgres) : IAsyncLifetime

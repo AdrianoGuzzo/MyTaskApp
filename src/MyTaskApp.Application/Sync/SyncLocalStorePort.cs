@@ -92,7 +92,7 @@ public sealed record SyncCommandReviewItem(string EntityType, Guid EntityId, str
 public sealed record SyncOrigin(Guid? CreatedByDeviceId, DateTimeOffset? OriginCreatedAt, Guid? UpdatedByDeviceId, DateTimeOffset? UpdatedAt);
 
 /// <summary>
-/// O estado local da sincronização (ADR-060): a ligação com a conta, o outbox,
+/// O estado local da sincronização (ADR-061): a ligação com a conta, o outbox,
 /// os conflitos e as falhas. Tudo no banco do app, nada de segredo.
 /// </summary>
 public interface ISyncLocalStore

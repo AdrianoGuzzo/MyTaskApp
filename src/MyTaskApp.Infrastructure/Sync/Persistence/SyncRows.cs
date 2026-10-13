@@ -16,7 +16,7 @@ internal enum SyncLinkStatus
 }
 
 /// <summary>
-/// A ligação com a conta, em linha única (ADR-060). Sem segredo: o refresh
+/// A ligação com a conta, em linha única (ADR-061). Sem segredo: o refresh
 /// token fica no cofre do sistema, e o access token só na memória.
 /// </summary>
 internal sealed class SyncStateRow
@@ -104,7 +104,7 @@ internal sealed class SyncEntityStateRow
 
     /// <summary>
     /// A versão de um comando que veio de outro dispositivo já revista aqui:
-    /// texto de comando alheio não roda sem alguém olhar (ADR-060).
+    /// texto de comando alheio não roda sem alguém olhar (ADR-061).
     /// </summary>
     public long ReviewedVersion { get; set; }
 
@@ -165,7 +165,7 @@ internal sealed class SyncOutboxRow
 }
 
 /// <summary>
-/// Um valor local que perdeu para o servidor (ADR-060): o mesmo campo mudou
+/// Um valor local que perdeu para o servidor (ADR-061): o mesmo campo mudou
 /// em outro dispositivo antes. Fica visível para reaplicar ou descartar.
 /// </summary>
 internal sealed class SyncConflictRow

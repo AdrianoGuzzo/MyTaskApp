@@ -8,7 +8,7 @@ namespace MyTaskApp.Infrastructure.Tests.OAuth;
 
 /// <summary>
 /// O listener de volta da autorização, compartilhado entre o Jira e a
-/// sincronização (ADR-060): cada provedor fala o próprio nome.
+/// sincronização (ADR-061): cada provedor fala o próprio nome.
 /// </summary>
 public sealed class LoopbackCallbackListenerTests
 {

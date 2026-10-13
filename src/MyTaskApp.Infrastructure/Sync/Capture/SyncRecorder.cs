@@ -22,7 +22,7 @@ internal sealed record SyncTouched(SyncEntityMapper Mapper, EntityEntry? Entry, 
 /// <summary>
 /// O diff entre o estado atual e o último conhecido, transformado em
 /// operações no outbox. Usado pela captura de cada <c>SaveChanges</c> e pela
-/// varredura da primeira conexão (ADR-060).
+/// varredura da primeira conexão (ADR-061).
 /// </summary>
 /// <remarks>
 /// <para>

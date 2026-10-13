@@ -2,7 +2,7 @@
 
 O servidor da [sincronização](sync.md) é um ASP.NET Core com PostgreSQL:
 contas pelo Google, OAuth do desktop pelo OpenIddict, e a API `/api/v1`. A
-decisão está no [ADR-060](ARCHITECTURE.md).
+decisão está no [ADR-061](ARCHITECTURE.md).
 
 Quem usa o app não precisa disto. Este guia é para quem publica o servidor, ou
 para quem desenvolve a sincronização.

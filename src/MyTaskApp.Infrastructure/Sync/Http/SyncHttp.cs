@@ -10,7 +10,7 @@ using MyTaskApp.Sync.Contracts;
 namespace MyTaskApp.Infrastructure.Sync.Http;
 
 /// <summary>
-/// O único lugar que fala HTTP com o servidor de sincronização (ADR-060).
+/// O único lugar que fala HTTP com o servidor de sincronização (ADR-061).
 /// Uma linha de log por chamada: método, caminho (sem a query), status e
 /// tempo. Nunca cabeçalho, corpo, código de autorização nem token.
 /// </summary>

@@ -9,7 +9,7 @@ using MyTaskApp.Desktop.Views;
 namespace MyTaskApp.Desktop.Tests.Composition;
 
 /// <summary>
-/// O composition root de verdade monta a janela da sincronização (ADR-060), e
+/// O composition root de verdade monta a janela da sincronização (ADR-061), e
 /// a conta que ela usa é a mesma do resto do app.
 /// </summary>
 public class SyncCompositionTests

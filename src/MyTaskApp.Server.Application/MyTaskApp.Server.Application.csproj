@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <!--
-    Os casos de uso do servidor de sincronizacao (ADR-060): push, pull,
+    Os casos de uso do servidor de sincronizacao (ADR-061): push, pull,
     dispositivos e workspaces, com a politica de mescla por campo. Conhece o
     contrato e nada de banco nem de HTTP; a persistencia entra por portas.
   -->

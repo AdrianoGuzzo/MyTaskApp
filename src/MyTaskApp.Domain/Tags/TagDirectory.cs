@@ -58,7 +58,7 @@ public sealed class TagDirectory
     /// <summary>
     /// Caminho absoluto. Pode não existir: a pasta é conferida só na exibição.
     /// <c>null</c> é "não mapeado neste computador" — o diretório veio de outro
-    /// dispositivo pela sincronização, e o caminho de lá não vale aqui (ADR-060).
+    /// dispositivo pela sincronização, e o caminho de lá não vale aqui (ADR-061).
     /// </summary>
     public string? Path { get; private set; }
 

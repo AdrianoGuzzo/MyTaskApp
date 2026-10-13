@@ -270,7 +270,7 @@ public sealed partial class TaskNotesViewModel(
         OriginText = null;
     }
 
-    /// <summary>"Criada em Notebook · 12/10/2026 · alterada por último neste computador" (ADR-060).</summary>
+    /// <summary>"Criada em Notebook · 12/10/2026 · alterada por último neste computador" (ADR-061).</summary>
     [ObservableProperty]
     private string? _originText;
 

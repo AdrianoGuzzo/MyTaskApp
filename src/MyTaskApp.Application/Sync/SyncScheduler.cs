@@ -2,7 +2,7 @@ using Microsoft.Extensions.Logging;
 
 namespace MyTaskApp.Application.Sync;
 
-/// <summary>Os tempos do agendador (ADR-060).</summary>
+/// <summary>Os tempos do agendador (ADR-061).</summary>
 public sealed record SyncSchedule(TimeSpan Debounce, TimeSpan PollInterval, TimeSpan BackoffBase, TimeSpan BackoffCap)
 {
     /// <summary>3 s depois de uma gravação; a cada minuto parado; espera até 5 min quando falha.</summary>
@@ -23,7 +23,7 @@ public sealed record SyncSchedule(TimeSpan Debounce, TimeSpan PollInterval, Time
 }
 
 /// <summary>
-/// Quem roda a sincronização em segundo plano (ADR-060): um laço só, que
+/// Quem roda a sincronização em segundo plano (ADR-061): um laço só, que
 /// acorda pouco depois de uma gravação, a cada minuto parado, e espera mais a
 /// cada falha passageira.
 /// </summary>

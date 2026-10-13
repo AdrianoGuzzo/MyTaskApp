@@ -80,7 +80,7 @@ public sealed class SyncRegistryTests
     [Fact]
     public void NoFieldCarriesAMachinePath()
     {
-        // Os caminhos absolutos são da máquina (ADR-060, categoria B): nem o nome do campo pode vazar.
+        // Os caminhos absolutos são da máquina (ADR-061, categoria B): nem o nome do campo pode vazar.
         var forbidden = new[] { "path", "repositoryPath", "worktreePath", "processId", "password", "secret", "token" };
 
         foreach (var definition in SyncRegistry.All)

@@ -1,4 +1,4 @@
-# O servidor de sincronizacao para desenvolvimento (ADR-060, docs/sync-server.md).
+# O servidor de sincronizacao para desenvolvimento (ADR-061, docs/sync-server.md).
 #
 #   docker compose -f deploy/sync-server/docker-compose.yml up -d postgres
 #   dotnet run --project src/MyTaskApp.Server.Api        (ambiente Development)

@@ -94,7 +94,7 @@ public sealed class MyTaskAppDbContext(DbContextOptions<MyTaskAppDbContext> opti
     /// <summary>Habilitado, porta, iniciar com o app e somente leitura do servidor MCP (ADR-059).</summary>
     internal DbSet<McpServerSettingsRow> McpServerSettings => Set<McpServerSettingsRow>();
 
-    /// <summary>A ligação desta instalação com a conta de sincronização (ADR-060).</summary>
+    /// <summary>A ligação desta instalação com a conta de sincronização (ADR-061).</summary>
     internal DbSet<Sync.Persistence.SyncStateRow> SyncState => Set<Sync.Persistence.SyncStateRow>();
 
     /// <summary>Versão, último estado compartilhado e origem de cada entidade sincronizada.</summary>

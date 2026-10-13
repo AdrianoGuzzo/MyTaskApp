@@ -5,7 +5,7 @@ neste computador, e não grava uma linha de sincronização sequer. Com a conta
 conectada, as mesmas tarefas, etiquetas, horas e post-its aparecem em todos os
 computadores da pessoa.
 
-A decisão e as alternativas estão no [ADR-060](ARCHITECTURE.md). O servidor,
+A decisão e as alternativas estão no [ADR-061](ARCHITECTURE.md). O servidor,
 com o cliente do Google, as variáveis e a implantação, está em
 [`sync-server.md`](sync-server.md).
 
@@ -43,7 +43,7 @@ sincronização.
 | Etiqueta e vínculo com a tarefa | nome, cor | — |
 | Diretório da etiqueta | alias, nome, descrição, branch padrão | **o caminho da pasta** |
 | Comandos globais e do diretório | texto, nome, modo, parâmetros, pasta relativa, ordem, ligado | a revisão local |
-| Ambiente de desenvolvimento | branch, origem, tag, prompt, lista de comandos | **repositório, worktree, situação** |
+| Ambiente de desenvolvimento | branch, origem, tag, prompt, lista de comandos | **repositório, worktree, situação, banco copiado** |
 | Horas | início, fim, origem, nota | o cronômetro **enquanto roda** |
 | Post-it | texto, aparência, arquivamento, lixeira, tarefa gerada | aberto, fixado, posição, tamanho |
 

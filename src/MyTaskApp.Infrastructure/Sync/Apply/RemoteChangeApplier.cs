@@ -13,7 +13,7 @@ using MyTaskApp.Sync.Contracts.Definitions;
 namespace MyTaskApp.Infrastructure.Sync.Apply;
 
 /// <summary>
-/// Aplica uma página do pull no SQLite (ADR-060): uma transação, dados e
+/// Aplica uma página do pull no SQLite (ADR-061): uma transação, dados e
 /// cursor juntos. Se a página falha, nada entra e o cursor fica — a próxima
 /// tentativa recomeça da mesma página.
 /// </summary>

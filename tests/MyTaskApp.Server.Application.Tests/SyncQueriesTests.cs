@@ -3,7 +3,7 @@ using MyTaskApp.Sync.Contracts.Definitions;
 
 namespace MyTaskApp.Server.Application.Tests;
 
-/// <summary>O pull com cursor, a página fechada e os dispositivos (ADR-060).</summary>
+/// <summary>O pull com cursor, a página fechada e os dispositivos (ADR-061).</summary>
 public sealed class SyncQueriesTests
 {
     private readonly InMemorySyncServer _server = new();

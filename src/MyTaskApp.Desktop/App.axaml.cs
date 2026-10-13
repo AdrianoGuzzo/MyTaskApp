@@ -418,7 +418,7 @@ public sealed partial class App : Avalonia.Application
     /// faria — o quadro, a aba "Tempo" das janelas abertas e a de Bancos.
     /// </summary>
     /// <summary>
-    /// A sincronização (ADR-060) em segundo plano. Sem servidor configurado ou
+    /// A sincronização (ADR-061) em segundo plano. Sem servidor configurado ou
     /// sem conta ligada, o laço acorda, vê que não há o que fazer e dorme: o
     /// app continua inteiro, só local.
     /// </summary>
@@ -429,7 +429,7 @@ public sealed partial class App : Avalonia.Application
     {
         services.GetRequiredService<IDataChangeNotifier>().Changed += areas => OnUiThread(() =>
         {
-            // Etiquetas e post-its que chegam de outro computador (ADR-060):
+            // Etiquetas e post-its que chegam de outro computador (ADR-061):
             // as bolinhas da lista e os post-its abertos se redesenham.
             if (areas.HasFlag(DataArea.Tags))
             {
@@ -556,7 +556,7 @@ public sealed partial class App : Avalonia.Application
         window.Reveal();
     }
 
-    /// <summary>A janela da sincronização (ADR-060), aberta pelo menu.</summary>
+    /// <summary>A janela da sincronização (ADR-061), aberta pelo menu.</summary>
     private static void ShowSync(IServiceProvider services, Window owner)
     {
         var window = services.GetRequiredService<SyncWindow>();
@@ -623,6 +623,7 @@ public sealed partial class App : Avalonia.Application
             services.GetRequiredService<IConfirmationDialog>());
 
         viewModel.Developments.CommandsRequested += () => ShowDevelopmentCommands(services, notes);
+        viewModel.Developments.DatabaseOperationsRequested += () => ShowDatabaseOperations(services, notes);
 
         // Vincular, atualizar ou desvincular muda a chave que a linha desenha.
         if (viewModel.Issue is { } issue)
@@ -843,10 +844,11 @@ public sealed partial class App : Avalonia.Application
         // Uma cópia de banco em andamento para; a limpeza do diretório
         // temporário roda no caminho de volta dela (ADR-056).
         services.GetRequiredService<DatabaseOperationsViewModel>().CancelForShutdown();
+        services.GetRequiredService<DatabaseCopyRuns>().CancelAll();
         services.GetRequiredService<ReminderScheduler>().Dispose();
         services.GetRequiredService<LifecycleMaintenanceScheduler>().Dispose();
 
-        // Um push no meio para; o outbox guarda, e o próximo início reenvia com os mesmos ids (ADR-060).
+        // Um push no meio para; o outbox guarda, e o próximo início reenvia com os mesmos ids (ADR-061).
         services.GetRequiredService<SyncScheduler>().Dispose();
         services.GetRequiredService<AgentSessionMonitor>().Dispose();
         services.GetRequiredService<CommandExecutionMonitor>().Dispose();

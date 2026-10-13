@@ -9,7 +9,7 @@ namespace MyTaskApp.Infrastructure.Tests.Sync;
 
 /// <summary>
 /// A garantia estrutural de que o que é deste computador não sai dele
-/// (ADR-060): toda coluna das tabelas que sincronizam está classificada — ou
+/// (ADR-061): toda coluna das tabelas que sincronizam está classificada — ou
 /// viaja, ou é local, por escrito. Uma coluna nova sem decisão quebra aqui.
 /// </summary>
 public sealed class SyncClassificationTests
@@ -83,7 +83,7 @@ public sealed class SyncClassificationTests
     public void TheLocalLists_NameWhatMustNeverTravel()
     {
         SyncMappers.TagDirectory.LocalProperties.Should().Contain("Path");
-        SyncMappers.Development.LocalProperties.Should().Contain(["RepositoryPath", "WorktreePath"]);
+        SyncMappers.Development.LocalProperties.Should().Contain(["RepositoryPath", "WorktreePath", "Database.Name", "Database.Host"]);
         SyncMappers.Occurrence.LocalProperties.Should().Contain("Position");
         SyncMappers.StickyNote.LocalProperties.Should().Contain(["X", "Y", "IsOpen"]);
     }

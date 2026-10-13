@@ -47,7 +47,7 @@ public sealed partial class SyncDeviceItem(DeviceInfo device) : ObservableObject
 }
 
 /// <summary>
-/// A janela "Sincronização…" (ADR-060): a conta, o estado, os conflitos, as
+/// A janela "Sincronização…" (ADR-061): a conta, o estado, os conflitos, as
 /// falhas, os comandos a revisar e os dispositivos.
 /// </summary>
 /// <remarks>

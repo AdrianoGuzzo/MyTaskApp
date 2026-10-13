@@ -31,7 +31,7 @@ internal sealed record LoopbackCallbackMessages(
 
 /// <summary>
 /// Espera o navegador voltar com o código de autorização em
-/// <c>http://localhost:{porta}/callback</c> (ADR-045, ADR-060).
+/// <c>http://localhost:{porta}/callback</c> (ADR-045, ADR-061).
 /// </summary>
 /// <remarks>
 /// <para>

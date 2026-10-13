@@ -10,7 +10,7 @@ namespace MyTaskApp.Infrastructure.Sync.Apply;
 
 /// <summary>
 /// Funde uma linha local na que veio do servidor com a mesma chave única
-/// (ADR-060): a etiqueta "Casa" criada nos dois computadores antes de
+/// (ADR-061): a etiqueta "Casa" criada nos dois computadores antes de
 /// conectar vira uma só. Os vínculos e diretórios passam a apontar para a
 /// remota, o caminho local do diretório vai junto, e o que diferia nos valores
 /// compartilhados vira conflito visível.

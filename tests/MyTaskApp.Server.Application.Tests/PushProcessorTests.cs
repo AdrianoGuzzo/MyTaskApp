@@ -3,7 +3,7 @@ using MyTaskApp.Sync.Contracts.Definitions;
 
 namespace MyTaskApp.Server.Application.Tests;
 
-/// <summary>O push: idempotência, pais, exclusão, unicidade e isolamento (ADR-060).</summary>
+/// <summary>O push: idempotência, pais, exclusão, unicidade e isolamento (ADR-061).</summary>
 public sealed class PushProcessorTests
 {
     private readonly InMemorySyncServer _server = new();

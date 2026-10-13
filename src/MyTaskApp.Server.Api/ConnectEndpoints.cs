@@ -14,7 +14,7 @@ namespace MyTaskApp.Server.Api;
 
 /// <summary>
 /// O <c>/connect/authorize</c> e o <c>/connect/token</c> em passthrough
-/// (ADR-060): o OpenIddict valida o protocolo (cliente, redirect exato, PKCE),
+/// (ADR-061): o OpenIddict valida o protocolo (cliente, redirect exato, PKCE),
 /// e aqui entra o que é do MyTaskApp — a sessão, o dispositivo e a revogação.
 /// </summary>
 internal static class ConnectEndpoints

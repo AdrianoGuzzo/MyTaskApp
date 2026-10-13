@@ -24,7 +24,7 @@ internal sealed class TempSqliteDatabase : IAsyncDisposable
             .UseSqlite(ConnectionString)
             .Options);
 
-    /// <summary>Com os interceptores do app — a captura da sincronização (ADR-060).</summary>
+    /// <summary>Com os interceptores do app — a captura da sincronização (ADR-061).</summary>
     public MyTaskAppDbContext CreateContext(params IInterceptor[] interceptors) =>
         new(new DbContextOptionsBuilder<MyTaskAppDbContext>()
             .UseSqlite(ConnectionString)

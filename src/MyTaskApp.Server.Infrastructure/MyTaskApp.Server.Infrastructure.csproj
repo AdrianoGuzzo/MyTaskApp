@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <!--
-    A persistencia do servidor de sincronizacao (ADR-060): PostgreSQL pelo EF
+    A persistencia do servidor de sincronizacao (ADR-061): PostgreSQL pelo EF
     Core, com o Identity, o OpenIddict e as chaves do DataProtection no mesmo
     banco. Migrations proprias, independentes das do desktop.
   -->

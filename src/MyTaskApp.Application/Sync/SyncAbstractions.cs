@@ -1,7 +1,7 @@
 namespace MyTaskApp.Application.Sync;
 
 /// <summary>
-/// A identidade desta instalação para a sincronização (ADR-060): um id
+/// A identidade desta instalação para a sincronização (ADR-061): um id
 /// estável, que não é o nome da máquina, guardado fora do banco.
 /// </summary>
 /// <remarks>

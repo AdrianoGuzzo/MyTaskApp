@@ -4,7 +4,7 @@ using MyTaskApp.Sync.Contracts;
 namespace MyTaskApp.Infrastructure.Sync.Http;
 
 /// <summary>
-/// O cliente tipado da API v1 (ADR-060). Toda chamada leva o access token; um
+/// O cliente tipado da API v1 (ADR-061). Toda chamada leva o access token; um
 /// 401 esquece o token, renova e tenta uma vez — o access pode ter vencido
 /// entre a conferência e a chegada.
 /// </summary>

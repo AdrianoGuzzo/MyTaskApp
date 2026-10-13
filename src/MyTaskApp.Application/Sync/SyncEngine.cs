@@ -51,7 +51,7 @@ public sealed class SyncDeviceDirectory
 }
 
 /// <summary>
-/// Um ciclo de sincronização (ADR-060): olá → (na primeira vez, o pull
+/// Um ciclo de sincronização (ADR-061): olá → (na primeira vez, o pull
 /// completo e a varredura do que já existia) → push → pull.
 /// </summary>
 /// <remarks>

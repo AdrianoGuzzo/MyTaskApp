@@ -365,6 +365,24 @@ public sealed class TaskItem
         development.ChangeAgentPrompt(normalized);
     }
 
+    /// <summary>
+    /// Confere, sem alterar nada, que o ambiente pode receber uma cópia do banco
+    /// (ADR-060). O caso de uso pergunta antes da cópia, que leva minutos.
+    /// </summary>
+    public void EnsureDevelopmentDatabaseCanChange(Guid developmentId)
+    {
+        RefuseWhenOutOfTheMainList("copiar o banco de");
+        GetDevelopment(developmentId).EnsureDatabaseCanChange();
+    }
+
+    /// <summary>
+    /// Registra o banco que a cópia acabou de criar para o ambiente (ADR-060).
+    /// Sem a guarda da lista principal, como o pronto do worktree: o banco já
+    /// existe no servidor, e arquivar no meio da cópia não pode perdê-lo de vista.
+    /// </summary>
+    public void SetDevelopmentDatabase(Guid developmentId, TaskDevelopmentDatabase database) =>
+        GetDevelopment(developmentId).ChangeDatabase(database);
+
     public void MarkDevelopmentReady(Guid developmentId, DateTimeOffset at) =>
         GetDevelopment(developmentId).MarkReady(at);
 
@@ -760,7 +778,7 @@ public sealed class TaskItem
     /// </remarks>
     /// <summary>
     /// Recalcula o que é derivado depois que o estado chegou de fora — de outro
-    /// computador, pela sincronização (ADR-060), sem passar pelas transições.
+    /// computador, pela sincronização (ADR-061), sem passar pelas transições.
     /// <see cref="ConcludedAt"/> volta a bater com as ocorrências, e nenhum
     /// lembrete fica armado onde a regra local não deixaria: fora da lista
     /// principal ou em ocorrência que já não está pendente. Rearmar as pendentes

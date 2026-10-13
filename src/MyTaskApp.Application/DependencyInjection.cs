@@ -53,7 +53,7 @@ public static class DependencyInjection
         // Singleton: resolver o fuso uma vez basta e evita repetir o fallback.
         services.TryAddSingleton<IUserClock, UserClock>();
 
-        // Sincronização (ADR-060): a gravação avisa, o agendador espera. Sem
+        // Sincronização (ADR-061): a gravação avisa, o agendador espera. Sem
         // conta ligada, o portão de comandos não tem o que barrar.
         services.TryAddSingleton<ISyncTrigger, SyncTrigger>();
         services.TryAddScoped<ICommandReviewGate, NoCommandReviewGate>();
@@ -122,6 +122,10 @@ public static class DependencyInjection
         services.AddScoped<InspectWorktreeHandler>();
         services.AddScoped<RemoveWorktreeHandler>();
         services.AddScoped<ProbeWorktreesHandler>();
+
+        // O banco copiado para o ambiente, e o {database} dos comandos (ADR-060).
+        services.AddScoped<ValidateDevelopmentDatabaseCopyHandler>();
+        services.AddScoped<CopyDevelopmentDatabaseHandler>();
 
         // A PR aberta da branch, pelo GitHub CLI (ADR-047).
         services.AddScoped<FindPullRequestHandler>();

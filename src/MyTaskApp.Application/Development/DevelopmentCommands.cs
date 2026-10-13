@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Commands;
+using MyTaskApp.Application.DatabaseOperations;
 using MyTaskApp.Application.Sync;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.Tasks;
@@ -55,6 +56,7 @@ public sealed record RunDevelopmentCommands(Guid TaskId, Guid DevelopmentId);
 public sealed class RunDevelopmentCommandsHandler(
     ITaskItemRepository tasks,
     IDevelopmentCommandRepository commands,
+    ISavedDatabaseRepository savedDatabases,
     ICommandExecutor executor,
     IDirectoryProbe directories,
     ILogger<RunDevelopmentCommandsHandler> logger,
@@ -87,7 +89,7 @@ public sealed class RunDevelopmentCommandsHandler(
                 $"A pasta do worktree ({development.WorktreePath}) não existe mais. Nenhum comando foi executado.");
         }
 
-        // A lista do ambiente e os globais que ela chama podem ter vindo de outro computador (ADR-060).
+        // A lista do ambiente e os globais que ela chama podem ter vindo de outro computador (ADR-061).
         if (reviewGate is not null)
         {
             await reviewGate.EnsureReviewedAsync(
@@ -99,12 +101,13 @@ public sealed class RunDevelopmentCommandsHandler(
         }
 
         var globals = await GlobalCommandLookup.LoadAsync(commands, cancellationToken);
+        var aliases = await DatabaseAliasNames.ListAsync(savedDatabases, cancellationToken);
         // {worktree}, {branch}… nos globais valem aqui também (ADR-051). Sem
-        // diretório de etiqueta, {tag} fica sem valor.
+        // diretório de etiqueta, {tag} fica sem valor. {apelido} é o banco (ADR-060).
         var resolved = CommandAliasResolver.Resolve(
             entries,
             globals,
-            CommandContext.For(task, development, tagName: null));
+            CommandContext.For(task, development, tagName: null, aliases: aliases));
 
         logger.LogInformation(
             "DevelopmentCommandsStarted {TaskId} {Count} {WorktreePath}",

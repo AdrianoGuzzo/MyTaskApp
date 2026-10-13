@@ -43,7 +43,7 @@ public sealed class AddTagDirectoryHandler(
 /// Troca alias, path, nome, descrição e branch padrão de uma vez. Anotações que já receberam o
 /// path antigo ficam como estão: o texto nunca guardou referência ao diretório.
 /// Num diretório que veio de outro computador, preencher o path é mapeá-lo
-/// aqui (ADR-060); em branco, ele continua sem pasta.
+/// aqui (ADR-061); em branco, ele continua sem pasta.
 /// </summary>
 public sealed record UpdateTagDirectory(
     Guid TagId,

@@ -11,7 +11,7 @@ using MyTaskApp.Sync.Contracts.Definitions;
 namespace MyTaskApp.Desktop.Tests.ViewModels;
 
 /// <summary>
-/// A janela "Sincronização…" (ADR-060): o que ela mostra em cada estado da
+/// A janela "Sincronização…" (ADR-061): o que ela mostra em cada estado da
 /// ligação, e que cada botão pede o caso de uso certo — sem conta e sem rede.
 /// </summary>
 public class SyncViewModelTests

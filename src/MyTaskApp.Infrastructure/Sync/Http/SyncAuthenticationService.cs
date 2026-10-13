@@ -9,7 +9,7 @@ using MyTaskApp.Sync.Contracts;
 namespace MyTaskApp.Infrastructure.Sync.Http;
 
 /// <summary>
-/// A conta da sincronização no desktop (ADR-060). Singleton: o access token
+/// A conta da sincronização no desktop (ADR-061). Singleton: o access token
 /// fica na memória, e a renovação passa por um portão só.
 /// </summary>
 /// <remarks>

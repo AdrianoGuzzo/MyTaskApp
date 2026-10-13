@@ -24,7 +24,7 @@ internal sealed class DatabaseInitializer(
 
         await context.Database.MigrateAsync(cancellationToken);
 
-        // A captura da sincronização (ADR-060) liga antes da primeira gravação
+        // A captura da sincronização (ADR-061) liga antes da primeira gravação
         // da tela: com a conta ligada, nenhuma alteração pode escapar do outbox.
         var linked = await context.SyncState.AnyAsync(state => state.Status != SyncLinkStatus.Unlinked, cancellationToken);
         captureSwitch.Set(linked);

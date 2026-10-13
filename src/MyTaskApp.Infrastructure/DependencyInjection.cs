@@ -65,7 +65,7 @@ public static class DependencyInjection
 
         services.AddSingleton(Options.Create(databaseOptions));
 
-        // A captura da sincronização (ADR-060) entra em todo SaveChanges, e só
+        // A captura da sincronização (ADR-061) entra em todo SaveChanges, e só
         // trabalha com a instalação ligada a uma conta.
         services.AddSingleton<SyncCaptureSwitch>();
         services.AddSingleton<SyncCaptureInterceptor>();
@@ -279,7 +279,7 @@ public static class DependencyInjection
     }
 
     /// <summary>
-    /// O cliente da sincronização (ADR-060). Singleton, como o do Jira: o
+    /// O cliente da sincronização (ADR-061). Singleton, como o do Jira: o
     /// access token e o portão da renovação valem para o app inteiro.
     /// </summary>
     private static void AddSyncClient(IServiceCollection services, IConfiguration configuration)

@@ -10,7 +10,7 @@ namespace MyTaskApp.Infrastructure.Sync.Apply;
 
 /// <summary>
 /// Compara tudo o que existe no banco com o que a sincronização sabe
-/// (ADR-060). Na primeira conexão, é o que manda as tarefas que já existiam;
+/// (ADR-061). Na primeira conexão, é o que manda as tarefas que já existiam;
 /// depois de um pull completo, só o que nunca subiu vira operação — o que
 /// veio do servidor já tem estado e não é enviado de volta.
 /// </summary>

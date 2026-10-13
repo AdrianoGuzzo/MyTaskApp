@@ -44,7 +44,7 @@ public sealed class SyncApiException(SyncFailureKind kind, string message, strin
     public TimeSpan? RetryAfter { get; } = retryAfter;
 }
 
-/// <summary>O cliente da API v1 (ADR-060). Cada chamada já leva o token; 401 renova e tenta uma vez.</summary>
+/// <summary>O cliente da API v1 (ADR-061). Cada chamada já leva o token; 401 renova e tenta uma vez.</summary>
 public interface ISyncApi
 {
     Task<MeResponse> MeAsync(CancellationToken cancellationToken);
@@ -70,7 +70,7 @@ public interface ISyncApi
 public sealed record SyncAuthorization(Uri AuthorizeUrl, Task Completion);
 
 /// <summary>
-/// A conta da sincronização no desktop (ADR-060): o login pelo navegador com
+/// A conta da sincronização no desktop (ADR-061): o login pelo navegador com
 /// PKCE, o access token só na memória e o refresh token no cofre do sistema.
 /// </summary>
 public interface ISyncAuthenticator

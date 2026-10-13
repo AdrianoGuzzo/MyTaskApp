@@ -12,7 +12,7 @@
         WindowStartupLocation="CenterOwner">
 
   <!--
-    Sincronização (ADR-060): a conta, o estado, os conflitos, as falhas, os
+    Sincronização (ADR-061): a conta, o estado, os conflitos, as falhas, os
     comandos que chegaram de outro computador e os dispositivos. Opcional: sem
     conta, o app continua inteiro, só local.
   -->

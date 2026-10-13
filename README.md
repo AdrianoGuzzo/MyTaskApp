@@ -346,7 +346,7 @@ tarefas, etiquetas, horas e post-its em todos os seus computadores. Sem conta,
 nada muda: o app continua inteiro, só local. O guia está em
 [`docs/sync.md`](docs/sync.md), o servidor em
 [`docs/sync-server.md`](docs/sync-server.md), e a decisão no
-[ADR-060](docs/ARCHITECTURE.md).
+[ADR-061](docs/ARCHITECTURE.md).
 
 - **Funciona offline.** As mudanças esperam num outbox, gravado junto com a
   própria mudança, e sobem quando a rede volta, sem duplicar.

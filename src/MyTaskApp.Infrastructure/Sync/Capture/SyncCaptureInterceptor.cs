@@ -11,7 +11,7 @@ namespace MyTaskApp.Infrastructure.Sync.Capture;
 
 /// <summary>
 /// Transforma cada <c>SaveChanges</c> de negócio em operações no outbox, no
-/// <b>mesmo</b> <c>SaveChanges</c> — e portanto na mesma transação (ADR-060).
+/// <b>mesmo</b> <c>SaveChanges</c> — e portanto na mesma transação (ADR-061).
 /// Os ~110 casos de uso não mudam: quem grava não sabe que existe sincronização.
 /// O que entra no outbox é decidido pelo <see cref="SyncRecorder"/>.
 /// </summary>

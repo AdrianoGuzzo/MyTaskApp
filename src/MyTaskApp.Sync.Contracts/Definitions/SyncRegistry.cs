@@ -4,7 +4,7 @@ namespace MyTaskApp.Sync.Contracts.Definitions;
 
 /// <summary>
 /// Todas as entidades que sincronizam, com o que é compartilhado de cada uma
-/// (ADR-060). O que não está aqui não sai do computador: caminhos absolutos,
+/// (ADR-061). O que não está aqui não sai do computador: caminhos absolutos,
 /// estado de janela, lembretes já tocados, processos, conexões e segredos.
 /// </summary>
 /// <remarks>

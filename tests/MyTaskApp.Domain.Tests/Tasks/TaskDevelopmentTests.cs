@@ -334,4 +334,91 @@ public class TaskDevelopmentTests
         FluentActions.Invoking(() => task.SetDevelopmentAgentPrompt(development.Id, "Outro texto"))
             .Should().Throw<DomainException>();
     }
+
+    // --- O banco do ambiente (ADR-060) ----------------------------------------
+
+    private static TaskDevelopmentDatabase Copied(string name = "eco_core_20261013_101500") =>
+        TaskDevelopmentDatabase.Create(Guid.CreateVersion7(), " Local ", " localhost ", 5433, " postgres ", $" {name} ", null, Now);
+
+    [Fact]
+    public void TheDatabase_IsOnlyRecorded_WithTheWorktreeReady()
+    {
+        var task = Task();
+        var development = Begin(task);
+
+        FluentActions.Invoking(() => task.SetDevelopmentDatabase(development.Id, Copied()))
+            .Should().Throw<DomainException>().WithMessage("*worktree pronto*");
+        FluentActions.Invoking(() => task.EnsureDevelopmentDatabaseCanChange(development.Id))
+            .Should().Throw<DomainException>();
+
+        task.MarkDevelopmentReady(development.Id, Now);
+        task.SetDevelopmentDatabase(development.Id, Copied());
+
+        development.Database!.Name.Should().Be("eco_core_20261013_101500");
+        development.Database.Host.Should().Be("localhost");
+        development.Database.Username.Should().Be("postgres");
+        development.Database.ConnectionName.Should().Be("Local");
+    }
+
+    [Fact]
+    public void TheLatestCopy_Wins()
+    {
+        var task = Task();
+        var development = Begin(task);
+        task.MarkDevelopmentReady(development.Id, Now);
+
+        task.SetDevelopmentDatabase(development.Id, Copied("primeiro_20261013_100000"));
+        task.SetDevelopmentDatabase(development.Id, Copied("segundo_20261013_110000"));
+
+        development.Database!.Name.Should().Be("segundo_20261013_110000");
+    }
+
+    [Fact]
+    public void RemovingTheWorktree_KeepsTheDatabase_ButANewAttemptStartsWithout()
+    {
+        var task = Task();
+        var development = Begin(task);
+        task.MarkDevelopmentReady(development.Id, Now);
+        task.SetDevelopmentDatabase(development.Id, Copied());
+
+        task.MarkDevelopmentRemoved(development.Id, Now);
+        development.Database.Should().NotBeNull("o banco continua no servidor, e a tela diz qual");
+
+        task.BeginDevelopment(development.Id, Repository, "main", "feature/x", Worktree, Now);
+        development.Database.Should().BeNull();
+    }
+
+    [Fact]
+    public void AnArchivedTask_DoesNotStartACopy_ButRecordsOneThatFinished()
+    {
+        var task = Task();
+        var development = Begin(task);
+        task.MarkDevelopmentReady(development.Id, Now);
+        task.Archive(Now);
+
+        FluentActions.Invoking(() => task.EnsureDevelopmentDatabaseCanChange(development.Id))
+            .Should().Throw<DomainException>();
+        FluentActions.Invoking(() => task.SetDevelopmentDatabase(development.Id, Copied()))
+            .Should().NotThrow("o banco já existe no servidor");
+    }
+
+    [Fact]
+    public void TheAlias_IsNormalized_AndBlankIsNone()
+    {
+        TaskDevelopmentDatabase.Create(Guid.CreateVersion7(), "Local", "localhost", 5432, "dev", "eco", null, Now, " Lock_ECO ")
+            .Alias.Should().Be("lock_eco");
+        TaskDevelopmentDatabase.Create(Guid.CreateVersion7(), "Local", "localhost", 5432, "dev", "eco", null, Now, "  ")
+            .Alias.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("", "localhost", 5432, "postgres", "Local", "*banco*")]
+    [InlineData("eco", "", 5432, "postgres", "Local", "*servidor*")]
+    [InlineData("eco", "localhost", 0, "postgres", "Local", "*porta*")]
+    [InlineData("eco", "localhost", 5432, "", "Local", "*usuário*")]
+    [InlineData("eco", "localhost", 5432, "postgres", "", "*conexão*")]
+    [InlineData("eco=1 host=outro", "localhost", 5432, "postgres", "Local", "*")]
+    public void AnInvalidDatabase_IsRefused(string name, string host, int port, string user, string connection, string message) =>
+        FluentActions.Invoking(() => TaskDevelopmentDatabase.Create(Guid.CreateVersion7(), connection, host, port, user, name, null, Now))
+            .Should().Throw<DomainException>().WithMessage(message);
 }

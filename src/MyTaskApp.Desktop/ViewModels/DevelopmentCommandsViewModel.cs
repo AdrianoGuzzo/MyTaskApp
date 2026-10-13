@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Commands;
+using MyTaskApp.Application.DatabaseOperations;
 using MyTaskApp.Desktop.Views;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.Commands;
@@ -11,7 +12,7 @@ using MyTaskApp.Domain.Commands;
 namespace MyTaskApp.Desktop.ViewModels;
 
 /// <summary>Um comando global na lista da janela.</summary>
-public sealed class DevelopmentCommandListItemViewModel(DevelopmentCommandRow row)
+public sealed class DevelopmentCommandListItemViewModel(DevelopmentCommandRow row, IReadOnlyCollection<string>? databaseAliases = null)
 {
     public DevelopmentCommandRow Row { get; } = row;
 
@@ -48,7 +49,7 @@ public sealed class DevelopmentCommandListItemViewModel(DevelopmentCommandRow ro
     /// contexto (<c>{worktree}</c>…) o app preenche sozinho (ADR-051).
     /// </summary>
     public IReadOnlyList<string> Parameters { get; } =
-        [.. CommandParameters.Names(row.Command).Where(name => !CommandVariables.IsContextName(name))];
+        DevelopmentCommandParameterEditorViewModel.UserParameters(row.Command, databaseAliases);
 
     public bool HasParameters => Parameters.Count > 0;
 
@@ -201,8 +202,11 @@ public sealed partial class DevelopmentCommandsViewModel(
         }
     }
 
-    private static IReadOnlyList<string> UserParameters(string? command) =>
-        DevelopmentCommandParameterEditorViewModel.UserParameters(command);
+    private IReadOnlyList<string> UserParameters(string? command) =>
+        DevelopmentCommandParameterEditorViewModel.UserParameters(command, _databaseAliases);
+
+    /// <summary>Os apelidos de banco: não viram linha de parâmetro, porque são o banco copiado (ADR-060).</summary>
+    private IReadOnlyList<string> _databaseAliases = [];
 
     /// <summary>
     /// O nome sugere o apelido enquanto o apelido for o que ele sugeriu: quem
@@ -226,7 +230,7 @@ public sealed partial class DevelopmentCommandsViewModel(
 
     private void SyncParameterEditors(IReadOnlyList<CommandParameterSpec>? saved)
     {
-        DevelopmentCommandParameterEditorViewModel.Sync(ParameterEditors, Command, saved);
+        DevelopmentCommandParameterEditorViewModel.Sync(ParameterEditors, Command, saved, _databaseAliases);
         OnPropertyChanged(nameof(HasParameterEditors));
     }
 
@@ -255,7 +259,19 @@ public sealed partial class DevelopmentCommandsViewModel(
             return;
         }
 
-        _all = [.. rows.Select(row => new DevelopmentCommandListItemViewModel(row))];
+        try
+        {
+            _databaseAliases = [.. (await runner.RunAsync<GetSavedDatabasesHandler, IReadOnlyList<SavedDatabaseRow>>(
+                (handler, token) => handler.HandleAsync(new GetSavedDatabases(), token),
+                cancellationToken)).Select(saved => saved.Alias)];
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // Sem os apelidos, o nome de um aparece como parâmetro; a execução continua certa.
+            _databaseAliases = [];
+        }
+
+        _all = [.. rows.Select(row => new DevelopmentCommandListItemViewModel(row, _databaseAliases))];
         ApplySearch();
     }
 

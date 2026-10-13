@@ -8,7 +8,7 @@ using MyTaskApp.Sync.Contracts.Definitions;
 namespace MyTaskApp.Server.IntegrationTests;
 
 /// <summary>
-/// Dois computadores da mesma pessoa, de ponta a ponta (ADR-060): desktop
+/// Dois computadores da mesma pessoa, de ponta a ponta (ADR-061): desktop
 /// inteiro sobre SQLite, login pelo navegador com PKCE e a volta pela porta de
 /// loopback, a API de verdade e o PostgreSQL por baixo. Nada é roteirizado: o
 /// que um grava, o outro lê pelo servidor.

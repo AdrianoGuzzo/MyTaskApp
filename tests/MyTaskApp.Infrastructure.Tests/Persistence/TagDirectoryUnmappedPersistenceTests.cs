@@ -9,7 +9,7 @@ using MyTaskApp.Infrastructure.Persistence.Repositories;
 namespace MyTaskApp.Infrastructure.Tests.Persistence;
 
 /// <summary>
-/// O diretório sem pasta neste computador (ADR-060): veio de outro dispositivo,
+/// O diretório sem pasta neste computador (ADR-061): veio de outro dispositivo,
 /// e o caminho de lá nunca é gravado aqui. A lista da etiqueta o mostra; o
 /// autocomplete e os comandos rápidos, que precisam do caminho, não.
 /// </summary>

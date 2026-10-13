@@ -15,7 +15,7 @@ using MyTaskApp.Sync.Contracts.Definitions;
 namespace MyTaskApp.Infrastructure.Sync;
 
 /// <summary>
-/// O estado local da sincronização no SQLite (ADR-060): a ligação com a
+/// O estado local da sincronização no SQLite (ADR-061): a ligação com a
 /// conta, o outbox e o que fazer com cada resposta do servidor.
 /// </summary>
 internal sealed class SyncLocalStore(
@@ -681,7 +681,7 @@ internal sealed class SyncLocalStore(
 
 /// <summary>
 /// Que entidade sincronizada carrega texto que vira comando — e qual. É a
-/// regra única do portão e da lista "Comandos recebidos" (ADR-060).
+/// regra única do portão e da lista "Comandos recebidos" (ADR-061).
 /// </summary>
 internal static class CommandReviewRule
 {
@@ -720,7 +720,7 @@ internal static class CommandReviewRule
         };
 }
 
-/// <summary>O portão de revisão sobre o estado local (ADR-060).</summary>
+/// <summary>O portão de revisão sobre o estado local (ADR-061).</summary>
 internal sealed class SyncCommandReviewGate(MyTaskAppDbContext context, IDeviceIdentity device) : ICommandReviewGate
 {
     public async Task EnsureReviewedAsync(IReadOnlyCollection<CommandSource> sources, CancellationToken cancellationToken)

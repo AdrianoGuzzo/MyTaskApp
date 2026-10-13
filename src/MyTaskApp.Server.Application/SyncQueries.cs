@@ -4,7 +4,7 @@ using MyTaskApp.Sync.Contracts.Definitions;
 namespace MyTaskApp.Server.Application;
 
 /// <summary>
-/// O pull (ADR-060): o estado atual do que mudou depois do cursor, em ordem
+/// O pull (ADR-061): o estado atual do que mudou depois do cursor, em ordem
 /// do log, uma vez cada. Não é um replay de operações — é o log compactado:
 /// a entidade alterada dez vezes vem uma vez, na última versão.
 /// </summary>

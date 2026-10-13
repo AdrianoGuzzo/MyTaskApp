@@ -1,4 +1,4 @@
-# O servidor de sincronizacao (ADR-060). Build a partir da raiz do repositorio:
+# O servidor de sincronizacao (ADR-061). Build a partir da raiz do repositorio:
 #   docker build -f src/MyTaskApp.Server.Api/Dockerfile -t mytaskapp-sync .
 # Segredos so por variavel de ambiente (docs/sync-server.md); nada e copiado para a imagem.
 

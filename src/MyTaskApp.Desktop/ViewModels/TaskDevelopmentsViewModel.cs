@@ -57,6 +57,9 @@ public sealed partial class TaskDevelopmentsViewModel(
     /// <summary>Pede a janela de comandos globais.</summary>
     public event Action? CommandsRequested;
 
+    /// <summary>Pede a janela Bancos de Dados, para cadastrar o que a cópia do ambiente usa (ADR-060).</summary>
+    public event Action? DatabaseOperationsRequested;
+
     /// <summary>A tarefa. Chamado uma vez, na abertura da janela.</summary>
     public void Load(Guid taskId, string taskTitle, bool isReadOnly)
     {
@@ -296,6 +299,7 @@ public sealed partial class TaskDevelopmentsViewModel(
 
         item.Changed += OnEnvironmentChanged;
         item.CommandsRequested += OnCommandsRequested;
+        item.DatabaseOperationsRequested += OnDatabaseOperationsRequested;
         item.PropertyChanged += OnEnvironmentPropertyChanged;
         Items.Add(item);
         return item;
@@ -311,10 +315,13 @@ public sealed partial class TaskDevelopmentsViewModel(
     {
         item.Changed -= OnEnvironmentChanged;
         item.CommandsRequested -= OnCommandsRequested;
+        item.DatabaseOperationsRequested -= OnDatabaseOperationsRequested;
         item.PropertyChanged -= OnEnvironmentPropertyChanged;
     }
 
     private void OnCommandsRequested() => CommandsRequested?.Invoke();
+
+    private void OnDatabaseOperationsRequested() => DatabaseOperationsRequested?.Invoke();
 
     private void OnEnvironmentPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs args)
     {

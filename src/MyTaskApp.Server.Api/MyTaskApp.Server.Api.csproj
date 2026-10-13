@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
   <!--
-    A API opcional de sincronizacao (ADR-060): Identity com login pelo Google,
+    A API opcional de sincronizacao (ADR-061): Identity com login pelo Google,
     OpenIddict como servidor OAuth 2.0/OIDC do desktop e os endpoints /api/v1.
     Nao faz parte do instalador: e implantada a parte (docs/sync-server.md).
   -->

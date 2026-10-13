@@ -31,7 +31,16 @@ public static class AliasCompletion
     /// Como <see cref="FindToken(string?, int)"/>, com outros caracteres depois
     /// do <c>@</c> — a referência a arquivo (ADR-039) aceita também a barra.
     /// </summary>
-    public static AliasToken? FindToken(string? text, int caretIndex, Func<char, bool> isTokenChar)
+    public static AliasToken? FindToken(string? text, int caretIndex, Func<char, bool> isTokenChar) =>
+        FindToken(text, caretIndex, isTokenChar, '@');
+
+    /// <summary>
+    /// Como <see cref="FindToken(string?, int, Func{char, bool})"/>, com outro
+    /// gatilho: o <c>{</c> das variáveis dos comandos (ADR-060). O <c>{</c>
+    /// vale em qualquer lugar da linha, menos depois de <c>$</c> e <c>@</c> —
+    /// <c>${env:X}</c> e <c>HEAD@{1}</c> são do shell e do Git.
+    /// </summary>
+    public static AliasToken? FindToken(string? text, int caretIndex, Func<char, bool> isTokenChar, char trigger)
     {
         text ??= string.Empty;
 
@@ -47,14 +56,21 @@ public static class AliasCompletion
             start--;
         }
 
-        if (start == 0 || text[start - 1] != '@')
+        if (start == 0 || text[start - 1] != trigger)
         {
             return null;
         }
 
         var at = start - 1;
 
-        if (at > 0 && !IsBoundary(text[at - 1]))
+        if (trigger == '{')
+        {
+            if (at > 0 && text[at - 1] is '$' or '@')
+            {
+                return null;
+            }
+        }
+        else if (at > 0 && !IsBoundary(text[at - 1]))
         {
             return null;
         }
@@ -110,6 +126,12 @@ public static class AliasCompletion
         var end = Math.Clamp(caretIndex, token.Start, text.Length);
 
         while (end < text.Length && isTokenChar(text[end]))
+        {
+            end++;
+        }
+
+        // "{wor|}" aceito como "{worktree}": a chave que já fechava vai junto.
+        if (path.EndsWith('}') && end < text.Length && text[end] == '}')
         {
             end++;
         }

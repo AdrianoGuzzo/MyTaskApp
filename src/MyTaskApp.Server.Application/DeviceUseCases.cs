@@ -4,7 +4,7 @@ using MyTaskApp.Sync.Contracts;
 namespace MyTaskApp.Server.Application;
 
 /// <summary>
-/// Os dispositivos de um usuário (ADR-060): o "olá" de cada ciclo, o
+/// Os dispositivos de um usuário (ADR-061): o "olá" de cada ciclo, o
 /// apelido, a lista e a revogação. Cada usuário só enxerga os seus.
 /// </summary>
 public sealed class DeviceUseCases(

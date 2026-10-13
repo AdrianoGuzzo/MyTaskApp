@@ -25,7 +25,7 @@ public sealed partial class TagDirectoryItemViewModel(TagListItemViewModel owner
 
     public string Path => Row.Path ?? string.Empty;
 
-    /// <summary>Veio de outro computador e ainda não tem pasta aqui: editar e preencher o caminho mapeia (ADR-060).</summary>
+    /// <summary>Veio de outro computador e ainda não tem pasta aqui: editar e preencher o caminho mapeia (ADR-061).</summary>
     public bool IsUnmapped => !Row.IsMapped;
 
     public string? Name => Row.Name;

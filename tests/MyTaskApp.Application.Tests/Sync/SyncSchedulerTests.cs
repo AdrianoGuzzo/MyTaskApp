@@ -5,7 +5,7 @@ using MyTaskApp.Application.Sync;
 namespace MyTaskApp.Application.Tests.Sync;
 
 /// <summary>
-/// O agendador da sincronização (ADR-060): quando roda, quanto espera, e que
+/// O agendador da sincronização (ADR-061): quando roda, quanto espera, e que
 /// nunca roda dois ciclos juntos.
 /// </summary>
 public sealed class SyncSchedulerTests : IAsyncDisposable

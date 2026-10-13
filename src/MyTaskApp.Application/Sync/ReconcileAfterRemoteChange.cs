@@ -5,7 +5,7 @@ using MyTaskApp.Domain.Tasks;
 
 namespace MyTaskApp.Application.Sync;
 
-/// <summary>As tarefas que mudaram por chegada de outro computador (ADR-060).</summary>
+/// <summary>As tarefas que mudaram por chegada de outro computador (ADR-061).</summary>
 /// <param name="TaskIds">Todas as que receberam alguma mudança (tarefa ou ocorrência).</param>
 /// <param name="RearmTaskIds">
 /// As que mudaram a política de lembrete ou o agendamento: os lembretes

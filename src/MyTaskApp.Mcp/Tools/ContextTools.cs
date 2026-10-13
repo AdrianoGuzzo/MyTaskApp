@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Globalization;
 using ModelContextProtocol.Server;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Commands;
@@ -90,7 +91,8 @@ public sealed class ContextTools(McpGateway gateway, IUserClock clock)
     [McpServerTool(Name = "worktree_list", Title = "Worktrees", ReadOnly = true, Idempotent = true)]
     [Description(
         "Os ambientes de desenvolvimento (worktrees Git) de uma tarefa — repositório, branch, origem, pasta, estado e comandos " +
-        "pós-worktree. Sem tarefa, os worktrees prontos de todas as tarefas da lista principal.")]
+        "pós-worktree e o banco copiado para o ambiente (o {database} dos comandos). Sem tarefa, os worktrees prontos de " +
+        "todas as tarefas da lista principal, sem o banco.")]
     public Task<IReadOnlyList<WorktreeEntry>> ListWorktreesAsync(
         [Description("O id da tarefa; vazio = todas.")] string? taskId = null,
         CancellationToken cancellationToken = default) =>
@@ -355,7 +357,9 @@ public sealed record WorktreeEntry(
     string Path,
     string Status,
     string? FailureReason,
-    IReadOnlyList<string> Commands)
+    IReadOnlyList<string> Commands,
+    string? Database = null,
+    string? DatabaseServer = null)
 {
     public static WorktreeEntry Of(TaskDevelopmentView view, string taskTitle) => new(
         view.Id,
@@ -367,7 +371,12 @@ public sealed record WorktreeEntry(
         view.WorktreePath,
         view.Status.ToString(),
         view.FailureReason,
-        view.Commands ?? []);
+        view.Commands ?? [],
+        // O banco copiado para o ambiente (ADR-060): o nome e o servidor, nunca o usuário nem a senha.
+        view.Database?.Name,
+        view.Database is { } database
+            ? string.Create(CultureInfo.InvariantCulture, $"{database.Host}:{database.Port}")
+            : null);
 }
 
 public sealed record GitContext(

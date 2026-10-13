@@ -11,7 +11,7 @@ public sealed record TagRow(
     int DirectoryCount = 0);
 
 /// <summary>Uma pasta de etiqueta, com a etiqueta junto para o autocomplete diferenciar.</summary>
-/// <param name="Path"><c>null</c>: veio de outro computador e ainda não foi mapeada aqui (ADR-060).</param>
+/// <param name="Path"><c>null</c>: veio de outro computador e ainda não foi mapeada aqui (ADR-061).</param>
 /// <param name="DefaultBranch">A origem preferida quando o repositório é esta pasta.</param>
 /// <param name="CommandCount">Quantos comandos rápidos ela oferece (ADR-051).</param>
 public sealed record TagDirectoryRow(

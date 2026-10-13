@@ -21,7 +21,7 @@ using MyTaskApp.Sync.Contracts;
 namespace MyTaskApp.Server.IntegrationTests;
 
 /// <summary>
-/// O servidor inteiro em memória (ADR-060), com o PostgreSQL de verdade por
+/// O servidor inteiro em memória (ADR-061), com o PostgreSQL de verdade por
 /// baixo e um "Google" de mentira: o desafio dele já volta autenticado com o
 /// usuário do cabeçalho <see cref="FakeGoogleHandler.SubjectHeader"/>.
 /// </summary>

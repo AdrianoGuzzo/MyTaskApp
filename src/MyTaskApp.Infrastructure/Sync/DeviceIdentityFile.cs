@@ -7,7 +7,7 @@ namespace MyTaskApp.Infrastructure.Sync;
 /// <summary>
 /// O id do dispositivo em <c>device.json</c>, na pasta <b>local</b> do
 /// usuário (<c>%LOCALAPPDATA%</c>), que não viaja com o perfil nem com o
-/// backup do banco (ADR-060). Criado na primeira leitura.
+/// backup do banco (ADR-061). Criado na primeira leitura.
 /// </summary>
 internal sealed class DeviceIdentityFile(string folder, ILogger<DeviceIdentityFile> logger) : IDeviceIdentity
 {

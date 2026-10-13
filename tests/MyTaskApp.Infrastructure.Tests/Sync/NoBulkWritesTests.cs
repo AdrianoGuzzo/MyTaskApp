@@ -4,7 +4,7 @@ namespace MyTaskApp.Infrastructure.Tests.Sync;
 
 /// <summary>
 /// A captura da sincronização enxerga o que passa pelo change tracker
-/// (ADR-060). <c>ExecuteDelete</c>, <c>ExecuteUpdate</c> e SQL solto gravam por
+/// (ADR-061). <c>ExecuteDelete</c>, <c>ExecuteUpdate</c> e SQL solto gravam por
 /// fora dele, e uma alteração gravada assim nunca chegaria aos outros
 /// computadores. Quem precisar de um deles decide aqui, por escrito.
 /// </summary>

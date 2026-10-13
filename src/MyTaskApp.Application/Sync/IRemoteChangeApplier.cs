@@ -22,7 +22,7 @@ public sealed record RemoteApplyResult(
 
 /// <summary>
 /// Grava no banco local o que veio do servidor, sem gerar operação de saída
-/// (ADR-060). Uma página por transação, e o cursor avança junto: ou a página
+/// (ADR-061). Uma página por transação, e o cursor avança junto: ou a página
 /// inteira entra, ou nada entra e o cursor fica onde estava.
 /// </summary>
 public interface IRemoteChangeApplier

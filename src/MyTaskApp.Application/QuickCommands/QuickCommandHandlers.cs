@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Commands;
+using MyTaskApp.Application.DatabaseOperations;
 using MyTaskApp.Application.Sync;
 using MyTaskApp.Application.Tags;
 using MyTaskApp.Domain;
@@ -29,6 +30,9 @@ public sealed record QuickCommandPlan(QuickCommandEntry Entry, string WorkingDir
 {
     /// <summary>Há parâmetro a preencher ou confirmação a pedir: a tela abre o diálogo.</summary>
     public bool NeedsPrompt => Entry.Parameters.Count > 0 || Entry.RequiresConfirmation;
+
+    /// <summary>O que o <c>{</c> sugere nos campos: os apelidos de banco e as variáveis, com o valor deste ambiente (ADR-060).</summary>
+    public IReadOnlyList<CommandPlaceholder> Placeholders => CommandPlaceholders.For(Context);
 
     /// <summary>A linha com estes valores — a mesma conta que a execução refaz.</summary>
     public QuickCommandLine Build(IReadOnlyDictionary<string, string>? values) =>
@@ -69,29 +73,32 @@ internal static class QuickCommandTargets
     public static async Task<(
         IReadOnlyList<CommandDirectoryMatch> Matches,
         IReadOnlyList<DevelopmentCommandRow> Commands,
-        IReadOnlyList<DevelopmentCommandRow> Globals)>
+        IReadOnlyList<DevelopmentCommandRow> Globals,
+        IReadOnlyList<string> Aliases)>
         CatalogAsync(
             ITagQuery tagQuery,
             IDevelopmentCommandRepository commands,
+            ISavedDatabaseRepository savedDatabases,
             TaskItem task,
             TaskDevelopment development,
             CancellationToken cancellationToken)
     {
         var directories = await tagQuery.ListCommandDirectoriesAsync(cancellationToken);
+        var aliases = await DatabaseAliasNames.ListAsync(savedDatabases, cancellationToken);
         var globals = (await commands.ListAsync(cancellationToken)).Select(command => DevelopmentCommandRow.From(command)).ToList();
         var taskTags = task.Tags.Select(link => link.TagId).ToHashSet();
         var matches = QuickCommandCatalog.Match(development.RepositoryPath, taskTags, directories);
 
         if (matches.Count == 0)
         {
-            return (matches, globals, globals);
+            return (matches, globals, globals, aliases);
         }
 
         var own = await commands.ListForDirectoriesAsync(
             [.. matches.Select(match => match.Directory.Id)],
             cancellationToken);
 
-        return (matches, [.. globals, .. own.Select(command => DevelopmentCommandRow.From(command))], globals);
+        return (matches, [.. globals, .. own.Select(command => DevelopmentCommandRow.From(command))], globals, aliases);
     }
 
     /// <summary>
@@ -103,11 +110,12 @@ internal static class QuickCommandTargets
         IReadOnlyList<CommandDirectoryMatch> matches,
         IReadOnlyList<DevelopmentCommandRow> commands,
         IReadOnlyList<DevelopmentCommandRow> globals,
+        IReadOnlyList<string> aliases,
         Guid commandId,
         Guid? bindingId)
     {
         if (bindingId is not null
-            && QuickCommandCatalog.Entries(matches, commands)
+            && QuickCommandCatalog.Entries(matches, commands, aliases)
                 .FirstOrDefault(entry => entry.BindingId == bindingId && entry.CommandId == commandId) is { } bound)
         {
             return bound;
@@ -116,7 +124,7 @@ internal static class QuickCommandTargets
         var global = globals.FirstOrDefault(row => row.Id == commandId)
             ?? throw new DomainException("Este comando não está mais disponível. Ele pode ter sido excluído, ou desligado no diretório da etiqueta.");
 
-        return QuickCommandCatalog.AdHoc(global, matches);
+        return QuickCommandCatalog.AdHoc(global, matches, aliases);
     }
 
     /// <summary>A pasta absoluta, dentro do worktree, conferida agora.</summary>
@@ -150,8 +158,12 @@ internal static class QuickCommandTargets
         return path;
     }
 
-    public static CommandContext ContextFor(TaskItem task, TaskDevelopment development, QuickCommandEntry entry) =>
-        CommandContext.For(task, development, entry.TagName);
+    public static CommandContext ContextFor(
+        TaskItem task,
+        TaskDevelopment development,
+        QuickCommandEntry entry,
+        IReadOnlyList<string> aliases) =>
+        CommandContext.For(task, development, entry.TagName, aliases: aliases);
 }
 
 /// <summary>Os botões do ambiente e a última execução de cada um (ADR-051).</summary>
@@ -161,6 +173,7 @@ public sealed class GetQuickCommandsHandler(
     ITaskItemRepository tasks,
     ITagQuery tagQuery,
     IDevelopmentCommandRepository commands,
+    ISavedDatabaseRepository savedDatabases,
     ICommandExecutionRepository executions,
     IUnitOfWork unitOfWork,
     IAgentProcessTracker processes,
@@ -177,8 +190,8 @@ public sealed class GetQuickCommandsHandler(
             return QuickCommandsView.Empty;
         }
 
-        var (matches, available, globals) = await QuickCommandTargets.CatalogAsync(
-            tagQuery, commands, task, development, cancellationToken);
+        var (matches, available, globals, aliases) = await QuickCommandTargets.CatalogAsync(
+            tagQuery, commands, savedDatabases, task, development, cancellationToken);
 
         var recent = await executions.ListForDevelopmentAsync(development.Id, cancellationToken);
         var now = timeProvider.GetUtcNow();
@@ -191,7 +204,7 @@ public sealed class GetQuickCommandsHandler(
         }
 
         return new QuickCommandsView(
-            QuickCommandCatalog.Entries(matches, available),
+            QuickCommandCatalog.Entries(matches, available, aliases),
             globals,
             [.. recent.Select(CommandExecutionView.From)]);
     }
@@ -207,6 +220,7 @@ public sealed class PrepareQuickCommandHandler(
     ITaskItemRepository tasks,
     ITagQuery tagQuery,
     IDevelopmentCommandRepository commands,
+    ISavedDatabaseRepository savedDatabases,
     IDirectoryProbe directories)
 {
     public async Task<QuickCommandPlan> HandleAsync(PrepareQuickCommand query, CancellationToken cancellationToken = default)
@@ -214,13 +228,13 @@ public sealed class PrepareQuickCommandHandler(
         var (task, development) = await QuickCommandTargets.ReadyAsync(
             tasks, directories, query.TaskId, query.DevelopmentId, cancellationToken);
 
-        var (matches, available, globals) = await QuickCommandTargets.CatalogAsync(
-            tagQuery, commands, task, development, cancellationToken);
+        var (matches, available, globals, aliases) = await QuickCommandTargets.CatalogAsync(
+            tagQuery, commands, savedDatabases, task, development, cancellationToken);
 
-        var entry = QuickCommandTargets.Find(matches, available, globals, query.CommandId, query.BindingId);
+        var entry = QuickCommandTargets.Find(matches, available, globals, aliases, query.CommandId, query.BindingId);
         var folder = await QuickCommandTargets.WorkingDirectoryAsync(directories, development, entry, cancellationToken);
 
-        return new QuickCommandPlan(entry, folder, QuickCommandTargets.ContextFor(task, development, entry));
+        return new QuickCommandPlan(entry, folder, QuickCommandTargets.ContextFor(task, development, entry, aliases));
     }
 }
 
@@ -259,6 +273,7 @@ public sealed class RunQuickCommandHandler(
     ITaskItemRepository tasks,
     ITagQuery tagQuery,
     IDevelopmentCommandRepository commands,
+    ISavedDatabaseRepository savedDatabases,
     ICommandExecutionRepository executions,
     IUnitOfWork unitOfWork,
     ICommandExecutor executor,
@@ -281,12 +296,12 @@ public sealed class RunQuickCommandHandler(
         var (task, development) = await QuickCommandTargets.ReadyAsync(
             tasks, directories, command.TaskId, command.DevelopmentId, cancellationToken);
 
-        var (matches, available, globals) = await QuickCommandTargets.CatalogAsync(
-            tagQuery, commands, task, development, cancellationToken);
+        var (matches, available, globals, aliases) = await QuickCommandTargets.CatalogAsync(
+            tagQuery, commands, savedDatabases, task, development, cancellationToken);
 
-        var entry = QuickCommandTargets.Find(matches, available, globals, command.CommandId, command.BindingId);
+        var entry = QuickCommandTargets.Find(matches, available, globals, aliases, command.CommandId, command.BindingId);
 
-        // O comando e a personalização do botão podem ter vindo de outro computador (ADR-060).
+        // O comando e a personalização do botão podem ter vindo de outro computador (ADR-061).
         if (reviewGate is not null)
         {
             await reviewGate.EnsureReviewedAsync(
@@ -301,7 +316,7 @@ public sealed class RunQuickCommandHandler(
             entry.Template,
             entry.Parameters,
             command.Values,
-            QuickCommandTargets.ContextFor(task, development, entry));
+            QuickCommandTargets.ContextFor(task, development, entry, aliases));
 
         if (line.Line is not { } commandLine)
         {
