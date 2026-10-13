@@ -55,6 +55,7 @@ public static class DependencyInjection
 
         // Sincronização (ADR-060): a gravação avisa, o agendador espera.
         services.TryAddSingleton<ISyncTrigger, SyncTrigger>();
+        services.AddScoped<ReconcileAfterRemoteChangeHandler>();
 
         services.AddScoped<GetTodayBoardHandler>();
         services.AddScoped<ReorderOccurrencesHandler>();

@@ -33,6 +33,10 @@ internal sealed class TableMapper<TEntity>(
 
     public override IReadOnlyList<SyncChildList> Children => Lists;
 
+    public Dictionary<string, object?> Defaults { get; init; } = [];
+
+    public override IReadOnlyDictionary<string, object?> InsertDefaults => Defaults;
+
     public Func<EntityEntry, Guid>? Id { get; init; }
 
     public Func<EntityEntry, bool>? Syncable { get; init; }
@@ -206,7 +210,20 @@ internal static class SyncMappers
                         (CommandParameter.Type, SyncValue.Integer((long)parameter.Type)),
                         (CommandParameter.DefaultValue, SyncValue.String(parameter.DefaultValue)),
                         (CommandParameter.IsRequired, SyncValue.Boolean(parameter.IsRequired)),
-                        (CommandParameter.Options, SyncValue.String(parameter.Options)))))),
+                        (CommandParameter.Options, SyncValue.String(parameter.Options))))),
+                (item, index, commandId) => new Dictionary<string, object?>
+                {
+                    [nameof(DevelopmentCommandParameter.Id)] = SyncValue.ReadGuid(SyncValue.Member(item, CommandParameter.Id)),
+                    [nameof(DevelopmentCommandParameter.DevelopmentCommandId)] = commandId,
+                    [nameof(DevelopmentCommandParameter.Name)] = SyncValue.ReadString(SyncValue.Member(item, CommandParameter.Name)),
+                    [nameof(DevelopmentCommandParameter.Label)] = SyncValue.ReadString(SyncValue.Member(item, CommandParameter.Label)),
+                    [nameof(DevelopmentCommandParameter.Type)] =
+                        (CommandParameterType)SyncValue.ReadInteger(SyncValue.Member(item, CommandParameter.Type))!.Value,
+                    [nameof(DevelopmentCommandParameter.DefaultValue)] = SyncValue.ReadString(SyncValue.Member(item, CommandParameter.DefaultValue)),
+                    [nameof(DevelopmentCommandParameter.IsRequired)] = SyncValue.ReadBoolean(SyncValue.Member(item, CommandParameter.IsRequired)),
+                    [nameof(DevelopmentCommandParameter.Options)] = SyncValue.ReadString(SyncValue.Member(item, CommandParameter.Options)),
+                    [nameof(DevelopmentCommandParameter.Order)] = index,
+                }),
         ],
     };
 
@@ -238,8 +255,24 @@ internal static class SyncMappers
                 nameof(TaskDevelopmentCommand.TaskDevelopmentId),
                 [nameof(TaskDevelopmentCommand.Command), nameof(TaskDevelopmentCommand.Order)],
                 [],
-                entity => SyncValue.List(((TaskDevelopment)entity).Commands.Select(command => SyncValue.String(command.Command)))),
+                entity => SyncValue.List(((TaskDevelopment)entity).Commands.Select(command => SyncValue.String(command.Command))),
+                (item, index, developmentId) => new Dictionary<string, object?>
+                {
+                    // A linha filha não tem identidade no fio: é a posição na lista.
+                    [nameof(TaskDevelopmentCommand.Id)] = Guid.CreateVersion7(),
+                    [nameof(TaskDevelopmentCommand.TaskDevelopmentId)] = developmentId,
+                    [nameof(TaskDevelopmentCommand.Command)] = SyncValue.ReadString(item),
+                    [nameof(TaskDevelopmentCommand.Order)] = index,
+                }),
         ],
+
+        // Veio de outro computador: sem repositório nem worktree aqui até "Criar aqui".
+        Defaults =
+        {
+            [nameof(TaskDevelopment.RepositoryPath)] = string.Empty,
+            [nameof(TaskDevelopment.WorktreePath)] = string.Empty,
+            [nameof(TaskDevelopment.Status)] = TaskDevelopmentStatus.NotCreatedHere,
+        },
     };
 
     public static readonly SyncEntityMapper TimeEntry = new TableMapper<Domain.TimeTracking.TimeEntry>(
@@ -282,7 +315,16 @@ internal static class SyncMappers
             nameof(Domain.StickyNotes.StickyNote.Y),
             nameof(Domain.StickyNotes.StickyNote.Width),
             nameof(Domain.StickyNotes.StickyNote.Height),
-        ]);
+        ])
+    {
+        // Um post-it criado em outro computador não abre janela aqui sozinho.
+        Defaults =
+        {
+            [nameof(Domain.StickyNotes.StickyNote.IsOpen)] = false,
+            [nameof(Domain.StickyNotes.StickyNote.Width)] = Domain.StickyNotes.StickyNote.DefaultWidth,
+            [nameof(Domain.StickyNotes.StickyNote.Height)] = Domain.StickyNotes.StickyNote.DefaultHeight,
+        },
+    };
 
     /// <summary>Em ordem de rank, como o registro do contrato.</summary>
     public static IReadOnlyList<SyncEntityMapper> All { get; } =

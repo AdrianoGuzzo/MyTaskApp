@@ -40,6 +40,7 @@ using MyTaskApp.Infrastructure.Processes;
 using MyTaskApp.Infrastructure.Secrets;
 using MyTaskApp.Infrastructure.Sounds;
 using MyTaskApp.Infrastructure.Sync;
+using MyTaskApp.Infrastructure.Sync.Apply;
 using MyTaskApp.Infrastructure.Sync.Capture;
 using MyTaskApp.Infrastructure.Storage;
 using MyTaskApp.Infrastructure.Terminals;
@@ -68,6 +69,8 @@ public static class DependencyInjection
         services.AddSingleton<SyncCaptureSwitch>();
         services.AddSingleton<SyncCaptureInterceptor>();
         services.TryAddSingleton<ISyncTrigger, SyncTrigger>();
+        services.AddScoped<IRemoteChangeApplier, RemoteChangeApplier>();
+        services.AddScoped<ISyncReconciler, SyncReconciler>();
         services.TryAddSingleton<IDeviceIdentity>(provider => new DeviceIdentityFile(
             UserDataLocation.Current.LocalRoot,
             provider.GetRequiredService<ILogger<DeviceIdentityFile>>()));

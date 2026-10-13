@@ -18,13 +18,16 @@ internal sealed record SyncColumn(string Field, string? Member, string Property)
 /// comando, comandos do ambiente) mesclam e conflitam como um valor só.
 /// </summary>
 /// <param name="ParentKey">A chave estrangeira do filho, para achar o pai a partir de uma linha alterada.</param>
+/// <param name="Project">A lista do fio a partir do pai já carregado.</param>
+/// <param name="Row">As colunas de uma linha filha a partir do item do fio, da posição e do id do pai.</param>
 internal sealed record SyncChildList(
     string Field,
     Type ChildType,
     string ParentKey,
     IReadOnlyList<string> SharedProperties,
     IReadOnlyList<string> LocalProperties,
-    Func<object, JsonElement> Project);
+    Func<object, JsonElement> Project,
+    Func<JsonElement, int, Guid, IReadOnlyDictionary<string, object?>> Row);
 
 /// <summary>
 /// A ponte entre uma entidade do domínio e o contrato (ADR-060): o que sai e o
@@ -47,6 +50,13 @@ internal abstract class SyncEntityMapper
     public virtual IReadOnlyDictionary<string, string> PresenceProperties { get; } = new Dictionary<string, string>();
 
     public virtual IReadOnlyList<SyncChildList> Children { get; } = [];
+
+    /// <summary>
+    /// O valor das colunas locais numa linha que chega de outro computador.
+    /// O que não está aqui recebe o vazio do tipo (nulo, zero, falso, texto
+    /// vazio) — ou "agora", num instante obrigatório.
+    /// </summary>
+    public virtual IReadOnlyDictionary<string, object?> InsertDefaults { get; } = new Dictionary<string, object?>();
 
     public virtual Guid IdOf(EntityEntry entry) => (Guid)entry.Property("Id").CurrentValue!;
 

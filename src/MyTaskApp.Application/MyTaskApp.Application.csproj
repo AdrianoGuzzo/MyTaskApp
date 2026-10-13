@@ -2,6 +2,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MyTaskApp.Domain\MyTaskApp.Domain.csproj" />
+    <!-- O contrato da sincronizacao (ADR-060): sem dependencia nenhuma. -->
+    <ProjectReference Include="..\MyTaskApp.Sync.Contracts\MyTaskApp.Sync.Contracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>

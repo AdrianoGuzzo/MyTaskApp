@@ -1,11 +1,15 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using MyTaskApp.Application.Sync;
 using MyTaskApp.Infrastructure.Persistence;
+using MyTaskApp.Infrastructure.Sync.Apply;
 using MyTaskApp.Infrastructure.Sync.Capture;
+using MyTaskApp.Infrastructure.Sync.Mapping;
 using MyTaskApp.Infrastructure.Sync.Persistence;
 using MyTaskApp.Infrastructure.Tests.Persistence;
+using MyTaskApp.Sync.Contracts;
 
 namespace MyTaskApp.Infrastructure.Tests.Sync;
 
@@ -99,6 +103,68 @@ internal sealed class SyncCaptureKit : IAsyncDisposable
     }
 
     public static Dictionary<string, JsonElement> Fields(SyncOutboxRow row) => SyncSnapshot.Read(row.Fields);
+
+    /// <summary>O outbox como o servidor o devolveria num pull: cada criação, na versão dada.</summary>
+    public async Task<List<SyncChange>> PageFromOutboxAsync(CancellationToken cancellationToken, long version = 1) =>
+        [
+            .. (await OutboxAsync(cancellationToken))
+                .Where(row => row.Kind == SyncOperationKind.Upsert)
+                .Select(row => new SyncChange(
+                    row.EntityType,
+                    row.EntityId,
+                    version,
+                    Deleted: false,
+                    Fields(row),
+                    CreatedByUserId: null,
+                    Device.DeviceId,
+                    row.OriginCreatedAt,
+                    Device.DeviceId,
+                    Now)),
+        ];
+
+    public RemoteChangeApplier Applier(MyTaskAppDbContext context) =>
+        new(context, Clock, NullLogger<RemoteChangeApplier>.Instance);
+
+    public async Task<RemoteApplyResult> ApplyAsync(
+        IReadOnlyList<SyncChange> changes,
+        CancellationToken cancellationToken,
+        string? cursor = "c1",
+        bool isolate = false)
+    {
+        await using var context = CreateContext();
+        return await Applier(context).ApplyAsync(changes, cursor, isolate, cancellationToken);
+    }
+
+    public SyncReconciler Reconciler(MyTaskAppDbContext context) =>
+        new(context, Device, Clock, Trigger, NullLogger<SyncReconciler>.Instance);
+
+    /// <summary>Os campos compartilhados de tudo o que está no banco, como o mapper os vê.</summary>
+    public async Task<Dictionary<(string Type, Guid Id), Dictionary<string, JsonElement>>> ProjectAllAsync(CancellationToken cancellationToken)
+    {
+        await using var context = Database.CreateContext();
+        await context.Tasks.LoadAsync(cancellationToken);
+        await context.Occurrences.LoadAsync(cancellationToken);
+        await context.TaskItemTags.LoadAsync(cancellationToken);
+        await context.Tags.LoadAsync(cancellationToken);
+        await context.TagDirectories.LoadAsync(cancellationToken);
+        await context.TagDirectoryCommands.LoadAsync(cancellationToken);
+        await context.DevelopmentCommands.Include(command => command.Parameters).LoadAsync(cancellationToken);
+        await context.TaskDevelopments.Include(development => development.Commands).LoadAsync(cancellationToken);
+        await context.TimeEntries.LoadAsync(cancellationToken);
+        await context.StickyNotes.LoadAsync(cancellationToken);
+
+        var all = new Dictionary<(string, Guid), Dictionary<string, JsonElement>>();
+
+        foreach (var mapper in SyncMappers.All)
+        {
+            foreach (var entry in context.ChangeTracker.Entries().Where(entry => entry.Metadata.ClrType == mapper.ClrType))
+            {
+                all[(mapper.Definition.Type, mapper.IdOf(entry))] = mapper.Project(entry);
+            }
+        }
+
+        return all;
+    }
 
     public ValueTask DisposeAsync() => Database.DisposeAsync();
 }
