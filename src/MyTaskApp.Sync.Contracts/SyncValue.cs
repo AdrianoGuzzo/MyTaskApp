@@ -18,7 +18,10 @@ public static class SyncValue
 
     public static JsonElement Null { get; } = Parse("null");
 
-    public static JsonElement String(string? value) => value is null ? Null : JsonSerializer.SerializeToElement(value);
+    /// <summary>O mesmo escape das opções do contrato: acento fica acento.</summary>
+    private static readonly JsonWriterOptions Writer = new() { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+
+    public static JsonElement String(string? value) => value is null ? Null : JsonSerializer.SerializeToElement(value, SyncJson.Options);
 
     public static JsonElement Integer(long? value) => value is null ? Null : JsonSerializer.SerializeToElement(value.Value);
 
@@ -43,7 +46,7 @@ public static class SyncValue
     {
         var buffer = new MemoryStream();
 
-        using (var writer = new Utf8JsonWriter(buffer))
+        using (var writer = new Utf8JsonWriter(buffer, Writer))
         {
             writer.WriteStartObject();
 
@@ -63,7 +66,7 @@ public static class SyncValue
     {
         var buffer = new MemoryStream();
 
-        using (var writer = new Utf8JsonWriter(buffer))
+        using (var writer = new Utf8JsonWriter(buffer, Writer))
         {
             writer.WriteStartArray();
 

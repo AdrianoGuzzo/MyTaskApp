@@ -1,3 +1,4 @@
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
@@ -15,6 +16,10 @@ public static class SyncJson
         {
             DefaultIgnoreCondition = JsonIgnoreCondition.Never,
             TypeInfoResolver = new DefaultJsonTypeInfoResolver(),
+
+            // "Título" fica "Título" no outbox, no snapshot e no conflito que a
+            // tela mostra, e não "Título". O JSON nunca vai parar em HTML.
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
         };
 
         Configure(options);

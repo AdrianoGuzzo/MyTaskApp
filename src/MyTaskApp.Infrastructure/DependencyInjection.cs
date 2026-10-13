@@ -72,6 +72,11 @@ public static class DependencyInjection
         services.TryAddSingleton<ISyncTrigger, SyncTrigger>();
         services.AddScoped<IRemoteChangeApplier, RemoteChangeApplier>();
         services.AddScoped<ISyncReconciler, SyncReconciler>();
+        services.AddScoped<ISyncLocalStore, SyncLocalStore>();
+
+        // Depois do padrão da Application (que deixa tudo passar): com a
+        // sincronização, comando que veio de outro computador espera revisão.
+        services.AddScoped<ICommandReviewGate, SyncCommandReviewGate>();
         services.TryAddSingleton<IDeviceIdentity>(provider => new DeviceIdentityFile(
             UserDataLocation.Current.LocalRoot,
             provider.GetRequiredService<ILogger<DeviceIdentityFile>>()));

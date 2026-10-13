@@ -53,9 +53,31 @@ public static class DependencyInjection
         // Singleton: resolver o fuso uma vez basta e evita repetir o fallback.
         services.TryAddSingleton<IUserClock, UserClock>();
 
-        // Sincronização (ADR-060): a gravação avisa, o agendador espera.
+        // Sincronização (ADR-060): a gravação avisa, o agendador espera. Sem
+        // conta ligada, o portão de comandos não tem o que barrar.
         services.TryAddSingleton<ISyncTrigger, SyncTrigger>();
+        services.TryAddScoped<ICommandReviewGate, NoCommandReviewGate>();
+        services.TryAddSingleton<SyncDeviceDirectory>();
+        services.TryAddSingleton<SyncEngine>();
+        services.TryAddSingleton<ISyncCycleRunner>(provider => provider.GetRequiredService<SyncEngine>());
+        services.TryAddSingleton(provider => new SyncScheduler(
+            provider.GetRequiredService<ISyncCycleRunner>(),
+            provider.GetRequiredService<ISyncTrigger>(),
+            provider.GetRequiredService<TimeProvider>(),
+            provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<SyncScheduler>>()));
+        services.TryAddSingleton<SyncAccountService>();
         services.AddScoped<ReconcileAfterRemoteChangeHandler>();
+        services.AddScoped<RemoteRefetcher>();
+        services.AddScoped<GetSyncStatusHandler>();
+        services.AddScoped<ListSyncConflictsHandler>();
+        services.AddScoped<ResolveSyncConflictHandler>();
+        services.AddScoped<ListSyncFailuresHandler>();
+        services.AddScoped<RetrySyncOperationHandler>();
+        services.AddScoped<DiscardSyncOperationHandler>();
+        services.AddScoped<RetryReceivedChangesHandler>();
+        services.AddScoped<ListCommandReviewsHandler>();
+        services.AddScoped<ApproveCommandReviewHandler>();
+        services.AddScoped<GetTaskOriginHandler>();
 
         services.AddScoped<GetTodayBoardHandler>();
         services.AddScoped<ReorderOccurrencesHandler>();

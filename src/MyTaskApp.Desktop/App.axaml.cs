@@ -11,6 +11,7 @@ using MyTaskApp.Application.QuickCommands;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Application.Sounds;
 using MyTaskApp.Application.StickyNotes;
+using MyTaskApp.Application.Sync;
 using MyTaskApp.Desktop.Composition;
 using MyTaskApp.Desktop.Reminders;
 using MyTaskApp.Desktop.SpellChecking;
@@ -104,6 +105,7 @@ public sealed partial class App : Avalonia.Application
                 SetUpCommandExecutions(Services);
                 SetUpTimeTracking(todayViewModel);
                 SetUpMcpServer(Services, todayViewModel);
+                SetUpSync(Services);
                 ListenForSecondLaunch(Services, window);
 
                 // A moldura só sabe iniciar com o Windows depois de conhecer o
@@ -414,6 +416,14 @@ public sealed partial class App : Avalonia.Application
     /// hora: o gateway avisa, e aqui o aviso vira a mesma recarga que a tela
     /// faria — o quadro, a aba "Tempo" das janelas abertas e a de Bancos.
     /// </summary>
+    /// <summary>
+    /// A sincronização (ADR-060) em segundo plano. Sem servidor configurado ou
+    /// sem conta ligada, o laço acorda, vê que não há o que fazer e dorme: o
+    /// app continua inteiro, só local.
+    /// </summary>
+    private static void SetUpSync(IServiceProvider services) =>
+        services.GetRequiredService<SyncScheduler>().Start();
+
     private void SetUpMcpServer(IServiceProvider services, TodayViewModel todayViewModel)
     {
         services.GetRequiredService<IDataChangeNotifier>().Changed += areas => OnUiThread(() =>
@@ -806,6 +816,9 @@ public sealed partial class App : Avalonia.Application
         services.GetRequiredService<DatabaseOperationsViewModel>().CancelForShutdown();
         services.GetRequiredService<ReminderScheduler>().Dispose();
         services.GetRequiredService<LifecycleMaintenanceScheduler>().Dispose();
+
+        // Um push no meio para; o outbox guarda, e o próximo início reenvia com os mesmos ids (ADR-060).
+        services.GetRequiredService<SyncScheduler>().Dispose();
         services.GetRequiredService<AgentSessionMonitor>().Dispose();
         services.GetRequiredService<CommandExecutionMonitor>().Dispose();
         (services.GetRequiredService<IAgentEventEndpoint>() as IDisposable)?.Dispose();

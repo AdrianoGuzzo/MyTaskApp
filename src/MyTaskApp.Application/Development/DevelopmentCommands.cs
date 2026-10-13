@@ -1,8 +1,10 @@
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Commands;
+using MyTaskApp.Application.Sync;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.Tasks;
+using MyTaskApp.Sync.Contracts.Definitions;
 
 namespace MyTaskApp.Application.Development;
 
@@ -55,7 +57,8 @@ public sealed class RunDevelopmentCommandsHandler(
     IDevelopmentCommandRepository commands,
     ICommandExecutor executor,
     IDirectoryProbe directories,
-    ILogger<RunDevelopmentCommandsHandler> logger)
+    ILogger<RunDevelopmentCommandsHandler> logger,
+    ICommandReviewGate? reviewGate = null)
 {
     public async Task<CommandRunSummary> HandleAsync(
         RunDevelopmentCommands command,
@@ -82,6 +85,17 @@ public sealed class RunDevelopmentCommandsHandler(
         {
             throw new DomainException(
                 $"A pasta do worktree ({development.WorktreePath}) não existe mais. Nenhum comando foi executado.");
+        }
+
+        // A lista do ambiente e os globais que ela chama podem ter vindo de outro computador (ADR-060).
+        if (reviewGate is not null)
+        {
+            await reviewGate.EnsureReviewedAsync(
+                [
+                    new CommandSource(SyncEntityTypes.Development, development.Id),
+                    .. CommandReviewSources.GlobalsUsedBy(entries, await commands.ListAsync(cancellationToken)),
+                ],
+                cancellationToken);
         }
 
         var globals = await GlobalCommandLookup.LoadAsync(commands, cancellationToken);

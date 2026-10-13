@@ -2,10 +2,12 @@ using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Commands;
+using MyTaskApp.Application.Sync;
 using MyTaskApp.Application.Tags;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.Commands;
 using MyTaskApp.Domain.Tasks;
+using MyTaskApp.Sync.Contracts.Definitions;
 
 namespace MyTaskApp.Application.QuickCommands;
 
@@ -265,7 +267,8 @@ public sealed class RunQuickCommandHandler(
     ICommandExecutionWatcher watcher,
     IDirectoryProbe directories,
     TimeProvider timeProvider,
-    ILogger<RunQuickCommandHandler> logger)
+    ILogger<RunQuickCommandHandler> logger,
+    ICommandReviewGate? reviewGate = null)
 {
     /// <summary>O histórico guarda as últimas execuções de cada ambiente; as mais antigas saem.</summary>
     public const int HistoryLimit = 20;
@@ -282,6 +285,17 @@ public sealed class RunQuickCommandHandler(
             tagQuery, commands, task, development, cancellationToken);
 
         var entry = QuickCommandTargets.Find(matches, available, globals, command.CommandId, command.BindingId);
+
+        // O comando e a personalização do botão podem ter vindo de outro computador (ADR-060).
+        if (reviewGate is not null)
+        {
+            await reviewGate.EnsureReviewedAsync(
+                entry.BindingId is { } bindingId
+                    ? [new CommandSource(SyncEntityTypes.Command, entry.CommandId), new CommandSource(SyncEntityTypes.DirectoryCommand, bindingId)]
+                    : [new CommandSource(SyncEntityTypes.Command, entry.CommandId)],
+                cancellationToken);
+        }
+
         var folder = await QuickCommandTargets.WorkingDirectoryAsync(directories, development, entry, cancellationToken);
         var line = QuickCommandLine.Build(
             entry.Template,

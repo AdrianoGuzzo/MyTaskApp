@@ -242,6 +242,39 @@ internal sealed class SqlRowWriter(MyTaskAppDbContext context, TimeProvider time
         return leftovers;
     }
 
+    /// <summary>Os ids (do contrato) das linhas de <paramref name="child"/> que apontam para <paramref name="targetId"/>.</summary>
+    public async Task<IReadOnlyList<Guid>> FindReferencingAsync(
+        SyncEntityMapper child,
+        string field,
+        Guid targetId,
+        CancellationToken cancellationToken)
+    {
+        var entity = Entity(child);
+        var property = FindProperty(entity, child.Columns.Single(column => column.Field == field && column.Member is null).Property);
+        var connection = await OpenAsync(cancellationToken);
+        var isTaskTag = child == SyncMappers.TaskTag;
+        var select = isTaskTag
+            ? $"{Quote(entity.FindProperty("TaskItemId")!.GetColumnName())}, {Quote(entity.FindProperty("TagId")!.GetColumnName())}"
+            : Quote(IdColumn(entity));
+
+        await using var command = CreateCommand(
+            connection,
+            $"SELECT {select} FROM {Quote(entity.GetTableName()!)} WHERE {Quote(property.GetColumnName())} = @p0",
+            [(property, targetId)]);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        var ids = new List<Guid>();
+
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            ids.Add(isTaskTag
+                ? SyncIds.TaskTag(ReadGuid(reader.GetValue(0)), ReadGuid(reader.GetValue(1)))
+                : ReadGuid(reader.GetValue(0)));
+        }
+
+        return ids;
+    }
+
     /// <summary>Copia colunas locais de uma linha para outra (o caminho do diretório fundido).</summary>
     public Task CopyLocalAsync(SyncEntityMapper mapper, Guid from, Guid to, string path, CancellationToken cancellationToken)
     {

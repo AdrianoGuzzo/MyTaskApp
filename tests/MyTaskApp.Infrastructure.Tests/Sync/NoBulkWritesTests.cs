@@ -11,10 +11,11 @@ namespace MyTaskApp.Infrastructure.Tests.Sync;
 public sealed partial class NoBulkWritesTests
 {
     /// <summary>
-    /// Os arquivos que podem: a aplicação do que veio do servidor, que não deve
-    /// gerar operação, e o próprio servidor, que não tem captura.
+    /// Os arquivos que podem: a própria sincronização do desktop — que grava
+    /// o que veio do servidor sem gerar operação, e as tabelas dela, que não
+    /// são capturadas — e o servidor, que não tem captura.
     /// </summary>
-    private static readonly string[] Allowed = [Path.Combine("Sync", "Apply"), "MyTaskApp.Server."];
+    private static readonly string[] Allowed = [Path.Combine("MyTaskApp.Infrastructure", "Sync"), "MyTaskApp.Server."];
 
     [Fact]
     public void TheProductCode_DoesNotWriteAroundTheChangeTracker()
