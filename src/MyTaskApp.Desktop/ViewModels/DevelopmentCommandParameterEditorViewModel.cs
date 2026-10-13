@@ -52,9 +52,12 @@ public sealed partial class DevelopmentCommandParameterEditorViewModel : Observa
     /// </summary>
     public static string VariablesHint { get; } =
         "Variáveis que o app preenche: " + string.Join(", ", CommandVariables.All
-            .Where(variable => variable.Name is not (CommandVariables.WorktreePath or CommandVariables.RepositoryPath))
+            .Where(variable => variable.Name is not (
+                CommandVariables.WorktreePath or CommandVariables.RepositoryPath or CommandVariables.DatabaseName))
             .Select(variable => variable.Placeholder))
-        + ". Caminho com espaço vai entre aspas: code \"{worktree}\".";
+        + ". Caminho com espaço vai entre aspas: code \"{worktree}\". "
+        + "{database…} só existe com um banco copiado para o ambiente, e também vale no valor de um parâmetro: "
+        + "@configura nomebanco={database}.";
 
     /// <summary>Os <c>{nome}</c> que o usuário preenche: as variáveis de contexto ficam de fora.</summary>
     public static IReadOnlyList<string> UserParameters(string? command) =>

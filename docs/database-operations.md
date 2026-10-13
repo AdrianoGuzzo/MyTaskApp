@@ -24,6 +24,7 @@ dados saírem de produção sem anonimização.
   - [Tabelas sem dados](#tabelas-sem-dados)
 - [Copiar Produção → Desenvolvimento](#copiar-produção--desenvolvimento)
 - [Banco escolhido na cópia e apelidos](#banco-escolhido-na-cópia-e-apelidos)
+- [Copiar um banco para o ambiente da tarefa](#copiar-um-banco-para-o-ambiente-da-tarefa)
 - [Verificação depois do restore](#verificação-depois-do-restore)
 - [Segurança](#segurança)
 - [Diretório temporário e auditoria](#diretório-temporário-e-auditoria)
@@ -488,6 +489,56 @@ preencha **Salvar como** (por exemplo `lock_eco_core_1010`) e clique em
 **Anonimização por banco.** O apelido guarda qual perfil vale para aquele
 banco. As regras são conferidas contra as colunas do banco escolhido a cada
 cópia: uma coluna que mudou de tipo ou sumiu aparece no [Validar].
+
+## Copiar um banco para o ambiente da tarefa
+
+Cada worktree da tarefa pode ter o seu banco (ADR-060). Na aba
+**Desenvolvimento** da tarefa:
+
+- **Ao criar o worktree.** Marque **Copiar banco para este ambiente** e escolha:
+  - **Apelido + servidor**: o apelido do banco de origem e uma conexão só de
+    servidor, fora de produção, que recebe o banco **novo**
+    (`{apelido}_{yyyyMMdd_HHmmss}`). Nada é apagado.
+  - **Perfil de cópia**: um perfil cadastrado, usado como está salvo.
+
+  A validação e a confirmação de produção acontecem **antes** do Git; recusar
+  não cria nada. O worktree é criado, o banco é copiado (com barra, etapa e
+  Cancelar no card do banco) e, só depois de a cópia dar certo, rodam os
+  comandos pós-Worktree.
+- **Com o worktree pronto.** O card **🗄 Banco do ambiente** mostra o banco
+  copiado e oferece **Copiar banco…** ou **Copiar de novo…** e **Copiar nome**.
+  A cópia nova substitui a anterior no ambiente; a anterior continua no servidor.
+
+**Usar o nome nos comandos.** O nome só é conhecido no fim da cópia. Os
+comandos o recebem nestas variáveis:
+
+| Variável | Valor |
+| --- | --- |
+| `{database}` (= `{database.name}`) | `lock_eco_core_1010_20261013_101500` |
+| `{database.host}` | o servidor da conexão de destino |
+| `{database.port}` | a porta dela |
+| `{database.user}` | o usuário dela |
+
+Valem nos comandos pós-Worktree, nos comandos globais chamados por `@` e nos
+comandos rápidos:
+
+```text
+configura-ambiente {database}                      direto na lista pós-Worktree
+@configura-ambiente nomebanco={database}           um comando pronto com parâmetro
+psql -h {database.host} -p {database.port} -U {database.user} -d {database}
+```
+
+- Num comando rápido com parâmetro, digite `{database}` no valor, ou deixe
+  `{database}` como **valor padrão** do parâmetro: a prévia já mostra o nome
+  real.
+- Não existe variável de senha. Use o `pgpass` ou a variável de ambiente que o
+  seu script já usa.
+- Sem banco copiado, o comando que usa `{database…}` não roda e diz por quê. Na
+  criação do worktree, a lista é recusada se usar `{database}` sem a cópia
+  marcada.
+
+**Remover o worktree não apaga o banco.** A confirmação diz qual banco fica.
+Apague os que não servem mais por fora do app, como as outras cópias.
 
 ## Verificação depois do restore
 

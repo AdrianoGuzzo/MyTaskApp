@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MyTaskApp.Application.Commands;
+using MyTaskApp.Domain.Commands;
 
 namespace MyTaskApp.Desktop.ViewModels;
 
@@ -73,13 +74,22 @@ public sealed partial class PostWorktreeCommandItemViewModel : ObservableObject
                     : null;
             }
 
-            var expansion = CommandAliasResolver.Expand(row.Command, Text.Trim()[alias.Length..]);
+            var expansion = CommandAliasResolver.Expand(row.Command, Text.Trim()[alias.Length..], FilledWhenRunning);
 
             return expansion.IsComplete
                 ? $"→ {expansion.Command}"
                 : $"⚠ Falta preencher: {string.Join(' ', expansion.Missing.Select(name => $"{name}=…"))}";
         }
     }
+
+    /// <summary>
+    /// As variáveis que o ambiente preenche na hora de rodar — <c>{worktree}</c>,
+    /// <c>{database}</c>… — não são parâmetro em falta: ficam no texto da dica.
+    /// <c>{tag}</c> fica de fora: aqui ninguém a preenche. Se o banco não for
+    /// copiado, quem avisa é a validação do "Iniciar implementação" (ADR-060).
+    /// </summary>
+    private static readonly CommandContext FilledWhenRunning = CommandContext.Deferred(
+        CommandVariables.All.Select(variable => variable.Name).Where(name => name != CommandVariables.Tag));
 
     public bool HasHint => Hint is not null;
 

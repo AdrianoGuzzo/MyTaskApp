@@ -252,4 +252,64 @@ public class TaskDevelopmentPersistenceTests
         task!.Title.Should().Be("Tarefa antiga");
         task.Developments.Should().BeEmpty();
     }
+
+    /// <summary>O banco do ambiente (ADR-060): sem cópia, nulo; com ela, volta inteiro; a próxima troca.</summary>
+    [Fact]
+    public async Task TheCopiedDatabase_GoesAndComesBack_AndTheNextCopyReplacesIt()
+    {
+        await using var db = await new TempSqliteDatabase().MigrateAsync(Ct);
+        var seeded = await SeedAsync(db);
+        var connectionId = Guid.CreateVersion7();
+        var auditId = Guid.CreateVersion7();
+
+        await using (var write = db.CreateContext())
+        {
+            var task = await new TaskItemRepository(write).FindByIdAsync(seeded.Id, Ct);
+            task!.BeginDevelopment(null, Repository, "origin/develop", "feature/x", Worktree, Now);
+            task.MarkDevelopmentReady(task.Developments[0].Id, Now);
+            await write.SaveChangesAsync(Ct);
+        }
+
+        await using (var read = db.CreateContext())
+        {
+            var stored = await new TaskItemRepository(read).FindByIdAsync(seeded.Id, Ct);
+            stored!.Developments.Single().Database.Should().BeNull();
+        }
+
+        await using (var write = db.CreateContext())
+        {
+            var task = await new TaskItemRepository(write).FindByIdAsync(seeded.Id, Ct);
+            task!.SetDevelopmentDatabase(task.Developments[0].Id, TaskDevelopmentDatabase.Create(
+                connectionId, "Local", "localhost", 5433, "postgres", "eco_core_20261013_101500", auditId, Now.AddMinutes(5)));
+            await write.SaveChangesAsync(Ct);
+        }
+
+        await using (var read = db.CreateContext())
+        {
+            var stored = await new TaskItemRepository(read).FindByIdAsync(seeded.Id, Ct);
+            var database = stored!.Developments.Single().Database!;
+
+            database.ConnectionId.Should().Be(connectionId);
+            database.ConnectionName.Should().Be("Local");
+            database.Host.Should().Be("localhost");
+            database.Port.Should().Be(5433);
+            database.Username.Should().Be("postgres");
+            database.Name.Should().Be("eco_core_20261013_101500");
+            database.AuditId.Should().Be(auditId);
+            database.CopiedAt.Should().Be(Now.AddMinutes(5));
+        }
+
+        await using (var write = db.CreateContext())
+        {
+            var task = await new TaskItemRepository(write).FindByIdAsync(seeded.Id, Ct);
+            task!.SetDevelopmentDatabase(task.Developments[0].Id, TaskDevelopmentDatabase.Create(
+                connectionId, "Local", "localhost", 5433, "postgres", "eco_core_20261013_120000", null, Now.AddHours(2)));
+            await write.SaveChangesAsync(Ct);
+        }
+
+        await using var last = db.CreateContext();
+        var replaced = (await new TaskItemRepository(last).FindByIdAsync(seeded.Id, Ct))!.Developments.Single().Database!;
+        replaced.Name.Should().Be("eco_core_20261013_120000");
+        replaced.AuditId.Should().BeNull();
+    }
 }

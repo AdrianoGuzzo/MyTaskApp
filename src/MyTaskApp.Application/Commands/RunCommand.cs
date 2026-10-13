@@ -62,7 +62,11 @@ internal static class GlobalCommandLookup
 /// pergunta antes de criar o worktree: descobrir o erro depois é ter um
 /// ambiente pela metade.
 /// </summary>
-public sealed record ValidateCommandEntries(IReadOnlyList<string> Entries);
+/// <param name="DatabaseScheduled">
+/// Um banco será copiado para o ambiente antes dos comandos (ADR-060): só então
+/// <c>{database}</c> e as irmãs podem aparecer na lista.
+/// </param>
+public sealed record ValidateCommandEntries(IReadOnlyList<string> Entries, bool DatabaseScheduled = false);
 
 public sealed class ValidateCommandEntriesHandler(IDevelopmentCommandRepository commands)
 {
@@ -71,17 +75,26 @@ public sealed class ValidateCommandEntriesHandler(IDevelopmentCommandRepository 
     /// para a execução (ADR-051). <c>{tag}</c> não: a lista pós-Worktree não vem
     /// de um diretório de etiqueta, então ninguém a preencheria.
     /// </summary>
+    private static readonly IReadOnlyList<string> WorktreeVariables = [.. CommandVariables.All
+        .Select(variable => variable.Name)
+        .Where(name => name != CommandVariables.Tag && !CommandVariables.DatabaseNames.Contains(name))];
+
     private static readonly CommandContext BeforeTheWorktree = CommandContext.Deferred(
-        CommandVariables.All
-            .Select(variable => variable.Name)
-            .Where(name => name != CommandVariables.Tag));
+        WorktreeVariables,
+        CommandContext.DatabaseUnavailable(
+            "nenhum banco será copiado para este ambiente. Marque \"Copiar banco para este ambiente\" ou tire a variável."));
+
+    /// <summary>Com a cópia marcada, o banco também fica para a execução.</summary>
+    private static readonly CommandContext BeforeTheWorktreeAndTheCopy = CommandContext.Deferred(
+        WorktreeVariables.Concat(CommandVariables.DatabaseNames));
 
     public async Task<IReadOnlyList<ResolvedCommand>> HandleAsync(
         ValidateCommandEntries query,
         CancellationToken cancellationToken = default)
     {
         var globals = await GlobalCommandLookup.LoadAsync(commands, cancellationToken);
-        var resolved = CommandAliasResolver.Resolve(query.Entries, globals, BeforeTheWorktree);
+        var context = query.DatabaseScheduled ? BeforeTheWorktreeAndTheCopy : BeforeTheWorktree;
+        var resolved = CommandAliasResolver.Resolve(query.Entries, globals, context);
 
         GlobalCommandLookup.EnsureResolved(resolved);
 

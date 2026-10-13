@@ -8,6 +8,9 @@ namespace MyTaskApp.Application.Commands;
 /// Uma entrada da lista já traduzida: <see cref="Command"/> é o que vai ao shell,
 /// ou <c>null</c> com <see cref="Error"/> quando o apelido não existe ou falta
 /// preencher um parâmetro (<see cref="MissingParameters"/>).
+/// <see cref="HasUnsafeValue"/> é erro de variável de contexto: um valor que o
+/// shell interpretaria, ou uma variável que o ambiente não tem
+/// (<c>{database}</c> sem banco copiado, ADR-060).
 /// </summary>
 public sealed record ResolvedCommand(
     int Index,
@@ -65,8 +68,10 @@ public static class CommandAliasResolver
     /// <param name="entries">A lista como o usuário digitou. Em branco é ignorada.</param>
     /// <param name="globals">Apelido (com <c>@</c>) → comando.</param>
     /// <param name="context">
-    /// As variáveis do ambiente (ADR-051), para os comandos globais. Entrada
-    /// literal não é tocada. <c>null</c> é o comportamento de antes.
+    /// As variáveis do ambiente (ADR-051). Nos comandos globais, preenchem
+    /// parâmetros e valores; na entrada literal, só as variáveis de contexto são
+    /// trocadas (ADR-060) — o resto do texto vai como escrito. <c>null</c> é o
+    /// comportamento de antes.
     /// </param>
     public static IReadOnlyList<ResolvedCommand> Resolve(
         IReadOnlyList<string> entries,
@@ -115,7 +120,17 @@ public static class CommandAliasResolver
     {
         if (AliasOf(entry) is not { } alias)
         {
-            return new ResolvedCommand(index, entry, entry, null);
+            if (context is null)
+            {
+                return new ResolvedCommand(index, entry, entry, null);
+            }
+
+            // "configura-ambiente {database}" direto na lista (ADR-060).
+            var literal = FillContext(entry, context);
+
+            return literal.Error is { } literalError
+                ? new ResolvedCommand(index, entry, null, char.ToUpperInvariant(literalError[0]) + literalError[1..], HasUnsafeValue: true)
+                : new ResolvedCommand(index, entry, literal.Command, null);
         }
 
         if (!lookup.TryGetValue(alias, out var command))
@@ -207,18 +222,51 @@ public static class CommandAliasResolver
     /// valor explícito vazio é vazio mesmo: o opcional em branco some da linha.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Só os valores de <b>contexto</b> são conferidos contra o shell — o título
     /// da tarefa pode ter vindo do Jira. O valor explícito é do usuário e vai
     /// como escrito, como sempre foi (ADR-028).
+    /// </para>
+    /// <para>
+    /// Um valor explícito pode trazer variáveis de contexto:
+    /// <c>@configura nomebanco={database}</c> passa o banco copiado a um
+    /// parâmetro do comando (ADR-060). Elas são trocadas antes, no valor — e o
+    /// que entra no comando não é olhado de novo.
+    /// </para>
     /// </remarks>
     public static AliasExpansion Fill(
         string command,
         IReadOnlyDictionary<string, string> values,
         CommandContext context)
     {
-        var explicitValues = new Dictionary<string, string>(values, StringComparer.OrdinalIgnoreCase);
+        var explicitValues = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
+        foreach (var (name, value) in values)
+        {
+            var expanded = FillContext(value, context);
+
+            if (expanded.Error is not null)
+            {
+                return expanded;
+            }
+
+            explicitValues[name] = expanded.Command!;
+        }
+
+        var used = CommandVariables.Used(command);
+
+        foreach (var name in used)
+        {
+            if (!explicitValues.ContainsKey(name) && context.UnavailableReason(name) is { } reason)
+            {
+                return new AliasExpansion(null, [], UnavailableMessage(name, reason));
+            }
+        }
+
+        // As variáveis com ponto também: {database.host} sem valor nunca vai cru ao shell.
         var missing = CommandParameters.Names(command)
+            .Concat(used)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
             .Where(name => !explicitValues.ContainsKey(name) && !context.Provides(name))
             .ToList();
 
@@ -227,7 +275,7 @@ public static class CommandAliasResolver
             return new AliasExpansion(null, missing);
         }
 
-        foreach (var name in CommandVariables.Used(command))
+        foreach (var name in used)
         {
             if (explicitValues.ContainsKey(name) || context.ValueOf(name) is not { } value)
             {
@@ -236,11 +284,7 @@ public static class CommandAliasResolver
 
             if (CommandVariables.UnsafeCharacter(value, context.IsWindows) is { } unsafeCharacter)
             {
-                return new AliasExpansion(
-                    null,
-                    [],
-                    $"a variável {{{name}}} tem o caractere \"{Describe(unsafeCharacter)}\", que o shell "
-                    + "interpretaria. Mude o texto de origem ou não use a variável neste comando.");
+                return new AliasExpansion(null, [], UnsafeMessage(name, unsafeCharacter));
             }
         }
 
@@ -250,6 +294,37 @@ public static class CommandAliasResolver
 
         return new AliasExpansion(filled, []);
     }
+
+    /// <summary>
+    /// Troca só as variáveis de contexto de <paramref name="text"/> — um valor
+    /// explícito, ou uma entrada literal da lista (ADR-060). Parâmetro do
+    /// usuário, variável adiada e o que o ambiente não conhece ficam como estão.
+    /// </summary>
+    public static AliasExpansion FillContext(string text, CommandContext context)
+    {
+        foreach (var name in CommandVariables.Used(text))
+        {
+            if (context.UnavailableReason(name) is { } reason)
+            {
+                return new AliasExpansion(null, [], UnavailableMessage(name, reason));
+            }
+
+            if (context.ValueOf(name) is { } value
+                && CommandVariables.UnsafeCharacter(value, context.IsWindows) is { } unsafeCharacter)
+            {
+                return new AliasExpansion(null, [], UnsafeMessage(name, unsafeCharacter));
+            }
+        }
+
+        return new AliasExpansion(CommandVariables.Fill(text, context.ValueOf), []);
+    }
+
+    private static string UnavailableMessage(string name, string reason) =>
+        $"a variável {{{name}}} não tem valor: {reason}";
+
+    private static string UnsafeMessage(string name, char unsafeCharacter) =>
+        $"a variável {{{name}}} tem o caractere \"{Describe(unsafeCharacter)}\", que o shell "
+        + "interpretaria. Mude o texto de origem ou não use a variável neste comando.";
 
     private static string Describe(char character) => character switch
     {

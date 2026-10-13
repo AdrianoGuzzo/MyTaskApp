@@ -3915,7 +3915,8 @@ preenchido por `@x branch=main`. Daí as regras:
   funcionar nos globais que eles chamam. Ao conferir a lista, antes de o worktree
   existir, as variáveis são **adiadas** (`CommandContext.Deferred`): não são
   cobradas, e ficam no texto até a execução. `{tag}` não entra no adiamento:
-  ali não há diretório que o preencha. Entrada literal não é tocada.
+  ali não há diretório que o preencha. Entrada literal não era tocada; desde o
+  ADR-060, ela tem as **variáveis de contexto** preenchidas (e só elas).
 
 **Injeção.** O título da tarefa pode ter vindo do Jira. Só os valores de
 **contexto** que o comando usa são conferidos, depois de montada a linha: no
@@ -5399,3 +5400,129 @@ A revisão achou mais quatro pontos, e todos entraram:
   busca e relatório.
 - **Desktop:** a tela com gerente falso, a janela headless, a bandeja e o
   composition root real.
+
+## ADR-060 — Banco do ambiente: a cópia na aba Desenvolvimento e o `{database}` dos comandos
+
+**Contexto:** a cópia de banco (ADR-056/057/058) só existia na janela Bancos
+de Dados. O usuário quer:
+
+- copiar o banco da própria aba Desenvolvimento;
+- já ao criar o worktree, para o ambiente nascer pronto, com o seu banco;
+- passar o nome criado aos comandos seguintes — `configura-ambiente {nomeDoBanco}`.
+
+O nome é dinâmico: `{prefixo}_aaaaMMdd_HHmmss` (ADR-057), conhecido só no fim
+da cópia.
+
+**Decisão:** o ambiente (`TaskDevelopment`) guarda o banco da última cópia, e
+os comandos o recebem em variáveis de contexto: `{database}` (=
+`{database.name}`), `{database.host}`, `{database.port}` e `{database.user}`.
+
+### O retrato, e não a conexão
+
+`TaskDevelopmentDatabase` é owned e opcional em `TaskDevelopments` (migration
+`DevelopmentDatabase`, só aditiva). Guarda nome, host, porta, usuário, o nome
+e o id da conexão de destino, a auditoria e quando. É uma **cópia**, pela mesma
+razão dos caminhos no ADR-027: a conexão pode ser editada ou apagada, e o banco
+continua onde foi criado. O id só sugere o destino de "Copiar de novo".
+
+- **A última cópia vence.** Copiar de novo troca o retrato; o banco anterior
+  fica no servidor.
+- **Nunca apaga.** Remover o worktree não apaga o banco, e a confirmação diz
+  qual banco fica. O retrato continua no ambiente removido. Tentar de novo no
+  mesmo ambiente (outro `git worktree add`) começa sem banco.
+- **Nunca a senha.** Ela fica no cofre, com a conexão. Não há
+  `{database.password}`: quem monta connection string usa o pgpass ou a
+  variável de ambiente que já usa.
+
+### A ordem: validar, Git, copiar, comandos
+
+1. "Iniciar implementação" confere os comandos e, com "Copiar banco para este
+   ambiente" marcado, **valida a cópia e pede a confirmação de produção antes
+   do Git** (`ValidateDevelopmentDatabaseCopyHandler`, que também recusa com
+   outra operação de banco em andamento). Recusar não cria nada.
+2. O worktree é criado como sempre, e o painel já fica Pronto: o worktree
+   serve sem o banco.
+3. A cópia roda (`CopyDevelopmentDatabaseHandler`), com barra, etapa, Cancelar
+   e logs no card do banco, dentro do card Pronto.
+4. Só com a cópia bem-sucedida os comandos pós-Worktree rodam, já com
+   `{database}`. Se ela falha ou é cancelada, nada é desfeito, e a mensagem
+   manda copiar de novo e depois "Executar comandos".
+
+O caso de uso só envolve o `RunDatabaseCopyHandler`. Política, confirmação
+digitada de produção crítica, a porta de uma operação por vez e auditoria
+ficam onde estão. Ele confere o ambiente antes da cópia e grava o nome gerado
+depois. Gravar é com `CancellationToken.None`, e sem a guarda da lista
+principal, porque o banco já existe no servidor.
+
+### O que copiar
+
+A escolha usa os cadastros da janela Bancos de Dados, lidos só quando ela abre:
+
+- **Apelido + servidor.** O destino só pode ser uma conexão **sem banco
+  fixo**, fora de produção e ativa. Cada ambiente ganha um banco novo, sem
+  `dropdb`. A anonimização vem do apelido e pode ser trocada. Não recria o
+  destino nem guarda o dump.
+- **Perfil de cópia.** É usado como está salvo. Se o destino tem banco fixo e
+  "Recriar o destino", a prévia avisa que ele será apagado.
+
+Não há cópia padrão por diretório: o usuário escolhe a cada ambiente.
+
+### As variáveis do banco
+
+- **Sem banco copiado, a variável é recusada com o motivo.** O
+  `CommandContext` ganhou um "indisponível com motivo" ("este ambiente não tem
+  banco copiado…"). O comando para antes do shell, inclusive na forma com
+  ponto. Isso também fechou uma brecha antiga: `{repository.name}` sem contexto
+  ia cru ao shell, porque `CommandParameters.Names` não enxerga ponto. Agora
+  falta como qualquer parâmetro.
+- **No valor de um parâmetro.** `@configura-ambiente nomebanco={database}`
+  passa o banco a um comando pronto que já tem parâmetro. O valor explícito
+  tem as variáveis de contexto preenchidas antes de entrar no comando, ainda
+  numa passada só. Na janela de parâmetros do comando rápido vale o mesmo,
+  inclusive como valor padrão: `{database}`.
+- **Na entrada literal.** `configura-ambiente {database}` direto na lista
+  pós-Worktree funciona, porque a entrada literal passou a ter só as variáveis
+  de contexto preenchidas (era intocada no ADR-051). Parâmetro do usuário,
+  `{ $_ }`, `HEAD@{1}` e `${env:X}` seguem como escritos: não são nome de
+  variável.
+- **Antes do worktree.** `ValidateCommandEntries` ganhou `DatabaseScheduled`.
+  Com a cópia marcada, `{database…}` fica adiado como `{worktree}`. Sem ela, é
+  recusado já no "Iniciar implementação".
+- **"Testar"**, na janela de globais, não tem ambiente. A mensagem sugere
+  passar `database=meu_banco`.
+- **Compatibilidade.** Um global antigo com um parâmetro `{database}` deixa de
+  pedir o valor na janela do comando rápido, porque o nome passou a ser de
+  contexto. `@x database=valor` continua vencendo, como todo valor explícito.
+- **A dica da lista pós-Worktree** não pede mais `worktree=…` nem
+  `database=…`: as variáveis de contexto ficam no texto, como na execução.
+
+### Fechar a janela e o app
+
+- A janela da tarefa **não fecha** com cópia em andamento. Ela mostra a aba e
+  pede para aguardar ou cancelar. Não cancela sozinha, porque cancelar deixa o
+  destino pela metade: é a regra da criação do worktree, e não a dos comandos.
+- Fechando o app, `DatabaseCopyRuns` cancela as cópias da aba, como a janela
+  Bancos de Dados já fazia com a dela. A limpeza do diretório temporário roda
+  no caminho de volta.
+
+O MCP (`worktree_list`) mostra o nome e o servidor do banco de cada ambiente,
+sem o usuário. Continua sem copiar (ADR-059).
+
+**Testes:**
+
+- **Domain:** Ready obrigatório, a última vence, remover mantém, tentar de
+  novo limpa, arquivada grava o que terminou, validações.
+- **Application:**
+  - o handler sobre o cenário de cópia real com fakes: nome gerado, falha que
+    mantém o anterior, produção sem confirmação, porta ocupada;
+  - contexto e resolvedor: indisponível com motivo, valor explícito, variável
+    no valor e na entrada literal;
+  - a validação com e sem cópia e o comando rápido.
+- **Infrastructure:** ida e volta do owned e a troca pela próxima cópia.
+- **Desktop:**
+  - a ordem validar → Git → copiar → comandos;
+  - recusar a confirmação não cria nada;
+  - a falha da cópia segura os comandos;
+  - a escolha (destinos, apelido, perfil);
+  - a janela headless.
+- **MCP:** `worktree_list` com o banco e sem o usuário.

@@ -1442,6 +1442,61 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .HasForeignKey("TaskItemId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.OwnsOne("MyTaskApp.Domain.Tasks.TaskDevelopmentDatabase", "Database", b1 =>
+                        {
+                            b1.Property<Guid>("TaskDevelopmentId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<Guid?>("AuditId")
+                                .HasColumnType("TEXT")
+                                .HasColumnName("Database_AuditId");
+
+                            b1.Property<Guid>("ConnectionId")
+                                .HasColumnType("TEXT")
+                                .HasColumnName("Database_ConnectionId");
+
+                            b1.Property<string>("ConnectionName")
+                                .IsRequired()
+                                .HasMaxLength(80)
+                                .HasColumnType("TEXT")
+                                .HasColumnName("Database_ConnectionName");
+
+                            b1.Property<long>("CopiedAt")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("Database_CopiedAt");
+
+                            b1.Property<string>("Host")
+                                .IsRequired()
+                                .HasMaxLength(255)
+                                .HasColumnType("TEXT")
+                                .HasColumnName("Database_Host");
+
+                            b1.Property<string>("Name")
+                                .IsRequired()
+                                .HasMaxLength(63)
+                                .HasColumnType("TEXT")
+                                .HasColumnName("Database_Name");
+
+                            b1.Property<int>("Port")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("Database_Port");
+
+                            b1.Property<string>("Username")
+                                .IsRequired()
+                                .HasMaxLength(63)
+                                .HasColumnType("TEXT")
+                                .HasColumnName("Database_Username");
+
+                            b1.HasKey("TaskDevelopmentId");
+
+                            b1.ToTable("TaskDevelopments");
+
+                            b1.WithOwner()
+                                .HasForeignKey("TaskDevelopmentId");
+                        });
+
+                    b.Navigation("Database");
                 });
 
             modelBuilder.Entity("MyTaskApp.Domain.Tasks.TaskDevelopmentCommand", b =>

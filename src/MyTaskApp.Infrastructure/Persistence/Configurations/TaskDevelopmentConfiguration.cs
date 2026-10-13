@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using MyTaskApp.Domain.DatabaseOperations;
 using MyTaskApp.Domain.Tasks;
 
 namespace MyTaskApp.Infrastructure.Persistence.Configurations;
@@ -56,6 +57,48 @@ internal sealed class TaskDevelopmentConfiguration : IEntityTypeConfiguration<Ta
 
         builder.Property(development => development.AgentPrompt)
             .HasMaxLength(TaskDevelopment.MaxAgentPromptLength);
+
+        // O banco copiado para o ambiente (ADR-060). Owned e opcional, como o
+        // vínculo externo da tarefa: quem diz "existe" é o Name, obrigatório no
+        // objeto — tudo nulo é ambiente sem banco.
+        builder.OwnsOne(development => development.Database, database =>
+        {
+            database.Property(value => value.ConnectionId)
+                .HasColumnName("Database_ConnectionId")
+                .IsRequired();
+
+            database.Property(value => value.ConnectionName)
+                .HasColumnName("Database_ConnectionName")
+                .HasMaxLength(DatabaseConnection.MaxNameLength)
+                .IsRequired();
+
+            database.Property(value => value.Host)
+                .HasColumnName("Database_Host")
+                .HasMaxLength(DatabaseConnection.MaxHostLength)
+                .IsRequired();
+
+            database.Property(value => value.Port)
+                .HasColumnName("Database_Port")
+                .IsRequired();
+
+            database.Property(value => value.Username)
+                .HasColumnName("Database_Username")
+                .HasMaxLength(DatabaseConnection.MaxIdentifierLength)
+                .IsRequired();
+
+            database.Property(value => value.Name)
+                .HasColumnName("Database_Name")
+                .HasMaxLength(DatabaseConnection.MaxIdentifierLength)
+                .IsRequired();
+
+            database.Property(value => value.AuditId)
+                .HasColumnName("Database_AuditId");
+
+            database.Property(value => value.CopiedAt)
+                .HasColumnName("Database_CopiedAt")
+                .HasConversion(UtcInstantConverter.Instance)
+                .IsRequired();
+        });
 
         // Os comandos pós-Worktree são parte do ambiente (ADR-028): tirar um da
         // lista apaga a linha, e apagar o ambiente leva todos.

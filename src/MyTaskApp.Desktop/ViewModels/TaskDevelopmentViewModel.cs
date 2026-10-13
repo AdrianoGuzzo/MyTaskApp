@@ -65,6 +65,7 @@ public sealed partial class TaskDevelopmentViewModel(
     TimeProvider timeProvider,
     AgentSessionViewModel agent,
     QuickCommandsViewModel quickCommands,
+    DevelopmentDatabaseViewModel database,
     ILogger<TaskDevelopmentViewModel> logger) : ObservableObject
 {
     /// <summary>Espera entre a última tecla no campo Diretório e a pergunta ao Git.</summary>
@@ -419,6 +420,20 @@ public sealed partial class TaskDevelopmentViewModel(
     /// <summary>Cancela o comando rápido escondido em andamento, se houver.</summary>
     public void CancelQuickCommand() => QuickCommands.Cancel();
 
+    // --- Banco do ambiente (ADR-060) -----------------------------------------
+
+    /// <summary>
+    /// A cópia do banco: marcada no formulário, roda com o worktree pronto e
+    /// antes dos comandos pós-Worktree; pronta, o card mostra o banco criado.
+    /// </summary>
+    public DevelopmentDatabaseViewModel Database { get; } = database;
+
+    /// <summary>A cópia validada e confirmada antes do Git, esperando o worktree.</summary>
+    private PlannedDatabaseCopy? _pendingCopy;
+
+    /// <summary>Pede a janela Bancos de Dados.</summary>
+    public event Action? DatabaseOperationsRequested;
+
     // --- Pronto ------------------------------------------------------------
 
     [ObservableProperty]
@@ -439,7 +454,7 @@ public sealed partial class TaskDevelopmentViewModel(
     public event Action<TaskDevelopmentViewModel>? Changed;
 
     /// <summary>Algo em andamento que fechar a janela interromperia.</summary>
-    public bool IsBusy => IsRunning || IsRemoving || Commands.IsRunning || QuickCommands.IsRunning;
+    public bool IsBusy => IsRunning || IsRemoving || Commands.IsRunning || QuickCommands.IsRunning || Database.IsRunning;
 
     // --- A aba do repositório (ADR-031) ------------------------------------
 
@@ -622,10 +637,26 @@ public sealed partial class TaskDevelopmentViewModel(
                 OnPropertyChanged(nameof(IsBusy));
             }
         };
+        Database.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName == nameof(DevelopmentDatabaseViewModel.IsRunning))
+            {
+                OnPropertyChanged(nameof(IsBusy));
+            }
+        };
+        Database.Copied += development =>
+        {
+            Development = development;
+            Changed?.Invoke(this);
+        };
+        Database.ManageRequested += () => DatabaseOperationsRequested?.Invoke();
+        Database.Show(taskId, Development);
     }
 
     partial void OnDevelopmentChanged(TaskDevelopmentView? value)
     {
+        Database.Show(_taskId, value);
+
         if (value is not null)
         {
             Agent.Load(_taskId, value.Id, IsReadOnly, value.AgentPrompt);
@@ -1149,6 +1180,21 @@ public sealed partial class TaskDevelopmentViewModel(
             return;
         }
 
+        // A cópia do banco também (ADR-060): validada e confirmada antes do
+        // Git. Recusar aqui não deixa nada criado.
+        _pendingCopy = null;
+
+        if (Database.CopyOnCreate)
+        {
+            if (await Database.PrepareAsync(_taskId) is not { } copy)
+            {
+                Message = Database.ErrorMessage ?? "A cópia do banco não foi confirmada. Nada foi criado.";
+                return;
+            }
+
+            _pendingCopy = copy;
+        }
+
         ResetRun();
         State = DevelopmentPanelState.Running;
         CanCancel = true;
@@ -1220,6 +1266,7 @@ public sealed partial class TaskDevelopmentViewModel(
     [RelayCommand]
     public void CancelConflict()
     {
+        _pendingCopy = null;
         Conflict = null;
         Plan = null;
         IsChoosingAlternative = false;
@@ -1259,6 +1306,27 @@ public sealed partial class TaskDevelopmentViewModel(
         }
 
         Changed?.Invoke(this);
+
+        // O banco vem antes dos comandos, que podem usar {database} (ADR-060).
+        // O worktree já serve sem ele: a falha da cópia não desfaz nada.
+        if (_pendingCopy is { } copy && Development is { } created)
+        {
+            _pendingCopy = null;
+            Message = "✓ Implementação iniciada. Copiando o banco…";
+
+            if (await Database.RunAsync(_taskId, created.Id, copy) is not { } withDatabase)
+            {
+                Message = Commands.Entries.Count > 0
+                    ? "O worktree está pronto, mas a cópia do banco não terminou, e os comandos pós-Worktree não rodaram. "
+                      + "Copie o banco de novo e depois clique em Executar comandos."
+                    : "O worktree está pronto, mas a cópia do banco não terminou. Copie o banco de novo pelo card do banco.";
+                return;
+            }
+
+            Development = withDatabase;
+            Message = "✓ Implementação iniciada, com o banco " + withDatabase.Database?.Name + ".";
+            Changed?.Invoke(this);
+        }
 
         // Só aqui, com o worktree pronto: a falha acima retorna antes (ADR-028).
         if (Commands.Entries.Count > 0)
@@ -1398,7 +1466,7 @@ public sealed partial class TaskDevelopmentViewModel(
         try
         {
             await runner.RunAsync<ValidateCommandEntriesHandler, IReadOnlyList<ResolvedCommand>>(
-                (handler, token) => handler.HandleAsync(new ValidateCommandEntries(entries), token),
+                (handler, token) => handler.HandleAsync(new ValidateCommandEntries(entries, Database.CopyOnCreate), token),
                 CancellationToken.None);
 
             return true;
@@ -1458,6 +1526,9 @@ public sealed partial class TaskDevelopmentViewModel(
 
     private void HandleFailure(Exception exception)
     {
+        // Sem worktree, a cópia agendada não tem para onde ir.
+        _pendingCopy = null;
+
         var running = Steps.LastOrDefault(step => step.IsRunning);
 
         switch (exception)
@@ -1642,6 +1713,12 @@ public sealed partial class TaskDevelopmentViewModel(
             return;
         }
 
+        if (Database.IsRunning)
+        {
+            Message = "Aguarde a cópia do banco terminar, ou cancele, antes de remover o worktree.";
+            return;
+        }
+
         ClearRemoveBlock();
         Message = null;
         IsRemoving = true;
@@ -1667,6 +1744,12 @@ public sealed partial class TaskDevelopmentViewModel(
                 _ => $"A pasta {development.WorktreePath} será apagada. "
                      + $"A branch {development.Branch} continua no repositório.",
             };
+
+            // O banco copiado nunca é apagado junto (ADR-060): melhor dizer.
+            if (development.Database is { } database)
+            {
+                detail += $" O banco {database.Name} em {database.Host} não será apagado.";
+            }
 
             var confirmed = await confirmation.AskAsync(new ConfirmationRequest(
                 "Deseja remover este Worktree?",

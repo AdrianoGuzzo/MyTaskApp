@@ -210,6 +210,11 @@ internal static class AppServices
 
             // A seção "⚡ Comandos" de cada ambiente (ADR-051): uma por ambiente.
             .AddTransient<QuickCommandsViewModel>()
+
+            // O banco do ambiente (ADR-060): uma seção por ambiente; as cópias
+            // em andamento, um dono só, para o app parar todas ao fechar.
+            .AddTransient<DevelopmentDatabaseViewModel>()
+            .AddSingleton<DatabaseCopyRuns>()
             .AddApplication(configuration)
             .AddInfrastructure(configuration)
             .BuildServiceProvider(validateScopes: true);
