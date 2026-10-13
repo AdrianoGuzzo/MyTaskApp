@@ -563,6 +563,12 @@ public sealed partial class TodayViewModel(
     [RelayCommand]
     public void OpenMcpServer() => McpServerRequested?.Invoke();
 
+    /// <summary>Pede a janela da sincronização entre computadores (ADR-061).</summary>
+    public event Action? SyncRequested;
+
+    [RelayCommand]
+    public void OpenSync() => SyncRequested?.Invoke();
+
     /// <summary>Pede a janela de sons dos avisos do agente (ADR-042).</summary>
     public event Action? SoundsRequested;
 

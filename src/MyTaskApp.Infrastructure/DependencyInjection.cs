@@ -20,6 +20,7 @@ using MyTaskApp.Application.QuickCommands;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Application.Sounds;
 using MyTaskApp.Application.StickyNotes;
+using MyTaskApp.Application.Sync;
 using MyTaskApp.Application.Tags;
 using MyTaskApp.Application.Tasks;
 using MyTaskApp.Application.TimeTracking;
@@ -38,6 +39,10 @@ using MyTaskApp.Infrastructure.PostgreSql;
 using MyTaskApp.Infrastructure.Processes;
 using MyTaskApp.Infrastructure.Secrets;
 using MyTaskApp.Infrastructure.Sounds;
+using MyTaskApp.Infrastructure.Sync;
+using MyTaskApp.Infrastructure.Sync.Apply;
+using MyTaskApp.Infrastructure.Sync.Capture;
+using MyTaskApp.Infrastructure.Sync.Http;
 using MyTaskApp.Infrastructure.Storage;
 using MyTaskApp.Infrastructure.Terminals;
 using MyTaskApp.Infrastructure.Terminals.Windows;
@@ -60,8 +65,26 @@ public static class DependencyInjection
 
         services.AddSingleton(Options.Create(databaseOptions));
 
+        // A captura da sincronização (ADR-061) entra em todo SaveChanges, e só
+        // trabalha com a instalação ligada a uma conta.
+        services.AddSingleton<SyncCaptureSwitch>();
+        services.AddSingleton<SyncCaptureInterceptor>();
+        services.TryAddSingleton<ISyncTrigger, SyncTrigger>();
+        services.AddScoped<IRemoteChangeApplier, RemoteChangeApplier>();
+        services.AddScoped<ISyncReconciler, SyncReconciler>();
+        services.AddScoped<ISyncLocalStore, SyncLocalStore>();
+
+        // Depois do padrão da Application (que deixa tudo passar): com a
+        // sincronização, comando que veio de outro computador espera revisão.
+        services.AddScoped<ICommandReviewGate, SyncCommandReviewGate>();
+        services.TryAddSingleton<IDeviceIdentity>(provider => new DeviceIdentityFile(
+            UserDataLocation.Current.LocalRoot,
+            provider.GetRequiredService<ILogger<DeviceIdentityFile>>()));
+
         services.AddDbContext<MyTaskAppDbContext>(
-            builder => builder.UseSqlite(databaseOptions.BuildConnectionString()));
+            (provider, builder) => builder
+                .UseSqlite(databaseOptions.BuildConnectionString())
+                .AddInterceptors(provider.GetRequiredService<SyncCaptureInterceptor>()));
 
         services.AddScoped<ITaskItemRepository, TaskItemRepository>();
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();
@@ -161,6 +184,7 @@ public static class DependencyInjection
 
         AddSecrets(services);
         AddJira(services, configuration);
+        AddSyncClient(services, configuration);
         AddDatabaseOperations(services, configuration);
 
         if (OperatingSystem.IsWindows())
@@ -252,6 +276,26 @@ public static class DependencyInjection
         services.AddSingleton<IDatabaseOperationWorkspaceFactory>(provider => new DatabaseOperationWorkspaceFactory(
             string.IsNullOrWhiteSpace(options.WorkspaceDirectory) ? UserDataLocation.Current.DatabaseOperations : options.WorkspaceDirectory,
             provider.GetRequiredService<ILogger<DatabaseOperationWorkspaceFactory>>()));
+    }
+
+    /// <summary>
+    /// O cliente da sincronização (ADR-061). Singleton, como o do Jira: o
+    /// access token e o portão da renovação valem para o app inteiro.
+    /// </summary>
+    private static void AddSyncClient(IServiceCollection services, IConfiguration configuration)
+    {
+        var options = SyncOptions.FromBuild();
+        configuration.GetSection(SyncOptions.SectionName).Bind(options);
+        services.AddSingleton(options);
+
+        services.AddSingleton(provider => new SyncHttp(
+            CreateJiraHttpClient(),
+            options,
+            provider.GetRequiredService<ILogger<SyncHttp>>()));
+
+        services.AddSingleton<SyncAuthenticationService>();
+        services.AddSingleton<ISyncAuthenticator>(provider => provider.GetRequiredService<SyncAuthenticationService>());
+        services.AddSingleton<ISyncApi, SyncApiClient>();
     }
 
     private static HttpClient CreateJiraHttpClient()

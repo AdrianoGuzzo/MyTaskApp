@@ -1,5 +1,4 @@
 using System.Net.Http.Headers;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using MyTaskApp.Application.External.Jira;
@@ -104,11 +103,6 @@ internal sealed class JiraOAuthClient(JiraHttp http, JiraOptions options, TimePr
     /// <summary>A API de um site, pelo gateway da Atlassian: <c>…/ex/jira/{cloudId}/</c>.</summary>
     public static Uri ApiBaseFor(string cloudId) => new(ApiGateway, Uri.EscapeDataString(cloudId) + "/");
 
-    /// <summary>Um <c>state</c> ou <c>code_verifier</c>: 32 bytes aleatórios em base64url.</summary>
-    public static string NewSecret() => Base64Url(RandomNumberGenerator.GetBytes(32));
-
-    public static string ChallengeFor(string verifier) => Base64Url(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
-
     private async Task<JiraTokens> RequestTokensAsync(Dictionary<string, string> body, CancellationToken cancellationToken)
     {
         using var document = await http.PostJsonAsync(TokenEndpoint, body, authorization: null, cancellationToken);
@@ -121,7 +115,4 @@ internal sealed class JiraOAuthClient(JiraHttp http, JiraOptions options, TimePr
             root.TryGetProperty("refresh_token", out var refresh) ? refresh.GetString() : null,
             timeProvider.GetUtcNow() + TimeSpan.FromSeconds(expiresIn) - ExpirySafety);
     }
-
-    private static string Base64Url(byte[] bytes) =>
-        Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 }

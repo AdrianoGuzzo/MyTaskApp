@@ -11,6 +11,7 @@ using MyTaskApp.Application.QuickCommands;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Application.Sounds;
 using MyTaskApp.Application.StickyNotes;
+using MyTaskApp.Application.Sync;
 using MyTaskApp.Desktop.Composition;
 using MyTaskApp.Desktop.Reminders;
 using MyTaskApp.Desktop.SpellChecking;
@@ -104,6 +105,7 @@ public sealed partial class App : Avalonia.Application
                 SetUpCommandExecutions(Services);
                 SetUpTimeTracking(todayViewModel);
                 SetUpMcpServer(Services, todayViewModel);
+                SetUpSync(Services);
                 ListenForSecondLaunch(Services, window);
 
                 // A moldura só sabe iniciar com o Windows depois de conhecer o
@@ -285,6 +287,7 @@ public sealed partial class App : Avalonia.Application
         todayViewModel.IntegrationsRequested += () => ShowIntegrations(services, window);
         todayViewModel.DatabaseOperationsRequested += () => ShowDatabaseOperations(services, window);
         todayViewModel.McpServerRequested += () => ShowMcpServer(services, window);
+        todayViewModel.SyncRequested += () => ShowSync(services, window);
 
         // Renomear, recolorir ou excluir muda as bolinhas de todo o painel; sem
         // isto a mudança só apareceria no refresh de 60 s.
@@ -414,10 +417,36 @@ public sealed partial class App : Avalonia.Application
     /// hora: o gateway avisa, e aqui o aviso vira a mesma recarga que a tela
     /// faria — o quadro, a aba "Tempo" das janelas abertas e a de Bancos.
     /// </summary>
+    /// <summary>
+    /// A sincronização (ADR-061) em segundo plano. Sem servidor configurado ou
+    /// sem conta ligada, o laço acorda, vê que não há o que fazer e dorme: o
+    /// app continua inteiro, só local.
+    /// </summary>
+    private static void SetUpSync(IServiceProvider services) =>
+        services.GetRequiredService<SyncScheduler>().Start();
+
     private void SetUpMcpServer(IServiceProvider services, TodayViewModel todayViewModel)
     {
         services.GetRequiredService<IDataChangeNotifier>().Changed += areas => OnUiThread(() =>
         {
+            // Etiquetas e post-its que chegam de outro computador (ADR-061):
+            // as bolinhas da lista e os post-its abertos se redesenham.
+            if (areas.HasFlag(DataArea.Tags))
+            {
+                _ = todayViewModel.LoadAsync(CancellationToken.None);
+                _ = services.GetRequiredService<StickyNoteWindowManager>().RefreshAllAsync();
+
+                if (services.GetRequiredService<TagsWindow>() is { IsVisible: true } tags)
+                {
+                    tags.Reveal();
+                }
+            }
+
+            if (areas.HasFlag(DataArea.StickyNotes))
+            {
+                _ = services.GetRequiredService<StickyNoteWindowManager>().RefreshAllAsync();
+            }
+
             if (areas.HasFlag(DataArea.Tasks) || areas.HasFlag(DataArea.Time))
             {
                 _ = todayViewModel.LoadAsync(CancellationToken.None);
@@ -521,6 +550,16 @@ public sealed partial class App : Avalonia.Application
     private static void ShowMcpServer(IServiceProvider services, Window owner)
     {
         var window = services.GetRequiredService<McpServerWindow>();
+
+        window.Show(owner);
+        window.Activate();
+        window.Reveal();
+    }
+
+    /// <summary>A janela da sincronização (ADR-061), aberta pelo menu.</summary>
+    private static void ShowSync(IServiceProvider services, Window owner)
+    {
+        var window = services.GetRequiredService<SyncWindow>();
 
         window.Show(owner);
         window.Activate();
@@ -808,6 +847,9 @@ public sealed partial class App : Avalonia.Application
         services.GetRequiredService<DatabaseCopyRuns>().CancelAll();
         services.GetRequiredService<ReminderScheduler>().Dispose();
         services.GetRequiredService<LifecycleMaintenanceScheduler>().Dispose();
+
+        // Um push no meio para; o outbox guarda, e o próximo início reenvia com os mesmos ids (ADR-061).
+        services.GetRequiredService<SyncScheduler>().Dispose();
         services.GetRequiredService<AgentSessionMonitor>().Dispose();
         services.GetRequiredService<CommandExecutionMonitor>().Dispose();
         (services.GetRequiredService<IAgentEventEndpoint>() as IDisposable)?.Dispose();

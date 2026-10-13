@@ -284,6 +284,10 @@
                                        FontSize="12"
                                        Foreground="{DynamicResource WidgetCautionBrush}"
                                        IsVisible="{Binding IsMissing}" />
+                            <TextBlock Text="&#x2192;"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource WidgetCautionBrush}"
+                                       IsVisible="{Binding IsUnmapped}" />
                           </Panel>
 
                           <StackPanel Grid.Column="1" Spacing="1">
@@ -299,7 +303,13 @@
                             <TextBlock Classes="meta"
                                        Text="{Binding Path}"
                                        TextTrimming="PrefixCharacterEllipsis"
-                                       ToolTip.Tip="{Binding Path}" />
+                                       ToolTip.Tip="{Binding Path}"
+                                       IsVisible="{Binding !IsUnmapped}" />
+                            <TextBlock Classes="meta"
+                                       Text="Não mapeado neste computador — edite e escolha a pasta"
+                                       Foreground="{DynamicResource WidgetCautionBrush}"
+                                       TextWrapping="Wrap"
+                                       IsVisible="{Binding IsUnmapped}" />
                             <TextBlock Classes="meta"
                                        Text="{Binding DefaultBranchLabel}"
                                        TextTrimming="CharacterEllipsis"

@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.DatabaseOperations;
+using MyTaskApp.Application.Sync;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.Commands;
 
@@ -145,7 +146,8 @@ public sealed class RunCommandHandler(
     IDevelopmentCommandRepository commands,
     ICommandExecutor executor,
     IDirectoryProbe directories,
-    ILogger<RunCommandHandler> logger)
+    ILogger<RunCommandHandler> logger,
+    ICommandReviewGate? reviewGate = null)
 {
     public async Task<CommandRunSummary> HandleAsync(
         RunCommand command,
@@ -158,6 +160,14 @@ public sealed class RunCommandHandler(
         }
 
         var directory = await CommandDirectory.RequireAsync(directories, command.WorkingDirectory, cancellationToken);
+
+        // Global que veio de outro computador não roda sem revisão (ADR-061).
+        if (reviewGate is not null)
+        {
+            await reviewGate.EnsureReviewedAsync(
+                [.. CommandReviewSources.GlobalsUsedBy([command.Entry], await commands.ListAsync(cancellationToken))],
+                cancellationToken);
+        }
 
         var globals = await GlobalCommandLookup.LoadAsync(commands, cancellationToken);
         var resolved = CommandAliasResolver.Resolve([command.Entry], globals, CommandContext.ForFolder(directory));

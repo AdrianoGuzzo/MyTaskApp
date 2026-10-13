@@ -32,7 +32,7 @@ public sealed class TagDirectory
         Guid id,
         Guid tagId,
         string alias,
-        string path,
+        string? path,
         string? name,
         string? description,
         string? defaultBranch,
@@ -55,8 +55,15 @@ public sealed class TagDirectory
     /// <summary>Sempre começa com <c>@</c> (ver <see cref="NormalizeAlias"/>).</summary>
     public string Alias { get; private set; }
 
-    /// <summary>Caminho absoluto. Pode não existir: a pasta é conferida só na exibição.</summary>
-    public string Path { get; private set; }
+    /// <summary>
+    /// Caminho absoluto. Pode não existir: a pasta é conferida só na exibição.
+    /// <c>null</c> é "não mapeado neste computador" — o diretório veio de outro
+    /// dispositivo pela sincronização, e o caminho de lá não vale aqui (ADR-061).
+    /// </summary>
+    public string? Path { get; private set; }
+
+    /// <summary>Tem pasta neste computador.</summary>
+    public bool IsMapped => Path is not null;
 
     public string? Name { get; private set; }
 
@@ -154,11 +161,15 @@ public sealed class TagDirectory
             NormalizeDefaultBranch(defaultBranch),
             createdAt);
 
-    /// <summary>Atômico: valida tudo antes de trocar qualquer campo.</summary>
-    internal void Update(string alias, string path, string? name, string? description, string? defaultBranch)
+    /// <summary>
+    /// Atômico: valida tudo antes de trocar qualquer campo. Um diretório ainda
+    /// não mapeado aceita o caminho em branco — editar o alias não obriga a
+    /// escolher a pasta —; um já mapeado não volta a ficar sem.
+    /// </summary>
+    internal void Update(string alias, string? path, string? name, string? description, string? defaultBranch)
     {
         var normalizedAlias = NormalizeAlias(alias);
-        var normalizedPath = NormalizePath(path);
+        var normalizedPath = !IsMapped && string.IsNullOrWhiteSpace(path) ? null : NormalizePath(path);
         var normalizedName = NormalizeOptional(name, MaxNameLength, "O nome do diretório");
         var normalizedDescription = NormalizeOptional(
             description, MaxDescriptionLength, "A descrição do diretório");

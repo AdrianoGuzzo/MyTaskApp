@@ -1,0 +1,46 @@
+# O servidor de sincronizacao para desenvolvimento (ADR-061, docs/sync-server.md).
+#
+#   docker compose -f deploy/sync-server/docker-compose.yml up -d postgres
+#   dotnet run --project src/MyTaskApp.Server.Api        (ambiente Development)
+#
+# Ou tudo em conteiner, com o cliente Google em variaveis do shell:
+#   GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... docker compose -f deploy/sync-server/docker-compose.yml up -d
+#
+# Senha de desenvolvimento, so para esta maquina. Em producao, a connection
+# string vem de um segredo do provedor, e o servidor fica atras de TLS.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: mytaskapp_sync
+      POSTGRES_USER: mytaskapp
+      POSTGRES_PASSWORD: mytaskapp
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - sync-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mytaskapp -d mytaskapp_sync"]
+      interval: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ../..
+      dockerfile: src/MyTaskApp.Server.Api/Dockerfile
+    profiles: ["api"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__Sync: "Host=postgres;Database=mytaskapp_sync;Username=mytaskapp;Password=mytaskapp"
+      Database__MigrateOnStartup: "true"
+      Authentication__Google__ClientId: ${GOOGLE_CLIENT_ID:-}
+      Authentication__Google__ClientSecret: ${GOOGLE_CLIENT_SECRET:-}
+    ports:
+      - "127.0.0.1:8080:8080"
+
+volumes:
+  sync-data:

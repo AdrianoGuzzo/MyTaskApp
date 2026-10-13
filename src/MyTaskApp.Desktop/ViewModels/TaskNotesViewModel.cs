@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Sync;
 using MyTaskApp.Application.Tags;
 using MyTaskApp.Application.Tasks;
 using MyTaskApp.Domain;
@@ -265,7 +266,58 @@ public sealed partial class TaskNotesViewModel(
             card.BranchSuggested += Developments.SuggestBranch;
             _ = card.ActivateAsync(CancellationToken.None);
         }
+
+        OriginText = null;
     }
+
+    /// <summary>"Criada em Notebook · 12/10/2026 · alterada por último neste computador" (ADR-061).</summary>
+    [ObservableProperty]
+    private string? _originText;
+
+    /// <summary>
+    /// A origem é lida na ativação da janela, como os atalhos — abrir não vai
+    /// ao banco, e a origem muda quando outro computador mexe na tarefa.
+    /// </summary>
+    public async Task LoadOriginAsync()
+    {
+        var taskId = _taskId;
+
+        try
+        {
+            var origin = await runner.RunAsync<GetTaskOriginHandler, TaskOriginView?>(
+                (handler, token) => handler.HandleAsync(new GetTaskOrigin(taskId), token),
+                CancellationToken.None);
+
+            // A janela pode ter trocado de tarefa enquanto a consulta voltava.
+            if (taskId == _taskId)
+            {
+                OriginText = DescribeOrigin(origin);
+            }
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "TaskOriginLoadFailed");
+        }
+    }
+
+    public static string? DescribeOrigin(TaskOriginView? origin)
+    {
+        if (origin is null)
+        {
+            return null;
+        }
+
+        var created = origin.CreatedAt is { } at
+            ? $"Criada {On(origin.CreatedOn)} · {at.ToLocalTime().ToString("dd/MM/yyyy HH:mm", System.Globalization.CultureInfo.CurrentCulture)}"
+            : $"Criada {On(origin.CreatedOn)}";
+
+        return origin.UpdatedOn is { } updated && origin.UpdatedOn != origin.CreatedOn
+            ? $"{created} · alterada por último {On(updated)}"
+            : created;
+    }
+
+    private static string On(string device) =>
+        device == GetTaskOriginHandler.ThisComputer ? "neste computador" : $"em {device}";
 
     /// <summary>As abas Desenvolvimento e Tempo se atualizam a cada vez que aparecem.</summary>
     partial void OnSelectedTabIndexChanged(int value)
@@ -372,7 +424,7 @@ public sealed partial class TaskNotesViewModel(
             Developments.DirectoryCompletion.SetDirectories(directories, unknown);
 
             var checks = await Task.WhenAll(directories.Select(async directory =>
-                (directory.Id, Exists: await directoryProbe.ExistsAsync(directory.Path, cancellationToken))));
+                (directory.Id, Exists: directory.Path is { } path && await directoryProbe.ExistsAsync(path, cancellationToken))));
 
             var existence = checks.ToDictionary(check => check.Id, check => check.Exists);
             Completion.SetDirectories(directories, existence);

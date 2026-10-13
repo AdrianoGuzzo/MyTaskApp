@@ -339,6 +339,29 @@ da tela. O guia completo, com as 81 ferramentas, está em
 claude mcp add --transport http mytaskapp http://127.0.0.1:5180/mcp   --header "Authorization: Bearer <token copiado da tela>"
 ```
 
+### Sincronização entre computadores (opcional)
+
+Em *☰ → Sincronização…*, você conecta a conta Google e passa a ver as mesmas
+tarefas, etiquetas, horas e post-its em todos os seus computadores. Sem conta,
+nada muda: o app continua inteiro, só local. O guia está em
+[`docs/sync.md`](docs/sync.md), o servidor em
+[`docs/sync-server.md`](docs/sync-server.md), e a decisão no
+[ADR-061](docs/ARCHITECTURE.md).
+
+- **Funciona offline.** As mudanças esperam num outbox, gravado junto com a
+  própria mudança, e sobem quando a rede volta, sem duplicar.
+- **Conflito visível.** Campos diferentes editados em dois computadores ficam
+  os dois. No mesmo campo, vence o que chegou primeiro ao servidor, e o outro
+  valor aparece na janela com "Reaplicar o meu" ou "Descartar".
+- **O que é da máquina fica na máquina:** pastas dos diretórios e dos
+  worktrees, posição das janelas, conexões de banco, configurações e qualquer
+  senha ou token. O diretório de uma etiqueta chega "não mapeado neste
+  computador".
+- **Comandos de outro computador** só rodam depois de você conferir o texto.
+- **Dispositivos** com apelido e revogação. Desconectar não apaga nada.
+- Na janela da tarefa: "Criada em Notebook · … · alterada por último neste
+  computador".
+
 ---
 
 ## Instalação
@@ -467,6 +490,8 @@ mudar algum deles sem editar o diretório de instalação, crie um
 | `Jira:CallbackPort` | 47832 | porta da volta do login do Jira; precisa ser a registrada no app OAuth |
 | `Jira:RequestTimeoutSeconds` | 8 | quanto uma chamada ao Jira espera antes de desistir |
 | `Jira:ClientId` / `ClientSecret` | do build | o app OAuth da Atlassian ([como registrar](docs/jira-oauth-app.md)) |
+| `Sync:ApiBaseUrl` | do build | o servidor de sincronização; HTTPS, ou HTTP só no loopback. Vazio = sem sincronização ([servidor](docs/sync-server.md)) |
+| `Sync:CallbackPort` | 47833 | porta da volta do login da sincronização; precisa ser uma das registradas no servidor |
 | `DatabaseOperations:*` | ver o guia | tempos limite e pasta das cópias de banco ([detalhes](docs/database-operations.md#configuração)) |
 
 Linha de comando: `MyTaskApp.exe --startup` abre direto na bandeja. É o
@@ -493,6 +518,17 @@ dotnet tool restore
 ```
 
 ### Compilar e rodar
+
+O repositório tem duas solutions:
+
+| Solution | O que tem |
+|---|---|
+| `MyTaskApp.slnx` | o app desktop: Domain, Application, Infrastructure, Mcp, Desktop e os testes deles |
+| `MyTaskApp.Server.slnx` | o servidor de sincronização opcional ([guia](docs/sync-server.md)): Server.Api, Server.Application, Server.Infrastructure e os testes deles |
+
+`MyTaskApp.Sync.Contracts` está nas duas, porque é o contrato entre elas. A do
+servidor também lista Domain, Application e Infrastructure, numa pasta
+`desktop`: os testes ponta a ponta sobem dois desktops inteiros contra a API.
 
 ```bash
 dotnet build MyTaskApp.slnx
@@ -523,10 +559,11 @@ CI.
 ### Testes
 
 ```bash
-dotnet test MyTaskApp.slnx
+dotnet test MyTaskApp.slnx          # desktop
+dotnet test MyTaskApp.Server.slnx   # servidor de sincronização
 ```
 
-São cinco suítes com xUnit v3, AwesomeAssertions e NSubstitute:
+As suítes usam xUnit v3, AwesomeAssertions e NSubstitute:
 
 | Projeto | Cobre |
 |---|---|
@@ -535,6 +572,9 @@ São cinco suítes com xUnit v3, AwesomeAssertions e NSubstitute:
 | `MyTaskApp.Infrastructure.Tests` | EF Core contra **SQLite real**, Git real, processos, migrations e upgrade |
 | `MyTaskApp.Desktop.Tests` | ViewModels e testes de UI **headless** (Avalonia.Headless), onde um binding quebrado passaria despercebido |
 | `MyTaskApp.Packaging.Tests` | contratos entre código e instalador (mutex, `--startup`, versão), lidos como texto e sem precisar do Inno Setup |
+| `MyTaskApp.Sync.Contracts.Tests` | o contrato da sincronização: JSON, ids determinísticos, registro de campos e validação |
+| `MyTaskApp.Server.Application.Tests` | a mescla por campo, o push e o pull do servidor, em memória |
+| `MyTaskApp.Server.IntegrationTests` | o servidor contra **PostgreSQL real** (Testcontainers) e o ponta a ponta com dois desktops; pulam sem Docker |
 
 ### Cobertura
 
@@ -639,8 +679,11 @@ Management).
 │   ├── MyTaskApp.Application/       casos de uso, agendadores, portas
 │   ├── MyTaskApp.Infrastructure/    EF Core/SQLite, Git, processos, Claude Code
 │   ├── MyTaskApp.Mcp/               servidor MCP local (Kestrel no loopback)
+│   ├── MyTaskApp.Sync.Contracts/    contrato da sincronização (desktop e servidor)
+│   ├── MyTaskApp.Server.*/          servidor de sincronização (ASP.NET Core + PostgreSQL)
 │   └── MyTaskApp.Desktop/           app Avalonia (views, view models, temas)
 ├── tests/                           uma suíte por projeto + Packaging.Tests
+├── deploy/sync-server/              docker compose do servidor de sincronização
 ├── installer/
 │   ├── windows/                     Inno Setup 6 (MyTaskApp.iss, build.ps1)
 │   ├── linux/                       tarball + install.sh/uninstall.sh
@@ -651,6 +694,8 @@ Management).
 ├── docs/
 │   ├── ARCHITECTURE.md              ADRs
 │   ├── mcp-server.md                servidor MCP: configuração e ferramentas
+│   ├── sync.md                      sincronização: o que vai, conflitos, limitações
+│   ├── sync-server.md               servidor de sincronização: Google, variáveis, implantação
 │   └── release-process.md           versionamento e release
 ├── .github/workflows/               CI, título de PR, Release Please, release
 ├── Directory.Build.props            versão do produto e regras de build
@@ -686,7 +731,7 @@ Management).
    .\scripts\coverage.ps1
    ```
 
-O CI roda em todo PR: build Release, as cinco suítes, o portão de cobertura
+O CI roda em todo PR: build Release, as suítes (o servidor de sincronização num job ubuntu, com PostgreSQL), o portão de cobertura
 (com comentário no PR) e um `publish` self-contained para `win-x64` e
 `linux-x64`.
 

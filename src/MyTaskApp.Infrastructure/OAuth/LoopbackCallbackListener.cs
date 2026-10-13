@@ -5,11 +5,33 @@ using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Domain;
 
-namespace MyTaskApp.Infrastructure.Jira;
+namespace MyTaskApp.Infrastructure.OAuth;
 
 /// <summary>
-/// Espera o navegador voltar de <c>auth.atlassian.com</c> com o código de
-/// autorização em <c>http://localhost:{porta}/callback</c> (ADR-045).
+/// O provedor voltou sem código. A frase é a do provedor, para a tela; o
+/// <see cref="Error"/> é o código OAuth, para quem precisa decidir por ele
+/// (o <c>device_revoked</c> da sincronização).
+/// </summary>
+internal sealed class AuthorizationRefusedException(string? error, string message) : DomainException(message)
+{
+    public string? Error { get; } = error;
+}
+
+/// <summary>
+/// As frases que o listener mostra no navegador e devolve ao app. Cada
+/// provedor (Jira, sincronização) fala o próprio nome.
+/// </summary>
+internal sealed record LoopbackCallbackMessages(
+    string PortInUse,
+    string Connected,
+    string NotCompleted,
+    string Denied,
+    string Failed,
+    string ReceivedLogEvent);
+
+/// <summary>
+/// Espera o navegador voltar com o código de autorização em
+/// <c>http://localhost:{porta}/callback</c> (ADR-045, ADR-061).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -28,7 +50,7 @@ namespace MyTaskApp.Infrastructure.Jira;
 /// enfiar um código — e é ignorada sem encerrar a espera.
 /// </para>
 /// </remarks>
-internal sealed class OAuthCallbackListener : IAsyncDisposable
+internal sealed class LoopbackCallbackListener : IAsyncDisposable
 {
     public const string CallbackPath = "/callback";
 
@@ -40,16 +62,22 @@ internal sealed class OAuthCallbackListener : IAsyncDisposable
 
     private readonly CancellationTokenSource _stopping = new();
 
+    private readonly LoopbackCallbackMessages _messages;
+
     private readonly ILogger _logger;
 
-    private OAuthCallbackListener(ILogger logger) => _logger = logger;
+    private LoopbackCallbackListener(LoopbackCallbackMessages messages, ILogger logger)
+    {
+        _messages = messages;
+        _logger = logger;
+    }
 
     public int Port { get; private set; }
 
-    /// <summary>Abre a porta. Ocupada, recusa com o que fazer — a Atlassian só volta para ela.</summary>
-    public static OAuthCallbackListener Start(int port, ILogger logger)
+    /// <summary>Abre a porta. Ocupada, recusa com o que fazer — o provedor só volta para ela.</summary>
+    public static LoopbackCallbackListener Start(int port, LoopbackCallbackMessages messages, ILogger logger)
     {
-        var listener = new OAuthCallbackListener(logger);
+        var listener = new LoopbackCallbackListener(messages, logger);
 
         try
         {
@@ -57,9 +85,7 @@ internal sealed class OAuthCallbackListener : IAsyncDisposable
         }
         catch (SocketException)
         {
-            throw new DomainException(
-                $"A porta {port} deste computador está ocupada, e o login do Jira volta por ela. "
-                + "Feche o programa que a usa e tente de novo.");
+            throw new DomainException(messages.PortInUse.Replace("{port}", port.ToString(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal));
         }
 
         try
@@ -99,25 +125,16 @@ internal sealed class OAuthCallbackListener : IAsyncDisposable
 
                 if (callback.TryGetValue("code", out var code) && code.Length > 0)
                 {
-                    await RespondAsync(
-                        connection,
-                        HttpStatusCode.OK,
-                        "Pronto! O MyTaskApp está conectado ao Jira. Você já pode fechar esta aba e voltar ao app.",
-                        cancellationToken);
+                    await RespondAsync(connection, HttpStatusCode.OK, _messages.Connected, cancellationToken);
 
                     return code;
                 }
 
-                await RespondAsync(
-                    connection,
-                    HttpStatusCode.OK,
-                    "A autorização não foi concluída. Volte ao MyTaskApp para tentar de novo.",
-                    cancellationToken);
+                await RespondAsync(connection, HttpStatusCode.OK, _messages.NotCompleted, cancellationToken);
 
-                throw new DomainException(
-                    callback.GetValueOrDefault("error") == "access_denied"
-                        ? "A autorização foi recusada no Jira."
-                        : "O Jira não concluiu a autorização. Tente de novo.");
+                var error = callback.GetValueOrDefault("error");
+
+                throw new AuthorizationRefusedException(error, error == "access_denied" ? _messages.Denied : _messages.Failed);
             }
         }
     }
@@ -225,7 +242,7 @@ internal sealed class OAuthCallbackListener : IAsyncDisposable
             return null;
         }
 
-        _logger.LogInformation("JiraAuthorizationCallbackReceived");
+        _logger.LogInformation("{Event}", _messages.ReceivedLogEvent);
 
         return target[(question + 1)..]
             .Split('&', StringSplitOptions.RemoveEmptyEntries)

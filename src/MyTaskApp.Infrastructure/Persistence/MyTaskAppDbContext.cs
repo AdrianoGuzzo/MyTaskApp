@@ -94,6 +94,18 @@ public sealed class MyTaskAppDbContext(DbContextOptions<MyTaskAppDbContext> opti
     /// <summary>Habilitado, porta, iniciar com o app e somente leitura do servidor MCP (ADR-059).</summary>
     internal DbSet<McpServerSettingsRow> McpServerSettings => Set<McpServerSettingsRow>();
 
+    /// <summary>A ligação desta instalação com a conta de sincronização (ADR-061).</summary>
+    internal DbSet<Sync.Persistence.SyncStateRow> SyncState => Set<Sync.Persistence.SyncStateRow>();
+
+    /// <summary>Versão, último estado compartilhado e origem de cada entidade sincronizada.</summary>
+    internal DbSet<Sync.Persistence.SyncEntityStateRow> SyncEntityStates => Set<Sync.Persistence.SyncEntityStateRow>();
+
+    /// <summary>As alterações locais a enviar, na ordem.</summary>
+    internal DbSet<Sync.Persistence.SyncOutboxRow> SyncOutbox => Set<Sync.Persistence.SyncOutboxRow>();
+
+    /// <summary>Os valores locais que perderam para o servidor.</summary>
+    internal DbSet<Sync.Persistence.SyncConflictRow> SyncConflicts => Set<Sync.Persistence.SyncConflictRow>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder) =>
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(MyTaskAppDbContext).Assembly);
 }

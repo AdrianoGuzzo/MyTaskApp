@@ -11,6 +11,7 @@ public sealed record TagRow(
     int DirectoryCount = 0);
 
 /// <summary>Uma pasta de etiqueta, com a etiqueta junto para o autocomplete diferenciar.</summary>
+/// <param name="Path"><c>null</c>: veio de outro computador e ainda não foi mapeada aqui (ADR-061).</param>
 /// <param name="DefaultBranch">A origem preferida quando o repositório é esta pasta.</param>
 /// <param name="CommandCount">Quantos comandos rápidos ela oferece (ADR-051).</param>
 public sealed record TagDirectoryRow(
@@ -19,11 +20,14 @@ public sealed record TagDirectoryRow(
     string TagName,
     string TagColorHex,
     string Alias,
-    string Path,
+    string? Path,
     string? Name,
     string? Description,
     string? DefaultBranch = null,
-    int CommandCount = 0);
+    int CommandCount = 0)
+{
+    public bool IsMapped => Path is not null;
+}
 
 /// <summary>Um comando rápido associado a um diretório (ADR-051), com o comando global junto.</summary>
 /// <param name="Alias"><c>null</c> no comando só do diretório.</param>
@@ -74,6 +78,8 @@ public interface ITagQuery
     /// <summary>
     /// As pastas de todas as etiquetas da tarefa, em ordem de alias. Pela
     /// tarefa, e não por uma lista de etiquetas, para refletir o vínculo atual.
+    /// Só as mapeadas neste computador: é a lista do autocomplete, que insere
+    /// o caminho.
     /// </summary>
     Task<IReadOnlyList<TagDirectoryRow>> ListDirectoriesForTaskAsync(
         Guid taskId,
@@ -88,7 +94,7 @@ public interface ITagQuery
     /// Os diretórios, de qualquer etiqueta, que oferecem algum comando rápido
     /// (ADR-051). De todas as etiquetas, e não só das da tarefa: o ambiente é
     /// achado pelo caminho do repositório, e quem decide a preferência é a
-    /// Application.
+    /// Application. Sem os não mapeados, que não têm caminho a comparar.
     /// </summary>
     Task<IReadOnlyList<CommandDirectoryRow>> ListCommandDirectoriesAsync(
         CancellationToken cancellationToken = default);
