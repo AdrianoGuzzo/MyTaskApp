@@ -23,12 +23,8 @@ public class DatabaseOperationsPersistenceTests
         DatabaseConnection.Create(
             name, "198.51.100.112", 5432, database, "backup_user", environment, DatabaseSslMode.Require, "descrição", Everything, Now);
 
-    private static async Task SeedAsync(TempSqliteDatabase db, params object[] entities)
-    {
-        await using var context = db.CreateContext();
-        context.AddRange(entities);
-        await context.SaveChangesAsync(Ct);
-    }
+    private static Task SeedAsync(TempSqliteDatabase db, params object[] entities) =>
+        db.SeedOnOlderSchemaAsync(Ct, entities);
 
     [Fact]
     public async Task AConnection_RoundTrips_WithItsSecretReference()

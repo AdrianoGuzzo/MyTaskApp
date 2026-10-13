@@ -152,4 +152,10 @@ public interface ISyncLocalStore
     Task MarkCommandReviewedAsync(string entityType, Guid entityId, CancellationToken cancellationToken);
 
     Task<SyncOrigin?> OriginOfAsync(string entityType, Guid entityId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Guarda os dispositivos da conta (ADR-062): o "Enviar para" e o seletor
+    /// precisam dos apelidos ao abrir o app, antes do primeiro ciclo e sem rede.
+    /// </summary>
+    Task SaveKnownDevicesAsync(IReadOnlyList<DeviceInfo> devices, CancellationToken cancellationToken);
 }

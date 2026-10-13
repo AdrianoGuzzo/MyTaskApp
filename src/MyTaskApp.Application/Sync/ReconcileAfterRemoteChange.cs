@@ -1,4 +1,6 @@
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Devices;
+using MyTaskApp.Domain.Devices;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Domain.Tasks;
@@ -11,7 +13,13 @@ namespace MyTaskApp.Application.Sync;
 /// As que mudaram a política de lembrete ou o agendamento: os lembretes
 /// pendentes delas são rearmados a partir de agora.
 /// </param>
-public sealed record ReconcileAfterRemoteChange(IReadOnlyCollection<Guid> TaskIds, IReadOnlyCollection<Guid> RearmTaskIds);
+/// <param name="Moves">As que outro computador mudou de lugar (ADR-062).</param>
+/// <param name="SharedTagIds">Etiquetas juntadas pelo nome na primeira conexão: passam a ser de todos.</param>
+public sealed record ReconcileAfterRemoteChange(
+    IReadOnlyCollection<Guid> TaskIds,
+    IReadOnlyCollection<Guid> RearmTaskIds,
+    IReadOnlyCollection<PlacementMove>? Moves = null,
+    IReadOnlyCollection<Guid>? SharedTagIds = null);
 
 /// <summary>
 /// Recalcula o que é deste computador depois de um estado que veio de fora: a
@@ -28,12 +36,18 @@ public sealed class ReconcileAfterRemoteChangeHandler(
     ITaskItemRepository tasks,
     IUnitOfWork unitOfWork,
     IUserClock clock,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider,
+    DevicePlacementState? placements = null,
+    ITagRepository? tags = null)
 {
     public async Task HandleAsync(ReconcileAfterRemoteChange command, CancellationToken cancellationToken = default)
     {
         var now = timeProvider.GetUtcNow();
         var rearm = command.RearmTaskIds.ToHashSet();
+        var arrivals = (command.Moves ?? [])
+            .Where(IsArrival)
+            .GroupBy(move => move.TaskId)
+            .ToDictionary(group => group.Key, group => group.Last());
 
         foreach (var taskId in command.TaskIds.Distinct())
         {
@@ -44,6 +58,11 @@ public sealed class ReconcileAfterRemoteChangeHandler(
             }
 
             task.ReconcileDerivedState();
+
+            if (arrivals.TryGetValue(taskId, out var arrival))
+            {
+                task.MarkArrived(arrival.ByDeviceId, now);
+            }
 
             if (task.IsOutOfTheMainList)
             {
@@ -67,6 +86,39 @@ public sealed class ReconcileAfterRemoteChangeHandler(
             }
         }
 
+        // A etiqueta que existia aqui e lá, juntada pelo nome, marca tarefas dos
+        // dois computadores: aparece em todos. Pelo domínio, para subir (ADR-062).
+        if (tags is not null)
+        {
+            foreach (var tagId in command.SharedTagIds ?? [])
+            {
+                if (await tags.FindByIdAsync(tagId, cancellationToken) is { } tag && tag.Placement?.IsEverywhere != true)
+                {
+                    tag.Place(DevicePlacement.Everywhere);
+                }
+            }
+        }
+
         await unitOfWork.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Chegou (ADR-062) quando outro computador a mandou para este, ou a
+    /// compartilhou estando escondida aqui. Uma tarefa nova "em todos" não é
+    /// chegada: ninguém a mandou para cá em particular.
+    /// </summary>
+    private bool IsArrival(PlacementMove move)
+    {
+        if (placements is not { IsActive: true } || placements.IsHere(move.ByDeviceId) || move.After is not { } after)
+        {
+            return false;
+        }
+
+        if (after.DeviceId is { } target)
+        {
+            return placements.IsHere(target);
+        }
+
+        return !move.IsNew && !placements.IsVisibleHere(move.Before);
     }
 }

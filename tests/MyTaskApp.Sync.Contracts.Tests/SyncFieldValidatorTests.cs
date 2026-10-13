@@ -113,6 +113,35 @@ public sealed class SyncFieldValidatorTests
     }
 
     [Fact]
+    public void Placement_IsOptional_ForEverythingWrittenBeforeIt()
+    {
+        // ValidTask não tem placement, como tudo o que o servidor gravou antes do ADR-062.
+        SyncFieldValidator.Validate(SyncRegistry.Task, ValidTask(), isCreate: true).Should().BeEmpty();
+        SyncFieldValidator.Validate(SyncRegistry.Tag, new Dictionary<string, JsonElement>
+        {
+            [SyncFields.Tag.Name] = SyncValue.String("Casa"),
+            [SyncFields.Tag.ColorHex] = SyncValue.String("#00FF00"),
+            [SyncFields.CreatedAt] = SyncValue.Instant(Created),
+        }, isCreate: true).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Placement_ChecksTheKind()
+    {
+        Dictionary<string, JsonElement> Placement(JsonElement kind) => new()
+        {
+            [SyncFields.Task.Placement] = SyncValue.Object(
+                (SyncFields.Placement.Kind, kind),
+                (SyncFields.Placement.DeviceId, SyncValue.Guid(Guid.NewGuid()))),
+        };
+
+        SyncFieldValidator.Validate(SyncRegistry.Task, Placement(SyncValue.Integer(0)), isCreate: false).Should().BeEmpty();
+        SyncFieldValidator.Validate(SyncRegistry.Task, Placement(SyncValue.Integer(1)), isCreate: false).Should().BeEmpty();
+        SyncFieldValidator.Validate(SyncRegistry.Task, Placement(SyncValue.Integer(7)), isCreate: false).Should().ContainSingle();
+        SyncFieldValidator.Validate(SyncRegistry.Task, Placement(SyncValue.Null), isCreate: false).Should().ContainSingle();
+    }
+
+    [Fact]
     public void UniqueKey_IsCaseInsensitiveAndScoped()
     {
         var tagId = Guid.NewGuid();

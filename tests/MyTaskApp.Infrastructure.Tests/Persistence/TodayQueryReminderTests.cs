@@ -1,3 +1,4 @@
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Domain.Reminders;
 using MyTaskApp.Domain.Tasks;
 using MyTaskApp.Infrastructure.Persistence.Queries;
@@ -84,6 +85,6 @@ public class TodayQueryReminderTests
 
         await using var read = db.CreateContext();
 
-        return (await new TodayQuery(read).GetCandidatesAsync(Today, Ct)).Single();
+        return (await new TodayQuery(read).GetCandidatesAsync(Today, PlacementFilter.All, Ct)).Single();
     }
 }

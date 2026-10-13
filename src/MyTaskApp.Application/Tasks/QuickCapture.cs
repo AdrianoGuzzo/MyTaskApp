@@ -1,10 +1,12 @@
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Application.External;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.Auditing;
+using MyTaskApp.Domain.Devices;
 using MyTaskApp.Domain.External;
 using MyTaskApp.Domain.Tasks;
 
@@ -27,10 +29,15 @@ namespace MyTaskApp.Application.Tasks;
 /// se escreve, então apagá-la é desfazer o vínculo, sem botão nenhum. Uma
 /// chave que ninguém escolheu continua texto: a captura não vai à rede.
 /// </param>
+/// <param name="Placement">
+/// Onde as tarefas aparecem (ADR-062): o botão ao lado das etiquetas, para
+/// "estou no trabalho e anoto para o computador de casa". Nulo é este computador.
+/// </param>
 public sealed record QuickCapture(
     string Text,
     IReadOnlyCollection<Guid>? TagIds = null,
-    IReadOnlyCollection<ExternalTask>? Links = null);
+    IReadOnlyCollection<ExternalTask>? Links = null,
+    DevicePlacement? Placement = null);
 
 public sealed record QuickCaptureResult(IReadOnlyList<Guid> TaskIds)
 {
@@ -46,7 +53,8 @@ public sealed class QuickCaptureHandler(
     ICurrentUser currentUser,
     IUserClock clock,
     TimeProvider timeProvider,
-    ILogger<QuickCaptureHandler> logger)
+    ILogger<QuickCaptureHandler> logger,
+    DevicePlacementState? placements = null)
 {
     /// <summary>
     /// Teto para o dedo escorregar no Ctrl+V: colar um documento inteiro criaria
@@ -78,6 +86,7 @@ public sealed class QuickCaptureHandler(
 
         // Validadas antes de criar qualquer coisa, pelo mesmo tudo-ou-nada.
         var tagIds = await tags.GetExistingAsync(command.TagIds, cancellationToken);
+        var placement = placements.ForNew(command.Placement);
 
         // Uma leitura do padrao para o lote inteiro, nao uma por linha.
         var reminder = (await settings.GetAsync(cancellationToken)).DefaultPolicy;
@@ -89,6 +98,12 @@ public sealed class QuickCaptureHandler(
         foreach (var task in created)
         {
             task.SetTags(tagIds);
+
+            if (placement is not null)
+            {
+                task.Place(placement);
+            }
+
             ReminderArming.Arm(task, task.Occurrences.Single(), clock, createdAt);
             await tasks.AddAsync(task, cancellationToken);
 

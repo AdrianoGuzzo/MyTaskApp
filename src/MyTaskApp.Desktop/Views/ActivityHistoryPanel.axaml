@@ -95,6 +95,33 @@
               Command="{Binding CloseCommand}" />
     </Grid>
 
+    <!--
+      De qual computador (ADR-062): o mesmo seletor da lista, só com outro
+      computador na conta. É aqui que se vê o que foi feito em cada um.
+    -->
+    <StackPanel x:Name="HistoryDevice"
+                DockPanel.Dock="Top"
+                Orientation="Horizontal"
+                Spacing="6"
+                Margin="6,2,0,4"
+                IsVisible="{Binding Devices.IsAvailable, FallbackValue=False}">
+      <TextBlock Text="Computador"
+                 FontSize="10.5"
+                 VerticalAlignment="Center"
+                 Foreground="{DynamicResource WidgetTextLowBrush}" />
+      <ComboBox FontSize="11"
+                MinHeight="22"
+                Padding="6,1"
+                ItemsSource="{Binding Devices.Views}"
+                SelectedItem="{Binding Devices.Selected}">
+        <ComboBox.ItemTemplate>
+          <DataTemplate x:DataType="vm:DeviceOption">
+            <TextBlock Text="{Binding Label}" />
+          </DataTemplate>
+        </ComboBox.ItemTemplate>
+      </ComboBox>
+    </StackPanel>
+
     <Border DockPanel.Dock="Bottom"
             BorderBrush="{DynamicResource WidgetStrokeSoftBrush}"
             BorderThickness="0,1,0,0"

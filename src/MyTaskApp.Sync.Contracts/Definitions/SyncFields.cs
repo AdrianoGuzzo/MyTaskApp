@@ -47,6 +47,14 @@ public static class SyncFields
         public const string ArchivedAt = "archivedAt";
         public const string DeletedAt = "deletedAt";
         public const string DeletedBy = "deletedBy";
+        public const string Placement = "placement";
+    }
+
+    /// <summary>O "onde aparece" de tarefas e etiquetas (ADR-062).</summary>
+    public static class Placement
+    {
+        public const string Kind = "kind";
+        public const string DeviceId = "deviceId";
     }
 
     public static class Reminder
@@ -93,6 +101,7 @@ public static class SyncFields
     {
         public const string Name = "name";
         public const string ColorHex = "colorHex";
+        public const string Placement = "placement";
     }
 
     public static class TagDirectory

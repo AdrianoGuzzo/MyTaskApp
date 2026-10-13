@@ -1,3 +1,4 @@
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Domain.Tasks;
 using MyTaskApp.Infrastructure.Persistence;
@@ -21,7 +22,7 @@ public class TodayQueryTests
     private static async Task<IReadOnlyList<string>> TitlesAsync(TempSqliteDatabase db)
     {
         await using var context = db.CreateContext();
-        var rows = await new TodayQuery(context).GetCandidatesAsync(Today, Ct);
+        var rows = await new TodayQuery(context).GetCandidatesAsync(Today, PlacementFilter.All, Ct);
         return rows.Select(row => row.Title).ToList();
     }
 
@@ -105,7 +106,7 @@ public class TodayQueryTests
             TaskPriority.Urgent, TaskSchedule.At(Today, new TimeOnly(15, 30))));
 
         await using var context = db.CreateContext();
-        var row = (await new TodayQuery(context).GetCandidatesAsync(Today, Ct)).Single();
+        var row = (await new TodayQuery(context).GetCandidatesAsync(Today, PlacementFilter.All, Ct)).Single();
 
         row.Title.Should().Be("Corrigir bug");
         row.Priority.Should().Be(TaskPriority.Urgent);
@@ -149,7 +150,7 @@ public class TodayQueryTests
         await SeedAsync(db, task, TaskItem.Create("Sem worktree", NowUtc, schedule: TaskSchedule.On(Today)));
 
         await using var context = db.CreateContext();
-        var rows = await new TodayQuery(context).GetCandidatesAsync(Today, Ct);
+        var rows = await new TodayQuery(context).GetCandidatesAsync(Today, PlacementFilter.All, Ct);
 
         rows.Single(row => row.Title == "Sem worktree").Worktrees.Should().BeNull();
         rows.Single(row => row.Title == "Corrigir animais").Worktrees.Should().ContainSingle()
@@ -170,7 +171,7 @@ public class TodayQueryTests
         await SeedAsync(db, task);
 
         await using var context = db.CreateContext();
-        var rows = await new TodayQuery(context).GetCandidatesAsync(Today, Ct);
+        var rows = await new TodayQuery(context).GetCandidatesAsync(Today, PlacementFilter.All, Ct);
 
         rows.Single().Worktrees.Should().ContainSingle().Which.SourceBranch.Should().Be("refs/tags/v1.4.2");
     }

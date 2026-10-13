@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using MyTaskApp.Domain.Devices;
 using MyTaskApp.Domain.Reminders;
 using MyTaskApp.Domain.StickyNotes;
 using MyTaskApp.Domain.Tags;
@@ -115,6 +116,39 @@ public sealed class SyncCaptureInterceptorTests : IAsyncLifetime
         fields.Keys.Should().Equal(SyncFields.Task.Reminder);
         SyncValue.Member(fields[SyncFields.Task.Reminder], SyncFields.Reminder.IsEnabled).GetBoolean()
             .Should().Be(ReminderPolicy.Urgent.IsEnabled);
+    }
+
+    [Fact]
+    public async Task AFieldNewerThanTheSnapshot_TravelsOnlyWhenItHasAValue()
+    {
+        var task = await CreateTaskAsync();
+        await _kit.AcknowledgeAllAsync(Ct);
+        // Um retrato gravado por uma versão que ainda não conhecia os dois campos.
+        await ForgetInSnapshotAsync(task.Id, SyncFields.Task.NextAction, SyncFields.Task.Title);
+
+        await EditTaskAsync(task.Id, loaded => loaded.ChangePriority(TaskPriority.Urgent));
+
+        var operation = (await _kit.OutboxAsync(Ct)).Should().ContainSingle().Subject;
+        SyncCaptureKit.Fields(operation).Keys.Should().BeEquivalentTo(
+            [SyncFields.Task.Priority, SyncFields.Task.Title],
+            "o título tem valor e nunca subiu; a próxima ação vazia não é mudança");
+    }
+
+    [Fact]
+    public async Task MovingATask_TravelsAsOneField_AndTheArrivalMarkStaysHere()
+    {
+        var task = await CreateTaskAsync();
+        await _kit.AcknowledgeAllAsync(Ct);
+        var home = Guid.CreateVersion7();
+
+        await EditTaskAsync(task.Id, loaded => loaded.Place(DevicePlacement.On(home)));
+        await EditTaskAsync(task.Id, loaded => loaded.MarkArrived(home, Now));
+
+        var operation = (await _kit.OutboxAsync(Ct)).Should().ContainSingle().Subject;
+        var fields = SyncCaptureKit.Fields(operation);
+        fields.Keys.Should().Equal(SyncFields.Task.Placement);
+        SyncValue.Member(fields[SyncFields.Task.Placement], SyncFields.Placement.Kind).GetInt64().Should().Be((long)PlacementKind.Device);
+        SyncValue.ReadGuid(SyncValue.Member(fields[SyncFields.Task.Placement], SyncFields.Placement.DeviceId)).Should().Be(home);
     }
 
     [Fact]
@@ -315,6 +349,22 @@ public sealed class SyncCaptureInterceptorTests : IAsyncLifetime
         await using var context = _kit.CreateContext();
         var task = await new TaskItemRepository(context).FindByIdAsync(id, Ct);
         change(task!);
+        await context.SaveChangesAsync(Ct);
+    }
+
+    private async Task ForgetInSnapshotAsync(Guid taskId, params string[] fields)
+    {
+        await using var context = _kit.Database.CreateContext();
+        var state = await context.SyncEntityStates.SingleAsync(
+            row => row.EntityType == SyncEntityTypes.Task && row.EntityId == taskId, Ct);
+        var snapshot = SyncSnapshot.Read(state.Snapshot);
+
+        foreach (var field in fields)
+        {
+            snapshot.Remove(field);
+        }
+
+        state.Snapshot = SyncSnapshot.Write(snapshot);
         await context.SaveChangesAsync(Ct);
     }
 

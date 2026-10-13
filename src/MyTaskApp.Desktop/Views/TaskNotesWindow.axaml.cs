@@ -439,6 +439,34 @@ public sealed partial class TaskNotesWindow : Window
     /// O "@" ao lado do campo Diretório: abre a lista de todos os diretórios das
     /// etiquetas, como se o usuário tivesse digitado "@".
     /// </summary>
+    /// <summary>
+    /// "Mudar…" do onde aparece (ADR-062): um item por lugar, com o atual
+    /// marcado. Montado na hora: os computadores da conta mudam com o tempo.
+    /// </summary>
+    private void OnPlacementClick(object? sender, RoutedEventArgs e)
+    {
+        if (ViewModel?.Placement is not { } placement || sender is not Control anchor)
+        {
+            return;
+        }
+
+        var menu = new MenuFlyout { Placement = PlacementMode.BottomEdgeAlignedLeft };
+
+        foreach (var option in placement.Options)
+        {
+            menu.Items.Add(new MenuItem
+            {
+                Header = option.Label,
+                ToggleType = MenuItemToggleType.Radio,
+                IsChecked = option.IsCurrent,
+                Command = placement.PlaceCommand,
+                CommandParameter = option,
+            });
+        }
+
+        menu.ShowAt(anchor);
+    }
+
     private void OnDirectoryAliasesClick(object? sender, RoutedEventArgs e)
     {
         if (ViewModel?.Developments.Selected is not { } development)

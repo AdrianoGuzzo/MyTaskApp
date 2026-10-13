@@ -1,3 +1,4 @@
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.TimeTracking;
 using MyTaskApp.Domain.Deadlines;
@@ -6,7 +7,8 @@ using MyTaskApp.Domain.Tasks;
 namespace MyTaskApp.Application.Tasks;
 
 /// <summary>Os números da lista inteira (ADR-059): quantas, em que estado, e o tempo recente.</summary>
-public sealed record GetTaskStatistics;
+/// <param name="Device">De qual computador (ADR-062); <c>null</c> = este e as compartilhadas.</param>
+public sealed record GetTaskStatistics(DeviceView? Device = null);
 
 /// <param name="Active">Na lista principal e não concluídas.</param>
 /// <param name="Completed">Concluídas e ainda na lista principal.</param>
@@ -42,7 +44,7 @@ public sealed class GetTaskStatisticsHandler(
         GetTaskStatistics request,
         CancellationToken cancellationToken = default)
     {
-        var rows = await query.ListForCountingAsync(cancellationToken);
+        var rows = await query.ListForCountingAsync(search.Filter(request.Device), cancellationToken);
         var today = clock.Today;
         var now = timeProvider.GetUtcNow();
 
@@ -57,7 +59,7 @@ public sealed class GetTaskStatisticsHandler(
             && clock.ToLocalDate(completedAt).DayNumber > today.DayNumber - days);
 
         var week = await time.HandleAsync(
-            new GetTimeSummary(today.AddDays(-6), today, TimeGrouping.Day),
+            new GetTimeSummary(today.AddDays(-6), today, TimeGrouping.Day, Device: request.Device),
             cancellationToken);
 
         var todayKey = today.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);

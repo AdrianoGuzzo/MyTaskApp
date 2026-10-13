@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Application;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
@@ -94,6 +95,9 @@ public class ApplicationRegistrationTests
             // A edição em lote chama o SetDeadlineHandler, que lê a configuração de prazos.
             .AddSingleton<IDeadlineSettingsStore>(new FakeDeadlineSettingsStore())
             .AddSingleton<ITimeEntryReportQuery>(new FakeTimeEntryReportQuery())
+            // Onde aparece (ADR-062): a identidade e o assentamento vêm da Infrastructure.
+            .AddSingleton<MyTaskApp.Application.Sync.IDeviceIdentity>(new FakeDeviceIdentity())
+            .AddSingleton<MyTaskApp.Application.Devices.IPendingPlacementQuery>(new FakePendingPlacementQuery())
             // Normalmente vem do composition root do Desktop (ADR-012).
             .AddSingleton<IUseCaseRunner>(new CountingUseCaseRunner())
             .AddApplication()
@@ -102,6 +106,7 @@ public class ApplicationRegistrationTests
 
     [Theory]
     [InlineData(typeof(CreateTaskHandler))]
+    [InlineData(typeof(MyTaskApp.Application.Devices.SettleDevicePlacementsHandler))]
     [InlineData(typeof(QuickCaptureHandler))]
     [InlineData(typeof(CompleteOccurrenceHandler))]
     [InlineData(typeof(ReopenOccurrenceHandler))]
@@ -356,6 +361,7 @@ public class ApplicationRegistrationTests
 
         public Task<IReadOnlyList<TodayOccurrenceRow>> GetCandidatesAsync(
             DateOnly today,
+            PlacementFilter placement,
             CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<TodayOccurrenceRow>>([]);
     }

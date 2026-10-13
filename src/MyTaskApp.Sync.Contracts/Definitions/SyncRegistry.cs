@@ -55,6 +55,7 @@ public static class SyncRegistry
             Lifecycle(SyncFields.Task.ArchivedAt),
             Lifecycle(SyncFields.Task.DeletedAt),
             Text(SyncFields.Task.DeletedBy, 200) with { Policy = SyncConflictPolicy.SilentWhenBothSet },
+            PlacementField(SyncFields.Task.Placement),
             CreatedAtField(),
         ]);
 
@@ -64,6 +65,7 @@ public static class SyncRegistry
         [
             Text(SyncFields.Tag.Name, 40, required: true),
             Text(SyncFields.Tag.ColorHex, 7, required: true),
+            PlacementField(SyncFields.Tag.Placement),
             CreatedAtField(),
         ])
     {
@@ -291,6 +293,21 @@ public static class SyncRegistry
 
     private static SyncFieldDefinition Lifecycle(string name) =>
         new(name, SyncFieldKind.Instant) { Policy = SyncConflictPolicy.SilentWhenBothSet };
+
+    /// <summary>
+    /// O "onde aparece" (ADR-062): um valor só, para tipo e computador nunca se
+    /// separarem numa mescla. Opcional de propósito: tudo o que o servidor gravou
+    /// antes do ADR-062 chega sem ele, e sem valor é "aparece em todos".
+    /// </summary>
+    private static SyncFieldDefinition PlacementField(string name) =>
+        new(name, SyncFieldKind.Object)
+        {
+            Members =
+            [
+                Integer(SyncFields.Placement.Kind, required: true, min: 0, max: 1),
+                new(SyncFields.Placement.DeviceId, SyncFieldKind.Guid),
+            ],
+        };
 
     private static SyncFieldDefinition CreatedAtField() =>
         new(CreatedAt, SyncFieldKind.Instant) { IsRequired = true, IsImmutable = true };

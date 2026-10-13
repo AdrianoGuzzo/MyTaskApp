@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Application.Planning;
+using MyTaskApp.Domain.Devices;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Domain.Reminders;
 using MyTaskApp.Domain.Tasks;
@@ -17,7 +19,8 @@ public sealed record CreateTask(
     TaskPriority Priority = TaskPriority.Normal,
     DateOnly? ScheduledDate = null,
     TimeOnly? ScheduledTime = null,
-    ReminderPolicy? Reminder = null);
+    ReminderPolicy? Reminder = null,
+    DevicePlacement? Placement = null);
 
 public sealed record CreateTaskResult(Guid TaskId, Guid OccurrenceId);
 
@@ -29,13 +32,15 @@ public sealed class CreateTaskHandler(
     ICurrentUser currentUser,
     IUserClock clock,
     TimeProvider timeProvider,
-    ILogger<CreateTaskHandler> logger)
+    ILogger<CreateTaskHandler> logger,
+    DevicePlacementState? placements = null)
 {
     public async Task<CreateTaskResult> HandleAsync(
         CreateTask command,
         CancellationToken cancellationToken = default)
     {
         var createdAt = timeProvider.GetUtcNow();
+        var placement = placements.ForNew(command.Placement);
 
         var task = await TaskCreation.AddAsync(
             tasks,
@@ -52,6 +57,7 @@ public sealed class CreateTaskHandler(
                 command.Priority,
                 new TaskSchedule(command.ScheduledDate, command.ScheduledTime),
                 reminder),
+            placement,
             cancellationToken);
 
         var occurrence = task.Occurrences.Single();

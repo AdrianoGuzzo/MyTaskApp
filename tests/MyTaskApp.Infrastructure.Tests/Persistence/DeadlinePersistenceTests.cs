@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Application.Deadlines;
 using MyTaskApp.Domain.Deadlines;
 using MyTaskApp.Domain.Tasks;
@@ -177,7 +178,7 @@ public class DeadlinePersistenceTests
         await SeedAsync(db, future, futureWithout);
 
         await using var read = db.CreateContext();
-        var rows = await new TodayQuery(read).GetCandidatesAsync(Today, Ct);
+        var rows = await new TodayQuery(read).GetCandidatesAsync(Today, PlacementFilter.All, Ct);
 
         var row = rows.Should().ContainSingle().Subject;
         row.Title.Should().Be("Preparar apresentação");

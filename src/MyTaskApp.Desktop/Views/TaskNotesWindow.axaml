@@ -74,6 +74,14 @@
       <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
     </Style>
 
+    <!-- "Mudar…" do onde aparece (ADR-062): pequeno, na altura da frase. -->
+    <Style Selector="Button.placementChange">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Padding" Value="6,0" />
+      <Setter Property="MinHeight" Value="18" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
     <!-- Etiqueta de estado, como a de arquivado na janela de dados. -->
     <Style Selector="Border.stateTag">
       <Setter Property="Background" Value="{DynamicResource WidgetCautionSoftBrush}" />
@@ -894,6 +902,29 @@
                      TextWrapping="Wrap"
                      Text="{Binding OriginText}"
                      IsVisible="{Binding OriginText, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+          <!--
+            Onde aparece (ADR-062): a frase e o botão que leva a tarefa para
+            outro computador, para todos, ou de volta para este. Só com outro
+            computador na conta.
+          -->
+          <StackPanel x:Name="PlacementLine"
+                      Orientation="Horizontal"
+                      Spacing="8"
+                      IsVisible="{Binding Placement.IsAvailable, FallbackValue=False}">
+            <TextBlock Classes="pageHint"
+                       VerticalAlignment="Center"
+                       Text="{Binding Placement.Text}" />
+            <Button x:Name="PlacementButton"
+                    Classes="placementChange"
+                    Content="Mudar…"
+                    Click="OnPlacementClick" />
+          </StackPanel>
+          <TextBlock Classes="pageHint"
+                     TextWrapping="Wrap"
+                     Foreground="{DynamicResource WidgetDangerBrush}"
+                     Text="{Binding Placement.ErrorMessage}"
+                     IsVisible="{Binding Placement.ErrorMessage, Converter={x:Static ObjectConverters.IsNotNull}, FallbackValue=False}" />
 
           <!--
             As etiquetas (ADR-025), com o nome por extenso: aqui há largura, ao

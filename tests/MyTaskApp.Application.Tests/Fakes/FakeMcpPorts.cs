@@ -1,3 +1,4 @@
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Application.Mcp;
 using MyTaskApp.Application.Tasks;
 using MyTaskApp.Application.TimeTracking;
@@ -47,7 +48,7 @@ internal sealed class FakeTaskSearchQuery : ITaskSearchQuery
         return Task.FromResult<IReadOnlyList<TaskSearchRow>>(Rows.ToList());
     }
 
-    public Task<IReadOnlyList<TaskCountRow>> ListForCountingAsync(CancellationToken cancellationToken = default) =>
+    public Task<IReadOnlyList<TaskCountRow>> ListForCountingAsync(PlacementFilter placement, CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<TaskCountRow>>(Counts.ToList());
 }
 

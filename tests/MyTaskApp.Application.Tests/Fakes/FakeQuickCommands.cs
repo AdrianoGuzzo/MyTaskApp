@@ -150,7 +150,10 @@ internal sealed class FakeTagQuery : ITagQuery
 {
     public List<CommandDirectoryRow> CommandDirectories { get; } = [];
 
-    public Task<IReadOnlyList<TagRow>> ListAsync(CancellationToken cancellationToken = default) =>
+    public Task<IReadOnlyList<TagRow>> ListAsync(
+        MyTaskApp.Application.Devices.PlacementFilter placement,
+        IReadOnlyCollection<Guid> include,
+        CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<TagRow>>([]);
 
     public Task<IReadOnlyList<TagDirectoryRow>> ListDirectoriesAsync(

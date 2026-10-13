@@ -172,7 +172,7 @@ public class TagDirectoryPersistenceTests
         await using var context = db.CreateContext();
         var query = new TagQuery(context);
 
-        (await query.ListAsync(Ct)).Select(tag => (tag.Name, tag.DirectoryCount))
+        (await query.ListAsync(MyTaskApp.Application.Devices.PlacementFilter.All, [], Ct)).Select(tag => (tag.Name, tag.DirectoryCount))
             .Should().Equal(("ECO CORE", 2), ("MY TASK APP", 0));
         (await query.ListDirectoriesAsync(eco.Id, Ct)).Select(row => row.Alias)
             .Should().Equal("@a", "@b");

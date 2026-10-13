@@ -1,5 +1,7 @@
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Domain.Agents;
 using MyTaskApp.Domain.Deadlines;
+using MyTaskApp.Domain.Devices;
 using MyTaskApp.Domain.External;
 using MyTaskApp.Domain.Reminders;
 using MyTaskApp.Domain.Tasks;
@@ -44,7 +46,12 @@ public sealed record TodayOccurrenceRow(
     /// <summary>A soma dos períodos encerrados da ocorrência (ADR-052).</summary>
     TimeSpan Logged = default,
     /// <summary>O início do cronômetro, se ele corre nesta ocorrência; <c>null</c> = parado.</summary>
-    DateTimeOffset? TimerStartedAt = null);
+    DateTimeOffset? TimerStartedAt = null,
+    /// <summary>Em qual computador a tarefa aparece; <c>null</c> = legado, em todos (ADR-062).</summary>
+    DevicePlacement? Placement = null,
+    /// <summary>Quando outro computador a mandou para cá; <c>null</c> = não chegou agora.</summary>
+    DateTimeOffset? ReceivedAt = null,
+    Guid? ReceivedFromDeviceId = null);
 
 /// <summary>
 /// Um agente em execução: em qual ambiente e de qual repositório. Ambiente
@@ -80,11 +87,13 @@ public interface ITodayQuery
 {
     /// <summary>
     /// Candidatas ao quadro de hoje: pendentes até <paramref name="today"/>,
-    /// pendentes com prazo de qualquer data (ADR-050) e concluídas recentes.
+    /// pendentes com prazo de qualquer data (ADR-050) e concluídas recentes,
+    /// só das tarefas que aparecem em <paramref name="placement"/> (ADR-062).
     /// Filtrar no banco evita trazer o histórico inteiro.
     /// </summary>
     Task<IReadOnlyList<TodayOccurrenceRow>> GetCandidatesAsync(
         DateOnly today,
+        PlacementFilter placement,
         CancellationToken cancellationToken = default);
 
     /// <summary>

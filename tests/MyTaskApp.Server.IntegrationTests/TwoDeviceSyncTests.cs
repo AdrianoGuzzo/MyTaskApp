@@ -1,5 +1,8 @@
 using Microsoft.EntityFrameworkCore;
+using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Sync;
+using MyTaskApp.Application.Tasks;
+using MyTaskApp.Domain.Devices;
 using MyTaskApp.Domain.Tags;
 using MyTaskApp.Domain.Tasks;
 using MyTaskApp.Sync.Contracts;
@@ -282,6 +285,124 @@ public sealed class TwoDeviceSyncTests(PostgresFixture postgres) : IAsyncLifetim
         (await bia.ReadAsync(context => context.Tags.SingleAsync(Ct))).ColorHex.Should().BeEquivalentTo("#aa0000", "o nome igual na outra conta não funde nada");
         (await ana.ReadAsync(context => context.Tags.SingleAsync(Ct))).ColorHex.Should().BeEquivalentTo("#336699");
         (await bia.Account.ListDevicesAsync(Ct)).Should().ContainSingle().Which.Nickname.Should().Be("Notebook da Bia");
+    }
+
+    // -----------------------------------------------------------------
+    // Onde aparece (ADR-062)
+    // -----------------------------------------------------------------
+
+    [Fact]
+    public async Task SendingToTheOtherComputer_LeavesThisList_AndArrivesThere()
+    {
+        var notebook = await ConnectedAsync("Notebook");
+        var desktop = await ConnectedAsync("Desktop");
+        await notebook.SyncedAsync(Ct); // o notebook aprende que o desktop existe
+
+        var created = await notebook.UseCaseAsync<CreateTaskHandler, CreateTaskResult>(
+            (handler, token) => handler.HandleAsync(
+                new CreateTask("Comprar ração", Placement: DevicePlacement.On(desktop.Device.DeviceId)),
+                token));
+        await notebook.SyncedAsync(Ct);
+        await desktop.SyncedAsync(Ct);
+
+        (await BoardAsync(notebook)).Should().NotContain("Comprar ração");
+        var there = await desktop.UseCaseAsync<GetTodayBoardHandler, TodayBoard>((handler, token) => handler.HandleAsync(token));
+        there.Arrived.Should().ContainSingle().Which.TaskId.Should().Be(created.TaskId);
+
+        var arrived = await desktop.ReadAsync(context => context.Tasks.SingleAsync(task => task.Id == created.TaskId, Ct));
+        arrived.ReceivedFromDeviceId.Should().Be(notebook.Device.DeviceId);
+        (await notebook.ConflictsAsync(Ct)).Should().BeEmpty();
+        (await desktop.ConflictsAsync(Ct)).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task WhatExistedBefore_GoesToTheComputerThatCreatedIt_WithoutConflicts()
+    {
+        var notebook = await ConnectedAsync("Notebook");
+        var desktop = await ConnectedAsync("Desktop");
+
+        // Como antes do ADR-062: tarefas sem lugar, criadas em cada um.
+        await notebook.ChangeAsync(context => context.Add(TaskItem.Create("Do notebook", Now)), Ct);
+        await desktop.ChangeAsync(context => context.Add(TaskItem.Create("Do desktop", Now)), Ct);
+
+        foreach (var _ in Enumerable.Range(0, 2))
+        {
+            await notebook.SyncedAsync(Ct);
+            await desktop.SyncedAsync(Ct);
+        }
+
+        foreach (var device in new[] { notebook, desktop })
+        {
+            var placements = await device.ReadAsync(context => context.Tasks.ToDictionaryAsync(task => task.Title, task => task.Placement, Ct));
+            placements["Do notebook"].Should().Be(DevicePlacement.On(notebook.Device.DeviceId));
+            placements["Do desktop"].Should().Be(DevicePlacement.On(desktop.Device.DeviceId));
+            (await device.ConflictsAsync(Ct)).Should().BeEmpty();
+        }
+
+        (await BoardAsync(notebook)).Should().Equal("Do notebook");
+        (await BoardAsync(desktop)).Should().Equal("Do desktop");
+    }
+
+    [Fact]
+    public async Task ATagCreatedOnBothBeforeConnecting_BecomesOneShared()
+    {
+        var notebook = await ConnectedAsync("Notebook");
+        var mine = TaskItem.Create("Do notebook", Now);
+        var tag = Tag.Create("Casa", "#00AA00", Now);
+        mine.SetTags([tag.Id]);
+        await notebook.ChangeAsync(context => context.AddRange(tag, mine), Ct);
+        await notebook.SyncedAsync(Ct);
+
+        var desktop = await DesktopAsync("Desktop");
+        var theirs = TaskItem.Create("Do desktop", Now);
+        var sameName = Tag.Create("Casa", "#00AA00", Now);
+        theirs.SetTags([sameName.Id]);
+        await desktop.ChangeAsync(context => context.AddRange(sameName, theirs), Ct);
+        await desktop.ConnectAsync(Ana, Ct);
+
+        foreach (var _ in Enumerable.Range(0, 2))
+        {
+            await desktop.SyncedAsync(Ct);
+            await notebook.SyncedAsync(Ct);
+        }
+
+        foreach (var device in new[] { notebook, desktop })
+        {
+            var only = await device.ReadAsync(context => context.Tags.SingleAsync(Ct));
+            only.Placement.Should().Be(DevicePlacement.Everywhere, "marca tarefas dos dois computadores");
+            (await device.ConflictsAsync(Ct)).Should().NotContain(conflict => conflict.Field == SyncFields.Tag.Placement);
+        }
+    }
+
+    [Fact]
+    public async Task AComputerThatComesBackWithAnotherId_KeepsItsTasks()
+    {
+        var notebook = await ConnectedAsync("Notebook");
+        var desktop = await ConnectedAsync("Desktop");
+        var revokedId = desktop.Device.DeviceId;
+        var created = await desktop.UseCaseAsync<CreateTaskHandler, CreateTaskResult>(
+            (handler, token) => handler.HandleAsync(new CreateTask("Só do desktop"), token));
+        await desktop.SyncedAsync(Ct);
+
+        await notebook.Account.RevokeDeviceAsync(revokedId, Ct);
+        (await desktop.SyncAsync(Ct)).Status.Should().Be(SyncCycleStatus.Blocked);
+        await desktop.ConnectAsync(Ana, Ct);
+        await desktop.SyncedAsync(Ct);
+        await desktop.SyncedAsync(Ct);
+        await notebook.SyncedAsync(Ct);
+
+        (await BoardAsync(desktop)).Should().Contain("Só do desktop");
+        var placement = await notebook.ReadAsync(context => context.Tasks.Where(task => task.Id == created.TaskId).Select(task => task.PlacementDeviceId).SingleAsync(Ct));
+        placement.Should().Be(desktop.Device.DeviceId, "o id novo, para o outro computador ver o apelido de agora");
+    }
+
+    /// <summary>Os títulos da lista principal deste computador, com e sem data (a busca do ADR-059).</summary>
+    private static async Task<IReadOnlyList<string>> BoardAsync(SyncedDesktop device)
+    {
+        var found = await device.UseCaseAsync<SearchTasksHandler, TaskSearchResult>(
+            (handler, token) => handler.HandleAsync(new SearchTasks(), token));
+
+        return [.. found.Items.Select(item => item.Task.Title)];
     }
 
     private async Task<ApiFactory> ServerAsync(Dictionary<string, string?>? settings = null)

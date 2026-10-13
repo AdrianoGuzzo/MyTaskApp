@@ -5,6 +5,7 @@ using Avalonia.Media.Immutable;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Commands;
 using MyTaskApp.Application.Tags;
@@ -104,7 +105,15 @@ public sealed partial class TagListItemViewModel(TagRow row) : ObservableObject
         1 => "Usada em 1 tarefa",
         _ => $"Usada em {Row.UsageCount} tarefas",
     };
+
+    /// <summary>"Aparece só neste computador" (ADR-062); <c>null</c> sem outro computador na conta.</summary>
+    public string? PlacementLabel { get; init; }
+
+    public bool HasPlacementLabel => PlacementLabel is not null;
 }
+
+/// <summary>Um lugar escolhido no "Onde aparece…" de uma etiqueta (ADR-062).</summary>
+public sealed record TagPlacementChoice(TagListItemViewModel Item, PlacementOption Option);
 
 /// <summary>Uma cor da paleta de um clique.</summary>
 public sealed partial class SwatchViewModel(string colorHex) : ObservableObject
@@ -127,8 +136,49 @@ public sealed partial class TagsViewModel(
     IConfirmationDialog confirmation,
     IDirectoryProbe directoryProbe,
     IDirectoryCommandEditor commandEditor,
-    ILogger<TagsViewModel> logger) : ObservableObject
+    ILogger<TagsViewModel> logger,
+    DevicePlacementState? placements = null) : ObservableObject
 {
+    /// <summary>A conta tem outro computador: cada etiqueta diz onde aparece e pode mudar (ADR-062).</summary>
+    public bool HasOtherComputers => placements is { HasOtherComputers: true };
+
+    /// <summary>Os lugares do "Onde aparece…" de uma etiqueta, com o atual marcado.</summary>
+    public IReadOnlyList<TagPlacementChoice> PlacementChoices(TagListItemViewModel item) =>
+        [.. PlacementOptions.For(placements, item.Row.Placement).Select(option => new TagPlacementChoice(item, option))];
+
+    /// <summary>
+    /// Leva a etiqueta para outro computador, para todos, ou de volta para este
+    /// (ADR-062). Mandada embora, ela sai do seletor daqui, mas continua nas
+    /// tarefas que já marca.
+    /// </summary>
+    [RelayCommand]
+    public async Task PlaceTagAsync(TagPlacementChoice choice, CancellationToken cancellationToken)
+    {
+        if (choice.Option.IsCurrent)
+        {
+            return;
+        }
+
+        PlaceResult? result = null;
+
+        var placed = await TryAsync(
+            async () => result = await runner.RunAsync<PlaceTagHandler, PlaceResult>(
+                (handler, token) => handler.HandleAsync(new PlaceTag(choice.Item.Row.Id, choice.Option.Placement), token),
+                cancellationToken),
+            "Não foi possível mudar onde a etiqueta aparece.");
+
+        if (!placed)
+        {
+            return;
+        }
+
+        Changed?.Invoke();
+        await LoadAsync(cancellationToken);
+        StatusMessage = result!.LeftThisComputer
+            ? $"Etiqueta enviada para {result.Destination}."
+            : $"A etiqueta aparece em {result.Destination}.";
+    }
+
     [ObservableProperty]
     private bool _isBusy;
 
@@ -211,7 +261,10 @@ public sealed partial class TagsViewModel(
 
         foreach (var row in rows)
         {
-            Tags.Add(new TagListItemViewModel(row));
+            Tags.Add(new TagListItemViewModel(row)
+            {
+                PlacementLabel = PlacementOptions.Describe(placements, row.Placement),
+            });
         }
 
         IsEmpty = Tags.Count == 0;

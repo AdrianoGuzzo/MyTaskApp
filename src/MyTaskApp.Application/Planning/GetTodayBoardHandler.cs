@@ -2,6 +2,7 @@ using Microsoft.Extensions.Options;
 using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Configuration;
 using MyTaskApp.Application.Deadlines;
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Application.TimeTracking;
 using MyTaskApp.Domain.Planning;
 using MyTaskApp.Domain.Reminders;
@@ -29,9 +30,16 @@ public sealed class GetTodayBoardHandler(
     IAgentCliProviders? agents = null,
     // Opcional pelo mesmo motivo: sem ele, o quadro não mostra a faixa do
     // cronômetro ativo, e o resto fica igual (ADR-052).
-    IActiveTimerQuery? timers = null)
+    IActiveTimerQuery? timers = null,
+    // Sem ele não há filtro por computador: tudo aparece (ADR-062).
+    DevicePlacementState? placements = null)
 {
-    public async Task<TodayBoard> HandleAsync(CancellationToken cancellationToken = default)
+    /// <summary>O quadro deste computador e das compartilhadas (ADR-062).</summary>
+    public Task<TodayBoard> HandleAsync(CancellationToken cancellationToken = default) =>
+        HandleAsync(DeviceView.Here, cancellationToken);
+
+    /// <summary>O quadro de uma visão do seletor: este computador, outro, ou todos (ADR-062).</summary>
+    public async Task<TodayBoard> HandleAsync(DeviceView view, CancellationToken cancellationToken = default)
     {
         var today = clock.Today;
         var now = clock.CurrentTime;
@@ -39,9 +47,27 @@ public sealed class GetTodayBoardHandler(
 
         var nowUtc = timeProvider.GetUtcNow();
 
-        var rows = await query.GetCandidatesAsync(today, cancellationToken);
+        var rows = await query.GetCandidatesAsync(today, placements?.Filter(view) ?? PlacementFilter.All, cancellationToken);
+
+        // As que chegaram de outro computador têm seção própria, no topo, até
+        // serem abertas (ADR-062): sem isso, uma tarefa sem data mandada para
+        // cá nem entraria no quadro.
+        static bool HasArrived(TodayOccurrenceRow row) =>
+            row.ReceivedAt is not null && row.Status is TaskItemStatus.Pending;
+
+        var arrived = rows
+            .Where(HasArrived)
+            .OrderByDescending(row => row.ReceivedAt)
+            .Select(row => Describe(
+                row,
+                Place(row, today, now, window) is { } classified
+                    ? classified with { Section = TodaySection.Arrived }
+                    : new TodayPlacement(TodaySection.Arrived, IsLate: false),
+                nowUtc))
+            .ToList();
 
         var placed = rows
+            .Where(row => !HasArrived(row))
             .Select(row => (Row: row, Placement: Place(row, today, now, window)))
             .Where(entry => entry.Placement is not null)
             .ToList();
@@ -96,6 +122,7 @@ public sealed class GetTodayBoardHandler(
                 .Select(ToTask)
                 .ToList(),
             ActiveTimer = activeTimer,
+            Arrived = arrived,
         };
     }
 
@@ -130,6 +157,9 @@ public sealed class GetTodayBoardHandler(
             ActiveAgents = Agents(row.ActiveAgents),
             Worktrees = Worktrees(row.Worktrees),
             External = row.External,
+            Placement = row.Placement,
+            ReceivedAt = row.ReceivedAt,
+            ReceivedFromDeviceId = row.ReceivedFromDeviceId,
             Deadline = row.Deadline is { } deadline
                 ? TaskDeadlineView.Describe(
                     deadline,

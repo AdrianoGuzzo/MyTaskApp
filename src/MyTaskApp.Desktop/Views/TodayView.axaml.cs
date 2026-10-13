@@ -222,6 +222,47 @@ public sealed partial class TodayView : UserControl
         }
     }
 
+    /// <summary>
+    /// "Onde aparece…" (ADR-062): um item por lugar — este computador, todos, e
+    /// cada outro computador da conta —, com o atual marcado. Ancorado na
+    /// linha, já que o menu de origem fecha no clique.
+    /// </summary>
+    private void OnPlacementMenuClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Control { DataContext: TaskRowViewModel row }
+            || DataContext is not TodayViewModel viewModel)
+        {
+            return;
+        }
+
+        e.Handled = true;
+
+        var anchor = this.GetVisualDescendants()
+            .OfType<Border>()
+            .FirstOrDefault(border => border.ContextFlyout is not null && border.DataContext == row);
+
+        PlacementMenu(row, viewModel).ShowAt((Control?)anchor ?? this);
+    }
+
+    internal static MenuFlyout PlacementMenu(TaskRowViewModel row, TodayViewModel viewModel)
+    {
+        var menu = new MenuFlyout { Placement = PlacementMode.BottomEdgeAlignedRight };
+
+        foreach (var choice in viewModel.PlacementChoices(row))
+        {
+            menu.Items.Add(new MenuItem
+            {
+                Header = choice.Label,
+                ToggleType = MenuItemToggleType.Radio,
+                IsChecked = choice.IsCurrent,
+                Command = viewModel.PlaceCommand,
+                CommandParameter = choice,
+            });
+        }
+
+        return menu;
+    }
+
     /// <summary>Um item por ambiente da linha, cada um abrindo o agente nele.</summary>
     internal static MenuFlyout WorktreeMenu(TaskRowViewModel row, TodayViewModel viewModel)
     {

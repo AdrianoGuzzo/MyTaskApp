@@ -1,4 +1,5 @@
 using MyTaskApp.Domain.Deadlines;
+using MyTaskApp.Domain.Devices;
 using MyTaskApp.Domain.External;
 using MyTaskApp.Domain.Lifecycle;
 using MyTaskApp.Domain.Reminders;
@@ -119,6 +120,27 @@ public sealed class TaskItem
     public DateTimeOffset? ConcludedAt { get; private set; }
 
     /// <summary>
+    /// Em qual computador a tarefa aparece (ADR-062), em duas colunas para o
+    /// filtro ser um predicado simples. <c>null</c> = legado, aparece em todos.
+    /// Leia por <see cref="Placement"/>.
+    /// </summary>
+    public PlacementKind? PlacementKind { get; private set; }
+
+    /// <summary>O computador, quando <see cref="PlacementKind"/> é <see cref="Devices.PlacementKind.Device"/>.</summary>
+    public Guid? PlacementDeviceId { get; private set; }
+
+    public DevicePlacement? Placement => DevicePlacement.From(PlacementKind, PlacementDeviceId);
+
+    /// <summary>
+    /// Quando outro computador mandou a tarefa para cá (ADR-062). Só deste
+    /// computador: é o destaque "chegou", que some quando a tarefa é aberta.
+    /// </summary>
+    public DateTimeOffset? ReceivedAt { get; private set; }
+
+    /// <summary>Quem mandou, quando se sabe.</summary>
+    public Guid? ReceivedFromDeviceId { get; private set; }
+
+    /// <summary>
     /// O estado do checklist, derivado por precedência: lixeira vence arquivo,
     /// que vence concluído (§9). <b>Nenhuma consulta, tela ou varredura deve
     /// remontar esta regra por conta própria.</b>
@@ -142,7 +164,8 @@ public sealed class TaskItem
         string? description = null,
         TaskPriority priority = TaskPriority.Normal,
         TaskSchedule? schedule = null,
-        ReminderPolicy? reminder = null)
+        ReminderPolicy? reminder = null,
+        DevicePlacement? placement = null)
     {
         var task = new TaskItem(
             Guid.CreateVersion7(createdAt),
@@ -154,7 +177,45 @@ public sealed class TaskItem
         task.ChangeReminder(reminder ?? ReminderPolicy.None);
         task.AddOccurrence(schedule ?? TaskSchedule.Unscheduled, createdAt);
 
+        if (placement is not null)
+        {
+            task.Place(placement);
+        }
+
         return task;
+    }
+
+    // ---------------------------------------------------------------------
+    // Onde aparece (ADR-062)
+    //
+    // Sem a guarda da lista principal, de propósito: arquivada e lixeira também
+    // pertencem a um computador, e o assentamento do legado passa por elas.
+    // ---------------------------------------------------------------------
+
+    /// <summary>
+    /// Leva a tarefa para um computador, ou para todos. Uma decisão daqui
+    /// encerra o destaque de "chegou".
+    /// </summary>
+    public void Place(DevicePlacement placement)
+    {
+        ArgumentNullException.ThrowIfNull(placement);
+
+        PlacementKind = placement.Kind;
+        PlacementDeviceId = placement.DeviceId;
+        AcknowledgeArrival();
+    }
+
+    /// <summary>Marca que outro computador mandou a tarefa para cá.</summary>
+    public void MarkArrived(Guid? fromDeviceId, DateTimeOffset at)
+    {
+        ReceivedAt = at;
+        ReceivedFromDeviceId = fromDeviceId;
+    }
+
+    public void AcknowledgeArrival()
+    {
+        ReceivedAt = null;
+        ReceivedFromDeviceId = null;
     }
 
     /// <summary>

@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Globalization;
 using ModelContextProtocol.Server;
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Commands;
 using MyTaskApp.Application.Development;
@@ -24,12 +25,16 @@ namespace MyTaskApp.Mcp.Tools;
 /// executado pelo MCP.
 /// </summary>
 [McpServerToolType]
-public sealed class ContextTools(McpGateway gateway, IUserClock clock)
+public sealed class ContextTools(McpGateway gateway, IUserClock clock, DevicePlacementState? placements = null)
 {
     [McpServerTool(Name = "tag_list", Title = "Listar etiquetas", ReadOnly = true, Idempotent = true)]
-    [Description("As etiquetas: nome, cor, quantas tarefas usam e quantos diretórios (repositórios) estão ligados a cada uma.")]
-    public Task<IReadOnlyList<TagRow>> ListTagsAsync(CancellationToken cancellationToken = default) =>
-        gateway.ReadAsync("tag_list", (runner, token) => Tags(runner, token), cancellationToken);
+    [Description(
+        "As etiquetas: nome, cor, quantas tarefas usam, quantos diretórios (repositórios) estão ligados a cada uma e " +
+        "em qual computador ela aparece.")]
+    public Task<IReadOnlyList<TagRow>> ListTagsAsync(
+        [Description(DeviceInput.ViewHelp)] string? device = null,
+        CancellationToken cancellationToken = default) =>
+        gateway.ReadAsync("tag_list", (runner, token) => Tags(runner, token, DeviceInput.View(placements, device)), cancellationToken);
 
     [McpServerTool(Name = "tag_get", Title = "Consultar etiqueta", ReadOnly = true, Idempotent = true)]
     [Description("Uma etiqueta por nome ou id, com os diretórios dela (alias, caminho, branch padrão) e os comandos ligados a cada diretório.")]
@@ -41,7 +46,7 @@ public sealed class ContextTools(McpGateway gateway, IUserClock clock)
             async (runner, token) =>
             {
                 var id = (await TagLookup.ResolveAsync(runner, [tag], token)).Single();
-                var row = (await Tags(runner, token)).Single(found => found.Id == id);
+                var row = (await Tags(runner, token, DeviceView.All)).Single(found => found.Id == id);
                 var directories = await Directories(runner, id, token);
 
                 var withCommands = new List<DirectoryInfo>();
@@ -74,7 +79,7 @@ public sealed class ContextTools(McpGateway gateway, IUserClock clock)
                 }
 
                 var tagIds = tag is null
-                    ? (await Tags(runner, token)).Select(row => row.Id).ToList()
+                    ? (await Tags(runner, token, DeviceView.Here)).Select(row => row.Id).ToList()
                     : await TagLookup.ResolveAsync(runner, [tag], token);
 
                 var all = new List<TagDirectoryRow>();
@@ -109,8 +114,10 @@ public sealed class ContextTools(McpGateway gateway, IUserClock clock)
                         .ToList();
                 }
 
+                // De todos os computadores (ADR-062): o worktree só existe onde foi
+                // criado, e a tarefa pode ter sido mandada para outro depois.
                 var tasks = await runner.RunAsync<SearchTasksHandler, TaskSearchResult>(
-                    (handler, cancel) => handler.HandleAsync(new SearchTasks(Limit: SearchTasks.MaxLimit), cancel), token);
+                    (handler, cancel) => handler.HandleAsync(new SearchTasks(Limit: SearchTasks.MaxLimit, Device: DeviceView.All), cancel), token);
 
                 return tasks.Items
                     .SelectMany(item => (item.Task.Worktrees ?? []).Select(worktree => new WorktreeEntry(
@@ -189,7 +196,7 @@ public sealed class ContextTools(McpGateway gateway, IUserClock clock)
             async (runner, token) =>
             {
                 var tagIds = tag is null
-                    ? (await Tags(runner, token)).Select(row => row.Id).ToList()
+                    ? (await Tags(runner, token, DeviceView.Here)).Select(row => row.Id).ToList()
                     : await TagLookup.ResolveAsync(runner, [tag], token);
 
                 var all = new List<DirectoryInfo>();
@@ -210,6 +217,7 @@ public sealed class ContextTools(McpGateway gateway, IUserClock clock)
     [Description("As tarefas pendentes com prazo nos próximos dias (padrão 7), do que vence primeiro. Atrasadas: task_get_overdue.")]
     public Task<TaskPage> ListUpcomingDeadlinesAsync(
         [Description("Quantos dias à frente, de 1 a 366.")] int days = 7,
+        [Description(DeviceInput.ViewHelp)] string? device = null,
         CancellationToken cancellationToken = default) =>
         gateway.ReadAsync(
             "deadline_list_upcoming",
@@ -229,11 +237,20 @@ public sealed class ContextTools(McpGateway gateway, IUserClock clock)
                             DeadlineTo: today.AddDays(days),
                             HasDeadline: true,
                             Sort: TaskSort.Deadline,
-                            Limit: SearchTasks.MaxLimit),
+                            Limit: SearchTasks.MaxLimit,
+                            Device: DeviceInput.View(placements, device)),
                         cancel),
                     token);
 
-                return new TaskPage(result.Items.Select(TaskSummary.Of).ToList(), result.Total, 0, result.Limit, result.Truncated, null);
+                return new TaskPage(
+                    result.Items
+                        .Select(item => TaskSummary.Of(item) with { Placement = DeviceInput.Describe(placements, item.Task.Placement) })
+                        .ToList(),
+                    result.Total,
+                    0,
+                    result.Limit,
+                    result.Truncated,
+                    null);
             },
             cancellationToken);
 
@@ -327,8 +344,8 @@ public sealed class ContextTools(McpGateway gateway, IUserClock clock)
                 token),
             cancellationToken);
 
-    private static Task<IReadOnlyList<TagRow>> Tags(IUseCaseRunner runner, CancellationToken cancellationToken) =>
-        runner.RunAsync<GetTagsHandler, IReadOnlyList<TagRow>>((handler, token) => handler.HandleAsync(new GetTags(), token), cancellationToken);
+    private static Task<IReadOnlyList<TagRow>> Tags(IUseCaseRunner runner, CancellationToken cancellationToken, DeviceView view) =>
+        runner.RunAsync<GetTagsHandler, IReadOnlyList<TagRow>>((handler, token) => handler.HandleAsync(new GetTags(view), token), cancellationToken);
 
     private static Task<IReadOnlyList<TagDirectoryRow>> Directories(IUseCaseRunner runner, Guid tagId, CancellationToken cancellationToken) =>
         runner.RunAsync<GetTagDirectoriesHandler, IReadOnlyList<TagDirectoryRow>>(

@@ -56,7 +56,8 @@ public sealed partial class TaskNotesViewModel(
     TaskIssueViewModel? issue = null,
     TaskDeadlineViewModel? deadline = null,
     TaskTimeLogViewModel? time = null,
-    TaskTagEditorViewModel? tags = null) : ObservableObject
+    TaskTagEditorViewModel? tags = null,
+    TaskPlacementViewModel? placement = null) : ObservableObject
 {
     public const int NotesTab = 0;
 
@@ -256,6 +257,7 @@ public sealed partial class TaskNotesViewModel(
         Deadline?.Load(row);
         Time?.Load(row);
         Tags?.Load(row);
+        Placement?.Load(row);
 
         if (Issue is { } card)
         {
@@ -269,6 +271,9 @@ public sealed partial class TaskNotesViewModel(
 
         OriginText = null;
     }
+
+    /// <summary>Onde a tarefa aparece, abaixo da origem (ADR-062); <c>null</c> sem sincronização.</summary>
+    public TaskPlacementViewModel? Placement { get; } = placement;
 
     /// <summary>"Criada em Notebook · 12/10/2026 · alterada por último neste computador" (ADR-061).</summary>
     [ObservableProperty]

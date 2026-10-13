@@ -1,10 +1,11 @@
 using Microsoft.EntityFrameworkCore;
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Domain.Tasks;
 
 namespace MyTaskApp.Infrastructure.Persistence.Queries;
 
-internal sealed class DueReminderQuery(MyTaskAppDbContext context) : IDueReminderQuery
+internal sealed class DueReminderQuery(MyTaskAppDbContext context, DevicePlacementState? placements = null) : IDueReminderQuery
 {
     public async Task<IReadOnlyList<DueReminderRow>> GetDueAsync(
         DateTimeOffset nowUtc,
@@ -16,6 +17,11 @@ internal sealed class DueReminderQuery(MyTaskAppDbContext context) : IDueReminde
             return [];
         }
 
+        // Só as tarefas daqui e as compartilhadas, seja qual for o seletor da
+        // tela (ADR-062): lembrete de tarefa do outro computador toca lá. O
+        // filtro vem antes do Take, para as escondidas não ocuparem o lote.
+        var tasks = context.Tasks.VisibleIn(placements?.HereFilter ?? PlacementFilter.All);
+
         // Cai no índice parcial: só ocorrências armadas e ainda sem resposta.
         var due = await context.Occurrences
             .AsNoTracking()
@@ -23,7 +29,7 @@ internal sealed class DueReminderQuery(MyTaskAppDbContext context) : IDueReminde
             // no agregado, mas um checklist guardado não pode voltar a tocar
             // nem por uma linha que tenha escapado — por migração, por edição
             // manual do banco, por um caminho futuro que esqueça de desarmar.
-            .Where(occurrence => context.Tasks.Any(task =>
+            .Where(occurrence => tasks.Any(task =>
                 task.Id == occurrence.TaskItemId
                 && task.ArchivedAt == null
                 && task.DeletedAt == null))

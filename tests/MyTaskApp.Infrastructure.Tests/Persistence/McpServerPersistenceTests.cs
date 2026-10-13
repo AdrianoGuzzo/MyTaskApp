@@ -77,13 +77,7 @@ public class McpServerPersistenceTests
     public async Task UpgradingFromSkippedTables_KeepsTheData_AndStartsWithTheServerOff()
     {
         await using var db = await new TempSqliteDatabase().MigrateToAsync("SkippedTables", Ct);
-        var task = TaskItem.Create("Antes do MCP", Now);
-
-        await using (var write = db.CreateContext())
-        {
-            write.Tasks.Add(task);
-            await write.SaveChangesAsync(Ct);
-        }
+        await db.SeedOnOlderSchemaAsync(Ct, TaskItem.Create("Antes do MCP", Now));
 
         await db.MigrateAsync(Ct);
 

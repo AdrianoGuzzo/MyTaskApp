@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Options;
 using MyTaskApp.Application.Configuration;
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.Lifecycle;
@@ -38,6 +39,7 @@ public enum TaskSort
 /// <param name="TagIds">Qualquer uma delas basta.</param>
 /// <param name="ExternalKey">A chave da issue (<c>ECO-123</c>) ou o prefixo do projeto (<c>ECO</c>).</param>
 /// <param name="OverdueOnly">Só as atrasadas: o mesmo critério do quadro Hoje.</param>
+/// <param name="Device">De qual computador (ADR-062); <c>null</c> = este e as compartilhadas.</param>
 public sealed record SearchTasks(
     string? Text = null,
     IReadOnlyCollection<TaskLifecycle>? Lifecycles = null,
@@ -55,7 +57,8 @@ public sealed record SearchTasks(
     TaskSort Sort = TaskSort.Created,
     int Limit = SearchTasks.DefaultLimit,
     int Offset = 0,
-    IReadOnlyCollection<Guid>? TaskIds = null)
+    IReadOnlyCollection<Guid>? TaskIds = null,
+    DeviceView? Device = null)
 {
     public const int DefaultLimit = 50;
 
@@ -92,6 +95,7 @@ public sealed record TaskSearchResult(
 /// Pendentes com data ou prazo até este dia: um superconjunto das atrasadas, para
 /// o teto não cortar justamente elas.
 /// </param>
+/// <param name="Placement">O "onde aparece" (ADR-062); <c>null</c> = de todos os computadores.</param>
 public sealed record TaskSearchCriteria(
     IReadOnlyCollection<TaskLifecycle> Lifecycles,
     IReadOnlyCollection<Guid>? TaskIds = null,
@@ -106,7 +110,8 @@ public sealed record TaskSearchCriteria(
     DateOnly? DeadlineTo = null,
     bool? HasDeadline = null,
     string? ExternalKey = null,
-    DateOnly? OverdueCandidatesOn = null)
+    DateOnly? OverdueCandidatesOn = null,
+    PlacementFilter? Placement = null)
 {
     /// <summary>Teto do que a consulta traz: um app de uma pessoa, e a página vem depois.</summary>
     public const int MaxRows = 2000;
@@ -147,8 +152,8 @@ public interface ITaskSearchQuery
         TaskSearchCriteria criteria,
         CancellationToken cancellationToken = default);
 
-    /// <summary>Todas as tarefas, em linha curta, para as estatísticas.</summary>
-    Task<IReadOnlyList<TaskCountRow>> ListForCountingAsync(CancellationToken cancellationToken = default);
+    /// <summary>Todas as tarefas que aparecem em <paramref name="placement"/>, em linha curta, para as estatísticas.</summary>
+    Task<IReadOnlyList<TaskCountRow>> ListForCountingAsync(PlacementFilter placement, CancellationToken cancellationToken = default);
 }
 
 public sealed class SearchTasksHandler(
@@ -156,7 +161,8 @@ public sealed class SearchTasksHandler(
     GetTodayBoardHandler board,
     IUserClock clock,
     TimeProvider timeProvider,
-    IOptions<ApplicationOptions> options)
+    IOptions<ApplicationOptions> options,
+    DevicePlacementState? placements = null)
 {
     /// <summary>A lista principal: o que a tela mostra fora de Arquivados e Lixeira.</summary>
     public static readonly IReadOnlyCollection<TaskLifecycle> MainList =
@@ -191,7 +197,10 @@ public sealed class SearchTasksHandler(
                 // Só as que podem estar atrasadas chegam ao teto: o critério exato
                 // é do classificador, aqui embaixo, mas as 2000 mais novas não
                 // podem esconder a atrasada mais antiga.
-                request.OverdueOnly ? clock.Today : null),
+                request.OverdueOnly ? clock.Today : null,
+                // Pedida pelo id, a tarefa vem de qualquer computador: quem
+                // tem o id já sabe qual quer.
+                request.TaskIds is { Count: > 0 } ? null : Filter(request.Device)),
             cancellationToken);
 
         var truncated = rows.Count > TaskSearchCriteria.MaxRows;
@@ -211,6 +220,10 @@ public sealed class SearchTasksHandler(
             request.Limit,
             truncated);
     }
+
+    /// <summary>O filtro de uma visão; sem visão, este computador e as compartilhadas (ADR-062).</summary>
+    internal PlacementFilter Filter(DeviceView? device) =>
+        placements?.Filter(device ?? DeviceView.Here) ?? PlacementFilter.All;
 
     /// <summary>Uma tarefa pelo id, em qualquer estado — inclusive arquivo e lixeira.</summary>
     internal async Task<TaskListItem?> FindAsync(Guid taskId, CancellationToken cancellationToken)
