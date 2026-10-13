@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using MyTaskApp.Application.Development;
+using MyTaskApp.Desktop.Composition;
 using MyTaskApp.Desktop.ViewModels;
 using MyTaskApp.Domain.Tasks;
 
@@ -46,7 +47,21 @@ internal static class TestDevelopment
                 runner,
                 new FakeQuickCommandPrompt(),
                 NullLogger<QuickCommandsViewModel>.Instance),
+            Database(runner, clipboard, confirmation),
             NullLogger<TaskDevelopmentViewModel>.Instance);
+
+    /// <summary>A seção do banco do ambiente (ADR-060).</summary>
+    public static DevelopmentDatabaseViewModel Database(
+        FakeUseCaseRunner runner,
+        FakeClipboardWriter? clipboard = null,
+        FakeConfirmationDialog? confirmation = null,
+        DatabaseCopyRuns? runs = null) =>
+        new(
+            runner,
+            confirmation ?? new FakeConfirmationDialog(),
+            clipboard ?? new FakeClipboardWriter(),
+            runs ?? new DatabaseCopyRuns(),
+            NullLogger<DevelopmentDatabaseViewModel>.Instance);
 
     /// <summary>Um ambiente gravado, como a consulta devolve.</summary>
     public static TaskDevelopmentView View(

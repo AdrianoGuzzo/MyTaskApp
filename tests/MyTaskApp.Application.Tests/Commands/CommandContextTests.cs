@@ -145,4 +145,88 @@ public class CommandContextTests
         context.ValueOf("tag").Should().Be("ECO CORE");
         context.ValueOf("project").Should().BeNull("não é variável de contexto");
     }
+
+    // --- O banco do ambiente (ADR-060) ----------------------------------------
+
+    private static CommandContext WithDatabase(string host = "localhost")
+    {
+        var task = TaskItem.Create("Validar antimicrobianos", Now);
+        var development = task.BeginDevelopment(null, Repository, "origin/develop", "feature/validacao", Worktree, Now);
+        task.MarkDevelopmentReady(development.Id, Now);
+        task.SetDevelopmentDatabase(development.Id, TaskDevelopmentDatabase.Create(
+            Guid.CreateVersion7(), "Local", host, 5433, "dev", "eco_core_20261013_101500", null, Now));
+
+        return CommandContext.For(task, development, null, windows: true);
+    }
+
+    [Fact]
+    public void TheCopiedDatabase_FillsTheDatabaseVariables()
+    {
+        var context = WithDatabase();
+
+        context.ValueOf("database").Should().Be("eco_core_20261013_101500");
+        context.ValueOf("database.name").Should().Be("eco_core_20261013_101500");
+        context.ValueOf("database.host").Should().Be("localhost");
+        context.ValueOf("database.port").Should().Be("5433");
+        context.ValueOf("database.user").Should().Be("dev");
+    }
+
+    [Fact]
+    public void WithoutACopiedDatabase_TheVariableIsRefusedWithTheReason_EvenDotted()
+    {
+        var globals = new Dictionary<string, string> { ["@conn"] = "psql -h {database.host} {database}" };
+
+        var resolved = CommandAliasResolver.Resolve(["@conn", "echo {database.port}"], globals, Context());
+
+        resolved.Should().OnlyContain(step => !step.IsResolved && step.HasUnsafeValue && !step.IsUnknownAlias);
+        resolved[0].Error.Should().StartWith("@conn: a variável {database.host} não tem valor: este ambiente não tem banco copiado");
+        resolved[1].Error.Should().StartWith("A variável {database.port} não tem valor");
+    }
+
+    [Fact]
+    public void AnExplicitValue_StillWins_WithoutACopiedDatabase()
+    {
+        var globals = new Dictionary<string, string> { ["@restore"] = "eco-restore {database}" };
+
+        CommandAliasResolver.Resolve(["@restore database=meu_banco"], globals, Context())[0]
+            .Command.Should().Be("eco-restore meu_banco");
+    }
+
+    [Fact]
+    public void AContextVariable_InsideAnExplicitValue_IsFilled_OnlyOnce()
+    {
+        var globals = new Dictionary<string, string> { ["@configura"] = "configura-ambiente {nomebanco} {branch}" };
+
+        var resolved = CommandAliasResolver.Resolve(["@configura nomebanco={database}"], globals, WithDatabase());
+
+        resolved[0].Command.Should().Be("configura-ambiente eco_core_20261013_101500 feature/validacao");
+    }
+
+    [Fact]
+    public void AnUnsafeContextValue_InsideAnExplicitValue_IsRefused()
+    {
+        var globals = new Dictionary<string, string> { ["@configura"] = "configura-ambiente {nomebanco}" };
+
+        var resolved = CommandAliasResolver.Resolve(["@configura nomebanco={task.title}"], globals, Context(title: "A & B"));
+
+        resolved[0].IsResolved.Should().BeFalse();
+        resolved[0].Error.Should().Contain("{task.title}").And.Contain("\"&\"");
+    }
+
+    [Fact]
+    public void TheFolderContext_ExplainsThatThereIsNoDatabase()
+    {
+        var resolved = CommandAliasResolver.Resolve(["echo {database}"], new Dictionary<string, string>(), CommandContext.ForFolder(@"C:\Temp"));
+
+        resolved[0].Error.Should().Contain("database=meu_banco");
+    }
+
+    [Fact]
+    public void ADottedVariableTheContextDoesNotKnow_IsMissing_AndNeverReachesTheShell()
+    {
+        var expansion = CommandAliasResolver.Fill("echo {repository.name}", new Dictionary<string, string>(), CommandContext.None);
+
+        expansion.IsComplete.Should().BeFalse();
+        expansion.Missing.Should().Equal("repository.name");
+    }
 }

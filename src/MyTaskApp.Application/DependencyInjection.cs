@@ -95,6 +95,10 @@ public static class DependencyInjection
         services.AddScoped<RemoveWorktreeHandler>();
         services.AddScoped<ProbeWorktreesHandler>();
 
+        // O banco copiado para o ambiente, e o {database} dos comandos (ADR-060).
+        services.AddScoped<ValidateDevelopmentDatabaseCopyHandler>();
+        services.AddScoped<CopyDevelopmentDatabaseHandler>();
+
         // A PR aberta da branch, pelo GitHub CLI (ADR-047).
         services.AddScoped<FindPullRequestHandler>();
         services.AddScoped<FindWorktreePullRequestsHandler>();

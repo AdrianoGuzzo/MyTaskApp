@@ -102,6 +102,13 @@ public sealed class TaskDevelopment
     /// </summary>
     public string? AgentPrompt { get; private set; }
 
+    /// <summary>
+    /// O banco copiado para este ambiente (ADR-060). <c>null</c> = nenhum: os
+    /// comandos que usam <c>{database}</c> recusam com o motivo. A última cópia
+    /// bem-sucedida vence; remover o worktree não apaga o banco nem o retrato.
+    /// </summary>
+    public TaskDevelopmentDatabase? Database { get; private set; }
+
     internal static TaskDevelopment Begin(
         Guid taskItemId,
         string repositoryPath,
@@ -144,6 +151,9 @@ public sealed class TaskDevelopment
         CreatedAt = at;
         StatusChangedAt = at;
         FailureReason = null;
+
+        // Outra tentativa é outro worktree: o banco da anterior não é dele.
+        Database = null;
     }
 
     /// <summary>
@@ -190,6 +200,23 @@ public sealed class TaskDevelopment
         }
 
         AgentPrompt = normalized;
+    }
+
+    /// <summary>A cópia só tem para onde ir com o worktree pronto.</summary>
+    internal void EnsureDatabaseCanChange()
+    {
+        if (Status != TaskDevelopmentStatus.Ready)
+        {
+            throw new DomainException("O banco só é copiado para um ambiente com o worktree pronto.");
+        }
+    }
+
+    /// <summary>Guarda o banco da última cópia, no lugar do anterior.</summary>
+    internal void ChangeDatabase(TaskDevelopmentDatabase database)
+    {
+        ArgumentNullException.ThrowIfNull(database);
+        EnsureDatabaseCanChange();
+        Database = database;
     }
 
     internal void MarkReady(DateTimeOffset at)

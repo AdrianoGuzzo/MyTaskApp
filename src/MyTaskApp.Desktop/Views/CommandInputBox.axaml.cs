@@ -20,6 +20,8 @@ public sealed partial class CommandInputBox : UserControl
 {
     private readonly AliasCompletionBinder _completion;
 
+    private readonly AliasCompletionBinder _placeholders;
+
     public CommandInputBox()
     {
         InitializeComponent();
@@ -29,15 +31,24 @@ public sealed partial class CommandInputBox : UserControl
             CommandPopup,
             () => (DataContext as PostWorktreeCommandItemViewModel)?.Completion);
 
+        // O { na mesma caixa (ADR-060): o @ só vale no começo, o { em qualquer lugar.
+        _placeholders = new AliasCompletionBinder(
+            CommandBox,
+            PlaceholderPopup,
+            () => (DataContext as PostWorktreeCommandItemViewModel)?.Placeholders);
+
         // Uma janela sem o túnel da anotação (e os testes) também ganham as teclas.
         AddHandler(KeyDownEvent, OnKeyDown, RoutingStrategies.Tunnel);
     }
 
     /// <summary>A tecla foi da lista aberta sobre esta caixa?</summary>
-    public bool HandleKey(KeyEventArgs e) => _completion.HandleKey(e);
+    public bool HandleKey(KeyEventArgs e) => _completion.HandleKey(e) || _placeholders.HandleKey(e);
 
     /// <summary>Usado pelos testes, como o clique num item.</summary>
     internal void AcceptSuggestion(CommandSuggestionViewModel? suggestion) => _completion.Accept(suggestion);
+
+    /// <summary>Usado pelos testes, como o clique num item do <c>{</c>.</summary>
+    internal void AcceptPlaceholder(PlaceholderSuggestionViewModel? suggestion) => _placeholders.Accept(suggestion);
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
@@ -53,6 +64,15 @@ public sealed partial class CommandInputBox : UserControl
         {
             e.Handled = true;
             _completion.Accept(suggestion);
+        }
+    }
+
+    private void OnPlaceholderPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is Control { DataContext: PlaceholderSuggestionViewModel suggestion })
+        {
+            e.Handled = true;
+            _placeholders.Accept(suggestion);
         }
     }
 }

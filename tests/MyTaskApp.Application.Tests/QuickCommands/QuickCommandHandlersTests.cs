@@ -25,6 +25,7 @@ public class QuickCommandHandlersTests
     private readonly FakeTimeProvider _time = new(Now);
     private readonly FakeTaskItemRepository _tasks = new();
     private readonly FakeDevelopmentCommandRepository _globals = new();
+    private readonly FakeSavedDatabaseRepository _aliases = new();
     private readonly FakeTagQuery _tagQuery = new();
     private readonly FakeCommandExecutionRepository _executions = new();
     private readonly FakeCommandExecutor _executor = new();
@@ -76,7 +77,7 @@ public class QuickCommandHandlersTests
     }
 
     private RunQuickCommandHandler Runner() =>
-        new(_tasks, _tagQuery, _globals, _executions, _executions, _executor, _terminals, _processes, _watcher, _disk,
+        new(_tasks, _tagQuery, _globals, _aliases, _executions, _executions, _executor, _terminals, _processes, _watcher, _disk,
             _time, NullLogger<RunQuickCommandHandler>.Instance);
 
     private Task<CommandExecutionView> RunAsync(
@@ -89,7 +90,7 @@ public class QuickCommandHandlersTests
             new SynchronousProgress<CommandOutputLine>(_lines.Add),
             cancellationToken ?? Ct);
 
-    private PrepareQuickCommandHandler Preparer() => new(_tasks, _tagQuery, _globals, _disk);
+    private PrepareQuickCommandHandler Preparer() => new(_tasks, _tagQuery, _globals, _aliases, _disk);
 
     // ---- Execução escondida ------------------------------------------------
 
@@ -506,7 +507,7 @@ public class QuickCommandHandlersTests
     }
 
     private GetQuickCommandsHandler Getter() =>
-        new(_tasks, _tagQuery, _globals, _executions, _executions, _processes, _watcher, _time);
+        new(_tasks, _tagQuery, _globals, _aliases, _executions, _executions, _processes, _watcher, _time);
 
     private sealed class SynchronousProgress<T>(Action<T> report) : IProgress<T>
     {

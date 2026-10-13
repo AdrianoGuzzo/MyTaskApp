@@ -48,6 +48,21 @@ public static partial class CommandVariables
 
     public const string Tag = "tag";
 
+    /// <summary>O banco copiado para o ambiente (ADR-060).</summary>
+    public const string Database = "database";
+
+    public const string DatabaseName = "database.name";
+
+    public const string DatabaseHost = "database.host";
+
+    public const string DatabasePort = "database.port";
+
+    public const string DatabaseUser = "database.user";
+
+    /// <summary>As variáveis do banco do ambiente: só existem depois de uma cópia.</summary>
+    public static IReadOnlyList<string> DatabaseNames { get; } =
+        [Database, DatabaseName, DatabaseHost, DatabasePort, DatabaseUser];
+
     /// <summary>Todas, na ordem em que a tela as explica.</summary>
     public static IReadOnlyList<CommandVariable> All { get; } =
     [
@@ -61,6 +76,11 @@ public static partial class CommandVariables
         new(TaskId, "Id da tarefa"),
         new(TaskTitle, "Título da tarefa"),
         new(Tag, "Nome da etiqueta do diretório"),
+        new(Database, "Banco copiado para o ambiente"),
+        new(DatabaseName, "O mesmo que {database}"),
+        new(DatabaseHost, "Servidor do banco copiado"),
+        new(DatabasePort, "Porta do servidor do banco copiado"),
+        new(DatabaseUser, "Usuário da conexão do banco copiado"),
     ];
 
     private static readonly HashSet<string> Names =

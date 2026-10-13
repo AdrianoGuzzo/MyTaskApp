@@ -326,7 +326,7 @@ As máscaras disponíveis são `Hash`, `FakeEmail`, `Partial` (argumento
 | `tag_list` | L | — | etiquetas, uso e quantos diretórios cada uma tem |
 | `tag_get` | L | `tag` (nome ou id) | a etiqueta, os diretórios (alias, caminho, branch padrão) e os comandos de cada um |
 | `directory_alias_list` | L | `tag?`, `taskId?` | os diretórios com `@alias`. São o equivalente do app a "repositório" e "projeto" |
-| `worktree_list` | L | `taskId?` | os ambientes da tarefa; sem tarefa, os worktrees prontos de todas |
+| `worktree_list` | L | `taskId?` | os ambientes da tarefa, com o banco copiado para cada um (nome e servidor, ADR-060); sem tarefa, os worktrees prontos de todas |
 | `git_context_get` | L | `taskId` | worktrees e estado do Git (alterações, commits por enviar, publicada), diretórios, issue e branch sugerida. Só lê |
 | `command_definition_list` | L | — | os comandos globais e só de diretório. **Só lista** |
 | `command_binding_list` | L | `tag?` | os comandos rápidos de cada diretório, na ordem. **Só lista** |
