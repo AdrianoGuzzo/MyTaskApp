@@ -5,6 +5,7 @@
     <Project Path="src/MyTaskApp.Domain/MyTaskApp.Domain.csproj" />
     <Project Path="src/MyTaskApp.Infrastructure/MyTaskApp.Infrastructure.csproj" />
     <Project Path="src/MyTaskApp.Mcp/MyTaskApp.Mcp.csproj" />
+    <Project Path="src/MyTaskApp.Server.Api/MyTaskApp.Server.Api.csproj" />
     <Project Path="src/MyTaskApp.Server.Application/MyTaskApp.Server.Application.csproj" />
     <Project Path="src/MyTaskApp.Server.Infrastructure/MyTaskApp.Server.Infrastructure.csproj" />
     <Project Path="src/MyTaskApp.Sync.Contracts/MyTaskApp.Sync.Contracts.csproj" />

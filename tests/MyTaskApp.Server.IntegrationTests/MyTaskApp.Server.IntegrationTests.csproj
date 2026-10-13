@@ -11,10 +11,12 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\MyTaskApp.Server.Infrastructure\MyTaskApp.Server.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\MyTaskApp.Server.Api\MyTaskApp.Server.Api.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Testcontainers.PostgreSql" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
   </ItemGroup>
 
