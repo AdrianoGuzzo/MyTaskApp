@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    O servidor de sincronizacao contra PostgreSQL de verdade (ADR-060):
+    Testcontainers, ou MYTASKAPP_TEST_SERVER_POSTGRES. Sem nenhum dos dois (o CI
+    do Windows), os testes pulam sozinhos.
+  -->
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MyTaskApp.Server.Infrastructure\MyTaskApp.Server.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Testcontainers.PostgreSql" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+  </ItemGroup>
+
+</Project>

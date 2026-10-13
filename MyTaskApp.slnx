@@ -6,6 +6,7 @@
     <Project Path="src/MyTaskApp.Infrastructure/MyTaskApp.Infrastructure.csproj" />
     <Project Path="src/MyTaskApp.Mcp/MyTaskApp.Mcp.csproj" />
     <Project Path="src/MyTaskApp.Server.Application/MyTaskApp.Server.Application.csproj" />
+    <Project Path="src/MyTaskApp.Server.Infrastructure/MyTaskApp.Server.Infrastructure.csproj" />
     <Project Path="src/MyTaskApp.Sync.Contracts/MyTaskApp.Sync.Contracts.csproj" />
   </Folder>
   <Folder Name="/tests/">
@@ -16,6 +17,7 @@
     <Project Path="tests/MyTaskApp.Mcp.Tests/MyTaskApp.Mcp.Tests.csproj" />
     <Project Path="tests/MyTaskApp.Packaging.Tests/MyTaskApp.Packaging.Tests.csproj" />
     <Project Path="tests/MyTaskApp.Server.Application.Tests/MyTaskApp.Server.Application.Tests.csproj" />
+    <Project Path="tests/MyTaskApp.Server.IntegrationTests/MyTaskApp.Server.IntegrationTests.csproj" />
     <Project Path="tests/MyTaskApp.Sync.Contracts.Tests/MyTaskApp.Sync.Contracts.Tests.csproj" />
   </Folder>
 </Solution>
