@@ -194,7 +194,8 @@ public static class SyncRegistry
         rank: 2,
         [
             new(SyncFields.Command.TagDirectoryId, SyncFieldKind.Guid) { IsImmutable = true },
-            Text(SyncFields.Command.Alias, 40, required: true),
+            // O comando só do diretório (ADR-055) não tem alias.
+            Text(SyncFields.Command.Alias, 40),
             Text(SyncFields.Command.Text, 2000, required: true),
             Text(SyncFields.Command.Description, 500),
             Text(SyncFields.Command.Name, 80),

@@ -20,6 +20,7 @@ using MyTaskApp.Application.QuickCommands;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Application.Sounds;
 using MyTaskApp.Application.StickyNotes;
+using MyTaskApp.Application.Sync;
 using MyTaskApp.Application.Tags;
 using MyTaskApp.Application.Tasks;
 using MyTaskApp.Application.TimeTracking;
@@ -38,6 +39,8 @@ using MyTaskApp.Infrastructure.PostgreSql;
 using MyTaskApp.Infrastructure.Processes;
 using MyTaskApp.Infrastructure.Secrets;
 using MyTaskApp.Infrastructure.Sounds;
+using MyTaskApp.Infrastructure.Sync;
+using MyTaskApp.Infrastructure.Sync.Capture;
 using MyTaskApp.Infrastructure.Storage;
 using MyTaskApp.Infrastructure.Terminals;
 using MyTaskApp.Infrastructure.Terminals.Windows;
@@ -60,8 +63,19 @@ public static class DependencyInjection
 
         services.AddSingleton(Options.Create(databaseOptions));
 
+        // A captura da sincronização (ADR-060) entra em todo SaveChanges, e só
+        // trabalha com a instalação ligada a uma conta.
+        services.AddSingleton<SyncCaptureSwitch>();
+        services.AddSingleton<SyncCaptureInterceptor>();
+        services.TryAddSingleton<ISyncTrigger, SyncTrigger>();
+        services.TryAddSingleton<IDeviceIdentity>(provider => new DeviceIdentityFile(
+            UserDataLocation.Current.LocalRoot,
+            provider.GetRequiredService<ILogger<DeviceIdentityFile>>()));
+
         services.AddDbContext<MyTaskAppDbContext>(
-            builder => builder.UseSqlite(databaseOptions.BuildConnectionString()));
+            (provider, builder) => builder
+                .UseSqlite(databaseOptions.BuildConnectionString())
+                .AddInterceptors(provider.GetRequiredService<SyncCaptureInterceptor>()));
 
         services.AddScoped<ITaskItemRepository, TaskItemRepository>();
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();

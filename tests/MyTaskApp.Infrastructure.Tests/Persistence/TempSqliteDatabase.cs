@@ -1,5 +1,6 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using MyTaskApp.Infrastructure.Persistence;
@@ -21,6 +22,13 @@ internal sealed class TempSqliteDatabase : IAsyncDisposable
     public MyTaskAppDbContext CreateContext() =>
         new(new DbContextOptionsBuilder<MyTaskAppDbContext>()
             .UseSqlite(ConnectionString)
+            .Options);
+
+    /// <summary>Com os interceptores do app — a captura da sincronização (ADR-060).</summary>
+    public MyTaskAppDbContext CreateContext(params IInterceptor[] interceptors) =>
+        new(new DbContextOptionsBuilder<MyTaskAppDbContext>()
+            .UseSqlite(ConnectionString)
+            .AddInterceptors(interceptors)
             .Options);
 
     public async Task<TempSqliteDatabase> MigrateAsync(CancellationToken cancellationToken)

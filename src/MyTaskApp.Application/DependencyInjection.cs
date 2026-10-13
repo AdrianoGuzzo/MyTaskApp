@@ -18,6 +18,7 @@ using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.QuickCommands;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Application.Sounds;
+using MyTaskApp.Application.Sync;
 using MyTaskApp.Application.StickyNotes;
 using MyTaskApp.Application.Tags;
 using MyTaskApp.Application.Tasks;
@@ -51,6 +52,9 @@ public static class DependencyInjection
 
         // Singleton: resolver o fuso uma vez basta e evita repetir o fallback.
         services.TryAddSingleton<IUserClock, UserClock>();
+
+        // Sincronização (ADR-060): a gravação avisa, o agendador espera.
+        services.TryAddSingleton<ISyncTrigger, SyncTrigger>();
 
         services.AddScoped<GetTodayBoardHandler>();
         services.AddScoped<ReorderOccurrencesHandler>();

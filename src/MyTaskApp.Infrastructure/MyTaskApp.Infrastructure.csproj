@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MyTaskApp.Application\MyTaskApp.Application.csproj" />
+    <ProjectReference Include="..\MyTaskApp.Sync.Contracts\MyTaskApp.Sync.Contracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>

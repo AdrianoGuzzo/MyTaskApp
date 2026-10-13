@@ -1286,6 +1286,243 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("MyTaskApp.Infrastructure.Sync.Persistence.SyncConflictRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("DetectedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("EntityId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EntityLabel")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Field")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LocalValue")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Resolution")
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("ResolvedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ServerValue")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ServerVersion")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DetectedAt")
+                        .HasFilter("\"ResolvedAt\" IS NULL");
+
+                    b.ToTable("SyncConflicts", (string)null);
+                });
+
+            modelBuilder.Entity("MyTaskApp.Infrastructure.Sync.Persistence.SyncEntityStateRow", b =>
+                {
+                    b.Property<string>("EntityType")
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("EntityId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ApplyError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ApplyErrorCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("CreatedByDeviceId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("CreatedByUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("OriginCreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ReviewedVersion")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ServerVersion")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Snapshot")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("UpdatedByDeviceId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("EntityType", "EntityId");
+
+                    b.HasIndex("ApplyErrorCode")
+                        .HasFilter("\"ApplyErrorCode\" IS NOT NULL");
+
+                    b.ToTable("SyncEntityStates", (string)null);
+                });
+
+            modelBuilder.Entity("MyTaskApp.Infrastructure.Sync.Persistence.SyncOutboxRow", b =>
+                {
+                    b.Property<long>("Seq")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Attempted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("BaseVersion")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("EntityId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Fields")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LastErrorCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OpId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("OriginCreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("State")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Seq");
+
+                    b.HasIndex("OpId")
+                        .IsUnique();
+
+                    b.HasIndex("EntityType", "EntityId");
+
+                    b.ToTable("SyncOutbox", (string)null);
+                });
+
+            modelBuilder.Entity("MyTaskApp.Infrastructure.Sync.Persistence.SyncStateRow", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ClientSchemaVersion")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Cursor")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("LastErrorAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("LastErrorCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("LastPullAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("LastPushAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("LastSuccessAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("LinkedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("LinkedDeviceId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ServerBaseUrl")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("UserDisplayName")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserEmail")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("WorkspaceId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("SyncState", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_SyncState_SingleRow", "Id = 1");
+                        });
+                });
+
             modelBuilder.Entity("MyTaskApp.Domain.Agents.AgentSession", b =>
                 {
                     b.HasOne("MyTaskApp.Domain.Tasks.TaskDevelopment", null)
