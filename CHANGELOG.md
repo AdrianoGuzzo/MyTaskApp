@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.11.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.10.0...v1.11.0) (2026-10-13)
+
+
+### Added
+
+* cópia do banco na aba Desenvolvimento e {database} nos comandos ([#75](https://github.com/AdrianoGuzzo/MyTaskApp/issues/75)) ([39adee0](https://github.com/AdrianoGuzzo/MyTaskApp/commit/39adee03b5abbbcb454d0a25d55a670affd9ade9))
+* escolher as etiquetas na janela da tarefa, abaixo do título ([#73](https://github.com/AdrianoGuzzo/MyTaskApp/issues/73)) ([e3668ad](https://github.com/AdrianoGuzzo/MyTaskApp/commit/e3668ad17d8d14a38f80d76a587d164ced896ab0))
+
 ## [1.10.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.9.0...v1.10.0) (2026-10-10)
 
 
