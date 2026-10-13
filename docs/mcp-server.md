@@ -190,10 +190,21 @@ compartilhado.
   excluem ou sobrescrevem dados levam `destructiveHint`, para o cliente pedir
   confirmação. As que falam com servidores de fora (PostgreSQL, Jira) levam
   `openWorldHint`.
+- **De qual computador** ([ADR-062](ARCHITECTURE.md), com a sincronização
+  conectada): as consultas de tarefas, horas, histórico, estatísticas,
+  etiquetas e prazos aceitam `device?`. Os valores são:
+  - `here`, o padrão: este computador e o que é compartilhado;
+  - `all`: todos os computadores;
+  - o apelido de outro computador da conta.
+
+  O padrão é sempre `here`, como a tela abre. O MCP não lê o seletor da tela.
+  Cada tarefa volta com `placement` ("este computador", "todos os
+  computadores" ou o apelido). Esse campo só vem quando a conta tem outro
+  computador. A busca de etiqueta por nome acha em qualquer computador.
 
 ## Ferramentas
 
-São 81 ferramentas. Nesta seção, **L** marca leitura, **E** escrita e **D**
+São 82 ferramentas. Nesta seção, **L** marca leitura, **E** escrita e **D**
 escrita destrutiva. Parâmetros com `?` são opcionais. Os detalhes de cada um,
 com tipos e descrições, vêm no `inputSchema` que o cliente recebe em
 `tools/list`.
@@ -208,15 +219,16 @@ com tipos e descrições, vêm no `inputSchema` que o cliente recebe em
 
 | Ferramenta | | Parâmetros | Resposta |
 |---|---|---|---|
-| `task_list` | L | `statuses?`, `lifecycles?`, `tags?`, `priorities?`, `scheduledFrom?`, `scheduledTo?`, `hasSchedule?`, `hasDeadline?`, `sort?`, `limit?` (1–200), `offset?` | `TaskPage`: `tasks[]` (resumo), `total`, `offset`, `limit`, `truncated`, `note` |
+| `task_list` | L | `statuses?`, `lifecycles?`, `tags?`, `priorities?`, `scheduledFrom?`, `scheduledTo?`, `hasSchedule?`, `hasDeadline?`, `sort?`, `limit?` (1–200), `offset?`, `device?` | `TaskPage`: `tasks[]` (resumo), `total`, `offset`, `limit`, `truncated`, `note` |
 | `task_search` | L | os de `task_list`, mais `text?`, `deadlineFrom?`, `deadlineTo?`, `issueKey?` (`ECO-123` ou `ECO`), `overdueOnly?` | `TaskPage` |
 | `task_get` | L | `taskId` | `TaskDetail`: todos os campos (anotação, prazo, etiquetas, issue, próxima ação, estimativa, tempo, lembrete, worktrees, datas do ciclo de vida) |
-| `task_get_today` | L | — | o quadro Hoje por seção (`overdue`, `now`, `today`, `unscheduled`, `deadlines`, `completedToday`) e `activeTimer` |
-| `task_get_overdue` | L | `limit?` | `TaskPage` das pendentes atrasadas, pelo critério do quadro |
+| `task_get_today` | L | `device?` | o quadro Hoje por seção (`arrived`, `overdue`, `now`, `today`, `unscheduled`, `deadlines`, `completedToday`) e `activeTimer`. `arrived` são as que outro computador mandou para cá e ainda não foram abertas |
+| `task_get_overdue` | L | `limit?`, `device?` | `TaskPage` das pendentes atrasadas, pelo critério do quadro |
 | `task_get_history` | L | `taskId` | a trilha de auditoria: operação, data, autor (com "(MCP)" quando veio daqui), detalhe |
-| `task_get_weekly_history` | L | `days?` (1–31) | os dias com o que foi concluído e trabalhado |
-| `task_get_statistics` | L | — | contagens por ciclo de vida e prioridade, atrasadas, para hoje, concluídas recentes, horas de hoje e da semana |
-| `task_create` | E | `title`, `description?`, `priority?`, `scheduledDate?`, `scheduledTime?`, `deadlineDate?`, `deadlineTime?`, `tags?`, `nextAction?`, `estimateMinutes?`, `reminder?` (`Default`, `Urgent`, `None`) | `{ message, task: TaskDetail }` relido do banco |
+| `task_get_weekly_history` | L | `days?` (1–31), `device?` | os dias com o que foi concluído e trabalhado |
+| `task_get_statistics` | L | `device?` | contagens por ciclo de vida e prioridade, atrasadas, para hoje, concluídas recentes, horas de hoje e da semana |
+| `task_create` | E | `title`, `description?`, `priority?`, `scheduledDate?`, `scheduledTime?`, `deadlineDate?`, `deadlineTime?`, `tags?`, `nextAction?`, `estimateMinutes?`, `reminder?` (`Default`, `Urgent`, `None`), `placement?` (`here`, o padrão; `all`; ou o apelido de outro computador) | `{ message, task: TaskDetail }` relido do banco |
+| `task_move` | E | `taskId`, `placement` (`here`, `all` ou o apelido de outro computador) | `{ message, task }`. Muda só em qual lista a tarefa aparece (ADR-062); tudo continua sincronizado. Recusa com o cronômetro correndo na tarefa |
 | `task_update` | D | `taskId`, mais os campos de `task_create`, e `clearDescription?`, `clearSchedule?`, `clearDeadline?`, `clearNextAction?`, `clearEstimate?` | `{ message, task }`. Tudo numa transação: um campo recusado desfaz os outros |
 | `task_complete` / `task_reopen` | E | `taskId` | `{ message, task }`. Concluir fecha o cronômetro, se ele corria na tarefa |
 | `task_cancel` | D | `taskId` | `{ message, task }` |
@@ -237,11 +249,11 @@ com tipos e descrições, vêm no `inputSchema` que o cliente recebe em
 | `time_tracking_stop` | E | `taskId?` | `{ message, closedEntry }` relido do banco |
 | `time_tracking_resume` | E | `taskId?`, `replaceRunning?` | um período **novo** na tarefa do último período encerrado (ou na informada) |
 | `time_entry_create` | E | `taskId`, `startDate`, `startTime`, `endTime`, `endDate?`, `note?` | `TimeEntryInfo` |
-| `time_entry_list` | L | `from?`, `to?`, `taskId?`, `tag?`, `issueKey?`, `source?` (`Timer`, `Manual`), `running?`, `includeTrashed?`, `limit?` (1–500), `offset?` | `entries[]`, `count`, `total` |
+| `time_entry_list` | L | `from?`, `to?`, `taskId?`, `tag?`, `issueKey?`, `source?` (`Timer`, `Manual`), `running?`, `includeTrashed?`, `limit?` (1–500), `offset?`, `device?` | `entries[]`, `count`, `total` |
 | `time_entry_get` | L | `entryId` | `TimeEntryInfo`: horários locais e UTC, duração, parte no intervalo, origem, nota, `createdAt`, `updatedAt`, `isRunning`, `crossesMidnight`, `isLong` |
 | `time_entry_update` | D | `entryId`, `startDate?`, `startTime?`, `endDate?`, `endTime?`, `note?`, `clearNote?` | `TimeEntryInfo`. Auditado com o antes e o depois |
 | `time_entry_delete` | D | `entryId` | `{ message, deleted }`. Auditado |
-| `time_entry_get_summary` | L | `from`, `to` (até 366 dias), `groupBy?` (`Day`, `Task`, `Tag`, `External`, `Source`), `taskId?`, `tag?`, `issueKey?`, `source?`, `includeRunning?` | `total`, `entryCount`, `groups[]` com `total`, `entryCount` e `entryIds` (de onde veio cada total) |
+| `time_entry_get_summary` | L | `from`, `to` (até 366 dias), `groupBy?` (`Day`, `Task`, `Tag`, `External`, `Source`), `taskId?`, `tag?`, `issueKey?`, `source?`, `includeRunning?`, `device?` (as horas seguem a tarefa) | `total`, `entryCount`, `groups[]` com `total`, `entryCount` e `entryIds` (de onde veio cada total) |
 | `time_entry_get_task_log` | L | `taskId` | a aba "Tempo": períodos por dia, total, o que corre, estimativa |
 
 Os totais vêm sempre dos períodos gravados:
@@ -323,14 +335,14 @@ As máscaras disponíveis são `Hash`, `FakeEmail`, `Partial` (argumento
 
 | Ferramenta | | Parâmetros | Resposta |
 |---|---|---|---|
-| `tag_list` | L | — | etiquetas, uso e quantos diretórios cada uma tem |
+| `tag_list` | L | `device?` | etiquetas, uso, quantos diretórios cada uma tem e em qual computador aparece |
 | `tag_get` | L | `tag` (nome ou id) | a etiqueta, os diretórios (alias, caminho, branch padrão) e os comandos de cada um |
 | `directory_alias_list` | L | `tag?`, `taskId?` | os diretórios com `@alias`. São o equivalente do app a "repositório" e "projeto" |
-| `worktree_list` | L | `taskId?` | os ambientes da tarefa, com o banco copiado para cada um (nome e servidor, ADR-060); sem tarefa, os worktrees prontos de todas |
+| `worktree_list` | L | `taskId?` | os ambientes da tarefa, com o banco copiado para cada um (nome e servidor, ADR-060); sem tarefa, os worktrees prontos de todas, de qualquer computador |
 | `git_context_get` | L | `taskId` | worktrees e estado do Git (alterações, commits por enviar, publicada), diretórios, issue e branch sugerida. Só lê |
 | `command_definition_list` | L | — | os comandos globais e só de diretório. **Só lista** |
 | `command_binding_list` | L | `tag?` | os comandos rápidos de cada diretório, na ordem. **Só lista** |
-| `deadline_list_upcoming` | L | `days?` (1–366) | `TaskPage` com os próximos prazos |
+| `deadline_list_upcoming` | L | `days?` (1–366), `device?` | `TaskPage` com os próximos prazos |
 | `reminder_get_defaults` | L | — | o lembrete padrão e a pausa |
 | `jira_search` | L | `query` | issues do Jira conectado. Só consulta |
 | `task_get_external_context` | L | `taskId` | a issue vinculada e a branch sugerida |
