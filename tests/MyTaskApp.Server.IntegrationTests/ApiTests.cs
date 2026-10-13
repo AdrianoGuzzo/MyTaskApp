@@ -193,7 +193,7 @@ public sealed class ApiTests(PostgresFixture postgres) : IAsyncLifetime
         var again = () => _api.AuthorizeAsync("ana", laptop.DeviceId);
 
         await refresh.Should().ThrowAsync<OAuthRefusedException>();
-        (await again.Should().ThrowAsync<OAuthRefusedException>()).Which.Error.Should().Be("access_denied");
+        (await again.Should().ThrowAsync<OAuthRefusedException>()).Which.Error.Should().Be(SyncErrorCodes.DeviceRevoked);
 
         var devices = await desktop.GetAsync<List<DeviceInfo>>(ApiRoutes.Devices);
         devices.Single(device => device.DeviceId == laptop.DeviceId).RevokedAt.Should().NotBeNull();

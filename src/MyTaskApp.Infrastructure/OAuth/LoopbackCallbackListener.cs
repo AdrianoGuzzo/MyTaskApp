@@ -8,6 +8,16 @@ using MyTaskApp.Domain;
 namespace MyTaskApp.Infrastructure.OAuth;
 
 /// <summary>
+/// O provedor voltou sem código. A frase é a do provedor, para a tela; o
+/// <see cref="Error"/> é o código OAuth, para quem precisa decidir por ele
+/// (o <c>device_revoked</c> da sincronização).
+/// </summary>
+internal sealed class AuthorizationRefusedException(string? error, string message) : DomainException(message)
+{
+    public string? Error { get; } = error;
+}
+
+/// <summary>
 /// As frases que o listener mostra no navegador e devolve ao app. Cada
 /// provedor (Jira, sincronização) fala o próprio nome.
 /// </summary>
@@ -122,8 +132,9 @@ internal sealed class LoopbackCallbackListener : IAsyncDisposable
 
                 await RespondAsync(connection, HttpStatusCode.OK, _messages.NotCompleted, cancellationToken);
 
-                throw new DomainException(
-                    callback.GetValueOrDefault("error") == "access_denied" ? _messages.Denied : _messages.Failed);
+                var error = callback.GetValueOrDefault("error");
+
+                throw new AuthorizationRefusedException(error, error == "access_denied" ? _messages.Denied : _messages.Failed);
             }
         }
     }

@@ -66,9 +66,10 @@ internal static class ConnectEndpoints
 
         var device = await database.Devices.FindAsync([user.Id, deviceId], cancellationToken);
 
+        // Código próprio, e não access_denied: o desktop entende que precisa de um id novo.
         if (device is { RevokedAt: not null })
         {
-            return Forbid(Errors.AccessDenied, "Este dispositivo foi revogado. Conecte de novo como um dispositivo novo.");
+            return Forbid(SyncErrorCodes.DeviceRevoked, "Este dispositivo foi revogado. Conecte de novo como um dispositivo novo.");
         }
 
         var now = timeProvider.GetUtcNow();

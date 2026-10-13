@@ -42,6 +42,7 @@ using MyTaskApp.Infrastructure.Sounds;
 using MyTaskApp.Infrastructure.Sync;
 using MyTaskApp.Infrastructure.Sync.Apply;
 using MyTaskApp.Infrastructure.Sync.Capture;
+using MyTaskApp.Infrastructure.Sync.Http;
 using MyTaskApp.Infrastructure.Storage;
 using MyTaskApp.Infrastructure.Terminals;
 using MyTaskApp.Infrastructure.Terminals.Windows;
@@ -178,6 +179,7 @@ public static class DependencyInjection
 
         AddSecrets(services);
         AddJira(services, configuration);
+        AddSyncClient(services, configuration);
         AddDatabaseOperations(services, configuration);
 
         if (OperatingSystem.IsWindows())
@@ -269,6 +271,26 @@ public static class DependencyInjection
         services.AddSingleton<IDatabaseOperationWorkspaceFactory>(provider => new DatabaseOperationWorkspaceFactory(
             string.IsNullOrWhiteSpace(options.WorkspaceDirectory) ? UserDataLocation.Current.DatabaseOperations : options.WorkspaceDirectory,
             provider.GetRequiredService<ILogger<DatabaseOperationWorkspaceFactory>>()));
+    }
+
+    /// <summary>
+    /// O cliente da sincronização (ADR-060). Singleton, como o do Jira: o
+    /// access token e o portão da renovação valem para o app inteiro.
+    /// </summary>
+    private static void AddSyncClient(IServiceCollection services, IConfiguration configuration)
+    {
+        var options = SyncOptions.FromBuild();
+        configuration.GetSection(SyncOptions.SectionName).Bind(options);
+        services.AddSingleton(options);
+
+        services.AddSingleton(provider => new SyncHttp(
+            CreateJiraHttpClient(),
+            options,
+            provider.GetRequiredService<ILogger<SyncHttp>>()));
+
+        services.AddSingleton<SyncAuthenticationService>();
+        services.AddSingleton<ISyncAuthenticator>(provider => provider.GetRequiredService<SyncAuthenticationService>());
+        services.AddSingleton<ISyncApi, SyncApiClient>();
     }
 
     private static HttpClient CreateJiraHttpClient()
