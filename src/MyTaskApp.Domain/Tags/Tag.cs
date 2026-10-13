@@ -87,7 +87,7 @@ public sealed class Tag
     public void UpdateDirectory(
         Guid directoryId,
         string alias,
-        string path,
+        string? path,
         string? name,
         string? description,
         string? defaultBranch = null)

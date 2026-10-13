@@ -47,7 +47,7 @@ public class TagDirectoriesViewModelTests
     [Fact]
     public async Task Expanding_LoadsTheDirectories_AndFlagsTheMissingFolder()
     {
-        _probe.Existing.Add(Core.Path);
+        _probe.Existing.Add(Core.Path!);
         var (viewModel, item) = await LoadedAsync();
 
         await viewModel.ToggleDirectoriesAsync(item, Ct);
@@ -57,6 +57,22 @@ public class TagDirectoriesViewModelTests
             .Should().Equal("@ecossistema-core", "@ecossistema-web");
         item.Directories[0].IsFound.Should().BeTrue();
         item.Directories[1].IsMissing.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ADirectoryFromAnotherComputer_ShowsAsUnmapped_AndIsNotProbed()
+    {
+        var (viewModel, item) = await LoadedAsync();
+        _runner.ResultsByHandler[typeof(GetTagDirectoriesHandler)] = (IReadOnlyList<TagDirectoryRow>)[Core with { Path = null }];
+
+        await viewModel.ToggleDirectoriesAsync(item, Ct);
+
+        var directory = item.Directories.Should().ContainSingle().Subject;
+        directory.IsUnmapped.Should().BeTrue();
+        directory.IsMissing.Should().BeFalse("não mapeado não é pasta sumida");
+        directory.Exists.Should().BeNull();
+        directory.ExistenceTip.Should().Contain("Não mapeado neste computador");
+        directory.Path.Should().BeEmpty();
     }
 
     [Fact]

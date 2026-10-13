@@ -154,7 +154,8 @@ public static class SyncRegistry
                 MaxItems = 50,
                 Item = Text("item", 2000, required: true),
             },
-            CreatedAtField(),
+            // "Quando esta tentativa começou": criar de novo, em qualquer computador, renova.
+            new(CreatedAt, SyncFieldKind.Instant) { IsRequired = true, Policy = SyncConflictPolicy.Silent },
         ])
     {
         References = [new(SyncFields.Development.TaskId, SyncEntityTypes.Task, SyncDeleteBehavior.Cascade)],

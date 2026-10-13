@@ -372,7 +372,7 @@ public sealed partial class TaskNotesViewModel(
             Developments.DirectoryCompletion.SetDirectories(directories, unknown);
 
             var checks = await Task.WhenAll(directories.Select(async directory =>
-                (directory.Id, Exists: await directoryProbe.ExistsAsync(directory.Path, cancellationToken))));
+                (directory.Id, Exists: directory.Path is { } path && await directoryProbe.ExistsAsync(path, cancellationToken))));
 
             var existence = checks.ToDictionary(check => check.Id, check => check.Exists);
             Completion.SetDirectories(directories, existence);

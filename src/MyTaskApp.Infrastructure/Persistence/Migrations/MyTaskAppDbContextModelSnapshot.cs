@@ -825,7 +825,6 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Path")
-                        .IsRequired()
                         .HasMaxLength(1024)
                         .HasColumnType("TEXT");
 

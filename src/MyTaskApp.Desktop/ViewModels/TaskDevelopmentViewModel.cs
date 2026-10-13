@@ -472,6 +472,7 @@ public sealed partial class TaskDevelopmentViewModel(
             TaskDevelopmentStatus.Error => "⚠",
             TaskDevelopmentStatus.Creating => "…",
             TaskDevelopmentStatus.Removed => "○",
+            TaskDevelopmentStatus.NotCreatedHere => "◌",
             _ => "+",
         },
     };
@@ -479,9 +480,9 @@ public sealed partial class TaskDevelopmentViewModel(
     /// <summary>O agente deste ambiente está aberto: a aba ganha a bolinha.</summary>
     public bool HasRunningAgent => Agent.IsRunning;
 
-    /// <summary>Só sai da lista o ambiente que não tem mais worktree.</summary>
+    /// <summary>Só sai da lista o ambiente que não tem worktree neste computador.</summary>
     public bool CanForget =>
-        Development is { Status: TaskDevelopmentStatus.Error or TaskDevelopmentStatus.Removed }
+        Development is { Status: TaskDevelopmentStatus.Error or TaskDevelopmentStatus.Removed or TaskDevelopmentStatus.NotCreatedHere }
         && State is not (DevelopmentPanelState.Running or DevelopmentPanelState.Conflict);
 
     /// <summary>O que aconteceu na tentativa anterior (falhou, foi interrompida, foi removida).</summary>
@@ -1863,6 +1864,9 @@ public sealed partial class TaskDevelopmentViewModel(
             TaskDevelopmentStatus.Removed =>
                 $"O worktree {development.WorktreePath} foi removido. "
                 + $"A branch {development.Branch} continua no repositório.",
+            TaskDevelopmentStatus.NotCreatedHere =>
+                $"Não criado neste computador: o ambiente da branch {development.Branch} veio de outro dispositivo. "
+                + "Escolha o repositório daqui e use \"Iniciar implementação\" para criá-lo aqui.",
             _ => null,
         };
 
@@ -1874,7 +1878,7 @@ public sealed partial class TaskDevelopmentViewModel(
             SetDirectory(development.RepositoryPath);
         }
 
-        if (development.Status is TaskDevelopmentStatus.Creating or TaskDevelopmentStatus.Error
+        if (development.Status is TaskDevelopmentStatus.Creating or TaskDevelopmentStatus.Error or TaskDevelopmentStatus.NotCreatedHere
             && NewBranchName == _suggestedBranch)
         {
             NewBranchName = development.Branch;

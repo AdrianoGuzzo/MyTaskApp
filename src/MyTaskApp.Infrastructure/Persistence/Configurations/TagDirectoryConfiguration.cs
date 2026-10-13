@@ -27,8 +27,9 @@ internal sealed class TagDirectoryConfiguration : IEntityTypeConfiguration<TagDi
 
         builder.HasIndex(directory => new { directory.TagId, directory.Alias }).IsUnique();
 
+        // Nulo = não mapeado neste computador (ADR-060): o diretório veio pela
+        // sincronização, e o caminho de outra máquina nunca é gravado aqui.
         builder.Property(directory => directory.Path)
-            .IsRequired()
             .HasMaxLength(TagDirectory.MaxPathLength);
 
         builder.Property(directory => directory.Name)

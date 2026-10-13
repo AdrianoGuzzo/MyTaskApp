@@ -266,9 +266,9 @@ public sealed partial class TaskDevelopmentsViewModel(
 
         foreach (var directory in DirectoryCompletion.Directories)
         {
-            if (!paths.Any(path => WorktreePathPlanner.SamePath(path, directory.Path)))
+            if (directory.Path is { } directoryPath && !paths.Any(path => WorktreePathPlanner.SamePath(path, directoryPath)))
             {
-                paths.Add(directory.Path);
+                paths.Add(directoryPath);
             }
         }
 
