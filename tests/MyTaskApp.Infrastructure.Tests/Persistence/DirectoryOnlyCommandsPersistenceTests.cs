@@ -19,12 +19,8 @@ public class DirectoryOnlyCommandsPersistenceTests
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
-    private static async Task SeedAsync(TempSqliteDatabase db, params object[] entities)
-    {
-        await using var context = db.CreateContext();
-        context.AddRange(entities);
-        await context.SaveChangesAsync(Ct);
-    }
+    private static Task SeedAsync(TempSqliteDatabase db, params object[] entities) =>
+        db.SeedOnOlderSchemaAsync(Ct, entities);
 
     private static DevelopmentCommand Own(Guid directoryId, string name, string command = "npm run dev -- --port {port}") =>
         DevelopmentCommand.CreateForDirectory(

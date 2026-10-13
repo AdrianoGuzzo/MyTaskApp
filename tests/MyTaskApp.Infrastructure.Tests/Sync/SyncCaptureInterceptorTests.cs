@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using MyTaskApp.Domain.Devices;
 using MyTaskApp.Domain.Reminders;
 using MyTaskApp.Domain.StickyNotes;
 using MyTaskApp.Domain.Tags;
@@ -131,6 +132,23 @@ public sealed class SyncCaptureInterceptorTests : IAsyncLifetime
         SyncCaptureKit.Fields(operation).Keys.Should().BeEquivalentTo(
             [SyncFields.Task.Priority, SyncFields.Task.Title],
             "o título tem valor e nunca subiu; a próxima ação vazia não é mudança");
+    }
+
+    [Fact]
+    public async Task MovingATask_TravelsAsOneField_AndTheArrivalMarkStaysHere()
+    {
+        var task = await CreateTaskAsync();
+        await _kit.AcknowledgeAllAsync(Ct);
+        var home = Guid.CreateVersion7();
+
+        await EditTaskAsync(task.Id, loaded => loaded.Place(DevicePlacement.On(home)));
+        await EditTaskAsync(task.Id, loaded => loaded.MarkArrived(home, Now));
+
+        var operation = (await _kit.OutboxAsync(Ct)).Should().ContainSingle().Subject;
+        var fields = SyncCaptureKit.Fields(operation);
+        fields.Keys.Should().Equal(SyncFields.Task.Placement);
+        SyncValue.Member(fields[SyncFields.Task.Placement], SyncFields.Placement.Kind).GetInt64().Should().Be((long)PlacementKind.Device);
+        SyncValue.ReadGuid(SyncValue.Member(fields[SyncFields.Task.Placement], SyncFields.Placement.DeviceId)).Should().Be(home);
     }
 
     [Fact]

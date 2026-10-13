@@ -2,6 +2,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Migrations;
 using MyTaskApp.Infrastructure.Persistence;
 
@@ -53,6 +54,61 @@ internal sealed class TempSqliteDatabase : IAsyncDisposable
             .MigrateAsync(targetMigration, cancellationToken);
 
         return this;
+    }
+
+    /// <summary>
+    /// Grava pelo modelo atual num banco migrado só até uma versão antiga.
+    /// Colunas que o modelo tem e o banco ainda não entram só durante a gravação
+    /// e saem logo depois. Assim a migration seguinte as cria como em produção,
+    /// e um campo novo numa tabela antiga não obriga a reescrever em SQL todo
+    /// teste de upgrade que semeia por ela.
+    /// </summary>
+    public async Task SeedOnOlderSchemaAsync(CancellationToken cancellationToken, params object[] entities)
+    {
+        await using var context = CreateContext();
+        var added = new List<(string Table, string Column)>();
+
+        foreach (var entityType in context.Model.GetEntityTypes())
+        {
+            if (entityType.GetTableName() is not { } table)
+            {
+                continue;
+            }
+
+            var existing = (await context.Database
+                .SqlQuery<string>($"SELECT name AS Value FROM pragma_table_info({table})")
+                .ToListAsync(cancellationToken))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            if (existing.Count == 0)
+            {
+                // A tabela ainda não existe nesta versão: nada dela vai ser semeado.
+                continue;
+            }
+
+            var store = StoreObjectIdentifier.Table(table, entityType.GetSchema());
+
+            foreach (var property in entityType.GetProperties())
+            {
+                if (property.GetColumnName(store) is { } column
+                    && !existing.Contains(column)
+                    && !added.Contains((table, column)))
+                {
+                    var addColumn = $"ALTER TABLE \"{table}\" ADD COLUMN \"{column}\"";
+                    await context.Database.ExecuteSqlRawAsync(addColumn, cancellationToken);
+                    added.Add((table, column));
+                }
+            }
+        }
+
+        context.AddRange(entities);
+        await context.SaveChangesAsync(cancellationToken);
+
+        foreach (var (table, column) in added)
+        {
+            var dropColumn = $"ALTER TABLE \"{table}\" DROP COLUMN \"{column}\"";
+            await context.Database.ExecuteSqlRawAsync(dropColumn, cancellationToken);
+        }
     }
 
     public async ValueTask DisposeAsync()

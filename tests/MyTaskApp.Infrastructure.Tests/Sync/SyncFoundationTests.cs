@@ -102,11 +102,7 @@ public sealed class SyncFoundationTests : IDisposable
         var task = TaskItem.Create("Pagar boleto", Now);
         task.SetTags([tag.Id]);
 
-        await using (var write = db.CreateContext())
-        {
-            write.AddRange(tag, task);
-            await write.SaveChangesAsync(Ct);
-        }
+        await db.SeedOnOlderSchemaAsync(Ct, tag, task);
 
         await db.MigrateAsync(Ct);
 

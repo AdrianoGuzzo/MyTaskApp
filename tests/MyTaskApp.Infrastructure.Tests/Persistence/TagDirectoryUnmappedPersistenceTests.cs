@@ -119,10 +119,6 @@ public class TagDirectoryUnmappedPersistenceTests
         return (tag, directory, task);
     }
 
-    private static async Task SeedAsync(TempSqliteDatabase db, params object[] entities)
-    {
-        await using var context = db.CreateContext();
-        context.AddRange(entities);
-        await context.SaveChangesAsync(Ct);
-    }
+    private static Task SeedAsync(TempSqliteDatabase db, params object[] entities) =>
+        db.SeedOnOlderSchemaAsync(Ct, entities);
 }

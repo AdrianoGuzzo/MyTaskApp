@@ -29,6 +29,10 @@ internal sealed class TagConfiguration : IEntityTypeConfiguration<Tag>
             .HasConversion(UtcInstantConverter.Instance)
             .IsRequired();
 
+        // Onde aparece (ADR-062).
+        builder.Property(tag => tag.PlacementKind).HasConversion<int?>();
+        builder.Ignore(tag => tag.Placement);
+
         // As pastas são parte do agregado: excluir a etiqueta leva todas junto.
         builder.HasMany(tag => tag.Directories)
             .WithOne()
