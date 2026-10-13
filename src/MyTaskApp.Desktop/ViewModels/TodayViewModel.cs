@@ -1111,7 +1111,8 @@ public sealed partial class TodayViewModel(
     /// </summary>
     private string? PlacementLabel(DevicePlacement? placement)
     {
-        if (placements is not { IsActive: true } || placement is null)
+        // Sem outro computador na conta não há o que separar, nem o que dizer.
+        if (placements is not { HasOtherComputers: true } || placement is null)
         {
             return null;
         }

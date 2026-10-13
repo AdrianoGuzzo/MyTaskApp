@@ -212,7 +212,7 @@
             <DataTemplate x:DataType="vm:TagListItemViewModel">
               <Border Classes="card" Margin="0,0,0,6" Padding="10,7">
                 <StackPanel Spacing="8">
-                <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto">
+                <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto">
 
                   <Ellipse Grid.Column="0"
                            Width="12"
@@ -227,6 +227,10 @@
                                FontWeight="SemiBold"
                                TextTrimming="CharacterEllipsis" />
                     <TextBlock Classes="meta" Text="{Binding UsageLabel}" />
+                    <!-- Onde aparece (ADR-062): só com outro computador na conta. -->
+                    <TextBlock Classes="meta"
+                               Text="{Binding PlacementLabel}"
+                               IsVisible="{Binding HasPlacementLabel}" />
                   </StackPanel>
 
                   <ToggleButton Grid.Column="2"
@@ -237,6 +241,13 @@
                                 ToolTip.Tip="Pastas desta etiqueta. O alias delas insere o caminho na anotação."
                                 Command="{Binding #Root.((vm:TagsViewModel)DataContext).ToggleDirectoriesCommand}"
                                 CommandParameter="{Binding}" />
+
+                  <Button Grid.Column="5"
+                          Classes="rowAction placement"
+                          Margin="6,0,0,0"
+                          Content="Onde aparece…"
+                          IsVisible="{Binding #Root.((vm:TagsViewModel)DataContext).HasOtherComputers}"
+                          Click="OnPlacementClick" />
 
                   <Button Grid.Column="3"
                           Classes="rowAction"
