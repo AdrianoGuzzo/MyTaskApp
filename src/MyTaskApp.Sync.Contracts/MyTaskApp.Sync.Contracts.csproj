@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    O contrato da sincronizacao (ADR-060): o que viaja entre o desktop e o
+    servidor. Sem dependencia nenhuma, para os dois lados lerem o mesmo
+    registro de entidades, campos e codigos de erro.
+  -->
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="MyTaskApp.Sync.Contracts.Tests" />
+  </ItemGroup>
+
+</Project>
