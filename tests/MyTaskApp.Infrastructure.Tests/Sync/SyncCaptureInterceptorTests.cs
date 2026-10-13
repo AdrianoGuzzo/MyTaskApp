@@ -118,6 +118,22 @@ public sealed class SyncCaptureInterceptorTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task AFieldNewerThanTheSnapshot_TravelsOnlyWhenItHasAValue()
+    {
+        var task = await CreateTaskAsync();
+        await _kit.AcknowledgeAllAsync(Ct);
+        // Um retrato gravado por uma versão que ainda não conhecia os dois campos.
+        await ForgetInSnapshotAsync(task.Id, SyncFields.Task.NextAction, SyncFields.Task.Title);
+
+        await EditTaskAsync(task.Id, loaded => loaded.ChangePriority(TaskPriority.Urgent));
+
+        var operation = (await _kit.OutboxAsync(Ct)).Should().ContainSingle().Subject;
+        SyncCaptureKit.Fields(operation).Keys.Should().BeEquivalentTo(
+            [SyncFields.Task.Priority, SyncFields.Task.Title],
+            "o título tem valor e nunca subiu; a próxima ação vazia não é mudança");
+    }
+
+    [Fact]
     public async Task LocalOnlyChanges_DoNotTravel()
     {
         var task = await CreateTaskAsync();
@@ -315,6 +331,22 @@ public sealed class SyncCaptureInterceptorTests : IAsyncLifetime
         await using var context = _kit.CreateContext();
         var task = await new TaskItemRepository(context).FindByIdAsync(id, Ct);
         change(task!);
+        await context.SaveChangesAsync(Ct);
+    }
+
+    private async Task ForgetInSnapshotAsync(Guid taskId, params string[] fields)
+    {
+        await using var context = _kit.Database.CreateContext();
+        var state = await context.SyncEntityStates.SingleAsync(
+            row => row.EntityType == SyncEntityTypes.Task && row.EntityId == taskId, Ct);
+        var snapshot = SyncSnapshot.Read(state.Snapshot);
+
+        foreach (var field in fields)
+        {
+            snapshot.Remove(field);
+        }
+
+        state.Snapshot = SyncSnapshot.Write(snapshot);
         await context.SaveChangesAsync(Ct);
     }
 
