@@ -44,6 +44,13 @@ public static class SyncErrorCodes
     /// <summary>O valor colide com o de outra entidade (nome de etiqueta, alias).</summary>
     public const string UniqueViolation = "unique_violation";
 
+    /// <summary>
+    /// O mesmo campo mudou antes em outro dispositivo, mas é um carimbo (data
+    /// de arquivamento, "atualizado em"): vale o do servidor, sem conflito
+    /// visível. O cliente só grava o valor que veio.
+    /// </summary>
+    public const string Superseded = "superseded";
+
     // ---- Resposta inteira ----
 
     public const string DeviceRevoked = "device_revoked";
