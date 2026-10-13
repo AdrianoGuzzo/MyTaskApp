@@ -6,6 +6,7 @@ using MyTaskApp.Application.External;
 using MyTaskApp.Application.External.Jira;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.External;
+using MyTaskApp.Infrastructure.OAuth;
 using MyTaskApp.Infrastructure.Secrets;
 
 namespace MyTaskApp.Infrastructure.Jira;
@@ -56,6 +57,16 @@ internal sealed class JiraAuthenticationService(
 {
     public const string SecretName = "jira";
 
+    /// <summary>O que a página de volta e os erros dizem, com o nome do Jira.</summary>
+    public static readonly LoopbackCallbackMessages CallbackMessages = new(
+        PortInUse: "A porta {port} deste computador está ocupada, e o login do Jira volta por ela. "
+            + "Feche o programa que a usa e tente de novo.",
+        Connected: "Pronto! O MyTaskApp está conectado ao Jira. Você já pode fechar esta aba e voltar ao app.",
+        NotCompleted: "A autorização não foi concluída. Volte ao MyTaskApp para tentar de novo.",
+        Denied: "A autorização foi recusada no Jira.",
+        Failed: "O Jira não concluiu a autorização. Tente de novo.",
+        ReceivedLogEvent: "JiraAuthorizationCallbackReceived");
+
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     private StoredJiraConnection? _state;
@@ -69,7 +80,7 @@ internal sealed class JiraAuthenticationService(
     private CancellationTokenSource? _pendingAuthorization;
 
     /// <summary>A porta da volta da autorização em curso.</summary>
-    private OAuthCallbackListener? _listener;
+    private LoopbackCallbackListener? _listener;
 
     public async Task<JiraConnection> GetConnectionAsync(CancellationToken cancellationToken = default)
     {
@@ -112,15 +123,15 @@ internal sealed class JiraAuthenticationService(
         var pending = new CancellationTokenSource(options.AuthorizationTimeout);
         _pendingAuthorization = pending;
 
-        var listener = OAuthCallbackListener.Start(options.CallbackPort, logger);
+        var listener = LoopbackCallbackListener.Start(options.CallbackPort, CallbackMessages, logger);
         _listener = listener;
-        var state = JiraOAuthClient.NewSecret();
-        var verifier = JiraOAuthClient.NewSecret();
+        var state = Pkce.NewSecret();
+        var verifier = Pkce.NewSecret();
 
         logger.LogInformation("JiraAuthorizationStarted {Port}", listener.Port);
 
         return new JiraAuthorization(
-            oauth.AuthorizeUrl(state, JiraOAuthClient.ChallengeFor(verifier)),
+            oauth.AuthorizeUrl(state, Pkce.ChallengeFor(verifier)),
             CompleteAuthorizationAsync(listener, state, verifier, pending, cancellationToken));
     }
 
@@ -392,7 +403,7 @@ internal sealed class JiraAuthenticationService(
     }
 
     private async Task<JiraConnection> CompleteAuthorizationAsync(
-        OAuthCallbackListener listener,
+        LoopbackCallbackListener listener,
         string state,
         string verifier,
         CancellationTokenSource pending,
