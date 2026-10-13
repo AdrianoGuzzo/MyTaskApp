@@ -224,6 +224,7 @@ public sealed class GitWorktreeIntegrationTests : IAsyncLifetime
             summary = await new RunDevelopmentCommandsHandler(
                     new TaskItemRepository(context),
                     new DevelopmentCommandRepository(context),
+                    new SavedDatabaseRepository(context),
                     new ShellCommandExecutor(TimeProvider.System),
                     new FileSystemDirectoryProbe(),
                     NullLogger<RunDevelopmentCommandsHandler>.Instance)

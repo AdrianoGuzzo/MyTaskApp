@@ -365,6 +365,24 @@ public sealed class TaskItem
         development.ChangeAgentPrompt(normalized);
     }
 
+    /// <summary>
+    /// Confere, sem alterar nada, que o ambiente pode receber uma cópia do banco
+    /// (ADR-060). O caso de uso pergunta antes da cópia, que leva minutos.
+    /// </summary>
+    public void EnsureDevelopmentDatabaseCanChange(Guid developmentId)
+    {
+        RefuseWhenOutOfTheMainList("copiar o banco de");
+        GetDevelopment(developmentId).EnsureDatabaseCanChange();
+    }
+
+    /// <summary>
+    /// Registra o banco que a cópia acabou de criar para o ambiente (ADR-060).
+    /// Sem a guarda da lista principal, como o pronto do worktree: o banco já
+    /// existe no servidor, e arquivar no meio da cópia não pode perdê-lo de vista.
+    /// </summary>
+    public void SetDevelopmentDatabase(Guid developmentId, TaskDevelopmentDatabase database) =>
+        GetDevelopment(developmentId).ChangeDatabase(database);
+
     public void MarkDevelopmentReady(Guid developmentId, DateTimeOffset at) =>
         GetDevelopment(developmentId).MarkReady(at);
 

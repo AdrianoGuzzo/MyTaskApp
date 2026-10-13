@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
+        xmlns:views="using:MyTaskApp.Desktop.Views"
         x:Class="MyTaskApp.Desktop.Views.QuickCommandPromptWindow"
         x:DataType="vm:QuickCommandPromptViewModel"
         x:Name="Dialog"
@@ -24,16 +25,18 @@
                TextWrapping="Wrap"
                Text="{Binding Title}" />
 
+    <TextBlock FontSize="11.5"
+               Opacity="0.75"
+               TextWrapping="Wrap"
+               IsVisible="{Binding HasFields}"
+               Text="Digite { para usar o banco copiado ou uma variável do ambiente." />
+
     <ItemsControl x:Name="Fields" ItemsSource="{Binding Fields}" IsVisible="{Binding HasFields}">
       <ItemsControl.ItemTemplate>
         <DataTemplate x:DataType="vm:QuickCommandFieldViewModel">
           <StackPanel Spacing="4" Margin="0,0,0,8">
             <TextBlock FontSize="12" FontWeight="SemiBold" Text="{Binding Label}" />
-            <TextBox FontSize="12"
-                     MaxLength="500"
-                     IsVisible="{Binding IsText}"
-                     PlaceholderText="{Binding Placeholder}"
-                     Text="{Binding Value}" />
+            <views:ParameterValueBox IsVisible="{Binding IsText}" />
             <ComboBox FontSize="12"
                       HorizontalAlignment="Stretch"
                       IsVisible="{Binding IsChoice}"

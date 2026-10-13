@@ -1903,6 +1903,27 @@
                                        Text="{Binding WorktreePreview, FallbackValue='—', TargetNullValue='—'}" />
                 </StackPanel>
 
+                <!--
+                  O banco do ambiente (ADR-060): validado e confirmado antes do
+                  Git, copiado com o worktree pronto e antes dos comandos.
+                -->
+                <StackPanel x:Name="SetupDatabase"
+                            Spacing="6"
+                            x:DataType="vm:DevelopmentDatabaseViewModel"
+                            DataContext="{Binding Database}">
+                  <CheckBox x:Name="CopyOnCreateBox"
+                            Content="Copiar banco para este ambiente"
+                            IsChecked="{Binding CopyOnCreate}" />
+                  <Border Classes="codeBox" IsVisible="{Binding CopyOnCreate}">
+                    <StackPanel Spacing="8">
+                      <views:DevelopmentDatabaseSelector />
+                      <TextBlock Classes="hint"
+                                 TextWrapping="Wrap"
+                                 Text="{x:Static vm:DevelopmentDatabaseViewModel.VariablesHint}" />
+                    </StackPanel>
+                  </Border>
+                </StackPanel>
+
                 <!-- Comandos pós-Worktree (ADR-028): gravados junto, rodam depois de criar. -->
                 <StackPanel Spacing="6">
                   <views:PostWorktreeCommandsView x:Name="SetupCommands" DataContext="{Binding Commands}" />
@@ -2103,6 +2124,79 @@
                               Command="{Binding ForceRemoveWorktreeCommand}"
                               IsVisible="{Binding CanForceRemove}"
                               IsEnabled="{Binding !IsRemoving}" />
+                    </StackPanel>
+                  </StackPanel>
+                </Border>
+
+                <Border Height="1" Margin="0,4,0,0" Background="{DynamicResource WidgetStrokeSoftBrush}" />
+
+                <!--
+                  O banco do ambiente (ADR-060): o que foi copiado, copiar (de novo)
+                  e o progresso. O nome é o {database} dos comandos.
+                -->
+                <Border x:Name="DatabaseCard">
+                  <StackPanel x:Name="DatabasePanel"
+                              x:DataType="vm:DevelopmentDatabaseViewModel"
+                              DataContext="{Binding Database}"
+                              Spacing="10">
+
+                    <TextBlock Classes="sectionTitle" Text="🗄 Banco do ambiente" />
+
+                    <StackPanel Spacing="4" IsVisible="{Binding HasDatabase}">
+                      <SelectableTextBlock Classes="code" x:Name="DatabaseName" Text="{Binding Current.Name, FallbackValue=''}" />
+                      <TextBlock Classes="hint" TextWrapping="Wrap" Text="{Binding DatabaseServer}" />
+                      <TextBlock Classes="hint" Text="{Binding CopiedAtText}" />
+                      <TextBlock x:Name="DatabaseVariablesText" Classes="hint" TextWrapping="Wrap" Text="{Binding VariablesText}" />
+                    </StackPanel>
+
+                    <TextBlock x:Name="NoDatabaseText"
+                               Classes="hint"
+                               TextWrapping="Wrap"
+                               IsVisible="{Binding !HasDatabase}"
+                               Text="Nenhum banco copiado para este ambiente. Copiado, o nome dele chega aos comandos em {database}." />
+
+                    <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8" IsVisible="{Binding !IsSelecting}">
+                      <Button x:Name="CopyDatabaseButton"
+                              Content="{Binding CopyActionLabel}"
+                              Command="{Binding BeginSelectingCommand}" />
+                      <Button Content="Copiar nome"
+                              IsVisible="{Binding HasDatabase}"
+                              Command="{Binding CopyNameCommand}" />
+                    </WrapPanel>
+
+                    <Border Classes="codeBox" IsVisible="{Binding IsSelecting}">
+                      <StackPanel Spacing="8">
+                        <views:DevelopmentDatabaseSelector />
+                        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" IsVisible="{Binding !IsRunning}">
+                          <Button Content="Cancelar" Command="{Binding CancelSelectingCommand}" />
+                          <Button Classes="accent"
+                                  x:Name="CopyNowButton"
+                                  Content="Copiar"
+                                  Command="{Binding CopyNowCommand}" />
+                        </StackPanel>
+                      </StackPanel>
+                    </Border>
+
+                    <StackPanel Spacing="6" IsVisible="{Binding IsRunning}">
+                      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <ProgressBar x:Name="DatabaseProgress" Minimum="0" Maximum="100" Value="{Binding Percent}" Height="10" />
+                        <TextBlock Grid.Column="1" Text="{Binding PercentText}" FontWeight="SemiBold" />
+                      </Grid>
+                      <TextBlock Classes="hint" TextWrapping="Wrap" Text="{Binding CurrentStep}" />
+                      <Button HorizontalAlignment="Left" Content="Cancelar cópia" Command="{Binding CancelCommand}" />
+                    </StackPanel>
+
+                    <TextBlock x:Name="DatabaseResult"
+                               Classes="body"
+                               Classes.ok="{Binding ResultSucceeded}"
+                               Classes.bad="{Binding !ResultSucceeded}"
+                               TextWrapping="Wrap"
+                               Text="{Binding ResultMessage}"
+                               IsVisible="{Binding HasResult}" />
+
+                    <StackPanel Spacing="6" IsVisible="{Binding Output.HasCommand}">
+                      <ToggleButton x:Name="DatabaseLogToggle" HorizontalAlignment="Left" Content="Logs" IsChecked="{Binding IsLogOpen}" />
+                      <views:CommandOutputView DataContext="{Binding Output}" IsVisible="{Binding #DatabaseLogToggle.IsChecked}" />
                     </StackPanel>
                   </StackPanel>
                 </Border>

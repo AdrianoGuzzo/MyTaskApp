@@ -202,6 +202,15 @@ public sealed partial class TaskNotesWindow : Window
                     busy.Message = "Aguarde a criação do worktree terminar para fechar.";
                 }
             }
+            else if (busy is { Database.IsRunning: true })
+            {
+                // A cópia do banco leva minutos, e cancelar deixa o destino
+                // pela metade: como a criação do worktree, segura e explica (ADR-060).
+                e.Cancel = true;
+                viewModel.SelectedTabIndex = TaskNotesViewModel.DevelopmentTab;
+                viewModel.Developments.Selected = busy;
+                busy.Message = "Cópia do banco em andamento. Aguarde terminar, ou clique em Cancelar cópia, para fechar.";
+            }
             else if (busy is { QuickCommands.IsRunning: true })
             {
                 // O mesmo para um comando rápido escondido (ADR-051).

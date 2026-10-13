@@ -584,6 +584,7 @@ public sealed partial class App : Avalonia.Application
             services.GetRequiredService<IConfirmationDialog>());
 
         viewModel.Developments.CommandsRequested += () => ShowDevelopmentCommands(services, notes);
+        viewModel.Developments.DatabaseOperationsRequested += () => ShowDatabaseOperations(services, notes);
 
         // Vincular, atualizar ou desvincular muda a chave que a linha desenha.
         if (viewModel.Issue is { } issue)
@@ -804,6 +805,7 @@ public sealed partial class App : Avalonia.Application
         // Uma cópia de banco em andamento para; a limpeza do diretório
         // temporário roda no caminho de volta dela (ADR-056).
         services.GetRequiredService<DatabaseOperationsViewModel>().CancelForShutdown();
+        services.GetRequiredService<DatabaseCopyRuns>().CancelAll();
         services.GetRequiredService<ReminderScheduler>().Dispose();
         services.GetRequiredService<LifecycleMaintenanceScheduler>().Dispose();
         services.GetRequiredService<AgentSessionMonitor>().Dispose();
