@@ -45,7 +45,7 @@ public sealed class McpResources(TaskTools tasks, TimeTools time, DatabaseConnec
     [McpServerResource(UriTemplate = "mytaskapp://today", Name = "today", Title = "Quadro de hoje", MimeType = "application/json")]
     [Description("As tarefas de hoje por seção e o cronômetro ativo.")]
     public async Task<string> TodayAsync(CancellationToken cancellationToken) =>
-        Json(await tasks.GetTodayAsync(cancellationToken));
+        Json(await tasks.GetTodayAsync(cancellationToken: cancellationToken));
 
     [McpServerResource(UriTemplate = "mytaskapp://timer", Name = "timer", Title = "Cronômetro", MimeType = "application/json")]
     [Description("O cronômetro ativo, o total de hoje e o último período encerrado.")]
@@ -61,14 +61,14 @@ public sealed class McpResources(TaskTools tasks, TimeTools time, DatabaseConnec
     [McpServerResource(UriTemplate = "mytaskapp://statistics", Name = "statistics", Title = "Estatísticas", MimeType = "application/json")]
     [Description("Contagens de tarefas e horas recentes.")]
     public async Task<string> StatisticsAsync(CancellationToken cancellationToken) =>
-        Json(await tasks.GetStatisticsAsync(cancellationToken));
+        Json(await tasks.GetStatisticsAsync(cancellationToken: cancellationToken));
 
     [McpServerResource(UriTemplate = "mytaskapp://tags", Name = "tags", Title = "Etiquetas e diretórios", MimeType = "application/json")]
     [Description("As etiquetas e os diretórios (aliases) de cada uma.")]
     public async Task<string> TagsAsync(CancellationToken cancellationToken) =>
         Json(new
         {
-            Tags = await context.ListTagsAsync(cancellationToken),
+            Tags = await context.ListTagsAsync(cancellationToken: cancellationToken),
             Directories = await context.ListDirectoriesAsync(cancellationToken: cancellationToken),
         });
 

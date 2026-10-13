@@ -1,3 +1,4 @@
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Domain.Lifecycle;
 using MyTaskApp.Domain.Tasks;
 
@@ -54,9 +55,11 @@ public interface IChecklistArchiveQuery
     /// de arquivados, "últimos 30 dias" quer dizer "arquivados nos últimos 30
     /// dias". <c>null</c> não recorta nada.
     /// </param>
+    /// <param name="placement">Só as tarefas que aparecem nesta visão (ADR-062).</param>
     Task<IReadOnlyList<ChecklistSummaryRow>> SearchAsync(
         ChecklistScope scope,
         string? search,
+        PlacementFilter placement,
         DateTimeOffset? since = null,
         CancellationToken cancellationToken = default);
 }

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Domain.Tasks;
 
@@ -12,10 +13,11 @@ internal sealed class ChecklistArchiveQuery(MyTaskAppDbContext context) : ICheck
     public async Task<IReadOnlyList<ChecklistSummaryRow>> SearchAsync(
         ChecklistScope scope,
         string? search,
+        PlacementFilter placement,
         DateTimeOffset? since = null,
         CancellationToken cancellationToken = default)
     {
-        var query = context.Tasks.AsNoTracking();
+        var query = context.Tasks.AsNoTracking().VisibleIn(placement);
 
         // A lixeira vence o arquivo: um checklist arquivado e depois excluído
         // aparece só na lixeira, que é onde o usuário pode agir sobre ele. E o

@@ -341,12 +341,18 @@ claude mcp add --transport http mytaskapp http://127.0.0.1:5180/mcp   --header "
 
 ### Sincronização entre computadores (opcional)
 
-Em *☰ → Sincronização…*, você conecta a conta Google e passa a ver as mesmas
-tarefas, etiquetas, horas e post-its em todos os seus computadores. Sem conta,
-nada muda: o app continua inteiro, só local. O guia está em
-[`docs/sync.md`](docs/sync.md), o servidor em
-[`docs/sync-server.md`](docs/sync-server.md), e a decisão no
-[ADR-061](docs/ARCHITECTURE.md).
+Em *☰ → Sincronização…*, você conecta a conta Google, e tarefas, etiquetas,
+horas e post-its vão para todos os seus computadores. Sem conta, nada muda: o
+app continua inteiro, só local. O guia está em [`docs/sync.md`](docs/sync.md),
+o servidor em [`docs/sync-server.md`](docs/sync-server.md), e as decisões no
+[ADR-061 e no ADR-062](docs/ARCHITECTURE.md).
+
+- **Cada computador com a sua lista.** A tarefa aparece só onde foi criada.
+  "Onde aparece…" compartilha com todos ou manda para outro computador, e a
+  caixa de captura escolhe o destino na hora ("estou no trabalho e anoto para
+  casa"). O que chega de outro computador aparece no topo, em CHEGARAM.
+  "Mostrando" e o histórico da semana mostram este computador, outro, ou
+  todos. Escondida não é privada: tudo continua sincronizado.
 
 - **Funciona offline.** As mudanças esperam num outbox, gravado junto com a
   própria mudança, e sobem quando a rede volta, sem duplicar.
@@ -768,7 +774,9 @@ fica em [`CHANGELOG.md`](CHANGELOG.md).
 
 | Documento | Conteúdo |
 |---|---|
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | decisões de arquitetura (ADR-001 a ADR-059), com o motivo de cada uma |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | decisões de arquitetura (ADR-001 a ADR-062), com o motivo de cada uma |
+| [`docs/sync.md`](docs/sync.md) | sincronização entre computadores: a tela, o que sincroniza, onde cada tarefa aparece, conflitos e limitações |
+| [`docs/sync-server.md`](docs/sync-server.md) | o servidor de sincronização: cliente OAuth do Google, configuração, migrations, implantação e testes |
 | [`docs/mcp-server.md`](docs/mcp-server.md) | servidor MCP local: ativar, porta, token, Claude Code, as ferramentas, segurança e limitações |
 | [`docs/database-operations.md`](docs/database-operations.md) | conexões PostgreSQL, ambientes, ferramentas, máscaras, cópia anonimizada de produção e solução de problemas |
 | [`docs/jira-oauth-app.md`](docs/jira-oauth-app.md) | registrar o app OAuth do Jira e pôr as credenciais no build |

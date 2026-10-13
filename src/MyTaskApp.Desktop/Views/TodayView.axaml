@@ -187,6 +187,16 @@
                       IsVisible="{Binding Worktree.HasWorktree}"
                       Click="OnOpenFolderClick" />
             <Separator IsVisible="{Binding Worktree.HasWorktree}" />
+            <!--
+              Onde a tarefa aparece (ADR-062): este computador, todos, ou
+              outro. Clique de code-behind: as escolhas dependem dos
+              computadores da conta, montadas na hora (OnPlacementMenuClick).
+            -->
+            <MenuItem Classes="placement"
+                      Header="Onde aparece…"
+                      IsVisible="{Binding #Root.((vm:TodayViewModel)DataContext).Devices.IsAvailable}"
+                      Click="OnPlacementMenuClick" />
+            <Separator IsVisible="{Binding #Root.((vm:TodayViewModel)DataContext).Devices.IsAvailable}" />
             <MenuItem Header="Arquivar"
                       Command="{Binding #Root.((vm:TodayViewModel)DataContext).ArchiveCommand}"
                       CommandParameter="{Binding}" />
@@ -381,6 +391,22 @@
                 </ToolTip.Tip>
               </TextBlock>
             </DockPanel>
+
+            <!--
+              De onde veio e onde aparece (ADR-062). A chegada some ao abrir a
+              tarefa; o lugar só aparece quando importa (ver PlacementLabel).
+            -->
+            <StackPanel Classes="placementLine"
+                        Orientation="Horizontal"
+                        Spacing="6"
+                        HorizontalAlignment="Left">
+              <TextBlock Classes="arrival"
+                         Text="{Binding ArrivalLabel}"
+                         IsVisible="{Binding HasArrived}" />
+              <TextBlock Classes="placementLabel"
+                         Text="{Binding PlacementLabel}"
+                         IsVisible="{Binding HasPlacementLabel}" />
+            </StackPanel>
 
             <!--
               O prazo (ADR-050): relógio e texto, abaixo do título. O texto já
@@ -1342,6 +1368,63 @@
       <Setter Property="BorderBrush" Value="{DynamicResource WidgetAccentLineBrush}" />
     </Style>
 
+    <!-- ===== Onde aparece (ADR-062) ===== -->
+
+    <Style Selector="Grid.deviceBar">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+
+    <Style Selector="Grid.deviceBar.available">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+
+    <Style Selector="Grid.deviceBar TextBlock">
+      <Setter Property="FontSize" Value="10.5" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+    </Style>
+
+    <Style Selector="Grid.deviceBar ComboBox, StackPanel.captureTarget ComboBox">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="MinHeight" Value="22" />
+      <Setter Property="Padding" Value="6,1" />
+    </Style>
+
+    <!-- Espiando outro computador: o seletor fica em destaque, para ninguém achar que é a lista daqui. -->
+    <Style Selector="Grid.deviceBar.others ComboBox">
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetAccentBrush}" />
+    </Style>
+
+    <Style Selector="StackPanel.captureTarget TextBlock">
+      <Setter Property="FontSize" Value="10.5" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+    </Style>
+
+    <Style Selector="StackPanel.captureTarget.away ComboBox">
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetAccentBrush}" />
+    </Style>
+
+    <Style Selector="StackPanel.placementLine TextBlock">
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <Style Selector="StackPanel.placementLine TextBlock.placementLabel">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+    </Style>
+
+    <Style Selector="StackPanel.placementLine TextBlock.arrival">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetInfoBrush}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <Style Selector="Button.undoPlacement">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Padding" Value="8,1" />
+      <Setter Property="Margin" Value="8,0,0,0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
     <!-- ===== A issue na linha (ADR-045) ===== -->
 
     <Style Selector="Border.rowIssueType">
@@ -1497,6 +1580,10 @@
       <Setter Property="IsVisible" Value="False" />
     </Style>
 
+    <Style Selector="views|TodayView.compact Grid#DeviceBar">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+
     <!--
       HUD (ADR-048). Vem depois dos estilos base e do compacto de propósito: no
       Avalonia não há especificidade de CSS, quem casa por último ganha. O
@@ -1511,6 +1598,10 @@
     </Style>
 
     <Style Selector="views|TodayView.hud Border#CaptureCard">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+
+    <Style Selector="views|TodayView.hud Grid#DeviceBar">
       <Setter Property="IsVisible" Value="False" />
     </Style>
 
@@ -1693,6 +1784,29 @@
         </Grid>
 
         <!--
+          Para onde vai o que está sendo escrito (ADR-062): este computador,
+          todos, ou outro — "estou no trabalho e anoto para casa". Volta para
+          este computador depois de cada captura.
+        -->
+        <StackPanel x:Name="CaptureTarget"
+                    Classes="captureTarget"
+                    Classes.away="{Binding Devices.IsSendingAway}"
+                    Orientation="Horizontal"
+                    Spacing="6"
+                    Margin="0,4,0,0"
+                    IsVisible="{Binding Devices.IsAvailable}">
+          <TextBlock Text="Para" VerticalAlignment="Center" />
+          <ComboBox ItemsSource="{Binding Devices.Destinations}"
+                    SelectedItem="{Binding Devices.CaptureTarget}">
+            <ComboBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:DeviceOption">
+                <TextBlock Text="{Binding Label}" />
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+        </StackPanel>
+
+        <!--
           A linha que vai nascer vinculada ao Jira (ADR-045). A chave fica no
           texto, visível; isto só confirma que ela foi reconhecida.
         -->
@@ -1762,6 +1876,31 @@
                  Foreground="{DynamicResource WidgetTextLowBrush}"
                  Text="Enter adiciona · Shift+Enter quebra linha · Ctrl+Espaço: Jira" />
 
+      <!--
+        De qual computador a lista mostra (ADR-062). Só existe com outro
+        computador na conta; a visibilidade é dos estilos (Grid.deviceBar),
+        para o compacto e o HUD poderem tirá-la.
+      -->
+      <Grid x:Name="DeviceBar"
+            DockPanel.Dock="Top"
+            Classes="deviceBar"
+            Classes.available="{Binding Devices.IsAvailable}"
+            Classes.others="{Binding Devices.IsShowingOthers}"
+            ColumnDefinitions="Auto,Auto"
+            Margin="14,6,12,0">
+        <TextBlock Grid.Column="0" Text="Mostrando" VerticalAlignment="Center" Margin="0,0,6,0" />
+        <ComboBox x:Name="DeviceViewPicker"
+                  Grid.Column="1"
+                  ItemsSource="{Binding Devices.Views}"
+                  SelectedItem="{Binding Devices.Selected}">
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:DeviceOption">
+              <TextBlock Text="{Binding Label}" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+      </Grid>
+
       <Border DockPanel.Dock="Top"
               Margin="12,8,12,0"
               Padding="10,7"
@@ -1780,10 +1919,19 @@
               CornerRadius="{StaticResource WidgetPillRadius}"
               Background="{DynamicResource WidgetAccentSoftBrush}"
               IsVisible="{Binding StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
-        <TextBlock Text="{Binding StatusMessage}"
-                   FontSize="11"
-                   Foreground="{DynamicResource WidgetTextHighBrush}"
-                   TextWrapping="Wrap" />
+        <DockPanel>
+          <!-- O envio para outro computador tira a tarefa daqui: um clique a traz de volta (ADR-062). -->
+          <Button DockPanel.Dock="Right"
+                  Classes="undoPlacement"
+                  Content="Desfazer"
+                  IsVisible="{Binding CanUndoPlacement}"
+                  Command="{Binding UndoPlaceCommand}" />
+          <TextBlock Text="{Binding StatusMessage}"
+                     FontSize="11"
+                     VerticalAlignment="Center"
+                     Foreground="{DynamicResource WidgetTextHighBrush}"
+                     TextWrapping="Wrap" />
+        </DockPanel>
       </Border>
 
       <!--

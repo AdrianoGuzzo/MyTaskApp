@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Application.History;
 using MyTaskApp.Domain.Planning;
 using MyTaskApp.Domain.Tasks;
@@ -19,15 +20,18 @@ internal sealed class ActivityHistoryQuery(MyTaskAppDbContext context) : IActivi
     public async Task<ActivityHistoryRows> GetAsync(
         DateTimeOffset since,
         DateTimeOffset until,
+        PlacementFilter placement,
         CancellationToken cancellationToken = default)
     {
+        var tasks = context.Tasks.AsNoTracking().VisibleIn(placement);
+
         // Cai no índice de CompletedAt.
         var completions = await (
                 from occurrence in context.Occurrences.AsNoTracking()
                 where occurrence.Status == TaskItemStatus.Completed
                     && occurrence.CompletedAt >= since
                     && occurrence.CompletedAt < until
-                join task in context.Tasks.AsNoTracking()
+                join task in tasks
                     on occurrence.TaskItemId equals task.Id
                 where task.DeletedAt == null
                 select new ActivityCompletion(task.Id, occurrence.Id, task.Title, occurrence.CompletedAt!.Value))
@@ -41,7 +45,7 @@ internal sealed class ActivityHistoryQuery(MyTaskAppDbContext context) : IActivi
                     && (entry.EndedAt == null || entry.EndedAt > since)
                 join occurrence in context.Occurrences.AsNoTracking()
                     on entry.TaskOccurrenceId equals occurrence.Id
-                join task in context.Tasks.AsNoTracking()
+                join task in tasks
                     on occurrence.TaskItemId equals task.Id
                 where task.DeletedAt == null
                 select new ActivityPeriod(task.Id, occurrence.Id, task.Title, entry.StartedAt, entry.EndedAt))

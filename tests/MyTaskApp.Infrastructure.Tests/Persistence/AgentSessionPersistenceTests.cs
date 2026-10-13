@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Domain.Agents;
 using MyTaskApp.Domain.Tasks;
@@ -159,7 +160,7 @@ public class AgentSessionPersistenceTests
         await AddAsync(db, Running(task, 100, Now.AddMinutes(-5)), Running(task, 200, development: api));
 
         await using var read = db.CreateContext();
-        var rows = await new TodayQuery(read).GetCandidatesAsync(Today, Ct);
+        var rows = await new TodayQuery(read).GetCandidatesAsync(Today, PlacementFilter.All, Ct);
 
         rows.Single(row => row.TaskId == task.Id).ActiveAgents!.Select(agent => agent.RepositoryPath)
             .Should().Equal(Repository, ApiRepository);
@@ -222,7 +223,7 @@ public class AgentSessionPersistenceTests
         await AddAsync(db, Running(withAgent, 15432), ended);
 
         await using var read = db.CreateContext();
-        var rows = await new TodayQuery(read).GetCandidatesAsync(Today, Ct);
+        var rows = await new TodayQuery(read).GetCandidatesAsync(Today, PlacementFilter.All, Ct);
 
         rows.Single(row => row.TaskId == withAgent.Id).ActiveAgents.Should().ContainSingle()
             .Which.Should().Be(new ActiveAgentRow(withAgent.Developments[0].Id, "claude-code", Repository, "feature/123"));
@@ -314,7 +315,7 @@ public class AgentSessionPersistenceTests
         stored.ActivityMessage.Should().Be("Redis ou MemoryCache?");
         stored.ActivityChangedAt.Should().Be(Now.AddMinutes(9));
 
-        var rows = await new TodayQuery(read).GetCandidatesAsync(Today, Ct);
+        var rows = await new TodayQuery(read).GetCandidatesAsync(Today, PlacementFilter.All, Ct);
         rows.Single().ActiveAgents!.Single().Activity.Should().Be(AgentActivity.WaitingForUser);
     }
 

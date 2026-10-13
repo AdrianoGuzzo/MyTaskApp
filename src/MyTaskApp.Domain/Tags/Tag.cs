@@ -1,3 +1,5 @@
+using MyTaskApp.Domain.Devices;
+
 namespace MyTaskApp.Domain.Tags;
 
 /// <summary>
@@ -31,8 +33,36 @@ public sealed class Tag
     /// <summary>As pastas da etiqueta, com o alias que as chama na anotação (ADR-026).</summary>
     public IReadOnlyList<TagDirectory> Directories => _directories.AsReadOnly();
 
-    public static Tag Create(string name, string colorHex, DateTimeOffset createdAt) =>
-        new(Guid.CreateVersion7(createdAt), NormalizeName(name), TagColor.Normalize(colorHex), createdAt);
+    /// <summary>
+    /// Em qual computador a etiqueta aparece para ser escolhida (ADR-062).
+    /// <c>null</c> = legado, aparece em todos. O chip numa tarefa visível aparece
+    /// sempre: o vínculo segue a tarefa.
+    /// </summary>
+    public PlacementKind? PlacementKind { get; private set; }
+
+    public Guid? PlacementDeviceId { get; private set; }
+
+    public DevicePlacement? Placement => DevicePlacement.From(PlacementKind, PlacementDeviceId);
+
+    public static Tag Create(string name, string colorHex, DateTimeOffset createdAt, DevicePlacement? placement = null)
+    {
+        var tag = new Tag(Guid.CreateVersion7(createdAt), NormalizeName(name), TagColor.Normalize(colorHex), createdAt);
+
+        if (placement is not null)
+        {
+            tag.Place(placement);
+        }
+
+        return tag;
+    }
+
+    public void Place(DevicePlacement placement)
+    {
+        ArgumentNullException.ThrowIfNull(placement);
+
+        PlacementKind = placement.Kind;
+        PlacementDeviceId = placement.DeviceId;
+    }
 
     /// <summary>Atômico: valida os dois campos antes de trocar qualquer um.</summary>
     public void Update(string name, string colorHex)

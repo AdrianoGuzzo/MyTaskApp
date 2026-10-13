@@ -55,7 +55,10 @@ public sealed record TaskSummary(
     Duration? Estimate,
     bool TimerRunning,
     DateTimeOffset? CreatedAt,
-    DateTimeOffset? CompletedAt)
+    DateTimeOffset? CompletedAt,
+    // Onde aparece (ADR-062): "este computador", "todos os computadores" ou o
+    // apelido. Nulo quando a conta não tem outro computador.
+    string? Placement = null)
 {
     public static TaskSummary Of(TaskListItem item) => new(
         item.Task.TaskId,
@@ -148,7 +151,9 @@ public sealed record TaskDetail(
     DateTimeOffset? ConcludedAt,
     DateTimeOffset? ArchivedAt,
     DateTimeOffset? DeletedAt,
-    string? DeletedBy)
+    string? DeletedBy,
+    // Onde aparece (ADR-062); nulo quando a conta não tem outro computador.
+    string? Placement = null)
 {
     public static TaskDetail Of(TaskListItem item)
     {

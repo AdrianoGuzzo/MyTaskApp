@@ -139,6 +139,14 @@ internal sealed class TaskItemConfiguration : IEntityTypeConfiguration<TaskItem>
         // continuar traduzível; nula = segue a configuração global.
         builder.Property(task => task.DeadlineAlerts).HasConversion<int?>();
 
+        // Onde aparece (ADR-062): duas colunas, para o filtro de cada consulta
+        // ser um predicado simples. O objeto é derivado delas.
+        builder.Property(task => task.PlacementKind).HasConversion<int?>();
+        builder.Ignore(task => task.Placement);
+
+        builder.Property(task => task.ReceivedAt)
+            .HasConversion(UtcInstantConverter.Instance);
+
         builder.Property(task => task.NextAction).HasMaxLength(TaskItem.MaxNextActionLength);
 
         builder.Property(task => task.Estimate)

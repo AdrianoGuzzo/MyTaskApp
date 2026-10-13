@@ -790,6 +790,12 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .HasColumnType("TEXT")
                         .UseCollation("NOCASE");
 
+                    b.Property<Guid?>("PlacementDeviceId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("PlacementKind")
+                        .HasColumnType("INTEGER");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Name")
@@ -994,8 +1000,20 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("PlacementDeviceId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("PlacementKind")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("Priority")
                         .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ReceivedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("ReceivedFromDeviceId")
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -1465,8 +1483,14 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("FormerDeviceIds")
+                        .HasColumnType("TEXT");
+
                     b.Property<bool>("IsEnabled")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("KnownDevices")
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("LastError")
                         .HasMaxLength(2000)

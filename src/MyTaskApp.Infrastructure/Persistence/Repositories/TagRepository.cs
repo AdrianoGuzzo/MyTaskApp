@@ -27,6 +27,12 @@ internal sealed class TagRepository(MyTaskAppDbContext context) : ITagRepository
             tag => tag.Name == name && tag.Id != exceptId,
             cancellationToken);
 
+    public Task<Tag?> FindByNameAsync(string name, CancellationToken cancellationToken = default) =>
+        context.Tags
+            .Include(tag => tag.Directories)
+            .ThenInclude(directory => directory.Commands)
+            .SingleOrDefaultAsync(tag => tag.Name == name, cancellationToken);
+
     public async Task<IReadOnlyCollection<Guid>> FindExistingIdsAsync(
         IReadOnlyCollection<Guid> ids,
         CancellationToken cancellationToken = default)

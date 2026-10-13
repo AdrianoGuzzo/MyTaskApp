@@ -1,3 +1,4 @@
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Domain.External;
 using MyTaskApp.Domain.Tasks;
 using MyTaskApp.Infrastructure.Persistence.Queries;
@@ -113,7 +114,7 @@ public class ExternalLinkPersistenceTests
         await SeedAsync(db, linked, local);
 
         await using var read = db.CreateContext();
-        var rows = await new TodayQuery(read).GetCandidatesAsync(Today, Ct);
+        var rows = await new TodayQuery(read).GetCandidatesAsync(Today, PlacementFilter.All, Ct);
 
         rows.Single(row => row.TaskId == linked.Id).External!.Id.Should().Be("GAECO-1234");
         rows.Single(row => row.TaskId == local.Id).External.Should().BeNull();

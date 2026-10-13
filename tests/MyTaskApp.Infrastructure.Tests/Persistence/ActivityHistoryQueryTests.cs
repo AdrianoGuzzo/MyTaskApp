@@ -2,6 +2,7 @@ using System.Data.Common;
 using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Domain.Tasks;
 using MyTaskApp.Domain.TimeTracking;
 using MyTaskApp.Infrastructure.Persistence;
@@ -67,7 +68,7 @@ public class ActivityHistoryQueryTests
     private static async Task<Application.History.ActivityHistoryRows> QueryAsync(TempSqliteDatabase db)
     {
         await using var context = db.CreateContext();
-        return await new ActivityHistoryQuery(context).GetAsync(Since, Until, Ct);
+        return await new ActivityHistoryQuery(context).GetAsync(Since, Until, PlacementFilter.All, Ct);
     }
 
     [Fact]
@@ -148,7 +149,7 @@ public class ActivityHistoryQueryTests
             .AddInterceptors(counter)
             .Options);
 
-        var rows = await new ActivityHistoryQuery(context).GetAsync(Since, Until, Ct);
+        var rows = await new ActivityHistoryQuery(context).GetAsync(Since, Until, PlacementFilter.All, Ct);
 
         rows.Completions.Should().HaveCount(50);
         rows.Periods.Should().HaveCount(50);

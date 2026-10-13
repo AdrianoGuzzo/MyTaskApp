@@ -222,7 +222,10 @@ internal sealed class ScriptedSyncApi : ISyncApi
         return Task.FromResult(new DeviceInfo(Guid.Empty, "PC", hello.Platform, hello.AppVersion, SyncDeviceHarness.Now, null, null, true));
     }
 
-    public Task<IReadOnlyList<DeviceInfo>> DevicesAsync(CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<DeviceInfo>>([]);
+    /// <summary>Os dispositivos da conta que o servidor devolve; o padrão é nenhum.</summary>
+    public IReadOnlyList<DeviceInfo> Devices { get; set; } = [];
+
+    public Task<IReadOnlyList<DeviceInfo>> DevicesAsync(CancellationToken cancellationToken) => Task.FromResult(Devices);
 
     public Task<DeviceInfo> RenameDeviceAsync(Guid deviceId, string nickname, CancellationToken cancellationToken) => throw new NotSupportedException();
 

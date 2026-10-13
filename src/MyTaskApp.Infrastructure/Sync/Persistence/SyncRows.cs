@@ -41,6 +41,19 @@ internal sealed class SyncStateRow
     /// </summary>
     public Guid? LinkedDeviceId { get; set; }
 
+    /// <summary>
+    /// Os ids que este computador já teve na conta, em JSON (ADR-062): revogado
+    /// e reconectado, ele volta com outro id, e o que estava no antigo continua
+    /// sendo daqui até o assentamento levar para o novo.
+    /// </summary>
+    public string? FormerDeviceIds { get; set; }
+
+    /// <summary>
+    /// Os dispositivos da conta no último ciclo, em JSON: o seletor e o
+    /// "Enviar para" precisam dos apelidos antes do primeiro ciclo e sem rede.
+    /// </summary>
+    public string? KnownDevices { get; set; }
+
     public SyncLinkStatus Status { get; set; }
 
     /// <summary>Ligado pelo usuário. Desligado, captura continua e nada viaja.</summary>

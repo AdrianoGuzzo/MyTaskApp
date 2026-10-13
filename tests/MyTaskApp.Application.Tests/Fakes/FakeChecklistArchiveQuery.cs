@@ -1,3 +1,4 @@
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Application.Lifecycle;
 
 namespace MyTaskApp.Application.Tests.Fakes;
@@ -15,6 +16,7 @@ internal sealed class FakeChecklistArchiveQuery : IChecklistArchiveQuery
     public Task<IReadOnlyList<ChecklistSummaryRow>> SearchAsync(
         ChecklistScope scope,
         string? search,
+        PlacementFilter placement,
         DateTimeOffset? since = null,
         CancellationToken cancellationToken = default)
     {

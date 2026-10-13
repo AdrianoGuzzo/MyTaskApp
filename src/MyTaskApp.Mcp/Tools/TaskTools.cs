@@ -2,6 +2,7 @@ using System.ComponentModel;
 using ModelContextProtocol.Server;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Deadlines;
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Application.History;
 using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Application.Planning;
@@ -19,9 +20,20 @@ namespace MyTaskApp.Mcp.Tools;
 
 /// <summary>Tarefas: consultar, criar, editar e mudar de estado (ADR-059).</summary>
 [McpServerToolType]
-public sealed class TaskTools(McpGateway gateway, IUserClock clock, TimeProvider timeProvider)
+public sealed class TaskTools(
+    McpGateway gateway,
+    IUserClock clock,
+    TimeProvider timeProvider,
+    DevicePlacementState? placements = null)
 {
     private const string TagsHelp = "Etiquetas por nome ou id (veja tag_list).";
+
+    /// <summary>A linha da lista com o lugar escrito (ADR-062).</summary>
+    private TaskSummary Summary(TaskListItem item) =>
+        TaskSummary.Of(item) with { Placement = DeviceInput.Describe(placements, item.Task.Placement) };
+
+    private TaskDetail Detail(TaskListItem item) =>
+        TaskDetail.Of(item) with { Placement = DeviceInput.Describe(placements, item.Task.Placement) };
 
     [McpServerTool(Name = "task_list", Title = "Listar tarefas", ReadOnly = true, Idempotent = true)]
     [Description(
@@ -39,11 +51,12 @@ public sealed class TaskTools(McpGateway gateway, IUserClock clock, TimeProvider
         [Description("Ordem: Created (padrão, mais novas primeiro), Scheduled, Deadline, Priority, Title.")] string? sort = null,
         [Description("Quantas por página, de 1 a 200.")] int limit = SearchTasks.DefaultLimit,
         [Description("Quantas pular.")] int offset = 0,
+        [Description(DeviceInput.ViewHelp)] string? device = null,
         CancellationToken cancellationToken = default) =>
         SearchAsync(
             "task_list",
             null, statuses, lifecycles, tags, priorities, scheduledFrom, scheduledTo, hasSchedule,
-            null, null, hasDeadline, null, overdueOnly: false, sort, limit, offset, cancellationToken);
+            null, null, hasDeadline, null, overdueOnly: false, sort, limit, offset, device, cancellationToken);
 
     [McpServerTool(Name = "task_search", Title = "Buscar tarefas", ReadOnly = true, Idempotent = true)]
     [Description(
@@ -64,11 +77,12 @@ public sealed class TaskTools(McpGateway gateway, IUserClock clock, TimeProvider
         [Description("Ordem: Created, Scheduled, Deadline, Priority, Title.")] string? sort = null,
         [Description("Quantas por página, de 1 a 200.")] int limit = SearchTasks.DefaultLimit,
         [Description("Quantas pular.")] int offset = 0,
+        [Description(DeviceInput.ViewHelp)] string? device = null,
         CancellationToken cancellationToken = default) =>
         SearchAsync(
             "task_search",
             text, statuses, lifecycles, tags, priorities, scheduledFrom, scheduledTo, null,
-            deadlineFrom, deadlineTo, null, issueKey, overdueOnly, sort, limit, offset, cancellationToken);
+            deadlineFrom, deadlineTo, null, issueKey, overdueOnly, sort, limit, offset, device, cancellationToken);
 
     [McpServerTool(Name = "task_get", Title = "Consultar tarefa", ReadOnly = true, Idempotent = true)]
     [Description(
@@ -79,24 +93,33 @@ public sealed class TaskTools(McpGateway gateway, IUserClock clock, TimeProvider
         CancellationToken cancellationToken = default) =>
         gateway.ReadAsync(
             "task_get",
-            async (runner, token) => TaskDetail.Of(await Details(runner, McpInput.Id(taskId, "o id da tarefa"), token)),
+            async (runner, token) => Detail(await Details(runner, McpInput.Id(taskId, "o id da tarefa"), token)),
             cancellationToken);
 
     [McpServerTool(Name = "task_get_today", Title = "Tarefas de hoje", ReadOnly = true, Idempotent = true)]
-    [Description("O quadro Hoje, como a tela mostra: atrasadas, agora, hoje, sem horário, prazos e concluídas hoje, e o cronômetro ativo.")]
-    public Task<TodayResult> GetTodayAsync(CancellationToken cancellationToken = default) =>
+    [Description(
+        "O quadro Hoje, como a tela mostra: as que chegaram de outro computador, atrasadas, agora, hoje, sem horário, " +
+        "prazos e concluídas hoje, e o cronômetro ativo.")]
+    public Task<TodayResult> GetTodayAsync(
+        [Description(DeviceInput.ViewHelp)] string? device = null,
+        CancellationToken cancellationToken = default) =>
         gateway.ReadAsync(
             "task_get_today",
             async (runner, token) =>
             {
+                var view = DeviceInput.View(placements, device);
                 var board = await runner.RunAsync<GetTodayBoardHandler, TodayBoard>(
-                    (handler, cancel) => handler.HandleAsync(cancel), token);
+                    (handler, cancel) => handler.HandleAsync(view, cancel), token);
 
                 IReadOnlyList<TaskSummary> Section(IReadOnlyList<TodayTask> tasks, bool overdue = false, bool completed = false) =>
-                    tasks.Select(task => TaskSummary.Of(task, completed, overdue || task.IsLate)).ToList();
+                    tasks.Select(task => TaskSummary.Of(task, completed, overdue || task.IsLate) with
+                    {
+                        Placement = DeviceInput.Describe(placements, task.Placement),
+                    }).ToList();
 
                 return new TodayResult(
                     Text.Date(board.Date),
+                    Section(board.Arrived),
                     Section(board.Overdue, overdue: true),
                     Section(board.Now),
                     Section(board.Today),
@@ -112,11 +135,12 @@ public sealed class TaskTools(McpGateway gateway, IUserClock clock, TimeProvider
     [Description("As tarefas pendentes atrasadas, pelo critério do quadro Hoje (data passada, hora de hoje passada ou prazo vencido), pelo prazo.")]
     public Task<TaskPage> GetOverdueAsync(
         [Description("Quantas, de 1 a 200.")] int limit = SearchTasks.MaxLimit,
+        [Description(DeviceInput.ViewHelp)] string? device = null,
         CancellationToken cancellationToken = default) =>
         SearchAsync(
             "task_get_overdue",
             null, [nameof(TaskItemStatus.Pending)], null, null, null, null, null, null,
-            null, null, null, null, overdueOnly: true, nameof(TaskSort.Deadline), limit, 0, cancellationToken);
+            null, null, null, null, overdueOnly: true, nameof(TaskSort.Deadline), limit, 0, device, cancellationToken);
 
     [McpServerTool(Name = "task_get_history", Title = "Histórico da tarefa", ReadOnly = true, Idempotent = true)]
     [Description(
@@ -138,6 +162,7 @@ public sealed class TaskTools(McpGateway gateway, IUserClock clock, TimeProvider
     [Description("O que foi concluído e trabalhado em cada um dos últimos dias (padrão: 7), no fuso do usuário. Lixeira fora, arquivo dentro.")]
     public Task<ActivityHistoryView> GetWeeklyHistoryAsync(
         [Description("Quantos dias para trás, contando hoje (1 a 31).")] int days = GetActivityHistory.Week,
+        [Description(DeviceInput.ViewHelp)] string? device = null,
         CancellationToken cancellationToken = default) =>
         gateway.ReadAsync(
             "task_get_weekly_history",
@@ -149,17 +174,19 @@ public sealed class TaskTools(McpGateway gateway, IUserClock clock, TimeProvider
                 }
 
                 return runner.RunAsync<GetActivityHistoryHandler, ActivityHistoryView>(
-                    (handler, cancel) => handler.HandleAsync(new GetActivityHistory(days), cancel), token);
+                    (handler, cancel) => handler.HandleAsync(new GetActivityHistory(days, DeviceInput.View(placements, device)), cancel), token);
             },
             cancellationToken);
 
     [McpServerTool(Name = "task_get_statistics", Title = "Estatísticas", ReadOnly = true, Idempotent = true)]
     [Description("Contagens da lista inteira: por ciclo de vida e prioridade, atrasadas, para hoje, concluídas recentes e horas trabalhadas hoje e em 7 dias.")]
-    public Task<TaskStatistics> GetStatisticsAsync(CancellationToken cancellationToken = default) =>
+    public Task<TaskStatistics> GetStatisticsAsync(
+        [Description(DeviceInput.ViewHelp)] string? device = null,
+        CancellationToken cancellationToken = default) =>
         gateway.ReadAsync(
             "task_get_statistics",
             (runner, token) => runner.RunAsync<GetTaskStatisticsHandler, TaskStatistics>(
-                (handler, cancel) => handler.HandleAsync(new GetTaskStatistics(), cancel), token),
+                (handler, cancel) => handler.HandleAsync(new GetTaskStatistics(DeviceInput.View(placements, device)), cancel), token),
             cancellationToken);
 
     [McpServerTool(Name = "task_create", Title = "Criar tarefa", Idempotent = false, Destructive = false)]
@@ -178,6 +205,7 @@ public sealed class TaskTools(McpGateway gateway, IUserClock clock, TimeProvider
         [Description("A próxima ação (até 200 caracteres).")] string? nextAction = null,
         [Description("A estimativa em minutos (1 a 59940).")] int? estimateMinutes = null,
         [Description("Lembrete: Default, Urgent ou None. Vazio = o padrão do usuário.")] string? reminder = null,
+        [Description(DeviceInput.PlacementHelp)] string? placement = null,
         CancellationToken cancellationToken = default) =>
         gateway.WriteAsync(
             "task_create",
@@ -201,12 +229,13 @@ public sealed class TaskTools(McpGateway gateway, IUserClock clock, TimeProvider
                                 McpInput.OptionalEnum<TaskPriority>(priority, "a prioridade") ?? TaskPriority.Normal,
                                 McpInput.OptionalDate(scheduledDate, "o dia marcado"),
                                 McpInput.OptionalTime(scheduledTime, "a hora marcada"),
-                                Reminder(reminder)),
+                                Reminder(reminder),
+                                DeviceInput.Placement(placements, placement)),
                             details),
                         cancel),
                     token);
 
-                return new TaskOperationResult("Tarefa criada.", TaskDetail.Of(await Details(runner, created.TaskId, token)));
+                return new TaskOperationResult("Tarefa criada.", Detail(await Details(runner, created.TaskId, token)));
             },
             cancellationToken);
 
@@ -234,6 +263,32 @@ public sealed class TaskTools(McpGateway gateway, IUserClock clock, TimeProvider
         [Description("Lembrete: Default, Urgent ou None.")] string? reminder = null,
         CancellationToken cancellationToken = default) =>
         EditAsync("task_update", taskId, title, description, clearDescription, priority, scheduledDate, scheduledTime, clearSchedule, deadlineDate, deadlineTime, clearDeadline, tags, nextAction, clearNextAction, estimateMinutes, clearEstimate, reminder, cancellationToken);
+
+    [McpServerTool(Name = "task_move", Title = "Mudar onde a tarefa aparece", Idempotent = true, Destructive = false)]
+    [Description(
+        "Leva a tarefa para outro computador da conta (sai da lista deste), para todos (compartilhada) ou de volta para este. " +
+        "Tudo continua sincronizado: isto só decide em qual lista ela aparece. Só com a sincronização conectada.")]
+    public Task<TaskOperationResult> MoveAsync(
+        [Description("O id da tarefa.")] string taskId,
+        [Description(DeviceInput.PlacementHelp)] string placement,
+        CancellationToken cancellationToken = default) =>
+        gateway.WriteAsync(
+            "task_move",
+            DataArea.Tasks,
+            async (runner, token) =>
+            {
+                var id = McpInput.Id(taskId, "o id da tarefa");
+                var target = DeviceInput.Placement(placements, placement)
+                    ?? throw new DomainException("Diga para onde: here, all ou o apelido de um computador.");
+
+                var result = await runner.RunAsync<PlaceTaskHandler, PlaceResult>(
+                    (handler, cancel) => handler.HandleAsync(new PlaceTask(id, target), cancel), token);
+
+                return new TaskOperationResult(
+                    result.LeftThisComputer ? $"Tarefa enviada para {result.Destination}." : $"A tarefa aparece em {result.Destination}.",
+                    Detail(await Details(runner, id, token)));
+            },
+            cancellationToken);
 
     [McpServerTool(Name = "task_complete", Title = "Concluir tarefa", Idempotent = false, Destructive = false)]
     [Description("Conclui a tarefa. Se o cronômetro corria nela, o período fecha agora.")]
@@ -396,7 +451,7 @@ public sealed class TaskTools(McpGateway gateway, IUserClock clock, TimeProvider
 
                 await runner.RunAsync<EditTaskHandler>((handler, cancel) => handler.HandleAsync(edit, cancel), token);
 
-                return new TaskOperationResult("Tarefa alterada.", TaskDetail.Of(await Details(runner, id, token)));
+                return new TaskOperationResult("Tarefa alterada.", Detail(await Details(runner, id, token)));
             },
             cancellationToken);
 
@@ -418,6 +473,7 @@ public sealed class TaskTools(McpGateway gateway, IUserClock clock, TimeProvider
         string? sort,
         int limit,
         int offset,
+        string? device,
         CancellationToken cancellationToken) =>
         gateway.ReadAsync(
             operation,
@@ -439,13 +495,14 @@ public sealed class TaskTools(McpGateway gateway, IUserClock clock, TimeProvider
                     overdueOnly,
                     McpInput.OptionalEnum<TaskSort>(sort, "a ordem") ?? TaskSort.Created,
                     limit,
-                    offset);
+                    offset,
+                    Device: DeviceInput.View(placements, device));
 
                 var result = await runner.RunAsync<SearchTasksHandler, TaskSearchResult>(
                     (handler, cancel) => handler.HandleAsync(request, cancel), token);
 
                 return new TaskPage(
-                    result.Items.Select(TaskSummary.Of).ToList(),
+                    result.Items.Select(Summary).ToList(),
                     result.Total,
                     result.Offset,
                     result.Limit,
@@ -473,7 +530,7 @@ public sealed class TaskTools(McpGateway gateway, IUserClock clock, TimeProvider
 
                 await change(runner, current.Task.OccurrenceId, token);
 
-                return new TaskOperationResult(message, TaskDetail.Of(await Details(runner, current.Task.TaskId, token)));
+                return new TaskOperationResult(message, Detail(await Details(runner, current.Task.TaskId, token)));
             },
             cancellationToken);
 
@@ -528,8 +585,10 @@ public sealed class TaskTools(McpGateway gateway, IUserClock clock, TimeProvider
     }
 }
 
+/// <param name="Arrived">Mandadas para cá por outro computador e ainda não abertas (ADR-062).</param>
 public sealed record TodayResult(
     string Date,
+    IReadOnlyList<TaskSummary> Arrived,
     IReadOnlyList<TaskSummary> Overdue,
     IReadOnlyList<TaskSummary> Now,
     IReadOnlyList<TaskSummary> Today,
@@ -564,8 +623,10 @@ internal static class TagLookup
             return [];
         }
 
+        // Pelo nome em qualquer computador (ADR-062): a etiqueta escondida aqui
+        // continua sendo a mesma, e o nome é único na conta.
         var all = await runner.RunAsync<GetTagsHandler, IReadOnlyList<TagRow>>(
-            (handler, token) => handler.HandleAsync(new GetTags(), token),
+            (handler, token) => handler.HandleAsync(new GetTags(DeviceView.All), token),
             cancellationToken);
 
         return tags

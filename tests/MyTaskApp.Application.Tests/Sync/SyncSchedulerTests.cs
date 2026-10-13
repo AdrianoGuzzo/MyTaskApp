@@ -5,9 +5,19 @@ using MyTaskApp.Application.Sync;
 namespace MyTaskApp.Application.Tests.Sync;
 
 /// <summary>
+/// Os testes que medem tempo com o relógio falso e um laço em outra thread:
+/// sozinhos, sem outras classes disputando a thread pool. Com a suíte em
+/// paralelo, a continuação do timer passava dos 3 ms de cada passo e o relógio
+/// andava segundos a mais.
+/// </summary>
+[CollectionDefinition(DisableParallelization = true)]
+public sealed class SchedulerTimingCollection;
+
+/// <summary>
 /// O agendador da sincronização (ADR-061): quando roda, quanto espera, e que
 /// nunca roda dois ciclos juntos.
 /// </summary>
+[Collection(typeof(SchedulerTimingCollection))]
 public sealed class SyncSchedulerTests : IAsyncDisposable
 {
     private static readonly SyncSchedule Schedule = new(

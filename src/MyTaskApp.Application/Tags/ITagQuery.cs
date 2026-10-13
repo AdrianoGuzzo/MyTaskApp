@@ -1,14 +1,19 @@
+using MyTaskApp.Application.Devices;
+using MyTaskApp.Domain.Devices;
+
 namespace MyTaskApp.Application.Tags;
 
 /// <summary>Uma etiqueta como as telas a desenham: sem passar pelo agregado.</summary>
 /// <param name="UsageCount">Em quantos checklists ela está — o aviso antes de excluir.</param>
 /// <param name="DirectoryCount">Quantas pastas ela tem (ADR-026).</param>
+/// <param name="Placement">Em qual computador ela aparece; <c>null</c> = legado, em todos (ADR-062).</param>
 public sealed record TagRow(
     Guid Id,
     string Name,
     string ColorHex,
     int UsageCount,
-    int DirectoryCount = 0);
+    int DirectoryCount = 0,
+    DevicePlacement? Placement = null);
 
 /// <summary>Uma pasta de etiqueta, com a etiqueta junto para o autocomplete diferenciar.</summary>
 /// <param name="Path"><c>null</c>: veio de outro computador e ainda não foi mapeada aqui (ADR-061).</param>
@@ -68,7 +73,12 @@ public sealed record CommandDirectoryRow(
 public interface ITagQuery
 {
     /// <summary>Todas as etiquetas, em ordem alfabética, com a contagem de uso.</summary>
-    Task<IReadOnlyList<TagRow>> ListAsync(CancellationToken cancellationToken = default);
+    /// <param name="placement">Só as que aparecem nesta visão (ADR-062).</param>
+    /// <param name="include">Estas entram mesmo escondidas: as que já marcam a tarefa aberta.</param>
+    Task<IReadOnlyList<TagRow>> ListAsync(
+        PlacementFilter placement,
+        IReadOnlyCollection<Guid> include,
+        CancellationToken cancellationToken = default);
 
     /// <summary>As pastas de uma etiqueta, em ordem de alias.</summary>
     Task<IReadOnlyList<TagDirectoryRow>> ListDirectoriesAsync(

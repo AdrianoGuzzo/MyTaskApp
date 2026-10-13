@@ -1,3 +1,4 @@
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Domain.Tasks;
 using MyTaskApp.Infrastructure.Persistence;
@@ -50,7 +51,7 @@ public class ChecklistArchiveQueryTests
         await using var read = db.CreateContext();
 
         var rows = await new ChecklistArchiveQuery(read)
-            .SearchAsync(ChecklistScope.Archived, null, cancellationToken: Ct);
+            .SearchAsync(ChecklistScope.Archived, null, PlacementFilter.All, cancellationToken: Ct);
 
         rows.Select(row => row.Title).Should().Equal("Arquivado");
     }
@@ -69,7 +70,7 @@ public class ChecklistArchiveQueryTests
         await using var read = db.CreateContext();
 
         var rows = await new ChecklistArchiveQuery(read)
-            .SearchAsync(ChecklistScope.Trashed, null, cancellationToken: Ct);
+            .SearchAsync(ChecklistScope.Trashed, null, PlacementFilter.All, cancellationToken: Ct);
 
         // Mais recente primeiro.
         rows.Select(row => row.Title).Should().Equal("Arquivado e excluído", "Excluído");
@@ -98,7 +99,7 @@ public class ChecklistArchiveQueryTests
         await using var read = db.CreateContext();
 
         var rows = await new ChecklistArchiveQuery(read)
-            .SearchAsync(ChecklistScope.Concluded, null, cancellationToken: Ct);
+            .SearchAsync(ChecklistScope.Concluded, null, PlacementFilter.All, cancellationToken: Ct);
 
         // Mais recente primeiro.
         rows.Select(row => row.Title).Should().Equal("Concluído ontem", "Concluído semana passada");
@@ -114,7 +115,7 @@ public class ChecklistArchiveQueryTests
         await using var read = db.CreateContext();
 
         var rows = await new ChecklistArchiveQuery(read)
-            .SearchAsync(ChecklistScope.Concluded, null, Now.AddDays(-30), Ct);
+            .SearchAsync(ChecklistScope.Concluded, null, PlacementFilter.All, Now.AddDays(-30), Ct);
 
         rows.Select(row => row.Title).Should().Equal("Concluído esta semana");
     }
@@ -129,7 +130,7 @@ public class ChecklistArchiveQueryTests
         await using var read = db.CreateContext();
 
         var row = (await new ChecklistArchiveQuery(read)
-            .SearchAsync(ChecklistScope.Archived, null, cancellationToken: Ct)).Single();
+            .SearchAsync(ChecklistScope.Archived, null, PlacementFilter.All, cancellationToken: Ct)).Single();
 
         row.TotalItems.Should().Be(1);
         row.CompletedItems.Should().Be(1);
@@ -152,7 +153,7 @@ public class ChecklistArchiveQueryTests
         await using var read = db.CreateContext();
 
         var rows = await new ChecklistArchiveQuery(read)
-            .SearchAsync(ChecklistScope.Archived, "estoque", cancellationToken: Ct);
+            .SearchAsync(ChecklistScope.Archived, "estoque", PlacementFilter.All, cancellationToken: Ct);
 
         rows.Select(row => row.Title).Should()
             .BeEquivalentTo("Relatório de estoque", "Outro assunto");
@@ -174,7 +175,7 @@ public class ChecklistArchiveQueryTests
         await using var read = db.CreateContext();
 
         var rows = await new ChecklistArchiveQuery(read)
-            .SearchAsync(ChecklistScope.Archived, "50%", cancellationToken: Ct);
+            .SearchAsync(ChecklistScope.Archived, "50%", PlacementFilter.All, cancellationToken: Ct);
 
         rows.Select(row => row.Title).Should().Equal("Meta de 50% batida");
     }
@@ -189,7 +190,7 @@ public class ChecklistArchiveQueryTests
         await using var read = db.CreateContext();
 
         var rows = await new ChecklistArchiveQuery(read)
-            .SearchAsync(ChecklistScope.Archived, "   ", cancellationToken: Ct);
+            .SearchAsync(ChecklistScope.Archived, "   ", PlacementFilter.All, cancellationToken: Ct);
 
         rows.Should().ContainSingle();
     }
@@ -212,7 +213,7 @@ public class ChecklistArchiveQueryTests
         await using var read = db.CreateContext();
 
         var rows = await new ChecklistArchiveQuery(read)
-            .SearchAsync(ChecklistScope.Archived, null, Now.AddDays(-30), Ct);
+            .SearchAsync(ChecklistScope.Archived, null, PlacementFilter.All, Now.AddDays(-30), Ct);
 
         rows.Select(row => row.Title).Should().Equal("Arquivado esta semana");
     }
@@ -230,7 +231,7 @@ public class ChecklistArchiveQueryTests
         await using var read = db.CreateContext();
 
         var rows = await new ChecklistArchiveQuery(read)
-            .SearchAsync(ChecklistScope.Trashed, null, Now.AddDays(-90), Ct);
+            .SearchAsync(ChecklistScope.Trashed, null, PlacementFilter.All, Now.AddDays(-90), Ct);
 
         rows.Select(row => row.Title).Should().Equal("Excluído ontem");
     }
@@ -251,7 +252,7 @@ public class ChecklistArchiveQueryTests
         await using var read = db.CreateContext();
 
         var rows = await new ChecklistArchiveQuery(read)
-            .SearchAsync(ChecklistScope.Archived, "estoque", Now.AddDays(-30), Ct);
+            .SearchAsync(ChecklistScope.Archived, "estoque", PlacementFilter.All, Now.AddDays(-30), Ct);
 
         rows.Select(row => row.Title).Should().Equal("Relatório de estoque");
     }

@@ -86,6 +86,7 @@ public sealed class SyncClassificationTests
         SyncMappers.Development.LocalProperties.Should().Contain(["RepositoryPath", "WorktreePath", "Database.Name", "Database.Host"]);
         SyncMappers.Occurrence.LocalProperties.Should().Contain("Position");
         SyncMappers.StickyNote.LocalProperties.Should().Contain(["X", "Y", "IsOpen"]);
+        SyncMappers.Task.LocalProperties.Should().Contain(["ReceivedAt", "ReceivedFromDeviceId"], "o destaque de chegada é de quem recebeu (ADR-062)");
     }
 
     [Fact]

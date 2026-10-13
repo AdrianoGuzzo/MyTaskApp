@@ -17,6 +17,20 @@ public sealed partial class ActivityHistoryViewModel(IUseCaseRunner runner, ILog
     /// <summary>Descarta a resposta de uma carga que outra mais nova já superou.</summary>
     private int _load;
 
+    /// <summary>
+    /// O mesmo seletor da lista (ADR-062): "o que eu fiz nesta semana" neste
+    /// computador, no outro, ou em todos. Trocar aqui troca a lista também.
+    /// </summary>
+    public DeviceViewSelectorViewModel? Devices { get; private set; }
+
+    /// <summary>Segue o seletor da lista: recarrega quando ele muda.</summary>
+    public void FollowDevices(DeviceViewSelectorViewModel devices)
+    {
+        Devices = devices;
+        devices.ViewChanged += (_, _) => _ = LoadAsync(CancellationToken.None);
+        OnPropertyChanged(nameof(Devices));
+    }
+
     [ObservableProperty]
     private IReadOnlyList<ActivityDayView> _days = [];
 
@@ -51,7 +65,7 @@ public sealed partial class ActivityHistoryViewModel(IUseCaseRunner runner, ILog
         try
         {
             var history = await runner.RunAsync<GetActivityHistoryHandler, ActivityHistoryView>(
-                (handler, token) => handler.HandleAsync(new GetActivityHistory(), token),
+                (handler, token) => handler.HandleAsync(new GetActivityHistory(Device: Devices?.View), token),
                 cancellationToken);
 
             if (load != _load)

@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Application.Configuration;
 using MyTaskApp.Application.History;
 using MyTaskApp.Application.Planning;
@@ -89,6 +90,7 @@ public class ActivityHistoryViewModelTests
 
         public Task<IReadOnlyList<TodayOccurrenceRow>> GetCandidatesAsync(
             DateOnly today,
+            PlacementFilter placement,
             CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<TodayOccurrenceRow>>([]);
 

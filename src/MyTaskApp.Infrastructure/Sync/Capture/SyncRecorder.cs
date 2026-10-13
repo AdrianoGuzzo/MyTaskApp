@@ -135,7 +135,12 @@ internal sealed class SyncRecorder(IDeviceIdentity device, TimeProvider timeProv
             {
                 var snapshot = SyncSnapshot.Read(state.Snapshot);
                 fields = projection
-                    .Where(field => !snapshot.TryGetValue(field.Key, out var known) || !SyncValue.AreEqual(known, field.Value))
+                    .Where(field => snapshot.TryGetValue(field.Key, out var known)
+                        ? !SyncValue.AreEqual(known, field.Value)
+                        // Campo que entrou no contrato depois do retrato: vazio
+                        // aqui não é mudança, e mandar nulo apagaria o valor que
+                        // outro computador já gravou (ADR-062).
+                        : !SyncValue.IsNull(field.Value))
                     .ToDictionary(field => field.Key, field => field.Value, StringComparer.Ordinal);
 
                 if (fields.Count == 0)

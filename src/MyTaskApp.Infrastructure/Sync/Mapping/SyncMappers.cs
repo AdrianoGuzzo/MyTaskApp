@@ -82,12 +82,23 @@ internal static class SyncMappers
             C(SyncFields.Task.ArchivedAt, nameof(TaskItem.ArchivedAt)),
             C(SyncFields.Task.DeletedAt, nameof(TaskItem.DeletedAt)),
             C(SyncFields.Task.DeletedBy, nameof(TaskItem.DeletedBy)),
+            M(SyncFields.Task.Placement, Placement.Kind, nameof(TaskItem.PlacementKind)),
+            M(SyncFields.Task.Placement, Placement.DeviceId, nameof(TaskItem.PlacementDeviceId)),
             C(CreatedAt, nameof(TaskItem.CreatedAt)),
         ],
-        // Derivado das ocorrências: cada computador recalcula.
-        [nameof(TaskItem.ConcludedAt)])
+        [
+            // Derivado das ocorrências: cada computador recalcula.
+            nameof(TaskItem.ConcludedAt),
+            // O destaque de "chegou" é de quem recebeu (ADR-062).
+            nameof(TaskItem.ReceivedAt),
+            nameof(TaskItem.ReceivedFromDeviceId),
+        ])
     {
-        Presence = { [SyncFields.Task.External] = "External.Provider" },
+        Presence =
+        {
+            [SyncFields.Task.External] = "External.Provider",
+            [SyncFields.Task.Placement] = nameof(TaskItem.PlacementKind),
+        },
     };
 
     public static readonly SyncEntityMapper Occurrence = new TableMapper<TaskOccurrence>(
@@ -138,9 +149,14 @@ internal static class SyncMappers
         [
             C(SyncFields.Tag.Name, nameof(Domain.Tags.Tag.Name)),
             C(SyncFields.Tag.ColorHex, nameof(Domain.Tags.Tag.ColorHex)),
+            M(SyncFields.Tag.Placement, Placement.Kind, nameof(Domain.Tags.Tag.PlacementKind)),
+            M(SyncFields.Tag.Placement, Placement.DeviceId, nameof(Domain.Tags.Tag.PlacementDeviceId)),
             C(CreatedAt, nameof(Domain.Tags.Tag.CreatedAt)),
         ],
-        []);
+        [])
+    {
+        Presence = { [SyncFields.Tag.Placement] = nameof(Domain.Tags.Tag.PlacementKind) },
+    };
 
     public static readonly SyncEntityMapper TagDirectory = new TableMapper<Domain.Tags.TagDirectory>(
         SyncRegistry.TagDirectory,

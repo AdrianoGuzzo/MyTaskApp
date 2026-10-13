@@ -44,6 +44,35 @@ public sealed partial class TagsWindow : Window
     }
 
     /// <summary>
+    /// "Onde aparece…" da etiqueta (ADR-062): um item por lugar, com o atual
+    /// marcado, montado na hora com os computadores da conta.
+    /// </summary>
+    private void OnPlacementClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Control { DataContext: TagListItemViewModel item } anchor
+            || DataContext is not TagsViewModel viewModel)
+        {
+            return;
+        }
+
+        var menu = new MenuFlyout { Placement = PlacementMode.BottomEdgeAlignedRight };
+
+        foreach (var choice in viewModel.PlacementChoices(item))
+        {
+            menu.Items.Add(new MenuItem
+            {
+                Header = choice.Option.Label,
+                ToggleType = MenuItemToggleType.Radio,
+                IsChecked = choice.Option.IsCurrent,
+                Command = viewModel.PlaceTagCommand,
+                CommandParameter = choice,
+            });
+        }
+
+        menu.ShowAt(anchor);
+    }
+
+    /// <summary>
     /// "Procurar…" do diretório (ADR-026). Fica aqui porque o seletor de pastas é
     /// serviço da janela; o que fazer com a pasta escolhida está no ViewModel.
     /// </summary>

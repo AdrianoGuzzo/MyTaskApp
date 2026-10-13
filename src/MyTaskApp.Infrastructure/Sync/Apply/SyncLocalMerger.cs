@@ -82,6 +82,9 @@ internal sealed class SyncLocalMerger(MyTaskAppDbContext context, SqlRowWriter w
             if (definition is null
                 || definition.Policy == SyncConflictPolicy.Silent
                 || field == SyncFields.CreatedAt
+                // Onde aparece não é conteúdo: a etiqueta juntada passa a ser de
+                // todos, e o lugar de cada lado não vira conflito (ADR-062).
+                || field == SyncFields.Tag.Placement
                 || !remoteFields.TryGetValue(field, out var remoteValue)
                 || SyncValue.AreEqual(localValue, remoteValue))
             {

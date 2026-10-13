@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Application.Tags;
+using MyTaskApp.Domain.Devices;
 
 namespace MyTaskApp.Infrastructure.Persistence.Queries;
 
@@ -10,17 +12,41 @@ internal sealed class TagQuery(MyTaskAppDbContext context) : ITagQuery
     /// servidas pelos índices de <c>TaskItemTags.TagId</c> e
     /// <c>TagDirectories (TagId, Alias)</c>.
     /// </remarks>
-    public async Task<IReadOnlyList<TagRow>> ListAsync(CancellationToken cancellationToken = default) =>
-        await context.Tags
+    public async Task<IReadOnlyList<TagRow>> ListAsync(
+        PlacementFilter placement,
+        IReadOnlyCollection<Guid> include,
+        CancellationToken cancellationToken = default)
+    {
+        var included = include.ToArray();
+        var visible = context.Tags.VisibleIn(placement);
+
+        var rows = await context.Tags
             .AsNoTracking()
+            .Where(tag => included.Contains(tag.Id) || visible.Any(shown => shown.Id == tag.Id))
             .OrderBy(tag => tag.Name)
-            .Select(tag => new TagRow(
+            .Select(tag => new
+            {
                 tag.Id,
                 tag.Name,
                 tag.ColorHex,
-                context.TaskItemTags.Count(link => link.TagId == tag.Id),
-                context.TagDirectories.Count(directory => directory.TagId == tag.Id)))
+                Usage = context.TaskItemTags.Count(link => link.TagId == tag.Id),
+                Directories = context.TagDirectories.Count(directory => directory.TagId == tag.Id),
+                tag.PlacementKind,
+                tag.PlacementDeviceId,
+            })
             .ToListAsync(cancellationToken);
+
+        return
+        [
+            .. rows.Select(row => new TagRow(
+                row.Id,
+                row.Name,
+                row.ColorHex,
+                row.Usage,
+                row.Directories,
+                DevicePlacement.From(row.PlacementKind, row.PlacementDeviceId))),
+        ];
+    }
 
     public Task<IReadOnlyList<TagDirectoryRow>> ListDirectoriesAsync(
         Guid tagId,

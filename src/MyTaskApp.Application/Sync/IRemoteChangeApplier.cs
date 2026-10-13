@@ -1,4 +1,5 @@
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Domain.Devices;
 using MyTaskApp.Sync.Contracts;
 
 namespace MyTaskApp.Application.Sync;
@@ -6,16 +7,27 @@ namespace MyTaskApp.Application.Sync;
 /// <summary>Uma mudança do servidor que este computador não conseguiu aplicar.</summary>
 public sealed record RemoteApplyFailure(string EntityType, Guid EntityId, string Code, string Message);
 
+/// <summary>
+/// Uma tarefa que outro computador mudou de lugar, ou criou já com lugar
+/// (ADR-062): é o que acende o "chegou" de quem recebe.
+/// </summary>
+/// <param name="ByDeviceId">Quem mudou por último, segundo o servidor.</param>
+public sealed record PlacementMove(Guid TaskId, DevicePlacement? Before, DevicePlacement? After, Guid? ByDeviceId, bool IsNew);
+
 /// <summary>O que uma página aplicada mudou, para recalcular e redesenhar.</summary>
 /// <param name="TaskIds">As tarefas que receberam alguma mudança (delas ou das ocorrências).</param>
-/// <param name="RearmTaskIds">As que mudaram a política de lembrete ou o agendamento.</param>
+/// <param name="RearmTaskIds">As que mudaram a política de lembrete, o agendamento ou o lugar.</param>
+/// <param name="Moves">As tarefas que mudaram de lugar (ADR-062).</param>
+/// <param name="MergedTagIds">Etiquetas daqui juntadas pelo nome às da conta: passam a ser de todos.</param>
 public sealed record RemoteApplyResult(
     int Applied,
     int Skipped,
     IReadOnlyList<Guid> TaskIds,
     IReadOnlyList<Guid> RearmTaskIds,
     DataArea Areas,
-    IReadOnlyList<RemoteApplyFailure> Failures)
+    IReadOnlyList<RemoteApplyFailure> Failures,
+    IReadOnlyList<PlacementMove>? Moves = null,
+    IReadOnlyList<Guid>? MergedTagIds = null)
 {
     public static RemoteApplyResult Empty { get; } = new(0, 0, [], [], DataArea.None, []);
 }

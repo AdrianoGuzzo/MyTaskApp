@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Sync;
+using MyTaskApp.Domain.Devices;
 using MyTaskApp.Infrastructure.Persistence;
 using MyTaskApp.Infrastructure.Sync.Capture;
 using MyTaskApp.Infrastructure.Sync.Mapping;
@@ -105,7 +106,9 @@ internal sealed class RemoteChangeApplier(
             [.. page.TaskIds],
             [.. page.RearmTaskIds],
             page.Areas,
-            page.Failures);
+            page.Failures,
+            page.Moves,
+            [.. page.MergedTagIds]);
     }
 
     /// <summary>Pai antes do filho nas criações; as exclusões por último, filho antes do pai.</summary>
@@ -174,7 +177,15 @@ internal sealed class RemoteChangeApplier(
 
         if (await writer.FindCollisionAsync(mapper, change.EntityId, change.Fields, cancellationToken) is { } localId)
         {
-            await ResolveCollisionAsync(change, mapper, localId, exists, writer, merger, cancellationToken);
+            // Etiqueta juntada pelo nome: usada nos dois computadores, então de
+            // todos (ADR-062). Quem compartilha é o reconcile, pelo domínio,
+            // para a decisão subir como qualquer edição.
+            if (await ResolveCollisionAsync(change, mapper, localId, exists, writer, merger, cancellationToken)
+                && mapper == SyncMappers.Tag)
+            {
+                page.MergedTagIds.Add(change.EntityId);
+            }
+
             exists = await writer.ExistsAsync(mapper, change.EntityId, change.Fields, cancellationToken);
         }
 
@@ -285,7 +296,8 @@ internal sealed class RemoteChangeApplier(
     /// do servidor (a primeira conexão), as duas viram uma; se é, ela sai do
     /// caminho e a operação pendente dela recebe a resposta do servidor.
     /// </summary>
-    private async Task ResolveCollisionAsync(
+    /// <returns>As duas viraram uma.</returns>
+    private async Task<bool> ResolveCollisionAsync(
         SyncChange change,
         SyncEntityMapper mapper,
         Guid localId,
@@ -300,7 +312,7 @@ internal sealed class RemoteChangeApplier(
 
         if (localState is not null || mapper == SyncMappers.DirectoryCommand)
         {
-            return;
+            return false;
         }
 
         if (!remoteExists)
@@ -309,6 +321,7 @@ internal sealed class RemoteChangeApplier(
         }
 
         await merger.MergeAsync(mapper, localId, change.EntityId, change.Fields, cancellationToken);
+        return true;
     }
 
     private static void Track(SyncChange change, Dictionary<string, JsonElement> before, bool isNew, PageResult page)
@@ -329,8 +342,12 @@ internal sealed class RemoteChangeApplier(
 
         page.TaskIds.Add(id);
 
+        // Mudar de lugar também rearma (ADR-062): a tarefa que passa a aparecer
+        // aqui não pode tocar um lembrete velho de uma vez.
+        var moved = change.EntityType == SyncEntityTypes.Task && Changed(SyncFields.Task.Placement);
+
         var changedPlan = change.EntityType == SyncEntityTypes.Task
-            ? Changed(SyncFields.Task.Reminder)
+            ? Changed(SyncFields.Task.Reminder) || moved
             : Changed(SyncFields.Occurrence.Schedule) || Changed(SyncFields.Occurrence.State);
 
         if (!isNew && changedPlan)
@@ -338,9 +355,32 @@ internal sealed class RemoteChangeApplier(
             page.RearmTaskIds.Add(id);
         }
 
+        if (moved)
+        {
+            page.Moves.Add(new PlacementMove(
+                id,
+                isNew ? null : PlacementOf(before),
+                PlacementOf(change.Fields),
+                change.UpdatedByDeviceId,
+                isNew));
+        }
+
         bool Changed(string field) =>
             change.Fields.TryGetValue(field, out var now)
             && (!before.TryGetValue(field, out var then) || !SyncValue.AreEqual(now, then));
+    }
+
+    private static DevicePlacement? PlacementOf(IReadOnlyDictionary<string, JsonElement> fields)
+    {
+        if (!fields.TryGetValue(SyncFields.Task.Placement, out var value) || SyncValue.IsNull(value))
+        {
+            return null;
+        }
+
+        var kind = SyncValue.ReadInteger(SyncValue.Member(value, SyncFields.Placement.Kind));
+        var device = SyncValue.ReadGuid(SyncValue.Member(value, SyncFields.Placement.DeviceId));
+
+        return DevicePlacement.From(kind is { } number ? (PlacementKind)number : null, device);
     }
 
     private static DataArea AreaOf(string type) => type switch
@@ -381,6 +421,10 @@ internal sealed class RemoteChangeApplier(
         public HashSet<Guid> TaskIds { get; } = [];
 
         public HashSet<Guid> RearmTaskIds { get; } = [];
+
+        public List<PlacementMove> Moves { get; } = [];
+
+        public HashSet<Guid> MergedTagIds { get; } = [];
 
         public DataArea Areas { get; set; }
 

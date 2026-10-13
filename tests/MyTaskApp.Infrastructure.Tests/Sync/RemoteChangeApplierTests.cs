@@ -7,6 +7,7 @@ using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Sync;
 using MyTaskApp.Domain.Commands;
 using MyTaskApp.Domain.Deadlines;
+using MyTaskApp.Domain.Devices;
 using MyTaskApp.Domain.External;
 using MyTaskApp.Domain.Reminders;
 using MyTaskApp.Domain.StickyNotes;
@@ -108,6 +109,65 @@ public sealed class RemoteChangeApplierTests : IAsyncLifetime
         var operation = (await _b.OutboxAsync(Ct)).Should().ContainSingle().Subject;
         operation.BaseVersion.Should().Be(4);
         SyncCaptureKit.Fields(operation).Keys.Should().Equal(SyncFields.Task.Priority);
+    }
+
+    [Fact]
+    public async Task Placement_AnOldClientsEditKeepsIt_AndOnlyAnExplicitNullClearsIt()
+    {
+        var task = TaskItem.Create("Pagar boleto", Now, placement: DevicePlacement.On(_a.Device.DeviceId));
+        await _a.SaveAsync(context => context.Add(task), Ct);
+        await _b.ApplyAsync(await _a.PageFromOutboxAsync(Ct), Ct);
+
+        var current = await _a.ProjectAllAsync(Ct);
+
+        // Um servidor de antes do ADR-062 não conhece o campo e não o devolve.
+        var withoutPlacement = WithAllTaskFields(
+            Change(SyncEntityTypes.Task, task.Id, 2, new() { [SyncFields.Task.Title] = SyncValue.String("Pagar o boleto") }),
+            current,
+            task.Id);
+        var legacyFields = new Dictionary<string, JsonElement>(withoutPlacement.Fields);
+        legacyFields.Remove(SyncFields.Task.Placement);
+        await _b.ApplyAsync([withoutPlacement with { Fields = legacyFields }], Ct, cursor: "c2");
+        (await PlacementInBAsync(task.Id)).Should().Be(DevicePlacement.On(_a.Device.DeviceId));
+
+        await _b.ApplyAsync(
+            [WithAllTaskFields(Change(SyncEntityTypes.Task, task.Id, 3, new() { [SyncFields.Task.Placement] = SyncValue.Null }), current, task.Id)],
+            Ct,
+            cursor: "c3");
+        (await PlacementInBAsync(task.Id)).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task AMoveFromAnotherComputer_IsReported_AndRearmsTheReminder()
+    {
+        var task = TaskItem.Create("Pagar boleto", Now, placement: DevicePlacement.On(_a.Device.DeviceId));
+        await _a.SaveAsync(context => context.Add(task), Ct);
+        await _b.ApplyAsync(await _a.PageFromOutboxAsync(Ct), Ct);
+        var current = await _a.ProjectAllAsync(Ct);
+        var sentToB = SyncValue.Object(
+            (SyncFields.Placement.Kind, SyncValue.Integer((long)PlacementKind.Device)),
+            (SyncFields.Placement.DeviceId, SyncValue.Guid(_b.Device.DeviceId)));
+
+        var result = await _b.ApplyAsync(
+            [WithAllTaskFields(
+                Change(SyncEntityTypes.Task, task.Id, 2, new() { [SyncFields.Task.Placement] = sentToB }) with { UpdatedByDeviceId = _a.Device.DeviceId },
+                current,
+                task.Id)],
+            Ct,
+            cursor: "c2");
+
+        var move = result.Moves.Should().ContainSingle().Subject;
+        move.Before.Should().Be(DevicePlacement.On(_a.Device.DeviceId));
+        move.After.Should().Be(DevicePlacement.On(_b.Device.DeviceId));
+        move.ByDeviceId.Should().Be(_a.Device.DeviceId);
+        move.IsNew.Should().BeFalse();
+        result.RearmTaskIds.Should().Contain(task.Id);
+    }
+
+    private async Task<DevicePlacement?> PlacementInBAsync(Guid taskId)
+    {
+        await using var read = _b.Database.CreateContext();
+        return (await read.Tasks.AsNoTracking().SingleAsync(task => task.Id == taskId, Ct)).Placement;
     }
 
     [Fact]
@@ -352,7 +412,7 @@ public sealed class RemoteChangeApplierTests : IAsyncLifetime
     /// <summary>Um pouco de tudo: cada tipo do contrato, com os compostos e as listas preenchidos.</summary>
     private static async Task SeedEverythingAsync(SyncCaptureKit kit)
     {
-        var tag = Tag.Create("ECO", "#22C55E", Now);
+        var tag = Tag.Create("ECO", "#22C55E", Now, DevicePlacement.Everywhere);
         var directory = tag.AddDirectory("@core", @"C:\Projects\core", "Core", "API", Now, "develop");
         var command = DevelopmentCommand.Create(
             "@run",
@@ -374,7 +434,8 @@ public sealed class RemoteChangeApplierTests : IAsyncLifetime
             "Com outbox",
             TaskPriority.High,
             TaskSchedule.At(new DateOnly(2026, 10, 14), new TimeOnly(9, 30)),
-            new ReminderPolicy(true, ReminderAnchor.AfterCreation, TimeSpan.FromMinutes(30), true, TimeSpan.FromMinutes(10), AlertChannels.All));
+            new ReminderPolicy(true, ReminderAnchor.AfterCreation, TimeSpan.FromMinutes(30), true, TimeSpan.FromMinutes(10), AlertChannels.All),
+            DevicePlacement.On(kit.Device.DeviceId));
         task.SetTags([tag.Id]);
         task.ChangePlan("Escrever o interceptor", TimeSpan.FromMinutes(90));
         task.LinkExternal(ExternalLink.Create("jira", "ECO-42", "Sync", "https://eco.atlassian.net/browse/ECO-42", "Story", "Doing", Now));

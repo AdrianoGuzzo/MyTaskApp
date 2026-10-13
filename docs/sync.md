@@ -2,8 +2,10 @@
 
 A sincronização é **opcional**. Sem conta, o MyTaskApp continua inteiro, só
 neste computador, e não grava uma linha de sincronização sequer. Com a conta
-conectada, as mesmas tarefas, etiquetas, horas e post-its aparecem em todos os
-computadores da pessoa.
+conectada, tarefas, etiquetas, horas e post-its vão para todos os
+computadores da pessoa. **Cada computador tem a sua lista:** uma tarefa
+aparece só onde foi criada, até alguém mandá-la para outro computador ou
+compartilhá-la com todos (veja [Onde cada tarefa aparece](#onde-cada-tarefa-aparece)).
 
 A decisão e as alternativas estão no [ADR-061](ARCHITECTURE.md). O servidor,
 com o cliente do Google, as variáveis e a implantação, está em
@@ -32,7 +34,72 @@ com o cliente do Google, as variáveis e a implantação, está em
 
 Na janela da tarefa, abaixo do título, aparece "Criada em Notebook · 12/10/2026
 14:30 · alterada por último neste computador". A linha só existe para tarefas
-que passaram pela sincronização.
+que passaram pela sincronização. Embaixo dela vem onde a tarefa aparece, com
+"Mudar…".
+
+## Onde cada tarefa aparece
+
+A decisão está no [ADR-062](ARCHITECTURE.md). Cada tarefa e cada etiqueta
+aparece **só no computador onde foi criada** ou **em todos os computadores**.
+
+- **Criar:** a tarefa nasce neste computador. Na caixa de captura, "Para"
+  escolhe outro destino:
+  - "Este computador", o padrão;
+  - "Todos os computadores";
+  - "Enviar para Notebook", para anotar no trabalho o que é para fazer em
+    casa.
+
+  Depois de cada captura, "Para" volta para este computador.
+- **Mudar:** "Onde aparece…" no menu da linha (⋯ ou clique direito), na janela
+  da tarefa e na janela Etiquetas. As opções são:
+  - "Só neste computador";
+  - "Em todos os computadores";
+  - "Enviar para …" cada outro computador da conta.
+
+  Mandar para outro computador tira a tarefa da lista daqui, e a mensagem
+  oferece "Desfazer". Com o cronômetro correndo nela, o envio é recusado.
+- **Chegou:** a tarefa que outro computador mandou para cá aparece no topo, em
+  **CHEGARAM DE OUTRO COMPUTADOR**, com ou sem data. Ela mostra "Chegou de
+  Notebook" e sai dali quando é aberta.
+- **Ver o outro computador:** "Mostrando", abaixo da caixa de captura, mostra
+  este computador, cada outro, ou todos. O histórico da semana (↺) usa o mesmo
+  seletor: é lá que se vê o que foi feito em cada computador. O app sempre abre
+  em "Este computador".
+- **Selos na linha:**
+  - "⇄ todos os computadores" na compartilhada, porque mexer nela muda nos
+    dois;
+  - "→ Notebook" na de outro computador, quando o seletor mostra mais do que
+    este.
+- **Lembretes e avisos de prazo** tocam só no computador onde a tarefa
+  aparece, seja qual for o seletor.
+- **Horas, histórico e estatísticas** seguem a tarefa e o seletor.
+- **Etiquetas:** o seletor de etiquetas mostra as daqui e as compartilhadas,
+  mais as que já marcam a tarefa aberta. Criar uma etiqueta com o nome de uma
+  que está escondida aqui reaproveita aquela etiqueta e a compartilha.
+- **Post-its e comandos globais** continuam aparecendo em todos.
+
+Sem outro computador na conta, nada disso aparece, e a lista é a de sempre.
+
+**Escondida não é privada.** Tudo continua sincronizado: o servidor e todos os
+computadores têm todas as tarefas, e "Mostrando: Todos" ou o MCP com
+`device: all` mostram tudo. A separação é de lista, não de segredo.
+
+### O que já existia
+
+Ao atualizar, cada computador assume as tarefas que ele mesmo criou: elas
+passam a ser só dele. Uma etiqueta usada nos dois computadores vira
+compartilhada. Até o outro computador atualizar, as tarefas dele aparecem em
+todos.
+
+A etiqueta criada nos dois antes da primeira conexão, como a "Casa", é juntada
+pelo nome e fica compartilhada.
+
+### Computador revogado
+
+Revogado e reconectado, o computador volta com outro id e continua vendo as
+suas tarefas. A próxima sincronização as leva para o id novo. Tarefas que
+ficaram num computador revogado e que não volta aparecem em "Mostrando:
+Todos", e "Onde aparece…" as traz para cá.
 
 Sem servidor configurado na build, a janela só explica que a versão não tem
 sincronização.
@@ -186,6 +253,10 @@ um app atualizado sobe a versão do contrato, ele refaz a primeira conexão.
   registrado.
 - Um espaço pessoal por conta, sem convites. O esquema do servidor já tem
   membros e papéis.
+- Escondida não é privada: a tarefa só de um computador também está no
+  servidor e nos outros computadores (ADR-062).
+- Um computador ainda na versão anterior ao ADR-062 mostra todas as tarefas e
+  não muda onde elas aparecem.
 - Uma janela de edição aberta pode sobrescrever, ao salvar, uma mudança que
   chegou enquanto ela estava aberta. A mudança vai para o servidor como uma
   edição normal.

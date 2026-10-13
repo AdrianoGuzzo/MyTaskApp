@@ -1,4 +1,5 @@
 using System.Globalization;
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Domain.Deadlines;
 using MyTaskApp.Domain.Planning;
@@ -11,7 +12,8 @@ namespace MyTaskApp.Application.History;
 /// foi concluído e o que foi trabalhado em cada um.
 /// </summary>
 /// <param name="Days">Quantos dias, contando hoje. A tela pede sempre <see cref="Week"/>.</param>
-public sealed record GetActivityHistory(int Days = GetActivityHistory.Week)
+/// <param name="Device">De qual computador (ADR-062); <c>null</c> = este e as compartilhadas.</param>
+public sealed record GetActivityHistory(int Days = GetActivityHistory.Week, DeviceView? Device = null)
 {
     public const int Week = 7;
 }
@@ -50,7 +52,8 @@ public sealed record ActivityItemView(
 public sealed class GetActivityHistoryHandler(
     IActivityHistoryQuery query,
     IUserClock clock,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider,
+    DevicePlacementState? placements = null)
 {
     public async Task<ActivityHistoryView> HandleAsync(
         GetActivityHistory request,
@@ -68,6 +71,7 @@ public sealed class GetActivityHistoryHandler(
         var rows = await query.GetAsync(
             StartOfDay(today.AddDays(1 - request.Days)),
             StartOfDay(today.AddDays(1)),
+            placements?.Filter(request.Device ?? DeviceView.Here) ?? PlacementFilter.All,
             cancellationToken);
 
         var history = ActivityHistoryBuilder.Build(

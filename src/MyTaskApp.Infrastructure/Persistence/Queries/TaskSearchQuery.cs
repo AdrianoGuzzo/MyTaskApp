@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Application.Tasks;
 using MyTaskApp.Domain.Lifecycle;
 using MyTaskApp.Domain.Tasks;
@@ -16,7 +17,7 @@ internal sealed class TaskSearchQuery(MyTaskAppDbContext context) : ITaskSearchQ
         TaskSearchCriteria criteria,
         CancellationToken cancellationToken = default)
     {
-        var tasks = context.Tasks.AsNoTracking();
+        var tasks = context.Tasks.AsNoTracking().VisibleIn(criteria.Placement ?? PlacementFilter.All);
 
         // A lixeira vence o arquivo, e o arquivo vence a conclusão — a mesma
         // precedência de TaskItem.Lifecycle e de ChecklistArchiveQuery.
@@ -157,10 +158,11 @@ internal sealed class TaskSearchQuery(MyTaskAppDbContext context) : ITaskSearchQ
     }
 
     public async Task<IReadOnlyList<TaskCountRow>> ListForCountingAsync(
+        PlacementFilter placement,
         CancellationToken cancellationToken = default) =>
         await (
                 from occurrence in context.Occurrences.AsNoTracking()
-                join task in context.Tasks.AsNoTracking() on occurrence.TaskItemId equals task.Id
+                join task in context.Tasks.AsNoTracking().VisibleIn(placement) on occurrence.TaskItemId equals task.Id
                 select new TaskCountRow(
                     task.Id,
                     occurrence.Id,

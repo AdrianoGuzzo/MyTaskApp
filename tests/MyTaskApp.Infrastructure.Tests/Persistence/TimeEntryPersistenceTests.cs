@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Domain.Tasks;
 using MyTaskApp.Domain.TimeTracking;
 using MyTaskApp.Infrastructure.Persistence.Configurations;
@@ -249,7 +250,7 @@ public class TimeEntryPersistenceTests
         await AddAsync(db, Closed(tracked, -300, -210), Closed(tracked, -120, -78), TimeEntry.StartTimer(tracked, At14));
 
         await using var read = db.CreateContext();
-        var rows = await new TodayQuery(read).GetCandidatesAsync(Today, Ct);
+        var rows = await new TodayQuery(read).GetCandidatesAsync(Today, PlacementFilter.All, Ct);
 
         var row = rows.Single(candidate => candidate.OccurrenceId == tracked);
         row.Logged.Should().Be(TimeSpan.FromMinutes(90 + 42));
@@ -293,7 +294,7 @@ public class TimeEntryPersistenceTests
 
         await using var read = db.CreateContext();
         var loaded = await new TaskItemRepository(read).FindByIdAsync(taskId, Ct);
-        var rows = await new TodayQuery(read).GetCandidatesAsync(Today, Ct);
+        var rows = await new TodayQuery(read).GetCandidatesAsync(Today, PlacementFilter.All, Ct);
 
         loaded!.Title.Should().Be("Renovar o contrato");
         (await new TimeEntryRepository(read).ListForOccurrenceAsync(occurrenceId, Ct)).Should().BeEmpty();

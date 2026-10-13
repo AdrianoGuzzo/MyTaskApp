@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using MyTaskApp.Application.Development;
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Domain.Agents;
+using MyTaskApp.Domain.Devices;
 using MyTaskApp.Domain.Tasks;
 
 namespace MyTaskApp.Infrastructure.Persistence.Queries;
@@ -10,6 +12,7 @@ internal sealed class TodayQuery(MyTaskAppDbContext context) : ITodayQuery
 {
     public async Task<IReadOnlyList<TodayOccurrenceRow>> GetCandidatesAsync(
         DateOnly today,
+        PlacementFilter placement,
         CancellationToken cancellationToken = default)
     {
         // Folga de um dia em cada ponta: o recorte exato por data local depende do
@@ -19,6 +22,9 @@ internal sealed class TodayQuery(MyTaskAppDbContext context) : ITodayQuery
         var completedUntil = new DateTimeOffset(
             today.AddDays(2).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
 
+        // Só as tarefas que aparecem na visão (ADR-062).
+        var tasks = context.Tasks.VisibleIn(placement);
+
         var occurrences = await context.Occurrences
             .AsNoTracking()
             // Arquivado e na lixeira saem da listagem principal (§1, §4). O
@@ -26,7 +32,7 @@ internal sealed class TodayQuery(MyTaskAppDbContext context) : ITodayQuery
             // arquivados e lixeira precisam justamente do que ele exclui, e um
             // filtro global obrigaria IgnoreQueryFilters() espalhado — inclusive
             // no caminho de restaurar, que passaria a nao encontrar o registro.
-            .Where(occurrence => context.Tasks.Any(task =>
+            .Where(occurrence => tasks.Any(task =>
                 task.Id == occurrence.TaskItemId
                 && task.ArchivedAt == null
                 && task.DeletedAt == null))
@@ -34,6 +40,10 @@ internal sealed class TodayQuery(MyTaskAppDbContext context) : ITodayQuery
                 (occurrence.Status == TaskItemStatus.Pending
                     && occurrence.ScheduledDate != null
                     && occurrence.ScheduledDate <= today)
+                // Chegou de outro computador (ADR-062): entra com qualquer data,
+                // ou sem nenhuma, até ser aberta.
+                || (occurrence.Status == TaskItemStatus.Pending
+                    && tasks.Any(task => task.Id == occurrence.TaskItemId && task.ReceivedAt != null))
                 // Com prazo, a responsabilidade corre desde já, qualquer que
                 // seja a data marcada (ADR-050). Cai no índice parcial do prazo.
                 || (occurrence.Status == TaskItemStatus.Pending
@@ -93,6 +103,10 @@ internal sealed class TodayQuery(MyTaskAppDbContext context) : ITodayQuery
                 task.DeadlineAlerts,
                 task.NextAction,
                 task.Estimate,
+                task.PlacementKind,
+                task.PlacementDeviceId,
+                task.ReceivedAt,
+                task.ReceivedFromDeviceId,
             })
             .ToListAsync(cancellationToken);
 
@@ -245,7 +259,10 @@ internal sealed class TodayQuery(MyTaskAppDbContext context) : ITodayQuery
                     definition.NextAction,
                     definition.Estimate,
                     loggedByOccurrence.GetValueOrDefault(occurrence.Id),
-                    timerByOccurrence.TryGetValue(occurrence.Id, out var timerStartedAt) ? timerStartedAt : null);
+                    timerByOccurrence.TryGetValue(occurrence.Id, out var timerStartedAt) ? timerStartedAt : null,
+                    DevicePlacement.From(definition.PlacementKind, definition.PlacementDeviceId),
+                    definition.ReceivedAt,
+                    definition.ReceivedFromDeviceId);
             })
             .ToList();
     }

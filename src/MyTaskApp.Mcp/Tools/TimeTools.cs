@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Globalization;
 using ModelContextProtocol.Server;
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.TimeTracking;
@@ -16,7 +17,11 @@ namespace MyTaskApp.Mcp.Tools;
 /// período sempre com fim depois do início e nunca no futuro.
 /// </summary>
 [McpServerToolType]
-public sealed class TimeTools(McpGateway gateway, IUserClock clock, TimeProvider timeProvider)
+public sealed class TimeTools(
+    McpGateway gateway,
+    IUserClock clock,
+    TimeProvider timeProvider,
+    DevicePlacementState? placements = null)
 {
     [McpServerTool(Name = "time_tracking_get_active", Title = "Cronômetro ativo", ReadOnly = true, Idempotent = true)]
     [Description("O cronômetro que corre agora, se houver — há no máximo um no app inteiro.")]
@@ -186,6 +191,7 @@ public sealed class TimeTools(McpGateway gateway, IUserClock clock, TimeProvider
         [Description("Incluir tarefas na lixeira.")] bool includeTrashed = false,
         [Description("Quantos por página, de 1 a 500.")] int limit = GetTimeEntries.DefaultLimit,
         [Description("Quantos pular.")] int offset = 0,
+        [Description(DeviceInput.ViewHelp + " As horas seguem a tarefa.")] string? device = null,
         CancellationToken cancellationToken = default) =>
         gateway.ReadAsync(
             "time_entry_list",
@@ -201,7 +207,8 @@ public sealed class TimeTools(McpGateway gateway, IUserClock clock, TimeProvider
                     running,
                     includeTrashed,
                     limit,
-                    offset);
+                    offset,
+                    DeviceInput.View(placements, device));
 
                 var report = await runner.RunAsync<TimeReportHandlers, TimeEntryReport>(
                     (handler, cancel) => handler.HandleAsync(request, cancel), token);
@@ -306,6 +313,7 @@ public sealed class TimeTools(McpGateway gateway, IUserClock clock, TimeProvider
         [Description("Chave da issue (ECO-123) ou do projeto (ECO).")] string? issueKey = null,
         [Description("Timer ou Manual.")] string? source = null,
         [Description("Contar o cronômetro que corre até agora.")] bool includeRunning = true,
+        [Description(DeviceInput.ViewHelp + " As horas seguem a tarefa.")] string? device = null,
         CancellationToken cancellationToken = default) =>
         gateway.ReadAsync(
             "time_entry_get_summary",
@@ -319,7 +327,8 @@ public sealed class TimeTools(McpGateway gateway, IUserClock clock, TimeProvider
                     tag is null ? null : (await TagLookup.ResolveAsync(runner, [tag], token)).Single(),
                     issueKey,
                     McpInput.OptionalEnum<TimeEntrySource>(source, "a origem"),
-                    includeRunning);
+                    includeRunning,
+                    Device: DeviceInput.View(placements, device));
 
                 var summary = await runner.RunAsync<TimeReportHandlers, TimeSummary>(
                     (handler, cancel) => handler.HandleAsync(request, cancel), token);

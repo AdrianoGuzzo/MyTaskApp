@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Application.Configuration;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Tests.Fakes;
@@ -138,6 +139,7 @@ public class TodayBoardDeadlineTests
 
         public Task<IReadOnlyList<TodayOccurrenceRow>> GetCandidatesAsync(
             DateOnly today,
+            PlacementFilter placement,
             CancellationToken cancellationToken = default) =>
             Task.FromResult(Rows);
     }

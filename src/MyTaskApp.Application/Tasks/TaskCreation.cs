@@ -2,6 +2,7 @@ using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Domain.Auditing;
+using MyTaskApp.Domain.Devices;
 using MyTaskApp.Domain.Reminders;
 using MyTaskApp.Domain.Tasks;
 
@@ -25,6 +26,7 @@ internal static class TaskCreation
         DateTimeOffset createdAt,
         ReminderPolicy? reminder,
         Func<ReminderPolicy, TaskItem> build,
+        DevicePlacement? placement,
         CancellationToken cancellationToken)
     {
         // Sem politica explicita vale o padrao do usuario: e o que faz
@@ -32,6 +34,12 @@ internal static class TaskCreation
         var policy = reminder ?? (await settings.GetAsync(cancellationToken)).DefaultPolicy;
 
         var task = build(policy);
+
+        // Onde aparece (ADR-062): já resolvido por quem chama; nulo = sem lugar.
+        if (placement is not null)
+        {
+            task.Place(placement);
+        }
 
         // Armar antes de salvar: o lembrete entra na mesma transacao da tarefa.
         ReminderArming.Arm(task, task.Occurrences.Single(), clock, createdAt);

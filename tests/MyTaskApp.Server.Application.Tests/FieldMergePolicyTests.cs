@@ -70,6 +70,25 @@ public sealed class FieldMergePolicyTests
     }
 
     [Fact]
+    public void Placement_MergesAsOneValue()
+    {
+        // ADR-062: tipo e computador nunca se separam, e o mesmo valor dos dois lados não é conflito.
+        static JsonElement On(Guid device) => SyncValue.Object(
+            (SyncFields.Placement.Kind, SyncValue.Integer(0)),
+            (SyncFields.Placement.DeviceId, SyncValue.Guid(device)));
+
+        var entity = Current();
+        entity.Data[SyncFields.Task.Placement] = On(DeviceA);
+        entity.FieldVersions[SyncFields.Task.Placement] = new(2, DeviceA);
+
+        FieldMergePolicy.Merge(SyncRegistry.Task, entity, Ops.Upsert(DeviceB, SyncEntityTypes.Task, entity.EntityId, 1, new() { [SyncFields.Task.Placement] = On(DeviceA) }))
+            .Should().Match<FieldMerge>(merge => merge.Applied.Count == 0 && merge.Rejected.Count == 0);
+
+        var concurrent = FieldMergePolicy.Merge(SyncRegistry.Task, entity, Ops.Upsert(DeviceB, SyncEntityTypes.Task, entity.EntityId, 1, new() { [SyncFields.Task.Placement] = On(DeviceB) }));
+        concurrent.Rejected.Should().ContainSingle().Which.Field.Should().Be(SyncFields.Task.Placement);
+    }
+
+    [Fact]
     public void AnEqualValue_IsNeitherAppliedNorAConflict()
     {
         var merge = Merge(DeviceB, baseVersion: 1, (SyncFields.Task.Title, SyncValue.String("Título de A")));

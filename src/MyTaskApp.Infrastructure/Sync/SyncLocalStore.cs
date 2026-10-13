@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Devices;
 using MyTaskApp.Application.Sync;
 using MyTaskApp.Domain;
 using MyTaskApp.Infrastructure.Persistence;
@@ -24,6 +25,8 @@ internal sealed class SyncLocalStore(
     IDeviceIdentity device,
     ISyncTrigger trigger,
     TimeProvider timeProvider,
+    DevicePlacementState placement,
+    SyncDeviceDirectory directory,
     ILogger<SyncLocalStore> logger) : ISyncLocalStore
 {
     public async Task<SyncLocalState> ReadAsync(CancellationToken cancellationToken)
@@ -32,6 +35,7 @@ internal sealed class SyncLocalStore(
 
         // A captura segue a ligação: quem nunca conectou não grava nada.
         captureSwitch.Set(row is not null && row.Status != SyncLinkStatus.Unlinked);
+        SyncPlacementHydration.Apply(row, placement, directory);
 
         if (row is null)
         {
@@ -78,6 +82,16 @@ internal sealed class SyncLocalStore(
             row.ClientSchemaVersion = 0;
         }
 
+        // Revogado e reconectado, ou com o device.json perdido, este computador
+        // volta com outro id: o que estava no antigo continua sendo daqui (ADR-062).
+        if (row.LinkedDeviceId is { } previousDevice && previousDevice != link.DeviceId)
+        {
+            var former = SyncPlacementHydration.ReadIds(row.FormerDeviceIds).ToHashSet();
+            former.Add(previousDevice);
+            former.Remove(link.DeviceId);
+            row.FormerDeviceIds = SyncPlacementHydration.WriteIds(former);
+        }
+
         row.ServerBaseUrl = link.Server.AbsoluteUri;
         row.UserId = link.UserId;
         row.UserDisplayName = link.DisplayName;
@@ -91,6 +105,14 @@ internal sealed class SyncLocalStore(
 
         await SaveAsync(cancellationToken);
         captureSwitch.Set(true);
+        SyncPlacementHydration.Apply(row, placement, directory);
+    }
+
+    public async Task SaveKnownDevicesAsync(IReadOnlyList<DeviceInfo> devices, CancellationToken cancellationToken)
+    {
+        var row = await RowAsync(cancellationToken);
+        row.KnownDevices = SyncPlacementHydration.WriteDevices(devices);
+        await SaveAsync(cancellationToken);
     }
 
     public async Task UnlinkAsync(CancellationToken cancellationToken)
