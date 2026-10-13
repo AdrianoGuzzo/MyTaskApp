@@ -147,6 +147,81 @@ public class DevelopmentDatabaseViewModelTests
         section.DestinationPreview.Should().Contain("eco_dev").And.Contain("apagado e criado de novo");
     }
 
+    // --- Perfil com origem só de servidor: o banco e o apelido ------------------
+
+    private static readonly DatabaseCopyProfileRow ServerProfile =
+        new(Guid.CreateVersion7(), "Produção → Local", Production.Id, LocalServer.Id, Anonymization.Id, DatabaseCopyOptions.Default, true, At, "eco_core_1010");
+
+    private DevelopmentDatabaseViewModel ProfileSection(params SavedDatabaseRow[] aliases)
+    {
+        _runner.ResultsByHandler[typeof(ListServerDatabasesHandler)] = (IReadOnlyList<string>)["eco_core_1010", "eco_core_2020"];
+        var section = TestDevelopment.Database(_runner, confirmation: _confirmation);
+        section.SetCatalog([Production, LocalServer, FixedDev], [Anonymization], [ServerProfile], aliases);
+        section.ByProfile = true;
+        section.SelectedCopyProfile = ServerProfile;
+        return section;
+    }
+
+    [Fact]
+    public void AProfileFromAServer_LetsTheDatabaseBeChosen_StartingWithTheSavedOne()
+    {
+        var section = ProfileSection();
+
+        section.NeedsSourceDatabase.Should().BeTrue();
+        section.SourceDatabase.Should().Be("eco_core_1010");
+        section.SourceDatabases.Should().Equal("eco_core_1010", "eco_core_2020");
+
+        section.SourceDatabase = "eco_core_2020";
+
+        section.Selection!.SourceDatabase.Should().Be("eco_core_2020");
+        section.Selection.CopyProfileId.Should().Be(ServerProfile.Id);
+        section.DestinationPreview.Should().StartWith("Será criado: eco_core_2020_aaaaMMdd_HHmmss");
+
+        section.SourceDatabase = " ";
+        section.Selection.Should().BeNull("falta escolher o banco");
+    }
+
+    [Fact]
+    public async Task TheChosenDatabase_CanBeSavedAsAnAlias_ThatNamesTheNewDatabase()
+    {
+        var section = ProfileSection();
+        section.SourceDatabase = "eco_core_2020";
+        section.CanOfferAlias.Should().BeTrue();
+        section.SaveAliasCommand.CanExecute(null).Should().BeFalse("sem nome, não há apelido");
+
+        var saved = new SavedDatabaseRow(Guid.CreateVersion7(), "local_eco_2020", Production.Id, "eco_core_2020", Anonymization.Id, At);
+        _runner.ResultsByHandler[typeof(SaveSavedDatabaseHandler)] = saved.Id;
+        _runner.ResultsByHandler[typeof(GetDatabaseConnectionsHandler)] = (IReadOnlyList<DatabaseConnectionRow>)[Production, LocalServer, FixedDev];
+        _runner.ResultsByHandler[typeof(GetAnonymizationProfilesHandler)] = (IReadOnlyList<AnonymizationProfileRow>)[Anonymization];
+        _runner.ResultsByHandler[typeof(GetDatabaseCopyProfilesHandler)] = (IReadOnlyList<DatabaseCopyProfileRow>)[ServerProfile];
+        _runner.ResultsByHandler[typeof(GetSavedDatabasesHandler)] = (IReadOnlyList<SavedDatabaseRow>)[saved];
+
+        section.NewAlias = "Local_ECO_2020";
+        await section.SaveAliasCommand.ExecuteAsync(null);
+
+        _runner.Invoked.Should().Contain(typeof(SaveSavedDatabaseHandler));
+        section.AliasMessage.Should().Contain("local_eco_2020 salvo");
+        section.SelectedCopyProfile.Should().Be(ServerProfile, "a escolha continua a mesma");
+        section.SourceDatabase.Should().Be("eco_core_2020");
+        section.ProfileAlias.Should().Be(saved);
+        section.CanOfferAlias.Should().BeFalse();
+        section.Selection!.SavedDatabaseId.Should().Be(saved.Id);
+        section.DestinationPreview.Should().StartWith("Será criado: local_eco_2020_aaaaMMdd_HHmmss");
+    }
+
+    [Fact]
+    public void AnExistingAlias_ForTheChosenDatabase_IsUsed_AndNotOfferedAgain()
+    {
+        var existing = new SavedDatabaseRow(Guid.CreateVersion7(), "lock_eco_core_1010", Production.Id, "eco_core_1010", null, At);
+
+        var section = ProfileSection(existing);
+
+        section.ProfileAlias.Should().Be(existing);
+        section.CanOfferAlias.Should().BeFalse();
+        section.ProfileAliasText.Should().Contain("lock_eco_core_1010");
+        section.Selection!.SavedDatabaseId.Should().Be(existing.Id);
+    }
+
     [Fact]
     public async Task Prepare_WithoutAChoice_SaysWhatIsMissing()
     {

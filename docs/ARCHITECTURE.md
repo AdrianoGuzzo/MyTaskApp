@@ -5462,8 +5462,14 @@ A escolha usa os cadastros da janela Bancos de Dados, lidos só quando ela abre:
   fixo**, fora de produção e ativa. Cada ambiente ganha um banco novo, sem
   `dropdb`. A anonimização vem do apelido e pode ser trocada. Não recria o
   destino nem guarda o dump.
-- **Perfil de cópia.** É usado como está salvo. Se o destino tem banco fixo e
-  "Recriar o destino", a prévia avisa que ele será apagado.
+- **Perfil de cópia.** As opções são as do perfil. Se o destino tem banco
+  fixo e "Recriar o destino", a prévia avisa que ele será apagado.
+  - Com a origem só de servidor, o banco vem do perfil e pode ser trocado,
+    como na aba Copiar Banco.
+  - "Salvar como" grava origem, banco e anonimização como apelido
+    (`SaveSavedDatabaseHandler`), para repetir pelo modo apelido.
+  - Havendo apelido para a origem e o banco escolhidos, o pedido leva o
+    `SavedDatabaseId`, e o banco novo ganha o nome do apelido.
 
 Não há cópia padrão por diretório: o usuário escolhe a cada ambiente.
 

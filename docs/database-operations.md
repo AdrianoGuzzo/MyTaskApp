@@ -499,7 +499,12 @@ Cada worktree da tarefa pode ter o seu banco (ADR-060). Na aba
   - **Apelido + servidor**: o apelido do banco de origem e uma conexão só de
     servidor, fora de produção, que recebe o banco **novo**
     (`{apelido}_{yyyyMMdd_HHmmss}`). Nada é apagado.
-  - **Perfil de cópia**: um perfil cadastrado, usado como está salvo.
+  - **Perfil de cópia**: um perfil cadastrado. Se a origem do perfil é só o
+    servidor, o campo **Banco** vem com o banco salvo no perfil e pode ser
+    trocado (da lista do servidor ou digitado). Em **Salvar como**, origem,
+    banco e anonimização viram um apelido: o banco novo já leva o nome dele, e
+    na próxima vez basta escolher o apelido. Com um apelido já salvo para
+    aquele banco, ele é usado sozinho.
 
   A validação e a confirmação de produção acontecem **antes** do Git; recusar
   não cria nada. O worktree é criado, o banco é copiado (com barra, etapa e

@@ -64,13 +64,45 @@ public sealed partial class DevelopmentDatabaseViewModel(
     /// <summary>Escolher por perfil de cópia; senão, por apelido e servidor de destino.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Selection), nameof(DestinationPreview), nameof(ByAlias), nameof(HasSelection))]
-    [NotifyCanExecuteChangedFor(nameof(CopyNowCommand))]
+    [NotifyCanExecuteChangedFor(nameof(CopyNowCommand), nameof(SaveAliasCommand))]
     private bool _byProfile;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Selection), nameof(DestinationPreview), nameof(HasSelection))]
-    [NotifyCanExecuteChangedFor(nameof(CopyNowCommand))]
+    [NotifyPropertyChangedFor(
+        nameof(Selection), nameof(DestinationPreview), nameof(HasSelection), nameof(NeedsSourceDatabase),
+        nameof(ProfileAlias), nameof(CanOfferAlias), nameof(ProfileAliasText))]
+    [NotifyCanExecuteChangedFor(nameof(CopyNowCommand), nameof(SaveAliasCommand))]
     private DatabaseCopyProfileRow? _selectedCopyProfile;
+
+    /// <summary>
+    /// O banco de origem do perfil, quando a origem dele é só o servidor
+    /// (ADR-057): vem do perfil, e pode ser trocado aqui — da lista do servidor
+    /// ou digitado.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(
+        nameof(Selection), nameof(DestinationPreview), nameof(HasSelection), nameof(ProfileAlias), nameof(CanOfferAlias),
+        nameof(ProfileAliasText))]
+    [NotifyCanExecuteChangedFor(nameof(CopyNowCommand), nameof(SaveAliasCommand))]
+    private string? _sourceDatabase;
+
+    /// <summary>Por que a lista de bancos do servidor não veio; dá para digitar o nome.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasDatabaseListMessage))]
+    private string? _databaseListMessage;
+
+    /// <summary>O apelido a salvar para a origem e o banco escolhidos no perfil.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SaveAliasCommand))]
+    private string _newAlias = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasAliasMessage))]
+    private string? _aliasMessage;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SaveAliasCommand))]
+    private bool _isSavingAlias;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Selection), nameof(DestinationPreview), nameof(HasSelection))]
@@ -99,7 +131,7 @@ public sealed partial class DevelopmentDatabaseViewModel(
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanEdit))]
-    [NotifyCanExecuteChangedFor(nameof(CopyNowCommand), nameof(CancelCommand), nameof(BeginSelectingCommand))]
+    [NotifyCanExecuteChangedFor(nameof(CopyNowCommand), nameof(CancelCommand), nameof(BeginSelectingCommand), nameof(SaveAliasCommand))]
     private bool _isRunning;
 
     [ObservableProperty]
@@ -139,6 +171,9 @@ public sealed partial class DevelopmentDatabaseViewModel(
 
     public ObservableCollection<AnonymizationProfileRow> AnonymizationProfiles { get; } = [];
 
+    /// <summary>Os bancos do servidor de origem do perfil, quando ele é só o servidor.</summary>
+    public ObservableCollection<string> SourceDatabases { get; } = [];
+
     /// <summary>O que impediu a cópia na validação: política e checagens que falharam.</summary>
     public ObservableCollection<string> Problems { get; } = [];
 
@@ -167,6 +202,58 @@ public sealed partial class DevelopmentDatabaseViewModel(
     public bool HasCatalogMessage => !string.IsNullOrEmpty(CatalogMessage);
 
     public bool HasSelection => Selection is not null;
+
+    public bool HasDatabaseListMessage => !string.IsNullOrEmpty(DatabaseListMessage);
+
+    public bool HasAliasMessage => !string.IsNullOrEmpty(AliasMessage);
+
+    /// <summary>A origem do perfil escolhido, se a conexão ainda está cadastrada e ativa.</summary>
+    private DatabaseConnectionItemViewModel? ProfileSource =>
+        SelectedCopyProfile is { } profile
+            ? _connections.FirstOrDefault(connection => connection.Id == profile.SourceConnectionId)
+            : null;
+
+    /// <summary>A origem do perfil é só o servidor: o banco é escolhido aqui.</summary>
+    public bool NeedsSourceDatabase => SelectedCopyProfile is not null && ProfileSource is { HasDatabase: false };
+
+    /// <summary>O banco de origem que vale no perfil: o fixo da conexão, o escolhido aqui, ou o salvo no perfil.</summary>
+    private string? ProfileSourceDatabase
+    {
+        get
+        {
+            if (SelectedCopyProfile is not { } profile)
+            {
+                return null;
+            }
+
+            if (ProfileSource?.Row.Database is { } fixedDatabase)
+            {
+                return fixedDatabase;
+            }
+
+            return NeedsSourceDatabase
+                ? (string.IsNullOrWhiteSpace(SourceDatabase) ? null : SourceDatabase.Trim())
+                : profile.SourceDatabase;
+        }
+    }
+
+    /// <summary>
+    /// O apelido já salvo para a origem e o banco do perfil. Com ele, o banco
+    /// novo leva o nome do apelido, como na aba Copiar Banco (ADR-057).
+    /// </summary>
+    public SavedDatabaseRow? ProfileAlias =>
+        SelectedCopyProfile is { } profile && ProfileSourceDatabase is { } database
+            ? SavedDatabases.FirstOrDefault(saved =>
+                saved.ConnectionId == profile.SourceConnectionId
+                && string.Equals(saved.DatabaseName, database, StringComparison.Ordinal))
+            : null;
+
+    /// <summary>Há origem e banco para guardar como apelido, e eles ainda não têm um.</summary>
+    public bool CanOfferAlias => ProfileSource is not null && ProfileSourceDatabase is not null && ProfileAlias is null;
+
+    public string? ProfileAliasText => ProfileAlias is { } alias
+        ? $"Já salvo como o apelido {alias.Alias}: na próxima vez, escolha-o em Apelido + servidor."
+        : null;
 
     public string PercentText => string.Create(CultureInfo.InvariantCulture, $"{Percent:0}%");
 
@@ -202,7 +289,6 @@ public sealed partial class DevelopmentDatabaseViewModel(
                 }
 
                 var destination = _connections.FirstOrDefault(connection => connection.Id == profile.DestinationConnectionId);
-                var source = _connections.FirstOrDefault(connection => connection.Id == profile.SourceConnectionId);
 
                 if (destination is { HasDatabase: true })
                 {
@@ -211,7 +297,7 @@ public sealed partial class DevelopmentDatabaseViewModel(
                         : $"Destino: {destination.Row.Database} em {destination.Name}.";
                 }
 
-                return (profile.SourceDatabase ?? source?.Row.Database) is { Length: > 0 } prefix
+                return (ProfileAlias?.Alias ?? ProfileSourceDatabase) is { Length: > 0 } prefix
                     ? NewDatabasePreview(prefix, destination?.Name)
                     : null;
             }
@@ -315,7 +401,12 @@ public sealed partial class DevelopmentDatabaseViewModel(
         OnPropertyChanged(nameof(Selection));
         OnPropertyChanged(nameof(DestinationPreview));
         OnPropertyChanged(nameof(HasSelection));
+        OnPropertyChanged(nameof(NeedsSourceDatabase));
+        OnPropertyChanged(nameof(ProfileAlias));
+        OnPropertyChanged(nameof(CanOfferAlias));
+        OnPropertyChanged(nameof(ProfileAliasText));
         CopyNowCommand.NotifyCanExecuteChanged();
+        SaveAliasCommand.NotifyCanExecuteChanged();
     }
 
     private bool _restoring;
@@ -561,17 +652,130 @@ public sealed partial class DevelopmentDatabaseViewModel(
     /// <summary>A cópia escondida não para sozinha: só pelo [Cancelar cópia] ou fechando o app.</summary>
     public void CancelRun() => _run?.Cancel();
 
-    private DatabaseCopyRequest? ProfileRequest() =>
-        SelectedCopyProfile is { } profile
-            ? new DatabaseCopyRequest(
-                profile.SourceConnectionId,
-                profile.DestinationConnectionId,
-                profile.Options.RequireAnonymization ? DatabaseOperationType.CopyAndAnonymize : DatabaseOperationType.Copy,
-                profile.Options.RequireAnonymization ? profile.AnonymizationProfileId : null,
-                profile.Options,
-                profile.Id,
-                profile.SourceDatabase)
-            : null;
+    private DatabaseCopyRequest? ProfileRequest()
+    {
+        if (SelectedCopyProfile is not { } profile)
+        {
+            return null;
+        }
+
+        // Origem só de servidor sem banco escolhido: falta escolher.
+        if (NeedsSourceDatabase && ProfileSourceDatabase is null)
+        {
+            return null;
+        }
+
+        return new DatabaseCopyRequest(
+            profile.SourceConnectionId,
+            profile.DestinationConnectionId,
+            profile.Options.RequireAnonymization ? DatabaseOperationType.CopyAndAnonymize : DatabaseOperationType.Copy,
+            profile.Options.RequireAnonymization ? profile.AnonymizationProfileId : null,
+            profile.Options,
+            profile.Id,
+            NeedsSourceDatabase ? ProfileSourceDatabase : profile.SourceDatabase,
+            ProfileAlias?.Id);
+    }
+
+    partial void OnSelectedCopyProfileChanged(DatabaseCopyProfileRow? value)
+    {
+        if (_restoring)
+        {
+            return;
+        }
+
+        // O banco salvo no perfil vem preenchido; o usuário pode trocar.
+        SourceDatabase = value?.SourceDatabase;
+        AliasMessage = null;
+        NewAlias = string.Empty;
+        _ = LoadSourceDatabasesAsync();
+    }
+
+    /// <summary>A lista do servidor de origem. Se não vier (sem acesso ao banco de manutenção), o nome pode ser digitado.</summary>
+    private async Task LoadSourceDatabasesAsync()
+    {
+        SourceDatabases.Clear();
+        DatabaseListMessage = null;
+
+        if (!NeedsSourceDatabase || ProfileSource is not { } source)
+        {
+            return;
+        }
+
+        try
+        {
+            var databases = await runner.RunAsync<ListServerDatabasesHandler, IReadOnlyList<string>>(
+                (handler, token) => handler.HandleAsync(new ListServerDatabases(source.Id), token), CancellationToken.None);
+
+            // O perfil pode ter mudado enquanto o servidor respondia.
+            if (ProfileSource?.Id != source.Id)
+            {
+                return;
+            }
+
+            Replace(SourceDatabases, databases);
+            DatabaseListMessage = databases.Count == 0 ? "Nenhum banco encontrado no servidor; digite o nome." : null;
+        }
+        catch (DomainException exception)
+        {
+            DatabaseListMessage = $"{exception.Message} Digite o nome do banco.";
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "DevelopmentDatabaseServerListFailed");
+            DatabaseListMessage = "Não foi possível listar os bancos do servidor; digite o nome.";
+        }
+    }
+
+    private bool CanSaveAlias() =>
+        !IsRunning && !IsSavingAlias && ByProfile && CanOfferAlias && !string.IsNullOrWhiteSpace(NewAlias);
+
+    /// <summary>
+    /// Guarda a origem, o banco e a anonimização do perfil como um apelido
+    /// (ADR-057): repetir a cópia vira escolher o apelido, e o banco novo leva
+    /// o nome dele.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanSaveAlias))]
+    public async Task SaveAliasAsync()
+    {
+        if (SelectedCopyProfile is not { } profile || ProfileSourceDatabase is not { } database)
+        {
+            return;
+        }
+
+        AliasMessage = null;
+        IsSavingAlias = true;
+
+        var command = new SaveSavedDatabase(
+            null,
+            NewAlias,
+            profile.SourceConnectionId,
+            database,
+            profile.Options.RequireAnonymization ? profile.AnonymizationProfileId : null);
+
+        try
+        {
+            await runner.RunAsync<SaveSavedDatabaseHandler, Guid>(
+                (handler, token) => handler.HandleAsync(command, token), CancellationToken.None);
+
+            var saved = SavedDatabase.NormalizeAlias(NewAlias);
+            await LoadCatalogAsync(CancellationToken.None);
+            NewAlias = string.Empty;
+            AliasMessage = $"✓ Apelido {saved} salvo. O banco novo já leva o nome dele.";
+        }
+        catch (DomainException exception)
+        {
+            AliasMessage = exception.Message;
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "DevelopmentDatabaseAliasSaveFailed");
+            AliasMessage = "Não foi possível salvar o apelido.";
+        }
+        finally
+        {
+            IsSavingAlias = false;
+        }
+    }
 
     private DatabaseCopyRequest? AliasRequest()
     {

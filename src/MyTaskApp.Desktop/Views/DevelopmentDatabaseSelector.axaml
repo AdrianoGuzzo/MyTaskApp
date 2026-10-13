@@ -61,7 +61,8 @@
       </Grid>
     </Grid>
 
-    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12" IsVisible="{Binding ByProfile}">
+    <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="8"
+          IsVisible="{Binding ByProfile}">
       <TextBlock Classes="fieldLabel" Text="Perfil" VerticalAlignment="Center" />
       <ComboBox Grid.Column="1" x:Name="CopyProfileBox" HorizontalAlignment="Stretch"
                 PlaceholderText="Origem, destino e anonimização já salvos"
@@ -72,6 +73,29 @@
           </DataTemplate>
         </ComboBox.ItemTemplate>
       </ComboBox>
+
+      <!-- Origem só de servidor (ADR-057): o banco vem do perfil e pode ser trocado, da lista ou digitado. -->
+      <TextBlock Grid.Row="1" Classes="fieldLabel" Text="Banco" VerticalAlignment="Center" IsVisible="{Binding NeedsSourceDatabase}" />
+      <StackPanel Grid.Row="1" Grid.Column="1" Spacing="2" IsVisible="{Binding NeedsSourceDatabase}">
+        <AutoCompleteBox x:Name="ProfileSourceDatabaseBox" HorizontalAlignment="Stretch"
+                         MinimumPrefixLength="0" FilterMode="Contains"
+                         PlaceholderText="Banco de origem (ex.: eco_core_1010)"
+                         ItemsSource="{Binding SourceDatabases}" Text="{Binding SourceDatabase}" />
+        <TextBlock Classes="hint" TextWrapping="Wrap" Text="{Binding DatabaseListMessage}" IsVisible="{Binding HasDatabaseListMessage}" />
+      </StackPanel>
+
+      <!-- Repetir depois: origem + banco + anonimização viram um apelido. -->
+      <TextBlock Grid.Row="2" Classes="fieldLabel" Text="Salvar como" VerticalAlignment="Center" IsVisible="{Binding CanOfferAlias}" />
+      <Grid Grid.Row="2" Grid.Column="1" ColumnDefinitions="*,8,Auto" IsVisible="{Binding CanOfferAlias}">
+        <TextBox x:Name="ProfileAliasBox" PlaceholderText="apelido, ex.: local_eco_core_1010" Text="{Binding NewAlias}" />
+        <Button Grid.Column="2" x:Name="SaveProfileAliasButton" Content="Salvar apelido" Command="{Binding SaveAliasCommand}" />
+      </Grid>
+
+      <StackPanel Grid.Row="3" Grid.Column="1" Spacing="2">
+        <TextBlock x:Name="ProfileAliasText" Classes="hint" TextWrapping="Wrap" Text="{Binding ProfileAliasText}"
+                   IsVisible="{Binding ProfileAliasText, Converter={x:Static ObjectConverters.IsNotNull}}" />
+        <TextBlock x:Name="AliasMessage" Classes="hint" TextWrapping="Wrap" Text="{Binding AliasMessage}" IsVisible="{Binding HasAliasMessage}" />
+      </StackPanel>
     </Grid>
 
     <TextBlock x:Name="DatabasePreview"
