@@ -131,10 +131,10 @@ public sealed class ApiTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task AnExpiredAccessToken_Is401_AndTheRefreshedOneWorks()
     {
-        await using var api = await CreateApiAsync(new() { ["Sync:AccessTokenLifetime"] = "00:00:01" });
+        await using var api = await CreateApiAsync(new() { ["Sync:AccessTokenLifetime"] = "00:00:02" });
         var session = await api.LoginAsync("ana");
 
-        await Task.Delay(TimeSpan.FromSeconds(2.5), Ct);
+        await Task.Delay(TimeSpan.FromSeconds(4), Ct);
         using (var client = session.Api())
         {
             (await client.GetAsync(ApiRoutes.Me, Ct)).StatusCode.Should().Be(HttpStatusCode.Unauthorized);

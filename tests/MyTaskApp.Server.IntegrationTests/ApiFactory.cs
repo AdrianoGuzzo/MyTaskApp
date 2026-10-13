@@ -124,7 +124,7 @@ internal sealed class ApiFactory(string connectionString, IReadOnlyDictionary<st
 
             var location = response.Headers.Location!;
 
-            if (location.IsAbsoluteUri && location.Port == 47833)
+            if (location.IsAbsoluteUri && location.IsLoopback && location.AbsolutePath == "/callback")
             {
                 return location;
             }
@@ -187,10 +187,11 @@ internal sealed class ApiFactory(string connectionString, IReadOnlyDictionary<st
                 root.TryGetProperty("error_description", out var description) ? description.GetString() : null);
         }
 
-        return new TokenSet(
-            root.GetProperty("access_token").GetString()!,
-            root.GetProperty("refresh_token").GetString()!,
-            root.GetProperty("expires_in").GetInt32());
+        string Required(string name) => root.TryGetProperty(name, out var value)
+            ? value.ToString()
+            : throw new InvalidOperationException($"Resposta sem {name}: {string.Join(", ", root.EnumerateObject().Select(property => property.Name))}");
+
+        return new TokenSet(Required("access_token"), Required("refresh_token"), int.Parse(Required("expires_in"), System.Globalization.CultureInfo.InvariantCulture));
     }
 
     private static string Encode(Dictionary<string, string> values) =>

@@ -12,6 +12,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\MyTaskApp.Server.Infrastructure\MyTaskApp.Server.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\MyTaskApp.Server.Api\MyTaskApp.Server.Api.csproj" />
+    <ProjectReference Include="..\..\src\MyTaskApp.Infrastructure\MyTaskApp.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>
