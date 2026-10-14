@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.14.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.13.0...v1.14.0) (2026-10-14)
+
+
+### Added
+
+* bolinha de status da sincronização no cabeçalho (ADR-063) ([#80](https://github.com/AdrianoGuzzo/MyTaskApp/issues/80)) ([7f48341](https://github.com/AdrianoGuzzo/MyTaskApp/commit/7f483419127a571f9ead77c0ca333c353b7af3a4))
+
 ## [1.13.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.12.0...v1.13.0) (2026-10-13)
 
 
