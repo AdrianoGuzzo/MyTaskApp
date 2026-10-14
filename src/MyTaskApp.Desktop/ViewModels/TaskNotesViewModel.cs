@@ -87,6 +87,9 @@ public sealed partial class TaskNotesViewModel(
 
     private TaskPriority _priority = TaskPriority.Normal;
 
+    /// <summary>A carga de atalhos mais recente: só ela grava (<see cref="LoadAliasesAsync"/>).</summary>
+    private int _aliasLoad;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasUnsavedChanges))]
     [NotifyPropertyChangedFor(nameof(NotesTabHeader))]
@@ -315,6 +318,7 @@ public sealed partial class TaskNotesViewModel(
     public void Load(TaskRowViewModel row)
     {
         _taskId = row.TaskId;
+        _aliasLoad++;
         Completion.Reset();
         Developments.DirectoryCompletion.Reset();
         _persistedTitle = row.Title;
@@ -332,8 +336,17 @@ public sealed partial class TaskNotesViewModel(
 
         Deadline?.Load(row);
         Time?.Load(row);
-        Tags?.Load(row);
         Placement?.Load(row);
+
+        if (Tags is { } tags)
+        {
+            // Os atalhos vêm dos diretórios das etiquetas: marcar uma no
+            // cabeçalho tem de valer no próximo "@", sem esperar a janela
+            // perder e recuperar o foco.
+            tags.Load(row);
+            tags.Changed -= OnTagsChanged;
+            tags.Changed += OnTagsChanged;
+        }
 
         if (Issue is { } card)
         {
@@ -480,7 +493,7 @@ public sealed partial class TaskNotesViewModel(
     /// <summary>
     /// Carrega os atalhos das etiquetas da tarefa. Pela tarefa, a cada ativação
     /// da janela, para acompanhar etiquetas e diretórios mudados enquanto ela
-    /// estava aberta. Falhar aqui não impede de escrever: só não há atalhos.
+    /// estava aberta, e a cada etiqueta marcada no próprio cabeçalho. Falhar aqui não impede de escrever: só não há atalhos.
     /// </summary>
     /// <remarks>
     /// A lista vale na hora; a conferência das pastas vem depois, todas ao
@@ -494,11 +507,21 @@ public sealed partial class TaskNotesViewModel(
             return;
         }
 
+        // A ativação e a marca de uma etiqueta podem carregar ao mesmo tempo; a
+        // que começou antes leu as etiquetas velhas e não pode vencer chegando
+        // por último. Nem a carga de outra tarefa, se a janela trocou.
+        var load = ++_aliasLoad;
+
         try
         {
             var directories = await runner.RunAsync<GetTaskDirectoriesHandler, IReadOnlyList<TagDirectoryRow>>(
                 (handler, token) => handler.HandleAsync(new GetTaskDirectories(_taskId), token),
                 cancellationToken);
+
+            if (load != _aliasLoad)
+            {
+                return;
+            }
 
             var unknown = new Dictionary<Guid, bool>();
             Completion.SetDirectories(directories, unknown);
@@ -506,6 +529,11 @@ public sealed partial class TaskNotesViewModel(
 
             var checks = await Task.WhenAll(directories.Select(async directory =>
                 (directory.Id, Exists: directory.Path is { } path && await directoryProbe.ExistsAsync(path, cancellationToken))));
+
+            if (load != _aliasLoad)
+            {
+                return;
+            }
 
             var existence = checks.ToDictionary(check => check.Id, check => check.Exists);
             Completion.SetDirectories(directories, existence);
@@ -519,6 +547,9 @@ public sealed partial class TaskNotesViewModel(
             logger.LogWarning(exception, "TaskNotesAliasesLoadFailed {TaskId}", _taskId);
         }
     }
+
+    /// <summary>Uma etiqueta marcada ou tirada no cabeçalho traz ou leva os diretórios dela.</summary>
+    private void OnTagsChanged() => _ = LoadAliasesAsync(CancellationToken.None);
 
     /// <summary>
     /// Devolve o texto e o título ao que está no banco. Usado quando o usuário confirma que
