@@ -15,7 +15,7 @@ sempre separada da refatoração.
 | E3 — Portas da UI fora de `Views` | refactor | concluída |
 | E4 — Caminho único de erro nos ViewModels (ADR-008) | refactor | concluída (7 de 19 telas; ver registro) |
 | E5 — Regras pequenas saem dos ViewModels | refactor | 5a e 5e concluídas; 5c descartada; 5d não feita (justificada); 5b pendente |
-| E6 — Duplicação na Infrastructure | refactor | 6a descartada, 6b concluída, 6c pendente |
+| E6 — Duplicação na Infrastructure | refactor | 6a descartada; 6b e 6c concluídas |
 | E7 — Composition root | refactor | pendente |
 | F6 — `ProcessRunner` preso por um neto | fix | concluída |
 | F4 — Vincular a outra conta é tudo ou nada | fix | concluída |
@@ -413,6 +413,19 @@ decisão sobre isso, nada foi mudado. O resto (bomba de saída e texto com teto)
     de plataforma;
   - `dotnet test MyTaskApp.slnx`: Application com 1294 aprovados e Desktop com 2333,
     além das 4 falhas de ambiente.
+
+### E6c — O duplicar de conexão mora com as conexões
+
+- **Problema (I12):** `DuplicateDatabaseConnection` e o handler dele estavam em
+  `AnonymizationProfileEditing.cs`, um arquivo de perfis de anonimização. Quem
+  procurasse o caso de uso da conexão o procuraria em `ConnectionHandlers.cs`.
+- **O que mudou:** os dois tipos foram para o fim de `ConnectionHandlers.cs`, com o
+  texto idêntico, o mesmo namespace e o mesmo CRLF. O diff mostra as mesmas 29
+  linhas removidas de um lado e acrescentadas do outro.
+- **Ficou onde estava:** o `DatabaseUsageHandlers`, porque responde ao mesmo tempo
+  pelo uso de perfis e pelo de conexões e é uma consulta só.
+- **Testes:** Application.Tests com 1295 aprovados, Mcp.Tests com 79 aprovados e o
+  registro de handlers (`ApplicationRegistrationTests`) igual.
 
 ### E5c — "Trocar a máscara reinicia o argumento": descartada
 
