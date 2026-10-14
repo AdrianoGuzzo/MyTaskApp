@@ -1858,33 +1858,11 @@ public sealed partial class TodayViewModel(
         return false;
     }
 
-    private async Task<bool> TryAsync(Func<Task> operation, string fallbackMessage)
-    {
-        IsBusy = true;
-        ErrorMessage = null;
-        StatusMessage = null;
-
-        try
-        {
-            await operation();
-            return true;
-        }
-        catch (DomainException exception)
-        {
-            // Regra de negócio: a mensagem já foi escrita para o usuário.
-            ErrorMessage = exception.Message;
-            return false;
-        }
-        catch (Exception exception)
-        {
-            // Detalhe técnico vai para o log, nunca para a tela (§25).
-            logger.LogError(exception, "TodayScreenOperationFailed");
-            ErrorMessage = fallbackMessage;
-            return false;
-        }
-        finally
-        {
-            IsBusy = false;
-        }
-    }
+    private Task<bool> TryAsync(Func<Task> operation, string fallbackMessage) =>
+        new ScreenErrorPath(
+            busy => IsBusy = busy,
+            error => ErrorMessage = error,
+            exception => logger.LogError(exception, "TodayScreenOperationFailed"),
+            ClearStatus: () => StatusMessage = null)
+        .TryAsync(operation, fallbackMessage);
 }

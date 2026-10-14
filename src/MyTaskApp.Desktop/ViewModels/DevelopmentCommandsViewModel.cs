@@ -526,31 +526,11 @@ public sealed partial class DevelopmentCommandsViewModel(
         SyncParameterEditors([]);
     }
 
-    private async Task<bool> TryAsync(Func<Task> operation, string fallbackMessage)
-    {
-        IsBusy = true;
-        ErrorMessage = null;
-        StatusMessage = null;
-
-        try
-        {
-            await operation();
-            return true;
-        }
-        catch (DomainException exception)
-        {
-            ErrorMessage = exception.Message;
-            return false;
-        }
-        catch (Exception exception)
-        {
-            logger.LogError(exception, "DevelopmentCommandsScreenOperationFailed");
-            ErrorMessage = fallbackMessage;
-            return false;
-        }
-        finally
-        {
-            IsBusy = false;
-        }
-    }
+    private Task<bool> TryAsync(Func<Task> operation, string fallbackMessage) =>
+        new ScreenErrorPath(
+            busy => IsBusy = busy,
+            error => ErrorMessage = error,
+            exception => logger.LogError(exception, "DevelopmentCommandsScreenOperationFailed"),
+            ClearStatus: () => StatusMessage = null)
+        .TryAsync(operation, fallbackMessage);
 }

@@ -5,7 +5,6 @@ using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Sounds;
-using MyTaskApp.Domain;
 using MyTaskApp.Domain.Agents;
 
 namespace MyTaskApp.Desktop.ViewModels;
@@ -223,32 +222,12 @@ public sealed partial class AgentAlertSoundsViewModel(
     internal SoundOption? Find(string soundId) => Sounds.FirstOrDefault(sound => sound.Id == soundId);
 
     /// <summary>Mesmo caminho de erro do resto do app (ADR-008).</summary>
-    private async Task<bool> TryAsync(Func<Task> operation, string fallbackMessage)
-    {
-        IsBusy = true;
-        ErrorMessage = null;
-
-        try
-        {
-            await operation();
-            return true;
-        }
-        catch (DomainException exception)
-        {
-            ErrorMessage = exception.Message;
-            return false;
-        }
-        catch (Exception exception)
-        {
-            logger.LogError(exception, "AgentAlertSoundsOperationFailed");
-            ErrorMessage = fallbackMessage;
-            return false;
-        }
-        finally
-        {
-            IsBusy = false;
-        }
-    }
+    private Task<bool> TryAsync(Func<Task> operation, string fallbackMessage) =>
+        new ScreenErrorPath(
+            busy => IsBusy = busy,
+            error => ErrorMessage = error,
+            exception => logger.LogError(exception, "AgentAlertSoundsOperationFailed"))
+        .TryAsync(operation, fallbackMessage);
 }
 
 /// <summary>Um estado do agente que avisa, com a caixa de ligar e o som escolhido.</summary>

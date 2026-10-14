@@ -13,7 +13,7 @@ sempre separada da refatoração.
 | E1 — Guarda de camadas | test | concluída |
 | E2 — Relógio pelo `TimeProvider` | refactor | concluída |
 | E3 — Portas da UI fora de `Views` | refactor | concluída |
-| E4 — Caminho único de erro nos ViewModels (ADR-008) | refactor | pendente |
+| E4 — Caminho único de erro nos ViewModels (ADR-008) | refactor | concluída (7 de 19 telas; ver registro) |
 | E5 — Regras pequenas saem dos ViewModels | refactor | pendente |
 | E6 — Duplicação na Infrastructure | refactor | pendente |
 | E7 — Composition root | refactor | pendente |
@@ -241,6 +241,54 @@ Ficam sem mudança. Decidir antes de mexer.
 - **Testes:** `dotnet test MyTaskApp.slnx -c Release`.
   - Desktop.Tests: 2309 aprovados, e as 4 falhas de ambiente de sempre.
   - O resto igual à E2.
+
+### E4 — Caminho único de erro nos ViewModels (ADR-008)
+
+- **Problema (I1):** o `TryAsync` estava copiado em 19 telas, com variações pequenas:
+  - limpar ou não o `StatusMessage`;
+  - tratar ou não o cancelamento como silencioso;
+  - o evento de log de cada tela.
+
+  Uma correção no caminho de erro teria de ser feita 19 vezes, e as cópias já
+  divergiam na ordem dos `catch`.
+- **O que mudou:**
+  - `Desktop/ViewModels/ScreenErrorPath.cs` (`readonly record struct`) tem o caminho
+    numa só implementação: liga o "ocupado", limpa o erro (e o status, se pedido),
+    roda, trata `DomainException` → mensagem, cancelamento → silêncio (se pedido) e
+    o resto → log + fallback, e desliga o "ocupado" no `finally`;
+  - 7 telas passaram a usá-lo, cada uma com o próprio evento de log: Hoje,
+    Etiquetas, Comandos globais, Sons do agente, Lembretes, Integrações e Conexões
+    de banco. O `TryAsync` delas virou uma linha que diz só o que é da tela;
+  - nota no ADR-008.
+- **Equivalência:**
+  - a ordem de atribuição continua a mesma (`IsBusy`, `ErrorMessage`, `StatusMessage`);
+  - `DomainException` e `OperationCanceledException` não se sobrepõem, então a ordem
+    dos `catch` não muda o resultado;
+  - sem `CancellationIsSilent`, o cancelamento cai no `catch (Exception)`, como
+    nas cópias que não o tratavam.
+- **Caracterização antes da troca:** `ScreenErrorPathTests`, 23 casos verdes sobre o
+  código antigo e de novo depois da troca. Por tela, eles fixam:
+  - a mensagem da regra, sem log;
+  - o fallback, com o evento exato de log, nível Error e a exceção;
+  - `IsBusy` falso no fim;
+  - a linha de status limpa só onde já era limpa;
+  - o cancelamento silencioso em Integrações e Conexões de banco.
+
+  `CapturingLogger<T>` é novo, para conferir o evento.
+- **Não convertidas:**
+  - `TaskIssue`, `TaskDeadline`, `TaskTimeLog` (evento com `{OccurrenceId}`),
+    `DatabaseProfiles` e `McpServer`: as variantes são idênticas às convertidas,
+    mas a operação passa por pré-condições que pedem preparo próprio. Ficam para
+    uma próxima rodada, com caracterização própria;
+  - com passo a mais, mantêm o `TryAsync` de propósito: `DataManagement` (limpa
+    também `SettingsStatus`), `DatabaseDiagnostics` (sem retorno),
+    `DeadlineAlert` e `ReminderAlert` (sem "ocupado", avisam `Acted`),
+    `StickyNotes` (recarrega a lista), `StickyNote` (limpa o erro só no sucesso) e
+    `Sync` (`SyncApiException`, recarrega no `finally`).
+- **Testes:** `dotnet test MyTaskApp.slnx -c Release`.
+  - Desktop.Tests: 2332 aprovados (+23), e as 4 falhas de ambiente.
+  - Infrastructure: 879 aprovados.
+  - O resto igual.
 
 ## Cobertura
 

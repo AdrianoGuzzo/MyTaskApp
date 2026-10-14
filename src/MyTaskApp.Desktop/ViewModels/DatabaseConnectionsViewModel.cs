@@ -5,7 +5,6 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.DatabaseOperations;
-using MyTaskApp.Domain;
 using MyTaskApp.Domain.DatabaseOperations;
 
 namespace MyTaskApp.Desktop.ViewModels;
@@ -361,36 +360,13 @@ public sealed partial class DatabaseConnectionsViewModel(
         ApplyPermissions(rules.Defaults, rules);
     }
 
-    private async Task<bool> TryAsync(Func<Task> operation, string fallbackMessage)
-    {
-        IsBusy = true;
-        ErrorMessage = null;
-        StatusMessage = null;
-
-        try
-        {
-            await operation();
-            return true;
-        }
-        catch (OperationCanceledException)
-        {
-            return false;
-        }
-        catch (DomainException exception)
-        {
-            ErrorMessage = exception.Message;
-            return false;
-        }
-        catch (Exception exception)
-        {
-            logger.LogError(exception, "DatabaseConnectionsScreenOperationFailed");
-            ErrorMessage = fallbackMessage;
-            return false;
-        }
-        finally
-        {
-            IsBusy = false;
-        }
-    }
+    private Task<bool> TryAsync(Func<Task> operation, string fallbackMessage) =>
+        new ScreenErrorPath(
+            busy => IsBusy = busy,
+            error => ErrorMessage = error,
+            exception => logger.LogError(exception, "DatabaseConnectionsScreenOperationFailed"),
+            ClearStatus: () => StatusMessage = null,
+            CancellationIsSilent: true)
+        .TryAsync(operation, fallbackMessage);
 
 }

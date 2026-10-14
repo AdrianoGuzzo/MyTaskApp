@@ -256,6 +256,18 @@ quanto "já foi concluída".
 `NullReferenceException` para a borda, e nada é persistido quando a regra
 recusa a operação.
 
+**Nas telas:** o caminho acima mora em `ScreenErrorPath`
+(`Desktop/ViewModels`). O ViewModel informa só o que é dele:
+
+- o evento de log;
+- se limpa a linha de status ao começar;
+- se o cancelamento é silencioso.
+
+`ScreenErrorPathTests` fixa esse caminho tela a tela. As telas com um passo a mais
+mantêm o próprio `TryAsync`: Sincronização (`SyncApiException`), alertas (avisam
+quem os abriu) e post-its (recarregam a lista). Elas estão listadas em
+`docs/refactoring/PROGRESS.md`.
+
 ## ADR-009 — Casos de uso sem mediador
 
 **Decisão:** uma classe por caso de uso, com `HandleAsync`. Sem MediatR.
