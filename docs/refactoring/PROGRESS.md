@@ -15,7 +15,7 @@ sempre separada da refatoração.
 | E3 — Portas da UI fora de `Views` | refactor | concluída |
 | E4 — Caminho único de erro nos ViewModels (ADR-008) | refactor | concluída (7 de 19 telas; ver registro) |
 | E5 — Regras pequenas saem dos ViewModels | refactor | pendente |
-| E6 — Duplicação na Infrastructure | refactor | pendente |
+| E6 — Duplicação na Infrastructure | refactor | 6a descartada, 6b concluída, 6c pendente |
 | E7 — Composition root | refactor | pendente |
 | F6 — `ProcessRunner` preso por um neto | fix | concluída |
 | F1–F5 — Demais defeitos autorizados | fix | pendente |
@@ -334,6 +334,21 @@ decisão sobre isso, nada foi mudado. O resto (bomba de saída e texto com teto)
     sem falha. A variação é o resultado intermitente que já existia;
   - suíte completa das duas solutions: só as 4 falhas de ambiente.
   - Server.IntegrationTests: 42 aprovados.
+
+### E6b — O merge na hora do push deixa de jogar o log fora
+
+- **Problema (I11):** `SyncLocalStore.MergeIntoAsync` monta um `SyncReconciler` à mão
+  (ele precisa do mesmo contexto do push) e passava
+  `NullLogger<SyncReconciler>.Instance`. Por isso o `SyncScanCompleted {Operations}`
+  dessa varredura nunca chegava ao log.
+- **O que mudou:**
+  - o `SyncLocalStore` recebe `ILogger<SyncReconciler>` pelo construtor (DI) e o
+    repassa;
+  - o `new` continua, pelo motivo de sempre, agora com um comentário.
+- **Preservação:** só o log muda, e ele carrega uma contagem, sem dado do usuário. A
+  ordem das operações e as transações não mudaram.
+- **Testes:** `dotnet build MyTaskApp.slnx`. Infrastructure `~Sync`: 131 aprovados.
+  A suíte completa roda junto com a F4.
 
 ## Cobertura
 

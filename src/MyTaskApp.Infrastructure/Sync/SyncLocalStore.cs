@@ -27,6 +27,7 @@ internal sealed class SyncLocalStore(
     TimeProvider timeProvider,
     DevicePlacementState placement,
     SyncDeviceDirectory directory,
+    ILogger<SyncReconciler> reconcilerLogger,
     ILogger<SyncLocalStore> logger) : ISyncLocalStore
 {
     public async Task<SyncLocalState> ReadAsync(CancellationToken cancellationToken)
@@ -436,7 +437,8 @@ internal sealed class SyncLocalStore(
         await context.SyncEntityStates.Where(row => row.EntityId == operation.EntityId || childIds.Contains(row.EntityId)).ExecuteDeleteAsync(cancellationToken);
         context.ChangeTracker.Clear();
 
-        await new SyncReconciler(context, device, timeProvider, trigger, Microsoft.Extensions.Logging.Abstractions.NullLogger<SyncReconciler>.Instance)
+        // O mesmo contexto do push, por isso não vem do contêiner; o log é o de sempre do reconciliador.
+        await new SyncReconciler(context, device, timeProvider, trigger, reconcilerLogger)
             .ScanAsync(cancellationToken);
 
         logger.LogInformation("SyncMergedOnPush {EntityType}", operation.EntityType);
