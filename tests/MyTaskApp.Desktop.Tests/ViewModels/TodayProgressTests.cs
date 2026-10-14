@@ -82,6 +82,19 @@ public class TodayProgressTests
         viewModel.PendingLabel.Should().Be(expected);
     }
 
+    [Theory]
+    [InlineData(0, "Tudo em dia")]
+    [InlineData(1, "1 pendente")]
+    [InlineData(3, "3 pendentes")]
+    public async Task ThePillGetsTheShortVersion(int pending, string expected)
+    {
+        var todo = Enumerable.Range(0, pending).Select(index => Row($"t{index}")).ToList();
+
+        var viewModel = await ShowAsync(new TodayBoard(Date, [], [], todo, [], []));
+
+        viewModel.PendingShortLabel.Should().Be(expected);
+    }
+
     [Fact]
     public async Task TheTrayIsToldHowManyAreLeft()
     {

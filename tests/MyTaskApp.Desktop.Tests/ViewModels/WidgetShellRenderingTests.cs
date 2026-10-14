@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Desktop.ViewModels;
 using MyTaskApp.Desktop.Views;
+using MyTaskApp.Desktop.Widget;
 using MyTaskApp.Domain.Tasks;
 
 namespace MyTaskApp.Desktop.Tests.ViewModels;
@@ -124,11 +125,40 @@ public class WidgetShellRenderingTests
         window.Chrome.UseMode("collapsed");
         window.UpdateLayout();
 
-        VisibleTexts(window).Should().Contain("2 tarefas pendentes");
+        VisibleTexts(window).Should().Contain("2 pendentes");
 
         // A lista continua montada; ela apenas não ocupa mais a tela.
         window.GetVisualDescendants().OfType<TodayView>().Single()
             .IsVisible.Should().BeFalse();
+    }
+
+    [AvaloniaFact]
+    public async Task Collapsed_ALongLabelNeverPushesTheButtonsOutOfThePill()
+    {
+        // A pílula tem largura fixa. Com o rótulo numa coluna Auto, o "+" de
+        // expandir e o X saíam pela borda direita.
+        var window = await ShowAsync(new TodayBoard(Date, [], [], [Row("Deploy")], [], []));
+
+        window.Chrome.UseMode("collapsed");
+        ((TodayViewModel)window.DataContext!).PendingShortLabel = new string('8', 80);
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+
+        window.Bounds.Width.Should().Be(WidgetMetrics.CollapsedWidth);
+
+        var shell = window.GetVisualDescendants().OfType<Border>()
+            .Single(border => border.Classes.Contains("widgetShell"));
+        var buttons = window.GetVisualDescendants().OfType<Button>()
+            .Where(button => button.Classes.Contains("chrome") && button.IsEffectivelyVisible)
+            .ToList();
+
+        buttons.Should().NotBeEmpty();
+
+        foreach (var button in buttons)
+        {
+            var right = button.TranslatePoint(new Point(button.Bounds.Width, 0), shell)!.Value.X;
+            right.Should().BeLessThanOrEqualTo(shell.Bounds.Width, $"o botão {button.Content} tem de caber na pílula");
+        }
     }
 
     [AvaloniaFact]

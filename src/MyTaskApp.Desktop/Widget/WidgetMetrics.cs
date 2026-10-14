@@ -16,8 +16,12 @@ public static class WidgetMetrics
 
     public const double CompactHeight = 420;
 
-    /// <summary>A pílula: largura fixa, altura de uma linha.</summary>
-    public const double CollapsedWidth = 268;
+    /// <summary>
+    /// A pílula: largura fixa, altura de uma linha. Cabem a marca, "12
+    /// pendentes" e os seis botões do cabeçalho, a bolinha da sincronização
+    /// (ADR-063) inclusive.
+    /// </summary>
+    public const double CollapsedWidth = 292;
 
     public const double CollapsedHeight = 66;
 
