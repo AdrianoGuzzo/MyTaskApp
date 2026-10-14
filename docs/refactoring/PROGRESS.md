@@ -10,7 +10,7 @@ sempre separada da refatoração.
 | Etapa | Tipo | Situação |
 |---|---|---|
 | E0 — Inventário e linha de base | docs | concluída |
-| E1 — Guarda de camadas | test | pendente |
+| E1 — Guarda de camadas | test | concluída |
 | E2 — Relógio pelo `TimeProvider` | refactor | pendente |
 | E3 — Portas da UI fora de `Views` | refactor | pendente |
 | E4 — Caminho único de erro nos ViewModels (ADR-008) | refactor | pendente |
@@ -147,6 +147,24 @@ Ficam sem mudança. Decidir antes de mexer.
 
 - **O que foi feito:** este arquivo.
 - **Código de produção:** nenhuma mudança.
+
+### E1 — Guarda de camadas
+
+- **O que foi feito:** `tests/MyTaskApp.Desktop.Tests/Architecture/LayerDependencyTests.cs`,
+  por reflexão e sem pacote novo:
+  - o Domain não referencia nada do app, nem EF, Npgsql ou Avalonia;
+  - o Sync.Contracts não referencia nada do app;
+  - a Application não referencia Infrastructure, Mcp, Desktop, EF, Npgsql nem Avalonia;
+  - o Mcp não referencia Infrastructure, EF, Npgsql nem Avalonia;
+  - nenhum tipo em `MyTaskApp.Desktop.ViewModels` guarda ou recebe
+    `IServiceProvider`, `IServiceScopeFactory`, `DbContext`, `Process` ou `HttpClient`,
+    nem embrulhado em `Func<>`, `Lazy<>` ou array;
+  - nenhum ViewModel depende de tipo da Infrastructure;
+  - um teste de sanidade confirma que a reflexão enxerga dependências que existem.
+- **Resultado:** os 7 testes passam sobre o código atual, que portanto já cumpria
+  as regras.
+- **Comando:** `dotnet test tests/MyTaskApp.Desktop.Tests -c Release --filter
+  FullyQualifiedName~LayerDependencyTests`.
 
 ## Cobertura
 
