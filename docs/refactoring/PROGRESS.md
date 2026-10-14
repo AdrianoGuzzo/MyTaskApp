@@ -14,9 +14,9 @@ sempre separada da refatoração.
 | E2 — Relógio pelo `TimeProvider` | refactor | concluída |
 | E3 — Portas da UI fora de `Views` | refactor | concluída |
 | E4 — Caminho único de erro nos ViewModels (ADR-008) | refactor | concluída (7 de 19 telas; ver registro) |
-| E5 — Regras pequenas saem dos ViewModels | refactor | 5a e 5e concluídas; 5c descartada; 5d não feita (justificada); 5b pendente |
+| E5 — Regras pequenas saem dos ViewModels | refactor | 5a e 5e concluídas; 5c descartada; 5b e 5d não feitas (justificadas) |
 | E6 — Duplicação na Infrastructure | refactor | 6a descartada; 6b e 6c concluídas |
-| E7 — Composition root | refactor | pendente |
+| E7 — Composition root | refactor | concluída |
 | F6 — `ProcessRunner` preso por um neto | fix | concluída |
 | F4 — Vincular a outra conta é tudo ou nada | fix | concluída |
 | F5 — Perfil de anonimização não sobrescreve o MCP | fix | concluída |
@@ -413,6 +413,40 @@ decisão sobre isso, nada foi mudado. O resto (bomba de saída e texto com teto)
     de plataforma;
   - `dotnet test MyTaskApp.slnx`: Application com 1294 aprovados e Desktop com 2333,
     além das 4 falhas de ambiente.
+
+### E5b — Montagem do pedido de cópia: não feita, com justificativa
+
+Lendo os três ViewModels, não há uma regra repetida, e sim quatro montagens de
+fluxos diferentes:
+
+- **Perfil salvo** (`DevelopmentDatabaseViewModel`, perto da linha 681): usa as
+  opções do perfil.
+- **Apelido** (`AliasRequest`): usa opções fixas de propósito (banco novo a cada
+  cópia, sem dump guardado, ADR-060), já cobertas por
+  `DevelopmentDatabaseViewModelTests`.
+- **Formulário livre** (`DatabaseCopyViewModel.Selection`): a operação vem do
+  seletor, e o artefato só fica quando anonimiza.
+- **Gravar perfil de cópia** (`DatabaseProfilesViewModel`): é um comando de
+  gravar, e não um pedido de cópia.
+
+O que se repete é "a operação é `CopyAndAnonymize` quando anonimiza", em duas
+linhas do mesmo ViewModel. Uma fábrica comum só trocaria parâmetros de lugar.
+Nada foi mudado.
+
+### E7 — A janela da tarefa recarrega a lista por uma função só
+
+- **Problema (I13):** em `App.ShowNotes`, seis eventos repetiam a mesma assinatura
+  `Dispatcher.UIThread.Post(() => _ = todayViewModel.LoadAsync(CancellationToken.None))`:
+  salvar, issue, prazo, tempo, onde aparece e etiquetas.
+- **O que mudou:** uma função local `ReloadToday()` com esse mesmo corpo, assinada
+  como grupo de método (`+= ReloadToday`). Os comentários de cada evento ficaram.
+- **Preservado:** a mesma ordem de assinatura, a mesma thread (`Post`), o mesmo
+  `CancellationToken.None` e a mesma captura do `todayViewModel`. Os outros pontos
+  do `App` que recarregam a lista ficaram como estavam, porque cada um tem um
+  contexto próprio.
+- **Testes:** `dotnet build`, e a suíte completa na verificação final. Nenhum teste
+  exercita o `ShowNotes`, porque precisa do app de pé. A equivalência foi conferida
+  no diff (10 linhas a mais, 12 a menos).
 
 ### E6c — O duplicar de conexão mora com as conexões
 
