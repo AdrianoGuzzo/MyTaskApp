@@ -111,7 +111,7 @@ public class ThemeControllerTests
     public void SelectedText_UsesTheLetterOfTheAccent()
     {
         // A seleção é pintada com o destaque. Com a letra branca do Fluent, o
-        // texto selecionado sumia no limão do Ponta e no gelo do Nórdico.
+        // texto selecionado sumia no limão do Verde Pecuária e no gelo do Nórdico.
         var box = new TextBox { Text = "Pagar boleto" };
         var window = new Window { Content = box };
         window.Show();
