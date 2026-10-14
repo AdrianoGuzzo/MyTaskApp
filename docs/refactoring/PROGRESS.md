@@ -14,7 +14,7 @@ sempre separada da refatoração.
 | E2 — Relógio pelo `TimeProvider` | refactor | concluída |
 | E3 — Portas da UI fora de `Views` | refactor | concluída |
 | E4 — Caminho único de erro nos ViewModels (ADR-008) | refactor | concluída (7 de 19 telas; ver registro) |
-| E5 — Regras pequenas saem dos ViewModels | refactor | pendente |
+| E5 — Regras pequenas saem dos ViewModels | refactor | 5a concluída; 5b–5e pendentes |
 | E6 — Duplicação na Infrastructure | refactor | 6a descartada, 6b concluída, 6c pendente |
 | E7 — Composition root | refactor | pendente |
 | F6 — `ProcessRunner` preso por um neto | fix | concluída |
@@ -376,6 +376,40 @@ decisão sobre isso, nada foi mudado. O resto (bomba de saída e texto com teto)
   - Infrastructure: 882 aprovados;
   - Server.IntegrationTests: 42 aprovados, inclusive o ponta a ponta com dois
     desktops, "instalação existente" e isolamento entre contas.
+
+### E5a — A escolha da branch de origem sai do ViewModel
+
+- **Problema (I5):** a cadeia que decide a branch de origem marcada estava no
+  `LoadBranchesAsync` do `TaskDevelopmentViewModel`. A cadeia é: escolha anterior →
+  tentativa anterior → padrão do diretório → outros ambientes → sugerida →
+  primeira. Junto estava a busca da branch padrão do diretório
+  (`ConfiguredDefaultBranch`). São regras dos ADR-031 e 035, e só dava para testar
+  pelo ViewModel inteiro.
+  - Correção do inventário: havia sim testes de ViewModel para parte da cadeia
+    (`TaskDevelopmentViewModelTests.cs:208-244`).
+- **O que mudou:**
+  - `ListBranchesHandler.ChooseSource` e `ListBranchesHandler.ConfiguredDefault`
+    (`Application/Development/DevelopmentQueries.cs`), ao lado do `FindConfigured`
+    que já estava lá. São funções puras com os mesmos predicados, na mesma ordem;
+  - o ViewModel passa as branches escolhíveis **na ordem da tela** e marca a opção
+    da branch escolhida.
+- **Equivalência:**
+  - o `GitBranch` é `record`, então o `==` continua sendo igualdade de valor, como
+    era entre as opções;
+  - a primeira opção com a branch escolhida é a mesma que o `FirstOrDefault`
+    antigo achava;
+  - sem candidatas, o resultado continua nulo;
+  - a normalização do texto digitado (`Trim().Trim('"').Trim()`) ficou no
+    ViewModel, porque é da tela.
+- **Testes:**
+  - caracterização nova no ViewModel, verde antes e depois da troca:
+    `ReloadingTheSameFolder_KeepsTheBranchTheUserChose`;
+  - na Application: `ChooseSource_FollowsThePriority_OneLinkAtATime`,
+    `ChooseSource_SkipsALinkThatIsNotAmongTheCandidates` e
+    `ConfiguredDefault_ComesFromTheDirectoryThatIsThisFolder`, com caminhos neutros
+    de plataforma;
+  - `dotnet test MyTaskApp.slnx`: Application com 1294 aprovados e Desktop com 2333,
+    além das 4 falhas de ambiente.
 
 ## Cobertura
 

@@ -244,6 +244,20 @@ public class TaskDevelopmentViewModelTests
         viewModel.BranchesNotice.Should().Contain("release");
     }
 
+    /// <summary>A escolha do usuário vence tudo numa recarga da mesma pasta, até a branch padrão do diretório.</summary>
+    [Fact]
+    public async Task ReloadingTheSameFolder_KeepsTheBranchTheUserChose()
+    {
+        var viewModel = await ActivatedAsync();
+        viewModel.DirectoryCompletion.SetDirectories([TagDirectory(Repository, "main")], new Dictionary<Guid, bool>());
+        await ChooseRepositoryAsync(viewModel);
+        viewModel.SelectedBranchOption = viewModel.BranchOptions.Single(option => option.Label == "origin/develop");
+
+        await viewModel.InspectDirectoryAsync(Ct);
+
+        viewModel.SelectedBranchOption!.Branch!.FullRef.Should().Be("refs/remotes/origin/develop");
+    }
+
     [Fact]
     public async Task ChoosingAGroupHeader_KeepsThePreviousBranch()
     {

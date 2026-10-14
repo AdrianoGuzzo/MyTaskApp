@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Tags;
 using MyTaskApp.Domain.Tasks;
 
 namespace MyTaskApp.Application.Development;
@@ -228,6 +229,49 @@ public sealed class ListBranchesHandler(IGitClient git)
                     && string.Equals(branch.ShortName, $"{branch.Remote}/{wanted}", StringComparison.OrdinalIgnoreCase))
                 .OrderBy(branch => branch.Remote == "origin" ? 0 : 1)
                 .FirstOrDefault();
+    }
+
+    /// <summary>
+    /// A branch de origem que vem marcada ao listar as branches, nesta ordem:
+    /// <list type="number">
+    /// <item>a que o usuário já tinha escolhido, numa recarga da mesma pasta;</item>
+    /// <item>a da tentativa anterior desta tarefa;</item>
+    /// <item>a padrão do diretório da etiqueta (ADR-035);</item>
+    /// <item>a dos outros ambientes da tarefa (ADR-031);</item>
+    /// <item>a sugerida pelo repositório;</item>
+    /// <item>a primeira da lista.</item>
+    /// </list>
+    /// </summary>
+    /// <param name="candidates">As branches que dá para escolher, na ordem em que aparecem.</param>
+    public static GitBranch? ChooseSource(
+        IReadOnlyList<GitBranch> candidates,
+        string? chosenFullRef,
+        string? previousAttemptSource,
+        GitBranch? configured,
+        string? otherEnvironmentsSource,
+        GitBranch? suggested) =>
+        candidates.FirstOrDefault(branch => branch.FullRef == chosenFullRef)
+        ?? candidates.FirstOrDefault(branch => branch.ShortName == previousAttemptSource)
+        ?? candidates.FirstOrDefault(branch => branch == configured)
+        ?? candidates.FirstOrDefault(branch => branch.ShortName == otherEnvironmentsSource)
+        ?? candidates.FirstOrDefault(branch => branch == suggested)
+        ?? candidates.FirstOrDefault();
+
+    /// <summary>
+    /// A branch padrão cadastrada no diretório da etiqueta que é esta pasta —
+    /// o caminho digitado ou o worktree principal dele. Com a mesma pasta em
+    /// duas etiquetas, vale a primeira que tiver uma.
+    /// </summary>
+    public static string? ConfiguredDefault(IEnumerable<TagDirectoryRow> directories, string typed, string repository)
+    {
+        var candidates = directories
+            .Where(directory => !string.IsNullOrWhiteSpace(directory.DefaultBranch))
+            .ToList();
+
+        var match = candidates.FirstOrDefault(directory => WorktreePathPlanner.SamePath(directory.Path, typed))
+            ?? candidates.FirstOrDefault(directory => WorktreePathPlanner.SamePath(directory.Path, repository));
+
+        return match?.DefaultBranch!.Trim();
     }
 }
 
