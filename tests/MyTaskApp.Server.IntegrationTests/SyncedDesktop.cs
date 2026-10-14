@@ -100,7 +100,7 @@ internal sealed class SyncedDesktop : IAsyncDisposable
             .AddSingleton<ISecretStore>(secrets)
             .AddSingleton(provider =>
             {
-                return new SyncHttp(new HttpClient(network.Over(api.Server.CreateHandler())), provider.GetRequiredService<SyncOptions>(), provider.GetRequiredService<ILogger<SyncHttp>>());
+                return new SyncHttp(new HttpClient(network.Over(api.Server.CreateHandler())), provider.GetRequiredService<SyncOptions>(), provider.GetRequiredService<TimeProvider>(), provider.GetRequiredService<ILogger<SyncHttp>>());
             })
             .BuildServiceProvider(validateScopes: true);
 

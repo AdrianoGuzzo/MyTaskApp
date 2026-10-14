@@ -157,30 +157,10 @@ public sealed partial class ReminderSettingsViewModel(
     }
 
     /// <summary>Mesmo caminho de erro do resto do app (ADR-008).</summary>
-    private async Task<bool> TryAsync(Func<Task> operation, string fallbackMessage)
-    {
-        IsBusy = true;
-        ErrorMessage = null;
-
-        try
-        {
-            await operation();
-            return true;
-        }
-        catch (DomainException exception)
-        {
-            ErrorMessage = exception.Message;
-            return false;
-        }
-        catch (Exception exception)
-        {
-            logger.LogError(exception, "ReminderSettingsOperationFailed");
-            ErrorMessage = fallbackMessage;
-            return false;
-        }
-        finally
-        {
-            IsBusy = false;
-        }
-    }
+    private Task<bool> TryAsync(Func<Task> operation, string fallbackMessage) =>
+        new ScreenErrorPath(
+            busy => IsBusy = busy,
+            error => ErrorMessage = error,
+            exception => logger.LogError(exception, "ReminderSettingsOperationFailed"))
+        .TryAsync(operation, fallbackMessage);
 }

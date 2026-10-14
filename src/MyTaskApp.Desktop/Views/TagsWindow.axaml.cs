@@ -1,6 +1,5 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using Avalonia.Platform.Storage;
 using MyTaskApp.Desktop.ViewModels;
 
 namespace MyTaskApp.Desktop.Views;
@@ -83,13 +82,18 @@ public sealed partial class TagsWindow : Window
             return;
         }
 
-        var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
-        {
-            Title = "Escolher a pasta do diretório",
-            AllowMultiple = false,
-        });
+        var path = await SystemPickers.PickFolderAsync(
+            StorageProvider,
+            "Escolher a pasta do diretório",
+            message =>
+            {
+                if (DataContext is TagsViewModel viewModel)
+                {
+                    viewModel.ErrorMessage = message;
+                }
+            });
 
-        if (folders.Count > 0 && folders[0].TryGetLocalPath() is { } path)
+        if (path is not null)
         {
             item.UseFolder(path);
         }

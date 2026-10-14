@@ -252,3 +252,32 @@ public sealed class ListServerDatabasesHandler(
         return databases;
     }
 }
+
+/// <summary>Copiar uma conexão para outra com outro nome — sem a senha, que não sai do cofre.</summary>
+public sealed record DuplicateDatabaseConnection(Guid Id, string Name);
+
+public sealed class DuplicateDatabaseConnectionHandler(
+    IDatabaseConnectionRepository connections,
+    SaveDatabaseConnectionHandler save)
+{
+    public async Task<Guid> HandleAsync(DuplicateDatabaseConnection command, CancellationToken cancellationToken = default)
+    {
+        var source = await connections.GetByIdAsync(command.Id, cancellationToken);
+
+        // Senha nula: a cópia nasce sem senha, e quem quiser a define na tela.
+        return await save.HandleAsync(
+            new SaveDatabaseConnection(
+                null,
+                command.Name,
+                source.Host,
+                source.Port,
+                source.Database,
+                source.Username,
+                source.Environment,
+                source.SslMode,
+                source.Description,
+                source.Permissions,
+                Password: null),
+            cancellationToken);
+    }
+}

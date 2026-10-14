@@ -6,7 +6,6 @@ using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.External;
 using MyTaskApp.Application.External.Jira;
 using MyTaskApp.Desktop.Composition;
-using MyTaskApp.Desktop.Views;
 using MyTaskApp.Domain;
 
 namespace MyTaskApp.Desktop.ViewModels;
@@ -489,34 +488,11 @@ public sealed partial class IntegrationsViewModel(
         }
     }
 
-    private async Task<bool> TryAsync(Func<Task> operation, string fallbackMessage)
-    {
-        IsBusy = true;
-        ErrorMessage = null;
-
-        try
-        {
-            await operation();
-            return true;
-        }
-        catch (DomainException exception)
-        {
-            ErrorMessage = exception.Message;
-            return false;
-        }
-        catch (OperationCanceledException)
-        {
-            return false;
-        }
-        catch (Exception exception)
-        {
-            logger.LogError(exception, "IntegrationsOperationFailed");
-            ErrorMessage = fallbackMessage;
-            return false;
-        }
-        finally
-        {
-            IsBusy = false;
-        }
-    }
+    private Task<bool> TryAsync(Func<Task> operation, string fallbackMessage) =>
+        new ScreenErrorPath(
+            busy => IsBusy = busy,
+            error => ErrorMessage = error,
+            exception => logger.LogError(exception, "IntegrationsOperationFailed"),
+            CancellationIsSilent: true)
+        .TryAsync(operation, fallbackMessage);
 }

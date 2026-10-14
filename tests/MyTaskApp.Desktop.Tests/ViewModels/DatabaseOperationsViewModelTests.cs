@@ -9,6 +9,7 @@ using MyTaskApp.Desktop.ViewModels;
 using MyTaskApp.Desktop.Views;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.DatabaseOperations;
+using NSubstitute;
 
 namespace MyTaskApp.Desktop.Tests.ViewModels;
 
@@ -784,7 +785,7 @@ public class DatabaseProfilesViewModelTests
     public async Task Saving_SendsOnlyTheConfirmedRules()
     {
         var viewModel = ViewModel();
-        _runner.ResultsByHandler[typeof(SaveAnonymizationProfileHandler)] = Guid.CreateVersion7();
+        _runner.ResultsByHandler[typeof(SaveAnonymizationProfileHandler)] = new SavedAnonymizationProfile(Guid.CreateVersion7(), DatabaseScreen.Now);
 
         viewModel.NewAnonymizationProfile();
         viewModel.AnonymizationName = "Outro";
@@ -799,6 +800,64 @@ public class DatabaseProfilesViewModelTests
         viewModel.Rules.Should().ContainSingle().Which.Column.Should().Be("a");
         viewModel.IsEditingAnonymization.Should().BeTrue();
         viewModel.StatusMessage.Should().Contain("Nada foi instalado");
+    }
+
+    /// <summary>
+    /// A tela abriu o perfil numa versão, e o MCP gravou outra depois: salvar
+    /// mostra a recusa em vez de apagar o que o MCP mudou.
+    /// </summary>
+    [Fact]
+    public async Task SavingAProfileTheMcpChangedMeanwhile_ShowsTheRefusal()
+    {
+        var stored = AnonymizationProfile.Create("ECO LGPD", "pelo MCP", DatabaseScreen.Production.Id, DatabaseScreen.Now.AddMinutes(5));
+        var (handler, unitOfWork) = SaveHandlerOver(stored);
+        _runner.Handlers[typeof(SaveAnonymizationProfileHandler)] = handler;
+        var viewModel = ViewModel();
+        viewModel.EditAnonymizationProfile(DatabaseScreen.Profile with { Id = stored.Id });
+
+        await viewModel.SaveAnonymizationProfileAsync(Ct);
+
+        viewModel.ErrorMessage.Should().Contain("alterado em outro lugar");
+        stored.Description.Should().Be("pelo MCP");
+        await unitOfWork.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>Salvar duas vezes seguidas na tela confere com a versão que ela mesma acabou de gravar.</summary>
+    [Fact]
+    public async Task SavingTwice_ComparesWithTheVersionJustSaved()
+    {
+        var stored = AnonymizationProfile.Create("ECO LGPD", null, DatabaseScreen.Production.Id, DatabaseScreen.Profile.UpdatedAt);
+        var (handler, unitOfWork) = SaveHandlerOver(stored, savedAt: DatabaseScreen.Now.AddMinutes(1));
+        _runner.Handlers[typeof(SaveAnonymizationProfileHandler)] = handler;
+        var viewModel = ViewModel();
+        viewModel.EditAnonymizationProfile(DatabaseScreen.Profile with { Id = stored.Id });
+
+        await viewModel.SaveAnonymizationProfileAsync(Ct);
+        viewModel.AnonymizationDescription = "de novo";
+        await viewModel.SaveAnonymizationProfileAsync(Ct);
+
+        viewModel.ErrorMessage.Should().BeNull();
+        stored.Description.Should().Be("de novo");
+        await unitOfWork.Received(2).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    private static (SaveAnonymizationProfileHandler Handler, IUnitOfWork UnitOfWork) SaveHandlerOver(
+        AnonymizationProfile stored,
+        DateTimeOffset? savedAt = null)
+    {
+        var profiles = Substitute.For<IAnonymizationProfileRepository>();
+        profiles.FindByIdAsync(stored.Id, Arg.Any<CancellationToken>()).Returns(stored);
+        profiles.ListAsync(Arg.Any<CancellationToken>()).Returns([stored]);
+        var unitOfWork = Substitute.For<IUnitOfWork>();
+
+        var handler = new SaveAnonymizationProfileHandler(
+            profiles,
+            new ServerOnlyScreenTests.CapturingConnections(DatabaseScreen.Production),
+            unitOfWork,
+            new Microsoft.Extensions.Time.Testing.FakeTimeProvider(savedAt ?? DatabaseScreen.Now),
+            NullLogger<SaveAnonymizationProfileHandler>.Instance);
+
+        return (handler, unitOfWork);
     }
 
     [Fact]

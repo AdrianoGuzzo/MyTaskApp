@@ -27,6 +27,7 @@ internal sealed class SyncLocalStore(
     TimeProvider timeProvider,
     DevicePlacementState placement,
     SyncDeviceDirectory directory,
+    ILogger<SyncReconciler> reconcilerLogger,
     ILogger<SyncLocalStore> logger) : ISyncLocalStore
 {
     public async Task<SyncLocalState> ReadAsync(CancellationToken cancellationToken)
@@ -63,6 +64,11 @@ internal sealed class SyncLocalStore(
 
     public async Task LinkAsync(SyncAccountLink link, CancellationToken cancellationToken)
     {
+        // Tudo ou nada: esquecer o que era da conta anterior e gravar a ligação
+        // nova. Uma queda entre os dois apagaria o outbox com a ligação antiga
+        // de pé, e a volta à mesma conta nem refaria a varredura.
+        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+
         var row = await RowAsync(cancellationToken);
         var otherAccount = row.UserId is { } previousUser && (previousUser != link.UserId || row.WorkspaceId != link.WorkspaceId);
 
@@ -104,6 +110,7 @@ internal sealed class SyncLocalStore(
         ClearError(row);
 
         await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         captureSwitch.Set(true);
         SyncPlacementHydration.Apply(row, placement, directory);
     }
@@ -436,7 +443,8 @@ internal sealed class SyncLocalStore(
         await context.SyncEntityStates.Where(row => row.EntityId == operation.EntityId || childIds.Contains(row.EntityId)).ExecuteDeleteAsync(cancellationToken);
         context.ChangeTracker.Clear();
 
-        await new SyncReconciler(context, device, timeProvider, trigger, Microsoft.Extensions.Logging.Abstractions.NullLogger<SyncReconciler>.Instance)
+        // O mesmo contexto do push, por isso não vem do contêiner; o log é o de sempre do reconciliador.
+        await new SyncReconciler(context, device, timeProvider, trigger, reconcilerLogger)
             .ScanAsync(cancellationToken);
 
         logger.LogInformation("SyncMergedOnPush {EntityType}", operation.EntityType);
