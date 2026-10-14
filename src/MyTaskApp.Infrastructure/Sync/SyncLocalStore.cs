@@ -64,6 +64,11 @@ internal sealed class SyncLocalStore(
 
     public async Task LinkAsync(SyncAccountLink link, CancellationToken cancellationToken)
     {
+        // Tudo ou nada: esquecer o que era da conta anterior e gravar a ligação
+        // nova. Uma queda entre os dois apagaria o outbox com a ligação antiga
+        // de pé, e a volta à mesma conta nem refaria a varredura.
+        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+
         var row = await RowAsync(cancellationToken);
         var otherAccount = row.UserId is { } previousUser && (previousUser != link.UserId || row.WorkspaceId != link.WorkspaceId);
 
@@ -105,6 +110,7 @@ internal sealed class SyncLocalStore(
         ClearError(row);
 
         await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         captureSwitch.Set(true);
         SyncPlacementHydration.Apply(row, placement, directory);
     }

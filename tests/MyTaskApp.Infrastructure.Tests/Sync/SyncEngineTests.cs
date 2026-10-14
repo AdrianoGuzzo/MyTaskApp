@@ -67,6 +67,35 @@ public sealed class SyncEngineTests : IAsyncLifetime
         state.LastError.Should().Contain("Sem conexão");
     }
 
+    /// <summary>
+    /// Trocar de conta esquece o que era da anterior e grava a nova ligação
+    /// juntos: uma queda no meio não pode deixar o outbox apagado com a
+    /// ligação antiga ainda de pé.
+    /// </summary>
+    [Fact]
+    public async Task LinkingToAnotherAccount_IsAllOrNothing()
+    {
+        await _device.LinkAsync(_user, _workspace, Ct);
+        await _device.SaveAsync(context => context.Add(TaskItem.Create("Pagar boleto", Now)), Ct);
+        var pending = await _device.ReadAsync(context => context.SyncOutbox.CountAsync(Ct));
+        pending.Should().BePositive();
+
+        var link = () => _device.RunAsync(async provider =>
+        {
+            provider.GetRequiredService<MyTaskApp.Infrastructure.Persistence.MyTaskAppDbContext>().SavingChanges +=
+                (_, _) => throw new InvalidOperationException("O app caiu antes de gravar a ligação.");
+
+            await provider.GetRequiredService<ISyncLocalStore>().LinkAsync(
+                new SyncAccountLink(Guid.CreateVersion7(), "Bia", "bia@exemplo.com", Guid.CreateVersion7(), _device.Device.DeviceId, new Uri("https://sync.exemplo.com/")),
+                Ct);
+        });
+
+        await link.Should().ThrowAsync<InvalidOperationException>();
+
+        (await _device.ReadAsync(context => context.SyncOutbox.CountAsync(Ct))).Should().Be(pending);
+        (await _device.ReadAsync(context => context.SyncState.SingleAsync(Ct))).UserId.Should().Be(_user);
+    }
+
     [Fact]
     public async Task AfterARestart_TheSameOperationsAreResent_AndTheServerRecognizesThem()
     {

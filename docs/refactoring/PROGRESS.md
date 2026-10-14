@@ -18,7 +18,8 @@ sempre separada da refatoração.
 | E6 — Duplicação na Infrastructure | refactor | 6a descartada, 6b concluída, 6c pendente |
 | E7 — Composition root | refactor | pendente |
 | F6 — `ProcessRunner` preso por um neto | fix | concluída |
-| F1–F5 — Demais defeitos autorizados | fix | pendente |
+| F4 — Vincular a outra conta é tudo ou nada | fix | concluída |
+| F1–F3, F5 — Demais defeitos autorizados | fix | pendente |
 
 ## Linha de base (13/10/2026, commit `7f48341`)
 
@@ -349,6 +350,32 @@ decisão sobre isso, nada foi mudado. O resto (bomba de saída e texto com teto)
   ordem das operações e as transações não mudaram.
 - **Testes:** `dotnet build MyTaskApp.slnx`. Infrastructure `~Sync`: 131 aprovados.
   A suíte completa roda junto com a F4.
+
+### F4 — Vincular a outra conta é tudo ou nada (defeito D4, autorizado)
+
+- **Defeito comprovado.** `SyncEngineTests.LinkingToAnotherAccount_IsAllOrNothing`:
+  - liga à conta A e cria uma tarefa (2 operações no outbox);
+  - liga à conta B com o `SaveChanges` final falhando (`SavingChanges` lança);
+  - sobre o código antigo: **outbox 2 → 0**, com a ligação ainda na conta A. Os três
+    `ExecuteDeleteAsync` (outbox, retratos, conflitos) tinham commit próprio antes da
+    gravação da ligação.
+- **Correção** (`Infrastructure/Sync/SyncLocalStore.cs`, `LinkAsync`):
+  - tudo dentro de uma transação, no mesmo padrão de `ApplyPushResultsAsync`;
+  - o `captureSwitch` e a hidratação do posicionamento só acontecem depois do
+    commit;
+  - o único chamador (`SyncUseCases`, pelo `IUseCaseRunner`) não abre transação,
+    então não há transação aninhada.
+- **Preservado:**
+  - o que acontece quando dá certo é idêntico: o que é apagado, o que é zerado e a
+    ordem;
+  - a semântica de "outra conta" (dados locais ficam e sobem como novos) não mudou;
+  - nenhum contrato ou esquema mudou.
+- **Testes:**
+  - Infrastructure `~Sync`: 132 aprovados, com o novo;
+  - suíte completa das duas solutions (com a E6b): só as 4 falhas de ambiente;
+  - Infrastructure: 882 aprovados;
+  - Server.IntegrationTests: 42 aprovados, inclusive o ponta a ponta com dois
+    desktops, "instalação existente" e isolamento entre contas.
 
 ## Cobertura
 
