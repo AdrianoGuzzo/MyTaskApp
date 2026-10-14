@@ -17,7 +17,8 @@ sempre separada da refatoração.
 | E5 — Regras pequenas saem dos ViewModels | refactor | pendente |
 | E6 — Duplicação na Infrastructure | refactor | pendente |
 | E7 — Composition root | refactor | pendente |
-| F1–F6 — Defeitos autorizados | fix | pendente |
+| F6 — `ProcessRunner` preso por um neto | fix | concluída |
+| F1–F5 — Demais defeitos autorizados | fix | pendente |
 
 ## Linha de base (13/10/2026, commit `7f48341`)
 
@@ -114,7 +115,7 @@ Por isso a refatoração é pontual, e não estrutural.
 | I7 | `Mcp/Tools/AnonymizationProfileTools.cs:346-347`; `Desktop/ViewModels/DatabaseOperationsItems.cs:336` | "Trocar a máscara reinicia o argumento" está escrito nos dois adaptadores. | O MCP e a tela podem divergir. | E5c: um único ponto no Domain ou na Application. | Mesmo argumento padrão por máscara. | Caracterização dos dois lados. | Média |
 | I8 | `SyncViewModel.cs:476-537, 587` | O ViewModel decodifica o JSON do protocolo (`SyncValue.Parse`) e usa o literal `"merged_on_join"`. | O Desktop fica acoplado ao formato do fio. | E5d: o `ListSyncConflictsHandler` entrega o texto pronto, e o literal vira constante. | Os mesmos textos na janela. O JSON não muda. | `SyncViewModelTests`, `DevicePlacementViewModelTests`. | Média |
 | I9 | `Views/TaskNotesWindow.axaml.cs:184-244` | Árvore de 5 ramos decidindo se a janela da tarefa pode fechar, no code-behind. | Sem teste. | E5e: `TaskNotesViewModel.DecideClose()`, no molde de `WidgetChromeViewModel.DecideClose()`. | Os ramos e as mensagens "Aguarde…"/"Feche de novo…". | Testes dos 5 ramos. | Média |
-| I10 | `Infrastructure/Processes/ProcessRunner.cs:231-242`; `ShellCommandExecutor.cs:131-142` | `Kill` da árvore de processos idêntico nos dois. | Uma correção ficaria só de um lado. | E6a: um helper `internal`. | O mesmo tratamento de exceção. | `ProcessRunnerTests`, `ShellCommandExecutorTests`. | Baixa |
+| I10 | `Infrastructure/Processes/ProcessRunner.cs:231-242`; `ShellCommandExecutor.cs:131-142` | `Kill` da árvore de processos parecido nos dois. **Revisto na E6a: não são iguais.** O `ProcessRunner` só engole `InvalidOperationException`; o `ShellCommandExecutor` também engole `Win32Exception`. | Unificar mudaria o que o `ProcessRunner` faz quando o `Kill` falha (hoje a exceção sobe). | **Descartado**, até haver decisão sobre essa semântica. | — | — | — |
 | I11 | `Infrastructure/Sync/SyncLocalStore.cs:439` | `new SyncReconciler(..., NullLogger<SyncReconciler>.Instance)`: os logs do merge no push somem. | Diagnóstico de sincronização às cegas. | E6b: logger real pelo `ILoggerFactory`. | Só muda o log, sem dado sensível. | Testes de sync existentes. | Baixa |
 | I12 | `Application/DatabaseOperations/AnonymizationProfileEditing.cs:381, 421` | Handlers de conexão (`DatabaseUsageHandlers`, `DuplicateDatabaseConnectionHandler`) no arquivo de perfis. | Coesão: o handler é procurado no arquivo errado. | E6c: arquivo próprio, mesmo namespace. | Os tipos e o registro. | O teste que resolve cada handler do contêiner. | Baixa |
 | I13 | `App.axaml.cs:628-670` e o bloco Show/Activate (×10) | `X.Changed += () => Dispatcher.UIThread.Post(() => _ = todayViewModel.LoadAsync(...))` repetido. | Ruído no composition root. | E7: helper local. | A ordem das assinaturas e a thread. | Testes de composição. | Baixa |
@@ -289,6 +290,50 @@ Ficam sem mudança. Decidir antes de mexer.
   - Desktop.Tests: 2332 aprovados (+23), e as 4 falhas de ambiente.
   - Infrastructure: 879 aprovados.
   - O resto igual.
+
+### E6a — `Kill` comum aos dois executores: descartada
+
+O inventário dizia que os dois `Kill` eram idênticos. Lendo o código, não são: o
+`ProcessRunner` engole só `InvalidOperationException`, e o `ShellCommandExecutor`
+também engole `Win32Exception`. Um helper comum mudaria o que acontece quando o
+`Kill` do `ProcessRunner` falha, porque hoje a exceção sobe para quem chamou. Sem
+decisão sobre isso, nada foi mudado. O resto (bomba de saída e texto com teto) já
+é compartilhado por `ProcessOutputPump` e `CapturedOutput`.
+
+### F6 — `ProcessRunner` preso por um neto que herdou a saída (defeito D6, autorizado)
+
+- **Defeito comprovado.** `ProcessRunnerTests.AGrandchildHoldingTheOutput_DoesNotHoldTheResult`
+  usa um `cmd` (ou `sh`) que escreve "pronto" e deixa um `ping` (ou `sleep`) de
+  25 s em segundo plano. Sobre o código antigo, ele levou **24 s nos dois caminhos**
+  (texto cru e ao vivo): o resultado de quem já tinha saído esperava o neto morrer.
+  Isso vale para git, gh, pg_* e qualquer outro processo que deixe um filho com o
+  handle.
+- **Correção** (`Infrastructure/Processes/ProcessRunner.cs`):
+  - depois da saída normal, a espera pelo resto da saída tem teto de **30 s**
+    (`DefaultDrainTimeout`).
+    - A primeira versão usava 5 s, como o `ShellCommandExecutor`. Na suíte
+      inteira, com o pool de threads disputado, a leitura do pipe atrasou mais que
+      isso, e o "pronto" já escrito ficou de fora (stdout vazio).
+    - Aqui a saída é lida por parser (o Git), e cortá-la num momento de app
+      ocupado seria pior que esperar. Com 30 s, o travamento deixa de ser "para
+      sempre", e perder saída exigiria 30 s de leitura parada;
+  - para o teste, um construtor `internal` recebe o prazo. O DI usa o público;
+  - para devolver o que já chegou, o caminho cru troca `ReadToEndAsync` por
+    `RawOutput`, que lê em blocos e concatena sem tocar no texto. O resultado é o
+    mesmo texto que o `ReadToEndAsync` entregaria;
+  - o caminho ao vivo passa a guardar o `CapturedOutput` para ler pela metade.
+- **Preservado:**
+  - com a saída fechada a tempo (o caso normal), o resultado é idêntico;
+  - uma falha de leitura continua subindo para quem chamou;
+  - o caminho de tempo esgotado devolve o que devolvia: o texto só se a leitura
+    terminou, e vazio se não terminou.
+- **Testes:**
+  - `ProcessRunnerGrandchildTests`: prazo de 3 s, coleção sem paralelismo, e um
+    teste que fixa os 30 s de produção. Os casos novos passam abaixo de 15 s;
+  - Infrastructure.Tests completo, três rodadas seguidas: 881, 882 e 881 aprovados,
+    sem falha. A variação é o resultado intermitente que já existia;
+  - suíte completa das duas solutions: só as 4 falhas de ambiente.
+  - Server.IntegrationTests: 42 aprovados.
 
 ## Cobertura
 

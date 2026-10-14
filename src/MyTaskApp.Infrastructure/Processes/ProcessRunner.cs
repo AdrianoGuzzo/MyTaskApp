@@ -83,6 +83,27 @@ internal sealed class ProcessRunner : IProcessRunner
     /// <summary>Teto do que fica guardado de cada saída na execução ao vivo; o resto só passa pela tela.</summary>
     internal const int MaxStreamedChars = 1_000_000;
 
+    /// <summary>
+    /// Quanto o resto da saída pode demorar a chegar depois que o processo sai.
+    /// Mais folgado que os 5 s do <see cref="ShellCommandExecutor"/>: aqui a saída
+    /// é lida por parser (o Git), e cortá-la num momento de app ocupado seria pior
+    /// que esperar. O que o prazo evita é esperar para sempre por um neto.
+    /// </summary>
+    internal static readonly TimeSpan DefaultDrainTimeout = TimeSpan.FromSeconds(30);
+
+    private readonly TimeSpan _drainTimeout;
+
+    public ProcessRunner()
+        : this(DefaultDrainTimeout)
+    {
+    }
+
+    /// <summary>Para os testes, que não esperam 30 s pelo neto.</summary>
+    internal ProcessRunner(TimeSpan drainTimeout)
+    {
+        _drainTimeout = drainTimeout;
+    }
+
     public Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken cancellationToken = default) =>
         RunCoreAsync(request, output: null, cancellationToken);
 
@@ -92,7 +113,7 @@ internal sealed class ProcessRunner : IProcessRunner
         CancellationToken cancellationToken = default) =>
         RunCoreAsync(request, output ?? NoOutput.Instance, cancellationToken);
 
-    private static async Task<ProcessResult> RunCoreAsync(
+    private async Task<ProcessResult> RunCoreAsync(
         ProcessRequest request,
         IProgress<CommandOutputLine>? output,
         CancellationToken cancellationToken)
@@ -112,18 +133,28 @@ internal sealed class ProcessRunner : IProcessRunner
 
         // Sem quem acompanhe, o texto vai inteiro e cru: o parser do Git lê
         // quebras de linha e espaços como vieram. Ao vivo, linha a linha.
-        Task<string> readOutput;
-        Task<string> readError;
+        Task readOutput;
+        Task readError;
+        Func<string> outputText;
+        Func<string> errorText;
 
         if (output is null)
         {
-            readOutput = process.StandardOutput.ReadToEndAsync(CancellationToken.None);
-            readError = process.StandardError.ReadToEndAsync(CancellationToken.None);
+            var rawOutput = new RawOutput();
+            var rawError = new RawOutput();
+            readOutput = rawOutput.ReadAsync(process.StandardOutput);
+            readError = rawError.ReadAsync(process.StandardError);
+            outputText = () => rawOutput.Text;
+            errorText = () => rawError.Text;
         }
         else
         {
-            readOutput = PumpAsync(process.StandardOutput, isError: false, output);
-            readError = PumpAsync(process.StandardError, isError: true, output);
+            var capturedOutput = new CapturedOutput(MaxStreamedChars);
+            var capturedError = new CapturedOutput(MaxStreamedChars);
+            readOutput = ProcessOutputPump.PumpAsync(process.StandardOutput, capturedOutput, isError: false, output);
+            readError = ProcessOutputPump.PumpAsync(process.StandardError, capturedError, isError: true, output);
+            outputText = () => capturedOutput.Text;
+            errorText = () => capturedError.Text;
         }
 
         using var timeout = new CancellationTokenSource(request.Timeout);
@@ -148,12 +179,24 @@ internal sealed class ProcessRunner : IProcessRunner
 
             return new ProcessResult(
                 -1,
-                readOutput.IsCompletedSuccessfully ? readOutput.Result : string.Empty,
-                readError.IsCompletedSuccessfully ? readError.Result : string.Empty,
+                readOutput.IsCompletedSuccessfully ? outputText() : string.Empty,
+                readError.IsCompletedSuccessfully ? errorText() : string.Empty,
                 TimedOut: true);
         }
 
-        return new ProcessResult(process.ExitCode, await readOutput, await readError, TimedOut: false);
+        // Terminou: o que ainda está no buffer do pipe chega agora. Um neto que
+        // herdou a saída (um daemon, um helper) a segura aberta enquanto viver,
+        // e o resultado de quem já saiu não espera por ele.
+        await Task.WhenAny(Task.WhenAll(readOutput, readError), Task.Delay(_drainTimeout, CancellationToken.None));
+
+        if (readOutput.IsCompleted && readError.IsCompleted)
+        {
+            // Uma falha de leitura continua chegando a quem chamou, como antes.
+            await readOutput;
+            await readError;
+        }
+
+        return new ProcessResult(process.ExitCode, outputText(), errorText(), TimedOut: false);
     }
 
     private static ProcessStartInfo StartInfoFor(ProcessRequest request)
@@ -220,11 +263,40 @@ internal sealed class ProcessRunner : IProcessRunner
         }
     }
 
-    private static async Task<string> PumpAsync(StreamReader reader, bool isError, IProgress<CommandOutputLine> output)
+    /// <summary>
+    /// A saída inteira e crua, igual ao que o <c>ReadToEndAsync</c> entregaria,
+    /// mas legível pela metade quando o pipe não fecha.
+    /// </summary>
+    private sealed class RawOutput
     {
-        var captured = new CapturedOutput(MaxStreamedChars);
-        await ProcessOutputPump.PumpAsync(reader, captured, isError, output);
-        return captured.Text;
+        private readonly StringBuilder _text = new();
+
+        private readonly Lock _gate = new();
+
+        public string Text
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _text.ToString();
+                }
+            }
+        }
+
+        public async Task ReadAsync(StreamReader reader)
+        {
+            var buffer = new char[4096];
+            int read;
+
+            while ((read = await reader.ReadAsync(buffer, CancellationToken.None).ConfigureAwait(false)) > 0)
+            {
+                lock (_gate)
+                {
+                    _text.Append(buffer, 0, read);
+                }
+            }
+        }
     }
 
     /// <summary>A árvore inteira: o git chama ssh, credential helper, hooks.</summary>
