@@ -160,8 +160,8 @@ uma pergunta para depois. Post-its não aparecem nas seções do checklist.
   cria um segundo processo.
 - **Iniciar com o Windows** (ligado por padrão no instalador). O app sobe
   direto na bandeja. Dá para mudar em *☰ → Iniciar com o Windows*.
-- **Temas:** Papel, Sépia, Carvão, Nórdico, Ameixa, Ponta e Alto contraste,
-  além de **Automático**, que segue o tema claro, escuro ou de alto contraste
+- **Temas:** Papel, Sépia, Carvão, Nórdico, Ameixa, Verde Pecuária e Alto
+  contraste, além de **Automático**, que segue o tema claro, escuro ou de alto contraste
   do Windows.
 
 ### Anotações, etiquetas e ciclo de vida
