@@ -663,3 +663,100 @@ não tem `pwsh`:
 | MyTaskApp.Sync.Contracts | 98,6% | 93,8% |
 
 O gate do script é de 80% de linha e 70% de ramo, sobre o total.
+
+**Depois das etapas** (commit `05044ba`, build `--no-incremental`):
+
+| Assembly | Linha | Ramo |
+|---|---|---|
+| **Total** | **87,0%** (29506/33906) ↑ | **76,8%** (11772/15315) ↑ |
+| MyTaskApp (Desktop) | 80,8% ↑ | 69,2% ↑ |
+| MyTaskApp.Application | 93,7% | 85,8% ↑ |
+| MyTaskApp.Domain | 98,2% | 91,8% |
+| MyTaskApp.Infrastructure | 91,7% ↑ | 77,8% ↑ |
+| MyTaskApp.Mcp | 71,3% | 70,7% ↑ |
+| MyTaskApp.Server.Application | 95,1% | 87,8% |
+| MyTaskApp.Sync.Contracts | 98,6% | 93,8% |
+
+Nenhum assembly caiu.
+
+## Verificação final (14/10/2026)
+
+**Build.** `dotnet build MyTaskApp.slnx -c Release --no-incremental` e
+`dotnet build MyTaskApp.Server.slnx -c Release`: 0 avisos e 0 erros.
+
+**Testes** (`dotnet test <solution> -c Release`, com o Docker ligado):
+
+| Projeto | Linha de base | Final |
+|---|---|---|
+| Domain.Tests | 912 | 912 |
+| Application.Tests | 1291 | 1295 |
+| Infrastructure.Tests | 877 (+7 ignorados) | 882 (+7 ignorados) |
+| Desktop.Tests | 2301 + 4 falhas de ambiente | 2352 + as mesmas 4 falhas de ambiente |
+| Mcp.Tests | 77 | 79 |
+| Packaging.Tests | 72 | 72 |
+| Sync.Contracts.Tests | 36 | 36 |
+| Server.Application.Tests | 45 | 45 |
+| Server.IntegrationTests (PostgreSQL real) | 42 | 42 |
+
+- Nenhum teste existente foi desativado.
+- Nenhuma expectativa existente mudou. Só mudou a configuração de teste: o tipo do
+  resultado falso em `Saving_SendsOnlyTheConfirmedRules` e o relógio passado ao
+  `SyncHttp`.
+
+**Banco e contratos:**
+
+- `dotnet ef migrations has-pending-model-changes`: "No changes have been made to
+  the model since the last migration", no desktop e no servidor;
+- `git diff master -- '*Migrations*'`: vazio;
+- nenhum campo de `Sync.Contracts` e nenhuma ferramenta MCP mudaram.
+
+**Não verificado:** o app de pé. O MyTaskApp instalado ficou aberto na mesma sessão
+do Windows e segura o mutex, então o build de dev só sinalizaria a instância
+instalada e sairia. Fica para conferir com o app fechado:
+
+- a tela Hoje;
+- uma tarefa com Desenvolvimento;
+- fechar a janela da tarefa com um comando rodando;
+- sair do app pela bandeja (F1).
+
+Usar `MYTASKAPP_DATA_DIR` isolado.
+
+## Riscos que ficam
+
+- **Defeitos não autorizados** (H1–H8 acima):
+  - os dois saves separados no `SyncEngine`;
+  - o `DbUpdateException` genérico no `AccountStores` do servidor;
+  - o SQLite sem WAL;
+  - o stderr de git e gh logado sem máscara;
+  - o `NoBulkWritesTests`, que não pega ADO cru;
+  - o `ChangeTracker.Clear` no meio do laço do push;
+  - o autosave do post-it na Window;
+  - o `PersistNow` síncrono.
+- **`Kill` dos dois executores de processo:** a diferença de exceção engolida
+  (E6a) é uma decisão em aberto.
+- **F6:** o prazo de 30 s depois da saída é uma escolha. Um processo com neto
+  segurando a saída agora leva até 30 s, e não para sempre.
+- **E4:** 12 telas ainda têm o próprio `TryAsync`. Cinco são variantes idênticas,
+  ainda sem caracterização própria (`TaskIssue`, `TaskDeadline`, `TaskTimeLog`,
+  `DatabaseProfiles`, `McpServer`). Sete têm um passo a mais de propósito.
+- **Teste que às vezes some do relatório (já existia):**
+  `QuickCommandTerminalTests.WatchExitCode_…`.
+
+## Próximas etapas recomendadas
+
+1. **Fluxo "Iniciar implementação"** (`TaskDevelopmentViewModel.StartAsync` e
+   `CreateAsync`).
+   - **Depende de:** caracterização completa, com as mensagens de falha parcial e o
+     caminho do banco, que hoje não tem teste.
+   - **Pronto quando:** a sequência validação → banco → worktree → cópia → comandos
+     viver num coordenador da Application, com só a pergunta de conflito na tela,
+     e os testes de caracterização verdes antes e depois.
+2. **Troca de cronômetro** (`TodayViewModel.StartTimerAsync` e
+   `TaskTimeLogViewModel.ToggleTimerAsync`).
+   - **Depende de:** caracterizar a confirmação e o `replace` nas duas telas.
+   - **Pronto quando:** houver um caminho só, com os testes atuais das duas telas
+     intactos.
+3. **E4, segunda rodada:** caracterizar e converter as 5 telas com variante
+   idêntica.
+4. **Decidir os itens H1–H8.** O H4 (máscara no stderr de git e gh) é o mais barato:
+   reaproveitar `SensitiveText.Mask`.
