@@ -223,6 +223,13 @@ public sealed partial class TodayViewModel(
     [ObservableProperty]
     private string _pendingLabel = string.Empty;
 
+    /// <summary>
+    /// "3 pendentes" — o que cabe na pílula ao lado dos seis botões. A frase
+    /// inteira fica no tooltip.
+    /// </summary>
+    [ObservableProperty]
+    private string _pendingShortLabel = string.Empty;
+
     /// <summary>"3/7" — a versão que cabe no cabeçalho compacto.</summary>
     [ObservableProperty]
     private string _countLabel = string.Empty;
@@ -1768,6 +1775,13 @@ public sealed partial class TodayViewModel(
             0 => "Tudo em dia",
             1 => "1 tarefa pendente",
             _ => $"{PendingCount} tarefas pendentes",
+        };
+
+        PendingShortLabel = PendingCount switch
+        {
+            0 => "Tudo em dia",
+            1 => "1 pendente",
+            _ => $"{PendingCount} pendentes",
         };
 
         PendingChanged?.Invoke(PendingCount);

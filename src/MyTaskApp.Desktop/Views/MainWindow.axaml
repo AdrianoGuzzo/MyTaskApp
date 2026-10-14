@@ -93,11 +93,17 @@
                          Text="Checklist"
                          IsVisible="{Binding #Shell.Chrome.IsPanelVisible}" />
 
-              <!-- Recolhido, o nome dá lugar ao número: é a única informação que sobra. -->
-              <TextBlock Grid.Column="1"
+              <!--
+                Recolhido, o nome dá lugar ao número: é a única informação que
+                sobra. Na coluna *, e não na Auto: a pílula tem largura fixa, e
+                um texto que pede mais do que sobra corta com reticências em vez
+                de empurrar os botões para fora dela.
+              -->
+              <TextBlock Grid.Column="2"
                          Classes="brand"
-                         Text="{Binding PendingLabel}"
+                         Text="{Binding PendingShortLabel}"
                          TextTrimming="CharacterEllipsis"
+                         ToolTip.Tip="{Binding PendingLabel}"
                          IsVisible="{Binding #Shell.Chrome.IsCollapsed}" />
 
               <!-- No modo compacto o progresso sobe para o cabeçalho. -->
