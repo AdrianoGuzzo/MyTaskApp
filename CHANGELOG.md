@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.14.1](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.14.0...v1.14.1) (2026-10-14)
+
+
+### Changed
+
+* organização interna sem mudar o comportamento, e seis defeitos corrigidos ([#82](https://github.com/AdrianoGuzzo/MyTaskApp/issues/82)) ([9803845](https://github.com/AdrianoGuzzo/MyTaskApp/commit/9803845e9da973ba69576e7675e596686a8df4a1))
+
 ## [1.14.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.13.0...v1.14.0) (2026-10-14)
 
 
