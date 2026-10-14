@@ -610,6 +610,13 @@ public sealed partial class TodayViewModel(
     [RelayCommand]
     public void OpenSync() => SyncRequested?.Invoke();
 
+    /// <summary>
+    /// A bolinha da sincronização no cabeçalho (ADR-063). Atribuída pelo app
+    /// depois de montar a janela; nula, ela não aparece.
+    /// </summary>
+    [ObservableProperty]
+    private SyncIndicatorViewModel? _syncIndicator;
+
     /// <summary>Pede a janela de sons dos avisos do agente (ADR-042).</summary>
     public event Action? SoundsRequested;
 

@@ -13,6 +13,22 @@ com o cliente do Google, as variáveis e a implantação, está em
 
 ## Na tela
 
+**A bolinha no cabeçalho** ([ADR-063](ARCHITECTURE.md)), ao lado do
+histórico, diz de relance como está a sincronização. Passe o mouse para ler o
+estado por extenso, ou clique para ver o painel com "Sincronizar agora":
+
+| Bolinha | Quer dizer |
+|---|---|
+| verde cheia | **Sincronizado**, com a hora da última vez ("há 2 min") |
+| âmbar cheia | Alterações daqui **esperando para subir** (sobem em segundos) |
+| azul pulsando | **Sincronizando** |
+| anel âmbar | **Offline**: as alterações ficam guardadas aqui e sobem quando a conexão voltar; o app tenta de novo sozinho |
+| vermelha | **Precisa de você**: login expirado, computador revogado, versão antiga ou alteração recusada |
+| verde com halo âmbar | Em dia, com **algo para revisar** (conflito, comando recebido) |
+| anel cinza | **Pausada**, ou **só neste computador** (sem conta: o clique leva a conectar) |
+
+Numa build sem servidor de sincronização, a bolinha não aparece.
+
 *☰ → Sincronização…*:
 
 - **Conta.** "Conectar com o Google" abre o navegador. O MyTaskApp nunca vê a

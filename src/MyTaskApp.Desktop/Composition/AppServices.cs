@@ -175,6 +175,9 @@ internal static class AppServices
             .AddSingleton<SyncViewModel>()
             .AddSingleton<SyncWindow>()
 
+            // A bolinha do cabeçalho (ADR-063): uma só, como o agendador que ela escuta.
+            .AddSingleton<SyncIndicatorViewModel>()
+
             // Sons dos avisos do agente (ADR-042): janela única, como as outras.
             .AddSingleton<AgentAlertSoundsViewModel>()
             .AddSingleton<AgentAlertSoundsWindow>()
