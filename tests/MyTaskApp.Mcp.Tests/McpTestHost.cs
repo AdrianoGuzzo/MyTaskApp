@@ -52,7 +52,11 @@ internal sealed class McpTestHost : IAsyncDisposable
 
     public Uri Endpoint => McpServerSettings.EndpointFor(Port);
 
-    public static async Task<McpTestHost> CreateAsync(bool start = true, bool readOnly = false, CancellationToken cancellationToken = default)
+    public static async Task<McpTestHost> CreateAsync(
+        bool start = true,
+        bool readOnly = false,
+        TimeProvider? clock = null,
+        CancellationToken cancellationToken = default)
     {
         var directory = Path.Combine(Path.GetTempPath(), $"mytaskapp-mcp-{Guid.NewGuid():N}");
         var logs = new CapturingLoggerProvider();
@@ -67,6 +71,9 @@ internal sealed class McpTestHost : IAsyncDisposable
             .Build();
 
         var services = new ServiceCollection()
+
+            // Antes da Application e da Infrastructure, que só registram o relógio do sistema se faltar um.
+            .AddSingleton(clock ?? TimeProvider.System)
             .AddLogging(builder => builder.SetMinimumLevel(LogLevel.Debug).AddProvider(logs))
             .AddSingleton<IUseCaseRunner, ScopedRunner>()
             .AddApplication(configuration)

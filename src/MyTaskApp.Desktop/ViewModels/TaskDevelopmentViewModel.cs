@@ -8,7 +8,6 @@ using MyTaskApp.Application.DatabaseOperations;
 using MyTaskApp.Application.Development;
 using MyTaskApp.Desktop.Composition;
 using MyTaskApp.Desktop.Development;
-using MyTaskApp.Desktop.Views;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.Tasks;
 
@@ -949,16 +948,19 @@ public sealed partial class TaskDevelopmentViewModel(
             // Só branches: o cabeçalho de grupo tem Branch nulo, e "nulo == nulo"
             // o escolheria quando não há escolha anterior.
             var selectable = BranchOptions.Where(option => option.IsSelectable).ToList();
-            var configuredName = ConfiguredDefaultBranch(repository);
+            var configuredName = ListBranchesHandler.ConfiguredDefault(
+                DirectoryCompletion.Directories, DirectoryText.Trim().Trim('"').Trim(), repository);
             var configured = ListBranchesHandler.FindConfigured(list.Branches, configuredName);
 
-            SelectedBranchOption =
-                selectable.FirstOrDefault(option => option.Branch!.FullRef == previous)
-                ?? selectable.FirstOrDefault(option => option.Branch!.ShortName == _preferredSource)
-                ?? selectable.FirstOrDefault(option => option.Branch == configured)
-                ?? selectable.FirstOrDefault(option => option.Branch!.ShortName == _siblingSource)
-                ?? selectable.FirstOrDefault(option => option.Branch == list.Suggested)
-                ?? selectable.FirstOrDefault();
+            var chosen = ListBranchesHandler.ChooseSource(
+                [.. selectable.Select(option => option.Branch!)],
+                previous,
+                _preferredSource,
+                configured,
+                _siblingSource,
+                list.Suggested);
+
+            SelectedBranchOption = selectable.FirstOrDefault(option => option.Branch == chosen);
 
             LoadTags(list.Tags);
 
@@ -1014,24 +1016,6 @@ public sealed partial class TaskDevelopmentViewModel(
         TagOptions.Clear();
         SelectedTagOption = null;
         OnPropertyChanged(nameof(HasTags));
-    }
-
-    /// <summary>
-    /// A branch padrão cadastrada no diretório da etiqueta que é esta pasta —
-    /// o caminho digitado ou o worktree principal dele. Com a mesma pasta em
-    /// duas etiquetas, vale a primeira que tiver uma.
-    /// </summary>
-    private string? ConfiguredDefaultBranch(string repository)
-    {
-        var typed = DirectoryText.Trim().Trim('"').Trim();
-        var candidates = DirectoryCompletion.Directories
-            .Where(directory => !string.IsNullOrWhiteSpace(directory.DefaultBranch))
-            .ToList();
-
-        var match = candidates.FirstOrDefault(directory => WorktreePathPlanner.SamePath(directory.Path, typed))
-            ?? candidates.FirstOrDefault(directory => WorktreePathPlanner.SamePath(directory.Path, repository));
-
-        return match?.DefaultBranch!.Trim();
     }
 
     /// <summary>Cabeçalho de grupo não é escolha: volta para a branch anterior.</summary>
@@ -1241,6 +1225,17 @@ public sealed partial class TaskDevelopmentViewModel(
 
     [RelayCommand(CanExecute = nameof(CanCancel))]
     public void CancelRun() => _run?.Cancel();
+
+    /// <summary>
+    /// A janela fechou: a conferência da pasta digitada e a busca da PR não têm
+    /// mais para quem mostrar, e param. Uma implementação em andamento continua:
+    /// cancelá-la é decisão do usuário, pelo botão.
+    /// </summary>
+    public void Detach()
+    {
+        _inspection?.Cancel();
+        _pullRequestLookup?.Cancel();
+    }
 
     /// <summary>"Usar Worktree existente".</summary>
     [RelayCommand]

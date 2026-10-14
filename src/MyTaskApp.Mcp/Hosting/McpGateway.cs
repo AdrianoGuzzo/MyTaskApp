@@ -23,6 +23,7 @@ public sealed class McpGateway(
     IDataChangeNotifier notifier,
     McpServerRuntime runtime,
     McpActivityLog activity,
+    TimeProvider timeProvider,
     ILogger<McpGateway> logger)
 {
     /// <summary>A origem gravada na auditoria: "adria (MCP)".</summary>
@@ -45,7 +46,7 @@ public sealed class McpGateway(
         if (runtime.ReadOnly)
         {
             activity.Add(new McpActivityEntry(
-                DateTimeOffset.UtcNow, operation, McpActivityOutcome.Denied, TimeSpan.Zero, "Somente leitura."));
+                timeProvider.GetUtcNow(), operation, McpActivityOutcome.Denied, TimeSpan.Zero, "Somente leitura."));
 
             throw new McpException(
                 "O servidor MCP do MyTaskApp está em modo somente leitura. " +
@@ -117,7 +118,7 @@ public sealed class McpGateway(
     }
 
     private void Record(string operation, McpActivityOutcome outcome, TimeSpan elapsed, string? detail) =>
-        activity.Add(new McpActivityEntry(DateTimeOffset.UtcNow, operation, outcome, elapsed, detail));
+        activity.Add(new McpActivityEntry(timeProvider.GetUtcNow(), operation, outcome, elapsed, detail));
 
     private void Notify(DataArea changes)
     {

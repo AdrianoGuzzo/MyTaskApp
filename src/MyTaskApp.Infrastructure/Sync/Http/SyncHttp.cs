@@ -19,7 +19,7 @@ namespace MyTaskApp.Infrastructure.Sync.Http;
 /// motivo do <c>JiraHttp</c>: o log de depuração da fábrica registra os
 /// cabeçalhos, e o Bearer iria junto.
 /// </remarks>
-internal sealed class SyncHttp(HttpClient client, SyncOptions options, ILogger<SyncHttp> logger)
+internal sealed class SyncHttp(HttpClient client, SyncOptions options, TimeProvider timeProvider, ILogger<SyncHttp> logger)
 {
     public async Task<T> SendAsync<T>(
         HttpMethod method,
@@ -109,7 +109,7 @@ internal sealed class SyncHttp(HttpClient client, SyncOptions options, ILogger<S
         }
     }
 
-    private static async Task<SyncApiException> FailureAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    private async Task<SyncApiException> FailureAsync(HttpResponseMessage response, CancellationToken cancellationToken)
     {
         var text = await response.Content.ReadAsStringAsync(cancellationToken);
         var code = TryRead(text, "code");
@@ -132,9 +132,9 @@ internal sealed class SyncHttp(HttpClient client, SyncOptions options, ILogger<S
         };
     }
 
-    private static TimeSpan? RetryAfter(HttpResponseMessage response) =>
+    private TimeSpan? RetryAfter(HttpResponseMessage response) =>
         response.Headers.RetryAfter?.Delta
-        ?? (response.Headers.RetryAfter?.Date is { } date ? date - DateTimeOffset.UtcNow : null);
+        ?? (response.Headers.RetryAfter?.Date is { } date ? date - timeProvider.GetUtcNow() : null);
 
     private static string? TryRead(string json, string property)
     {

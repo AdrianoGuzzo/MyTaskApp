@@ -3,7 +3,6 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using MyTaskApp.Desktop.Notes;
@@ -187,56 +186,17 @@ public sealed partial class TaskNotesWindow : Window
             && e.CloseReason is WindowCloseReason.WindowClosing
             && ViewModel is { } viewModel)
         {
-            // Qualquer repositório da tarefa ocupado segura a janela (ADR-031).
-            var busy = viewModel.Developments.Busy;
+            // A regra é do ViewModel; aqui só se segura a janela e se pergunta.
+            switch (viewModel.RequestClose())
+            {
+                case TaskNotesCloseDecision.Stay:
+                    e.Cancel = true;
+                    break;
 
-            if (busy is { IsRunning: true })
-            {
-                e.Cancel = true;
-
-                if (busy.CanCancel)
-                {
-                    busy.CancelRun();
-                }
-                else
-                {
-                    viewModel.SelectedTabIndex = TaskNotesViewModel.DevelopmentTab;
-                    viewModel.Developments.Selected = busy;
-                    busy.Message = "Aguarde a criação do worktree terminar para fechar.";
-                }
-            }
-            else if (busy is { Database.IsRunning: true })
-            {
-                // A cópia do banco leva minutos, e cancelar deixa o destino
-                // pela metade: como a criação do worktree, segura e explica (ADR-060).
-                e.Cancel = true;
-                viewModel.SelectedTabIndex = TaskNotesViewModel.DevelopmentTab;
-                viewModel.Developments.Selected = busy;
-                busy.Message = "Cópia do banco em andamento. Aguarde terminar, ou clique em Cancelar cópia, para fechar.";
-            }
-            else if (busy is { QuickCommands.IsRunning: true })
-            {
-                // O mesmo para um comando rápido escondido (ADR-051).
-                e.Cancel = true;
-                viewModel.SelectedTabIndex = TaskNotesViewModel.DevelopmentTab;
-                viewModel.Developments.Selected = busy;
-                busy.CancelQuickCommand();
-                busy.Message = "Comando cancelado. Feche de novo para sair.";
-            }
-            else if (busy is { Commands.IsRunning: true })
-            {
-                // Fechar com um comando rodando o mataria sem ninguém ver o
-                // output: o primeiro "X" cancela e mostra; o segundo fecha.
-                e.Cancel = true;
-                viewModel.SelectedTabIndex = TaskNotesViewModel.DevelopmentTab;
-                viewModel.Developments.Selected = busy;
-                busy.CancelCommands();
-                busy.Message = "Execução dos comandos cancelada. Feche de novo para sair.";
-            }
-            else if (_confirmation is not null && viewModel.HasUnsavedChanges)
-            {
-                e.Cancel = true;
-                _ = AskThenCloseAsync(viewModel);
+                case TaskNotesCloseDecision.AskToDiscard when _confirmation is not null:
+                    e.Cancel = true;
+                    _ = AskThenCloseAsync(viewModel);
+                    break;
             }
         }
 
@@ -509,16 +469,17 @@ public sealed partial class TaskNotesWindow : Window
         }
     }
 
-    private async Task<string?> PickFolderAsync(string title)
-    {
-        var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
-        {
-            Title = title,
-            AllowMultiple = false,
-        });
-
-        return folders.Count > 0 ? folders[0].TryGetLocalPath() : null;
-    }
+    private Task<string?> PickFolderAsync(string title) =>
+        SystemPickers.PickFolderAsync(
+            StorageProvider,
+            title,
+            message =>
+            {
+                if (ViewModel is { } viewModel)
+                {
+                    viewModel.ErrorMessage = message;
+                }
+            });
 
     private void Format(MarkdownCommand command)
     {

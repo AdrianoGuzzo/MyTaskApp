@@ -33,6 +33,9 @@ public sealed partial class App : Avalonia.Application
     /// </summary>
     internal static IServiceProvider? Services { get; set; }
 
+    /// <summary>O encerramento fora da thread da UI, que o <see cref="Program"/> espera antes de descartar o contêiner.</summary>
+    internal static PendingShutdown ShutdownInProgress { get; } = new();
+
     /// <summary>
     /// As anotações abertas, por checklist. Existe para o segundo clique no
     /// mesmo ícone trazer a janela de volta em vez de abrir uma cópia — duas
@@ -623,10 +626,13 @@ public sealed partial class App : Avalonia.Application
 
         viewModel.Load(row);
 
+        // O que muda nesta janela muda o que a linha desenha: a lista recarrega
+        // na thread da UI.
+        void ReloadToday() => Dispatcher.UIThread.Post(() => _ = todayViewModel.LoadAsync(CancellationToken.None));
+
         // Salvar muda o que a lista desenha: o ícone da linha acende, e no dia
         // em que o texto for apagado ele precisa apagar junto.
-        viewModel.Saved += () => Dispatcher.UIThread.Post(
-            () => _ = todayViewModel.LoadAsync(CancellationToken.None));
+        viewModel.Saved += ReloadToday;
 
         var notes = new TaskNotesWindow(
             viewModel,
@@ -638,36 +644,31 @@ public sealed partial class App : Avalonia.Application
         // Vincular, atualizar ou desvincular muda a chave que a linha desenha.
         if (viewModel.Issue is { } issue)
         {
-            issue.Changed += () => Dispatcher.UIThread.Post(
-                () => _ = todayViewModel.LoadAsync(CancellationToken.None));
+            issue.Changed += ReloadToday;
         }
 
         // O prazo, os avisos e a próxima ação mudam o que a linha desenha (ADR-050).
         if (viewModel.Deadline is { } deadline)
         {
-            deadline.Changed += () => Dispatcher.UIThread.Post(
-                () => _ = todayViewModel.LoadAsync(CancellationToken.None));
+            deadline.Changed += ReloadToday;
         }
 
         // O tempo lançado e o cronômetro mudam o total e o relógio da linha (ADR-052).
         if (viewModel.Time is { } time)
         {
-            time.Changed += () => Dispatcher.UIThread.Post(
-                () => _ = todayViewModel.LoadAsync(CancellationToken.None));
+            time.Changed += ReloadToday;
         }
 
         // Mandar para outro computador tira a linha daqui; abrir a que chegou apaga o destaque (ADR-062).
         if (viewModel.Placement is { } placement)
         {
-            placement.Changed += () => Dispatcher.UIThread.Post(
-                () => _ = todayViewModel.LoadAsync(CancellationToken.None));
+            placement.Changed += ReloadToday;
         }
 
         // As etiquetas mudam as bolinhas da linha (ADR-025).
         if (viewModel.Tags is { } tags)
         {
-            tags.Changed += () => Dispatcher.UIThread.Post(
-                () => _ = todayViewModel.LoadAsync(CancellationToken.None));
+            tags.Changed += ReloadToday;
             tags.ManageRequested += () => ShowTags(services, notes);
         }
 
@@ -678,6 +679,9 @@ public sealed partial class App : Avalonia.Application
 
             // O relógio é do app: sem soltar, ele seguraria esta aba viva.
             viewModel.Time?.Detach();
+
+            // A pasta digitada e a PR não têm mais para quem mostrar.
+            viewModel.Developments.Detach();
         };
 
         notes.Show(owner);
@@ -851,7 +855,7 @@ public sealed partial class App : Avalonia.Application
         // thread da UI lança, e o encerramento pararia antes de soltar a bandeja.
         _window?.PersistNow();
 
-        _ = Task.Run(() => Shutdown(services));
+        ShutdownInProgress.Start(() => Shutdown(services));
         desktop.Shutdown();
     }
 

@@ -213,7 +213,7 @@ public sealed class RecordAgentEventHandler(
                 development?.Branch,
                 session.Activity,
                 session.ActivityMessage,
-                session.ActivityChangedAt ?? DateTimeOffset.UtcNow,
+                session.ActivityChangedAt ?? timeProvider.GetUtcNow(),
                 DeadlineLabelOf(task)),
             cancellationToken);
     }

@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using MyTaskApp.Application.Development;
+using MyTaskApp.Application.Tags;
 using MyTaskApp.Application.Tests.Fakes;
 using MyTaskApp.Domain.Tasks;
 
@@ -81,6 +82,70 @@ public class DevelopmentQueriesTests
         ListBranchesHandler.FindConfigured(branches, "Main")!.FullRef.Should().Be("refs/heads/main");
         ListBranchesHandler.FindConfigured(branches, "develop").Should().BeNull();
         ListBranchesHandler.FindConfigured(branches, null).Should().BeNull();
+    }
+
+    private static readonly IReadOnlyList<GitBranch> Candidates =
+    [
+        GitBranch.Local("main", "refs/remotes/origin/main", isHead: true),
+        GitBranch.Local("develop", "refs/remotes/origin/develop"),
+        GitBranch.Local("release"),
+        GitBranch.RemoteTracking("origin", "main"),
+        GitBranch.RemoteTracking("origin", "develop"),
+    ];
+
+    private static string? Chosen(
+        string? chosen = null,
+        string? previousAttempt = null,
+        GitBranch? configured = null,
+        string? otherEnvironments = null,
+        GitBranch? suggested = null) =>
+        ListBranchesHandler.ChooseSource(Candidates, chosen, previousAttempt, configured, otherEnvironments, suggested)?.FullRef;
+
+    /// <summary>Cada elo da cadeia vence os que vêm depois dele.</summary>
+    [Fact]
+    public void ChooseSource_FollowsThePriority_OneLinkAtATime()
+    {
+        var release = Candidates[2];
+        var main = Candidates[0];
+
+        Chosen("refs/remotes/origin/develop", "release", release, "develop", main).Should().Be("refs/remotes/origin/develop");
+        Chosen(null, "origin/main", release, "develop", main).Should().Be("refs/remotes/origin/main");
+        Chosen(null, null, release, "develop", main).Should().Be("refs/heads/release");
+        Chosen(null, null, null, "origin/develop", main).Should().Be("refs/remotes/origin/develop");
+        Chosen(null, null, null, null, release).Should().Be("refs/heads/release");
+        Chosen().Should().Be("refs/heads/main", "sem nada, a primeira da lista");
+    }
+
+    /// <summary>Um elo que não existe entre as candidatas passa a vez, e não escolhe nada.</summary>
+    [Fact]
+    public void ChooseSource_SkipsALinkThatIsNotAmongTheCandidates()
+    {
+        Chosen("refs/heads/sumiu", "sumiu", GitBranch.Local("sumiu"), "sumiu", Candidates[1]).Should().Be("refs/heads/develop");
+        ListBranchesHandler.ChooseSource([], "refs/heads/main", "main", null, null, null).Should().BeNull();
+    }
+
+    private static TagDirectoryRow Directory(string? path, string? defaultBranch) =>
+        new(Guid.NewGuid(), Guid.NewGuid(), "ECO", "#22C55E", "@eco", path, null, null, defaultBranch);
+
+    /// <summary>A pasta digitada vence o worktree principal, e a primeira etiqueta com padrão vence as outras.</summary>
+    [Fact]
+    public void ConfiguredDefault_ComesFromTheDirectoryThatIsThisFolder()
+    {
+        var eco = Path.Combine(Path.GetTempPath(), "eco");
+        var worktree = Path.Combine(Path.GetTempPath(), "eco-wt");
+        var other = Path.Combine(Path.GetTempPath(), "outro");
+
+        TagDirectoryRow[] directories =
+        [
+            Directory(eco, null),
+            Directory(worktree, " develop "),
+            Directory(eco, "main"),
+            Directory(eco, "release"),
+        ];
+
+        ListBranchesHandler.ConfiguredDefault(directories, worktree, eco).Should().Be("develop");
+        ListBranchesHandler.ConfiguredDefault(directories, Path.Combine(eco, "sub"), eco).Should().Be("main");
+        ListBranchesHandler.ConfiguredDefault(directories, other, other).Should().BeNull();
     }
 
     [Fact]

@@ -244,6 +244,67 @@ public class TaskDevelopmentViewModelTests
         viewModel.BranchesNotice.Should().Contain("release");
     }
 
+    /// <summary>Sem janela, a pasta digitada ainda é conferida quando o atraso vence (o controle do teste abaixo).</summary>
+    [Fact]
+    public async Task ATypedFolder_IsInspectedAfterThePause()
+    {
+        var viewModel = await ActivatedAsync();
+        _runner.Invoked.Clear();
+
+        viewModel.DirectoryText = Repository;
+        _time.Advance(TaskDevelopmentViewModel.InspectionDelay);
+
+        (await InspectedWithinAsync(TimeSpan.FromSeconds(5))).Should().BeTrue();
+    }
+
+    /// <summary>
+    /// A janela fechou: a conferência da pasta digitada e a busca da PR não
+    /// têm mais para quem mostrar, e param em vez de rodar git e gh à toa.
+    /// </summary>
+    [Fact]
+    public async Task ClosingTheWindow_StopsTheInspectionStillWaiting()
+    {
+        var viewModel = await ActivatedAsync();
+        _runner.Invoked.Clear();
+
+        viewModel.DirectoryText = Repository;
+        viewModel.Detach();
+        _time.Advance(TaskDevelopmentViewModel.InspectionDelay);
+
+        (await InspectedWithinAsync(TimeSpan.FromMilliseconds(500))).Should().BeFalse();
+    }
+
+    private async Task<bool> InspectedWithinAsync(TimeSpan patience)
+    {
+        var deadline = DateTime.UtcNow + patience;
+
+        while (DateTime.UtcNow < deadline)
+        {
+            if (_runner.Invoked.ToArray().Contains(typeof(InspectDirectoryHandler)))
+            {
+                return true;
+            }
+
+            await Task.Delay(20, Ct);
+        }
+
+        return false;
+    }
+
+    /// <summary>A escolha do usuário vence tudo numa recarga da mesma pasta, até a branch padrão do diretório.</summary>
+    [Fact]
+    public async Task ReloadingTheSameFolder_KeepsTheBranchTheUserChose()
+    {
+        var viewModel = await ActivatedAsync();
+        viewModel.DirectoryCompletion.SetDirectories([TagDirectory(Repository, "main")], new Dictionary<Guid, bool>());
+        await ChooseRepositoryAsync(viewModel);
+        viewModel.SelectedBranchOption = viewModel.BranchOptions.Single(option => option.Label == "origin/develop");
+
+        await viewModel.InspectDirectoryAsync(Ct);
+
+        viewModel.SelectedBranchOption!.Branch!.FullRef.Should().Be("refs/remotes/origin/develop");
+    }
+
     [Fact]
     public async Task ChoosingAGroupHeader_KeepsThePreviousBranch()
     {

@@ -38,7 +38,7 @@ public sealed class SyncClientTests : IDisposable
 
     public SyncClientTests()
     {
-        var http = new SyncHttp(new HttpClient(_server), _options, _log.For<SyncHttp>());
+        var http = new SyncHttp(new HttpClient(_server), _options, _clock, _log.For<SyncHttp>());
         _auth = new SyncAuthenticationService(_options, http, _secrets, _device, _clock, _log.For<SyncAuthenticationService>());
         _api = new SyncApiClient(http, _auth);
     }
@@ -154,6 +154,25 @@ public sealed class SyncClientTests : IDisposable
         {
             failure.RetryAfter.Should().Be(TimeSpan.FromSeconds(7));
         }
+    }
+
+    /// <summary>O <c>Retry-After</c> também vem como data: o piso é o tempo que falta até ela.</summary>
+    [Fact]
+    public async Task ARetryAfterDate_BecomesTheTimeLeftUntilIt()
+    {
+        await ConnectedAsync();
+        _server.On("/sync/pull", _ =>
+        {
+            var response = FakeJiraServer.Json(HttpStatusCode.ServiceUnavailable, """{"title":"ocupado","code":"busy"}""");
+            response.Headers.RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(_clock.GetUtcNow().AddSeconds(30));
+            return response;
+        });
+
+        var pull = () => _api.PullAsync(Guid.CreateVersion7(), "", 100, Ct);
+
+        var failure = (await pull.Should().ThrowAsync<SyncApiException>()).Which;
+        failure.Kind.Should().Be(SyncFailureKind.Transient);
+        failure.RetryAfter.Should().Be(TimeSpan.FromSeconds(30));
     }
 
     [Fact]

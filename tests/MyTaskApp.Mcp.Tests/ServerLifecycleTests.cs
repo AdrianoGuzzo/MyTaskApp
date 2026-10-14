@@ -2,6 +2,8 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Sockets;
 using System.Text;
+using Microsoft.Extensions.DependencyInjection;
+using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Mcp;
 using MyTaskApp.Domain;
 using MyTaskApp.Mcp.Hosting;
@@ -290,6 +292,58 @@ public class ServerLifecycleTests
 
         host.Manager.Activity.Snapshot().Count(entry => entry.Outcome == McpActivityOutcome.Denied)
             .Should().BeLessThan(5, "um registro por segundo, no máximo");
+    }
+
+    /// <summary>Passado o intervalo, o próximo barrado é registrado, e conta os que ficaram de fora.</summary>
+    [Fact]
+    public async Task AfterTheInterval_TheNextDenial_IsRecordedWithTheSuppressedCount()
+    {
+        var clock = new ManualClock(new DateTimeOffset(2026, 10, 13, 12, 0, 0, TimeSpan.Zero));
+        await using var host = await McpTestHost.CreateAsync(clock: clock, cancellationToken: Ct);
+
+        using var http = new HttpClient();
+
+        for (var i = 0; i < 3; i++)
+        {
+            using var response = await http.SendAsync(Post(host.Endpoint, "errado"), Ct);
+        }
+
+        clock.Advance(McpSecurityMiddleware.DenialRecordInterval);
+
+        using (await http.SendAsync(Post(host.Endpoint, "errado"), Ct))
+        {
+        }
+
+        var denied = host.Manager.Activity.Snapshot().Where(entry => entry.Outcome == McpActivityOutcome.Denied).ToList();
+        denied.Should().HaveCount(2);
+        denied.Should().ContainSingle(entry =>
+            entry.At == clock.GetUtcNow() && entry.Detail!.EndsWith("(+2 barrados no último segundo)", StringComparison.Ordinal));
+    }
+
+    /// <summary>A escrita recusada no modo somente leitura fica na atividade com a hora do relógio do app.</summary>
+    [Fact]
+    public async Task AWriteRefusedWhileReadOnly_IsRecordedAtTheAppsTime()
+    {
+        var clock = new ManualClock(new DateTimeOffset(2026, 10, 13, 12, 0, 0, TimeSpan.Zero));
+        await using var host = await McpTestHost.CreateAsync(start: false, readOnly: true, clock: clock, cancellationToken: Ct);
+        await host.Manager.StartAsync(Ct);
+
+        var gateway = host.Services.GetRequiredService<McpGateway>();
+        var write = () => gateway.WriteAsync("task_create", DataArea.Tasks, (_, _) => Task.FromResult(0), Ct);
+
+        await write.Should().ThrowAsync<ModelContextProtocol.McpException>();
+        host.Manager.Activity.Snapshot().Should().ContainSingle(entry =>
+            entry.Operation == "task_create" && entry.Outcome == McpActivityOutcome.Denied && entry.At == clock.GetUtcNow());
+    }
+
+    /// <summary>Só a hora é manual; os temporizadores continuam os do sistema, e o servidor sobe e para normalmente.</summary>
+    private sealed class ManualClock(DateTimeOffset start) : TimeProvider
+    {
+        private DateTimeOffset _now = start;
+
+        public override DateTimeOffset GetUtcNow() => _now;
+
+        public void Advance(TimeSpan by) => _now += by;
     }
 
     [Fact]

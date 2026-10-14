@@ -49,17 +49,20 @@ public sealed partial class AgentAlertSoundsWindow : Window
             return;
         }
 
-        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = "Escolher um som",
-            AllowMultiple = false,
-            FileTypeFilter =
-            [
-                new FilePickerFileType("Sons (WAV, MP3)") { Patterns = [.. AgentAlertSoundsViewModel.FilePatterns] },
-            ],
-        });
+        var path = await SystemPickers.PickFileAsync(
+            StorageProvider,
+            new FilePickerOpenOptions
+            {
+                Title = "Escolher um som",
+                AllowMultiple = false,
+                FileTypeFilter =
+                [
+                    new FilePickerFileType("Sons (WAV, MP3)") { Patterns = [.. AgentAlertSoundsViewModel.FilePatterns] },
+                ],
+            },
+            message => viewModel.ErrorMessage = message);
 
-        if (files.Count > 0 && files[0].TryGetLocalPath() is { } path)
+        if (path is not null)
         {
             await viewModel.ImportAsync(path, CancellationToken.None);
         }
