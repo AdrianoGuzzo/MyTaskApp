@@ -8,6 +8,12 @@ namespace MyTaskApp.Desktop;
 
 internal static class Program
 {
+    /// <summary>
+    /// Folga para o encerramento soltar tudo. O MCP sozinho leva até 5 s
+    /// (ADR-059); passado isso, o processo sai como saía antes.
+    /// </summary>
+    private static readonly TimeSpan ShutdownPatience = TimeSpan.FromSeconds(10);
+
     [STAThread]
     public static int Main(string[] args)
     {
@@ -54,6 +60,10 @@ internal static class Program
 
                 App.Services = services;
                 var exitCode = BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+
+                // O encerramento (agendadores, MCP, bandeja) ainda usa o
+                // contêiner: o `using` só o descarta depois dele terminar.
+                App.ShutdownInProgress.Wait(ShutdownPatience);
 
                 App.Services = null;
                 return exitCode;

@@ -33,6 +33,9 @@ public sealed partial class App : Avalonia.Application
     /// </summary>
     internal static IServiceProvider? Services { get; set; }
 
+    /// <summary>O encerramento fora da thread da UI, que o <see cref="Program"/> espera antes de descartar o contêiner.</summary>
+    internal static PendingShutdown ShutdownInProgress { get; } = new();
+
     /// <summary>
     /// As anotações abertas, por checklist. Existe para o segundo clique no
     /// mesmo ícone trazer a janela de volta em vez de abrir uma cópia — duas
@@ -851,7 +854,7 @@ public sealed partial class App : Avalonia.Application
         // thread da UI lança, e o encerramento pararia antes de soltar a bandeja.
         _window?.PersistNow();
 
-        _ = Task.Run(() => Shutdown(services));
+        ShutdownInProgress.Start(() => Shutdown(services));
         desktop.Shutdown();
     }
 

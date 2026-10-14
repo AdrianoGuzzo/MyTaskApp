@@ -20,7 +20,8 @@ sempre separada da refatoração.
 | F6 — `ProcessRunner` preso por um neto | fix | concluída |
 | F4 — Vincular a outra conta é tudo ou nada | fix | concluída |
 | F5 — Perfil de anonimização não sobrescreve o MCP | fix | concluída |
-| F1–F3 — Encerramento, handlers e buscas da janela | fix | pendente |
+| F1 — Contêiner descartado só depois do encerramento | fix | concluída |
+| F2–F3 — Handlers de seletor e buscas da janela | fix | pendente |
 
 ## Linha de base (13/10/2026, commit `7f48341`)
 
@@ -446,6 +447,37 @@ decisão sobre isso, nada foi mudado. O resto (bomba de saída e texto com teto)
     resultado falso;
   - `dotnet test MyTaskApp.slnx`: Application com 1295 aprovados e Desktop com 2335,
     além das 4 falhas de ambiente.
+
+### F1 — O contêiner só é descartado depois do encerramento (defeito D1, autorizado)
+
+- **Defeito, comprovado pela leitura do código e não por um teste que falhasse
+  antes:**
+  - `App.Exit` disparava `_ = Task.Run(() => Shutdown(services))` e logo chamava
+    `desktop.Shutdown()`;
+  - o `StartWithClassicDesktopLifetime` voltava, e o `using var services` do
+    `Program` descartava o contêiner enquanto o `Shutdown` ainda chamava
+    `GetRequiredService` (agendadores, monitores, MCP com até 5 s de parada);
+  - uma `ObjectDisposedException` ali sumia numa `Task` que ninguém observava, e o
+    que vinha depois dela (bandeja, MCP) não era solto.
+  - Reproduzir a corrida exigiria subir o app inteiro. Os testes fixam o contrato
+    novo.
+- **Correção:**
+  - `Desktop/Composition/PendingShutdown.cs` guarda a `Task` do encerramento;
+  - `App.Exit` usa `App.ShutdownInProgress.Start(...)`, no mesmo ponto e na mesma
+    ordem;
+  - o `Program` chama `App.ShutdownInProgress.Wait(10 s)` antes de sair do `using`.
+    Uma falha vai para o log (`ShutdownFailed`), e um encerramento travado fica para
+    trás depois da folga, com aviso (`ShutdownStillRunning`), como antes.
+- **Preservado:**
+  - a janela e o ícone somem na hora, porque o `desktop.Shutdown()` não espera;
+  - a ordem interna do `Shutdown()` não mudou;
+  - o `PersistNow` continua na thread da UI, antes.
+- **Testes:** `PendingShutdownTests` (4 casos: espera até o fim, falha não lança,
+  travado é deixado depois da folga, sem encerramento não espera). Desktop.Tests:
+  2339 aprovados e as 4 falhas de ambiente.
+- **Limitação:** não deu para subir o build de dev e fechar o app de verdade. O
+  MyTaskApp instalado está aberto na mesma sessão e segura o mutex, então o build
+  de dev só sinalizaria a instância instalada e sairia.
 
 ## Cobertura
 
