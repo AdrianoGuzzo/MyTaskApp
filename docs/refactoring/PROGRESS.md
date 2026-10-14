@@ -14,7 +14,7 @@ sempre separada da refatoração.
 | E2 — Relógio pelo `TimeProvider` | refactor | concluída |
 | E3 — Portas da UI fora de `Views` | refactor | concluída |
 | E4 — Caminho único de erro nos ViewModels (ADR-008) | refactor | concluída (7 de 19 telas; ver registro) |
-| E5 — Regras pequenas saem dos ViewModels | refactor | 5a concluída; 5b–5e pendentes |
+| E5 — Regras pequenas saem dos ViewModels | refactor | 5a e 5e concluídas; 5c descartada; 5d não feita (justificada); 5b pendente |
 | E6 — Duplicação na Infrastructure | refactor | 6a descartada, 6b concluída, 6c pendente |
 | E7 — Composition root | refactor | pendente |
 | F6 — `ProcessRunner` preso por um neto | fix | concluída |
@@ -413,6 +413,65 @@ decisão sobre isso, nada foi mudado. O resto (bomba de saída e texto com teto)
     de plataforma;
   - `dotnet test MyTaskApp.slnx`: Application com 1294 aprovados e Desktop com 2333,
     além das 4 falhas de ambiente.
+
+### E5c — "Trocar a máscara reinicia o argumento": descartada
+
+O inventário via a mesma regra em dois lugares. Lendo o código, são regras
+diferentes:
+
+- `AnonymizationProfileTools.UpdateRuleAsync` (MCP) trata uma alteração parcial.
+  Com máscara nova e sem argumento, manda `null`, e o padrão é aplicado depois. Um
+  argumento explícito ou `clearArgument` vence.
+- `AnonymizationRuleItemViewModel.OnMethodChanged` (tela) escreve no campo o
+  **texto** padrão da nova máscara a cada troca, para a pessoa ver e editar.
+
+Unificar mudaria uma das duas. Nada foi mudado.
+
+### E5d — Texto dos conflitos de sincronização: não feita, com justificativa
+
+O que o `SyncViewModel.ShowField/Show/Describe/FieldLabel/ReasonLabel` faz é
+apresentação:
+
+- rótulos em pt-BR;
+- hora local na cultura do usuário (`ToLocalTime`, `CurrentCulture`);
+- o apelido dos dispositivos que só o ViewModel tem.
+
+Levar para o `ListSyncConflictsHandler` poria texto de tela e cultura dentro de um
+caso de uso, com risco de mudar data ou fuso, para ganho pequeno. A dependência do
+Desktop em `Sync.Contracts` (constantes de campo e `SyncValue`) fica registrada.
+Se o protocolo do "onde aparece" mudar, o ponto a revisar é `ShowField`. O literal
+`"merged_on_join"` continua como estava. Para virar constante de `SyncErrorCodes`
+seria preciso conferir se o servidor e o merger usam esse mesmo texto, e isso
+fica para quando a área for tocada.
+
+### E5e — O "X" da janela da tarefa decide no ViewModel
+
+- **Problema (I9):** `TaskNotesWindow.OnClosing` tinha a árvore de decisão do
+  fechamento:
+  - preparação → cancela;
+  - criação do worktree → segura e explica;
+  - cópia do banco → segura e explica;
+  - comando rápido ou comandos pós-Worktree → cancela e explica;
+  - texto não salvo → pergunta.
+
+  Era regra de tela no code-behind, sem nenhum teste.
+- **O que mudou:**
+  - `TaskNotesViewModel.RequestClose()` devolve `TaskNotesCloseDecision` (`Close`,
+    `Stay`, `AskToDiscard`) e faz o que a regra manda (cancelar, mostrar a aba e o
+    ambiente, explicar), **na mesma ordem de atribuições** de antes;
+  - a janela só aplica o resultado: `Stay` → `e.Cancel`; `AskToDiscard` (com
+    confirmação disponível) → `e.Cancel` e a pergunta;
+  - o mesmo molde do `WidgetChromeViewModel.DecideClose()`.
+- **Preservado:**
+  - só o fechamento pedido pelo usuário (`WindowClosing`) é interceptado, e o
+    `_discarding` continua na janela;
+  - sem `IConfirmationDialog`, texto não salvo fecha, como antes.
+- **Caracterização antes da troca:** `TaskNotesClosingTests`, na janela de verdade
+  (headless), 7 casos verdes sobre o code-behind antigo e de novo depois. Eles
+  cobrem nada rodando → fecha, criação, preparação, cópia, comando rápido,
+  comandos pós-Worktree e texto não salvo, com as mensagens exatas. Mais
+  `TheDecision_IsTheViewModels`, que testa a regra sem passar pela janela.
+- **Testes:** Desktop.Tests: 2352 aprovados e as 4 falhas de ambiente.
 
 ### F5 — Salvar o perfil de anonimização não apaga a mudança do MCP (defeito D5, autorizado)
 

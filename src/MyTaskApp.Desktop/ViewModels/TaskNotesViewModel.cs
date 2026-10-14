@@ -23,6 +23,19 @@ public enum NotesViewMode
     Split,
 }
 
+/// <summary>O que o "X" da janela da tarefa faz, decidido por <see cref="TaskNotesViewModel.RequestClose"/>.</summary>
+public enum TaskNotesCloseDecision
+{
+    /// <summary>Fecha.</summary>
+    Close,
+
+    /// <summary>Fica aberta: um ambiente está ocupado, e a tela já explicou ou cancelou.</summary>
+    Stay,
+
+    /// <summary>Pergunta antes: há texto não salvo.</summary>
+    AskToDiscard,
+}
+
 /// <summary>
 /// A anotação livre de um item do checklist (§12): texto em Markdown que o
 /// usuário escreve enquanto a tarefa está em aberto e só lê depois que ela é
@@ -207,6 +220,69 @@ public sealed partial class TaskNotesViewModel(
             || !string.Equals(TaskTitle.Trim(), _persistedTitle, StringComparison.Ordinal));
 
     public int MaxTitleLength => TaskItem.MaxTitleLength;
+
+    /// <summary>
+    /// O "X" da janela, pedido pelo usuário. Qualquer repositório da tarefa
+    /// ocupado segura a janela (ADR-031):
+    /// <list type="bullet">
+    /// <item>a preparação do worktree é cancelada;</item>
+    /// <item>a criação do worktree não pode ser interrompida, e fechar esconderia o resultado (ADR-027);</item>
+    /// <item>a cópia do banco leva minutos, e cancelar deixaria o destino pela metade (ADR-060);</item>
+    /// <item>um comando rápido ou os comandos pós-Worktree são cancelados à vista: o segundo "X" fecha (ADR-051, 028).</item>
+    /// </list>
+    /// Sem nada rodando, o texto não salvo pede confirmação: salvar é explícito, e
+    /// o "X" seria um jeito fácil de jogar fora meia hora de anotação.
+    /// </summary>
+    public TaskNotesCloseDecision RequestClose()
+    {
+        var busy = Developments.Busy;
+
+        if (busy is { IsRunning: true })
+        {
+            if (busy.CanCancel)
+            {
+                busy.CancelRun();
+            }
+            else
+            {
+                ShowDevelopment(busy);
+                busy.Message = "Aguarde a criação do worktree terminar para fechar.";
+            }
+
+            return TaskNotesCloseDecision.Stay;
+        }
+
+        if (busy is { Database.IsRunning: true })
+        {
+            ShowDevelopment(busy);
+            busy.Message = "Cópia do banco em andamento. Aguarde terminar, ou clique em Cancelar cópia, para fechar.";
+            return TaskNotesCloseDecision.Stay;
+        }
+
+        if (busy is { QuickCommands.IsRunning: true })
+        {
+            ShowDevelopment(busy);
+            busy.CancelQuickCommand();
+            busy.Message = "Comando cancelado. Feche de novo para sair.";
+            return TaskNotesCloseDecision.Stay;
+        }
+
+        if (busy is { Commands.IsRunning: true })
+        {
+            ShowDevelopment(busy);
+            busy.CancelCommands();
+            busy.Message = "Execução dos comandos cancelada. Feche de novo para sair.";
+            return TaskNotesCloseDecision.Stay;
+        }
+
+        return HasUnsavedChanges ? TaskNotesCloseDecision.AskToDiscard : TaskNotesCloseDecision.Close;
+    }
+
+    private void ShowDevelopment(TaskDevelopmentViewModel busy)
+    {
+        SelectedTabIndex = DevelopmentTab;
+        Developments.Selected = busy;
+    }
 
     /// <summary>
     /// As mesmas regras do domínio, ditas antes do clique: um "Salvar" que só
