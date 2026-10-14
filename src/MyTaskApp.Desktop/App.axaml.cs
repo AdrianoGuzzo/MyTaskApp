@@ -105,7 +105,7 @@ public sealed partial class App : Avalonia.Application
                 SetUpCommandExecutions(Services);
                 SetUpTimeTracking(todayViewModel);
                 SetUpMcpServer(Services, todayViewModel);
-                SetUpSync(Services);
+                SetUpSync(Services, todayViewModel);
                 ListenForSecondLaunch(Services, window);
 
                 // A moldura só sabe iniciar com o Windows depois de conhecer o
@@ -422,8 +422,18 @@ public sealed partial class App : Avalonia.Application
     /// sem conta ligada, o laço acorda, vê que não há o que fazer e dorme: o
     /// app continua inteiro, só local.
     /// </summary>
-    private static void SetUpSync(IServiceProvider services) =>
+    /// <remarks>
+    /// A bolinha do cabeçalho (ADR-063) assina o agendador antes do Start:
+    /// o primeiro ciclo, logo na abertura, já aparece nela.
+    /// </remarks>
+    private static void SetUpSync(IServiceProvider services, TodayViewModel todayViewModel)
+    {
+        var indicator = services.GetRequiredService<SyncIndicatorViewModel>();
+        todayViewModel.SyncIndicator = indicator;
+        _ = indicator.LoadAsync(CancellationToken.None);
+
         services.GetRequiredService<SyncScheduler>().Start();
+    }
 
     private void SetUpMcpServer(IServiceProvider services, TodayViewModel todayViewModel)
     {

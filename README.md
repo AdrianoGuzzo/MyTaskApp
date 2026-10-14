@@ -354,6 +354,11 @@ o servidor em [`docs/sync-server.md`](docs/sync-server.md), e as decisões no
   "Mostrando" e o histórico da semana mostram este computador, outro, ou
   todos. Escondida não é privada: tudo continua sincronizado.
 
+- **O estado de relance.** Uma bolinha no cabeçalho mostra se está tudo
+  sincronizado (verde), se há alterações esperando (âmbar), se está
+  sincronizando (azul pulsando), se está offline (anel âmbar) ou se precisa de
+  você (vermelha). O tooltip diz o estado por extenso e o clique traz
+  "Sincronizar agora" ([ADR-063](docs/ARCHITECTURE.md)).
 - **Funciona offline.** As mudanças esperam num outbox, gravado junto com a
   própria mudança, e sobem quando a rede volta, sem duplicar.
 - **Conflito visível.** Campos diferentes editados em dois computadores ficam

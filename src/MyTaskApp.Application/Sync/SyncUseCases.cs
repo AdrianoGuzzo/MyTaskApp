@@ -111,16 +111,16 @@ public sealed class SyncAccountService(
         await authenticator.SignOutAsync(cancellationToken);
         await runner.RunAsync<ISyncLocalStore>((store, token) => store.UnlinkAsync(token), cancellationToken);
         logger.LogInformation("SyncDisconnected");
+
+        // Um ciclo ocioso, sem rede: só para o indicador do cabeçalho reler o estado (ADR-063).
+        scheduler.RequestNow();
     }
 
+    /// <summary>Ligar sincroniza na hora; pausar também acorda o laço, que só avisa o indicador (ADR-063).</summary>
     public async Task SetEnabledAsync(bool enabled, CancellationToken cancellationToken)
     {
         await runner.RunAsync<ISyncLocalStore>((store, token) => store.SetEnabledAsync(enabled, token), cancellationToken);
-
-        if (enabled)
-        {
-            scheduler.RequestNow();
-        }
+        scheduler.RequestNow();
     }
 
     public void SyncNow() => scheduler.RequestNow();

@@ -154,6 +154,37 @@ public sealed class SyncSchedulerTests : IAsyncDisposable
         _scheduler.LastResult.Should().NotBeNull();
     }
 
+    [Fact]
+    public async Task TheStartOfACycle_IsReported_WhileItRuns()
+    {
+        _cycle.Gate = new TaskCompletionSource();
+        var runningWhenStarted = new List<bool>();
+        _scheduler = new SyncScheduler(_cycle, _trigger, _clock, NullLogger<SyncScheduler>.Instance, Schedule, () => 1.0);
+        _scheduler.CycleStarted += () => runningWhenStarted.Add(_scheduler.IsRunning);
+        _scheduler.Start();
+
+        await WaitUntilAsync(() => _cycle.Running == 1);
+
+        runningWhenStarted.Should().Equal(true);
+        _cycle.Gate.SetResult();
+    }
+
+    [Fact]
+    public async Task ALocalChange_IsReported_BeforeTheDebounce()
+    {
+        var queued = 0;
+        Start();
+        _scheduler!.ChangeQueued += () => Interlocked.Increment(ref queued);
+        await WaitForCyclesAsync(1);
+        await WaitUntilAsync(() => _cycle.Running == 0);
+        await Task.Delay(30, Ct);
+
+        _trigger.Signal();
+
+        await WaitUntilAsync(() => Volatile.Read(ref queued) == 1);
+        _cycle.Runs.Should().Be(1, "o ciclo só vem depois da rajada");
+    }
+
     private void Start(double random = 1.0)
     {
         _scheduler = new SyncScheduler(_cycle, _trigger, _clock, NullLogger<SyncScheduler>.Instance, Schedule, () => random);

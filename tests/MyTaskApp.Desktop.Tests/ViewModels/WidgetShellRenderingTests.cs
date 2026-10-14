@@ -160,11 +160,12 @@ public class WidgetShellRenderingTests
             .Where(button => button.Classes.Contains("chrome"))
             .ToList();
 
-        // Cinco na janela normal (histórico, HUD, recolher, menu, fechar) e
-        // cinco no cabeçalho do HUD (nova tarefa, histórico, sair do HUD, menu,
-        // fechar). Os dois menus e os dois históricos (ADR-053) abrem flyout em
-        // vez de comando.
-        buttons.Should().HaveCount(10);
+        // Seis na janela normal (sincronização, histórico, HUD, recolher, menu,
+        // fechar) e seis no cabeçalho do HUD (nova tarefa, sincronização,
+        // histórico, sair do HUD, menu, fechar). Os dois menus, os dois
+        // históricos (ADR-053) e as duas bolinhas (ADR-063) abrem flyout em vez
+        // de comando.
+        buttons.Should().HaveCount(12);
         buttons.Where(button => button.Command is not null).Should().HaveCount(6);
     }
 
@@ -186,7 +187,7 @@ public class WidgetShellRenderingTests
             .Where(button => button.Classes.Contains("chrome"))
             .ToList();
 
-        buttons.Should().HaveCount(10);
+        buttons.Should().HaveCount(12);
         buttons.Should().OnlyContain(button =>
             WindowDecorationProperties.GetElementRole(button)
                 == WindowDecorationsElementRole.User);
