@@ -1,0 +1,171 @@
+# Refatoração sem mudança de comportamento — acompanhamento
+
+Princípio: **refatorar a implementação, não o produto.** Cada etapa é um commit
+próprio (`refactor:`, `test:`, `fix:` ou `docs:`) na branch
+`feature/fatoracao-do-codigo`. Correção de defeito só entra quando autorizada, e
+sempre separada da refatoração.
+
+## Estado
+
+| Etapa | Tipo | Situação |
+|---|---|---|
+| E0 — Inventário e linha de base | docs | concluída |
+| E1 — Guarda de camadas | test | pendente |
+| E2 — Relógio pelo `TimeProvider` | refactor | pendente |
+| E3 — Portas da UI fora de `Views` | refactor | pendente |
+| E4 — Caminho único de erro nos ViewModels (ADR-008) | refactor | pendente |
+| E5 — Regras pequenas saem dos ViewModels | refactor | pendente |
+| E6 — Duplicação na Infrastructure | refactor | pendente |
+| E7 — Composition root | refactor | pendente |
+| F1–F6 — Defeitos autorizados | fix | pendente |
+
+## Linha de base (13/10/2026, commit `7f48341`)
+
+**Ambiente.** SDK 10.0.402. O SDK do .NET 10 não estava instalado na máquina, e o
+instalador MSI falhou ao extrair (`0x8007025d`). Por isso o SDK foi instalado por
+usuário, com o `dotnet-install.ps1`, em `%LOCALAPPDATA%\Microsoft\dotnet`.
+
+O MyTaskApp instalado estava aberto na mesma sessão do Windows. O Docker Desktop
+foi ligado para os testes do servidor.
+
+**Build.** `dotnet build MyTaskApp.slnx -c Release` e
+`dotnet build MyTaskApp.Server.slnx -c Release` compilam com 0 erros. Os warnings
+viram erro: `TreatWarningsAsErrors` e `EnforceCodeStyleInBuild` estão ligados.
+
+**Testes.** `dotnet test <solution> -c Release --no-build`:
+
+| Projeto | Aprovados | Falhas | Ignorados |
+|---|---|---|---|
+| Domain.Tests | 912 | 0 | 0 |
+| Application.Tests | 1291 | 0 | 0 |
+| Infrastructure.Tests | 877 | 0 | 7 |
+| Desktop.Tests | 2301 | **4** | 2 |
+| Mcp.Tests | 77 | 0 | 0 |
+| Packaging.Tests | 72 | 0 | 0 |
+| Sync.Contracts.Tests | 36 | 0 | 0 |
+| Server.Application.Tests | 45 | 0 | 0 |
+| Server.IntegrationTests (PostgreSQL real, Testcontainers) | 42 | 0 | 0 |
+
+- **As 4 falhas são de ambiente e já existiam.** São
+  `SingleInstanceTests.{TheFirstLaunchOwnsTheApplication,
+  ClosingTheAppLetsTheNextLaunchIn, TheOwnerIsToldWhenSomeoneClicksTheShortcutAgain,
+  ASecondLaunchDoesNotOwnIt}`. O app instalado segura o mutex da sessão.
+- **Ignorados, todos por ambiente:**
+  - os testes de PostgreSQL local, sem `MYTASKAPP_TEST_POSTGRES` e
+    `MYTASKAPP_TEST_PG_BIN`;
+  - os testes só de Linux e de Unix;
+  - duas palavras em inglês do corretor do Windows.
+
+**Cobertura:** veja a seção [Cobertura](#cobertura).
+
+**Contratos registrados:**
+
+- **Migrations do desktop:** 35, e a última é `20261013200115_DevicePlacement`.
+- **Migration do servidor:** 1, `20261013055355_InitialServer`.
+- **`MyTaskApp.Sync.Contracts`:** `Messages`, `SyncSchema` e as definições,
+  `SyncErrorCodes`, `SyncIds` (UUIDv5), `SyncJson` e `SyncCursor`.
+- **Ferramentas MCP:** 82 (`McpServerTool`).
+
+Nada disso pode mudar sem autorização.
+
+**Fluxos que precisam continuar iguais:** a tela Hoje e a classificação, o
+ciclo da tarefa, do checklist e da ocorrência, a recorrência e a materialização,
+o cronômetro e os lançamentos, os lembretes e prazos, as etiquetas e os
+diretórios, a aba Desenvolvimento (worktree, comandos, banco do ambiente, PR,
+agente), as operações de banco, o MCP, a sincronização (captura, outbox, push e
+pull, conflito, reaplicação), os post-its, o HUD e a bandeja, a instância única,
+iniciar com o Windows, e o encerramento.
+
+## Inventário
+
+O inventário saiu de três varreduras de leitura do código, conferidas por
+amostragem. A base já é disciplinada:
+
+- nenhum ViewModel usa `DbContext`, `Process`, `HttpClient` ou arquivo
+  diretamente, e são 202 chamadas por `IUseCaseRunner`;
+- o contêiner é montado com `validateScopes: true` e não há *captive
+  dependency*;
+- um `ProcessRunner` com `ArgumentList` e cancelamento;
+- `PGPASSWORD` mascarado;
+- o outbox gravado no mesmo `SaveChanges` da mudança;
+- dois `HttpClient` longevos com `PooledConnectionLifetime`;
+- o código específico do Windows atrás de portas.
+
+Por isso a refatoração é pontual, e não estrutural.
+
+### Comprovados
+
+| # | Onde | Problema e evidência | Risco | Proposta | Preservar | Testes | Prioridade |
+|---|---|---|---|---|---|---|---|
+| I1 | Desktop/ViewModels (~20 classes) | `TryAsync`/`RunAsync` copiado: `DomainException` → mensagem, outra → log + fallback (ex.: `TodayViewModel.cs:1862`, `TagsViewModel.cs:852`, `ReminderSettingsViewModel.cs:160`). As variantes diferem: limpam ou não o status, cada uma tem o próprio evento de log, e `SyncViewModel` trata `SyncApiException`. | Uma correção no caminho de erro precisa ser feita 20 vezes. | E4: `ScreenOperation` parametrizado, aplicado só onde a variante bate exatamente. | O evento de log, a ordem de limpeza, `IsBusy` no `finally`, o retorno `bool`. | Teste de mensagem e de fallback por ViewModel convertido. | Média |
+| I2 | Mcp, Application, Infrastructure, Desktop | Relógio lido direto: `McpGateway.cs:48,120`, `McpSecurityMiddleware.cs:55`, `RecordAgentEvent.cs:216`, `SyncHttp.cs:137`, `WindowsTerminalLauncher.cs:150`, `McpServerViewModel.cs:96`. | Não dá para testar sem esperar o relógio. Contraria o ADR-015. | E2: `TimeProvider` injetado. | Valores idênticos com `TimeProvider.System`. | Rate limit do MCP e `Retry-After` com `FakeTimeProvider`. | Alta (baixo risco) |
+| I3 | `Views/ConfirmWindow.axaml.cs:36` | `IConfirmationDialog` e outras portas declaradas em `Views`. 17 ViewModels importam `MyTaskApp.Desktop.Views`. | O ViewModel depende do namespace da View. Contraria o MVVM. | E3: mover as declarações para `MyTaskApp.Desktop.Dialogs`. | As implementações e o registro no DI. | Guarda de camadas. | Média |
+| I4 | (testes) | Não há teste de arquitetura. As regras de camada (ADR-005/009/012) só valem por disciplina. | Um atalho futuro passa sem ninguém ver. | E1: testes de dependência por reflexão. | — | O próprio teste. | Alta |
+| I5 | `TaskDevelopmentViewModel.cs:952-961, 1024-1035` | A escolha da branch de origem (anterior → preferida → do diretório → irmã → sugerida) está no ViewModel. | Regra de negócio sem teste e fora da Application. | E5a: função pura em `Application/Development/ExistingBranches.cs`. | A ordem exata e o aviso "branch padrão do diretório". | Caracterização no ViewModel, depois na Application. | Média |
+| I6 | `DevelopmentDatabaseViewModel.cs:686-687, 768, 795-819`; `DatabaseCopyViewModel.cs:199-216, 410`; `DatabaseProfilesViewModel.cs:278-292` | O pedido de cópia (`DatabaseCopyOptions`, a operação "anonimizar se exigido") é montado em três ViewModels. | Uma flag pode divergir entre as telas. | E5b: *factory* ao lado de `DatabaseCopyPlanner`. | Cada flag, por origem. | Caracterização por tela. | Média |
+| I7 | `Mcp/Tools/AnonymizationProfileTools.cs:346-347`; `Desktop/ViewModels/DatabaseOperationsItems.cs:336` | "Trocar a máscara reinicia o argumento" está escrito nos dois adaptadores. | O MCP e a tela podem divergir. | E5c: um único ponto no Domain ou na Application. | Mesmo argumento padrão por máscara. | Caracterização dos dois lados. | Média |
+| I8 | `SyncViewModel.cs:476-537, 587` | O ViewModel decodifica o JSON do protocolo (`SyncValue.Parse`) e usa o literal `"merged_on_join"`. | O Desktop fica acoplado ao formato do fio. | E5d: o `ListSyncConflictsHandler` entrega o texto pronto, e o literal vira constante. | Os mesmos textos na janela. O JSON não muda. | `SyncViewModelTests`, `DevicePlacementViewModelTests`. | Média |
+| I9 | `Views/TaskNotesWindow.axaml.cs:184-244` | Árvore de 5 ramos decidindo se a janela da tarefa pode fechar, no code-behind. | Sem teste. | E5e: `TaskNotesViewModel.DecideClose()`, no molde de `WidgetChromeViewModel.DecideClose()`. | Os ramos e as mensagens "Aguarde…"/"Feche de novo…". | Testes dos 5 ramos. | Média |
+| I10 | `Infrastructure/Processes/ProcessRunner.cs:231-242`; `ShellCommandExecutor.cs:131-142` | `Kill` da árvore de processos idêntico nos dois. | Uma correção ficaria só de um lado. | E6a: um helper `internal`. | O mesmo tratamento de exceção. | `ProcessRunnerTests`, `ShellCommandExecutorTests`. | Baixa |
+| I11 | `Infrastructure/Sync/SyncLocalStore.cs:439` | `new SyncReconciler(..., NullLogger<SyncReconciler>.Instance)`: os logs do merge no push somem. | Diagnóstico de sincronização às cegas. | E6b: logger real pelo `ILoggerFactory`. | Só muda o log, sem dado sensível. | Testes de sync existentes. | Baixa |
+| I12 | `Application/DatabaseOperations/AnonymizationProfileEditing.cs:381, 421` | Handlers de conexão (`DatabaseUsageHandlers`, `DuplicateDatabaseConnectionHandler`) no arquivo de perfis. | Coesão: o handler é procurado no arquivo errado. | E6c: arquivo próprio, mesmo namespace. | Os tipos e o registro. | O teste que resolve cada handler do contêiner. | Baixa |
+| I13 | `App.axaml.cs:628-670` e o bloco Show/Activate (×10) | `X.Changed += () => Dispatcher.UIThread.Post(() => _ = todayViewModel.LoadAsync(...))` repetido. | Ruído no composition root. | E7: helper local. | A ordem das assinaturas e a thread. | Testes de composição. | Baixa |
+| D1 | `App.axaml.cs:854`; `Program.cs:45` | `Exit` dispara `Task.Run(Shutdown)` e o `Program` descarta o contêiner em seguida. O `Shutdown` pode resolver serviços num contêiner já descartado, e a exceção nunca é observada. | Agendador, MCP ou bandeja podem não ser liberados. | F1 (autorizado). | A janela some na hora. A ordem do `Shutdown`. | Teste da espera. | Alta |
+| D2 | Views: `AgentAlertSoundsWindow:45`, `DevelopmentCommandsWindow:48`, `DirectoryCommandWindow:37`, `TimeEntryWindow:95`, `TaskNotesWindow:489, 502`, `TagsWindow:79` | `async void` sem try/catch: um seletor de arquivo que falhar derruba o processo. | Crash. | F2 (autorizado). | O resultado de sucesso. | Por handler, onde for testável. | Alta |
+| D3 | `TaskDevelopmentViewModel.cs:107, 327` | `_inspection` e `_pullRequestLookup` não são cancelados ao fechar a janela. | git e gh continuam rodando para uma janela fechada. | F3 (autorizado). | Comandos do usuário (`_run`) não são cancelados. | Teste de cancelamento. | Média |
+| D4 | `SyncLocalStore.cs:64-110` (`LinkAsync`) | Três `ExecuteDeleteAsync` com commit próprio, e só depois o `SaveAsync` do vínculo. | Uma queda no meio apaga o outbox e mantém o vínculo antigo. Na volta, a varredura não roda. | F4 (autorizado): uma transação. | A semântica de "outra conta". | Falha injetada no save. Ponta a ponta do servidor. | Alta |
+| D5 | `ProfileHandlers.cs:85-125` | `SaveAnonymizationProfileHandler` troca todas as regras sem conferir versão. O MCP exige `ExpectedUpdatedAt` (`AnonymizationProfileEditing.cs:133-146`). | A tela aberta antes de uma edição do MCP apaga essa edição em silêncio. | F5 (autorizado): `ExpectedUpdatedAt` opcional. | A chamada interna do MCP (`:310`) sem conferência, como hoje. | Teste do conflito. | Média |
+| D6 | `ProcessRunner.cs:156` | Depois de uma saída normal, `await readOutput, await readError` sem limite. O `ShellCommandExecutor` limita a 5 s. | git ou gh com um neto segurando o stdout trava a operação. | F6 (autorizado). | O resultado completo no caso normal. | Neto segurando o stdout. | Média |
+
+### Hipóteses e defeitos só documentados
+
+Ficam sem mudança. Decidir antes de mexer.
+
+| # | Onde | Observação |
+|---|---|---|
+| H1 | `Application/Sync/SyncEngine.cs:110-111` | `SetStateAsync(NeedsReconnect)` e `RecordErrorAsync` em escopos separados. Uma queda entre os dois deixa o estado sem o erro. Não autorizado. |
+| H2 | `Server.Infrastructure/.../AccountStores.cs:110` | Todo `DbUpdateException` é tratado como "dois logins ao mesmo tempo". Outra falha vira um `SingleAsync` confuso. |
+| H3 | `Persistence/DatabaseOptions.cs:23` | SQLite sem WAL. Uma página longa de pull pode segurar a tela e o MCP até o timeout de 30 s. Mudar o journal muda os arquivos no disco: precisa de decisão. |
+| H4 | `GitClient.cs:346-350`, `GhCliPullRequestClient.cs:154-158`, `StartDevelopment.cs:237-241`, `QuickCommandHandlers.cs:349-356` | O stderr de git e gh e a linha do comando rápido vão para o log sem máscara. O git costuma anonimizar a URL, mas um parâmetro digitado pode ser segredo. |
+| H5 | `tests/.../NoBulkWritesTests.cs` | Só procura `ExecuteDelete`/`ExecuteUpdate`/`ExecuteSql*`. Um ADO cru fora de `Sync/` passaria. |
+| H6 | `SyncLocalStore.cs:437` | `ChangeTracker.Clear()` no meio do laço. Hoje está correto só porque cada volta consulta de novo. |
+| H7 | `Desktop/Views/StickyNoteWindow.axaml.cs:55-66, 239-240` | O *debounce* do autosave fica na Window, e o fechamento dispara `FlushAsync` sem esperar. |
+| H8 | `MainWindow.axaml.cs:290-299` | `PersistNow` grava arquivo de forma síncrona na thread da UI. O arquivo é pequeno. |
+
+### Para próximas etapas (fora do escopo desta sessão)
+
+- **Fluxo "Iniciar implementação"** (`TaskDevelopmentViewModel.cs:1171-1338`). Validação → banco → worktree → conflito → cópia → comandos, com mensagens de falha parcial. Precisa de caracterização completa (o caminho do banco não tem teste) antes de virar coordenador na Application. Só a pergunta de conflito fica na UI.
+- **Troca de cronômetro duplicada** (`TodayViewModel.StartTimerAsync` e `TaskTimeLogViewModel.ToggleTimerAsync`). Área crítica. Caracterizar a confirmação e o `replace` antes de unificar.
+- **Remoção de worktrees em lote** (`TodayViewModel.cs:1400-1494`). Cada remoção roda no próprio escopo. Juntar num handler mudaria a semântica de falha parcial.
+- **Mescla de perfil no `DatabaseProfilesViewModel.cs:529-620`** (sugestões, tabelas puladas, regras não confirmadas).
+- **`Focus*Handler` duplicados** (`AgentSessionHandlers.cs:458` e `CommandExecutionHandlers.cs:143`), os *monitors* que divergiram (`AgentSessionMonitor` com `_gate` e `CommandExecutionMonitor` sem), e o mapeamento de erro repetido em `JiraHttp`/`SyncHttp`.
+- **Vários handlers por arquivo** (`ProfileHandlers.cs` com cerca de 17), e os helpers `Replace<T>` (×4) e `OnUi` (×3) nos ViewModels.
+
+## Registro das etapas
+
+### E0 — Inventário e linha de base
+
+- **O que foi feito:** este arquivo.
+- **Código de produção:** nenhuma mudança.
+
+## Cobertura
+
+**Como foi medida.** Os passos do `coverage.ps1`, rodados no Bash, porque a máquina
+não tem `pwsh`:
+
+- `dotnet test <solution> -c Release --no-build --settings coverage.runsettings
+  --collect "XPlat Code Coverage"`, para as duas solutions;
+- `dotnet reportgenerator -reporttypes:JsonSummary`.
+
+| Assembly | Linha | Ramo |
+|---|---|---|
+| **Total (linha de base)** | **86,8%** (29418/33854) | **76,5%** (11712/15291) |
+| MyTaskApp (Desktop) | 80,6% | 68,7% |
+| MyTaskApp.Application | 93,7% | 85,7% |
+| MyTaskApp.Domain | 98,2% | 91,8% |
+| MyTaskApp.Infrastructure | 91,6% | 77,5% |
+| MyTaskApp.Mcp | 71,3% | 70,4% |
+| MyTaskApp.Server.Application | 95,1% | 87,8% |
+| MyTaskApp.Sync.Contracts | 98,6% | 93,8% |
+
+O gate do script é de 80% de linha e 70% de ramo, sobre o total.
