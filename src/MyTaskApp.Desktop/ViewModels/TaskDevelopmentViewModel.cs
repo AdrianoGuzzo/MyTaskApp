@@ -1226,6 +1226,17 @@ public sealed partial class TaskDevelopmentViewModel(
     [RelayCommand(CanExecute = nameof(CanCancel))]
     public void CancelRun() => _run?.Cancel();
 
+    /// <summary>
+    /// A janela fechou: a conferência da pasta digitada e a busca da PR não têm
+    /// mais para quem mostrar, e param. Uma implementação em andamento continua:
+    /// cancelá-la é decisão do usuário, pelo botão.
+    /// </summary>
+    public void Detach()
+    {
+        _inspection?.Cancel();
+        _pullRequestLookup?.Cancel();
+    }
+
     /// <summary>"Usar Worktree existente".</summary>
     [RelayCommand]
     public async Task UseExistingAsync()

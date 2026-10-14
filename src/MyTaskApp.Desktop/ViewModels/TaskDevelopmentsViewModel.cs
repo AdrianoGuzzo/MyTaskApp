@@ -37,6 +37,15 @@ public sealed partial class TaskDevelopmentsViewModel(
 
     public ObservableCollection<TaskDevelopmentViewModel> Items { get; } = [];
 
+    /// <summary>A janela fechou: cada ambiente para o que só servia para mostrar algo nela.</summary>
+    public void Detach()
+    {
+        foreach (var item in Items)
+        {
+            item.Detach();
+        }
+    }
+
     [ObservableProperty]
     private TaskDevelopmentViewModel? _selected;
 

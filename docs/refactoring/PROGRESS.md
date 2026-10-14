@@ -22,7 +22,7 @@ sempre separada da refatoração.
 | F5 — Perfil de anonimização não sobrescreve o MCP | fix | concluída |
 | F1 — Contêiner descartado só depois do encerramento | fix | concluída |
 | F2 — Seletor do sistema que falha não fecha o app | fix | concluída |
-| F3 — Buscas da janela da tarefa canceladas ao fechar | fix | pendente |
+| F3 — Buscas da janela da tarefa canceladas ao fechar | fix | concluída |
 
 ## Linha de base (13/10/2026, commit `7f48341`)
 
@@ -506,6 +506,35 @@ decisão sobre isso, nada foi mudado. O resto (bomba de saída e texto com teto)
   "primeiro caminho local" de antes.
 - **Testes:** `SystemPickersTests` (3 casos, com `IStorageProvider` substituto).
   Desktop.Tests: 2342 aprovados e as 4 falhas de ambiente.
+
+### F3 — Fechar a janela da tarefa para as buscas que só serviam a ela (defeito D3, autorizado)
+
+- **Defeito.** O `TaskDevelopmentViewModel` (um por ambiente, transitório) guarda três
+  `CancellationTokenSource`, e nenhum era cancelado ao fechar a janela:
+  - `_inspection`: a conferência atrasada da pasta digitada, que roda `git` e lista
+    branches;
+  - `_pullRequestLookup`: a busca da PR pelo `gh`;
+  - `_run`: o "Iniciar implementação".
+
+  O fechamento só fazia `Time?.Detach()` (`App.axaml.cs`), então git e gh
+  continuavam rodando para uma janela que já não existia.
+- **Correção:**
+  - `TaskDevelopmentViewModel.Detach()` cancela `_inspection` e
+    `_pullRequestLookup`;
+  - `TaskDevelopmentsViewModel.Detach()` repassa a todos os ambientes;
+  - o `Closed` da janela da tarefa chama `viewModel.Developments.Detach()` ao lado do
+    `Time?.Detach()`.
+- **Preservado de propósito:** o `_run` **não** é cancelado. Uma implementação em
+  andamento (worktree, cópia de banco, comandos) continua, e cancelá-la é decisão do
+  usuário, pelo botão "Cancelar". Os dois caminhos cancelados já tratavam o
+  `OperationCanceledException` em silêncio (`InspectLaterAsync`,
+  `LookUpPullRequestAsync`).
+- **Testes:**
+  - `ATypedFolder_IsInspectedAfterThePause`: controle, mostra que a inspeção roda
+    quando o atraso vence;
+  - `ClosingTheWindow_StopsTheInspectionStillWaiting`. Foi conferido que esse teste
+    **falha** com o `Detach` vazio ("found True").
+  - Desktop.Tests: 2344 aprovados e as 4 falhas de ambiente.
 
 ## Cobertura
 

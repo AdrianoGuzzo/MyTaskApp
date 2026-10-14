@@ -681,6 +681,9 @@ public sealed partial class App : Avalonia.Application
 
             // O relógio é do app: sem soltar, ele seguraria esta aba viva.
             viewModel.Time?.Detach();
+
+            // A pasta digitada e a PR não têm mais para quem mostrar.
+            viewModel.Developments.Detach();
         };
 
         notes.Show(owner);
