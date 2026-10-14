@@ -80,7 +80,17 @@ public sealed record SaveAnonymizationProfile(
     IReadOnlyList<AnonymizationRuleRow> Rules)
 {
     public IReadOnlyList<SkippedTableRow> SkippedTables { get; init; } = [];
+
+    /// <summary>
+    /// O <c>UpdatedAt</c> do perfil quando a tela o abriu. Com ele, salvar
+    /// recusa se outro caminho (o MCP) gravou o perfil nesse meio-tempo, em vez
+    /// de apagar a mudança de lá. <c>null</c> = sem conferência.
+    /// </summary>
+    public DateTimeOffset? ExpectedUpdatedAt { get; init; }
 }
+
+/// <summary>O perfil gravado e a versão dele, para o próximo salvar da mesma tela conferir.</summary>
+public sealed record SavedAnonymizationProfile(Guid Id, DateTimeOffset UpdatedAt);
 
 public sealed class SaveAnonymizationProfileHandler(
     IAnonymizationProfileRepository profiles,
@@ -89,7 +99,11 @@ public sealed class SaveAnonymizationProfileHandler(
     TimeProvider timeProvider,
     ILogger<SaveAnonymizationProfileHandler> logger)
 {
-    public async Task<Guid> HandleAsync(SaveAnonymizationProfile command, CancellationToken cancellationToken = default)
+    public async Task<Guid> HandleAsync(SaveAnonymizationProfile command, CancellationToken cancellationToken = default) =>
+        (await SaveAsync(command, cancellationToken)).Id;
+
+    /// <summary>O mesmo salvar, devolvendo também a versão gravada.</summary>
+    public async Task<SavedAnonymizationProfile> SaveAsync(SaveAnonymizationProfile command, CancellationToken cancellationToken = default)
     {
         var now = timeProvider.GetUtcNow();
         await connections.GetByIdAsync(command.ConnectionId, cancellationToken);
@@ -106,6 +120,16 @@ public sealed class SaveAnonymizationProfileHandler(
         if (command.Id is { } id)
         {
             profile = await profiles.GetByIdAsync(id, cancellationToken);
+
+            // Mesma conferência do MCP (ChangeAnonymizationProfileHandler): quem
+            // salva por cima de uma versão que não viu apagaria a mudança de lá.
+            if (command.ExpectedUpdatedAt is { } expected && expected.UtcTicks != profile.UpdatedAt.UtcTicks)
+            {
+                throw new DomainException(
+                    $"O perfil {profile.Name} foi alterado em outro lugar (pelo MCP, por exemplo) depois que você o abriu. " +
+                    "Abra o perfil de novo e refaça a mudança, para não apagar a que já foi gravada.");
+            }
+
             profile.Update(command.Name, command.Description, command.ConnectionId, now);
         }
         else
@@ -120,7 +144,7 @@ public sealed class SaveAnonymizationProfileHandler(
 
         logger.LogInformation(
             "AnonymizationProfileSaved {ProfileId} {Rules} {SkippedTables}", profile.Id, profile.Rules.Count, profile.SkippedTables.Count);
-        return profile.Id;
+        return new SavedAnonymizationProfile(profile.Id, profile.UpdatedAt);
     }
 }
 

@@ -226,6 +226,38 @@ public class DatabaseCatalogHandlersTests
         Catalog.AnonymizationProfiles.Items.Single(profile => profile.Id == id).Rules.Should().BeEmpty();
     }
 
+    /// <summary>
+    /// A tela abriu o perfil, o MCP gravou outra versão, e a tela salva: recusa
+    /// com a mensagem, sem gravar nada, em vez de apagar o que o MCP mudou.
+    /// </summary>
+    [Fact]
+    public async Task SavingOverAProfileChangedElsewhere_IsRefused_AndNothingIsWritten()
+    {
+        var handler = new SaveAnonymizationProfileHandler(
+            Catalog.AnonymizationProfiles, Catalog.Connections, Catalog, _scenario.Clock, NullLogger<SaveAnonymizationProfileHandler>.Instance);
+        var cpf = new AnonymizationRuleRow("public", "clientes", "cpf", MaskingMethod.Partial, "3,2", ColumnSensitivity.High);
+
+        var opened = await handler.SaveAsync(new SaveAnonymizationProfile(null, "Concorrido", null, _scenario.Production.Id, [cpf]), Ct);
+
+        _scenario.Clock.Advance(TimeSpan.FromMinutes(1));
+        var elsewhere = await handler.SaveAsync(new SaveAnonymizationProfile(opened.Id, "Concorrido", "pelo MCP", _scenario.Production.Id, [cpf]), Ct);
+
+        var stale = () => handler.SaveAsync(
+            new SaveAnonymizationProfile(opened.Id, "Concorrido", "pela tela", _scenario.Production.Id, []) { ExpectedUpdatedAt = opened.UpdatedAt },
+            Ct);
+
+        (await stale.Should().ThrowAsync<DomainException>()).Which.Message.Should().Contain("Concorrido");
+        var stored = Catalog.AnonymizationProfiles.Items.Single(profile => profile.Id == opened.Id);
+        stored.Description.Should().Be("pelo MCP");
+        stored.Rules.Should().ContainSingle();
+
+        var current = await handler.SaveAsync(
+            new SaveAnonymizationProfile(opened.Id, "Concorrido", "pela tela", _scenario.Production.Id, []) { ExpectedUpdatedAt = elsewhere.UpdatedAt },
+            Ct);
+        current.UpdatedAt.Should().Be(_scenario.Clock.GetUtcNow());
+        stored.Description.Should().Be("pela tela");
+    }
+
     [Fact]
     public async Task SkippedTables_AreSavedWithTheProfile_AndComeBackInTheRow()
     {

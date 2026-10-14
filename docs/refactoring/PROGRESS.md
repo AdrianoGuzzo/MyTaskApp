@@ -19,7 +19,8 @@ sempre separada da refatoração.
 | E7 — Composition root | refactor | pendente |
 | F6 — `ProcessRunner` preso por um neto | fix | concluída |
 | F4 — Vincular a outra conta é tudo ou nada | fix | concluída |
-| F1–F3, F5 — Demais defeitos autorizados | fix | pendente |
+| F5 — Perfil de anonimização não sobrescreve o MCP | fix | concluída |
+| F1–F3 — Encerramento, handlers e buscas da janela | fix | pendente |
 
 ## Linha de base (13/10/2026, commit `7f48341`)
 
@@ -409,6 +410,41 @@ decisão sobre isso, nada foi mudado. O resto (bomba de saída e texto com teto)
     `ConfiguredDefault_ComesFromTheDirectoryThatIsThisFolder`, com caminhos neutros
     de plataforma;
   - `dotnet test MyTaskApp.slnx`: Application com 1294 aprovados e Desktop com 2333,
+    além das 4 falhas de ambiente.
+
+### F5 — Salvar o perfil de anonimização não apaga a mudança do MCP (defeito D5, autorizado)
+
+- **Defeito comprovado.** `DatabaseCatalogHandlersTests.SavingOverAProfileChangedElsewhere_IsRefused_AndNothingIsWritten`:
+  sobre o código antigo, o salvar de uma versão velha **foi aceito** ("Expected a
+  DomainException… but no exception was thrown") e apagaria o que o MCP gravou.
+  O MCP já conferia `ExpectedUpdatedAt` (`AnonymizationProfileEditing.cs:133-146`), e
+  a tela não conferia nada.
+- **Correção:**
+  - `SaveAnonymizationProfile` ganhou `ExpectedUpdatedAt`, uma propriedade `init`
+    opcional, como `SkippedTables`. Com valor, o handler compara por `UtcTicks` (a
+    mesma regra do MCP) e recusa com `DomainException` antes de mexer no perfil.
+    Nada é gravado, como pede o ADR-008;
+  - `SaveAnonymizationProfileHandler.SaveAsync` devolve `SavedAnonymizationProfile(Id,
+    UpdatedAt)`. O `HandleAsync` continua devolvendo o `Guid`, para o MCP e para o
+    duplicar;
+  - o `DatabaseProfilesViewModel` guarda a versão aberta: a do perfil ao editar,
+    nenhuma ao criar e a nova depois de salvar. O segundo salvar seguido não acusa
+    conflito falso.
+- **Preservado:**
+  - as chamadas internas (`DuplicateAnonymizationProfileHandler` e a ferramenta MCP
+    de criar) não passam versão, então se comportam como antes;
+  - criar um perfil não confere nada;
+  - nenhum esquema ou contrato do MCP mudou.
+- **Mudança visível, autorizada:** quem salva na tela um perfil que o MCP alterou
+  depois que ela abriu vê "O perfil … foi alterado em outro lugar…" em vez de
+  sobrescrever.
+- **Testes:**
+  - Application: o novo teste;
+  - Desktop: `SavingAProfileTheMcpChangedMeanwhile_ShowsTheRefusal` e
+    `SavingTwice_ComparesWithTheVersionJustSaved`, sobre o handler real com
+    repositório substituto. `Saving_SendsOnlyTheConfirmedRules` só trocou o tipo do
+    resultado falso;
+  - `dotnet test MyTaskApp.slnx`: Application com 1295 aprovados e Desktop com 2335,
     além das 4 falhas de ambiente.
 
 ## Cobertura

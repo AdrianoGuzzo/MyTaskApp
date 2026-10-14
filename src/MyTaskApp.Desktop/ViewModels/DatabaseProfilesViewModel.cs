@@ -82,6 +82,12 @@ public sealed partial class DatabaseProfilesViewModel(
     [NotifyPropertyChangedFor(nameof(IsEditingAnonymization), nameof(AnonymizationFormTitle))]
     private Guid? _editingAnonymizationId;
 
+    /// <summary>
+    /// A versão do perfil que está no formulário: salvar por cima de uma versão
+    /// que o MCP gravou depois é recusado, em vez de apagar a mudança de lá.
+    /// </summary>
+    private DateTimeOffset? _editingAnonymizationVersion;
+
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SaveAnonymizationProfileCommand))]
     private string _anonymizationName = string.Empty;
@@ -353,6 +359,7 @@ public sealed partial class DatabaseProfilesViewModel(
     public void NewAnonymizationProfile()
     {
         EditingAnonymizationId = null;
+        _editingAnonymizationVersion = null;
         AnonymizationName = string.Empty;
         AnonymizationDescription = string.Empty;
         ColumnsConnection = null;
@@ -368,6 +375,7 @@ public sealed partial class DatabaseProfilesViewModel(
     public void EditAnonymizationProfile(AnonymizationProfileRow profile)
     {
         EditingAnonymizationId = profile.Id;
+        _editingAnonymizationVersion = profile.UpdatedAt;
         AnonymizationName = profile.Name;
         AnonymizationDescription = profile.Description ?? string.Empty;
         ColumnsConnection = Connections.FirstOrDefault(connection => connection.Id == profile.ConnectionId);
@@ -604,16 +612,18 @@ public sealed partial class DatabaseProfilesViewModel(
             Rules.Where(rule => rule.IsConfirmed).Select(rule => rule.ToRow()).ToList())
         {
             SkippedTables = SkippedTableRows(),
+            ExpectedUpdatedAt = _editingAnonymizationVersion,
         };
 
-        Guid id = default;
+        SavedAnonymizationProfile? saved = null;
 
         if (await TryAsync(
-                async () => id = await runner.RunAsync<SaveAnonymizationProfileHandler, Guid>(
-                    (handler, token) => handler.HandleAsync(command, token), cancellationToken),
+                async () => saved = await runner.RunAsync<SaveAnonymizationProfileHandler, SavedAnonymizationProfile>(
+                    (handler, token) => handler.SaveAsync(command, token), cancellationToken),
                 "Não foi possível salvar o perfil de anonimização."))
         {
-            EditingAnonymizationId = id;
+            EditingAnonymizationId = saved!.Id;
+            _editingAnonymizationVersion = saved.UpdatedAt;
 
             // As sugestões não marcadas saem: o perfil é o que foi confirmado.
             Replace(Rules, Rules.Where(rule => rule.IsConfirmed).ToList());
