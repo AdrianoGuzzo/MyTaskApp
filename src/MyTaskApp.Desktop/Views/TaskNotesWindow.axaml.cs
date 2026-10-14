@@ -3,7 +3,6 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using MyTaskApp.Desktop.Notes;
@@ -509,16 +508,17 @@ public sealed partial class TaskNotesWindow : Window
         }
     }
 
-    private async Task<string?> PickFolderAsync(string title)
-    {
-        var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
-        {
-            Title = title,
-            AllowMultiple = false,
-        });
-
-        return folders.Count > 0 ? folders[0].TryGetLocalPath() : null;
-    }
+    private Task<string?> PickFolderAsync(string title) =>
+        SystemPickers.PickFolderAsync(
+            StorageProvider,
+            title,
+            message =>
+            {
+                if (ViewModel is { } viewModel)
+                {
+                    viewModel.ErrorMessage = message;
+                }
+            });
 
     private void Format(MarkdownCommand command)
     {

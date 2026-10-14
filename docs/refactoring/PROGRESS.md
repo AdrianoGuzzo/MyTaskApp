@@ -21,7 +21,8 @@ sempre separada da refatoração.
 | F4 — Vincular a outra conta é tudo ou nada | fix | concluída |
 | F5 — Perfil de anonimização não sobrescreve o MCP | fix | concluída |
 | F1 — Contêiner descartado só depois do encerramento | fix | concluída |
-| F2–F3 — Handlers de seletor e buscas da janela | fix | pendente |
+| F2 — Seletor do sistema que falha não fecha o app | fix | concluída |
+| F3 — Buscas da janela da tarefa canceladas ao fechar | fix | pendente |
 
 ## Linha de base (13/10/2026, commit `7f48341`)
 
@@ -478,6 +479,33 @@ decisão sobre isso, nada foi mudado. O resto (bomba de saída e texto com teto)
 - **Limitação:** não deu para subir o build de dev e fechar o app de verdade. O
   MyTaskApp instalado está aberto na mesma sessão e segura o mutex, então o build
   de dev só sinalizaria a instância instalada e sairia.
+
+### F2 — Seletor do sistema que falha não fecha o app (defeito D2, autorizado)
+
+- **Defeito, revisto ao ler cada handler.** Dos 7 `async void` apontados, 5 chamam o
+  seletor de pasta ou de arquivo do sistema sem proteção:
+  - `AgentAlertSoundsWindow.OnAddSoundClick`;
+  - `DevelopmentCommandsWindow.OnBrowseTestDirectoryClick`;
+  - `TagsWindow.OnBrowseFolderClick`;
+  - `TaskNotesWindow.PickFolderAsync`, usado por dois handlers.
+
+  O `StorageProvider` pode lançar (no Linux, sem o portal do desktop). Não há
+  tratador global de exceção da thread da UI, então a exceção sobe até o `try` do
+  `Program`, que registra `UnhandledException` e encerra o app.
+- **Não alterados, sem risco:** `TimeEntryWindow.OnAccept` e
+  `DirectoryCommandWindow.OnAccept`. O `AcceptAsync` deles chama o `SaveAsync` de
+  quem pediu, e esse delegate já pega toda exceção e devolve a mensagem
+  (`TaskTimeLogViewModel.SaveAsync`, `TagsViewModel.SaveCommandAsync`).
+- **Correção:**
+  - `Desktop/Views/SystemPickers.cs` chama o seletor. Uma falha vai para o log
+    (`SystemPickerFailed {Title}`) e vira a frase "Não foi possível abrir a janela de
+    escolha do sistema…" no `ErrorMessage` da janela, e nada é escolhido;
+  - fechar o seletor sem escolher continua não sendo erro;
+  - o cancelamento continua passando.
+- **Preservado:** no caminho de sucesso, o mesmo título, o mesmo filtro e o mesmo
+  "primeiro caminho local" de antes.
+- **Testes:** `SystemPickersTests` (3 casos, com `IStorageProvider` substituto).
+  Desktop.Tests: 2342 aprovados e as 4 falhas de ambiente.
 
 ## Cobertura
 

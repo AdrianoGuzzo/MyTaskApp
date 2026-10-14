@@ -1,6 +1,5 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using Avalonia.Platform.Storage;
 using MyTaskApp.Desktop.ViewModels;
 
 namespace MyTaskApp.Desktop.Views;
@@ -47,15 +46,18 @@ public sealed partial class DevelopmentCommandsWindow : Window
 
     private async void OnBrowseTestDirectoryClick(object? sender, RoutedEventArgs e)
     {
-        var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
-        {
-            Title = "Escolher a pasta onde testar",
-            AllowMultiple = false,
-        });
+        var path = await SystemPickers.PickFolderAsync(
+            StorageProvider,
+            "Escolher a pasta onde testar",
+            message =>
+            {
+                if (DataContext is DevelopmentCommandsViewModel failed)
+                {
+                    failed.ErrorMessage = message;
+                }
+            });
 
-        if (folders.Count > 0
-            && folders[0].TryGetLocalPath() is { } path
-            && DataContext is DevelopmentCommandsViewModel viewModel)
+        if (path is not null && DataContext is DevelopmentCommandsViewModel viewModel)
         {
             viewModel.UseTestDirectory(path);
         }
