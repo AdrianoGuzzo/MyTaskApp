@@ -67,6 +67,16 @@ public sealed class SyncScheduler(
     /// <summary>Terminou um ciclo: a tela relê o estado.</summary>
     public event Action<SyncCycleResult>? CycleCompleted;
 
+    /// <summary>Começou um ciclo: o indicador do cabeçalho pode mostrar "sincronizando" (ADR-063).</summary>
+    public event Action? CycleStarted;
+
+    /// <summary>
+    /// Uma gravação acordou o laço: há algo novo no outbox. Avisa antes da
+    /// rajada para a contagem de pendentes subir na hora — sem rede, o próximo
+    /// ciclo pode estar a minutos (ADR-063).
+    /// </summary>
+    public event Action? ChangeQueued;
+
     public SyncCycleResult? LastResult { get; private set; }
 
     public bool IsRunning { get; private set; }
@@ -102,6 +112,8 @@ public sealed class SyncScheduler(
             {
                 if (await WaitAsync(delay, stopping) && !Interlocked.Exchange(ref _immediate, false))
                 {
+                    ChangeQueued?.Invoke();
+
                     // Uma gravação acordou o laço: espera as próximas da mesma rajada.
                     await Task.Delay(_schedule.Debounce, timeProvider, stopping);
                 }
@@ -149,6 +161,7 @@ public sealed class SyncScheduler(
 
         try
         {
+            CycleStarted?.Invoke();
             result = await engine.RunCycleAsync(stopping);
         }
         finally

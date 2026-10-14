@@ -1106,6 +1106,16 @@ public partial class MainWindow : Window
     private void HideHistory() => _openHistory?.Hide();
 
     /// <summary>
+    /// "Abrir sincronização…"/"Conectar…" no painel da bolinha (ADR-063): a
+    /// janela abre por cima, e o painel não fica pendurado atrás dela.
+    /// </summary>
+    private void OnSyncDetailsClick(object? sender, RoutedEventArgs e)
+    {
+        SyncStatusButton.Flyout?.Hide();
+        HudSyncStatusButton.Flyout?.Hide();
+    }
+
+    /// <summary>
     /// Esc fecha o histórico. Abrir o flyout não tira o foco da janela — ele
     /// continua, por exemplo, na caixa de captura —, então a tecla chega aqui,
     /// e não ao painel. Com o foco dentro do painel, quem fecha é ele.

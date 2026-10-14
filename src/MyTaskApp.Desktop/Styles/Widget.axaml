@@ -203,6 +203,89 @@
     <Setter Property="Foreground" Value="{DynamicResource WidgetAccentBrush}" />
   </Style>
 
+  <!--
+    A bolinha da sincronização (ADR-063). Cheia quando a sincronização anda
+    (verde em dia, âmbar com alterações esperando, azul pulsando enviando),
+    anel quando não anda (cinza de propósito, âmbar sem conexão), vermelha
+    quando precisa da pessoa, halo âmbar quando há o que revisar. A cor nunca
+    vem sozinha: o formato muda junto, e o tooltip diz o estado por extenso.
+  -->
+  <Style Selector="Ellipse.syncDot">
+    <Setter Property="Width" Value="8" />
+    <Setter Property="Height" Value="8" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Fill" Value="{DynamicResource WidgetTextMidBrush}" />
+  </Style>
+
+  <Style Selector="Ellipse.syncDot.synced">
+    <Setter Property="Fill" Value="{DynamicResource WidgetSuccessBrush}" />
+  </Style>
+
+  <Style Selector="Ellipse.syncDot.pending">
+    <Setter Property="Fill" Value="{DynamicResource WidgetCautionBrush}" />
+  </Style>
+
+  <!-- Respira devagar, como a moldura do agente: mostra trabalho sem virar sirene. -->
+  <Style Selector="Ellipse.syncDot.syncing">
+    <Setter Property="Fill" Value="{DynamicResource WidgetInfoBrush}" />
+    <Style.Animations>
+      <Animation Duration="0:0:1.2"
+                 IterationCount="Infinite"
+                 PlaybackDirection="Alternate"
+                 Easing="SineEaseInOut">
+        <KeyFrame Cue="0%">
+          <Setter Property="Opacity" Value="1" />
+        </KeyFrame>
+        <KeyFrame Cue="100%">
+          <Setter Property="Opacity" Value="0.35" />
+        </KeyFrame>
+      </Animation>
+    </Style.Animations>
+  </Style>
+
+  <Style Selector="Ellipse.syncDot.local, Ellipse.syncDot.paused">
+    <Setter Property="Fill" Value="{DynamicResource WidgetTransparentBrush}" />
+    <Setter Property="Stroke" Value="{DynamicResource WidgetTextLowBrush}" />
+    <Setter Property="StrokeThickness" Value="1.5" />
+  </Style>
+
+  <Style Selector="Ellipse.syncDot.offline">
+    <Setter Property="Fill" Value="{DynamicResource WidgetTransparentBrush}" />
+    <Setter Property="Stroke" Value="{DynamicResource WidgetCautionBrush}" />
+    <Setter Property="StrokeThickness" Value="1.5" />
+  </Style>
+
+  <Style Selector="Ellipse.syncDot.attention">
+    <Setter Property="Fill" Value="{DynamicResource WidgetDangerBrush}" />
+  </Style>
+
+  <Style Selector="Ellipse.syncDot.review">
+    <Setter Property="Width" Value="11" />
+    <Setter Property="Height" Value="11" />
+    <Setter Property="Fill" Value="{DynamicResource WidgetSuccessBrush}" />
+    <Setter Property="Stroke" Value="{DynamicResource WidgetCautionHaloBrush}" />
+    <Setter Property="StrokeThickness" Value="3" />
+  </Style>
+
+  <!-- O painel do clique: título, o detalhe por extenso e as ações. -->
+  <Style Selector="StackPanel.syncPanel">
+    <Setter Property="Width" Value="250" />
+    <Setter Property="Margin" Value="4" />
+    <Setter Property="Spacing" Value="8" />
+  </Style>
+
+  <Style Selector="TextBlock.syncTitle">
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+
+  <Style Selector="TextBlock.syncDetail">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="Foreground" Value="{DynamicResource WidgetTextMidBrush}" />
+  </Style>
+
   <!-- A marca: o único bloco de cor de destaque sempre visível. -->
   <Style Selector="Border.brandMark">
     <Setter Property="Width" Value="16" />
