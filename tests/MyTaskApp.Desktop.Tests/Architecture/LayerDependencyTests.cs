@@ -87,6 +87,24 @@ public class LayerDependencyTests
         offenders.Should().BeEmpty();
     }
 
+    /// <summary>
+    /// As portas da UI (confirmar, pedir parâmetros) são declaradas junto dos
+    /// ViewModels; as janelas que as implementam ficam em <c>Views</c>, e o
+    /// ViewModel nunca enxerga uma janela.
+    /// </summary>
+    [Fact]
+    public void NoViewModel_DependsOnAView()
+    {
+        var views = typeof(TodayViewModel).Namespace!.Replace("ViewModels", "Views", StringComparison.Ordinal);
+
+        var offenders = ViewModelTypes()
+            .SelectMany(type => Dependencies(type).Select(dependency => (type, dependency)))
+            .Where(pair => pair.dependency.Namespace?.StartsWith(views, StringComparison.Ordinal) == true)
+            .Select(pair => $"{pair.type.Name} → {pair.dependency.Name}");
+
+        offenders.Should().BeEmpty();
+    }
+
     /// <summary>Sem isto, uma reflexão que não acha nada passaria todos os testes acima.</summary>
     [Fact]
     public void TheGuard_SeesTheDependenciesThatDoExist()

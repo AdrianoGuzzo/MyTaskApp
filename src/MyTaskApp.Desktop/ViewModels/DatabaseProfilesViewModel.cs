@@ -5,7 +5,6 @@ using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.DatabaseOperations;
 using MyTaskApp.Desktop.Composition;
-using MyTaskApp.Desktop.Views;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.DatabaseOperations;
 

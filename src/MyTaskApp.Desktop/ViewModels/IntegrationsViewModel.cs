@@ -6,7 +6,6 @@ using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.External;
 using MyTaskApp.Application.External.Jira;
 using MyTaskApp.Desktop.Composition;
-using MyTaskApp.Desktop.Views;
 using MyTaskApp.Domain;
 
 namespace MyTaskApp.Desktop.ViewModels;

@@ -8,7 +8,6 @@ using MyTaskApp.Application.DatabaseOperations;
 using MyTaskApp.Application.Development;
 using MyTaskApp.Desktop.Composition;
 using MyTaskApp.Desktop.Development;
-using MyTaskApp.Desktop.Views;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.Tasks;
 

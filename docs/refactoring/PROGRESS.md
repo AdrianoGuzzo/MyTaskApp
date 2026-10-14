@@ -12,7 +12,7 @@ sempre separada da refatoração.
 | E0 — Inventário e linha de base | docs | concluída |
 | E1 — Guarda de camadas | test | concluída |
 | E2 — Relógio pelo `TimeProvider` | refactor | concluída |
-| E3 — Portas da UI fora de `Views` | refactor | pendente |
+| E3 — Portas da UI fora de `Views` | refactor | concluída |
 | E4 — Caminho único de erro nos ViewModels (ADR-008) | refactor | pendente |
 | E5 — Regras pequenas saem dos ViewModels | refactor | pendente |
 | E6 — Duplicação na Infrastructure | refactor | pendente |
@@ -55,6 +55,14 @@ viram erro: `TreatWarningsAsErrors` e `EnforceCodeStyleInBuild` estão ligados.
     `MYTASKAPP_TEST_PG_BIN`;
   - os testes só de Linux e de Unix;
   - duas palavras em inglês do corretor do Windows.
+- **Resultado que às vezes some do relatório (já existia):**
+  `QuickCommandTerminalTests.WatchExitCode_ReportsTheExitCode_OfAProcessItDidNotStart`
+  fica de fora do total em algumas rodadas, sem falhar.
+  - Faltou na linha de base (Infrastructure com 884), apareceu depois da E2 (886, com
+    1 teste novo) e faltou de novo depois da E3 (885).
+  - Duas rodadas seguidas, comparadas pelo `.trx`, diferem só nele.
+  - Ele roda um `cmd.exe` real e não tem relação com as etapas. Fica registrado, e
+    não é investigado aqui.
 
 **Cobertura:** veja a seção [Cobertura](#cobertura).
 
@@ -209,6 +217,30 @@ Ficam sem mudança. Decidir antes de mexer.
   - suíte completa das duas solutions: só as 4 falhas de ambiente já conhecidas;
   - Desktop.Tests: 2308 aprovados;
   - Server.IntegrationTests: 42 aprovados.
+
+### E3 — Portas da UI fora de `Views`
+
+- **Problema (I3):** `IConfirmationDialog`, `ConfirmationRequest` e
+  `IQuickCommandPrompt` eram declarados nos arquivos das janelas, no namespace
+  `MyTaskApp.Desktop.Views`. Para usar a porta, 17 ViewModels importavam o namespace
+  das janelas. Enquanto isso, `ITimeEntryEditor` e `IDirectoryCommandEditor` já
+  moravam em `MyTaskApp.Desktop.ViewModels`.
+- **O que mudou:**
+  - as três declarações foram para `ViewModels/IConfirmationDialog.cs` e
+    `ViewModels/IQuickCommandPrompt.cs`, sem alterar membros nem documentação;
+  - as implementações (`ConfirmationDialog`, `QuickCommandPrompt`) continuam
+    nas janelas;
+  - os 17 `using MyTaskApp.Desktop.Views;` saíram dos ViewModels, e nenhum deles
+    usava outra coisa de `Views`;
+  - os dois *fakes* de teste trocaram o `using`.
+  - Optei pelo namespace dos ViewModels, e não por um `Dialogs` novo, para seguir o
+    precedente que já existia.
+- **Preservação:** só namespace, sem mudança de assinatura, registro no DI ou XAML.
+  Nenhum tipo movido é serializado nem resolvido por nome.
+- **Guarda:** `LayerDependencyTests.NoViewModel_DependsOnAView`.
+- **Testes:** `dotnet test MyTaskApp.slnx -c Release`.
+  - Desktop.Tests: 2309 aprovados, e as 4 falhas de ambiente de sempre.
+  - O resto igual à E2.
 
 ## Cobertura
 

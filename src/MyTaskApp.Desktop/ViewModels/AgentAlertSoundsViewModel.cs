@@ -5,7 +5,6 @@ using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Sounds;
-using MyTaskApp.Desktop.Views;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.Agents;
 

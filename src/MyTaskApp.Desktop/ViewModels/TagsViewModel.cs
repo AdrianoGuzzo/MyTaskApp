@@ -10,7 +10,6 @@ using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Commands;
 using MyTaskApp.Application.Tags;
 using MyTaskApp.Desktop.Composition;
-using MyTaskApp.Desktop.Views;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.Tags;
 

@@ -8,7 +8,6 @@ using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Sync;
 using MyTaskApp.Desktop.Composition;
-using MyTaskApp.Desktop.Views;
 using MyTaskApp.Domain;
 using MyTaskApp.Sync.Contracts;
 using MyTaskApp.Sync.Contracts.Definitions;

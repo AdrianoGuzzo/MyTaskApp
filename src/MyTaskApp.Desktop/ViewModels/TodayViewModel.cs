@@ -19,7 +19,6 @@ using MyTaskApp.Application.Tags;
 using MyTaskApp.Application.Tasks;
 using MyTaskApp.Application.TimeTracking;
 using MyTaskApp.Desktop.Composition;
-using MyTaskApp.Desktop.Views;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.Deadlines;
 using MyTaskApp.Domain.Devices;

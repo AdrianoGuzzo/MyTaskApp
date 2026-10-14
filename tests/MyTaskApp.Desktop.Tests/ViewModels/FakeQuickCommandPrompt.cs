@@ -1,5 +1,5 @@
 using MyTaskApp.Application.QuickCommands;
-using MyTaskApp.Desktop.Views;
+using MyTaskApp.Desktop.ViewModels;
 
 namespace MyTaskApp.Desktop.Tests.ViewModels;
 

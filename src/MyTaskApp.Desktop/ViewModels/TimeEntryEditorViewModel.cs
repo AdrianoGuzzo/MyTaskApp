@@ -28,7 +28,7 @@ public sealed record TimeEntryEditorRequest(
 
 /// <summary>
 /// Lança ou corrige um período (ADR-052). Porta, como
-/// <see cref="Views.IConfirmationDialog"/>, para o ViewModel da aba ser testado
+/// <see cref="IConfirmationDialog"/>, para o ViewModel da aba ser testado
 /// sem janela.
 /// </summary>
 public interface ITimeEntryEditor

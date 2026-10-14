@@ -8,7 +8,6 @@ using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.StickyNotes;
 using MyTaskApp.Desktop.StickyNotes;
-using MyTaskApp.Desktop.Views;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.StickyNotes;
 
