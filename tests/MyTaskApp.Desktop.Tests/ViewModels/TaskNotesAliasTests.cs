@@ -183,6 +183,37 @@ public class TaskNotesAliasTests
         viewModel.Completion.Suggestions.Single(item => item.Alias == "@ecossistema-web").IsMissing.Should().BeTrue();
     }
 
+    /// <summary>
+    /// Marcar a etiqueta no cabeçalho da própria janela traz os diretórios dela
+    /// para o "@" na hora — sem precisar sair da janela e voltar.
+    /// </summary>
+    [Fact]
+    public async Task MarkingATagInTheHeader_ReloadsTheAliases()
+    {
+        var tag = new TagRow(AppId, "MY TASK APP", "#22C55E", 0);
+        _runner.ResultsByHandler[typeof(GetTaskDirectoriesHandler)] = (IReadOnlyList<TagDirectoryRow>)[];
+        _runner.ResultsByHandler[typeof(GetTagsHandler)] = (IReadOnlyList<TagRow>)[tag];
+
+        var tags = new TaskTagEditorViewModel(_runner, NullLogger<TaskTagEditorViewModel>.Instance);
+        var viewModel = new TaskNotesViewModel(
+            _runner, _probe, TestDevelopment.For(_runner), NullLogger<TaskNotesViewModel>.Instance, tags: tags);
+        viewModel.Load(Row());
+        await viewModel.LoadAliasesAsync(Ct);
+
+        Type(viewModel, "@");
+        viewModel.Completion.IsCompletionOpen.Should().BeFalse();
+
+        _runner.ResultsByHandler[typeof(GetTaskDirectoriesHandler)] =
+            (IReadOnlyList<TagDirectoryRow>)[.. Directories.Where(directory => directory.TagId == AppId)];
+        await tags.OpenAsync(Ct);
+        await tags.ToggleTagAsync(tags.Tags.Options.Single(), Ct);
+
+        Type(viewModel, "@");
+
+        viewModel.Completion.Suggestions.Select(item => item.Alias).Should().Equal("@mytaskapp");
+        viewModel.Developments.DirectoryCompletion.HasDirectories.Should().BeTrue();
+    }
+
     /// <summary>A anotação continua funcionando sem os atalhos se a consulta falhar.</summary>
     [Fact]
     public async Task FailingToLoadTheAliases_JustMeansNoList()
