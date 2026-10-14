@@ -19,6 +19,7 @@ internal sealed class McpSecurityMiddleware(
     RequestDelegate next,
     McpAccessGuard guard,
     McpActivityLog activity,
+    TimeProvider timeProvider,
     ILogger<McpSecurityMiddleware> logger)
 {
     public async Task InvokeAsync(HttpContext context)
@@ -52,7 +53,7 @@ internal sealed class McpSecurityMiddleware(
     private void Record(string reason, int status)
     {
         int suppressed;
-        var now = DateTimeOffset.UtcNow;
+        var now = timeProvider.GetUtcNow();
 
         lock (_denials)
         {

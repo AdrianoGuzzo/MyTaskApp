@@ -11,7 +11,7 @@ sempre separada da refatoração.
 |---|---|---|
 | E0 — Inventário e linha de base | docs | concluída |
 | E1 — Guarda de camadas | test | concluída |
-| E2 — Relógio pelo `TimeProvider` | refactor | pendente |
+| E2 — Relógio pelo `TimeProvider` | refactor | concluída |
 | E3 — Portas da UI fora de `Views` | refactor | pendente |
 | E4 — Caminho único de erro nos ViewModels (ADR-008) | refactor | pendente |
 | E5 — Regras pequenas saem dos ViewModels | refactor | pendente |
@@ -165,6 +165,50 @@ Ficam sem mudança. Decidir antes de mexer.
   as regras.
 - **Comando:** `dotnet test tests/MyTaskApp.Desktop.Tests -c Release --filter
   FullyQualifiedName~LayerDependencyTests`.
+
+### E2 — Relógio pelo `TimeProvider`
+
+- **Problema (I2):** quatro componentes liam `DateTimeOffset.UtcNow` direto, apesar
+  de o `TimeProvider` já estar registrado. Por isso o limite de registros de recusa
+  do MCP e o `Retry-After` em forma de data só podiam ser testados esperando o
+  relógio de verdade.
+- **O que mudou:**
+  - `Mcp/Hosting/McpGateway.cs`: as entradas de atividade, inclusive a recusa em
+    somente leitura, usam o `TimeProvider` do contêiner do app.
+  - `Mcp/Hosting/McpSecurityMiddleware.cs`: o limite de um registro de recusa por
+    segundo usa o `TimeProvider`. O host do MCP já registrava a mesma instância
+    (`McpServerManager.cs:351`).
+  - `Application/Agents/RecordAgentEvent.cs`: o *fallback* de `ActivityChangedAt`
+    usa o `timeProvider` que o handler já recebia.
+  - `Infrastructure/Sync/Http/SyncHttp.cs`: o `Retry-After` com data calcula o tempo
+    restante pelo `TimeProvider`. O construtor ganhou o parâmetro, e o registro no
+    DI e os dois pontos de teste que constroem a classe foram atualizados.
+- **Preservação:** em produção a instância é `TimeProvider.System` (registrada com
+  `TryAddSingleton` em Application e Infrastructure), que devolve o mesmo valor de
+  `DateTimeOffset.UtcNow`. A ordem das operações não mudou.
+- **Caracterização antes da troca, ambos verdes sobre o código antigo:**
+  - `SyncClientTests.ARetryAfterDate_BecomesTheTimeLeftUntilIt`, com o relógio real
+    e tolerância de 5 s;
+  - `ServerLifecycleTests.AfterTheInterval_TheNextDenial_IsRecordedWithTheSuppressedCount`,
+    com espera real de 1,2 s.
+- **Depois da troca:**
+  - os dois testes ficaram determinísticos (`FakeTimeProvider`, e um `ManualClock`
+    no MCP, que só fixa a hora e mantém os temporizadores do sistema);
+  - o `McpTestHost` aceita um relógio;
+  - novo teste: `AWriteRefusedWhileReadOnly_IsRecordedAtTheAppsTime`.
+- **Ficaram de fora, com justificativa:**
+  - `WindowsTerminalLauncher.cs:150`: um *fallback* do *fallback*, quando o sistema
+    nega o `Process.StartTime`, num método estático. Levar o relógio até ali mudaria
+    o construtor público usado pelo DI sem ganho de teste;
+  - `McpServerViewModel.cs:96`: o valor inicial do campo é sobrescrito no próprio
+    construtor por `Show(manager.Status)`.
+- **Testes:**
+  - Mcp.Tests: 79 aprovados;
+  - Infrastructure.Tests `~Sync`: 131 aprovados;
+  - Application.Tests `~Agent`: 113 aprovados;
+  - suíte completa das duas solutions: só as 4 falhas de ambiente já conhecidas;
+  - Desktop.Tests: 2308 aprovados;
+  - Server.IntegrationTests: 42 aprovados.
 
 ## Cobertura
 

@@ -297,6 +297,7 @@ public static class DependencyInjection
         services.AddSingleton(provider => new SyncHttp(
             CreateJiraHttpClient(),
             options,
+            provider.GetRequiredService<TimeProvider>(),
             provider.GetRequiredService<ILogger<SyncHttp>>()));
 
         services.AddSingleton<SyncAuthenticationService>();
