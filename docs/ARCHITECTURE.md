@@ -2836,7 +2836,7 @@ ao problema antigo.
 | `charcoal`      | Carvão          | escuro | índigo (o de sempre)  |
 | `nordic`        | Nórdico         | escuro | gelo                  |
 | `plum`          | Ameixa          | escuro | magenta               |
-| `ponta`         | Ponta           | escuro | verde-limão           |
+| `ponta`         | Verde Pecuária  | escuro | verde-limão           |
 | `high-contrast` | Alto contraste  | escuro | amarelo               |
 
 "Automático" (`system`) usa Papel com o Windows claro, Carvão com o Windows
@@ -2900,8 +2900,11 @@ essas matizes: Sépia é petróleo, Ameixa é magenta (rosa ficaria perto do
 perigo), Nórdico é gelo. No Alto contraste o destaque é amarelo, e a atenção
 virou laranja.
 
-**Ponta, a exceção de marca.** O Ponta veio depois, na identidade verde da
-Ponta, e é o único tema com destaque na matiz do sucesso. A paleta da marca vai
+**Verde Pecuária, a exceção de marca.** O Verde Pecuária veio depois, na
+identidade verde da Ponta, e é o único tema com destaque na matiz do sucesso.
+Chamava-se "Ponta"; o id `ponta` ficou, porque é o que está gravado no
+`widget.json` de quem já o escolheu, e trocar o id mandaria essa pessoa de
+volta para "Automático". A paleta da marca vai
 para os papéis de sempre, sem chave nova: petróleo `#104544` no fundo, `#154E44`
 no cartão, `#1E5B45` no hover, `#2D6F44` na borda, e o limão `#7CBB3B` só na
 ação (`#A2D152` no hover e como texto, `#5EA341` pressionado). Para o verde não
@@ -2925,7 +2928,7 @@ já era.
 
 A seleção de texto (`TextBox`, `SelectableTextBlock` das anotações) é pintada
 com o destaque, mas o Fluent deixa a letra na cor do texto. Com destaque claro
-(Nórdico, Ameixa, Alto contraste, Ponta), o selecionado ficava branco sobre
+(Nórdico, Ameixa, Alto contraste, Verde Pecuária), o selecionado ficava branco sobre
 claro, perto de 2:1. Agora a letra selecionada é `WidgetOnAccentBrush`
 (`Styles/Widget.axaml`). Nos temas de letra branca no botão, nada muda.
 

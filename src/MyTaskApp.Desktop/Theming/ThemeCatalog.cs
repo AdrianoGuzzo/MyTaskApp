@@ -198,11 +198,12 @@ public static class ThemeCatalog
     /// Escuro na identidade verde da Ponta: fundo petróleo, cartão e hover
     /// subindo pelo teal, e o verde-limão só onde há ação. É o único tema com
     /// destaque na matiz do sucesso — a marca é verde —, então o sucesso vira
-    /// menta, longe do limão.
+    /// menta, longe do limão. Chamava-se "Ponta"; o id ficou, porque é o que
+    /// está gravado no widget.json de quem já o escolheu.
     /// </summary>
     public static readonly AppTheme Ponta = new(
         "ponta",
-        "Ponta",
+        "Verde Pecuária",
         "Escuro em verde-petróleo profundo, com destaque verde-limão.",
         IsDark: true,
         new ThemePalette
