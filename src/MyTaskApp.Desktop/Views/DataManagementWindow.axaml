@@ -5,7 +5,7 @@
         x:DataType="vm:DataManagementViewModel"
         x:Name="Root"
         Title="Gerenciamento de dados"
-        Width="620"
+        Width="780"
         Height="620"
         MinWidth="520"
         MinHeight="420"
@@ -185,7 +185,7 @@
                  TextWrapping="Wrap" />
     </Border>
 
-    <TabControl>
+    <TabControl SelectionChanged="OnTabChanged">
 
       <!-- ============================ CONCLUÍDOS ============================ -->
       <!--
@@ -491,6 +491,139 @@
                                       ContentTemplate="{StaticResource ChecklistDetails}" />
 
                     </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+
+        </DockPanel>
+      </TabItem>
+
+      <!-- ============================= WORKTREES ============================= -->
+      <!--
+        ADR-065: os worktrees que nenhuma tarefa em andamento usa — sem tarefa
+        nenhuma, ou de tarefa concluída, cancelada, arquivada ou na lixeira.
+        Vêm todos marcados; o que ficar marcado é apagado com as alterações
+        não commitadas junto. O DataContext é outro ViewModel, posto pela janela.
+      -->
+      <TabItem Header="Worktrees" x:Name="WorktreesTab">
+        <DockPanel Margin="0,8,0,0" x:DataType="vm:WorktreeCleanupViewModel">
+
+          <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,10">
+
+            <TextBlock Classes="meta"
+                       Text="Worktrees sem tarefa e de tarefas concluídas, canceladas, arquivadas ou na lixeira, nos repositórios das etiquetas e das tarefas. O worktree principal e os de tarefas em andamento nunca aparecem aqui." />
+
+            <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto">
+              <Button Grid.Column="0"
+                      x:Name="ScanWorktreesButton"
+                      Content="Procurar"
+                      IsEnabled="{Binding !IsBusy}"
+                      Command="{Binding ScanCommand}" />
+              <Button Grid.Column="1"
+                      Classes="rowAction"
+                      Margin="8,0,0,0"
+                      Content="Marcar todos"
+                      IsEnabled="{Binding HasItems}"
+                      Command="{Binding SelectAllCommand}" />
+              <Button Grid.Column="2"
+                      Classes="rowAction"
+                      Margin="6,0,0,0"
+                      Content="Desmarcar todos"
+                      IsEnabled="{Binding HasItems}"
+                      Command="{Binding SelectNoneCommand}" />
+              <Button Grid.Column="4"
+                      x:Name="CleanWorktreesButton"
+                      Classes="danger"
+                      Content="{Binding CleanLabel}"
+                      IsEnabled="{Binding CanClean}"
+                      Command="{Binding CleanCommand}" />
+            </Grid>
+
+            <TextBlock Classes="meta"
+                       Text="Procurando worktrees…"
+                       IsVisible="{Binding IsBusy}" />
+
+            <Border Padding="10,7"
+                    CornerRadius="6"
+                    Background="{DynamicResource WidgetAccentSoftBrush}"
+                    IsVisible="{Binding StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
+              <TextBlock Text="{Binding StatusMessage}" FontSize="12" TextWrapping="Wrap" />
+            </Border>
+
+            <Border Padding="10,7"
+                    CornerRadius="6"
+                    Background="{DynamicResource SystemFillColorCriticalBackgroundBrush}"
+                    IsVisible="{Binding ErrorMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
+              <SelectableTextBlock x:Name="WorktreeCleanupError"
+                                   Text="{Binding ErrorMessage}"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource WidgetDangerBrush}"
+                                   TextWrapping="Wrap" />
+            </Border>
+
+            <Border Padding="10,7"
+                    CornerRadius="6"
+                    Background="{DynamicResource WidgetDangerSoftBrush}"
+                    IsVisible="{Binding ProblemsMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
+              <SelectableTextBlock Text="{Binding ProblemsMessage}" FontSize="12" TextWrapping="Wrap" />
+            </Border>
+
+          </StackPanel>
+
+          <TextBlock Classes="empty"
+                     IsVisible="{Binding IsEmpty}"
+                     Text="Nada para limpar: todo worktree que o app encontrou pertence a uma tarefa em andamento." />
+
+          <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+            <ItemsControl x:Name="WorktreeCleanupList" ItemsSource="{Binding Items}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:WorktreeCleanupItemViewModel">
+                  <Border Classes="card">
+                    <Grid ColumnDefinitions="Auto,*">
+
+                      <CheckBox Grid.Column="0"
+                                VerticalAlignment="Top"
+                                Margin="0,0,8,0"
+                                IsChecked="{Binding IsSelected}"
+                                IsEnabled="{Binding CanSelect}" />
+
+                      <StackPanel Grid.Column="1" Spacing="3">
+
+                        <StackPanel Orientation="Horizontal" Spacing="7">
+                          <Border Classes="stateTag">
+                            <TextBlock Text="{Binding ReasonLabel}" />
+                          </Border>
+                        </StackPanel>
+
+                        <TextBlock Text="{Binding Title}"
+                                   FontSize="13"
+                                   FontWeight="SemiBold"
+                                   TextTrimming="CharacterEllipsis" />
+
+                        <SelectableTextBlock Text="{Binding Path}"
+                                             FontFamily="Consolas, Menlo, monospace"
+                                             FontSize="11"
+                                             Foreground="{DynamicResource WidgetTextLowBrush}"
+                                             TextWrapping="Wrap" />
+
+                        <TextBlock Classes="meta" Text="{Binding State}" />
+
+                        <TextBlock Text="{Binding Warning}"
+                                   FontSize="11"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource WidgetDangerBrush}"
+                                   TextWrapping="Wrap"
+                                   IsVisible="{Binding IsDirty}" />
+
+                        <TextBlock Classes="meta"
+                                   Text="{Binding Note}"
+                                   IsVisible="{Binding HasNote}" />
+
+                      </StackPanel>
+
+                    </Grid>
                   </Border>
                 </DataTemplate>
               </ItemsControl.ItemTemplate>

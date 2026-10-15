@@ -31,5 +31,12 @@ public interface ITaskItemRepository
         IReadOnlyCollection<Guid> occurrenceIds,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Os agregados com algum worktree pronto ou em criação neste computador,
+    /// em qualquer estado do checklist — inclusive arquivados e na lixeira. É
+    /// de onde a limpeza de worktrees (ADR-065) tira quem está ligado a quê.
+    /// </summary>
+    Task<IReadOnlyList<TaskItem>> FindWithWorktreesAsync(CancellationToken cancellationToken = default);
+
     void Remove(TaskItem task);
 }

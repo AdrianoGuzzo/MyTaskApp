@@ -288,8 +288,19 @@ internal sealed class GitClient(
     public Task<GitCommandResult> RemoveWorktreeAsync(
         string repository,
         string path,
-        CancellationToken cancellationToken = default) =>
-        RunAsync(repository, ["worktree", "remove", path], CheckoutTimeout, cancellationToken);
+        WorktreeRemoveForce force = WorktreeRemoveForce.None,
+        CancellationToken cancellationToken = default)
+    {
+        // Duas vezes --force é como o Git aceita passar por cima de "worktree lock".
+        string[] arguments = force switch
+        {
+            WorktreeRemoveForce.Force => ["worktree", "remove", "--force", path],
+            WorktreeRemoveForce.ForceLocked => ["worktree", "remove", "--force", "--force", path],
+            _ => ["worktree", "remove", path],
+        };
+
+        return RunAsync(repository, arguments, CheckoutTimeout, cancellationToken);
+    }
 
     public Task<GitCommandResult> PruneWorktreesAsync(string repository, CancellationToken cancellationToken = default) =>
         RunAsync(repository, ["worktree", "prune"], DefaultTimeout, cancellationToken);
