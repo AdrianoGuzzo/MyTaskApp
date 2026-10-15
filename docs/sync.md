@@ -127,7 +127,7 @@ sincronização.
 | Tarefa | título, anotação, prioridade, próxima ação, estimativa, lembrete, prazo e alertas, issue do Jira (o retrato), arquivamento, lixeira | auditoria; a conclusão é recalculada |
 | Agendamento | data e hora, situação, prazo | posição manual, estado dos lembretes e dos alertas |
 | Etiqueta e vínculo com a tarefa | nome, cor | — |
-| Diretório da etiqueta | alias, nome, descrição, branch padrão | **o caminho da pasta** |
+| Diretório da etiqueta | alias, nome, descrição, branch padrão, URL do repositório | **o caminho da pasta** |
 | Comandos globais e do diretório | texto, nome, modo, parâmetros, pasta relativa, ordem, ligado | a revisão local |
 | Ambiente de desenvolvimento | branch, origem, tag, prompt, lista de comandos | **repositório, worktree, situação, banco copiado** |
 | Horas | início, fim, origem, nota | o cronômetro **enquanto roda** |
@@ -146,7 +146,9 @@ entra na lista de propósito, e nunca por acaso.
 
 O diretório de uma etiqueta chega sem pasta: "Não mapeado neste computador". Em
 *Etiquetas…*, você escolhe a pasta daqui. Ela nunca sobe, e uma pasta que veio
-de outro computador nunca sobrescreve a daqui.
+de outro computador nunca sobrescreve a daqui. Com a URL do repositório, editar
+o diretório já sugere onde clonar, e **Clonar** baixa e mapeia de uma vez
+(ADR-064).
 
 O ambiente de desenvolvimento chega como "Não criado neste computador", com a
 branch. "Iniciar implementação" cria o worktree aqui, a partir do repositório

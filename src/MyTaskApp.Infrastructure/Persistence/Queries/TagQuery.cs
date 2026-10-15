@@ -64,6 +64,14 @@ internal sealed class TagQuery(MyTaskAppDbContext context) : ITagQuery
             cancellationToken,
             mappedOnly: true);
 
+    public async Task<IReadOnlyList<string>> ListMappedDirectoryPathsAsync(CancellationToken cancellationToken = default) =>
+        await context.TagDirectories
+            .AsNoTracking()
+            .Where(directory => directory.Path != null)
+            .OrderBy(directory => directory.CreatedAt)
+            .Select(directory => directory.Path!)
+            .ToListAsync(cancellationToken);
+
     /// <remarks>Ordena no cliente: o EF não traduz ordenação depois da projeção no record.</remarks>
     public async Task<IReadOnlyList<TagDirectoryCommandRow>> ListDirectoryCommandsAsync(
         Guid directoryId,
@@ -166,7 +174,8 @@ internal sealed class TagQuery(MyTaskAppDbContext context) : ITagQuery
                     directory.Name,
                     directory.Description,
                     directory.DefaultBranch,
-                    context.TagDirectoryCommands.Count(binding => binding.TagDirectoryId == directory.Id)))
+                    context.TagDirectoryCommands.Count(binding => binding.TagDirectoryId == directory.Id),
+                    directory.RepositoryUrl))
             .ToListAsync(cancellationToken);
 
         return

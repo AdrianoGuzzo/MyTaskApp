@@ -286,4 +286,45 @@ public class TagRenderingTests
         window.GetVisualDescendants().OfType<TextBlock>()
             .Should().Contain(text => text.Text == "Usada em 2 tarefas");
     }
+
+    /// <summary>
+    /// ADR-064: com o Git, o formulário do diretório tem a URL do repositório, e
+    /// colá-la mostra o "Clonar" ligado ao comando, com a pasta já escolhida.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task TheDirectoryForm_WithGit_OffersTheUrlAndTheClone()
+    {
+        var tag = new TagRow(Guid.NewGuid(), "ECO CORE", "#22C55E", 0);
+        var runner = new FakeUseCaseRunner();
+        runner.ResultsByHandler[typeof(GetTagsHandler)] = (IReadOnlyList<TagRow>)[tag];
+        runner.ResultsByHandler[typeof(GetTagDirectoriesHandler)] = (IReadOnlyList<TagDirectoryRow>)[];
+        runner.ResultsByHandler[typeof(MyTaskApp.Application.Development.DetectGitHandler)] =
+            new MyTaskApp.Application.Development.GitInstallation(true, "2.51.0", @"C:\Program Files\Git\cmd\git.exe");
+        runner.ResultsByHandler[typeof(SuggestCloneFolderHandler)] = @"C:\Projetos";
+
+        var viewModel = new TagsViewModel(
+            runner, new FakeConfirmationDialog(), new FakeDirectoryProbe(), new FakeDirectoryCommandEditor(), NullLogger<TagsViewModel>.Instance);
+        await viewModel.LoadAsync(CancellationToken.None);
+        var item = viewModel.Tags.Single();
+        await viewModel.ToggleDirectoriesAsync(item, CancellationToken.None);
+
+        var window = new TagsWindow(viewModel);
+        window.Show();
+        window.UpdateLayout();
+
+        var urlBox = window.GetVisualDescendants().OfType<TextBox>()
+            .Single(box => box.PlaceholderText?.StartsWith("Repositório Git", StringComparison.Ordinal) == true);
+        urlBox.IsEffectivelyVisible.Should().BeTrue();
+
+        item.RepositoryUrl = "https://github.com/eco/ecossistema-web.git";
+        window.UpdateLayout();
+
+        var clone = window.GetVisualDescendants().OfType<Button>()
+            .Single(button => Equals(button.Content, "Clonar"));
+        clone.IsEffectivelyVisible.Should().BeTrue();
+        clone.Command.Should().BeSameAs(viewModel.CloneRepositoryCommand);
+        clone.CommandParameter.Should().BeSameAs(item);
+        window.GetVisualDescendants().OfType<TextBox>()
+            .Should().Contain(box => box.Text == @"C:\Projetos\ecossistema-web");
+    }
 }

@@ -317,10 +317,15 @@
                                        ToolTip.Tip="{Binding Path}"
                                        IsVisible="{Binding !IsUnmapped}" />
                             <TextBlock Classes="meta"
-                                       Text="Não mapeado neste computador — edite e escolha a pasta"
+                                       Text="{Binding UnmappedLabel}"
                                        Foreground="{DynamicResource WidgetCautionBrush}"
                                        TextWrapping="Wrap"
                                        IsVisible="{Binding IsUnmapped}" />
+                            <TextBlock Classes="meta"
+                                       Text="{Binding RepositoryUrl}"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip.Tip="Repositório Git: acompanha o origin da pasta"
+                                       IsVisible="{Binding HasRepositoryUrl}" />
                             <TextBlock Classes="meta"
                                        Text="{Binding DefaultBranchLabel}"
                                        TextTrimming="CharacterEllipsis"
@@ -529,7 +534,7 @@
                   </ItemsControl>
 
                   <!-- Formulário: acrescenta, ou altera o diretório escolhido em "Editar". -->
-                  <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto"
+                  <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto"
                         ColumnSpacing="6" RowSpacing="6">
 
                     <TextBox Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2"
@@ -538,25 +543,69 @@
                              PlaceholderText="Alias (ex.: @ecossistema-core)"
                              Text="{Binding Alias}" />
 
-                    <TextBox Grid.Row="1" Grid.Column="0"
+                    <!-- Só com o Git encontrado (ADR-064). A pasta manda: se ela é repositório, a URL vem do origin. -->
+                    <TextBox Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
+                             FontSize="12"
+                             MaxLength="2048"
+                             PlaceholderText="Repositório Git (opcional, ex.: https://github.com/empresa/projeto.git)"
+                             ToolTip.Tip="Com a URL e uma pasta que ainda não existe, dá para clonar o repositório nela. Numa pasta que já é repositório, a URL acompanha o origin."
+                             Text="{Binding RepositoryUrl}"
+                             IsVisible="{Binding IsGitAvailable}" />
+
+                    <TextBox Grid.Row="2" Grid.Column="0"
                              FontSize="12"
                              MaxLength="1024"
                              PlaceholderText="Caminho (ex.: C:\Projetos\ecossistema-core)"
                              Text="{Binding Path}" />
 
-                    <Button Grid.Row="1" Grid.Column="1"
+                    <Button Grid.Row="2" Grid.Column="1"
                             Classes="rowAction"
                             Content="Procurar…"
                             ToolTip.Tip="Escolher a pasta"
                             Click="OnBrowseFolderClick" />
 
-                    <TextBox Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2"
+                    <!-- A pasta ainda não existe: clonar nela, ou escolher outra pasta-mãe. -->
+                    <Grid Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2"
+                          ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6"
+                          IsVisible="{Binding IsCloneOffered}">
+                      <TextBlock Classes="meta"
+                                 VerticalAlignment="Center"
+                                 TextWrapping="Wrap"
+                                 Text="A pasta ainda não existe. Clonar baixa o repositório nela e salva o diretório."
+                                 IsVisible="{Binding !IsCloning}" />
+                      <TextBlock Classes="meta"
+                                 VerticalAlignment="Center"
+                                 TextWrapping="Wrap"
+                                 Text="Clonando… se o Git pedir login, a janela dele abre."
+                                 IsVisible="{Binding IsCloning}" />
+                      <Button Grid.Column="1"
+                              Classes="rowAction"
+                              Content="Outra pasta…"
+                              ToolTip.Tip="Escolher onde clonar: o repositório entra numa subpasta com o nome dele"
+                              IsEnabled="{Binding !IsCloning}"
+                              Click="OnBrowseCloneFolderClick" />
+                      <Button Grid.Column="2"
+                              Classes="rowAction accent"
+                              Content="Clonar"
+                              ToolTip.Tip="git clone na pasta do campo Caminho"
+                              IsVisible="{Binding !IsCloning}"
+                              IsEnabled="{Binding CanClone}"
+                              Command="{Binding #Root.((vm:TagsViewModel)DataContext).CloneRepositoryCommand}"
+                              CommandParameter="{Binding}" />
+                      <Button Grid.Column="2"
+                              Classes="rowAction"
+                              Content="Cancelar clone"
+                              IsVisible="{Binding IsCloning}"
+                              Command="{Binding #Root.((vm:TagsViewModel)DataContext).CloneRepositoryCancelCommand}" />
+                    </Grid>
+
+                    <TextBox Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="2"
                              FontSize="12"
                              MaxLength="80"
                              PlaceholderText="Nome (opcional)"
                              Text="{Binding DirectoryName}" />
 
-                    <TextBox Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2"
+                    <TextBox Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="2"
                              FontSize="12"
                              MaxLength="500"
                              PlaceholderText="Descrição (opcional)"
@@ -564,7 +613,7 @@
                              spell:SpellCheck.IsEnabled="True" />
 
                     <!-- Só uma preferência: se o repositório não tiver a branch, a tela sugere outra. -->
-                    <TextBox Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="2"
+                    <TextBox Grid.Row="6" Grid.Column="0" Grid.ColumnSpan="2"
                              FontSize="12"
                              MaxLength="255"
                              PlaceholderText="Branch de origem padrão (opcional, ex.: develop ou origin/develop)"

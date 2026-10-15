@@ -71,6 +71,29 @@ public class GitClientTests
     }
 
     /// <summary>
+    /// ADR-064: o clone separa URL e caminho com <c>--</c>, roda sem pasta de
+    /// trabalho e com o prazo dele. O Credential Manager volta ao normal (o
+    /// clique foi do usuário), mas o terminal continua proibido.
+    /// </summary>
+    [Fact]
+    public async Task Clone_SeparatesUrlAndPath_AndLetsTheCredentialManagerAsk()
+    {
+        _runner.Respond("clone", new ProcessResult(0, "", "Cloning into 'eco core'...", false));
+
+        var result = await Client().CloneAsync("https://github.com/eco/core.git", @"C:\Projects\eco core", Ct);
+
+        var request = _runner.Requests.Single();
+        request.Arguments.Should().Equal(
+            "-c", "core.quotepath=false",
+            "clone", "--", "https://github.com/eco/core.git", @"C:\Projects\eco core");
+        request.Timeout.Should().Be(GitClient.CloneTimeout);
+        request.Environment!["GIT_TERMINAL_PROMPT"].Should().Be("0");
+        request.Environment["LC_ALL"].Should().Be("C");
+        request.Environment.Should().ContainKey("GCM_INTERACTIVE").WhoseValue.Should().BeNull("nulo remove a variável");
+        result.Succeeded.Should().BeTrue();
+    }
+
+    /// <summary>
     /// O comando do pedido, com cada parte num argumento: um caminho com espaço
     /// ou uma branch com caractere estranho não tem como virar outro comando.
     /// </summary>
