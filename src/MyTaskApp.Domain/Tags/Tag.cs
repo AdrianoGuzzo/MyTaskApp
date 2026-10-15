@@ -103,9 +103,10 @@ public sealed class Tag
         string? name,
         string? description,
         DateTimeOffset createdAt,
-        string? defaultBranch = null)
+        string? defaultBranch = null,
+        string? repositoryUrl = null)
     {
-        var directory = TagDirectory.Create(Id, alias, path, name, description, defaultBranch, createdAt);
+        var directory = TagDirectory.Create(Id, alias, path, name, description, defaultBranch, createdAt, repositoryUrl);
 
         EnsureAliasIsFree(directory.Alias, exceptId: null);
 
@@ -120,14 +121,22 @@ public sealed class Tag
         string? path,
         string? name,
         string? description,
-        string? defaultBranch = null)
+        string? defaultBranch = null,
+        string? repositoryUrl = null)
     {
         var directory = GetDirectory(directoryId);
 
         EnsureAliasIsFree(TagDirectory.NormalizeAlias(alias), directoryId);
 
-        directory.Update(alias, path, name, description, defaultBranch);
+        directory.Update(alias, path, name, description, defaultBranch, repositoryUrl);
     }
+
+    /// <summary>
+    /// A URL do repositório acompanhando o <c>origin</c> da pasta (ADR-064).
+    /// <c>true</c> quando mudou de fato — só então vale gravar.
+    /// </summary>
+    public bool ChangeDirectoryRepositoryUrl(Guid directoryId, string? repositoryUrl) =>
+        GetDirectory(directoryId).ChangeRepositoryUrl(repositoryUrl);
 
     public void RemoveDirectory(Guid directoryId) => _directories.Remove(GetDirectory(directoryId));
 

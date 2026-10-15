@@ -177,6 +177,11 @@ uma pergunta para depois. Post-its não aparecem nas seções do checklist.
 - **Diretórios da etiqueta:** um `@alias` aponta para uma pasta, que pode ter
   uma branch de origem padrão. Digitar `@` na anotação troca o alias pelo
   caminho real.
+- **Repositório Git do diretório:** com o Git instalado, cole a URL do
+  repositório e clique em **Clonar**. A pasta já vem sugerida, ao lado dos
+  outros projetos, e o diretório é salvo junto. Numa pasta que já é
+  repositório, a URL acompanha o `origin` dela
+  ([ADR-064](docs/ARCHITECTURE.md)).
 - **Arquivar e mover para a lixeira** pelo menu `⋯` da linha. Em
   *☰ → Gerenciamento de dados…* ficam as abas Concluídos, Arquivados e Lixeira,
   com restauração, exclusão definitiva, histórico de auditoria e a política de
@@ -367,7 +372,7 @@ o servidor em [`docs/sync-server.md`](docs/sync-server.md), e as decisões no
 - **O que é da máquina fica na máquina:** pastas dos diretórios e dos
   worktrees, posição das janelas, conexões de banco, configurações e qualquer
   senha ou token. O diretório de uma etiqueta chega "não mapeado neste
-  computador".
+  computador", com a URL do repositório para clonar aqui.
 - **Comandos de outro computador** só rodam depois de você conferir o texto.
 - **Dispositivos** com apelido e revogação. Desconectar não apaga nada.
 - Na janela da tarefa: "Criada em Notebook · … · alterada por último neste

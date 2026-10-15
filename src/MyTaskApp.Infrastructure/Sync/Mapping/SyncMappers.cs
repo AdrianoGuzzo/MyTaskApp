@@ -166,6 +166,7 @@ internal static class SyncMappers
             C(SyncFields.TagDirectory.Name, nameof(Domain.Tags.TagDirectory.Name)),
             C(SyncFields.TagDirectory.Description, nameof(Domain.Tags.TagDirectory.Description)),
             C(SyncFields.TagDirectory.DefaultBranch, nameof(Domain.Tags.TagDirectory.DefaultBranch)),
+            C(SyncFields.TagDirectory.RepositoryUrl, nameof(Domain.Tags.TagDirectory.RepositoryUrl)),
             C(CreatedAt, nameof(Domain.Tags.TagDirectory.CreatedAt)),
         ],
         // O mapeamento por dispositivo: o caminho de outra máquina não vale aqui.

@@ -266,4 +266,12 @@ public interface IGitClient
 
     /// <summary><c>git worktree prune</c>: esquece worktrees cuja pasta já sumiu.</summary>
     Task<GitCommandResult> PruneWorktreesAsync(string repository, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// <c>git clone -- {url} {path}</c> (ADR-064). Só cria: o próprio Git recusa
+    /// uma pasta de destino que já existe e não está vazia. É o único comando
+    /// em que o Git Credential Manager pode abrir a janela de login — quem
+    /// pediu clicou em "Clonar" e está olhando.
+    /// </summary>
+    Task<GitCommandResult> CloneAsync(string url, string path, CancellationToken cancellationToken = default);
 }

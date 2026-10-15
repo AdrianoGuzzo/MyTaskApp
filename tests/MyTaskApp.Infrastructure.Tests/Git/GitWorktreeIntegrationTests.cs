@@ -130,6 +130,32 @@ public sealed class GitWorktreeIntegrationTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// ADR-064: o clone de verdade, de um "origin" local, e a URL lida de volta
+    /// da pasta clonada — o caminho que o formulário da etiqueta percorre.
+    /// Clonar de novo na mesma pasta o Git recusa, em inglês, com o texto que a tela traduz.
+    /// </summary>
+    [Fact]
+    public async Task Clone_CreatesTheFolder_AndItsOriginIsTheUrl()
+    {
+        Assert.SkipWhen(_executable is null, "Git não instalado nesta máquina.");
+
+        var target = Path.Combine(_root, "clones", "eco-core");
+        var url = new Uri(Origin).AbsoluteUri;
+
+        var result = await _git.CloneAsync(url, target, Ct);
+
+        result.Succeeded.Should().BeTrue(result.StandardError);
+        File.Exists(Path.Combine(target, "README.md")).Should().BeTrue();
+        (await _git.GetRemoteUrlAsync(target, "origin", Ct)).Should().Be(url);
+
+        var again = await _git.CloneAsync(url, target, Ct);
+
+        again.Succeeded.Should().BeFalse();
+        again.StandardError.Should().Contain(
+            "already exists and is not an empty directory", "é o texto que vira \"já existe e não está vazia\" na tela");
+    }
+
+    /// <summary>
     /// ADR-029: um terminal aberto dentro do worktree. O Git apaga os arquivos,
     /// esquece o worktree e sai com erro deixando a pasta; o app mostra quem a
     /// segura e, quando o usuário manda, encerra esse processo e termina o serviço.

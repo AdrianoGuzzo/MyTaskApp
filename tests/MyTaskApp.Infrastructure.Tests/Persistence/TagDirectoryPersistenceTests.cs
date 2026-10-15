@@ -61,6 +61,33 @@ public class TagDirectoryPersistenceTests
         core.CreatedAt.Should().Be(Now);
     }
 
+    /// <summary>ADR-064: a URL do repositório vai e volta, e a consulta da lista a traz.</summary>
+    [Fact]
+    public async Task TheRepositoryUrl_SurvivesTheRoundTrip_AndReachesTheRow()
+    {
+        await using var db = await new TempSqliteDatabase().MigrateAsync(Ct);
+        var eco = Tag.Create("ECO CORE", "#22C55E", Now);
+        var core = eco.AddDirectory(
+            "@core", @"C:\Projects\core", null, null, Now, repositoryUrl: "https://github.com/eco/core.git");
+        eco.AddDirectory("@web", @"D:\Outros\web", null, null, Now);
+        await SeedAsync(db, eco);
+
+        await using (var write = db.CreateContext())
+        {
+            var tag = await new TagRepository(write).FindByIdAsync(eco.Id, Ct);
+            tag!.ChangeDirectoryRepositoryUrl(core.Id, "git@github.com:eco/core.git").Should().BeTrue();
+            await write.SaveChangesAsync(Ct);
+        }
+
+        await using var read = db.CreateContext();
+        var rows = await new TagQuery(read).ListDirectoriesAsync(eco.Id, Ct);
+        rows.Single(row => row.Alias == "@core").RepositoryUrl.Should().Be("git@github.com:eco/core.git");
+        rows.Single(row => row.Alias == "@web").RepositoryUrl.Should().BeNull();
+
+        (await new TagQuery(read).ListMappedDirectoryPathsAsync(Ct))
+            .Should().BeEquivalentTo(@"C:\Projects\core", @"D:\Outros\web");
+    }
+
     [Fact]
     public async Task OneTagCannotHaveTheSameAliasTwice_IgnoringCase()
     {

@@ -150,6 +150,8 @@ internal sealed class FakeTagQuery : ITagQuery
 {
     public List<CommandDirectoryRow> CommandDirectories { get; } = [];
 
+    public List<string> MappedPaths { get; } = [];
+
     public Task<IReadOnlyList<TagRow>> ListAsync(
         MyTaskApp.Application.Devices.PlacementFilter placement,
         IReadOnlyCollection<Guid> include,
@@ -175,4 +177,7 @@ internal sealed class FakeTagQuery : ITagQuery
     public Task<IReadOnlyList<CommandDirectoryRow>> ListCommandDirectoriesAsync(
         CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<CommandDirectoryRow>>([.. CommandDirectories]);
+
+    public Task<IReadOnlyList<string>> ListMappedDirectoryPathsAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<string>>([.. MappedPaths]);
 }

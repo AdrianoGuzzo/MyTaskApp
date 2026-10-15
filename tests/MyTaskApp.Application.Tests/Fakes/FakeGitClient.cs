@@ -63,6 +63,12 @@ internal sealed class FakeGitClient : IGitClient
 
     public GitCommandResult RemoveResult { get; set; } = Ok("git worktree remove");
 
+    /// <summary><c>null</c> = o clone dá certo e passa a ter <see cref="RemoteUrls"/> com a URL clonada.</summary>
+    public GitCommandResult? CloneFailure { get; set; }
+
+    /// <summary>Cada clone, como <c>"{url} → {path}"</c>.</summary>
+    public List<string> Clones { get; } = [];
+
     /// <summary>
     /// A falha de quando algo segura a pasta: o Git apaga os arquivos, esquece o
     /// worktree e só então sai com erro (ADR-029).
@@ -270,6 +276,21 @@ internal sealed class FakeGitClient : IGitClient
         }
 
         return Task.FromResult(RemoveResult);
+    }
+
+    public Task<GitCommandResult> CloneAsync(string url, string path, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        Calls.Add("clone");
+        Clones.Add($"{url} → {path}");
+
+        if (CloneFailure is { } failure)
+        {
+            return Task.FromResult(failure);
+        }
+
+        RemoteUrls[$"{path}|origin"] = url;
+        return Task.FromResult(Ok($"git clone -- {url} {path}"));
     }
 
     public Task<GitCommandResult> PruneWorktreesAsync(string repository, CancellationToken cancellationToken = default)

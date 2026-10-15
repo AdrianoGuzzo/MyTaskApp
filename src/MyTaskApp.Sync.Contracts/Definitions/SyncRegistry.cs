@@ -134,6 +134,7 @@ public static class SyncRegistry
             Text(SyncFields.TagDirectory.Name, 80),
             Text(SyncFields.TagDirectory.Description, 500),
             Text(SyncFields.TagDirectory.DefaultBranch, 255),
+            Text(SyncFields.TagDirectory.RepositoryUrl, 2048),
             CreatedAtField(),
         ])
     {
