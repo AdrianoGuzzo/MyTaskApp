@@ -40,6 +40,19 @@ public sealed partial class TagDirectoryItemViewModel(TagListItemViewModel owner
 
     public string DefaultBranchLabel => $"Branch padrão: {Row.DefaultBranch}";
 
+    /// <summary>De onde a pasta é clonada (ADR-064).</summary>
+    public string? RepositoryUrl => Row.RepositoryUrl;
+
+    public bool HasRepositoryUrl => !string.IsNullOrEmpty(Row.RepositoryUrl);
+
+    /// <summary>
+    /// O aviso do não mapeado: com a URL, dá para clonar aqui mesmo; sem ela,
+    /// só escolhendo a pasta.
+    /// </summary>
+    public string UnmappedLabel => HasRepositoryUrl
+        ? "Não mapeado neste computador — edite para clonar ou escolher a pasta"
+        : "Não mapeado neste computador — edite e escolha a pasta";
+
     /// <summary>Os comandos rápidos que os worktrees deste repositório mostram (ADR-051).</summary>
     public ObservableCollection<TagDirectoryCommandItemViewModel> Commands { get; } = [];
 
@@ -104,7 +117,7 @@ public sealed partial class TagDirectoryItemViewModel(TagListItemViewModel owner
 
     public string ExistenceTip => (IsUnmapped, Exists) switch
     {
-        (true, _) => "Não mapeado neste computador — edite e escolha a pasta",
+        (true, _) => UnmappedLabel,
         (_, true) => "Pasta encontrada",
         (_, false) => "Pasta não encontrada — o caminho continua salvo e pode ser usado",
         (_, null) => "Conferindo a pasta…",

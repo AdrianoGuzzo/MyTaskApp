@@ -119,6 +119,13 @@ public static class DependencyInjection
         services.AddScoped<UpdateTagDirectoryHandler>();
         services.AddScoped<RemoveTagDirectoryHandler>();
 
+        // Repositório Git do diretório: a URL acompanha a pasta, e o clone (ADR-064).
+        services.AddScoped<RepositoryUrlReader>();
+        services.AddScoped<ReadRepositoryUrlHandler>();
+        services.AddScoped<RefreshTagDirectoryRepositoriesHandler>();
+        services.AddScoped<SuggestCloneFolderHandler>();
+        services.AddScoped<CloneTagRepositoryHandler>();
+
         // Ambiente de desenvolvimento: Git e worktree da tarefa (ADR-027).
         services.AddScoped<GetTaskDevelopmentsHandler>();
         services.AddScoped<ListEnvironmentFilesHandler>();

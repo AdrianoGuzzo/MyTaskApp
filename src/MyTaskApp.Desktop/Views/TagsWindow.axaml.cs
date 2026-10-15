@@ -93,9 +93,37 @@ public sealed partial class TagsWindow : Window
                 }
             });
 
-        if (path is not null)
+        if (path is not null && DataContext is TagsViewModel owner)
         {
-            item.UseFolder(path);
+            await owner.UseFolderAsync(item, path, CancellationToken.None);
+        }
+    }
+
+    /// <summary>
+    /// "Outra pasta…" do clone (ADR-064): escolhe a pasta-mãe, e o repositório
+    /// entra numa subpasta com o nome dele.
+    /// </summary>
+    private async void OnBrowseCloneFolderClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Control { DataContext: TagListItemViewModel item })
+        {
+            return;
+        }
+
+        var parent = await SystemPickers.PickFolderAsync(
+            StorageProvider,
+            "Escolher onde clonar o repositório",
+            message =>
+            {
+                if (DataContext is TagsViewModel viewModel)
+                {
+                    viewModel.ErrorMessage = message;
+                }
+            });
+
+        if (parent is not null)
+        {
+            item.UseCloneFolder(parent);
         }
     }
 }

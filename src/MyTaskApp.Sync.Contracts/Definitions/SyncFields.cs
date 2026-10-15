@@ -111,6 +111,7 @@ public static class SyncFields
         public const string Name = "name";
         public const string Description = "description";
         public const string DefaultBranch = "defaultBranch";
+        public const string RepositoryUrl = "repositoryUrl";
     }
 
     public static class Command

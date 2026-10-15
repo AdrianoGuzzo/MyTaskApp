@@ -35,12 +35,25 @@ internal sealed class GitClient(
 
     internal static readonly TimeSpan CheckoutTimeout = TimeSpan.FromMinutes(2);
 
+    /// <summary>Um repositório grande numa rede lenta demora; o usuário pode cancelar antes.</summary>
+    internal static readonly TimeSpan CloneTimeout = TimeSpan.FromMinutes(30);
+
     internal static readonly IReadOnlyDictionary<string, string?> Environment = new Dictionary<string, string?>
     {
         ["GIT_TERMINAL_PROMPT"] = "0",
         ["GCM_INTERACTIVE"] = "Never",
         ["LC_ALL"] = "C",
         ["GIT_OPTIONAL_LOCKS"] = "0",
+    };
+
+    /// <summary>
+    /// O clone, ao contrário do fetch de fundo, foi pedido por um clique: o
+    /// Git Credential Manager volta ao normal e pode abrir a janela de login.
+    /// O terminal continua proibido — não há nenhum para alguém digitar.
+    /// </summary>
+    internal static readonly IReadOnlyDictionary<string, string?> CloneEnvironment = new Dictionary<string, string?>(Environment)
+    {
+        ["GCM_INTERACTIVE"] = null,
     };
 
     private readonly Lock _gate = new();
@@ -281,6 +294,10 @@ internal sealed class GitClient(
     public Task<GitCommandResult> PruneWorktreesAsync(string repository, CancellationToken cancellationToken = default) =>
         RunAsync(repository, ["worktree", "prune"], DefaultTimeout, cancellationToken);
 
+    // O "--" separa: nem a URL nem o caminho viram opção do Git.
+    public Task<GitCommandResult> CloneAsync(string url, string path, CancellationToken cancellationToken = default) =>
+        RunAsync(null, ["clone", "--", url, path], CloneTimeout, cancellationToken, CloneEnvironment);
+
     private async Task<GitCommandResult> RequireAsync(
         string? directory,
         IReadOnlyList<string> arguments,
@@ -300,7 +317,8 @@ internal sealed class GitClient(
         string? directory,
         IReadOnlyList<string> arguments,
         TimeSpan timeout,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyDictionary<string, string?>? environment = null)
     {
         List<string> fullArguments = ["-c", "core.quotepath=false"];
 
@@ -313,7 +331,7 @@ internal sealed class GitClient(
         fullArguments.AddRange(arguments);
 
         var executable = Executable();
-        var request = new ProcessRequest(executable ?? "git", fullArguments, timeout, Environment: Environment);
+        var request = new ProcessRequest(executable ?? "git", fullArguments, timeout, Environment: environment ?? Environment);
         var display = "git " + request.Display[(request.Display.IndexOf(' ', StringComparison.Ordinal) + 1)..];
 
         if (executable is null)

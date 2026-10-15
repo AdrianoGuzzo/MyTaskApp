@@ -5,13 +5,15 @@ namespace MyTaskApp.Application.Tags;
 
 /// <summary>Uma pasta nova na etiqueta, com o alias que a chama na anotação (ADR-026).</summary>
 /// <param name="DefaultBranch">A origem que "Iniciar implementação" já traz escolhida para este repositório.</param>
+/// <param name="RepositoryUrl">De onde a pasta é clonada (ADR-064).</param>
 public sealed record AddTagDirectory(
     Guid TagId,
     string Alias,
     string Path,
     string? Name,
     string? Description,
-    string? DefaultBranch = null);
+    string? DefaultBranch = null,
+    string? RepositoryUrl = null);
 
 public sealed class AddTagDirectoryHandler(
     ITagRepository tags,
@@ -29,7 +31,8 @@ public sealed class AddTagDirectoryHandler(
             command.Name,
             command.Description,
             timeProvider.GetUtcNow(),
-            command.DefaultBranch);
+            command.DefaultBranch,
+            command.RepositoryUrl);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -40,7 +43,7 @@ public sealed class AddTagDirectoryHandler(
 }
 
 /// <summary>
-/// Troca alias, path, nome, descrição e branch padrão de uma vez. Anotações que já receberam o
+/// Troca alias, path, nome, descrição, branch padrão e URL do repositório de uma vez. Anotações que já receberam o
 /// path antigo ficam como estão: o texto nunca guardou referência ao diretório.
 /// Num diretório que veio de outro computador, preencher o path é mapeá-lo
 /// aqui (ADR-061); em branco, ele continua sem pasta.
@@ -52,7 +55,8 @@ public sealed record UpdateTagDirectory(
     string? Path,
     string? Name,
     string? Description,
-    string? DefaultBranch = null);
+    string? DefaultBranch = null,
+    string? RepositoryUrl = null);
 
 public sealed class UpdateTagDirectoryHandler(
     ITagRepository tags,
@@ -69,7 +73,8 @@ public sealed class UpdateTagDirectoryHandler(
             command.Path,
             command.Name,
             command.Description,
-            command.DefaultBranch);
+            command.DefaultBranch,
+            command.RepositoryUrl);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 

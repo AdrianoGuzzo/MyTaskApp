@@ -834,6 +834,10 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .HasMaxLength(1024)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("RepositoryUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid>("TagId")
                         .HasColumnType("TEXT");
 

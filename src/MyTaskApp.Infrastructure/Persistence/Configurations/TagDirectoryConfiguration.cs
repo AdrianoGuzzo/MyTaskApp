@@ -41,6 +41,9 @@ internal sealed class TagDirectoryConfiguration : IEntityTypeConfiguration<TagDi
         builder.Property(directory => directory.DefaultBranch)
             .HasMaxLength(TagDirectory.MaxDefaultBranchLength);
 
+        builder.Property(directory => directory.RepositoryUrl)
+            .HasMaxLength(TagDirectory.MaxRepositoryUrlLength);
+
         builder.Property(directory => directory.CreatedAt)
             .HasConversion(UtcInstantConverter.Instance)
             .IsRequired();

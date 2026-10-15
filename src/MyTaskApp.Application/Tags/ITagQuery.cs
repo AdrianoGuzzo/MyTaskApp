@@ -19,6 +19,7 @@ public sealed record TagRow(
 /// <param name="Path"><c>null</c>: veio de outro computador e ainda não foi mapeada aqui (ADR-061).</param>
 /// <param name="DefaultBranch">A origem preferida quando o repositório é esta pasta.</param>
 /// <param name="CommandCount">Quantos comandos rápidos ela oferece (ADR-051).</param>
+/// <param name="RepositoryUrl">De onde a pasta é clonada (ADR-064); vale em qualquer computador.</param>
 public sealed record TagDirectoryRow(
     Guid Id,
     Guid TagId,
@@ -29,7 +30,8 @@ public sealed record TagDirectoryRow(
     string? Name,
     string? Description,
     string? DefaultBranch = null,
-    int CommandCount = 0)
+    int CommandCount = 0,
+    string? RepositoryUrl = null)
 {
     public bool IsMapped => Path is not null;
 }
@@ -94,6 +96,12 @@ public interface ITagQuery
     Task<IReadOnlyList<TagDirectoryRow>> ListDirectoriesForTaskAsync(
         Guid taskId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Os caminhos de todos os diretórios mapeados neste computador, de
+    /// qualquer etiqueta: de onde sai a pasta sugerida para clonar (ADR-064).
+    /// </summary>
+    Task<IReadOnlyList<string>> ListMappedDirectoryPathsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>Os comandos rápidos de um diretório, na ordem dos botões (ADR-051).</summary>
     Task<IReadOnlyList<TagDirectoryCommandRow>> ListDirectoryCommandsAsync(

@@ -26,6 +26,8 @@ public sealed class TagDirectory
 
     public const int MaxCommands = 50;
 
+    public const int MaxRepositoryUrlLength = GitRemoteUrl.MaxLength;
+
     private readonly List<TagDirectoryCommand> _commands = [];
 
     private TagDirectory(
@@ -36,6 +38,7 @@ public sealed class TagDirectory
         string? name,
         string? description,
         string? defaultBranch,
+        string? repositoryUrl,
         DateTimeOffset createdAt)
     {
         Id = id;
@@ -45,6 +48,7 @@ public sealed class TagDirectory
         Name = name;
         Description = description;
         DefaultBranch = defaultBranch;
+        RepositoryUrl = repositoryUrl;
         CreatedAt = createdAt;
     }
 
@@ -75,6 +79,13 @@ public sealed class TagDirectory
     /// preferência — se não existir no repositório, a tela sugere outra.
     /// </summary>
     public string? DefaultBranch { get; private set; }
+
+    /// <summary>
+    /// De onde a pasta é clonada (ADR-064). Ao contrário de <see cref="Path"/>,
+    /// vale em qualquer computador e viaja na sincronização: é o que permite
+    /// clonar, num computador novo, o diretório que chegou sem pasta.
+    /// </summary>
+    public string? RepositoryUrl { get; private set; }
 
     public DateTimeOffset CreatedAt { get; }
 
@@ -150,7 +161,8 @@ public sealed class TagDirectory
         string? name,
         string? description,
         string? defaultBranch,
-        DateTimeOffset createdAt) =>
+        DateTimeOffset createdAt,
+        string? repositoryUrl = null) =>
         new(
             Guid.CreateVersion7(createdAt),
             tagId,
@@ -159,6 +171,7 @@ public sealed class TagDirectory
             NormalizeOptional(name, MaxNameLength, "O nome do diretório"),
             NormalizeOptional(description, MaxDescriptionLength, "A descrição do diretório"),
             NormalizeDefaultBranch(defaultBranch),
+            GitRemoteUrl.Normalize(repositoryUrl),
             createdAt);
 
     /// <summary>
@@ -166,7 +179,13 @@ public sealed class TagDirectory
     /// não mapeado aceita o caminho em branco — editar o alias não obriga a
     /// escolher a pasta —; um já mapeado não volta a ficar sem.
     /// </summary>
-    internal void Update(string alias, string? path, string? name, string? description, string? defaultBranch)
+    internal void Update(
+        string alias,
+        string? path,
+        string? name,
+        string? description,
+        string? defaultBranch,
+        string? repositoryUrl = null)
     {
         var normalizedAlias = NormalizeAlias(alias);
         var normalizedPath = !IsMapped && string.IsNullOrWhiteSpace(path) ? null : NormalizePath(path);
@@ -174,12 +193,32 @@ public sealed class TagDirectory
         var normalizedDescription = NormalizeOptional(
             description, MaxDescriptionLength, "A descrição do diretório");
         var normalizedDefaultBranch = NormalizeDefaultBranch(defaultBranch);
+        var normalizedRepositoryUrl = GitRemoteUrl.Normalize(repositoryUrl);
 
         Alias = normalizedAlias;
         Path = normalizedPath;
         Name = normalizedName;
         Description = normalizedDescription;
         DefaultBranch = normalizedDefaultBranch;
+        RepositoryUrl = normalizedRepositoryUrl;
+    }
+
+    /// <summary>
+    /// Só a URL, quando o remoto <c>origin</c> da pasta mudou (ADR-064). A
+    /// mesma URL escrita de outro jeito (com ou sem <c>.git</c>) não conta
+    /// como mudança: devolve <c>false</c> e nada muda.
+    /// </summary>
+    internal bool ChangeRepositoryUrl(string? repositoryUrl)
+    {
+        var normalized = GitRemoteUrl.Normalize(repositoryUrl);
+
+        if (normalized is null || GitRemoteUrl.AreSame(normalized, RepositoryUrl))
+        {
+            return false;
+        }
+
+        RepositoryUrl = normalized;
+        return true;
     }
 
     /// <summary>
