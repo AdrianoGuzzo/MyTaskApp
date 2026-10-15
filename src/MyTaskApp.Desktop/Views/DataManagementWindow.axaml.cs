@@ -7,8 +7,33 @@ public sealed partial class DataManagementWindow : Window
 {
     public DataManagementWindow() => InitializeComponent();
 
-    public DataManagementWindow(DataManagementViewModel viewModel)
-        : this() => DataContext = viewModel;
+    public DataManagementWindow(DataManagementViewModel viewModel, WorktreeCleanupViewModel worktrees)
+        : this()
+    {
+        DataContext = viewModel;
+        WorktreesTab.DataContext = worktrees;
+    }
+
+    /// <summary>
+    /// A varredura de worktrees chama o Git em cada repositório (ADR-065): só
+    /// roda quando a aba aparece, e não a cada abertura da janela.
+    /// </summary>
+    private void OnTabChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (ReferenceEquals(e.Source, sender))
+        {
+            ScanWorktreesIfShown();
+        }
+    }
+
+    private void ScanWorktreesIfShown()
+    {
+        // A seleção inicial dispara ainda dentro do InitializeComponent, antes de a aba existir.
+        if (WorktreesTab is { IsSelected: true, DataContext: WorktreeCleanupViewModel worktrees })
+        {
+            _ = worktrees.ScanIfIdleAsync(CancellationToken.None);
+        }
+    }
 
     /// <summary>
     /// Recarrega a cada abertura. A varredura automática pode ter arquivado ou
@@ -45,5 +70,7 @@ public sealed partial class DataManagementWindow : Window
         {
             _ = viewModel.LoadAsync(CancellationToken.None);
         }
+
+        ScanWorktreesIfShown();
     }
 }

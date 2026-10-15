@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.LogicalTree;
 using Microsoft.Extensions.Logging.Abstractions;
+using MyTaskApp.Application.Development;
 using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Desktop.ViewModels;
 using MyTaskApp.Desktop.Views;
@@ -12,15 +13,19 @@ namespace MyTaskApp.Desktop.Tests.ViewModels;
 /// <summary>
 /// A janela de gerenciamento de dados sobe de verdade (sem display). Binding de
 /// XAML só falha em runtime, e esta tela tem quatro abas ligadas a um mesmo
-/// ViewModel — o tipo de coisa que compila e só quebra quando alguém abre.
+/// ViewModel e uma (Worktrees) ligada a outro — o tipo de coisa que compila e
+/// só quebra quando alguém abre.
 /// </summary>
 public class DataManagementWindowTests
 {
     private static readonly DateTimeOffset Now = new(2026, 9, 21, 12, 0, 0, TimeSpan.Zero);
 
-    private static DataManagementWindow Show()
+    private static DataManagementWindow Show(WorktreeCleanupScan? worktreeScan = null)
     {
         var runner = new FakeUseCaseRunner();
+
+        runner.ResultsByHandler[typeof(FindWorktreeCleanupHandler)] =
+            worktreeScan ?? new WorktreeCleanupScan([], []);
 
         runner.ResultsByHandler[typeof(GetDataRetentionSettingsHandler)] =
             DataRetentionPolicy.Factory;
@@ -37,7 +42,12 @@ public class DataManagementWindowTests
             new FakeConfirmationDialog(),
             NullLogger<DataManagementViewModel>.Instance);
 
-        var window = new DataManagementWindow(viewModel);
+        var worktrees = new WorktreeCleanupViewModel(
+            runner,
+            new FakeConfirmationDialog(),
+            NullLogger<WorktreeCleanupViewModel>.Instance);
+
+        var window = new DataManagementWindow(viewModel, worktrees);
         window.Show();
         window.UpdateLayout();
 
@@ -54,7 +64,7 @@ public class DataManagementWindowTests
             .Select(tab => tab.Header)
             .ToList();
 
-        headers.Should().Equal("Concluídos", "Arquivados", "Lixeira", "Configurações");
+        headers.Should().Equal("Concluídos", "Arquivados", "Lixeira", "Worktrees", "Configurações");
     }
 
     /// <summary>
@@ -100,6 +110,42 @@ public class DataManagementWindowTests
             // esconderia itens de quem nem sabe que ele existe.
             combo.SelectedIndex.Should().Be(0);
         }
+    }
+
+    /// <summary>
+    /// ADR-065: a aba de worktrees varre ao aparecer, e não ao abrir a janela;
+    /// cada linha sobe com o seu checkbox e o botão conta os marcados.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task TheWorktreesTab_ScansWhenShown_AndListsTheCandidates()
+    {
+        var window = Show(new WorktreeCleanupScan(
+        [
+            new WorktreeCleanupCandidate(
+                @"C:\Projects\eco-core",
+                @"C:\Projects\eco-core-experimento",
+                "experimento",
+                WorktreeCleanupReason.NoTask,
+                null,
+                null,
+                null,
+                new WorktreeSync(Guid.NewGuid(), WorktreeSyncState.Dirty, Changes: 2)),
+        ],
+        []));
+
+        var tab = window.FindControl<TabItem>("WorktreesTab")!;
+        var worktrees = (WorktreeCleanupViewModel)tab.DataContext!;
+        worktrees.HasScanned.Should().BeFalse("abrir a janela não chama o Git");
+
+        tab.IsSelected = true;
+        await Task.Delay(50, TestContext.Current.CancellationToken);
+        window.UpdateLayout();
+
+        worktrees.Items.Should().ContainSingle();
+        window.FindControl<Button>("CleanWorktreesButton")!.Content.Should().Be("Limpar 1 worktree");
+        window.GetLogicalDescendants().OfType<CheckBox>().Should().Contain(box => box.IsChecked == true);
+        window.GetLogicalDescendants().OfType<TextBlock>()
+            .Should().Contain(block => block.Text == "2 alterações não commitadas serão perdidas");
     }
 
     [AvaloniaFact]

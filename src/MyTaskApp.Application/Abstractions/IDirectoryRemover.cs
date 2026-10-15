@@ -47,4 +47,14 @@ public interface IDirectoryRemover
         string path,
         IReadOnlyCollection<DirectoryLocker> terminate,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Quem está segurando algo dentro de <paramref name="path"/> agora, sem
+    /// apagar nada. A limpeza de worktrees (ADR-065) pergunta antes do
+    /// <c>--force</c>: o Git forçado apaga os arquivos debaixo de um terminal ou
+    /// agente aberto ali, e só a pasta vazia ficaria presa.
+    /// </summary>
+    Task<IReadOnlyList<DirectoryLocker>> FindLockersAsync(
+        string path,
+        CancellationToken cancellationToken = default);
 }

@@ -140,6 +140,7 @@ internal static class AppServices
             // reabrir a janela precisa mostrar o estado atual, nao uma segunda
             // copia com dados velhos.
             .AddSingleton<DataManagementViewModel>()
+            .AddSingleton<WorktreeCleanupViewModel>()
             .AddSingleton<DataManagementWindow>()
 
             // Abrir pasta, terminal e link fora do app (ADR-027). Sem estado,

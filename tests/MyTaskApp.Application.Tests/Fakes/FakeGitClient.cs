@@ -266,9 +266,18 @@ internal sealed class FakeGitClient : IGitClient
     public Task<string?> GetCurrentBranchAsync(string workingTree, CancellationToken cancellationToken = default) =>
         Task.FromResult(Worktrees.FirstOrDefault(worktree => WorktreePathPlanner.SamePath(worktree.Path, workingTree))?.BranchName);
 
-    public Task<GitCommandResult> RemoveWorktreeAsync(string repository, string path, CancellationToken cancellationToken = default)
+    public Task<GitCommandResult> RemoveWorktreeAsync(
+        string repository,
+        string path,
+        WorktreeRemoveForce force = WorktreeRemoveForce.None,
+        CancellationToken cancellationToken = default)
     {
-        Calls.Add($"worktree remove {path}");
+        Calls.Add(force switch
+        {
+            WorktreeRemoveForce.Force => $"worktree remove --force {path}",
+            WorktreeRemoveForce.ForceLocked => $"worktree remove --force --force {path}",
+            _ => $"worktree remove {path}",
+        });
 
         if (RemoveResult.Succeeded || RemoveForgetsOnFailure)
         {
@@ -337,6 +346,15 @@ internal sealed class FakeDirectoryRemover : IDirectoryRemover
     {
         Calls.Add((path, terminate));
         return Task.FromResult(Results.TryDequeue(out var result) ? result : DirectoryRemoval.Done);
+    }
+
+    /// <summary>Quem segura cada pasta; o que não estiver aqui está livre.</summary>
+    public Dictionary<string, IReadOnlyList<DirectoryLocker>> Lockers { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    public Task<IReadOnlyList<DirectoryLocker>> FindLockersAsync(string path, CancellationToken cancellationToken = default)
+    {
+        var key = Lockers.Keys.FirstOrDefault(locked => WorktreePathPlanner.SamePath(locked, path));
+        return Task.FromResult(key is null ? (IReadOnlyList<DirectoryLocker>)[] : Lockers[key]);
     }
 }
 
