@@ -65,6 +65,28 @@ public class ChecklistConclusionTests
         task.Lifecycle.Should().Be(TaskLifecycle.Active);
     }
 
+    /// <summary>
+    /// Ativo e encerrado ao mesmo tempo: é o cancelado que a limpeza de
+    /// worktrees (ADR-065) precisa reconhecer, sem estado próprio no ciclo de vida.
+    /// </summary>
+    [Fact]
+    public void IsSettled_OnlyWhenNothingIsPending()
+    {
+        var task = NewChecklist();
+        var occurrenceId = task.Occurrences.Single().Id;
+
+        task.IsSettled.Should().BeFalse();
+
+        task.CancelOccurrence(occurrenceId);
+        task.IsSettled.Should().BeTrue();
+
+        task.ReopenOccurrence(occurrenceId);
+        task.IsSettled.Should().BeFalse();
+
+        task.CompleteOccurrence(occurrenceId, Finished);
+        task.IsSettled.Should().BeTrue();
+    }
+
     [Fact]
     public void ReschedulingAPendingChecklist_DoesNotConcludeIt()
     {

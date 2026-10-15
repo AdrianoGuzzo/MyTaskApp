@@ -12,7 +12,8 @@ namespace MyTaskApp.Desktop.ViewModels;
 
 /// <summary>
 /// "Gerenciamento de dados": Concluídos, Arquivados, Lixeira e as configurações
-/// de retenção (§3, §5, §11).
+/// de retenção (§3, §5, §11). A aba Worktrees da mesma janela é de
+/// <see cref="WorktreeCleanupViewModel"/> (ADR-065).
 /// </summary>
 /// <remarks>
 /// Uma janela só, fora do painel, porque é aí que o §12 é atendido: a lista

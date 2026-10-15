@@ -158,9 +158,22 @@ public class GitClientTests
     {
         _runner.Respond("worktree", new ProcessResult(0, "", "", false));
 
-        await Client().RemoveWorktreeAsync(Repository, @"C:\Projects\wt", Ct);
+        await Client().RemoveWorktreeAsync(Repository, @"C:\Projects\wt", cancellationToken: Ct);
 
         _runner.Requests.Single().Arguments.Should().NotContain(argument => argument.StartsWith("--force", StringComparison.Ordinal) || argument == "-f");
+    }
+
+    /// <summary>Só a limpeza (ADR-065) pede força; duas vezes passa por cima de "worktree lock".</summary>
+    [Theory]
+    [InlineData(WorktreeRemoveForce.Force, new[] { "worktree", "remove", "--force", @"C:\Projects\wt" })]
+    [InlineData(WorktreeRemoveForce.ForceLocked, new[] { "worktree", "remove", "--force", "--force", @"C:\Projects\wt" })]
+    public async Task RemoveWorktree_ForcesOnlyWhenAsked(WorktreeRemoveForce force, string[] expected)
+    {
+        _runner.Respond("worktree", new ProcessResult(0, "", "", false));
+
+        await Client().RemoveWorktreeAsync(Repository, @"C:\Projects\wt", force, Ct);
+
+        _runner.Requests.Single().Arguments.Should().EndWith(expected);
     }
 
     [Fact]

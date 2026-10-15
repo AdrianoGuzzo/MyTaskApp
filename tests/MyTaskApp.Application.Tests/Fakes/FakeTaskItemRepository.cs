@@ -50,6 +50,12 @@ internal sealed class FakeTaskItemRepository : ITaskItemRepository, IUnitOfWork
                 task => task.Occurrences.Any(
                     occurrence => occurrenceIds.Contains(occurrence.Id)))]);
 
+    public Task<IReadOnlyList<TaskItem>> FindWithWorktreesAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<TaskItem>>(
+            [.. _tasks.Values.Where(
+                task => task.Developments.Any(
+                    development => development.Status is TaskDevelopmentStatus.Ready or TaskDevelopmentStatus.Creating))]);
+
     public void Remove(TaskItem task) => _tasks.Remove(task.Id);
 
     public Task SaveChangesAsync(CancellationToken cancellationToken = default)

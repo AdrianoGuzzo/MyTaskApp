@@ -46,5 +46,16 @@ internal sealed class TaskItemRepository(MyTaskAppDbContext context) : ITaskItem
                 occurrence => occurrenceIds.Contains(occurrence.Id)))
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<TaskItem>> FindWithWorktreesAsync(CancellationToken cancellationToken = default) =>
+        await context.Tasks
+            .Include(task => task.Occurrences)
+            .Include(task => task.Tags)
+            .Include(task => task.Developments.OrderBy(development => development.Id))
+                .ThenInclude(development => development.Commands)
+            .Where(task => task.Developments.Any(development =>
+                development.Status == TaskDevelopmentStatus.Ready
+                || development.Status == TaskDevelopmentStatus.Creating))
+            .ToListAsync(cancellationToken);
+
     public void Remove(TaskItem task) => context.Tasks.Remove(task);
 }
