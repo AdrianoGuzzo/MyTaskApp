@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.15.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.14.1...v1.15.0) (2026-10-15)
+
+
+### Added
+
+* repositório Git no diretório da etiqueta, com clone e URL que acompanha a pasta (ADR-064) ([#88](https://github.com/AdrianoGuzzo/MyTaskApp/issues/88)) ([3deaf3b](https://github.com/AdrianoGuzzo/MyTaskApp/commit/3deaf3b2cb6f641c01a5652bd4a808683528905a))
+* tema Ponta passa a se chamar Verde Pecuária ([#85](https://github.com/AdrianoGuzzo/MyTaskApp/issues/85)) ([9315d1d](https://github.com/AdrianoGuzzo/MyTaskApp/commit/9315d1df433aa42c1d2946e7afa6748903b1454b))
+
+
+### Fixed
+
+* botões do cabeçalho saíam da pílula no modo recolhido ([#86](https://github.com/AdrianoGuzzo/MyTaskApp/issues/86)) ([07aa53c](https://github.com/AdrianoGuzzo/MyTaskApp/commit/07aa53c526c97cc50e359c2d4d77e50bd7b1f6f9))
+* o @ da anotação acompanha a etiqueta marcada na janela da tarefa ([#84](https://github.com/AdrianoGuzzo/MyTaskApp/issues/84)) ([ac47154](https://github.com/AdrianoGuzzo/MyTaskApp/commit/ac471544a5d8765c05fe092aca2bffb43c730f51))
+
 ## [1.14.1](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.14.0...v1.14.1) (2026-10-14)
 
 
