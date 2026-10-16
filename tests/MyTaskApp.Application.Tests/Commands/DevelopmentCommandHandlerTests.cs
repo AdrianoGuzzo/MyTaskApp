@@ -135,7 +135,7 @@ public class DevelopmentCommandHandlerTests
         rows.Select(row => row.Alias).Should().Equal("@build", "@restore");
     }
 
-    /// <summary>ADR-065: o comando novo fica neste computador, a menos que marcado.</summary>
+    /// <summary>ADR-066: o comando novo fica neste computador, a menos que marcado.</summary>
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

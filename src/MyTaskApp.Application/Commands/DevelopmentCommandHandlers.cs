@@ -9,7 +9,7 @@ namespace MyTaskApp.Application.Commands;
 /// <param name="Alias"><c>null</c> só no comando do diretório (ADR-055).</param>
 /// <param name="BindingCount">Em quantos diretórios de etiqueta ele é botão — o aviso antes de excluir.</param>
 /// <param name="TagDirectoryId">O diretório dono do comando; <c>null</c> é global (ADR-055).</param>
-/// <param name="IsShared">Se o comando global vai para os outros computadores (ADR-065).</param>
+/// <param name="IsShared">Se o comando global vai para os outros computadores (ADR-066).</param>
 public sealed record DevelopmentCommandRow(
     Guid Id,
     string? Alias,
@@ -81,7 +81,7 @@ public sealed class GetDevelopmentCommandsHandler(IDevelopmentCommandRepository 
 }
 
 /// <param name="Settings">O comando rápido (ADR-051). <c>null</c> é o padrão: escondido, na raiz.</param>
-/// <param name="IsShared">Vai para os outros computadores (ADR-065). O padrão é ficar só neste.</param>
+/// <param name="IsShared">Vai para os outros computadores (ADR-066). O padrão é ficar só neste.</param>
 public sealed record CreateDevelopmentCommand(
     string Alias,
     string Command,
@@ -124,7 +124,7 @@ public sealed class CreateDevelopmentCommandHandler(
 
 /// <param name="Settings">O comando rápido (ADR-051). <c>null</c> mantém o que está gravado.</param>
 /// <param name="IsShared">
-/// Compartilhar com os outros computadores (ADR-065). <c>null</c> mantém como
+/// Compartilhar com os outros computadores (ADR-066). <c>null</c> mantém como
 /// está. Desmarcar não apaga as cópias de lá: só deixa de acompanhá-las.
 /// </param>
 public sealed record UpdateDevelopmentCommand(

@@ -158,6 +158,14 @@ public sealed class TaskItem
     /// <summary>Sai da lista principal quando arquivado ou na lixeira.</summary>
     public bool IsOutOfTheMainList => IsArchived || IsInTrash;
 
+    /// <summary>
+    /// Nenhuma ocorrência pendente: tudo concluído ou cancelado. É o que conta
+    /// como "encerrada" para a limpeza de worktrees (ADR-065) — um checklist
+    /// inteiramente cancelado não tem <see cref="ConcludedAt"/> e continua
+    /// <see cref="TaskLifecycle.Active"/>, mas ninguém mais trabalha nele.
+    /// </summary>
+    public bool IsSettled => !_occurrences.Exists(occurrence => occurrence.Status is TaskItemStatus.Pending);
+
     public static TaskItem Create(
         string title,
         DateTimeOffset createdAt,

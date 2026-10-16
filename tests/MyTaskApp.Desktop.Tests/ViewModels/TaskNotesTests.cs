@@ -537,6 +537,9 @@ public class TaskNotesTests
                     ? [task]
                     : []);
 
+        public Task<IReadOnlyList<TaskItem>> FindWithWorktreesAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<TaskItem>>([]);
+
         public void Remove(TaskItem item)
         {
         }

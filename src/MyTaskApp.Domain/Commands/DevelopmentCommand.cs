@@ -28,7 +28,7 @@ namespace MyTaskApp.Domain.Commands;
 /// </para>
 /// <para>
 /// O comando global é <b>deste computador</b> até ser marcado como compartilhado
-/// (<see cref="IsShared"/>, ADR-065): o texto costuma ter caminho, executável e
+/// (<see cref="IsShared"/>, ADR-066): o texto costuma ter caminho, executável e
 /// script de uma máquina só.
 /// </para>
 /// </remarks>
@@ -103,7 +103,7 @@ public sealed class DevelopmentCommand
     public bool RequiresConfirmation { get; private set; }
 
     /// <summary>
-    /// Se o comando global vai para os outros computadores (ADR-065). Nasce
+    /// Se o comando global vai para os outros computadores (ADR-066). Nasce
     /// desmarcado. É escolha deste computador e não viaja: desmarcar deixa as
     /// cópias de lá como estão. O comando do diretório vai sempre, com o diretório.
     /// </summary>
@@ -195,7 +195,7 @@ public sealed class DevelopmentCommand
     }
 
     /// <summary>
-    /// Compartilha ou deixa de compartilhar o comando global (ADR-065). Não conta
+    /// Compartilha ou deixa de compartilhar o comando global (ADR-066). Não conta
     /// como edição: <see cref="UpdatedAt"/> viaja, e a escolha é só daqui.
     /// </summary>
     public void SetSharing(bool isShared)

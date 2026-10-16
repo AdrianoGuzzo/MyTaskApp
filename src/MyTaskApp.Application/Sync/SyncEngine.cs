@@ -127,7 +127,7 @@ public sealed class SyncEngine(
 
             var pushed = await PushAllAsync(workspaceId, cancellationToken);
 
-            // O comando que esperava um apelido livre (ADR-065) entra assim que dá.
+            // O comando que esperava um apelido livre (ADR-066) entra assim que dá.
             await runner.RunAsync<RetryWaitingReceivedChangesHandler>(
                 (handler, token) => handler.HandleAsync(new RetryWaitingReceivedChanges(), token),
                 cancellationToken);

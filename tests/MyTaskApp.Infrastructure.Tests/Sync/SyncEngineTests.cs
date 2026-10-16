@@ -364,7 +364,7 @@ public sealed class SyncEngineTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// ADR-065: o comando de outro computador com o apelido de um comando local
+    /// ADR-066: o comando de outro computador com o apelido de um comando local
     /// daqui espera; renomeado o daqui, ele entra no ciclo seguinte sozinho.
     /// </summary>
     [Fact]

@@ -98,7 +98,7 @@ public sealed class SyncClassificationTests
     }
 
     /// <summary>
-    /// Compartilhar é escolha de cada computador e não viaja (ADR-065); o
+    /// Compartilhar é escolha de cada computador e não viaja (ADR-066); o
     /// comando que chega de outro foi compartilhado lá.
     /// </summary>
     [Fact]

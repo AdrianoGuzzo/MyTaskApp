@@ -2,7 +2,7 @@ using MyTaskApp.Domain.Commands;
 
 namespace MyTaskApp.Domain.Tests.Commands;
 
-/// <summary>O comando global é deste computador até ser compartilhado (ADR-065).</summary>
+/// <summary>O comando global é deste computador até ser compartilhado (ADR-066).</summary>
 public class CommandSharingTests
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 16, 10, 0, 0, TimeSpan.Zero);

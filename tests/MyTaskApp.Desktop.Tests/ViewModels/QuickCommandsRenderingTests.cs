@@ -194,7 +194,7 @@ public class QuickCommandsRenderingTests
         viewModel.IsTerminal.Should().BeTrue();
     }
 
-    /// <summary>ADR-065: o check aparece desmarcado e liga o comando a todos os computadores.</summary>
+    /// <summary>ADR-066: o check aparece desmarcado e liga o comando a todos os computadores.</summary>
     [AvaloniaFact]
     public async Task TheGlobalsWindow_DrawsTheShareCheck_Unticked()
     {

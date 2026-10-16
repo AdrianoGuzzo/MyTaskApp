@@ -8,7 +8,7 @@ using MyTaskApp.Sync.Contracts.Definitions;
 namespace MyTaskApp.Infrastructure.Tests.Sync;
 
 /// <summary>
-/// Comando global só deste computador, a menos que compartilhado (ADR-065):
+/// Comando global só deste computador, a menos que compartilhado (ADR-066):
 /// nada vai nem vem do que não é compartilhado, os botões de diretório seguem
 /// o comando, e o apelido de um comando local não é tomado pelo que chega.
 /// </summary>

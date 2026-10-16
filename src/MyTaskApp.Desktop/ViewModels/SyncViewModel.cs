@@ -140,7 +140,7 @@ public sealed partial class SyncViewModel : ObservableObject
 
     /// <summary>
     /// O porquê do que chegou e ficou de fora esperando algo daqui: o apelido
-    /// que um comando local já usa (ADR-065). Some sozinho quando resolvido.
+    /// que um comando local já usa (ADR-066). Some sozinho quando resolvido.
     /// </summary>
     public ObservableCollection<string> WaitingMessages { get; } = [];
 

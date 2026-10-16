@@ -185,7 +185,7 @@ uma pergunta para depois. Post-its não aparecem nas seções do checklist.
 - **Arquivar e mover para a lixeira** pelo menu `⋯` da linha. Em
   *☰ → Gerenciamento de dados…* ficam as abas Concluídos, Arquivados e Lixeira,
   com restauração, exclusão definitiva, histórico de auditoria e a política de
-  arquivamento automático.
+  arquivamento automático. A aba Worktrees limpa os worktrees que sobraram.
 
 ### Desenvolvimento: tarefa → worktree → agente
 
@@ -201,7 +201,7 @@ A janela da tarefa tem a aba **Desenvolvimento**:
    Os **comandos globais** (`@restore` → `dotnet restore`) ficam em
    *☰ → Comandos globais…*. Com a sincronização ligada, cada um fica só no
    computador onde foi criado, a menos que você marque **Compartilhar entre
-   computadores** (ADR-065).
+   computadores** (ADR-066).
 3. **Comandos rápidos.** Ligue um comando global a um diretório da etiqueta
    (*☰ → Etiquetas… → Comandos*) e ele vira um botão **▶** no worktree pronto
    de toda tarefa daquele repositório: "▶ Executar aplicação" abre um terminal
@@ -223,6 +223,25 @@ A janela da tarefa tem a aba **Desenvolvimento**:
    o app mostra como instalar (ADR-047).
 7. **Remover worktree** apaga a pasta. Se algum processo a estiver segurando,
    o app mostra qual.
+8. **Limpeza de worktrees.** Em *☰ → Gerenciamento de dados… → Worktrees*, o
+   app lista os worktrees que não pertencem a nenhuma tarefa em andamento:
+   - os **sem tarefa**: a tarefa foi apagada de vez, ou o worktree foi criado
+     à mão ou por outra ferramenta;
+   - os de tarefa **concluída, cancelada, arquivada ou na lixeira**.
+
+   A busca cobre os repositórios dos diretórios das etiquetas e os das
+   tarefas. Cada linha mostra as alterações não commitadas e os commits sem
+   push, e vem marcada. Desmarque o que quiser manter e clique em
+   **Limpar N worktrees**. A limpeza apaga **inclusive as alterações não
+   commitadas**, e as branches continuam no repositório.
+
+   Nunca entram na limpeza:
+   - o worktree principal;
+   - um worktree com um agente de IA aberto;
+   - uma pasta aberta num terminal ou editor. Ela fica, com o nome de quem a
+     segura.
+
+   Worktree travado com `git worktree lock` aparece desmarcado (ADR-065).
 
 ### Claude Code por tarefa
 
@@ -786,7 +805,7 @@ fica em [`CHANGELOG.md`](CHANGELOG.md).
 
 | Documento | Conteúdo |
 |---|---|
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | decisões de arquitetura (ADR-001 a ADR-062), com o motivo de cada uma |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | decisões de arquitetura (ADR-001 a ADR-066), com o motivo de cada uma |
 | [`docs/sync.md`](docs/sync.md) | sincronização entre computadores: a tela, o que sincroniza, onde cada tarefa aparece, conflitos e limitações |
 | [`docs/sync-server.md`](docs/sync-server.md) | o servidor de sincronização: cliente OAuth do Google, configuração, migrations, implantação e testes |
 | [`docs/mcp-server.md`](docs/mcp-server.md) | servidor MCP local: ativar, porta, token, Claude Code, as ferramentas, segurança e limitações |

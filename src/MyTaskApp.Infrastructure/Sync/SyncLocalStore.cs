@@ -338,7 +338,7 @@ internal sealed class SyncLocalStore(
                 return;
 
             // A outra precisa existir aqui, e não só ter estado: o comando que
-            // espera um apelido livre (ADR-065) tem estado e nenhuma linha.
+            // espera um apelido livre (ADR-066) tem estado e nenhuma linha.
             case SyncErrorCodes.UniqueViolation
                 when result.RejectedFields.FirstOrDefault()?.ConflictingEntityId is { } other
                 && await context.SyncEntityStates.AnyAsync(candidate => candidate.EntityType == operation.EntityType && candidate.EntityId == other && !candidate.IsDeleted, cancellationToken)
@@ -458,7 +458,7 @@ internal sealed class SyncLocalStore(
             await context.SyncOutbox.CountAsync(row => row.State == SyncOutboxState.Pending, cancellationToken),
             await context.SyncOutbox.CountAsync(row => row.State == SyncOutboxState.Failed, cancellationToken),
             await context.SyncConflicts.CountAsync(row => row.ResolvedAt == null, cancellationToken),
-            // O botão que espera o comando (ADR-065) já conta no aviso do comando.
+            // O botão que espera o comando (ADR-066) já conta no aviso do comando.
             await context.SyncEntityStates.CountAsync(
                 row => row.ApplyErrorCode != null && row.ApplyErrorCode != SyncWaitingCodes.WaitingCommand,
                 cancellationToken),

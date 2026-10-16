@@ -7,7 +7,7 @@ using MyTaskApp.Infrastructure.Sync.Mapping;
 namespace MyTaskApp.Infrastructure.Sync.Capture;
 
 /// <summary>
-/// O que a escolha de compartilhar um comando global (ADR-065) acrescenta a um
+/// O que a escolha de compartilhar um comando global (ADR-066) acrescenta a um
 /// <c>SaveChanges</c>. Os botões de diretório seguem o comando, mas ninguém os
 /// toca quando só o comando muda: marcar "compartilhar" precisa mandá-los
 /// junto, desmarcar precisa desligá-los, e excluir um comando que não é

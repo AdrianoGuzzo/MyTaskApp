@@ -137,7 +137,7 @@ public sealed class PushProcessorTests
     }
 
     /// <summary>
-    /// ADR-065: o comando que voltou a ser compartilhado depois de excluído em
+    /// ADR-066: o comando que voltou a ser compartilhado depois de excluído em
     /// outro computador. Quem manda já viu a exclusão (a versão base alcança a
     /// do tombstone) e manda a entidade inteira: é recriar de propósito.
     /// </summary>

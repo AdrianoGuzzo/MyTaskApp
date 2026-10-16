@@ -140,6 +140,10 @@ public static class DependencyInjection
         services.AddScoped<RemoveWorktreeHandler>();
         services.AddScoped<ProbeWorktreesHandler>();
 
+        // Limpeza de worktrees: os sem tarefa e os de tarefa encerrada (ADR-065).
+        services.AddScoped<FindWorktreeCleanupHandler>();
+        services.AddScoped<CleanWorktreesHandler>();
+
         // O banco copiado para o ambiente, e o {database} dos comandos (ADR-060).
         services.AddScoped<ValidateDevelopmentDatabaseCopyHandler>();
         services.AddScoped<CopyDevelopmentDatabaseHandler>();

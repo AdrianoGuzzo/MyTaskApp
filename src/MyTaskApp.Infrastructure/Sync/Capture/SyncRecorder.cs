@@ -16,7 +16,7 @@ namespace MyTaskApp.Infrastructure.Sync.Capture;
 /// </summary>
 /// <param name="ForceLocalOnly">
 /// Não compartilhada mesmo sem <see cref="Entry"/> para perguntar: o botão de
-/// um comando não compartilhado que a cascata levou (ADR-065).
+/// um comando não compartilhado que a cascata levou (ADR-066).
 /// </param>
 internal sealed record SyncTouched(SyncEntityMapper Mapper, EntityEntry? Entry, Guid Id, bool ForceLocalOnly = false)
 {
@@ -79,7 +79,7 @@ internal sealed class SyncRecorder(IDeviceIdentity device, TimeProvider timeProv
             var entityOutbox = outbox.Where(row => row.EntityType == type && row.EntityId == item.Id).ToList();
             var unsent = entityOutbox.Where(row => row is { Attempted: false, State: SyncOutboxState.Pending }).ToList();
 
-            // Escolhida para ficar aqui (ADR-065): nada vai, nem a exclusão — a
+            // Escolhida para ficar aqui (ADR-066): nada vai, nem a exclusão — a
             // cópia que outro computador já tem fica com ele. O que ainda não
             // saiu daqui não sai mais.
             if (item.ForceLocalOnly || (item.Entry is not null && item.Mapper.IsLocalOnly(item.Entry)))
@@ -138,7 +138,7 @@ internal sealed class SyncRecorder(IDeviceIdentity device, TimeProvider timeProv
             Dictionary<string, JsonElement> fields;
 
             // Desligada e compartilhada de novo: vai inteira, sobre a última versão
-            // que o servidor mostrou — a daqui é a que vale (ADR-065).
+            // que o servidor mostrou — a daqui é a que vale (ADR-066).
             if (state is null || state.IsDeleted || state.IsDetached)
             {
                 fields = projection;

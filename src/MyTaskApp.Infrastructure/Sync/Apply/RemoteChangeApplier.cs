@@ -143,7 +143,7 @@ internal sealed class RemoteChangeApplier(
             return;
         }
 
-        // Este computador deixou de acompanhar a cópia de lá (ADR-065): nem
+        // Este computador deixou de acompanhar a cópia de lá (ADR-066): nem
         // edição nem exclusão de outro computador entram. A versão segue a do
         // servidor, para que compartilhar de novo faça valer a daqui.
         if (await IsDetachedHereAsync(change, mapper, state, cancellationToken))
@@ -358,7 +358,7 @@ internal sealed class RemoteChangeApplier(
     }
 
     /// <summary>
-    /// O comando que este computador desligou, ou um botão dele (ADR-065). O
+    /// O comando que este computador desligou, ou um botão dele (ADR-066). O
     /// botão é achado pelo comando do que chegou, ou do último estado
     /// conhecido, numa exclusão.
     /// </summary>

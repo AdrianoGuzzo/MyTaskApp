@@ -139,7 +139,7 @@ public class DevelopmentCommandsViewModelTests
         viewModel.StatusMessage.Should().Be("@build excluído.");
     }
 
-    /// <summary>ADR-065: o comando global é deste computador até alguém marcar.</summary>
+    /// <summary>ADR-066: o comando global é deste computador até alguém marcar.</summary>
     [Fact]
     public async Task ANewCommand_StartsNotShared_AndEditingShowsTheChoice()
     {

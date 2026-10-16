@@ -195,7 +195,7 @@ public sealed class TwoDeviceSyncTests(PostgresFixture postgres) : IAsyncLifetim
     }
 
     /// <summary>
-    /// ADR-065, o roteiro inteiro: o comando global é do computador onde nasceu
+    /// ADR-066, o roteiro inteiro: o comando global é do computador onde nasceu
     /// até ser compartilhado; desmarcado, cada um fica com a sua cópia, e
     /// compartilhar de novo faz valer a de quem marcou — mesmo que o outro a
     /// tenha excluído.

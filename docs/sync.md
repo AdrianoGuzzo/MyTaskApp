@@ -168,7 +168,7 @@ Não escreva senha dentro de um comando compartilhado: ela iria junto.
 ### Comandos só deste computador
 
 O comando global nasce **só deste computador**: o texto costuma ter caminho,
-executável ou script de uma máquina só (ADR-065). Para mandar para os outros,
+executável ou script de uma máquina só (ADR-066). Para mandar para os outros,
 marque **Compartilhar entre computadores** no formulário de *Comandos
 globais*. A lista mostra "⇄ todos os computadores" no compartilhado. Os
 comandos que já existiam antes desta versão continuam compartilhados, e os do
@@ -237,7 +237,7 @@ pelo relógio dos computadores:
 - editar algo que foi excluído em outro computador vira conflito "excluído em
   outro computador". **Exclusão não ressuscita**: só vínculos (tarefa ↔
   etiqueta) podem voltar, e o comando que outro computador volta a
-  compartilhar depois de alguém excluí-lo (ADR-065).
+  compartilhar depois de alguém excluí-lo (ADR-066).
 
 A sincronização nunca para por causa de um conflito.
 

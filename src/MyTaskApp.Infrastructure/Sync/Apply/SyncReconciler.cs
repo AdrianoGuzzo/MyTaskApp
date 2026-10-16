@@ -50,7 +50,7 @@ internal sealed class SyncReconciler(
         var outbox = await context.SyncOutbox.ToListAsync(cancellationToken);
 
         // Conhecidas pela sincronização e que não estão mais no banco: saíram por
-        // cascata. Fora a desligada (ADR-065), cuja exclusão não sai daqui, e a
+        // cascata. Fora a desligada (ADR-066), cuja exclusão não sai daqui, e a
         // que chegou e espera para entrar, que nunca existiu aqui.
         var known = present.Select(item => (item.Mapper.Definition.Type, item.Id)).ToHashSet();
         var gone = states

@@ -262,7 +262,7 @@ public sealed class RetryReceivedChangesHandler(ISyncLocalStore store, RemoteRef
 
 /// <summary>
 /// Os códigos de uma mudança recebida que ainda não entrou porque espera algo
-/// deste computador (ADR-065), e não porque falhou. Cada ciclo tenta de novo.
+/// deste computador (ADR-066), e não porque falhou. Cada ciclo tenta de novo.
 /// </summary>
 public static class SyncWaitingCodes
 {
@@ -276,7 +276,7 @@ public static class SyncWaitingCodes
 }
 
 /// <summary>
-/// Busca de novo o que esperava (ADR-065): renomeado o comando local, o que
+/// Busca de novo o que esperava (ADR-066): renomeado o comando local, o que
 /// estava de fora entra no ciclo seguinte, sem ninguém clicar em nada.
 /// </summary>
 public sealed record RetryWaitingReceivedChanges;

@@ -17,7 +17,7 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                 nullable: false,
                 defaultValue: false);
 
-            // Escrito à mão (ADR-065): os comandos de antes já iam para todos os
+            // Escrito à mão (ADR-066): os comandos de antes já iam para todos os
             // computadores e continuam indo. O novo nasce deste computador pelo
             // domínio — o modelo não tem HasDefaultValue de propósito, ver
             // DevelopmentCommandConfiguration.

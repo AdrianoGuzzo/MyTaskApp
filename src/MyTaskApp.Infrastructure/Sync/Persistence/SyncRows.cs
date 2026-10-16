@@ -122,7 +122,7 @@ internal sealed class SyncEntityStateRow
     public long ReviewedVersion { get; set; }
 
     /// <summary>
-    /// Este computador deixou de acompanhar a cópia do servidor (ADR-065): o
+    /// Este computador deixou de acompanhar a cópia do servidor (ADR-066): o
     /// comando global desmarcado de "compartilhar" e os vínculos dele. Nada vai
     /// nem vem; <see cref="ServerVersion"/> segue o servidor para que, ao
     /// compartilhar de novo, a versão daqui seja a que vale.

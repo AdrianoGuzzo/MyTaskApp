@@ -190,7 +190,7 @@ internal static class SyncMappers
         ],
         [])
     {
-        // O botão de um comando que não é compartilhado fica com ele (ADR-065).
+        // O botão de um comando que não é compartilhado fica com ele (ADR-066).
         // Quem garante que o comando está no tracker é a captura.
         LocalOnly = entry => CommandIsLocalOnly(
             entry.Context,
@@ -213,7 +213,7 @@ internal static class SyncMappers
             C(UpdatedAt, nameof(DevelopmentCommand.UpdatedAt)),
         ],
         [
-            // Compartilhar é escolha deste computador (ADR-065).
+            // Compartilhar é escolha deste computador (ADR-066).
             nameof(DevelopmentCommand.IsShared),
         ])
     {
@@ -374,7 +374,7 @@ internal static class SyncMappers
         },
     };
 
-    /// <summary>O comando global que este computador não compartilha (ADR-065).</summary>
+    /// <summary>O comando global que este computador não compartilha (ADR-066).</summary>
     public static bool IsLocalOnlyCommand(EntityEntry entry) =>
         entry.Property(nameof(DevelopmentCommand.TagDirectoryId)).CurrentValue is null
         && !(bool)entry.Property(nameof(DevelopmentCommand.IsShared)).CurrentValue!;

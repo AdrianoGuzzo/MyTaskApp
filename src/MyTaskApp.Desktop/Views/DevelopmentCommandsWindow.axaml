@@ -207,7 +207,7 @@
                     IsChecked="{Binding RequiresConfirmation}" />
         </WrapPanel>
 
-        <!-- ADR-065: o comando global é deste computador até alguém marcar. -->
+        <!-- ADR-066: o comando global é deste computador até alguém marcar. -->
         <StackPanel Spacing="2">
           <CheckBox x:Name="IsSharedBox"
                     FontSize="12"

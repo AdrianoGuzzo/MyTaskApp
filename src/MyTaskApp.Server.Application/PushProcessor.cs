@@ -136,7 +136,7 @@ public sealed class PushProcessor(
 
         // Quem já viu a exclusão (a versão base alcança a do tombstone) e manda a
         // entidade inteira está recriando de propósito: o comando que voltou a ser
-        // compartilhado depois de excluído em outro computador (ADR-065). Quem não
+        // compartilhado depois de excluído em outro computador (ADR-066). Quem não
         // viu continua recebendo "excluído em outro dispositivo".
         var revive = current is { IsDeleted: true }
             && (definition.IsAssociation || operation.BaseVersion >= current.Version);

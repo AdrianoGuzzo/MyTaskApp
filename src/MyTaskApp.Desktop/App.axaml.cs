@@ -270,6 +270,12 @@ public sealed partial class App : Avalonia.Application
             () => Dispatcher.UIThread.Post(
                 () => _ = todayViewModel.LoadAsync(CancellationToken.None));
 
+        // A limpeza de worktrees (ADR-065) apaga a bolinha e o "Worktree criado"
+        // das linhas: a lista precisa saber agora, e não no próximo refresh.
+        services.GetRequiredService<WorktreeCleanupViewModel>().WorktreesChanged +=
+            () => Dispatcher.UIThread.Post(
+                () => _ = todayViewModel.LoadAsync(CancellationToken.None));
+
         // Primeiro tique imediato, como o dos lembretes: é ele que põe em dia o
         // que venceu enquanto o app esteve fechado.
         services.GetRequiredService<LifecycleMaintenanceScheduler>().Start();

@@ -40,7 +40,7 @@ public sealed class DevelopmentCommandListItemViewModel(DevelopmentCommandRow ro
             Row.IsGlobal && Row.IsShared ? SharedBadge : null,
         }.OfType<string>());
 
-    /// <summary>O comando que vai para os outros computadores (ADR-065); o local, o padrão, não leva marca.</summary>
+    /// <summary>O comando que vai para os outros computadores (ADR-066); o local, o padrão, não leva marca.</summary>
     public const string SharedBadge = "⇄ todos os computadores";
 
     public string? Description => Row.Description;
@@ -139,7 +139,7 @@ public sealed partial class DevelopmentCommandsViewModel(
     [ObservableProperty]
     private bool _requiresConfirmation;
 
-    /// <summary>Vai para os outros computadores (ADR-065). Desmarcado, o comando é só deste.</summary>
+    /// <summary>Vai para os outros computadores (ADR-066). Desmarcado, o comando é só deste.</summary>
     [ObservableProperty]
     private bool _isShared;
 
@@ -361,7 +361,7 @@ public sealed partial class DevelopmentCommandsViewModel(
             var count => $" O botão dele também sai dos {count} diretórios de etiqueta que o oferecem.",
         };
 
-        // O compartilhado sai de todos; o local, só daqui — as cópias de lá ficam (ADR-065).
+        // O compartilhado sai de todos; o local, só daqui — as cópias de lá ficam (ADR-066).
         var where = item.Row.IsShared
             ? " Ele sai de todos os computadores."
             : " Ele só sai deste computador.";

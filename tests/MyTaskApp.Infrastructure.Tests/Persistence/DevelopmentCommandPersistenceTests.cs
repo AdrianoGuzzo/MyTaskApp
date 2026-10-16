@@ -193,7 +193,7 @@ public class DevelopmentCommandPersistenceTests
     }
 
     /// <summary>
-    /// ADR-065: os comandos de antes já iam para todos os computadores e
+    /// ADR-066: os comandos de antes já iam para todos os computadores e
     /// continuam indo; só o novo nasce deste computador.
     /// </summary>
     [Fact]
