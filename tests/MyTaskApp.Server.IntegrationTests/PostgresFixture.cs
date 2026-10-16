@@ -37,7 +37,12 @@ public sealed class PostgresFixture : IAsyncLifetime
 
         try
         {
-            _container = new PostgreSqlBuilder("postgres:17-alpine").Build();
+            // Cada teste cria o seu banco, e cada banco guarda o seu pool de
+            // conexões até o fim da montagem: com as classes em paralelo (dois
+            // desktops, celular e desktop, a API), as 100 do padrão acabam.
+            _container = new PostgreSqlBuilder("postgres:17-alpine")
+                .WithCommand("-c", "max_connections=400")
+                .Build();
 
             await _container.StartAsync();
             _admin = _container.GetConnectionString();

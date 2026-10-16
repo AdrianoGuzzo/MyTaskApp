@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:MyTaskApp.Mobile.Core.ViewModels;assembly=MyTaskApp.Mobile.Core"
+             x:Class="MyTaskApp.Mobile.Views.ConnectPage"
+             x:DataType="vm:ConnectViewModel"
+             Title="Entrar">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="24" Spacing="14" VerticalOptions="Center">
+            <Label Text="Suas tarefas em todos os dispositivos" Style="{StaticResource Title}" HorizontalTextAlignment="Center" />
+            <Label Text="Entre com a mesma conta do computador. O celular passa a ver e alterar as tarefas de todos os dispositivos, e funciona também sem rede: o que você fizer sem conexão vai quando ela voltar."
+                   Style="{StaticResource Muted}"
+                   HorizontalTextAlignment="Center" />
+
+            <Label Text="{Binding Server, StringFormat='Servidor: {0}'}" Style="{StaticResource Muted}" HorizontalTextAlignment="Center" />
+
+            <Button Text="Entrar com Google"
+                    Command="{Binding SignInCommand}"
+                    IsEnabled="{Binding CanSignIn}"
+                    Margin="0,8,0,0" />
+
+            <ActivityIndicator IsRunning="{Binding IsWorking}" IsVisible="{Binding IsWorking}" />
+
+            <Label Text="{Binding Message}"
+                   HorizontalTextAlignment="Center"
+                   IsVisible="{Binding Message, Converter={StaticResource HasValue}}" />
+
+            <Button Text="Continuar sem conta"
+                    Style="{StaticResource Secondary}"
+                    Command="{Binding SkipCommand}" />
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

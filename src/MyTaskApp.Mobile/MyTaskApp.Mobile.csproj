@@ -1,0 +1,84 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    A casca MAUI do celular (ADR-065): telas, portas da plataforma e os
+    arquivos de Android e iOS. Toda a lógica está em MyTaskApp.Mobile.Core.
+
+    Fica fora do MyTaskApp.slnx (que o CI do desktop compila sem workload);
+    a solução dela é MyTaskApp.Mobile.slnx. O iOS só entra no macOS, ou com
+    -p:IncludeIos=true para conferir a configuração em outro sistema.
+  -->
+
+  <PropertyGroup>
+    <!-- O Directory.Build.props fixa net10.0 para todos; aqui são vários alvos. -->
+    <TargetFramework></TargetFramework>
+    <TargetFrameworks>net10.0-android</TargetFrameworks>
+    <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('osx')) or '$(IncludeIos)' == 'true'">$(TargetFrameworks);net10.0-ios</TargetFrameworks>
+
+    <OutputType>Exe</OutputType>
+    <RootNamespace>MyTaskApp.Mobile</RootNamespace>
+    <UseMaui>true</UseMaui>
+    <SingleProject>true</SingleProject>
+
+    <ApplicationTitle>MyTaskApp</ApplicationTitle>
+    <!-- O mesmo domínio reverso do esquema de volta do login (SyncSchema.MobileRedirectScheme). -->
+    <ApplicationId>io.github.adrianoguzzo.mytaskapp</ApplicationId>
+
+    <!-- A versão é a do produto (Release Please); o código de versão sobe junto: 1.15.0 → 11500. -->
+    <ApplicationDisplayVersion>$(VersionPrefix)</ApplicationDisplayVersion>
+    <ApplicationVersion>$([MSBuild]::Add($([MSBuild]::Add($([MSBuild]::Multiply($([System.Version]::Parse($(VersionPrefix)).Major), 10000)), $([MSBuild]::Multiply($([System.Version]::Parse($(VersionPrefix)).Minor), 100)))), $([System.Version]::Parse($(VersionPrefix)).Build)))</ApplicationVersion>
+
+    <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">24.0</SupportedOSPlatformVersion>
+    <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">15.0</SupportedOSPlatformVersion>
+
+    <!-- Bindings compilados também com Source: um binding errado é erro de build, não tela vazia. -->
+    <MauiEnableXamlCBindingWithSourceCompilation>true</MauiEnableXamlCBindingWithSourceCompilation>
+
+    <!--
+      O identificador do dispositivo, a captura da sincronização e a hidratação
+      dos lugares usam System.Text.Json por reflexão; com o trimming do MAUI,
+      isso vem desligado por padrão.
+    -->
+    <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
+
+    <!-- O EF Core e a reflexão do JSON avisam no trimming, como esperado; o trimming é parcial (abaixo). -->
+    <ILLinkTreatWarningsAsErrors>false</ILLinkTreatWarningsAsErrors>
+    <TrimMode>partial</TrimMode>
+
+    <!-- O endereço do servidor de sincronização vem da build, como no desktop. -->
+    <SyncApiBaseUrl Condition="'$(SyncApiBaseUrl)' == '' and '$(Configuration)' == 'Debug'">http://localhost:5280/</SyncApiBaseUrl>
+  </PropertyGroup>
+
+  <!-- iOS: o EF Core compila expressões em tempo de execução; sem JIT, o interpretador faz isso. -->
+  <PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">
+    <UseInterpreter>true</UseInterpreter>
+    <CodesignEntitlements>Platforms\iOS\Entitlements.plist</CodesignEntitlements>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyMetadata Include="SyncApiBaseUrl" Value="$(SyncApiBaseUrl)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <TrimmerRootAssembly Include="MyTaskApp.Domain" />
+    <TrimmerRootAssembly Include="MyTaskApp.Application" />
+    <TrimmerRootAssembly Include="MyTaskApp.Infrastructure" />
+    <TrimmerRootAssembly Include="MyTaskApp.Sync.Contracts" />
+    <TrimmerRootAssembly Include="MyTaskApp.Mobile.Core" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#17181C" />
+    <MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#17181C" BaseSize="128,128" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MyTaskApp.Mobile.Core\MyTaskApp.Mobile.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Maui.Controls" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Debug" />
+  </ItemGroup>
+
+</Project>

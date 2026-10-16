@@ -20,11 +20,22 @@ public class LayerDependencyTests
     private static readonly string[] Persistence = ["Microsoft.EntityFrameworkCore", "Npgsql"];
     private static readonly string[] Ui = ["Avalonia"];
 
+    /// <summary>O celular (ADR-065) usa a Application; o contrário nunca.</summary>
+    private const string Mobile = "MyTaskApp.Mobile";
+
     [Fact]
     public void TheDomain_DependsOnNothingFromTheApp_NorOnPersistenceOrUi()
     {
         References(typeof(TaskItem).Assembly).Should().NotContain(name =>
             name.StartsWith("MyTaskApp", StringComparison.Ordinal) || IsAnyOf(name, Persistence) || IsAnyOf(name, Ui));
+    }
+
+    /// <summary>O desktop e o celular são duas cascas sobre o mesmo núcleo: nenhum conhece o outro.</summary>
+    [Fact]
+    public void TheDesktop_DoesNotKnowTheMobileApp()
+    {
+        References(typeof(TodayViewModel).Assembly).Should().NotContain(name =>
+            name.StartsWith(Mobile, StringComparison.Ordinal));
     }
 
     [Fact]
@@ -42,6 +53,7 @@ public class LayerDependencyTests
             name == typeof(DependencyInjection).Assembly.GetName().Name
             || name == typeof(McpServerManager).Assembly.GetName().Name
             || name == typeof(TodayViewModel).Assembly.GetName().Name
+            || name.StartsWith(Mobile, StringComparison.Ordinal)
             || IsAnyOf(name, Persistence)
             || IsAnyOf(name, Ui));
     }
@@ -52,6 +64,7 @@ public class LayerDependencyTests
     {
         References(typeof(McpServerManager).Assembly).Should().NotContain(name =>
             name == typeof(DependencyInjection).Assembly.GetName().Name
+            || name.StartsWith(Mobile, StringComparison.Ordinal)
             || IsAnyOf(name, Persistence)
             || IsAnyOf(name, Ui));
     }
