@@ -32,6 +32,14 @@ internal sealed class SyncCaptureInterceptor(
         if (ShouldCapture(eventData.Context) is { } context)
         {
             var touched = CollectTouched(context);
+            var sharing = CommandSharingCapture.Of(context, touched);
+
+            if (!sharing.IsEmpty)
+            {
+                sharing.UntrackedCommandsQuery(context).Load();
+                sharing.FlippedLinksQuery(context).Load();
+                touched = sharing.Expand(context, touched, sharing.CascadedLinksQuery(context).ToList());
+            }
 
             if (touched.Count > 0)
             {
@@ -51,6 +59,15 @@ internal sealed class SyncCaptureInterceptor(
         if (ShouldCapture(eventData.Context) is { } context)
         {
             var touched = CollectTouched(context);
+            var sharing = CommandSharingCapture.Of(context, touched);
+
+            if (!sharing.IsEmpty)
+            {
+                await sharing.UntrackedCommandsQuery(context).LoadAsync(cancellationToken);
+                await sharing.FlippedLinksQuery(context).LoadAsync(cancellationToken);
+                var cascaded = await sharing.CascadedLinksQuery(context).ToListAsync(cancellationToken);
+                touched = sharing.Expand(context, touched, cascaded);
+            }
 
             if (touched.Count > 0)
             {

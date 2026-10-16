@@ -26,6 +26,11 @@ namespace MyTaskApp.Domain.Commands;
 /// apelido, não aparece em Comandos globais nem na lista pós-Worktree, e vai
 /// embora com o diretório. O nome é obrigatório, porque é o rótulo do botão.
 /// </para>
+/// <para>
+/// O comando global é <b>deste computador</b> até ser marcado como compartilhado
+/// (<see cref="IsShared"/>, ADR-066): o texto costuma ter caminho, executável e
+/// script de uma máquina só.
+/// </para>
 /// </remarks>
 public sealed class DevelopmentCommand
 {
@@ -49,6 +54,7 @@ public sealed class DevelopmentCommand
     {
         Id = id;
         TagDirectoryId = tagDirectoryId;
+        IsShared = tagDirectoryId is not null;
         Alias = alias;
         Command = command;
         Description = description;
@@ -95,6 +101,13 @@ public sealed class DevelopmentCommand
 
     /// <summary>Mostra a linha final e pede um clique antes de executar.</summary>
     public bool RequiresConfirmation { get; private set; }
+
+    /// <summary>
+    /// Se o comando global vai para os outros computadores (ADR-066). Nasce
+    /// desmarcado. É escolha deste computador e não viaja: desmarcar deixa as
+    /// cópias de lá como estão. O comando do diretório vai sempre, com o diretório.
+    /// </summary>
+    public bool IsShared { get; private set; }
 
     /// <summary>Como perguntar cada <c>{nome}</c>, na ordem do formulário.</summary>
     public IReadOnlyList<DevelopmentCommandParameter> Parameters =>
@@ -179,6 +192,20 @@ public sealed class DevelopmentCommand
         }
 
         Change(NormalizeAlias(alias), command, description, settings, at);
+    }
+
+    /// <summary>
+    /// Compartilha ou deixa de compartilhar o comando global (ADR-066). Não conta
+    /// como edição: <see cref="UpdatedAt"/> viaja, e a escolha é só daqui.
+    /// </summary>
+    public void SetSharing(bool isShared)
+    {
+        if (!IsGlobal)
+        {
+            throw new DomainException("O comando do diretório vai para todos os computadores com o diretório.");
+        }
+
+        IsShared = isShared;
     }
 
     /// <summary>Atômico, como o global. Só no comando do diretório (ADR-055).</summary>

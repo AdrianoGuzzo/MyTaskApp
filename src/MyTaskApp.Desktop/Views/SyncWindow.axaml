@@ -205,6 +205,13 @@
                        Text="{Binding ReceivedFailures, StringFormat='{}{0} mudança(s) da conta não entraram neste computador.'}" />
             <Button Grid.Column="1" Content="Tentar de novo" Command="{Binding RetryReceivedCommand}" />
           </Grid>
+          <ItemsControl x:Name="WaitingList" ItemsSource="{Binding WaitingMessages}" IsVisible="{Binding HasWaitingMessages}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="x:String">
+                <TextBlock Classes="meta" TextWrapping="Wrap" Margin="0,2" Text="{Binding}" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
         </StackPanel>
       </Border>
 

@@ -85,6 +85,7 @@ public static class DependencyInjection
         services.AddScoped<RetrySyncOperationHandler>();
         services.AddScoped<DiscardSyncOperationHandler>();
         services.AddScoped<RetryReceivedChangesHandler>();
+        services.AddScoped<RetryWaitingReceivedChangesHandler>();
         services.AddScoped<ListCommandReviewsHandler>();
         services.AddScoped<ApproveCommandReviewHandler>();
         services.AddScoped<GetTaskOriginHandler>();

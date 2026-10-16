@@ -139,7 +139,8 @@ public static class CommandAliasResolver
                 index,
                 entry,
                 null,
-                $"O comando {alias} não existe. Cadastre-o em Comandos globais ou corrija o apelido.");
+                $"O comando {alias} não existe neste computador. Cadastre-o em Comandos globais "
+                + "(ou marque \"Compartilhar entre computadores\" no computador onde ele existe) ou corrija o apelido.");
         }
 
         var expansion = Expand(command, entry[alias.Length..], context);

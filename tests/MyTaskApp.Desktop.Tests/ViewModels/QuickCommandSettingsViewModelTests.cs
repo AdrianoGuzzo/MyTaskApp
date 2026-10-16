@@ -45,8 +45,8 @@ public class QuickCommandSettingsViewModelTests
 
         var run = viewModel.Commands.Single(item => item.Alias == "@run");
         run.DisplayName.Should().Be("Executar aplicação");
-        run.Summary.Should().Be("Terminal · pasta src/Eco.Web · pede confirmação · em 2 diretórios");
-        viewModel.Commands.Single(item => item.Alias == "@test").Summary.Should().Be("Execução");
+        run.Summary.Should().Be("Terminal · pasta src/Eco.Web · pede confirmação · em 2 diretórios · ⇄ todos os computadores");
+        viewModel.Commands.Single(item => item.Alias == "@test").Summary.Should().Be("Execução · ⇄ todos os computadores");
     }
 
     [Fact]

@@ -134,4 +134,38 @@ public class DevelopmentCommandHandlerTests
 
         rows.Select(row => row.Alias).Should().Equal("@build", "@restore");
     }
+
+    /// <summary>ADR-066: o comando novo fica neste computador, a menos que marcado.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Create_SharesOnlyWhenAsked(bool shared)
+    {
+        var row = await Create().HandleAsync(
+            new CreateDevelopmentCommand("@build", "dotnet build", null, IsShared: shared), Ct);
+
+        row.IsShared.Should().Be(shared);
+        _commands.Commands.Single().IsShared.Should().Be(shared);
+    }
+
+    [Fact]
+    public async Task Create_ByDefault_StaysHere()
+    {
+        var row = await Create().HandleAsync(new CreateDevelopmentCommand("@build", "dotnet build", null), Ct);
+
+        row.IsShared.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Update_ChangesTheSharing_OnlyWhenAsked()
+    {
+        var existing = _commands.Seed("@build", "dotnet build");
+
+        (await Update().HandleAsync(new UpdateDevelopmentCommand(existing.Id, "@build", "dotnet build", null, IsShared: true), Ct))
+            .IsShared.Should().BeTrue();
+        (await Update().HandleAsync(new UpdateDevelopmentCommand(existing.Id, "@build", "dotnet build -c Release", null), Ct))
+            .IsShared.Should().BeTrue();
+        (await Update().HandleAsync(new UpdateDevelopmentCommand(existing.Id, "@build", "dotnet build", null, IsShared: false), Ct))
+            .IsShared.Should().BeFalse();
+    }
 }
