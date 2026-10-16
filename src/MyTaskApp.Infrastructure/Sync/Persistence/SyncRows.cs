@@ -121,6 +121,18 @@ internal sealed class SyncEntityStateRow
     /// </summary>
     public long ReviewedVersion { get; set; }
 
+    /// <summary>
+    /// Este computador deixou de acompanhar a cópia do servidor (ADR-065): o
+    /// comando global desmarcado de "compartilhar" e os vínculos dele. Nada vai
+    /// nem vem; <see cref="ServerVersion"/> segue o servidor para que, ao
+    /// compartilhar de novo, a versão daqui seja a que vale.
+    /// </summary>
+    /// <remarks>
+    /// Não é <see cref="IsDeleted"/>: a linha local continua, e o portão de
+    /// revisão de comando alheio continua valendo para ela.
+    /// </remarks>
+    public bool IsDetached { get; set; }
+
     public string? ApplyErrorCode { get; set; }
 
     public string? ApplyError { get; set; }

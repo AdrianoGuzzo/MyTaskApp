@@ -136,6 +136,30 @@ public sealed class PushProcessorTests
         _server.Get(_workspace, SyncEntityTypes.Task, task)!.IsDeleted.Should().BeTrue();
     }
 
+    /// <summary>
+    /// ADR-065: o comando que voltou a ser compartilhado depois de excluído em
+    /// outro computador. Quem manda já viu a exclusão (a versão base alcança a
+    /// do tombstone) e manda a entidade inteira: é recriar de propósito.
+    /// </summary>
+    [Fact]
+    public async Task ADeviceThatSawTheDelete_CanCreateItAgain_Whole()
+    {
+        var task = Guid.CreateVersion7();
+        await PushOneAsync(Ops.Upsert(_device, SyncEntityTypes.Task, task, 0, Ops.Task()));
+        await PushOneAsync(Ops.Delete(_device, SyncEntityTypes.Task, task, 1));
+
+        var partial = await PushOneAsync(Ops.Upsert(_device, SyncEntityTypes.Task, task, 2, new() { [SyncFields.Task.Title] = SyncValue.String("De volta") }));
+        partial.Error!.Code.Should().Be(SyncErrorCodes.ValidationFailed);
+
+        var whole = await PushOneAsync(Ops.Upsert(_device, SyncEntityTypes.Task, task, 2, Ops.Task("De volta")));
+
+        whole.Outcome.Should().Be(OperationOutcome.Applied);
+        var stored = _server.Get(_workspace, SyncEntityTypes.Task, task)!;
+        stored.IsDeleted.Should().BeFalse();
+        stored.Version.Should().Be(3);
+        stored.Data[SyncFields.Task.Title].GetString().Should().Be("De volta");
+    }
+
     [Fact]
     public async Task ADeleteThatArrivesBeforeTheCreation_StillWins()
     {

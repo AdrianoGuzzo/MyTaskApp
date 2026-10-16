@@ -194,6 +194,29 @@ public class QuickCommandsRenderingTests
         viewModel.IsTerminal.Should().BeTrue();
     }
 
+    /// <summary>ADR-065: o check aparece desmarcado e liga o comando a todos os computadores.</summary>
+    [AvaloniaFact]
+    public async Task TheGlobalsWindow_DrawsTheShareCheck_Unticked()
+    {
+        var runner = new FakeUseCaseRunner();
+        runner.ResultsByHandler[typeof(GetDevelopmentCommandsHandler)] = (IReadOnlyList<DevelopmentCommandRow>)[];
+        var viewModel = new DevelopmentCommandsViewModel(runner, new FakeConfirmationDialog(), NullLogger<DevelopmentCommandsViewModel>.Instance);
+
+        var window = new DevelopmentCommandsWindow(viewModel);
+        window.Show();
+        await viewModel.LoadAsync(CancellationToken.None);
+        Settle(window);
+
+        var share = Named<CheckBox>(window, "IsSharedBox");
+        share.IsChecked.Should().BeFalse();
+        share.IsEffectivelyVisible.Should().BeTrue();
+
+        share.IsChecked = true;
+        Settle(window);
+
+        viewModel.IsShared.Should().BeTrue();
+    }
+
     [AvaloniaFact]
     public async Task TheTagsWindow_DrawsTheDirectoryCommands()
     {

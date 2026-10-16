@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Sync;
 using MyTaskApp.Application.Tasks;
+using MyTaskApp.Domain.Commands;
 using MyTaskApp.Domain.Devices;
 using MyTaskApp.Domain.Tags;
 using MyTaskApp.Domain.Tasks;
@@ -191,6 +192,60 @@ public sealed class TwoDeviceSyncTests(PostgresFixture postgres) : IAsyncLifetim
         onNotebook.Path.Should().Be(notebookPath);
         onDesktop.Alias.Should().Be("@api-v2");
         onDesktop.Name.Should().Be("API nova");
+    }
+
+    /// <summary>
+    /// ADR-065, o roteiro inteiro: o comando global é do computador onde nasceu
+    /// até ser compartilhado; desmarcado, cada um fica com a sua cópia, e
+    /// compartilhar de novo faz valer a de quem marcou — mesmo que o outro a
+    /// tenha excluído.
+    /// </summary>
+    [Fact]
+    public async Task AGlobalCommand_GoesOnlyWhenShared_AndEachKeepsItsCopyAfterwards()
+    {
+        var notebook = await ConnectedAsync("Notebook");
+        var desktop = await ConnectedAsync("Desktop");
+        var build = DevelopmentCommand.Create("@build", "dotnet build", null, Now);
+        await notebook.ChangeAsync(context => context.Add(build), Ct);
+        await notebook.SyncedAsync(Ct);
+        await desktop.SyncedAsync(Ct);
+
+        (await CommandTextAsync(desktop)).Should().BeNull("o comando novo é só do notebook");
+
+        await EditCommandAsync(notebook, build.Id, mine => mine.SetSharing(true));
+        await notebook.SyncedAsync(Ct);
+        await desktop.SyncedAsync(Ct);
+
+        (await CommandTextAsync(desktop)).Should().Be("dotnet build");
+        (await desktop.ReadAsync(context => context.DevelopmentCommands.SingleAsync(Ct))).IsShared.Should().BeTrue();
+
+        await EditCommandAsync(notebook, build.Id, mine =>
+        {
+            mine.SetSharing(false);
+            mine.Update("@build", "dotnet build -c Release", null, Now);
+        });
+        await EditCommandAsync(desktop, build.Id, mine => mine.Update("@build", "dotnet build -c Debug", null, Now));
+        await notebook.SyncedAsync(Ct);
+        await desktop.SyncedAsync(Ct);
+        await notebook.SyncedAsync(Ct);
+
+        (await CommandTextAsync(notebook)).Should().Be("dotnet build -c Release");
+        (await CommandTextAsync(desktop)).Should().Be("dotnet build -c Debug");
+
+        await desktop.ChangeAsync(
+            async context => context.Remove(await context.DevelopmentCommands.Include(command => command.Parameters).SingleAsync(Ct)),
+            Ct);
+        await desktop.SyncedAsync(Ct);
+        await notebook.SyncedAsync(Ct);
+
+        (await CommandTextAsync(notebook)).Should().Be("dotnet build -c Release", "excluir lá não exclui a cópia daqui");
+
+        await EditCommandAsync(notebook, build.Id, mine => mine.SetSharing(true));
+        await notebook.SyncedAsync(Ct);
+        await desktop.SyncedAsync(Ct);
+
+        (await CommandTextAsync(desktop)).Should().Be("dotnet build -c Release");
+        (await notebook.ReadAsync(context => context.SyncOutbox.CountAsync(Ct))).Should().Be(0);
     }
 
     [Fact]
@@ -424,6 +479,16 @@ public sealed class TwoDeviceSyncTests(PostgresFixture postgres) : IAsyncLifetim
     }
 
     /// <summary>Instalado, conectado e com a primeira sincronização feita.</summary>
+    private static Task<string?> CommandTextAsync(SyncedDesktop device) =>
+        device.ReadAsync(context => context.DevelopmentCommands.Select(command => command.Command).SingleOrDefaultAsync(Ct));
+
+    private static Task EditCommandAsync(SyncedDesktop device, Guid id, Action<DevelopmentCommand> edit) =>
+        device.ChangeAsync(async context =>
+        {
+            var command = await context.DevelopmentCommands.Include(command => command.Parameters).SingleAsync(command => command.Id == id, Ct);
+            edit(command);
+        }, Ct);
+
     private async Task<SyncedDesktop> ConnectedAsync(string nickname, string googleSubject = Ana)
     {
         var desktop = await DesktopAsync(nickname);

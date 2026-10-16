@@ -199,7 +199,9 @@ A janela da tarefa tem a aba **Desenvolvimento**:
 2. **Comandos pós-worktree.** Uma lista ordenada, como `dotnet restore` e
    `npm ci`, roda em sequência com o output ao vivo e para no primeiro erro.
    Os **comandos globais** (`@restore` → `dotnet restore`) ficam em
-   *☰ → Comandos globais…*.
+   *☰ → Comandos globais…*. Com a sincronização ligada, cada um fica só no
+   computador onde foi criado, a menos que você marque **Compartilhar entre
+   computadores** (ADR-065).
 3. **Comandos rápidos.** Ligue um comando global a um diretório da etiqueta
    (*☰ → Etiquetas… → Comandos*) e ele vira um botão **▶** no worktree pronto
    de toda tarefa daquele repositório: "▶ Executar aplicação" abre um terminal

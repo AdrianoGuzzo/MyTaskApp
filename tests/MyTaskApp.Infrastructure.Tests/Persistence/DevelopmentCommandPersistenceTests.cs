@@ -172,4 +172,59 @@ public class DevelopmentCommandPersistenceTests
         task.Developments[0].Commands.Should().BeEmpty();
         (await read.DevelopmentCommands.CountAsync(Ct)).Should().Be(0);
     }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TheChoiceToShare_IsStored(bool shared)
+    {
+        await using var db = await new TempSqliteDatabase().MigrateAsync(Ct);
+        var created = DevelopmentCommand.Create("@restore", "dotnet restore", null, Now);
+        created.SetSharing(shared);
+
+        await using (var write = db.CreateContext())
+        {
+            write.DevelopmentCommands.Add(created);
+            await write.SaveChangesAsync(Ct);
+        }
+
+        await using var read = db.CreateContext();
+        (await read.DevelopmentCommands.SingleAsync(Ct)).IsShared.Should().Be(shared);
+    }
+
+    /// <summary>
+    /// ADR-065: os comandos de antes já iam para todos os computadores e
+    /// continuam indo; só o novo nasce deste computador.
+    /// </summary>
+    [Fact]
+    public async Task CommandsFromBefore_StayShared()
+    {
+        await using var db = await new TempSqliteDatabase().MigrateToAsync("TagDirectoryRepositoryUrl", Ct);
+        var commandId = Guid.CreateVersion7();
+
+        await using (var write = db.CreateContext())
+        {
+            await write.Database.ExecuteSqlAsync(
+                $"""
+                 INSERT INTO DevelopmentCommands
+                     (Id, Alias, Command, Description, CreatedAt, UpdatedAt, Mode, KeepTerminalOpen, RequiresConfirmation)
+                 VALUES ({commandId}, {"@restore"}, {"dotnet restore"}, NULL, {Now.UtcTicks}, {Now.UtcTicks}, 0, 1, 0);
+                 """,
+                Ct);
+
+            await write.Database.ExecuteSqlAsync(
+                $"""
+                 INSERT INTO SyncEntityStates (EntityType, EntityId, ServerVersion, IsDeleted, ReviewedVersion)
+                 VALUES ({"command"}, {commandId}, 3, 0, 0);
+                 """,
+                Ct);
+        }
+
+        await db.MigrateAsync(Ct);
+
+        await using var read = db.CreateContext();
+        (await read.DevelopmentCommands.SingleAsync(Ct)).IsShared.Should().BeTrue();
+        (await read.SyncEntityStates.SingleAsync(Ct)).IsDetached.Should().BeFalse();
+        DevelopmentCommand.Create("@build", "dotnet build", null, Now).IsShared.Should().BeFalse();
+    }
 }

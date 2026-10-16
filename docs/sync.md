@@ -92,7 +92,9 @@ aparece **só no computador onde foi criada** ou **em todos os computadores**.
 - **Etiquetas:** o seletor de etiquetas mostra as daqui e as compartilhadas,
   mais as que já marcam a tarefa aberta. Criar uma etiqueta com o nome de uma
   que está escondida aqui reaproveita aquela etiqueta e a compartilha.
-- **Post-its e comandos globais** continuam aparecendo em todos.
+- **Post-its** continuam aparecendo em todos. **Comandos globais** não têm
+  seletor: os compartilhados estão em todos, e os outros só no computador onde
+  foram criados (ver "Comandos só deste computador").
 
 Sem outro computador na conta, nada disso aparece, e a lista é a de sempre.
 
@@ -128,7 +130,7 @@ sincronização.
 | Agendamento | data e hora, situação, prazo | posição manual, estado dos lembretes e dos alertas |
 | Etiqueta e vínculo com a tarefa | nome, cor | — |
 | Diretório da etiqueta | alias, nome, descrição, branch padrão, URL do repositório | **o caminho da pasta** |
-| Comandos globais e do diretório | texto, nome, modo, parâmetros, pasta relativa, ordem, ligado | a revisão local |
+| Comandos globais **marcados como compartilhados** e os do diretório | texto, nome, modo, parâmetros, pasta relativa, ordem, ligado | a revisão local; **a escolha de compartilhar**; o comando global desmarcado inteiro, com os botões dele |
 | Ambiente de desenvolvimento | branch, origem, tag, prompt, lista de comandos | **repositório, worktree, situação, banco copiado** |
 | Horas | início, fim, origem, nota | o cronômetro **enquanto roda** |
 | Post-it | texto, aparência, arquivamento, lixeira, tarefa gerada | aberto, fixado, posição, tamanho |
@@ -161,7 +163,30 @@ rodar algo que você não escreveu aqui. Por isso, até alguém conferir o texto
 janela de Sincronização, ele não roda, nem pelo botão, nem pelo ambiente, nem
 pelo comando rápido.
 
-Não escreva senha dentro de um comando: ela iria junto.
+Não escreva senha dentro de um comando compartilhado: ela iria junto.
+
+### Comandos só deste computador
+
+O comando global nasce **só deste computador**: o texto costuma ter caminho,
+executável ou script de uma máquina só (ADR-065). Para mandar para os outros,
+marque **Compartilhar entre computadores** no formulário de *Comandos
+globais*. A lista mostra "⇄ todos os computadores" no compartilhado. Os
+comandos que já existiam antes desta versão continuam compartilhados, e os do
+diretório da etiqueta sempre acompanham o diretório.
+
+- **Desmarcar** um compartilhado não apaga nada: os outros computadores ficam
+  com a cópia que já têm. Daí em diante, as mudanças daqui não vão, e as de lá
+  não chegam aqui. A tela pede confirmação antes.
+- **Excluir** o compartilhado tira de todos. O desmarcado, só daqui.
+- **Marcar de novo** faz valer a versão daqui nos outros computadores, mesmo
+  que um deles o tenha excluído nesse meio-tempo.
+- **O mesmo apelido nos dois lados:** se chega um `@build` compartilhado e aqui
+  já existe um `@build` só deste computador, o daqui fica como está, e o de lá
+  espera com um aviso na janela de Sincronização. Renomeie um dos dois (o de lá
+  entra sozinho no ciclo seguinte), ou marque o daqui para compartilhar, e os
+  dois viram um.
+- Uma tarefa que chama `@build` num computador sem ele avisa que o comando não
+  existe neste computador.
 
 ## Como funciona
 
@@ -211,7 +236,8 @@ pelo relógio dos computadores:
 - nome de etiqueta repetido na conta vira conflito "o nome já existe";
 - editar algo que foi excluído em outro computador vira conflito "excluído em
   outro computador". **Exclusão não ressuscita**: só vínculos (tarefa ↔
-  etiqueta) podem voltar.
+  etiqueta) podem voltar, e o comando que outro computador volta a
+  compartilhar depois de alguém excluí-lo (ADR-065).
 
 A sincronização nunca para por causa de um conflito.
 
@@ -219,8 +245,9 @@ A sincronização nunca para por causa de um conflito.
 
 1. Traz tudo o que a conta já tem (cursor zero).
 2. Junta pelo nome o que já existia aqui e lá: etiquetas, alias de comando
-   global e alias de diretório. Os vínculos da tarefa local passam para a
-   etiqueta da conta.
+   global compartilhado e alias de diretório. Os vínculos da tarefa local
+   passam para a etiqueta da conta. Um comando só deste computador não é
+   juntado: o de lá espera, com aviso (ver "Comandos só deste computador").
 3. Manda o que só existe aqui, com a origem "este computador" e a data de
    criação original.
 
@@ -265,8 +292,10 @@ um app atualizado sobe a versão do contrato, ele refaz a primeira conexão.
   você.
 - O cronômetro só sincroniza quando para.
 - Os registros de exclusão (tombstones) não são podados nesta versão.
-- O texto dos comandos viaja. Segredo digitado num comando vai junto. A
-  revisão local é a barreira, e não a solução.
+- O texto dos comandos compartilhados viaja. Segredo digitado num comando
+  compartilhado vai junto. A revisão local é a barreira, e não a solução.
+- Um botão de diretório criado em outro computador enquanto o comando estava
+  desmarcado aqui não chega quando ele volta a ser compartilhado.
 - A porta de volta do login (47833) é fixa: o servidor só aceita o endereço
   registrado.
 - Um espaço pessoal por conta, sem convites. O esquema do servidor já tem

@@ -139,6 +139,80 @@ public class DevelopmentCommandsViewModelTests
         viewModel.StatusMessage.Should().Be("@build excluído.");
     }
 
+    /// <summary>ADR-065: o comando global é deste computador até alguém marcar.</summary>
+    [Fact]
+    public async Task ANewCommand_StartsNotShared_AndEditingShowsTheChoice()
+    {
+        var viewModel = await LoadedAsync();
+        viewModel.IsShared.Should().BeFalse();
+
+        viewModel.Edit(viewModel.Commands[0]);
+        viewModel.IsShared.Should().BeTrue();
+
+        viewModel.CancelEdit();
+        viewModel.IsShared.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Unsharing_AsksFirst_AndKeepsTheFormWhenRefused()
+    {
+        var viewModel = await LoadedAsync();
+        _runner.ResultsByHandler[typeof(UpdateDevelopmentCommandHandler)] = Rows[0];
+        _confirmation.Answer = false;
+        viewModel.Edit(viewModel.Commands[0]);
+
+        viewModel.IsShared = false;
+        await viewModel.SaveAsync(Ct);
+
+        _confirmation.LastAsked!.Headline.Should().Be("Deixar de compartilhar @build?");
+        _confirmation.LastAsked.Message.Should().Contain("ficam com a cópia");
+        _runner.Invoked.Should().NotContain(typeof(UpdateDevelopmentCommandHandler));
+        viewModel.IsEditing.Should().BeTrue();
+
+        _confirmation.Answer = true;
+        await viewModel.SaveAsync(Ct);
+
+        _runner.Invoked.Should().Contain(typeof(UpdateDevelopmentCommandHandler));
+    }
+
+    [Fact]
+    public async Task SharingOrEditingAShared_AsksNothing()
+    {
+        var viewModel = await LoadedAsync();
+        _runner.ResultsByHandler[typeof(UpdateDevelopmentCommandHandler)] = Rows[0];
+        _runner.ResultsByHandler[typeof(CreateDevelopmentCommandHandler)] = Rows[0];
+
+        viewModel.Alias = "@test";
+        viewModel.Command = "dotnet test";
+        viewModel.IsShared = true;
+        await viewModel.SaveAsync(Ct);
+        viewModel.Edit(viewModel.Commands[0]);
+        viewModel.Command = "dotnet build -c Release";
+        await viewModel.SaveAsync(Ct);
+
+        _confirmation.Asked.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task TheList_MarksTheSharedOnes_AndDeletingSaysWhereItLeaves()
+    {
+        _runner.ResultsByHandler[typeof(GetDevelopmentCommandsHandler)] = new List<DevelopmentCommandRow>
+        {
+            Rows[0],
+            Rows[2] with { IsShared = false },
+        };
+        var viewModel = new DevelopmentCommandsViewModel(_runner, _confirmation, NullLogger<DevelopmentCommandsViewModel>.Instance);
+        await viewModel.LoadAsync(Ct);
+
+        viewModel.Commands[0].Summary.Should().Contain(DevelopmentCommandListItemViewModel.SharedBadge);
+        viewModel.Commands[1].Summary.Should().NotContain(DevelopmentCommandListItemViewModel.SharedBadge);
+
+        await viewModel.DeleteAsync(viewModel.Commands[0], Ct);
+        _confirmation.LastAsked!.Message.Should().Contain("sai de todos os computadores");
+        await viewModel.DeleteAsync(viewModel.Commands[1], Ct);
+        _confirmation.LastAsked!.Message.Should().Contain("só sai deste computador");
+    }
+
     [Fact]
     public async Task Test_WithoutAFolder_RunsNothing()
     {

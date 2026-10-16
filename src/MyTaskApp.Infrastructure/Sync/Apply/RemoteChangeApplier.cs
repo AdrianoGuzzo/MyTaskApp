@@ -143,6 +143,23 @@ internal sealed class RemoteChangeApplier(
             return;
         }
 
+        // Este computador deixou de acompanhar a cópia de lá (ADR-065): nem
+        // edição nem exclusão de outro computador entram. A versão segue a do
+        // servidor, para que compartilhar de novo faça valer a daqui.
+        if (await IsDetachedHereAsync(change, mapper, state, cancellationToken))
+        {
+            KeepPace(change, state);
+            page.Skipped++;
+            return;
+        }
+
+        if (await WaitingCommandOfAsync(change, mapper, cancellationToken) is { } waitingCommand)
+        {
+            Wait(change, state, SyncWaitingCodes.WaitingCommand, $"Este botão espera o comando {waitingCommand} entrar neste computador.");
+            page.Skipped++;
+            return;
+        }
+
         var snapshot = SyncSnapshot.Read(state?.Snapshot);
         var outbox = await context.SyncOutbox
             .Where(row => row.EntityType == change.EntityType && row.EntityId == change.EntityId && row.State == SyncOutboxState.Pending)
@@ -177,6 +194,18 @@ internal sealed class RemoteChangeApplier(
 
         if (await writer.FindCollisionAsync(mapper, change.EntityId, change.Fields, cancellationToken) is { } localId)
         {
+            // O apelido é de um comando que este computador não compartilha: ele
+            // fica como está, e o que chegou espera alguém renomear um dos dois.
+            if (mapper == SyncMappers.Command && await IsLocalOnlyCommandAsync(localId, cancellationToken))
+            {
+                var alias = SyncValue.ReadString(change.Fields[SyncFields.Command.Alias]);
+                Wait(change, state, SyncWaitingCodes.LocalAliasTaken,
+                    $"O comando {alias} de outro computador não entrou: {alias} já existe aqui como comando só deste computador. "
+                    + "Renomeie um dos dois ou marque \"Compartilhar entre computadores\" no daqui.");
+                page.Skipped++;
+                return;
+            }
+
             // Etiqueta juntada pelo nome: usada nos dois computadores, então de
             // todos (ADR-062). Quem compartilha é o reconcile, pelo domínio,
             // para a decisão subir como qualquer edição.
@@ -287,6 +316,10 @@ internal sealed class RemoteChangeApplier(
         state.UpdatedByDeviceId = change.UpdatedByDeviceId;
         state.UpdatedAt = change.UpdatedAt;
 
+        // O que esperava e foi excluído lá não espera mais nada.
+        state.ApplyErrorCode = null;
+        state.ApplyError = null;
+
         page.Areas |= AreaOf(change.EntityType);
         page.Applied++;
     }
@@ -322,6 +355,122 @@ internal sealed class RemoteChangeApplier(
 
         await merger.MergeAsync(mapper, localId, change.EntityId, change.Fields, cancellationToken);
         return true;
+    }
+
+    /// <summary>
+    /// O comando que este computador desligou, ou um botão dele (ADR-065). O
+    /// botão é achado pelo comando do que chegou, ou do último estado
+    /// conhecido, numa exclusão.
+    /// </summary>
+    private async Task<bool> IsDetachedHereAsync(
+        SyncChange change,
+        SyncEntityMapper mapper,
+        SyncEntityStateRow? state,
+        CancellationToken cancellationToken)
+    {
+        if (state is { IsDetached: true })
+        {
+            return true;
+        }
+
+        if (mapper != SyncMappers.DirectoryCommand || CommandIdOf(change, state) is not { } commandId)
+        {
+            return false;
+        }
+
+        var command = await context.SyncEntityStates.FindAsync([SyncEntityTypes.Command, commandId], cancellationToken);
+
+        return command is { IsDetached: true };
+    }
+
+    /// <summary>
+    /// O apelido do comando que o botão que chegou espera: o comando ficou de
+    /// fora (<see cref="SyncWaitingCodes"/>) e a linha ainda não existe aqui.
+    /// </summary>
+    private async Task<string?> WaitingCommandOfAsync(SyncChange change, SyncEntityMapper mapper, CancellationToken cancellationToken)
+    {
+        if (change.Deleted || mapper != SyncMappers.DirectoryCommand || CommandIdOf(change, null) is not { } commandId)
+        {
+            return null;
+        }
+
+        var command = await context.SyncEntityStates.FindAsync([SyncEntityTypes.Command, commandId], cancellationToken);
+
+        if (command is not { ApplyErrorCode: { } code } || !SyncWaitingCodes.IsWaiting(code)
+            || await context.DevelopmentCommands.AnyAsync(row => row.Id == commandId, cancellationToken))
+        {
+            return null;
+        }
+
+        return SyncSnapshot.Read(command.Snapshot).TryGetValue(SyncFields.Command.Alias, out var alias)
+            ? SyncValue.ReadString(alias)
+            : "de outro computador";
+    }
+
+    private static Guid? CommandIdOf(SyncChange change, SyncEntityStateRow? state)
+    {
+        var fields = change.Deleted ? SyncSnapshot.Read(state?.Snapshot) : change.Fields;
+
+        return fields.TryGetValue(SyncFields.DirectoryCommand.CommandId, out var value) ? SyncValue.ReadGuid(value) : null;
+    }
+
+    private Task<bool> IsLocalOnlyCommandAsync(Guid commandId, CancellationToken cancellationToken) =>
+        context.DevelopmentCommands.AnyAsync(
+            command => command.Id == commandId && command.TagDirectoryId == null && !command.IsShared,
+            cancellationToken);
+
+    /// <summary>
+    /// Desligado: a mudança não entra, mas a versão anda. A revisão que estava
+    /// em dia continua em dia — o texto daqui não mudou —, e a pendente
+    /// continua pendente.
+    /// </summary>
+    private void KeepPace(SyncChange change, SyncEntityStateRow? state)
+    {
+        if (state is null)
+        {
+            // O botão criado lá para um comando que daqui não acompanha.
+            context.SyncEntityStates.Add(new SyncEntityStateRow
+            {
+                EntityType = change.EntityType,
+                EntityId = change.EntityId,
+                ServerVersion = change.Version,
+                IsDeleted = change.Deleted,
+                IsDetached = true,
+            });
+
+            return;
+        }
+
+        if (state.ReviewedVersion >= state.ServerVersion)
+        {
+            state.ReviewedVersion = change.Version;
+        }
+
+        state.ServerVersion = change.Version;
+    }
+
+    /// <summary>
+    /// A mudança fica de fora, visível, sem andar a versão: buscada de novo,
+    /// ela é aplicada inteira (ver <see cref="RetryWaitingReceivedChangesHandler"/>).
+    /// </summary>
+    private void Wait(SyncChange change, SyncEntityStateRow? state, string code, string message)
+    {
+        if (state is null)
+        {
+            state = new SyncEntityStateRow { EntityType = change.EntityType, EntityId = change.EntityId };
+            context.SyncEntityStates.Add(state);
+        }
+
+        // O retrato do que chegou dá o apelido aos botões que esperam por ele.
+        if (state.ServerVersion == 0)
+        {
+            state.Snapshot = SyncSnapshot.Write(change.Fields);
+        }
+
+        state.ApplyErrorCode = code;
+        state.ApplyError = message.Length > 2000 ? message[..2000] : message;
+
+        logger.LogInformation("SyncChangeWaiting {EntityType} {EntityId} {Code}", change.EntityType, change.EntityId, code);
     }
 
     private static void Track(SyncChange change, Dictionary<string, JsonElement> before, bool isNew, PageResult page)

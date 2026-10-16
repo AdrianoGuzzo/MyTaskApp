@@ -138,6 +138,14 @@ public sealed partial class SyncViewModel : ObservableObject
 
     public bool HasReceivedFailures => ReceivedFailures > 0;
 
+    /// <summary>
+    /// O porquê do que chegou e ficou de fora esperando algo daqui: o apelido
+    /// que um comando local já usa (ADR-065). Some sozinho quando resolvido.
+    /// </summary>
+    public ObservableCollection<string> WaitingMessages { get; } = [];
+
+    public bool HasWaitingMessages => WaitingMessages.Count > 0;
+
     public bool HasConflicts => Conflicts.Count > 0;
 
     public bool HasFailures => Failures.Count > 0 || ReceivedFailures > 0;
@@ -207,6 +215,7 @@ public sealed partial class SyncViewModel : ObservableObject
                 Replace(Failures, []);
                 Replace(Reviews, []);
                 Replace(Devices, []);
+                Replace(WaitingMessages, []);
                 ReceivedFailures = 0;
                 NotifyLists();
                 return;
@@ -221,7 +230,12 @@ public sealed partial class SyncViewModel : ObservableObject
 
             Replace(Conflicts, conflicts.Select(ToItem));
             Replace(Failures, failures.Operations.Select(failure => new SyncFailureItem(failure, Describe(failure.EntityType, failure.EntityLabel), failure.Error ?? failure.ErrorCode ?? "Recusada pelo servidor.")));
-            ReceivedFailures = failures.Received.Count;
+            // O botão que espera o comando já está no aviso do comando.
+            var received = failures.Received.Where(failure => failure.ErrorCode != SyncWaitingCodes.WaitingCommand).ToList();
+            ReceivedFailures = received.Count;
+            Replace(WaitingMessages, received
+                .Where(failure => SyncWaitingCodes.IsWaiting(failure.ErrorCode) && failure.Error is not null)
+                .Select(failure => failure.Error!));
             Replace(Reviews, reviews.Select(review => new SyncReviewItem(review, NicknameOf(review.FromDeviceId))));
             NotifyLists();
 
@@ -593,6 +607,7 @@ public sealed partial class SyncViewModel : ObservableObject
         OnPropertyChanged(nameof(HasFailures));
         OnPropertyChanged(nameof(HasReviews));
         OnPropertyChanged(nameof(HasDevices));
+        OnPropertyChanged(nameof(HasWaitingMessages));
     }
 
     private static void Replace<T>(ObservableCollection<T> target, IEnumerable<T> items)

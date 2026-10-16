@@ -38,6 +38,24 @@ public sealed class SyncEngineTests : IAsyncLifetime
         _device.DeleteFolder();
     }
 
+    private SyncChange RemoteCommand(string alias, string text, long version)
+    {
+        var otherDevice = Guid.CreateVersion7();
+
+        return new SyncChange(SyncEntityTypes.Command, Guid.CreateVersion7(), version, false, new Dictionary<string, JsonElement>
+        {
+            [SyncFields.Command.TagDirectoryId] = SyncValue.Null,
+            [SyncFields.Command.Alias] = SyncValue.String(alias),
+            [SyncFields.Command.Text] = SyncValue.String(text),
+            [SyncFields.Command.Mode] = SyncValue.Integer(0),
+            [SyncFields.Command.KeepTerminalOpen] = SyncValue.Boolean(true),
+            [SyncFields.Command.RequiresConfirmation] = SyncValue.Boolean(false),
+            [SyncFields.Command.Parameters] = SyncValue.List([]),
+            [SyncFields.CreatedAt] = SyncValue.Instant(Now),
+            [SyncFields.UpdatedAt] = SyncValue.Instant(Now),
+        }, _user, otherDevice, Now, otherDevice, Now);
+    }
+
     [Fact]
     public async Task WithoutAnAccount_NothingHappens_AndTheAppIsJustLocal()
     {
@@ -343,6 +361,45 @@ public sealed class SyncEngineTests : IAsyncLifetime
 
         await gate.Should().NotThrowAsync();
         (await _device.StoreAsync(store => store.ListCommandReviewsAsync(_device.Device.DeviceId, Ct))).Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// ADR-065: o comando de outro computador com o apelido de um comando local
+    /// daqui espera; renomeado o daqui, ele entra no ciclo seguinte sozinho.
+    /// </summary>
+    [Fact]
+    public async Task ACommandWaitingForALocalAlias_ComesIn_OnceTheAliasIsFree()
+    {
+        await _device.LinkAsync(_user, _workspace, Ct);
+        var local = DevelopmentCommand.Create("@run", "./run-local.ps1", null, Now);
+        await _device.SaveAsync(context => context.Add(local), Ct);
+        var remote = RemoteCommand("@run", "dotnet run", version: 2);
+        _api.Pages.Enqueue(new PullResponse([remote], SyncCursor.Encode(2), false));
+        _api.Fetchable.Add(remote);
+
+        await _device.Engine.RunCycleAsync(Ct);
+
+        (await _device.ReadAsync(context => context.DevelopmentCommands.SingleAsync(Ct))).Id.Should().Be(local.Id);
+        _api.Pushed.Should().BeEmpty("o comando local não sai daqui");
+        var counts = await _device.StoreAsync(store => store.CountAsync(_device.Device.DeviceId, Ct));
+        counts.ApplyFailures.Should().Be(1);
+
+        await _device.SaveAsync(context =>
+        {
+            var loaded = context.DevelopmentCommands.Include(command => command.Parameters).Single();
+            loaded.Update("@run-local", loaded.Command, null, Now);
+        }, Ct);
+        _api.Calls.Clear();
+        await _device.Engine.RunCycleAsync(Ct);
+
+        _api.Calls.Should().Contain("fetch");
+        (await _device.ReadAsync(context => context.DevelopmentCommands.Select(command => command.Alias).ToListAsync(Ct)))
+            .Should().BeEquivalentTo(["@run", "@run-local"]);
+        (await _device.StoreAsync(store => store.CountAsync(_device.Device.DeviceId, Ct))).ApplyFailures.Should().Be(0);
+
+        _api.Calls.Clear();
+        await _device.Engine.RunCycleAsync(Ct);
+        _api.Calls.Should().NotContain("fetch", "nada mais espera");
     }
 
     [Fact]

@@ -24,7 +24,7 @@ public sealed class DevelopmentCommandListItemViewModel(DevelopmentCommandRow ro
 
     public string Command => Row.Command;
 
-    /// <summary>"Terminal · pasta src/Eco.Web · pede confirmação" — o que o botão faz.</summary>
+    /// <summary>"Terminal · pasta src/Eco.Web · pede confirmação" — o que o botão faz, e se vai para os outros computadores.</summary>
     public string Summary =>
         string.Join(" · ", new[]
         {
@@ -37,7 +37,11 @@ public sealed class DevelopmentCommandListItemViewModel(DevelopmentCommandRow ro
                 1 => "em 1 diretório",
                 var count => $"em {count} diretórios",
             },
+            Row.IsGlobal && Row.IsShared ? SharedBadge : null,
         }.OfType<string>());
+
+    /// <summary>O comando que vai para os outros computadores (ADR-065); o local, o padrão, não leva marca.</summary>
+    public const string SharedBadge = "⇄ todos os computadores";
 
     public string? Description => Row.Description;
 
@@ -134,6 +138,13 @@ public sealed partial class DevelopmentCommandsViewModel(
 
     [ObservableProperty]
     private bool _requiresConfirmation;
+
+    /// <summary>Vai para os outros computadores (ADR-065). Desmarcado, o comando é só deste.</summary>
+    [ObservableProperty]
+    private bool _isShared;
+
+    /// <summary>Como o comando em edição estava: desmarcar o compartilhado pede confirmação.</summary>
+    private bool _editingWasShared;
 
     /// <summary>Onde "Testar" roda. Fica entre um teste e outro.</summary>
     [ObservableProperty]
@@ -284,16 +295,26 @@ public sealed partial class DevelopmentCommandsViewModel(
         var command = Command;
         var description = Description;
         var settings = FormSettings();
+        var isShared = IsShared;
+
+        if (editingId is not null && _editingWasShared && !isShared && !await confirmation.AskAsync(new ConfirmationRequest(
+                $"Deixar de compartilhar {alias}?",
+                "Os outros computadores ficam com a cópia que já têm, mas ela deixa de acompanhar as mudanças daqui, "
+                + "e as de lá deixam de chegar aqui. Excluir depois só exclui deste computador.",
+                "Deixar de compartilhar")))
+        {
+            return;
+        }
 
         var saved = await TryAsync(
             () => editingId is { } id
                 ? runner.RunAsync<UpdateDevelopmentCommandHandler, DevelopmentCommandRow>(
                     (handler, token) => handler.HandleAsync(
-                        new UpdateDevelopmentCommand(id, alias, command, description, settings), token),
+                        new UpdateDevelopmentCommand(id, alias, command, description, settings, isShared), token),
                     cancellationToken)
                 : runner.RunAsync<CreateDevelopmentCommandHandler, DevelopmentCommandRow>(
                     (handler, token) => handler.HandleAsync(
-                        new CreateDevelopmentCommand(alias, command, description, settings), token),
+                        new CreateDevelopmentCommand(alias, command, description, settings, isShared), token),
                     cancellationToken),
             "Não foi possível salvar o comando.");
 
@@ -321,6 +342,7 @@ public sealed partial class DevelopmentCommandsViewModel(
         WorkingDirectory = item.Row.WorkingDirectory ?? string.Empty;
         KeepTerminalOpen = item.Row.KeepTerminalOpen;
         RequiresConfirmation = item.Row.RequiresConfirmation;
+        IsShared = _editingWasShared = item.Row.IsShared;
         SyncParameterEditors(item.Row.Parameters ?? []);
         ErrorMessage = null;
         StatusMessage = null;
@@ -339,10 +361,15 @@ public sealed partial class DevelopmentCommandsViewModel(
             var count => $" O botão dele também sai dos {count} diretórios de etiqueta que o oferecem.",
         };
 
+        // O compartilhado sai de todos; o local, só daqui — as cópias de lá ficam (ADR-065).
+        var where = item.Row.IsShared
+            ? " Ele sai de todos os computadores."
+            : " Ele só sai deste computador.";
+
         var confirmed = await confirmation.AskAsync(new ConfirmationRequest(
             $"Excluir {item.Alias}?",
             $"As tarefas que chamam {item.Alias} vão avisar que ele não existe na próxima execução. "
-            + "Nenhuma lista de tarefa é alterada." + bindings,
+            + "Nenhuma lista de tarefa é alterada." + bindings + where,
             "Excluir"));
 
         if (!confirmed)
@@ -523,6 +550,7 @@ public sealed partial class DevelopmentCommandsViewModel(
         WorkingDirectory = string.Empty;
         KeepTerminalOpen = true;
         RequiresConfirmation = false;
+        IsShared = _editingWasShared = false;
         SyncParameterEditors([]);
     }
 

@@ -260,6 +260,40 @@ public sealed class RetryReceivedChangesHandler(ISyncLocalStore store, RemoteRef
     }
 }
 
+/// <summary>
+/// Os códigos de uma mudança recebida que ainda não entrou porque espera algo
+/// deste computador (ADR-065), e não porque falhou. Cada ciclo tenta de novo.
+/// </summary>
+public static class SyncWaitingCodes
+{
+    /// <summary>Um comando local daqui já usa o apelido do que chegou.</summary>
+    public const string LocalAliasTaken = "local_alias_taken";
+
+    /// <summary>O botão de diretório de um comando que está esperando.</summary>
+    public const string WaitingCommand = "waiting_command";
+
+    public static bool IsWaiting(string? code) => code is LocalAliasTaken or WaitingCommand;
+}
+
+/// <summary>
+/// Busca de novo o que esperava (ADR-065): renomeado o comando local, o que
+/// estava de fora entra no ciclo seguinte, sem ninguém clicar em nada.
+/// </summary>
+public sealed record RetryWaitingReceivedChanges;
+
+public sealed class RetryWaitingReceivedChangesHandler(ISyncLocalStore store, RemoteRefetcher refetcher)
+{
+    public async Task HandleAsync(RetryWaitingReceivedChanges command, CancellationToken cancellationToken = default)
+    {
+        var waiting = (await store.ListApplyFailuresAsync(cancellationToken))
+            .Where(failure => SyncWaitingCodes.IsWaiting(failure.ErrorCode))
+            .Select(failure => new EntityRef(failure.EntityType, failure.EntityId))
+            .ToList();
+
+        await refetcher.RefetchAsync(waiting, cancellationToken);
+    }
+}
+
 /// <summary>O estado do servidor de algumas entidades, aplicado por cima do local, linha a linha.</summary>
 public sealed class RemoteRefetcher(
     ISyncLocalStore store,

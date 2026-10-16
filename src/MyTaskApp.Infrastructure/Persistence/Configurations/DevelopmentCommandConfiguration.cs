@@ -60,7 +60,9 @@ internal sealed class DevelopmentCommandConfiguration : IEntityTypeConfiguration
 
         // Sem HasDefaultValue(true): o EF tomaria o false do CLR por "não
         // informado" e gravaria true no lugar. O true das linhas antigas vem da
-        // migration QuickCommands, escrito à mão.
+        // migration QuickCommands, escrito à mão. O mesmo vale para IsShared
+        // (ADR-065): os comandos de antes continuam compartilhados pela
+        // migration CommandSharing; o novo nasce deste computador pelo domínio.
 
         // As definições dos parâmetros são parte do comando: excluí-lo leva todas.
         builder.HasMany(command => command.Parameters)

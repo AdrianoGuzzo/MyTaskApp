@@ -63,6 +63,14 @@ internal abstract class SyncEntityMapper
     /// <summary>Uma entidade que ainda não pode viajar (o cronômetro rodando).</summary>
     public virtual bool IsSyncable(EntityEntry entry) => true;
 
+    /// <summary>
+    /// Uma entidade que este computador escolheu não compartilhar (o comando
+    /// global desmarcado, ADR-065). Ao contrário de <see cref="IsSyncable"/>,
+    /// não é "ainda não": nada vai, nem a exclusão, e o que vem do servidor
+    /// para ela é ignorado. Vale também para a entrada excluída.
+    /// </summary>
+    public virtual bool IsLocalOnly(EntityEntry entry) => false;
+
     public virtual DateTimeOffset? OriginCreatedAt(EntityEntry entry) =>
         Columns.Any(column => column.Field == SyncFields.CreatedAt)
             ? (DateTimeOffset?)entry.Property("CreatedAt").CurrentValue

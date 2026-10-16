@@ -98,6 +98,17 @@ public sealed class SyncClassificationTests
     }
 
     /// <summary>
+    /// Compartilhar é escolha de cada computador e não viaja (ADR-065); o
+    /// comando que chega de outro foi compartilhado lá.
+    /// </summary>
+    [Fact]
+    public void TheChoiceToShareACommand_StaysHere()
+    {
+        SyncMappers.Command.LocalProperties.Should().Contain("IsShared");
+        SyncMappers.Command.InsertDefaults["IsShared"].Should().Be(true);
+    }
+
+    /// <summary>
     /// As colunas, com o owned como <c>Navegação.Propriedade</c>. O id e as
     /// chaves de sombra ficam de fora; a chave composta feita de FKs (o
     /// vínculo tarefa↔etiqueta) fica, porque ela é o próprio dado.

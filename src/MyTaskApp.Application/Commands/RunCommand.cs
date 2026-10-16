@@ -38,14 +38,16 @@ internal static class GlobalCommandLookup
 
         if (missing.Count == 1)
         {
-            problems.Add($"O comando {missing[0]} não existe. Cadastre-o em Comandos globais ou corrija o apelido.");
+            problems.Add(
+                $"O comando {missing[0]} não existe neste computador. Cadastre-o em Comandos globais "
+                + "(ou marque \"Compartilhar entre computadores\" no computador onde ele existe) ou corrija o apelido.");
         }
 
         if (missing.Count > 1)
         {
             problems.Add(
-                $"Os comandos {string.Join(", ", missing)} não existem. "
-                + "Cadastre-os em Comandos globais ou corrija os apelidos.");
+                $"Os comandos {string.Join(", ", missing)} não existem neste computador. "
+                + "Cadastre-os em Comandos globais (ou marque \"Compartilhar entre computadores\" no computador onde eles existem) ou corrija os apelidos.");
         }
 
         problems.AddRange(resolved

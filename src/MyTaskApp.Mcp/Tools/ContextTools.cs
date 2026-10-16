@@ -176,7 +176,8 @@ public sealed class ContextTools(McpGateway gateway, IUserClock clock, DevicePla
     [McpServerTool(Name = "command_definition_list", Title = "Comandos cadastrados", ReadOnly = true, Idempotent = true)]
     [Description(
         "Os comandos globais (chamados por @alias) e os comandos só de diretório: o comando, o modo (Execute ou Terminal), a pasta, " +
-        "os parâmetros e se pedem confirmação. Só lista: o MCP não executa comandos.")]
+        "os parâmetros, se pedem confirmação e se o comando global é compartilhado entre computadores (IsShared). " +
+        "Só lista: o MCP não executa comandos.")]
     public Task<IReadOnlyList<DevelopmentCommandRow>> ListCommandsAsync(CancellationToken cancellationToken = default) =>
         gateway.ReadAsync(
             "command_definition_list",
