@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.16.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.15.0...v1.16.0) (2026-10-16)
+
+
+### Added
+
+* comandos globais só sincronizam quando marcados para compartilhar (ADR-066) ([#91](https://github.com/AdrianoGuzzo/MyTaskApp/issues/91)) ([f3dc243](https://github.com/AdrianoGuzzo/MyTaskApp/commit/f3dc2436b4d69ae4cc18dfb1eb40a109367696d7))
+* limpeza de worktrees sem tarefa ou de tarefa encerrada (ADR-065) ([#89](https://github.com/AdrianoGuzzo/MyTaskApp/issues/89)) ([a21e4aa](https://github.com/AdrianoGuzzo/MyTaskApp/commit/a21e4aa47426648a203a13d04a86c5fddabb7949))
+
 ## [1.15.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.14.1...v1.15.0) (2026-10-15)
 
 
