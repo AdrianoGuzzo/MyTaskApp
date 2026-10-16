@@ -239,7 +239,10 @@ public sealed class PresentationTests
         var review = SyncStatusText.Describe(Status(linked, new SyncCounts(0, 0, 1, 2, 1)), false);
         review.Kind.Should().Be(SyncIndicatorKind.Review);
         review.NeedsAttention.Should().BeTrue();
-        review.Detail.Should().Be("Em dia, com 1 conflito, 2 recebidos com falha, 1 comando para liberar no computador.");
+        review.Detail.Should().Be("Em dia, com 1 conflito, 2 recebidos com falha.");
+
+        // Comando de outro computador se revisa no computador: no celular não é pendência.
+        SyncStatusText.Describe(Status(linked, new SyncCounts(0, 0, 0, 0, 27)), false).Kind.Should().Be(SyncIndicatorKind.Synced);
 
         var hidden = SyncStatusText.Describe(new SyncStatusView(false, null, SyncLocalState.Unlinked, new SyncCounts(0, 0, 0, 0, 0), false, null), false);
         hidden.IsVisible.Should().BeFalse();

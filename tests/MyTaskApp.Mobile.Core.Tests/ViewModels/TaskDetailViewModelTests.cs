@@ -160,6 +160,17 @@ public sealed class TaskDetailViewModelTests : IAsyncLifetime
         detail.CanComplete.Should().BeFalse();
     }
 
+    [Theory]
+    [InlineData(@"C:\Projetos\MyTaskApp", "MyTaskApp")]
+    [InlineData("/home/ana/src/api/", "api")]
+    [InlineData("", TaskDetailViewModel.RepositoryElsewhere)]
+    [InlineData(null, TaskDetailViewModel.RepositoryElsewhere)]
+    public void TheRepository_IsNamedByItsFolder_OrSaidToBeElsewhere(string? path, string expected)
+    {
+        // O worktree de outro computador chega sem caminho: o caminho não sincroniza (ADR-061).
+        TaskDetailViewModel.RepositoryName(path).Should().Be(expected);
+    }
+
     private async Task<TaskDetailViewModel> OpenAsync(string title)
     {
         var task = await _app.CreateTaskAsync(title);

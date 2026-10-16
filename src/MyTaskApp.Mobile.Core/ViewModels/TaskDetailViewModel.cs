@@ -298,9 +298,19 @@ public sealed partial class TaskDetailViewModel(
     private static string Device(string name) =>
         name == GetTaskOriginHandler.ThisComputer ? "este celular" : name;
 
-    /// <summary>O nome da pasta, que é o que identifica o repositório; o caminho é do outro computador.</summary>
-    private static string RepositoryName(string path)
+    public const string RepositoryElsewhere = "Repositório de outro computador";
+
+    /// <summary>
+    /// O nome da pasta, que é o que identifica o repositório. O caminho é por
+    /// computador e não sincroniza (ADR-061): o worktree de outro chega sem ele.
+    /// </summary>
+    internal static string RepositoryName(string? path)
     {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return RepositoryElsewhere;
+        }
+
         var trimmed = path.TrimEnd('/', '\\');
         var cut = trimmed.LastIndexOfAny(['/', '\\']);
 

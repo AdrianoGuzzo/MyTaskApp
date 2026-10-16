@@ -81,7 +81,15 @@ internal sealed class ShellNavigator : INavigator
 
     public Task OpenConnectAsync() => GoAsync(Connect);
 
-    public Task OpenTasksAsync() => GoAsync("//tasks");
+    /// <summary>
+    /// Para a lista, deixando a aba de onde se veio na raiz: depois de entrar
+    /// pela aba Conta, ela não pode continuar mostrando a tela Entrar.
+    /// </summary>
+    public Task OpenTasksAsync() => MainThread.InvokeOnMainThreadAsync(async () =>
+    {
+        await Shell.Current.Navigation.PopToRootAsync(animated: false);
+        await Shell.Current.GoToAsync("//tasks");
+    });
 
     public Task OpenAccountAsync() => GoAsync("//account");
 

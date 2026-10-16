@@ -21,6 +21,10 @@ public static class SyncStatusText
     {
         ArgumentNullException.ThrowIfNull(status);
 
+        // Comandos de outro computador esperam revisão para rodar — no
+        // computador. O celular não roda comando, e não tem o que fazer com eles.
+        status = status with { Counts = status.Counts with { CommandsToReview = 0 } };
+
         var kind = SyncIndicatorClassifier.Classify(status, syncing);
         var pending = status.Counts.Pending;
 
@@ -58,11 +62,6 @@ public static class SyncStatusText
         if (counts.ApplyFailures > 0)
         {
             parts.Add(Count(counts.ApplyFailures, "recebido com falha", "recebidos com falha"));
-        }
-
-        if (counts.CommandsToReview > 0)
-        {
-            parts.Add(Count(counts.CommandsToReview, "comando para liberar no computador", "comandos para liberar no computador"));
         }
 
         return "Em dia, com " + string.Join(", ", parts) + ".";
