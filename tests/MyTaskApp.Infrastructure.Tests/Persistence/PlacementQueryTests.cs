@@ -139,7 +139,7 @@ public sealed class PlacementQueryTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// A origem do celular (ADR-065) é exata: "Do trabalho" não traz as
+    /// A origem do celular (ADR-067) é exata: "Do trabalho" não traz as
     /// compartilhadas, e "Compartilhadas" traz o legado, que aparece em todos.
     /// </summary>
     [Fact]

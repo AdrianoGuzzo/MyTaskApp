@@ -207,6 +207,17 @@
                     IsChecked="{Binding RequiresConfirmation}" />
         </WrapPanel>
 
+        <!-- ADR-066: o comando global é deste computador até alguém marcar. -->
+        <StackPanel Spacing="2">
+          <CheckBox x:Name="IsSharedBox"
+                    FontSize="12"
+                    Content="Compartilhar entre computadores"
+                    IsChecked="{Binding IsShared}" />
+          <TextBlock Classes="meta"
+                     TextWrapping="Wrap"
+                     Text="Desmarcado, o comando fica só neste computador. Quem já tem uma cópia fica com ela, e ela deixa de acompanhar as mudanças daqui." />
+        </StackPanel>
+
         <!-- Uma linha por {nome}: como a tela pergunta o valor antes de executar. -->
         <StackPanel Spacing="6" IsVisible="{Binding HasParameterEditors}">
           <TextBlock Classes="meta" Text="Parâmetros — perguntados antes de executar o botão:" />

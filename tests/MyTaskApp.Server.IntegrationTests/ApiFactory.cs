@@ -64,7 +64,7 @@ internal sealed class ApiFactory(string connectionString, IReadOnlyDictionary<st
         return new DesktopSession(this, device, tokens);
     }
 
-    /// <summary>Um celular (ADR-065): o mesmo login, pelo cliente e pelo esquema de volta do app.</summary>
+    /// <summary>Um celular (ADR-067): o mesmo login, pelo cliente e pelo esquema de volta do app.</summary>
     public async Task<DesktopSession> LoginMobileAsync(string googleSubject, Guid? deviceId = null, string deviceName = "Pixel 8")
     {
         var device = deviceId ?? Guid.CreateVersion7();

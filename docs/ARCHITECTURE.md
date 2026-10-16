@@ -20,7 +20,7 @@ havia mais de um caminho razoável.
 | ASP.NET Core Identity + Google + DataProtection.EF | 10.0.12 | contas do servidor de sincronização, só por login externo (ADR-061) |
 | OpenIddict | 7.7.2 | servidor OAuth do desktop: code + PKCE, refresh rotativo, revogação (ADR-061) |
 | Testcontainers.PostgreSql | 4.16.0 | testes do servidor contra PostgreSQL real; pulam sem Docker |
-| .NET MAUI (Microsoft.Maui.Controls) | 10.0.110 | só o app do celular (ADR-065), Android e iOS; a versão acompanha o workload `maui-android` |
+| .NET MAUI (Microsoft.Maui.Controls) | 10.0.110 | só o app do celular (ADR-067), Android e iOS; a versão acompanha o workload `maui-android` |
 
 Versões centralizadas em `Directory.Packages.props` (Central Package Management).
 `Avalonia.Diagnostics` **não existe** na linha 12.x (parou na 11.3.22); DevTools
@@ -5731,7 +5731,7 @@ pendente mantém o valor local.
     autorização a cada chamada. Revogar o dispositivo derruba os tokens dele
     na hora.
 - O celular é um segundo cliente público, `mytaskapp-mobile`, com as mesmas
-  regras e a volta pelo esquema do app em vez do loopback (ADR-065).
+  regras e a volta pelo esquema do app em vez do loopback (ADR-067).
 - O token do Google nunca é token da API.
 - O desktop guarda o refresh token no cofre do sistema e o access token só na
   memória. A renovação é serializada, e um 401 renova uma vez e tenta de novo.
@@ -6226,7 +6226,308 @@ a sugestão sai do que o usuário já fez, e "Outra pasta…" resolve a exceçã
   procurar e ao salvar, o diretório de outro computador, a lista recarregada
   quando o `origin` mudou e o formulário desenhado com o "Clonar" ligado.
 
-## ADR-065 — O celular como mais um dispositivo da sincronização (.NET MAUI)
+## ADR-065 — Limpeza de worktrees: os sem tarefa e os de tarefa encerrada, com força
+
+**Contexto:** o worktree sai do disco por dois caminhos: pela aba
+Desenvolvimento ou pela pergunta feita ao concluir a tarefa (ADR-034). O
+resto se acumula:
+- o worktree de quem respondeu "Manter";
+- o de tarefa arquivada, cancelada ou na lixeira;
+- o de tarefa apagada de vez. O purge (§7) apaga as linhas de
+  `TaskDevelopments` em cascata, e a pasta e o registro no Git ficam sem
+  ninguém que aponte para eles;
+- o criado fora do app, à mão ou por um agente (`.claude/worktrees`).
+
+O pedido foi uma faxina: apagar todo worktree que não está ligado a uma
+tarefa, ou cuja tarefa terminou. Ela apaga inclusive os worktrees com
+alterações pendentes.
+
+**Decisão:** uma aba **Worktrees** em *Gerenciamento de dados*, ao lado de
+Lixeira. Ela lista os candidatos, todos marcados, e **Limpar N worktrees**
+apaga os marcados com `git worktree remove --force`, depois de uma confirmação
+irreversível que conta quantos têm alterações a perder. A branch fica no
+repositório, como em toda remoção do app.
+
+### Onde procurar
+
+A varredura junta duas fontes:
+- os **diretórios mapeados das etiquetas** neste computador
+  (`ListMappedDirectoryPathsAsync`), cada um levado à raiz do repositório
+  com `rev-parse --show-toplevel`. O que não é repositório fica de fora;
+- os **repositórios das tarefas** (`TaskDevelopment.RepositoryPath`).
+
+As duas fontes são deduplicadas pelo caminho canônico. Em cada repositório
+roda um `git worktree list --porcelain`. Um repositório em que o Git falha
+fica fora da lista, e a aba diz qual.
+
+### Quem entra
+
+- **Sem tarefa:** nenhum ambiente pronto ou em criação aponta para a pasta.
+- **De tarefa encerrada:** concluída, arquivada ou na lixeira, pelo
+  `TaskItem.Lifecycle`. A tarefa cancelada não tem estado próprio no ciclo de
+  vida: tudo cancelado não tem `ConcludedAt` e continua `Active`. O domínio
+  ganhou `TaskItem.IsSettled` (nenhuma ocorrência pendente) só para esse caso,
+  em vez de a consulta remontar a regra.
+- **O ambiente pronto de tarefa encerrada que o Git já esqueceu** (sobra de
+  pasta, ou pasta sumida) também entra. A remoção de sempre resolve os dois
+  casos.
+
+**Nunca entram:**
+- o worktree principal e o repositório bare;
+- o worktree de tarefa em andamento;
+- o ambiente em criação;
+- a pasta que é ela mesma um diretório mapeado de etiqueta. O usuário a
+  cadastrou, então ela está em uso, mesmo sem tarefa.
+
+Cada linha traz a mesma sonda da bolinha da lista (`ProbeWorktreesHandler`):
+alterações não commitadas e commits sem push. No worktree sem tarefa, os
+commits contam a partir da branch do worktree principal.
+
+### Marcados, menos dois
+
+- **Travado com `git worktree lock`:** vem desmarcado. Alguém pediu
+  explicitamente que o Git não mexesse nele. Marcado, sai com
+  `--force --force`, que é como o Git aceita passar por cima da trava.
+- **Com agente de IA do app aberto (ADR-030):** não pode ser marcado. A
+  remoção recusaria de qualquer jeito.
+
+### A exceção ao "sem `--force`"
+
+O ADR-027 proíbe operação destrutiva no `IGitClient`, e a remoção comum
+continua recusando worktree com alterações. A limpeza é a exceção, e só ela
+passa `WorktreeRemoveForce` além de `None`. Ela se apoia em três coisas, e só
+nelas:
+1. o usuário vê cada worktree, com as alterações de cada um;
+2. ele escolhe quais saem;
+3. a confirmação é irreversível e diz quantos têm trabalho a perder.
+
+O commit sem push não se perde, porque a branch fica.
+
+### Antes de cada um, de novo
+
+Entre a varredura e o clique, o mundo muda. Por isso o comando confere de
+novo, worktree por worktree, e o que não passa fica com o motivo, sem parar
+os outros:
+- **quem é o dono agora:** uma tarefa reaberta, ou que adotou o worktree sem
+  dono, faz o worktree ficar. Uma tarefa apagada de vez depois da varredura
+  faz o worktree ser tratado como sem tarefa;
+- **se é o principal:** nunca sai, mesmo que um candidato montado à mão
+  aponte para ele;
+- **quem está com a pasta aberta** (`IDirectoryRemover.FindLockersAsync`, a
+  mesma detecção do ADR-029). Sem força, o Git recusaria. Com força, ele
+  apaga os arquivos debaixo de um terminal ou agente rodando ali e só deixa a
+  pasta vazia presa. Com alguém segurando, nada é apagado, e a mensagem diz
+  quem. Na limpeza em lote, nenhum processo é encerrado.
+
+O ambiente de tarefa sai pelo mesmo `RemoveWorktreeHandler` da aba
+Desenvolvimento, com `Force`: fica `Removed`, e a recusa por agente aberto
+continua valendo. O worktree sem tarefa sai pelo mesmo miolo
+(`WorktreeEraser`), que remove o registrado, apaga a sobra ou faz o prune. O
+banco copiado do ambiente (ADR-060) não é apagado, como na remoção comum.
+
+### A varredura não roda ao abrir a janela
+
+Ela chama o Git em cada repositório. Por isso roda quando a aba aparece e em
+**Procurar**, não a cada abertura do Gerenciamento de dados. Depois de
+limpar, a lista é varrida de novo, e a lista Hoje é recarregada para a
+bolinha e o "Worktree criado" sumirem na hora.
+
+### Alternativas
+
+- **Limpar sozinho, ao concluir ou no purge.** Apagar alterações não
+  commitadas sem o usuário ver a lista é exatamente o que o ADR-027 existe
+  para impedir.
+- **Um item de menu que apaga tudo de uma vez.** Um worktree criado à mão
+  para um experimento não teria como ser poupado.
+- **Só os worktrees criados pelo app.** O pedido incluía os criados fora
+  dele. E a tarefa apagada de vez já não deixa rastro de que o worktree era
+  do app.
+- **Apagar a branch junto.** Commit sem push se perderia de verdade. Com a
+  branch, a pasta some e o trabalho fica recuperável.
+
+### Consequências
+
+- A janela de Gerenciamento de dados ficou mais larga (780) para as cinco abas
+  caberem numa linha.
+- `IGitClient.RemoveWorktreeAsync` ganhou o parâmetro `force`. O padrão é sem
+  força, e a revisão de segurança do Git continua olhando um lugar só.
+
+**Testes:**
+
+- **Domain:** `IsSettled` com cancelar, reabrir e concluir.
+- **Application:**
+  - o principal e o de tarefa ativa ficam fora;
+  - o motivo certo para cada estado da tarefa;
+  - repositório alcançado duas vezes;
+  - a pasta mapeada como diretório;
+  - alterações reportadas, travado e agente aberto;
+  - o ambiente que o Git esqueceu;
+  - o repositório que falha;
+  - a remoção forçada de worktree com alterações, e a dupla força no travado;
+  - a pasta aberta pulada sem encerrar nada;
+  - a tarefa reaberta depois da varredura;
+  - o principal recusado.
+- **Infrastructure:**
+  - os argumentos `--force` e `--force --force`;
+  - com o Git de verdade, um worktree criado à mão com arquivo não commitado e
+    o de uma tarefa concluída saem, e as duas branches ficam.
+- **Desktop:**
+  - o que vem marcado;
+  - os textos de cada linha;
+  - marcar e desmarcar todos;
+  - recusar não apaga;
+  - a pergunta conta o que se perde;
+  - confirmar varre de novo e avisa a lista;
+  - a limpeza parcial;
+  - a aba que só varre quando aparece.
+
+## ADR-066 — Comandos globais só deste computador, a menos que compartilhados
+
+**Contexto:** a sincronização (ADR-061) mandava todo comando global para todos
+os computadores. Só que um comando costuma ser de uma máquina só: caminho
+absoluto, executável instalado ali, script que só existe naquela pasta
+(`eco-sync`, `C:\Projetos\core\run.ps1`). No outro computador, ele aparecia na
+lista e falhava ao rodar. O pedido: o comando global não é compartilhado, a
+menos que o usuário marque um check para isso.
+
+**Decisão:** o comando ganha `IsShared`. No formulário de *Comandos globais*,
+"Compartilhar entre computadores" fica embaixo de "Pedir confirmação", e a
+lista marca o compartilhado com "⇄ todos os computadores", como a tarefa
+(ADR-062).
+
+- **O comando novo nasce desmarcado.** É o domínio que decide
+  (`DevelopmentCommand.Create`), não a tela, então o MCP e qualquer caminho
+  futuro também criam comandos locais.
+- **Os que já existiam continuam compartilhados.** Eles já estavam nos outros
+  computadores. A migration `CommandSharing` grava `true` nas linhas antigas;
+  o modelo não tem `HasDefaultValue`, pelo mesmo motivo do `KeepTerminalOpen`
+  (ADR-051).
+- **O comando do diretório (ADR-055) sempre viaja**, com o diretório. Ele não
+  tem o check, e `SetSharing` recusa.
+- **Os botões de diretório seguem o comando.** O vínculo de um comando local
+  também fica aqui. Senão, o servidor esperaria para sempre um pai que nunca
+  chega (`parent_missing`).
+- **A escolha é de cada computador e não viaja.** `IsShared` é coluna local no
+  mapper. O comando que chega de outro computador entra marcado, porque lá ele
+  foi compartilhado.
+
+### Desmarcar: cada um fica com a sua cópia
+
+Desmarcar um comando compartilhado não apaga nada em lugar nenhum. Este
+computador para de mandar **e** de receber mudanças dele e dos botões dele:
+
+- o que ainda não tinha saído do outbox não sai mais;
+- a edição, e também a exclusão, que chega de outro computador é ignorada;
+- excluir aqui não manda exclusão: a cópia de lá fica.
+
+Para isso, o estado da sincronização ganha `IsDetached` ("este computador
+parou de acompanhar a cópia do servidor"). Ela não é `IsDeleted`: a linha
+local continua, e o portão de revisão de comando alheio (ADR-061) continua
+valendo para ela. A mudança ignorada ainda anda a versão (`ServerVersion`). A
+revisão que estava em dia anda junto, porque o texto daqui não mudou; a
+pendente continua pendente.
+
+A exclusão local de um comando desmarcado leva os botões pela cascata do
+banco, sem o change tracker ver. A captura lê esses botões antes do
+`SaveChanges` e os desliga também. Sem isso, a varredura os acharia "sumidos"
+e mandaria a exclusão para os outros computadores.
+
+### Compartilhar de novo: vale a versão daqui
+
+Marcar de novo manda o comando inteiro, e os botões dele, sobre a última versão
+que o servidor mostrou. Como a versão base alcança todos os campos, a mescla
+por campo do servidor aceita os campos daqui: quem marcou é quem vale.
+
+Se outro computador excluiu o comando nesse meio-tempo, ele volta. O servidor
+passa a reviver uma entidade excluída quando a versão base da operação alcança
+a do tombstone. Só quem já viu a exclusão chega a essa versão, e quem manda a
+entidade inteira está recriando de propósito. Quem não viu continua recebendo
+"excluído em outro dispositivo". Antes, só os vínculos (tarefa ↔ etiqueta)
+reviviam.
+
+### O mesmo apelido aqui e lá
+
+Chega de outro computador um `@build` compartilhado, e aqui já existe um
+`@build` só deste computador. Antes, a primeira conexão juntava os dois pelo
+nome (ADR-061). Agora:
+
+- o daqui não é tocado: nem renomeado, nem juntado;
+- o que chegou fica de fora, com o aviso na janela de Sincronização: "O
+  comando @build de outro computador não entrou: @build já existe aqui como
+  comando só deste computador. Renomeie um dos dois ou marque 'Compartilhar
+  entre computadores' no daqui.";
+- os botões dele esperam com ele, e não falham;
+- cada ciclo busca de novo, por id, o que espera
+  (`RetryWaitingReceivedChangesHandler`). Renomeado o daqui, o de lá entra
+  sozinho no ciclo seguinte. Excluído lá, o aviso some.
+- Marcado o daqui, o servidor recusa o apelido repetido, e o fluxo da primeira
+  conexão junta os dois: um `@build` só, com as diferenças como conflito
+  visível.
+
+### Alternativas
+
+- **`IsShared` no contrato, sincronizado.** A escolha de um computador
+  mandaria nos outros, e desmarcar teria de mandar algo para o servidor,
+  justamente o que o usuário pediu para não acontecer.
+- **Reaproveitar `IsDeleted` para "desligado".** Ele desliga o portão de
+  revisão e faz a varredura tratar a linha como excluída.
+- **Desmarcar apaga dos outros computadores.** Foi oferecido e recusado: quem
+  já usa o comando lá não deve perdê-lo porque mudou de ideia aqui.
+- **Id novo ao compartilhar de novo.** Exigiria reescrever as chaves dos
+  botões e das execuções, e o comando de lá viraria um segundo `@build`.
+- **Juntar pelo apelido, como antes.** O comando local seria trocado pelo de
+  lá sem ninguém pedir.
+
+### Consequências
+
+- Enquanto algo espera um apelido livre, cada ciclo faz uma busca por id. Sem
+  nada esperando, nenhuma.
+- "Exclusão não ressuscita" ganha uma exceção, a da versão base que alcança o
+  tombstone. Para clientes anteriores nada muda: eles só chegavam a essa
+  versão aplicando o tombstone, que apaga a linha, e daí em diante não mandam
+  nada daquele id.
+- **Ordem de publicação: o servidor primeiro.** Um servidor antigo responderia
+  `entity_deleted` a quem compartilha de novo, e o cliente apagaria a cópia
+  local.
+- Um botão criado em outro computador enquanto o comando estava desmarcado
+  aqui não chega quando ele volta a ser compartilhado. O botão continua lá.
+- Na outra ponta, a tarefa que chama `@build` num computador sem ele avisa: "O
+  comando @build não existe neste computador. Cadastre-o em Comandos globais
+  (ou marque 'Compartilhar entre computadores' no computador onde ele existe)
+  ou corrija o apelido."
+
+**Testes:**
+
+- **Domain:** o global nasce local, o do diretório vai sempre e recusa o
+  check, compartilhar não é edição (`UpdatedAt` fica), editar mantém a
+  escolha.
+- **Application:** criar compartilha só quando pedido, e editar sem dizer
+  mantém.
+- **Infrastructure:**
+  - a escolha gravada;
+  - a migration mantém os antigos compartilhados;
+  - a coluna classificada como local, com o padrão "compartilhado" para o que
+    chega;
+  - a captura: o novo fica aqui com os botões; marcar manda o comando e os
+    botões, pai primeiro; desmarcar descarta o que não saiu e não manda mais
+    nada; excluir o local não manda exclusão, nem dos botões, nem na
+    varredura; o compartilhado excluído ainda sai de todos; compartilhar de
+    novo manda tudo sobre a última versão; o comando do diretório sempre vai;
+  - o que chega: o comando de lá entra marcado; edição e exclusão de um
+    desligado não entram e andam a versão; o botão novo de um desligado fica
+    de fora; o mesmo apelido de um local espera, com o local intacto, e entra
+    depois de renomeado; a exclusão de lá tira o aviso;
+  - o ciclo busca de novo o que espera e para quando nada espera.
+- **Server.Application:** quem viu a exclusão recria com a entidade inteira;
+  pela metade, não.
+- **Server.IntegrationTests:** o roteiro inteiro com dois desktops e o
+  PostgreSQL: local não vai, marcado vai, desmarcado cada um com a sua cópia,
+  excluir lá não exclui aqui, compartilhar de novo traz de volta a versão de
+  quem marcou.
+- **Desktop:** o formulário começa desmarcado e carrega a escolha, desmarcar
+  pede confirmação, a marca na lista e o texto de excluir.
+
+## ADR-067 — O celular como mais um dispositivo da sincronização (.NET MAUI)
 
 **Contexto:** o pedido era um app para Android e iOS que mostre todas as
 tarefas numa lista, crie, edite, conclua e filtre, funcione sem rede por um

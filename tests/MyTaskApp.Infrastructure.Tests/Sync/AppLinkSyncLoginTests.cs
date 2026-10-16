@@ -9,7 +9,7 @@ using MyTaskApp.Sync.Contracts;
 namespace MyTaskApp.Infrastructure.Tests.Sync;
 
 /// <summary>
-/// O login do celular (ADR-065): o mesmo serviço do desktop, com o cliente
+/// O login do celular (ADR-067): o mesmo serviço do desktop, com o cliente
 /// <c>mytaskapp-mobile</c> e a volta pelo esquema do app, entregue pela casca
 /// com <see cref="AppLinkAuthorizationRedirect.Deliver"/>.
 /// </summary>

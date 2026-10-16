@@ -9,6 +9,7 @@ namespace MyTaskApp.Application.Commands;
 /// <param name="Alias"><c>null</c> só no comando do diretório (ADR-055).</param>
 /// <param name="BindingCount">Em quantos diretórios de etiqueta ele é botão — o aviso antes de excluir.</param>
 /// <param name="TagDirectoryId">O diretório dono do comando; <c>null</c> é global (ADR-055).</param>
+/// <param name="IsShared">Se o comando global vai para os outros computadores (ADR-066).</param>
 public sealed record DevelopmentCommandRow(
     Guid Id,
     string? Alias,
@@ -22,7 +23,8 @@ public sealed record DevelopmentCommandRow(
     bool RequiresConfirmation = false,
     IReadOnlyList<CommandParameterSpec>? Parameters = null,
     int BindingCount = 0,
-    Guid? TagDirectoryId = null)
+    Guid? TagDirectoryId = null,
+    bool IsShared = true)
 {
     public string DisplayName => Name ?? Alias ?? string.Empty;
 
@@ -45,7 +47,8 @@ public sealed record DevelopmentCommandRow(
             command.RequiresConfirmation,
             [.. command.Parameters.Select(parameter => parameter.ToSpec())],
             bindingCount,
-            command.TagDirectoryId);
+            command.TagDirectoryId,
+            command.IsShared);
 
     /// <summary>A definição de cada <c>{nome}</c> do texto (ver <see cref="DevelopmentCommand.ParametersOf"/>).</summary>
     /// <param name="databaseAliases">
@@ -78,11 +81,13 @@ public sealed class GetDevelopmentCommandsHandler(IDevelopmentCommandRepository 
 }
 
 /// <param name="Settings">O comando rápido (ADR-051). <c>null</c> é o padrão: escondido, na raiz.</param>
+/// <param name="IsShared">Vai para os outros computadores (ADR-066). O padrão é ficar só neste.</param>
 public sealed record CreateDevelopmentCommand(
     string Alias,
     string Command,
     string? Description,
-    DevelopmentCommandSettings? Settings = null);
+    DevelopmentCommandSettings? Settings = null,
+    bool IsShared = false);
 
 public sealed class CreateDevelopmentCommandHandler(
     IDevelopmentCommandRepository commands,
@@ -103,24 +108,32 @@ public sealed class CreateDevelopmentCommandHandler(
             command.Settings ?? DevelopmentCommandSettings.Default,
             timeProvider.GetUtcNow());
 
+        created.SetSharing(command.IsShared);
+
         await commands.EnsureAliasIsFreeAsync(alias, exceptId: null, cancellationToken);
 
         await commands.AddAsync(created, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        logger.LogInformation("DevelopmentCommandCreated {CommandId} {Alias}", created.Id, created.Alias);
+        logger.LogInformation(
+            "DevelopmentCommandCreated {CommandId} {Alias} {IsShared}", created.Id, created.Alias, created.IsShared);
 
         return DevelopmentCommandRow.From(created);
     }
 }
 
 /// <param name="Settings">O comando rápido (ADR-051). <c>null</c> mantém o que está gravado.</param>
+/// <param name="IsShared">
+/// Compartilhar com os outros computadores (ADR-066). <c>null</c> mantém como
+/// está. Desmarcar não apaga as cópias de lá: só deixa de acompanhá-las.
+/// </param>
 public sealed record UpdateDevelopmentCommand(
     Guid CommandId,
     string Alias,
     string Command,
     string? Description,
-    DevelopmentCommandSettings? Settings = null);
+    DevelopmentCommandSettings? Settings = null,
+    bool? IsShared = null);
 
 public sealed class UpdateDevelopmentCommandHandler(
     IDevelopmentCommandRepository commands,
@@ -152,9 +165,15 @@ public sealed class UpdateDevelopmentCommandHandler(
             command.Settings ?? existing.Settings,
             timeProvider.GetUtcNow());
 
+        if (command.IsShared is { } isShared)
+        {
+            existing.SetSharing(isShared);
+        }
+
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        logger.LogInformation("DevelopmentCommandUpdated {CommandId} {Alias}", existing.Id, existing.Alias);
+        logger.LogInformation(
+            "DevelopmentCommandUpdated {CommandId} {Alias} {IsShared}", existing.Id, existing.Alias, existing.IsShared);
 
         var bindings = await commands.CountBindingsAsync(cancellationToken);
 

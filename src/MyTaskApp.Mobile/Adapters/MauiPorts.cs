@@ -5,7 +5,7 @@ using MyTaskApp.Mobile.Core.Ports;
 namespace MyTaskApp.Mobile.Adapters;
 
 /// <summary>
-/// O cofre da plataforma (ADR-065): Keystore no Android, Keychain no iOS. Só o
+/// O cofre da plataforma (ADR-067): Keystore no Android, Keychain no iOS. Só o
 /// refresh token da sincronização passa por aqui; o access fica na memória.
 /// </summary>
 internal sealed class MauiSecretStore(ILogger<MauiSecretStore> logger) : ISecretStore

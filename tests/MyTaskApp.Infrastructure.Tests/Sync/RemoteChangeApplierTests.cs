@@ -426,6 +426,7 @@ public sealed class RemoteChangeApplierTests : IAsyncLifetime
                 RequiresConfirmation: true,
                 [new CommandParameterSpec("profile", "Perfil", CommandParameterType.Choice, "Dev", true, ["Dev", "Prod"])]),
             Now);
+        command.SetSharing(true);
         tag.AddDirectoryCommand(directory.Id, command.Id, Now);
 
         var task = TaskItem.Create(

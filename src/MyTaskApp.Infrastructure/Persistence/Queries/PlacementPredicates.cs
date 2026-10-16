@@ -28,7 +28,7 @@ internal static class PlacementPredicates
     }
 
     /// <summary>
-    /// A origem exata (ADR-065): só as compartilhadas — legado e "só no
+    /// A origem exata (ADR-067): só as compartilhadas — legado e "só no
     /// computador" sem computador inclusos, como em <see cref="DevicePlacement.From"/> —
     /// ou só as que moram nestes dispositivos.
     /// </summary>

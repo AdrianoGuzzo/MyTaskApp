@@ -7,7 +7,7 @@ namespace MyTaskApp.Infrastructure.Sync.Http;
 
 /// <summary>
 /// Por onde o login da sincronização volta ao app, e com qual cliente OAuth
-/// (ADR-061, ADR-065). O desktop volta pelo loopback; o celular, pelo esquema
+/// (ADR-061, ADR-067). O desktop volta pelo loopback; o celular, pelo esquema
 /// próprio do app, que o sistema entrega ao <see cref="AppLinkAuthorizationRedirect"/>.
 /// </summary>
 /// <remarks>
@@ -60,7 +60,7 @@ internal sealed class LoopbackSyncAuthorizationRedirect(SyncOptions options, ILo
 }
 
 /// <summary>
-/// A volta pelo esquema próprio do app (ADR-065). Quem recebe o endereço é o
+/// A volta pelo esquema próprio do app (ADR-067). Quem recebe o endereço é o
 /// sistema do celular — no MAUI, o <c>WebAuthenticator</c> —, e a casca do app
 /// entrega os parâmetros aqui com <see cref="Deliver"/>. Nada daqui depende de
 /// MAUI: o mesmo tipo serve aos testes.

@@ -2,7 +2,7 @@ namespace MyTaskApp.Infrastructure;
 
 /// <summary>
 /// O que um app que não é o desktop diz a <see cref="DependencyInjection.AddLocalData"/>
-/// (ADR-065): onde guardar o id do dispositivo e como o aparelho se chama.
+/// (ADR-067): onde guardar o id do dispositivo e como o aparelho se chama.
 /// </summary>
 /// <remarks>
 /// O banco continua vindo da seção <c>Database</c> da configuração; isto é só o

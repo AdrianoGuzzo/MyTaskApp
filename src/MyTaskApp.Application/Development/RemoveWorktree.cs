@@ -65,10 +65,16 @@ public sealed class InspectWorktreeHandler(
 /// Os processos que o usuário viu segurando a pasta e mandou encerrar. Vazio,
 /// nada é encerrado: a primeira tentativa só descobre quem são (ADR-029).
 /// </param>
+/// <param name="Force">
+/// Só a limpeza de worktrees (ADR-065) passa algo além de
+/// <see cref="WorktreeRemoveForce.None"/>: o usuário viu as alterações na lista
+/// e confirmou que elas vão junto.
+/// </param>
 public sealed record RemoveWorktree(
     Guid TaskId,
     Guid DevelopmentId,
-    IReadOnlyList<DirectoryLocker>? TerminateLockers = null);
+    IReadOnlyList<DirectoryLocker>? TerminateLockers = null,
+    WorktreeRemoveForce Force = WorktreeRemoveForce.None);
 
 /// <summary>
 /// Confere as alterações de novo, aqui dentro, mesmo que a tela já tenha
@@ -97,8 +103,6 @@ public sealed class RemoveWorktreeHandler(
     TimeProvider timeProvider,
     ILogger<RemoveWorktreeHandler> logger)
 {
-    private const DevelopmentStep Step = DevelopmentStep.RemoveWorktree;
-
     public async Task<TaskDevelopmentView> HandleAsync(
         RemoveWorktree command,
         CancellationToken cancellationToken = default)
@@ -113,39 +117,12 @@ public sealed class RemoveWorktreeHandler(
 
         await EnsureNoAgentRunningAsync(development.Id, cancellationToken);
 
-        try
-        {
-            if (await directories.ExistsAsync(development.WorktreePath, cancellationToken))
-            {
-                if (await WorktreeRegistry.IsRegisteredAsync(git, development, cancellationToken))
-                {
-                    await RemoveRegisteredAsync(development, cancellationToken);
-                }
-                else
-                {
-                    await EnsureLeftoverAsync(development, cancellationToken);
-                }
-
-                await DeleteDirectoryAsync(task.Id, development, command.TerminateLockers ?? [], cancellationToken);
-            }
-            else
-            {
-                // A pasta já sumiu: só falta o repositório esquecer dela.
-                var prune = await git.PruneWorktreesAsync(development.RepositoryPath, cancellationToken);
-
-                if (!prune.Succeeded)
-                {
-                    logger.LogWarning(
-                        "WorktreePruneFailed {TaskId} {StandardError}",
-                        task.Id,
-                        prune.StandardError);
-                }
-            }
-        }
-        catch (GitCommandFailedException exception)
-        {
-            throw new DevelopmentStepException(Step, "Não foi possível verificar as alterações do worktree.", exception.Result);
-        }
+        await new WorktreeEraser(git, directories, remover, logger).EraseAsync(
+            development.RepositoryPath,
+            development.WorktreePath,
+            command.Force,
+            command.TerminateLockers ?? [],
+            cancellationToken);
 
         task.MarkDevelopmentRemoved(development.Id, timeProvider.GetUtcNow());
         await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -177,26 +154,91 @@ public sealed class RemoveWorktreeHandler(
                 "Há um agente de IA aberto neste worktree. Encerre-o no terminal antes de remover o worktree.");
         }
     }
+}
 
-    private async Task RemoveRegisteredAsync(TaskDevelopment development, CancellationToken cancellationToken)
+/// <summary>
+/// Tira um worktree do disco e do repositório, pelo caminho: é o miolo de
+/// <see cref="RemoveWorktreeHandler"/>, e a limpeza (ADR-065) usa o mesmo para
+/// worktrees que nenhuma tarefa conhece.
+/// </summary>
+/// <remarks>
+/// Três casos. Registrado no Git: <c>git worktree remove</c> (sem força, a não
+/// ser que peçam) e depois a pasta. Pasta que o Git já esqueceu: é sobra, e só
+/// a pasta sai. Pasta que sumiu: <c>git worktree prune</c>.
+/// </remarks>
+internal sealed class WorktreeEraser(
+    IGitClient git,
+    IDirectoryProbe directories,
+    IDirectoryRemover remover,
+    ILogger logger)
+{
+    private const DevelopmentStep Step = DevelopmentStep.RemoveWorktree;
+
+    public async Task EraseAsync(
+        string repository,
+        string worktreePath,
+        WorktreeRemoveForce force,
+        IReadOnlyCollection<DirectoryLocker> terminate,
+        CancellationToken cancellationToken)
     {
-        var status = await git.GetStatusAsync(development.WorktreePath, cancellationToken);
-
-        if (!status.IsClean)
+        try
         {
-            throw new DevelopmentStepException(
-                Step,
-                $"O worktree tem {(status.Entries.Count == 1 ? "1 alteração não commitada" : $"{status.Entries.Count} alterações não commitadas")}. "
-                + "Nada foi removido.",
-                changes: status.Entries);
+            if (await directories.ExistsAsync(worktreePath, cancellationToken))
+            {
+                if (await WorktreeRegistry.IsRegisteredAsync(git, repository, worktreePath, cancellationToken))
+                {
+                    await RemoveRegisteredAsync(repository, worktreePath, force, cancellationToken);
+                }
+                else
+                {
+                    await EnsureLeftoverAsync(worktreePath, cancellationToken);
+                }
+
+                await DeleteDirectoryAsync(worktreePath, terminate, cancellationToken);
+            }
+            else
+            {
+                // A pasta já sumiu: só falta o repositório esquecer dela.
+                var prune = await git.PruneWorktreesAsync(repository, cancellationToken);
+
+                if (!prune.Succeeded)
+                {
+                    logger.LogWarning(
+                        "WorktreePruneFailed {WorktreePath} {StandardError}",
+                        worktreePath,
+                        prune.StandardError);
+                }
+            }
+        }
+        catch (GitCommandFailedException exception)
+        {
+            throw new DevelopmentStepException(Step, "Não foi possível verificar as alterações do worktree.", exception.Result);
+        }
+    }
+
+    private async Task RemoveRegisteredAsync(
+        string repository,
+        string worktreePath,
+        WorktreeRemoveForce force,
+        CancellationToken cancellationToken)
+    {
+        if (force is WorktreeRemoveForce.None)
+        {
+            var status = await git.GetStatusAsync(worktreePath, cancellationToken);
+
+            if (!status.IsClean)
+            {
+                throw new DevelopmentStepException(
+                    Step,
+                    $"O worktree tem {(status.Entries.Count == 1 ? "1 alteração não commitada" : $"{status.Entries.Count} alterações não commitadas")}. "
+                    + "Nada foi removido.",
+                    changes: status.Entries);
+            }
         }
 
-        var result = await git.RemoveWorktreeAsync(
-            development.RepositoryPath,
-            development.WorktreePath,
-            cancellationToken);
+        var result = await git.RemoveWorktreeAsync(repository, worktreePath, force, cancellationToken);
 
-        if (!result.Succeeded && await WorktreeRegistry.IsRegisteredAsync(git, development, cancellationToken))
+        if (!result.Succeeded && await WorktreeRegistry.IsRegisteredAsync(git, repository, worktreePath, cancellationToken))
         {
             throw new DevelopmentStepException(Step, "O Git não removeu o worktree.", result);
         }
@@ -205,35 +247,34 @@ public sealed class RemoveWorktreeHandler(
     /// <summary>
     /// A pasta existe e o Git não a conhece: é o que sobrou de uma remoção
     /// anterior. A não ser que agora seja um repositório por conta própria — aí
-    /// não é mais o worktree desta tarefa, e não é o app quem vai apagá-lo.
+    /// não é mais aquele worktree, e não é o app quem vai apagá-lo.
     /// </summary>
-    private async Task EnsureLeftoverAsync(TaskDevelopment development, CancellationToken cancellationToken)
+    private async Task EnsureLeftoverAsync(string worktreePath, CancellationToken cancellationToken)
     {
-        var inspection = await git.InspectAsync(development.WorktreePath, cancellationToken);
+        var inspection = await git.InspectAsync(worktreePath, cancellationToken);
 
-        if (inspection.IsRepository && WorktreePathPlanner.SamePath(inspection.TopLevel, development.WorktreePath))
+        if (inspection.IsRepository && WorktreePathPlanner.SamePath(inspection.TopLevel, worktreePath))
         {
             throw new DevelopmentStepException(
                 Step,
-                $"A pasta {development.WorktreePath} não é mais o worktree desta tarefa: agora é outro repositório. "
+                $"A pasta {worktreePath} não é mais o worktree desta tarefa: agora é outro repositório. "
                 + "Nada foi removido.",
                 inspection.Result);
         }
     }
 
     private async Task DeleteDirectoryAsync(
-        Guid taskId,
-        TaskDevelopment development,
+        string worktreePath,
         IReadOnlyCollection<DirectoryLocker> terminate,
         CancellationToken cancellationToken)
     {
-        var removal = await remover.RemoveAsync(development.WorktreePath, terminate, cancellationToken);
+        var removal = await remover.RemoveAsync(worktreePath, terminate, cancellationToken);
 
         foreach (var terminated in removal.Terminated)
         {
             logger.LogWarning(
-                "WorktreeLockerTerminated {TaskId} {ProcessId} {ProcessName}",
-                taskId,
+                "WorktreeLockerTerminated {WorktreePath} {ProcessId} {ProcessName}",
+                worktreePath,
                 terminated.ProcessId,
                 terminated.ProcessName);
         }
@@ -244,18 +285,17 @@ public sealed class RemoveWorktreeHandler(
         }
 
         logger.LogWarning(
-            "WorktreeDirectoryLocked {TaskId} {WorktreePath} {Lockers} {Error}",
-            taskId,
-            development.WorktreePath,
+            "WorktreeDirectoryLocked {WorktreePath} {Lockers} {Error}",
+            worktreePath,
             string.Join(", ", removal.Lockers.Select(locker => locker.Display)),
             removal.Error);
 
         var message = removal.Lockers.Count switch
         {
-            0 => $"O Git removeu o worktree, mas a pasta {development.WorktreePath} não pôde ser apagada"
+            0 => $"O Git removeu o worktree, mas a pasta {worktreePath} não pôde ser apagada"
                  + (removal.Error is null ? "." : $": {removal.Error}"),
-            1 => $"O Git removeu o worktree, mas a pasta {development.WorktreePath} está sendo usada por 1 processo.",
-            var count => $"O Git removeu o worktree, mas a pasta {development.WorktreePath} está sendo usada por {count} processos.",
+            1 => $"O Git removeu o worktree, mas a pasta {worktreePath} está sendo usada por 1 processo.",
+            var count => $"O Git removeu o worktree, mas a pasta {worktreePath} está sendo usada por {count} processos.",
         };
 
         throw new DevelopmentStepException(Step, message, lockers: removal.Lockers) { IsDirectoryLocked = true };
@@ -265,12 +305,20 @@ public sealed class RemoveWorktreeHandler(
 internal static class WorktreeRegistry
 {
     /// <summary>O repositório ainda lista o worktree desta tarefa?</summary>
-    public static async Task<bool> IsRegisteredAsync(
+    public static Task<bool> IsRegisteredAsync(
         IGitClient git,
         TaskDevelopment development,
+        CancellationToken cancellationToken) =>
+        IsRegisteredAsync(git, development.RepositoryPath, development.WorktreePath, cancellationToken);
+
+    /// <summary>O repositório ainda lista o worktree deste caminho?</summary>
+    public static async Task<bool> IsRegisteredAsync(
+        IGitClient git,
+        string repository,
+        string worktreePath,
         CancellationToken cancellationToken)
     {
-        var worktrees = await git.ListWorktreesAsync(development.RepositoryPath, cancellationToken);
-        return worktrees.Any(worktree => WorktreePathPlanner.SamePath(worktree.Path, development.WorktreePath));
+        var worktrees = await git.ListWorktreesAsync(repository, cancellationToken);
+        return worktrees.Any(worktree => WorktreePathPlanner.SamePath(worktree.Path, worktreePath));
     }
 }

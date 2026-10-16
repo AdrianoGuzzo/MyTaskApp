@@ -11,7 +11,7 @@ namespace MyTaskApp.Infrastructure.Sync.Http;
 /// <summary>
 /// A conta da sincronização (ADR-061). Singleton: o access token fica na
 /// memória, e a renovação passa por um portão só. Desktop e celular usam a
-/// mesma; muda só por onde o login volta (<see cref="ISyncAuthorizationRedirect"/>, ADR-065).
+/// mesma; muda só por onde o login volta (<see cref="ISyncAuthorizationRedirect"/>, ADR-067).
 /// </summary>
 /// <remarks>
 /// <para>

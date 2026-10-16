@@ -28,7 +28,7 @@ public sealed class MobileHostOptions
 }
 
 /// <summary>
-/// A composição do celular (ADR-065): a mesma Application e os mesmos dados do
+/// A composição do celular (ADR-067): a mesma Application e os mesmos dados do
 /// desktop (<see cref="DependencyInjection.AddLocalData"/>), e nada de
 /// processo, Git, terminal ou Jira. A casca MAUI registra as portas da
 /// plataforma (<see cref="Ports"/> e o <see cref="Infrastructure.Secrets.ISecretStore"/>).

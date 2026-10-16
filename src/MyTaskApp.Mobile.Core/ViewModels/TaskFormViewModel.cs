@@ -27,7 +27,7 @@ public sealed record StatusChoice(TaskItemStatus Status, string Label)
 }
 
 /// <summary>
-/// Criar e editar uma tarefa no celular (ADR-065). Nenhuma regra é repetida
+/// Criar e editar uma tarefa no celular (ADR-067). Nenhuma regra é repetida
 /// aqui além do que a tela precisa para avisar antes de enviar (título vazio
 /// ou longo demais): quem decide é a Application — prazo no passado, status
 /// que não pode mudar, etiqueta que não existe —, e a frase dela aparece como veio.

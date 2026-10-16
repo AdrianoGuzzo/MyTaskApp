@@ -17,7 +17,7 @@ public sealed record OriginChoice(string Label, DevicePlacement? Placement)
 }
 
 /// <summary>
-/// A origem de uma tarefa no celular (ADR-065) é o "onde aparece" do ADR-062:
+/// A origem de uma tarefa no celular (ADR-067) é o "onde aparece" do ADR-062:
 /// compartilhada, só neste celular, ou só num dos computadores da conta.
 /// Contextos como Trabalho ou Estudos continuam sendo etiquetas.
 /// </summary>

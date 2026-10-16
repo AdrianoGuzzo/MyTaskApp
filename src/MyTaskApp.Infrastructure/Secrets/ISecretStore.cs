@@ -9,7 +9,7 @@ namespace MyTaskApp.Infrastructure.Secrets;
 /// <remarks>
 /// Porta da Infrastructure, e não da Application: quem guarda e lê segredo é
 /// só a autenticação, e nenhum caso de uso precisa saber que ele existe.
-/// Pública só para o app do celular entregar o cofre da plataforma (ADR-065);
+/// Pública só para o app do celular entregar o cofre da plataforma (ADR-067);
 /// as implementações do desktop continuam internas.
 /// </remarks>
 public interface ISecretStore

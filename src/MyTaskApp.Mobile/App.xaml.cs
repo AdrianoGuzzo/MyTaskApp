@@ -4,7 +4,7 @@ using MyTaskApp.Mobile.Core.Composition;
 namespace MyTaskApp.Mobile;
 
 /// <summary>
-/// O app no celular (ADR-065). A janela liga o ciclo de vida: o banco sobe ao
+/// O app no celular (ADR-067). A janela liga o ciclo de vida: o banco sobe ao
 /// abrir, a sincronização para em segundo plano e volta ao reabrir — e também
 /// quando a rede volta.
 /// </summary>

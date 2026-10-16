@@ -23,7 +23,7 @@ public static class SyncSchema
     public const string DesktopClientId = "mytaskapp-desktop";
 
     /// <summary>
-    /// O cliente OAuth público do celular (ADR-065): também sem secret e com
+    /// O cliente OAuth público do celular (ADR-067): também sem secret e com
     /// PKCE, mas a volta do login é um esquema próprio do app, não o loopback.
     /// </summary>
     public const string MobileClientId = "mytaskapp-mobile";

@@ -53,7 +53,7 @@ namespace MyTaskApp.Infrastructure;
 public static class DependencyInjection
 {
     /// <summary>
-    /// O que todo app do MyTaskApp precisa para trabalhar com os dados (ADR-065):
+    /// O que todo app do MyTaskApp precisa para trabalhar com os dados (ADR-067):
     /// o SQLite com as migrations, os repositórios e as consultas, a captura e a
     /// aplicação da sincronização e o cliente HTTP dela. Nada de processo, Git,
     /// terminal, Jira, PostgreSQL nem cofre do sistema — é o que roda no celular.
@@ -157,7 +157,7 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        // Os dados e a sincronização são os mesmos do celular (ADR-065); daqui
+        // Os dados e a sincronização são os mesmos do celular (ADR-067); daqui
         // para baixo é o que só o computador tem.
         services.AddLocalData(configuration);
 

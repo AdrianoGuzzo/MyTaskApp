@@ -257,6 +257,14 @@ internal sealed class ScriptedSyncApi : ISyncApi
         return Task.FromResult(Pages.TryDequeue(out var page) ? page : new PullResponse([], cursor, false));
     }
 
-    public Task<FetchResponse> FetchAsync(Guid workspaceId, FetchRequest request, CancellationToken cancellationToken) =>
-        Task.FromResult(new FetchResponse([]));
+    /// <summary>O estado do servidor que a busca por id devolve; o que não está aqui não existe.</summary>
+    public List<SyncChange> Fetchable { get; } = [];
+
+    public Task<FetchResponse> FetchAsync(Guid workspaceId, FetchRequest request, CancellationToken cancellationToken)
+    {
+        Calls.Add("fetch");
+
+        return Task.FromResult(new FetchResponse(
+            [.. Fetchable.Where(change => request.Entities.Contains(new EntityRef(change.EntityType, change.EntityId)))]));
+    }
 }

@@ -107,6 +107,23 @@ public sealed record GitBranchStatus(
 }
 
 /// <summary>
+/// Quanta força o <c>git worktree remove</c> leva. Só a limpeza de worktrees
+/// (ADR-065) passa algo além de <see cref="None"/>, e só depois de o usuário
+/// ver a lista, marcar e confirmar.
+/// </summary>
+public enum WorktreeRemoveForce
+{
+    /// <summary>Sem força: o Git recusa com alterações não commitadas.</summary>
+    None = 0,
+
+    /// <summary><c>--force</c>: apaga também o que não foi commitado.</summary>
+    Force = 1,
+
+    /// <summary><c>--force --force</c>: além disso, passa por cima de <c>git worktree lock</c>.</summary>
+    ForceLocked = 2,
+}
+
+/// <summary>
 /// O Git rodou e recusou. Carrega a execução inteira para a área de detalhes;
 /// quem chama decide a mensagem, porque só ele sabe em que etapa estava.
 /// </summary>
@@ -125,9 +142,11 @@ public sealed class GitCommandFailedException(GitCommandResult result)
 /// <remarks>
 /// <para>
 /// Nenhuma operação destrutiva existe aqui, e isso é a regra, não um esquecimento:
-/// não há reset, clean, stash, checkout forçado nem <c>--force</c> em lugar
-/// nenhum. Atualizar a origem é só fast-forward; remover worktree é o
-/// <c>git worktree remove</c> sem força, que o próprio Git recusa com alterações.
+/// não há reset, clean, stash nem checkout forçado. Atualizar a origem é só
+/// fast-forward; remover worktree é o <c>git worktree remove</c> sem força, que
+/// o próprio Git recusa com alterações. A única exceção é a limpeza de
+/// worktrees (ADR-065): ali o usuário vê cada worktree, com as alterações que
+/// ele tem, marca e confirma — e só então a remoção leva <c>--force</c>.
 /// </para>
 /// <para>
 /// Os métodos que devolvem dado lançam <see cref="GitCommandFailedException"/>
@@ -258,10 +277,14 @@ public interface IGitClient
     /// <summary><c>git rev-parse --abbrev-ref HEAD</c> no worktree.</summary>
     Task<string?> GetCurrentBranchAsync(string workingTree, CancellationToken cancellationToken = default);
 
-    /// <summary><c>git -C repo worktree remove {path}</c>, sem <c>--force</c>.</summary>
+    /// <summary>
+    /// <c>git -C repo worktree remove {path}</c>, sem <c>--force</c> a não ser
+    /// que <paramref name="force"/> peça (só a limpeza, ADR-065).
+    /// </summary>
     Task<GitCommandResult> RemoveWorktreeAsync(
         string repository,
         string path,
+        WorktreeRemoveForce force = WorktreeRemoveForce.None,
         CancellationToken cancellationToken = default);
 
     /// <summary><c>git worktree prune</c>: esquece worktrees cuja pasta já sumiu.</summary>

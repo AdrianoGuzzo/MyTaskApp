@@ -14,7 +14,7 @@ using MyTaskApp.Sync.Contracts;
 namespace MyTaskApp.Mobile.Core.Tests.Composition;
 
 /// <summary>
-/// A composição do celular de verdade (ADR-065): cada caso de uso que as telas
+/// A composição do celular de verdade (ADR-067): cada caso de uso que as telas
 /// pedem monta com o que <c>AddMobileCore</c> registra — sem Git, terminal,
 /// Jira nem PostgreSQL.
 /// </summary>

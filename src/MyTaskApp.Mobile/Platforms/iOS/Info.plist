@@ -28,7 +28,7 @@
 	</array>
 	<key>XSAppIconAssets</key>
 	<string>Assets.xcassets/appicon.appiconset</string>
-	<!-- A volta do login (ADR-065): o mesmo esquema de SyncSchema.MobileRedirectScheme. -->
+	<!-- A volta do login (ADR-067): o mesmo esquema de SyncSchema.MobileRedirectScheme. -->
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

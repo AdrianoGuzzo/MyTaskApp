@@ -6,7 +6,7 @@ using MyTaskApp.Infrastructure.Persistence;
 namespace MyTaskApp.Mobile.Core.Composition;
 
 /// <summary>
-/// O app no celular (ADR-065): o banco nasce pelas migrations fora da thread
+/// O app no celular (ADR-067): o banco nasce pelas migrations fora da thread
 /// da tela, e a sincronização roda só em primeiro plano — o sistema congela o
 /// processo em segundo plano de qualquer jeito, e um ciclo cortado no meio é
 /// reenviado com os mesmos ids na volta.

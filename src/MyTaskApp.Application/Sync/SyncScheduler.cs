@@ -40,7 +40,7 @@ public sealed record SyncSchedule(TimeSpan Debounce, TimeSpan PollInterval, Time
 /// </para>
 /// <para>
 /// <b>Parar e voltar.</b> O desktop liga uma vez e só desliga ao fechar. O
-/// celular (ADR-065) para ao ir para segundo plano — o sistema congela o
+/// celular (ADR-067) para ao ir para segundo plano — o sistema congela o
 /// processo de qualquer jeito — e volta com <see cref="Start"/> ao reabrir.
 /// </para>
 /// </remarks>
@@ -117,7 +117,7 @@ public sealed class SyncScheduler(
     }
 
     /// <summary>
-    /// Para o laço e espera um pouco o ciclo em andamento (ADR-065). Pode voltar
+    /// Para o laço e espera um pouco o ciclo em andamento (ADR-067). Pode voltar
     /// com <see cref="Start"/>; o que não foi enviado continua no outbox.
     /// </summary>
     public async Task StopAsync()

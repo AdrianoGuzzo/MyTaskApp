@@ -40,7 +40,7 @@ public sealed record PlacementFilter(IReadOnlyCollection<Guid>? DeviceIds)
 }
 
 /// <summary>
-/// A origem exata de uma tarefa, para o filtro "Origem" do celular (ADR-065):
+/// A origem exata de uma tarefa, para o filtro "Origem" do celular (ADR-067):
 /// só as compartilhadas, ou só as que moram num destes dispositivos.
 /// </summary>
 /// <remarks>

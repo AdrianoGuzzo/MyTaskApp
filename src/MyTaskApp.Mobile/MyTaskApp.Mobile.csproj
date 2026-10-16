@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    A casca MAUI do celular (ADR-065): telas, portas da plataforma e os
+    A casca MAUI do celular (ADR-067): telas, portas da plataforma e os
     arquivos de Android e iOS. Toda a lógica está em MyTaskApp.Mobile.Core.
 
     Fica fora do MyTaskApp.slnx (que o CI do desktop compila sem workload);

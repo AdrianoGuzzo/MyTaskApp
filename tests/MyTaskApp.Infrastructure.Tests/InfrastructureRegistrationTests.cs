@@ -205,7 +205,7 @@ public class InfrastructureRegistrationTests : IDisposable
         return services.BuildServiceProvider(validateScopes: true);
     }
 
-    /// <summary>O que o celular usa (ADR-065): os dados e a sincronização, sem nada do computador.</summary>
+    /// <summary>O que o celular usa (ADR-067): os dados e a sincronização, sem nada do computador.</summary>
     [Theory]
     [InlineData(typeof(ITaskItemRepository))]
     [InlineData(typeof(IUnitOfWork))]

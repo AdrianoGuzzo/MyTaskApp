@@ -3,7 +3,7 @@ using Foundation;
 namespace MyTaskApp.Mobile;
 
 /// <summary>
-/// Tira a pasta de dados do backup do iCloud (ADR-065): restaurada noutro
+/// Tira a pasta de dados do backup do iCloud (ADR-067): restaurada noutro
 /// iPhone, ela levaria o id deste dispositivo, e os dois sincronizariam em
 /// nome do mesmo. O equivalente do <c>allowBackup="false"</c> do Android.
 /// </summary>

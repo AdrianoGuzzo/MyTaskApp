@@ -4,7 +4,7 @@ using MyTaskApp.Mobile.Core.Composition;
 namespace MyTaskApp.Mobile.Core.Tests.Architecture;
 
 /// <summary>
-/// O núcleo do celular (ADR-065) fica sem MAUI, para rodar e ser testado no
+/// O núcleo do celular (ADR-067) fica sem MAUI, para rodar e ser testado no
 /// CI do desktop, e as telas não falam com banco, rede nem contêiner — só com
 /// os casos de uso, pelo <c>IUseCaseRunner</c>.
 /// </summary>

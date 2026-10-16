@@ -13,7 +13,7 @@
     <ProjectReference Include="..\..\src\MyTaskApp.Server.Infrastructure\MyTaskApp.Server.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\MyTaskApp.Server.Api\MyTaskApp.Server.Api.csproj" />
     <ProjectReference Include="..\..\src\MyTaskApp.Infrastructure\MyTaskApp.Infrastructure.csproj" />
-    <!-- O celular de ponta a ponta (ADR-065): a composição e as telas do app, sem MAUI. -->
+    <!-- O celular de ponta a ponta (ADR-067): a composição e as telas do app, sem MAUI. -->
     <ProjectReference Include="..\..\src\MyTaskApp.Mobile.Core\MyTaskApp.Mobile.Core.csproj" />
   </ItemGroup>
 

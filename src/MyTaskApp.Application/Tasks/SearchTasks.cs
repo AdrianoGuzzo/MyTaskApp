@@ -41,7 +41,7 @@ public enum TaskSort
 /// <param name="OverdueOnly">Só as atrasadas: o mesmo critério do quadro Hoje.</param>
 /// <param name="Device">De qual computador (ADR-062); <c>null</c> = este e as compartilhadas.</param>
 /// <param name="Origin">
-/// A origem exata (ADR-065): só as compartilhadas ou só as de um dispositivo,
+/// A origem exata (ADR-067): só as compartilhadas ou só as de um dispositivo,
 /// por cima de <paramref name="Device"/>. <c>null</c> = sem esse filtro.
 /// </param>
 public sealed record SearchTasks(
@@ -101,7 +101,7 @@ public sealed record TaskSearchResult(
 /// o teto não cortar justamente elas.
 /// </param>
 /// <param name="Placement">O "onde aparece" (ADR-062); <c>null</c> = de todos os computadores.</param>
-/// <param name="Origin">A origem exata (ADR-065); <c>null</c> = qualquer uma.</param>
+/// <param name="Origin">A origem exata (ADR-067); <c>null</c> = qualquer uma.</param>
 public sealed record TaskSearchCriteria(
     IReadOnlyCollection<TaskLifecycle> Lifecycles,
     IReadOnlyCollection<Guid>? TaskIds = null,

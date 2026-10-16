@@ -3,7 +3,7 @@
 O app do celular é feito em .NET MAUI. Ele é **mais um dispositivo da
 sincronização**: roda a mesma Application do desktop sobre um SQLite próprio
 e conversa só com o servidor de sincronização. A decisão e as alternativas
-estão no [ADR-065](ARCHITECTURE.md#adr-065--o-celular-como-mais-um-dispositivo-da-sincronização-net-maui).
+estão no [ADR-067](ARCHITECTURE.md#adr-067--o-celular-como-mais-um-dispositivo-da-sincronização-net-maui).
 
 | Plataforma | Estado |
 |---|---|

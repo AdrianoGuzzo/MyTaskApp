@@ -22,7 +22,7 @@ public sealed record HistoryLine(string What, string When, string? Who);
 public sealed record DevelopmentLine(string Repository, string Branch, string Status);
 
 /// <summary>
-/// A tarefa inteira (ADR-065): o que o domínio sabe dela e as operações que a
+/// A tarefa inteira (ADR-067): o que o domínio sabe dela e as operações que a
 /// regra permite agora. Cada botão chama o mesmo caso de uso do desktop; a
 /// tela só esconde o que a regra recusaria, e a regra continua decidindo.
 /// </summary>

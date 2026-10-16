@@ -5,7 +5,7 @@ namespace MyTaskApp.Mobile.Core.SignIn;
 
 /// <summary>
 /// Abre o login no navegador do sistema e entrega a volta ao
-/// <see cref="AppLinkAuthorizationRedirect"/> (ADR-065). Quem espera o código é
+/// <see cref="AppLinkAuthorizationRedirect"/> (ADR-067). Quem espera o código é
 /// o mesmo <c>SyncAuthenticationService</c> do desktop.
 /// </summary>
 public sealed class AppLinkSignIn(IWebAuthenticatorPort browser, AppLinkAuthorizationRedirect redirect)

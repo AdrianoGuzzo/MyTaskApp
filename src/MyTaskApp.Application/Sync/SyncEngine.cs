@@ -126,6 +126,12 @@ public sealed class SyncEngine(
             await SettleAsync(cancellationToken);
 
             var pushed = await PushAllAsync(workspaceId, cancellationToken);
+
+            // O comando que esperava um apelido livre (ADR-066) entra assim que dá.
+            await runner.RunAsync<RetryWaitingReceivedChangesHandler>(
+                (handler, token) => handler.HandleAsync(new RetryWaitingReceivedChanges(), token),
+                cancellationToken);
+
             var pulled = await PullAllAsync(workspaceId, cancellationToken);
 
             // O que chegou agora pode ser legado de um id antigo daqui: sobe no próximo ciclo.
@@ -349,7 +355,7 @@ public sealed class SyncEngine(
         SyncSchema.Current,
         Capabilities: []);
 
-    /// <summary>O sistema, para a lista de dispositivos; o celular também aparece nela (ADR-065).</summary>
+    /// <summary>O sistema, para a lista de dispositivos; o celular também aparece nela (ADR-067).</summary>
     internal static string PlatformName() =>
         OperatingSystem.IsWindows() ? "Windows"
         : OperatingSystem.IsAndroid() ? "Android"

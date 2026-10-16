@@ -1,6 +1,6 @@
 namespace MyTaskApp.Application.Sync;
 
-/// <summary>O que a bolinha da sincronização mostra, na ordem em que um estado vence o outro (ADR-063). O desktop e o celular (ADR-065) usam a mesma ordem.</summary>
+/// <summary>O que a bolinha da sincronização mostra, na ordem em que um estado vence o outro (ADR-063). O desktop e o celular (ADR-067) usam a mesma ordem.</summary>
 public enum SyncIndicatorKind
 {
     /// <summary>A build não tem servidor: não há o que mostrar nem o que conectar.</summary>

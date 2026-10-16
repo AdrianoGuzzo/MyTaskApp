@@ -11,7 +11,7 @@ namespace MyTaskApp.Infrastructure.Sync;
 /// backup do banco (ADR-061). Criado na primeira leitura.
 /// </summary>
 /// <param name="nickname">
-/// O apelido dado pelo app — o nome do celular (ADR-065). Sem ele, o do
+/// O apelido dado pelo app — o nome do celular (ADR-067). Sem ele, o do
 /// computador: no Android, nome de máquina e usuário são <c>localhost</c> e um
 /// <c>u0_a123</c> que não dizem nada.
 /// </param>

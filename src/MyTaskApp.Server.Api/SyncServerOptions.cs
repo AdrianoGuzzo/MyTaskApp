@@ -22,7 +22,7 @@ public sealed class SyncServerOptions
     ];
 
     /// <summary>
-    /// Os endereços de volta aceitos para o celular (ADR-065): o esquema
+    /// Os endereços de volta aceitos para o celular (ADR-067): o esquema
     /// próprio do app. Vazio = o servidor não aceita login do celular.
     /// </summary>
     public string[] MobileRedirectUris { get; set; } = [SyncSchema.MobileRedirectUri];

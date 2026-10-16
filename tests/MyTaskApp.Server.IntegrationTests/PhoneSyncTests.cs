@@ -8,7 +8,7 @@ using MyTaskApp.Mobile.Core.ViewModels;
 namespace MyTaskApp.Server.IntegrationTests;
 
 /// <summary>
-/// O celular como mais um dispositivo (ADR-065), de ponta a ponta: as telas
+/// O celular como mais um dispositivo (ADR-067), de ponta a ponta: as telas
 /// do app sobre a composição de verdade, a API real, o PostgreSQL por baixo e
 /// um desktop do outro lado. O que um grava, o outro lê pelo servidor.
 /// </summary>

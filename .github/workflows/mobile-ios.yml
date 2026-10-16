@@ -1,6 +1,6 @@
 name: Mobile iOS (manual)
 
-# O app do celular para iOS (ADR-065) só compila num Mac, com Xcode. A
+# O app do celular para iOS (ADR-067) só compila num Mac, com Xcode. A
 # configuração está pronta mas ainda não foi validada (docs/mobile.md); este
 # workflow é o primeiro passo dessa validação, rodado à mão num runner macOS.
 # Fica fora do CI dos PRs até passar a primeira vez.

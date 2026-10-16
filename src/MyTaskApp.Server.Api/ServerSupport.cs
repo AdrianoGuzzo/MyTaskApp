@@ -113,7 +113,7 @@ internal sealed class OpenIddictAuthorizationRevoker(
 /// <summary>
 /// Cria (ou atualiza) os clientes públicos ao subir: sem secret, com PKCE
 /// obrigatório e só os redirects configurados — loopback para o desktop, o
-/// esquema próprio do app para o celular (ADR-065). Cada cliente só aceita os
+/// esquema próprio do app para o celular (ADR-067). Cada cliente só aceita os
 /// seus: um código emitido para um não vira token no outro.
 /// </summary>
 internal sealed class PublicClientSeeder(IServiceProvider services, SyncServerOptions options) : IHostedService

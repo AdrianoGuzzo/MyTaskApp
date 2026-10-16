@@ -9,7 +9,7 @@ using NSubstitute;
 
 namespace MyTaskApp.Application.Tests.Tasks;
 
-/// <summary>A origem exata do celular (ADR-065) chega ao banco; pedida pelo id, a tarefa vem de qualquer lugar.</summary>
+/// <summary>A origem exata do celular (ADR-067) chega ao banco; pedida pelo id, a tarefa vem de qualquer lugar.</summary>
 public sealed class SearchTasksOriginTests
 {
     private static readonly DateTimeOffset NowUtc = new(2026, 10, 15, 15, 0, 0, TimeSpan.Zero);

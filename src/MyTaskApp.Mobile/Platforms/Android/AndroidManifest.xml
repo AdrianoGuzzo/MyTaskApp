@@ -3,7 +3,7 @@
 	<!--
 		allowBackup="false": o backup automático levaria o device.json (o id deste
 		dispositivo na sincronização) e o cofre do SecureStorage para outro
-		celular, e os dois falariam em nome do mesmo dispositivo (ADR-065).
+		celular, e os dois falariam em nome do mesmo dispositivo (ADR-067).
 	-->
 	<application
 		android:allowBackup="false"

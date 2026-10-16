@@ -13,7 +13,7 @@
     <Project Path="src/MyTaskApp.Domain/MyTaskApp.Domain.csproj" />
     <Project Path="src/MyTaskApp.Infrastructure/MyTaskApp.Infrastructure.csproj" />
   </Folder>
-  <!-- E um celular (ADR-065): a composição e as telas do app, sem MAUI. -->
+  <!-- E um celular (ADR-067): a composição e as telas do app, sem MAUI. -->
   <Folder Name="/mobile/">
     <Project Path="src/MyTaskApp.Mobile.Core/MyTaskApp.Mobile.Core.csproj" />
   </Folder>

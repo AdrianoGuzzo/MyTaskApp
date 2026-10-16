@@ -9,7 +9,7 @@ using MyTaskApp.Mobile.Views;
 namespace MyTaskApp.Mobile;
 
 /// <summary>
-/// A composição do app no celular (ADR-065): as portas da plataforma aqui, o
+/// A composição do app no celular (ADR-067): as portas da plataforma aqui, o
 /// resto em <see cref="MobileServices.AddMobileCore"/> — a mesma Application e
 /// os mesmos dados do desktop.
 /// </summary>

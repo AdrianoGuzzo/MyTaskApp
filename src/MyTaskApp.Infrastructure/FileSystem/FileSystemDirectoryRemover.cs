@@ -34,6 +34,13 @@ internal sealed class FileSystemDirectoryRemover(
         CancellationToken cancellationToken = default) =>
         Task.Run(() => RemoveCoreAsync(path, terminate, cancellationToken), cancellationToken);
 
+    public Task<IReadOnlyList<DirectoryLocker>> FindLockersAsync(
+        string path,
+        CancellationToken cancellationToken = default) =>
+        Task.Run<IReadOnlyList<DirectoryLocker>>(
+            () => Directory.Exists(path) ? lockFinder.Find(path, cancellationToken) : [],
+            cancellationToken);
+
     private async Task<DirectoryRemoval> RemoveCoreAsync(
         string path,
         IReadOnlyCollection<DirectoryLocker> terminate,

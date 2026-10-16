@@ -17,7 +17,7 @@ public sealed record ConflictLine(Guid Id, string What, string Mine, string Thei
 public sealed record FailureLine(Guid OpId, string What, string Error);
 
 /// <summary>
-/// A aba Conta (ADR-065): a ligação com a conta e o estado da sincronização
+/// A aba Conta (ADR-067): a ligação com a conta e o estado da sincronização
 /// sem esconder nada — sincronizado, pendente e falha são estados diferentes,
 /// e cada conflito ou recusa tem o que fazer com ele.
 /// </summary>

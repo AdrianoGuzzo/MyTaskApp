@@ -20,7 +20,7 @@ public class LayerDependencyTests
     private static readonly string[] Persistence = ["Microsoft.EntityFrameworkCore", "Npgsql"];
     private static readonly string[] Ui = ["Avalonia"];
 
-    /// <summary>O celular (ADR-065) usa a Application; o contrário nunca.</summary>
+    /// <summary>O celular (ADR-067) usa a Application; o contrário nunca.</summary>
     private const string Mobile = "MyTaskApp.Mobile";
 
     [Fact]

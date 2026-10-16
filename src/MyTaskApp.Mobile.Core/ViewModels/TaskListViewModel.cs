@@ -35,7 +35,7 @@ public sealed record SortChoice(TaskSort Sort, string Label)
 }
 
 /// <summary>
-/// A tela principal do celular (ADR-065): todas as tarefas, de todos os
+/// A tela principal do celular (ADR-067): todas as tarefas, de todos os
 /// dispositivos, numa lista só, em páginas — a busca é a mesma do desktop e do
 /// MCP (<see cref="SearchTasksHandler"/>).
 /// </summary>

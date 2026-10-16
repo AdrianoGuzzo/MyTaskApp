@@ -23,7 +23,7 @@ public enum ConnectState
 }
 
 /// <summary>
-/// Entrar com a conta (ADR-065): o mesmo login do desktop — Google pelo
+/// Entrar com a conta (ADR-067): o mesmo login do desktop — Google pelo
 /// servidor, código + PKCE —, aberto no navegador do sistema e voltando pelo
 /// esquema do app. Também dá para seguir sem conta: o celular fica só local.
 /// </summary>

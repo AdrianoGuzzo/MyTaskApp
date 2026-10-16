@@ -207,6 +207,49 @@ public sealed class GitWorktreeIntegrationTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// ADR-065 de ponta a ponta: um worktree criado à mão, sem tarefa e com
+    /// trabalho não commitado, e o de uma tarefa concluída. A limpeza acha os
+    /// dois, apaga os dois com força, e as branches continuam no repositório.
+    /// </summary>
+    [Fact]
+    public async Task Cleanup_RemovesTheOrphanWithChanges_AndTheCompletedTasksWorktree_KeepingTheBranches()
+    {
+        Assert.SkipWhen(_executable is null, "Git não instalado nesta máquina.");
+
+        var orphan = Path.Combine(_root, "eco-core-experimento");
+        await GitAsync(Repository, "worktree", "add", "-q", "-b", "experimento", orphan);
+        await File.WriteAllTextAsync(Path.Combine(orphan, "rascunho.txt"), "não commitado\n", Ct);
+
+        var task = await SeedTaskAsync();
+        await StartAsync(await PrepareAsync(task, "refs/heads/main", []));
+        await CompleteAsync(task);
+
+        var scan = await FindCleanupAsync();
+
+        scan.Problems.Should().BeEmpty();
+        scan.Candidates.Select(candidate => (candidate.WorktreePath, candidate.Reason)).Should().BeEquivalentTo(
+        [
+            (WorktreePathPlanner.Canonical(orphan), WorktreeCleanupReason.NoTask),
+            (ExpectedWorktree, WorktreeCleanupReason.Completed),
+        ]);
+        scan.Candidates.Single(candidate => candidate.TaskId is null).Sync.Changes.Should().Be(1);
+
+        var result = await CleanAsync(scan.Candidates);
+
+        result.Failures.Should().BeEmpty();
+        result.Removed.Should().Be(2);
+        Directory.Exists(orphan).Should().BeFalse();
+        Directory.Exists(ExpectedWorktree).Should().BeFalse();
+        (await _git.ListWorktreesAsync(Repository, Ct)).Should().ContainSingle("só o principal fica");
+        (await _git.CommitExistsAsync(Repository, "refs/heads/experimento", Ct)).Should().BeTrue();
+        (await _git.CommitExistsAsync(Repository, "refs/heads/feature/123-corrigir-animais", Ct)).Should().BeTrue();
+
+        await using var context = _database!.CreateContext();
+        context.TaskDevelopments.Single(development => development.TaskItemId == task.Id)
+            .Status.Should().Be(TaskDevelopmentStatus.Removed);
+    }
+
+    /// <summary>
     /// ADR-028 de ponta a ponta: worktree de verdade, banco de verdade, shell de
     /// verdade. Os comandos rodam na pasta do worktree, em ordem, e param no
     /// primeiro exit code diferente de zero.
@@ -550,22 +593,69 @@ public sealed class GitWorktreeIntegrationTests : IAsyncLifetime
     {
         await using var context = _database!.CreateContext();
 
-        var handler = new RemoveWorktreeHandler(
+        return await RemoveHandler(context).HandleAsync(new RemoveWorktree(task.Id, context.TaskDevelopments.Single(development => development.TaskItemId == task.Id).Id, terminate), Ct);
+    }
+
+    private RemoveWorktreeHandler RemoveHandler(MyTaskAppDbContext context) =>
+        new(
             new TaskItemRepository(context),
             new EfUnitOfWork(context),
             _git,
             new FileSystemDirectoryProbe(),
             new AgentSessionRepository(context),
             new AgentProcessTracker(),
-            new FileSystemDirectoryRemover(
-                OperatingSystem.IsWindows()
-                    ? new WindowsDirectoryLockFinder(NullLogger<WindowsDirectoryLockFinder>.Instance)
-                    : new NoDirectoryLockFinder(),
-                NullLogger<FileSystemDirectoryRemover>.Instance),
+            Remover(),
             new FakeTimeProvider(Now),
             NullLogger<RemoveWorktreeHandler>.Instance);
 
-        return await handler.HandleAsync(new RemoveWorktree(task.Id, context.TaskDevelopments.Single(development => development.TaskItemId == task.Id).Id, terminate), Ct);
+    private static FileSystemDirectoryRemover Remover() =>
+        new(
+            OperatingSystem.IsWindows()
+                ? new WindowsDirectoryLockFinder(NullLogger<WindowsDirectoryLockFinder>.Instance)
+                : new NoDirectoryLockFinder(),
+            NullLogger<FileSystemDirectoryRemover>.Instance);
+
+    private async Task CompleteAsync(TaskItem task)
+    {
+        await using var context = _database!.CreateContext();
+
+        var loaded = await new TaskItemRepository(context).FindByIdAsync(task.Id, Ct);
+        loaded!.CompleteOccurrence(loaded.Occurrences[0].Id, Now);
+        await context.SaveChangesAsync(Ct);
+    }
+
+    private async Task<WorktreeCleanupScan> FindCleanupAsync()
+    {
+        await using var context = _database!.CreateContext();
+
+        var handler = new FindWorktreeCleanupHandler(
+            new TaskItemRepository(context),
+            new MyTaskApp.Infrastructure.Persistence.Queries.TagQuery(context),
+            _git,
+            new FileSystemDirectoryProbe(),
+            new AgentSessionRepository(context),
+            new AgentProcessTracker(),
+            new EfUnitOfWork(context),
+            new ProbeWorktreesHandler(_git, new FileSystemDirectoryProbe(), NullLogger<ProbeWorktreesHandler>.Instance),
+            new FakeTimeProvider(Now),
+            NullLogger<FindWorktreeCleanupHandler>.Instance);
+
+        return await handler.HandleAsync(new FindWorktreeCleanup(), Ct);
+    }
+
+    private async Task<WorktreeCleanupResult> CleanAsync(IReadOnlyList<WorktreeCleanupCandidate> worktrees)
+    {
+        await using var context = _database!.CreateContext();
+
+        var handler = new CleanWorktreesHandler(
+            new TaskItemRepository(context),
+            _git,
+            new FileSystemDirectoryProbe(),
+            Remover(),
+            RemoveHandler(context),
+            NullLogger<CleanWorktreesHandler>.Instance);
+
+        return await handler.HandleAsync(new CleanWorktrees(worktrees), Ct);
     }
 
     private Task<ProcessResult> CommitAsync(string directory, string message) =>

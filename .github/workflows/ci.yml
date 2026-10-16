@@ -102,7 +102,7 @@ jobs:
           path: artifacts/server-integration/*.trx
           if-no-files-found: ignore
 
-  # O app do celular (ADR-065): a casca MAUI fica fora das duas solutions
+  # O app do celular (ADR-067): a casca MAUI fica fora das duas solutions
   # acima, que não precisam de workload. Aqui ela compila para Android em
   # Release (trimming e tudo), e o APK precisa levar o SQLite nativo — sem ele,
   # o app abre e morre na primeira consulta. Sem emulador: os testes do app

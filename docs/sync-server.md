@@ -65,7 +65,7 @@ para o repositório nem para a imagem.**
 | `Database__MigrateOnStartup` | não | `true` aplica as migrations ao subir. Padrão: só em Development |
 | `ForwardedHeaders__KnownProxies__0` | atrás de proxy | IP do proxy reverso, para valer o `X-Forwarded-Proto` |
 | `Sync__DesktopRedirectUris__0` … | não | voltas aceitas do desktop. Padrão: `http://127.0.0.1:47833/callback` e `http://localhost:47833/callback` |
-| `Sync__MobileRedirectUris__0` … | não | voltas aceitas do celular (cliente `mytaskapp-mobile`, ADR-065). Padrão: `io.github.adrianoguzzo.mytaskapp://oauth/callback` |
+| `Sync__MobileRedirectUris__0` … | não | voltas aceitas do celular (cliente `mytaskapp-mobile`, ADR-067). Padrão: `io.github.adrianoguzzo.mytaskapp://oauth/callback` |
 | `Sync__AccessTokenLifetime` | não | padrão `00:15:00` |
 | `Sync__RefreshTokenLifetime` | não | padrão `30.00:00:00`, deslizante e rotativo |
 | `Sync__RefreshTokenReuseLeeway` | não | padrão `00:00:30`: um refresh já trocado ainda vale, para a resposta perdida na rede |

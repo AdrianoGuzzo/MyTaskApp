@@ -13,7 +13,7 @@ using MyTaskApp.Mobile.Core.ViewModels;
 namespace MyTaskApp.Server.IntegrationTests;
 
 /// <summary>
-/// Um celular inteiro contra a API de verdade (ADR-065): a composição do app
+/// Um celular inteiro contra a API de verdade (ADR-067): a composição do app
 /// (<see cref="MobileServices.AddMobileCore"/>) e os ViewModels das telas, só
 /// sem MAUI. O login é o da tela Entrar, com um "navegador" que segue os
 /// redirects do servidor até o esquema do app — como o Custom Tabs faria.

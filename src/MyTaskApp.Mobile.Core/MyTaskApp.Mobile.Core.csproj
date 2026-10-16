@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    O celular sem MAUI (ADR-065): composição, ViewModels e apresentação em
+    O celular sem MAUI (ADR-067): composição, ViewModels e apresentação em
     net10.0 puro, para os testes rodarem no CI do desktop sem workload. A casca
     MAUI (MyTaskApp.Mobile) só põe as telas e as portas da plataforma.
   -->

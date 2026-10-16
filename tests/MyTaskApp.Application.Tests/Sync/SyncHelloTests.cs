@@ -3,7 +3,7 @@ using MyTaskApp.Sync.Contracts;
 
 namespace MyTaskApp.Application.Tests.Sync;
 
-/// <summary>O "olá" ao servidor: o sistema vai para a lista de dispositivos (ADR-061, ADR-065).</summary>
+/// <summary>O "olá" ao servidor: o sistema vai para a lista de dispositivos (ADR-061, ADR-067).</summary>
 public sealed class SyncHelloTests
 {
     [Fact]
