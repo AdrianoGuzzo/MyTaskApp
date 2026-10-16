@@ -344,8 +344,17 @@ public sealed class SyncEngine(
     /// <summary>O "olá": plataforma e versão, para o servidor recusar versões antigas e a tela listar os dispositivos.</summary>
     public static DeviceHello Hello() => new(
         Nickname: null,
-        OperatingSystem.IsWindows() ? "Windows" : OperatingSystem.IsLinux() ? "Linux" : OperatingSystem.IsMacOS() ? "macOS" : "Outro",
+        PlatformName(),
         (Assembly.GetEntryAssembly() ?? typeof(SyncEngine).Assembly).GetName().Version?.ToString(3) ?? "0.0.0",
         SyncSchema.Current,
         Capabilities: []);
+
+    /// <summary>O sistema, para a lista de dispositivos; o celular também aparece nela (ADR-065).</summary>
+    internal static string PlatformName() =>
+        OperatingSystem.IsWindows() ? "Windows"
+        : OperatingSystem.IsAndroid() ? "Android"
+        : OperatingSystem.IsIOS() ? "iOS"
+        : OperatingSystem.IsLinux() ? "Linux"
+        : OperatingSystem.IsMacOS() ? "macOS"
+        : "Outro";
 }

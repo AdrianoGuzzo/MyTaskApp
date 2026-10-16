@@ -40,6 +40,10 @@ public enum TaskSort
 /// <param name="ExternalKey">A chave da issue (<c>ECO-123</c>) ou o prefixo do projeto (<c>ECO</c>).</param>
 /// <param name="OverdueOnly">Só as atrasadas: o mesmo critério do quadro Hoje.</param>
 /// <param name="Device">De qual computador (ADR-062); <c>null</c> = este e as compartilhadas.</param>
+/// <param name="Origin">
+/// A origem exata (ADR-065): só as compartilhadas ou só as de um dispositivo,
+/// por cima de <paramref name="Device"/>. <c>null</c> = sem esse filtro.
+/// </param>
 public sealed record SearchTasks(
     string? Text = null,
     IReadOnlyCollection<TaskLifecycle>? Lifecycles = null,
@@ -58,7 +62,8 @@ public sealed record SearchTasks(
     int Limit = SearchTasks.DefaultLimit,
     int Offset = 0,
     IReadOnlyCollection<Guid>? TaskIds = null,
-    DeviceView? Device = null)
+    DeviceView? Device = null,
+    PlacementMatch? Origin = null)
 {
     public const int DefaultLimit = 50;
 
@@ -96,6 +101,7 @@ public sealed record TaskSearchResult(
 /// o teto não cortar justamente elas.
 /// </param>
 /// <param name="Placement">O "onde aparece" (ADR-062); <c>null</c> = de todos os computadores.</param>
+/// <param name="Origin">A origem exata (ADR-065); <c>null</c> = qualquer uma.</param>
 public sealed record TaskSearchCriteria(
     IReadOnlyCollection<TaskLifecycle> Lifecycles,
     IReadOnlyCollection<Guid>? TaskIds = null,
@@ -111,7 +117,8 @@ public sealed record TaskSearchCriteria(
     bool? HasDeadline = null,
     string? ExternalKey = null,
     DateOnly? OverdueCandidatesOn = null,
-    PlacementFilter? Placement = null)
+    PlacementFilter? Placement = null,
+    PlacementMatch? Origin = null)
 {
     /// <summary>Teto do que a consulta traz: um app de uma pessoa, e a página vem depois.</summary>
     public const int MaxRows = 2000;
@@ -200,7 +207,8 @@ public sealed class SearchTasksHandler(
                 request.OverdueOnly ? clock.Today : null,
                 // Pedida pelo id, a tarefa vem de qualquer computador: quem
                 // tem o id já sabe qual quer.
-                request.TaskIds is { Count: > 0 } ? null : Filter(request.Device)),
+                request.TaskIds is { Count: > 0 } ? null : Filter(request.Device),
+                request.TaskIds is { Count: > 0 } ? null : request.Origin),
             cancellationToken);
 
         var truncated = rows.Count > TaskSearchCriteria.MaxRows;

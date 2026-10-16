@@ -10,7 +10,12 @@ namespace MyTaskApp.Infrastructure.Sync;
 /// usuário (<c>%LOCALAPPDATA%</c>), que não viaja com o perfil nem com o
 /// backup do banco (ADR-061). Criado na primeira leitura.
 /// </summary>
-internal sealed class DeviceIdentityFile(string folder, ILogger<DeviceIdentityFile> logger) : IDeviceIdentity
+/// <param name="nickname">
+/// O apelido dado pelo app — o nome do celular (ADR-065). Sem ele, o do
+/// computador: no Android, nome de máquina e usuário são <c>localhost</c> e um
+/// <c>u0_a123</c> que não dizem nada.
+/// </param>
+internal sealed class DeviceIdentityFile(string folder, ILogger<DeviceIdentityFile> logger, string? nickname = null) : IDeviceIdentity
 {
     public const string FileName = "device.json";
 
@@ -29,7 +34,12 @@ internal sealed class DeviceIdentityFile(string folder, ILogger<DeviceIdentityFi
         }
     }
 
-    public string DefaultNickname => NicknameFor(Environment.MachineName, Environment.UserName);
+    public string DefaultNickname => string.IsNullOrWhiteSpace(nickname)
+        ? NicknameFor(Environment.MachineName, Environment.UserName)
+        : Clip(nickname.Trim());
+
+    private static string Clip(string text) =>
+        text.Length <= SyncSchema.MaxNicknameLength ? text : text[..SyncSchema.MaxNicknameLength];
 
     /// <summary>
     /// Computador e usuário do Windows: dois logins na mesma máquina são dois

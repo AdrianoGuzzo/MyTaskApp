@@ -64,12 +64,23 @@ internal sealed class ApiFactory(string connectionString, IReadOnlyDictionary<st
         return new DesktopSession(this, device, tokens);
     }
 
+    /// <summary>Um celular (ADR-065): o mesmo login, pelo cliente e pelo esquema de volta do app.</summary>
+    public async Task<DesktopSession> LoginMobileAsync(string googleSubject, Guid? deviceId = null, string deviceName = "Pixel 8")
+    {
+        var device = deviceId ?? Guid.CreateVersion7();
+        var code = await AuthorizeAsync(googleSubject, device, deviceName, SyncSchema.MobileRedirectUri, clientId: SyncSchema.MobileClientId);
+        var tokens = await ExchangeAsync(code.Code, code.Verifier, SyncSchema.MobileRedirectUri, SyncSchema.MobileClientId);
+
+        return new DesktopSession(this, device, tokens);
+    }
+
     public async Task<(string Code, string Verifier)> AuthorizeAsync(
         string googleSubject,
         Guid deviceId,
         string deviceName = "PC-TESTE",
         string redirectUri = DesktopSession.RedirectUri,
-        bool withPkce = true)
+        bool withPkce = true,
+        string clientId = SyncSchema.DesktopClientId)
     {
         var verifier = Base64Url(RandomNumberGenerator.GetBytes(32));
         var challenge = Base64Url(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
@@ -77,7 +88,7 @@ internal sealed class ApiFactory(string connectionString, IReadOnlyDictionary<st
 
         var query = new Dictionary<string, string>
         {
-            ["client_id"] = SyncSchema.DesktopClientId,
+            ["client_id"] = clientId,
             ["response_type"] = "code",
             ["redirect_uri"] = redirectUri,
             ["scope"] = "openid profile email offline_access sync",
@@ -105,7 +116,7 @@ internal sealed class ApiFactory(string connectionString, IReadOnlyDictionary<st
         return (code, verifier);
     }
 
-    /// <summary>O navegador: segue os redirects até a volta para o loopback do desktop.</summary>
+    /// <summary>O navegador: segue os redirects até a volta para o loopback do desktop ou para o esquema do celular.</summary>
     public async Task<Uri> FollowToCallbackAsync(string googleSubject, string start)
     {
         using var browser = CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = true });
@@ -129,20 +140,30 @@ internal sealed class ApiFactory(string connectionString, IReadOnlyDictionary<st
                 return location;
             }
 
+            // O esquema próprio do app: quem abre é o sistema do celular, não o servidor.
+            if (location.IsAbsoluteUri && location.Scheme is not ("http" or "https"))
+            {
+                return location;
+            }
+
             next = location.IsAbsoluteUri ? location.PathAndQuery : location.OriginalString;
         }
 
         throw new InvalidOperationException("Redirects demais.");
     }
 
-    public async Task<TokenSet> ExchangeAsync(string code, string? verifier, string redirectUri = DesktopSession.RedirectUri)
+    public async Task<TokenSet> ExchangeAsync(
+        string code,
+        string? verifier,
+        string redirectUri = DesktopSession.RedirectUri,
+        string clientId = SyncSchema.DesktopClientId)
     {
         var form = new Dictionary<string, string>
         {
             ["grant_type"] = "authorization_code",
             ["code"] = code,
             ["redirect_uri"] = redirectUri,
-            ["client_id"] = SyncSchema.DesktopClientId,
+            ["client_id"] = clientId,
         };
 
         if (verifier is not null)
@@ -153,12 +174,13 @@ internal sealed class ApiFactory(string connectionString, IReadOnlyDictionary<st
         return await TokenRequestAsync(form);
     }
 
-    public Task<TokenSet> RefreshAsync(string refreshToken) => TokenRequestAsync(new Dictionary<string, string>
-    {
-        ["grant_type"] = "refresh_token",
-        ["refresh_token"] = refreshToken,
-        ["client_id"] = SyncSchema.DesktopClientId,
-    });
+    public Task<TokenSet> RefreshAsync(string refreshToken, string clientId = SyncSchema.DesktopClientId) =>
+        TokenRequestAsync(new Dictionary<string, string>
+        {
+            ["grant_type"] = "refresh_token",
+            ["refresh_token"] = refreshToken,
+            ["client_id"] = clientId,
+        });
 
     public async Task RevokeAsync(string refreshToken)
     {

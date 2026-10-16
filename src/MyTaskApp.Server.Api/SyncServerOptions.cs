@@ -1,3 +1,5 @@
+using MyTaskApp.Sync.Contracts;
+
 namespace MyTaskApp.Server.Api;
 
 /// <summary>
@@ -18,6 +20,12 @@ public sealed class SyncServerOptions
         "http://127.0.0.1:47833/callback",
         "http://localhost:47833/callback",
     ];
+
+    /// <summary>
+    /// Os endereços de volta aceitos para o celular (ADR-065): o esquema
+    /// próprio do app. Vazio = o servidor não aceita login do celular.
+    /// </summary>
+    public string[] MobileRedirectUris { get; set; } = [SyncSchema.MobileRedirectUri];
 
     public TimeSpan AccessTokenLifetime { get; set; } = TimeSpan.FromMinutes(15);
 

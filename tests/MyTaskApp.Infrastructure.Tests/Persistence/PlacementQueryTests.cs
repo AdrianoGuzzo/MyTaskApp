@@ -138,6 +138,45 @@ public sealed class PlacementQueryTests : IAsyncLifetime
         (await new TimeEntryReportQuery(read).ListAsync(new TimeEntryReportCriteria(), Ct)).Should().HaveCount(2);
     }
 
+    /// <summary>
+    /// A origem do celular (ADR-065) é exata: "Do trabalho" não traz as
+    /// compartilhadas, e "Compartilhadas" traz o legado, que aparece em todos.
+    /// </summary>
+    [Fact]
+    public async Task TheExactOrigin_KeepsOnlyThatDeviceOrOnlyTheShared()
+    {
+        await using var read = _db.CreateContext();
+        var query = new TaskSearchQuery(read);
+
+        async Task<IEnumerable<string>> SearchAsync(PlacementMatch origin) =>
+            (await query.SearchAsync(new Application.Tasks.TaskSearchCriteria([TaskLifecycle.Active], Origin: origin), Ct))
+                .Select(row => row.Row.Title);
+
+        (await SearchAsync(PlacementMatch.On([Work]))).Should().BeEquivalentTo("Do trabalho");
+        (await SearchAsync(PlacementMatch.On([Work, Home]))).Should().BeEquivalentTo("Do trabalho", "De casa");
+        (await SearchAsync(PlacementMatch.Shared)).Should().BeEquivalentTo("Legado", "Compartilhada");
+    }
+
+    [Fact]
+    public async Task TheExactOrigin_StacksOnTheDeviceView()
+    {
+        await using var read = _db.CreateContext();
+
+        var rows = await new TaskSearchQuery(read).SearchAsync(
+            new Application.Tasks.TaskSearchCriteria([TaskLifecycle.Active], Placement: AtWork, Origin: PlacementMatch.On([Home])),
+            Ct);
+
+        rows.Should().BeEmpty("a de casa não aparece no trabalho");
+    }
+
+    [Fact]
+    public void AnOriginWithoutDevices_IsAMistake()
+    {
+        var empty = () => PlacementMatch.On([]);
+
+        empty.Should().Throw<ArgumentException>();
+    }
+
     [Fact]
     public async Task Tags_ShowThisComputers_PlusTheOnesTheOpenTaskAlreadyHas()
     {

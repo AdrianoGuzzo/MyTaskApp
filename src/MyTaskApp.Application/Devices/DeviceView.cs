@@ -38,3 +38,41 @@ public sealed record PlacementFilter(IReadOnlyCollection<Guid>? DeviceIds)
 
     public bool IsAll => DeviceIds is null;
 }
+
+/// <summary>
+/// A origem exata de uma tarefa, para o filtro "Origem" do celular (ADR-065):
+/// só as compartilhadas, ou só as que moram num destes dispositivos.
+/// </summary>
+/// <remarks>
+/// Diferente de <see cref="PlacementFilter"/>, que responde "o que aparece num
+/// dispositivo" e por isso inclui as compartilhadas: aqui "Notebook" é só o que
+/// está no notebook. O legado sem lugar conta como compartilhada, porque
+/// aparece em todos.
+/// </remarks>
+public sealed record PlacementMatch
+{
+    private PlacementMatch(bool sharedOnly, IReadOnlyCollection<Guid> deviceIds)
+    {
+        SharedOnly = sharedOnly;
+        DeviceIds = deviceIds;
+    }
+
+    public static PlacementMatch Shared { get; } = new(true, []);
+
+    public bool SharedOnly { get; }
+
+    /// <summary>Os ids do dispositivo — o atual e os antigos, quando é este.</summary>
+    public IReadOnlyCollection<Guid> DeviceIds { get; }
+
+    public static PlacementMatch On(IReadOnlyCollection<Guid> deviceIds)
+    {
+        ArgumentNullException.ThrowIfNull(deviceIds);
+
+        if (deviceIds.Count == 0)
+        {
+            throw new ArgumentException("Informe ao menos um dispositivo.", nameof(deviceIds));
+        }
+
+        return new(false, deviceIds);
+    }
+}

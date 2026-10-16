@@ -111,22 +111,41 @@ internal sealed class OpenIddictAuthorizationRevoker(
 }
 
 /// <summary>
-/// Cria (ou atualiza) o cliente público do desktop ao subir: sem secret, com
-/// PKCE obrigatório e só os redirects de loopback configurados.
+/// Cria (ou atualiza) os clientes públicos ao subir: sem secret, com PKCE
+/// obrigatório e só os redirects configurados — loopback para o desktop, o
+/// esquema próprio do app para o celular (ADR-065). Cada cliente só aceita os
+/// seus: um código emitido para um não vira token no outro.
 /// </summary>
-internal sealed class DesktopClientSeeder(IServiceProvider services, SyncServerOptions options) : IHostedService
+internal sealed class PublicClientSeeder(IServiceProvider services, SyncServerOptions options) : IHostedService
 {
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         await using var scope = services.CreateAsyncScope();
         var applications = scope.ServiceProvider.GetRequiredService<IOpenIddictApplicationManager>();
 
+        await SeedAsync(applications, SyncSchema.DesktopClientId, "MyTaskApp (desktop)", options.DesktopRedirectUris, cancellationToken);
+
+        if (options.MobileRedirectUris.Length > 0)
+        {
+            await SeedAsync(applications, SyncSchema.MobileClientId, "MyTaskApp (celular)", options.MobileRedirectUris, cancellationToken);
+        }
+    }
+
+    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    private static async Task SeedAsync(
+        IOpenIddictApplicationManager applications,
+        string clientId,
+        string displayName,
+        IEnumerable<string> redirectUris,
+        CancellationToken cancellationToken)
+    {
         var descriptor = new OpenIddictApplicationDescriptor
         {
-            ClientId = SyncSchema.DesktopClientId,
+            ClientId = clientId,
             ClientType = ClientTypes.Public,
             ConsentType = ConsentTypes.Implicit,
-            DisplayName = "MyTaskApp (desktop)",
+            DisplayName = displayName,
             Permissions =
             {
                 Permissions.Endpoints.Authorization,
@@ -142,12 +161,12 @@ internal sealed class DesktopClientSeeder(IServiceProvider services, SyncServerO
             Requirements = { Requirements.Features.ProofKeyForCodeExchange },
         };
 
-        foreach (var uri in options.DesktopRedirectUris)
+        foreach (var uri in redirectUris)
         {
             descriptor.RedirectUris.Add(new Uri(uri));
         }
 
-        if (await applications.FindByClientIdAsync(SyncSchema.DesktopClientId, cancellationToken) is { } existing)
+        if (await applications.FindByClientIdAsync(clientId, cancellationToken) is { } existing)
         {
             await applications.UpdateAsync(existing, descriptor, cancellationToken);
         }
@@ -156,8 +175,6 @@ internal sealed class DesktopClientSeeder(IServiceProvider services, SyncServerO
             await applications.CreateAsync(descriptor, cancellationToken);
         }
     }
-
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 }
 
 /// <summary>Esquece os resultados de operação antigos: depois de 90 dias, nenhum cliente reenvia.</summary>

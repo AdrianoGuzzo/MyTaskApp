@@ -182,6 +182,97 @@ public class InfrastructureRegistrationTests : IDisposable
         scope.ServiceProvider.GetRequiredService(handlerType).Should().NotBeNull();
     }
 
+    private ServiceProvider BuildLocalDataProvider(bool withSecrets = true)
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Database:Directory"] = _directory,
+                ["Database:FileName"] = "app.db",
+                ["Sync:ApiBaseUrl"] = "https://sync.exemplo.com",
+            })
+            .Build();
+
+        var services = new ServiceCollection()
+            .AddSingleton(typeof(ILogger<>), typeof(NullLogger<>))
+            .AddLocalData(configuration, new LocalDataOptions { DeviceIdentityFolder = _directory, DeviceNickname = "Pixel 8" });
+
+        if (withSecrets)
+        {
+            services.AddSingleton<MyTaskApp.Infrastructure.Secrets.ISecretStore, Jira.InMemorySecretStore>();
+        }
+
+        return services.BuildServiceProvider(validateScopes: true);
+    }
+
+    /// <summary>O que o celular usa (ADR-065): os dados e a sincronização, sem nada do computador.</summary>
+    [Theory]
+    [InlineData(typeof(ITaskItemRepository))]
+    [InlineData(typeof(IUnitOfWork))]
+    [InlineData(typeof(MyTaskAppDbContext))]
+    [InlineData(typeof(IDatabaseInitializer))]
+    [InlineData(typeof(ITodayQuery))]
+    [InlineData(typeof(MyTaskApp.Application.Tasks.ITaskSearchQuery))]
+    [InlineData(typeof(ITagRepository))]
+    [InlineData(typeof(ITagQuery))]
+    [InlineData(typeof(ITimeEntryRepository))]
+    [InlineData(typeof(IActiveTimerQuery))]
+    [InlineData(typeof(IStickyNoteRepository))]
+    [InlineData(typeof(ITaskAuditLog))]
+    [InlineData(typeof(MyTaskApp.Application.Sync.ISyncLocalStore))]
+    [InlineData(typeof(MyTaskApp.Application.Sync.IRemoteChangeApplier))]
+    [InlineData(typeof(MyTaskApp.Application.Sync.ISyncReconciler))]
+    [InlineData(typeof(MyTaskApp.Application.Sync.ISyncApi))]
+    [InlineData(typeof(MyTaskApp.Application.Sync.ISyncAuthenticator))]
+    [InlineData(typeof(MyTaskApp.Application.Sync.IDeviceIdentity))]
+    public void TheLocalData_WiresEveryDataAndSyncPort(Type serviceType)
+    {
+        using var provider = BuildLocalDataProvider();
+        using var scope = provider.CreateScope();
+
+        scope.ServiceProvider.GetRequiredService(serviceType).Should().NotBeNull();
+    }
+
+    [Theory]
+    [InlineData(typeof(IGitClient))]
+    [InlineData(typeof(ITerminalLauncher))]
+    [InlineData(typeof(ICommandExecutor))]
+    [InlineData(typeof(IAgentCliProvider))]
+    [InlineData(typeof(ISoundLibrary))]
+    [InlineData(typeof(MyTaskApp.Infrastructure.Jira.IJiraClient))]
+    [InlineData(typeof(IPostgresDumpService))]
+    [InlineData(typeof(IDatabaseCredentialStore))]
+    [InlineData(typeof(MyTaskApp.Infrastructure.Secrets.ISecretStore))]
+    public void TheLocalData_LeavesOutWhatOnlyTheComputerHas(Type serviceType)
+    {
+        using var provider = BuildLocalDataProvider(withSecrets: false);
+        using var scope = provider.CreateScope();
+
+        scope.ServiceProvider.GetService(serviceType).Should().BeNull();
+    }
+
+    [Fact]
+    public void TheLocalData_NamesTheDeviceAsTheAppSays_AndKeepsItsIdInTheGivenFolder()
+    {
+        using var provider = BuildLocalDataProvider();
+        var device = provider.GetRequiredService<MyTaskApp.Application.Sync.IDeviceIdentity>();
+
+        device.DefaultNickname.Should().Be("Pixel 8");
+        _ = device.DeviceId;
+        File.Exists(Path.Combine(_directory, MyTaskApp.Infrastructure.Sync.DeviceIdentityFile.FileName)).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task TheLocalData_MigratesTheDatabase()
+    {
+        using var provider = BuildLocalDataProvider();
+        using var scope = provider.CreateScope();
+
+        await scope.ServiceProvider.GetRequiredService<IDatabaseInitializer>().InitializeAsync(Ct);
+
+        File.Exists(Path.Combine(_directory, "app.db")).Should().BeTrue();
+    }
+
     /// <summary>Nunca chamado: o teste só monta o contêiner.</summary>
     private sealed class UnusedRunner : IUseCaseRunner
     {

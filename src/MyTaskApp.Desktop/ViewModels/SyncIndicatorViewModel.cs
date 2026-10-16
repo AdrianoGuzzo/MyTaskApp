@@ -8,37 +8,6 @@ using MyTaskApp.Application.Sync;
 
 namespace MyTaskApp.Desktop.ViewModels;
 
-/// <summary>O que a bolinha da sincronização mostra, na ordem em que um estado vence o outro (ADR-063).</summary>
-public enum SyncIndicatorKind
-{
-    /// <summary>A build não tem servidor: não há o que mostrar nem o que conectar.</summary>
-    Hidden,
-
-    /// <summary>Sem conta: tudo fica neste computador.</summary>
-    LocalOnly,
-
-    /// <summary>Parou e só volta com a pessoa: login vencido, revogado, versão antiga, alteração recusada.</summary>
-    Attention,
-
-    /// <summary>Pausada de propósito.</summary>
-    Paused,
-
-    /// <summary>Um ciclo em andamento que já passou do instante, ou que leva alterações.</summary>
-    Syncing,
-
-    /// <summary>Sem conexão: o outbox guarda tudo e o agendador tenta de novo sozinho.</summary>
-    Offline,
-
-    /// <summary>Alterações esperando o próximo ciclo.</summary>
-    Pending,
-
-    /// <summary>Em dia, com algo para a pessoa revisar: conflito, comando, recebido com falha.</summary>
-    Review,
-
-    /// <summary>Em dia.</summary>
-    Synced,
-}
-
 /// <summary>
 /// A bolinha da sincronização no cabeçalho (ADR-063): o estado de relance,
 /// o texto no tooltip e um painel curto com "Sincronizar agora".
@@ -146,23 +115,8 @@ public sealed partial class SyncIndicatorViewModel : ObservableObject, IDisposab
     /// antes de tudo; pausada vem antes de "sem conexão", porque pausada não
     /// tenta.
     /// </summary>
-    public static SyncIndicatorKind Classify(SyncStatusView status, bool syncing) => status switch
-    {
-        { IsAvailable: false } => SyncIndicatorKind.Hidden,
-        { Local.State: SyncLinkState.Unlinked } => SyncIndicatorKind.LocalOnly,
-        { Local.State: SyncLinkState.NeedsReconnect or SyncLinkState.DeviceRevoked } => SyncIndicatorKind.Attention,
-        { LastCycle.Status: SyncCycleStatus.Blocked } => SyncIndicatorKind.Attention,
-        { Counts.Failed: > 0 } => SyncIndicatorKind.Attention,
-        { Local.IsEnabled: false } => SyncIndicatorKind.Paused,
-        _ when syncing => SyncIndicatorKind.Syncing,
-        { LastCycle.Status: SyncCycleStatus.Transient } => SyncIndicatorKind.Offline,
-
-        // Logo depois de abrir o app ainda não houve ciclo: vale o último erro gravado.
-        { LastCycle: null, Local.LastErrorCode: not null } => SyncIndicatorKind.Offline,
-        { Counts.Pending: > 0 } => SyncIndicatorKind.Pending,
-        _ when ToReview(status.Counts) > 0 => SyncIndicatorKind.Review,
-        _ => SyncIndicatorKind.Synced,
-    };
+    public static SyncIndicatorKind Classify(SyncStatusView status, bool syncing) =>
+        SyncIndicatorClassifier.Classify(status, syncing);
 
     public async Task LoadAsync(CancellationToken cancellationToken)
     {
@@ -336,7 +290,7 @@ public sealed partial class SyncIndicatorViewModel : ObservableObject, IDisposab
         return string.Join(", ", parts) + ". Abra a sincronização para ver.";
     }
 
-    private static int ToReview(SyncCounts counts) => counts.OpenConflicts + counts.CommandsToReview + counts.ApplyFailures;
+    private static int ToReview(SyncCounts counts) => SyncIndicatorClassifier.ToReview(counts);
 
     /// <summary>" 3 alterações guardadas aqui." — vazio quando não há nada guardado.</summary>
     private static string Kept(int pending, string tail) =>
