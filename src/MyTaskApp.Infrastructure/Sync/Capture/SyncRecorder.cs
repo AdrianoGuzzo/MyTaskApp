@@ -14,7 +14,11 @@ namespace MyTaskApp.Infrastructure.Sync.Capture;
 /// Uma entidade sincronizada a registrar. Sem <see cref="Entry"/>, ela sumiu
 /// do banco sem passar pelo change tracker (cascata) e só a exclusão vale.
 /// </summary>
-internal sealed record SyncTouched(SyncEntityMapper Mapper, EntityEntry? Entry, Guid Id)
+/// <param name="ForceLocalOnly">
+/// Não compartilhada mesmo sem <see cref="Entry"/> para perguntar: o botão de
+/// um comando não compartilhado que a cascata levou (ADR-066).
+/// </param>
+internal sealed record SyncTouched(SyncEntityMapper Mapper, EntityEntry? Entry, Guid Id, bool ForceLocalOnly = false)
 {
     public bool IsDeleted => Entry is null || Entry.State == EntityState.Deleted;
 }
@@ -75,6 +79,27 @@ internal sealed class SyncRecorder(IDeviceIdentity device, TimeProvider timeProv
             var entityOutbox = outbox.Where(row => row.EntityType == type && row.EntityId == item.Id).ToList();
             var unsent = entityOutbox.Where(row => row is { Attempted: false, State: SyncOutboxState.Pending }).ToList();
 
+            // Escolhida para ficar aqui (ADR-066): nada vai, nem a exclusão — a
+            // cópia que outro computador já tem fica com ele. O que ainda não
+            // saiu daqui não sai mais.
+            if (item.ForceLocalOnly || (item.Entry is not null && item.Mapper.IsLocalOnly(item.Entry)))
+            {
+                context.SyncOutbox.RemoveRange(unsent);
+
+                if (state is not null)
+                {
+                    state.IsDetached = true;
+
+                    if (item.IsDeleted)
+                    {
+                        state.IsDeleted = true;
+                        state.Snapshot = null;
+                    }
+                }
+
+                continue;
+            }
+
             if (item.IsDeleted)
             {
                 if (state is null || state.IsDeleted)
@@ -112,7 +137,9 @@ internal sealed class SyncRecorder(IDeviceIdentity device, TimeProvider timeProv
             var projection = item.Mapper.Project(item.Entry!);
             Dictionary<string, JsonElement> fields;
 
-            if (state is null || state.IsDeleted)
+            // Desligada e compartilhada de novo: vai inteira, sobre a última versão
+            // que o servidor mostrou — a daqui é a que vale (ADR-066).
+            if (state is null || state.IsDeleted || state.IsDetached)
             {
                 fields = projection;
 
@@ -130,6 +157,7 @@ internal sealed class SyncRecorder(IDeviceIdentity device, TimeProvider timeProv
                 }
 
                 state.IsDeleted = false;
+                state.IsDetached = false;
             }
             else
             {

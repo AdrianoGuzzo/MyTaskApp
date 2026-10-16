@@ -49,10 +49,13 @@ internal sealed class SyncReconciler(
         var states = await context.SyncEntityStates.ToListAsync(cancellationToken);
         var outbox = await context.SyncOutbox.ToListAsync(cancellationToken);
 
-        // Conhecidas pela sincronização e que não estão mais no banco: saíram por cascata.
+        // Conhecidas pela sincronização e que não estão mais no banco: saíram por
+        // cascata. Fora a desligada (ADR-066), cuja exclusão não sai daqui, e a
+        // que chegou e espera para entrar, que nunca existiu aqui.
         var known = present.Select(item => (item.Mapper.Definition.Type, item.Id)).ToHashSet();
         var gone = states
-            .Where(state => !state.IsDeleted && !known.Contains((state.EntityType, state.EntityId)))
+            .Where(state => !state.IsDeleted && !state.IsDetached && !known.Contains((state.EntityType, state.EntityId)))
+            .Where(state => !(SyncWaitingCodes.IsWaiting(state.ApplyErrorCode) && state.ServerVersion == 0))
             .Select(state => SyncMappers.ForEntityType(state.EntityType) is { } mapper ? new SyncTouched(mapper, null, state.EntityId) : null)
             .OfType<SyncTouched>();
 

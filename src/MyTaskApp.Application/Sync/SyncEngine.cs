@@ -126,6 +126,12 @@ public sealed class SyncEngine(
             await SettleAsync(cancellationToken);
 
             var pushed = await PushAllAsync(workspaceId, cancellationToken);
+
+            // O comando que esperava um apelido livre (ADR-066) entra assim que dá.
+            await runner.RunAsync<RetryWaitingReceivedChangesHandler>(
+                (handler, token) => handler.HandleAsync(new RetryWaitingReceivedChanges(), token),
+                cancellationToken);
+
             var pulled = await PullAllAsync(workspaceId, cancellationToken);
 
             // O que chegou agora pode ser legado de um id antigo daqui: sobe no próximo ciclo.

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using MyTaskApp.Domain.Commands;
 using MyTaskApp.Domain.StickyNotes;
@@ -41,9 +42,13 @@ internal sealed class TableMapper<TEntity>(
 
     public Func<EntityEntry, bool>? Syncable { get; init; }
 
+    public Func<EntityEntry, bool>? LocalOnly { get; init; }
+
     public override Guid IdOf(EntityEntry entry) => Id?.Invoke(entry) ?? base.IdOf(entry);
 
     public override bool IsSyncable(EntityEntry entry) => Syncable?.Invoke(entry) ?? true;
+
+    public override bool IsLocalOnly(EntityEntry entry) => LocalOnly?.Invoke(entry) ?? false;
 }
 
 /// <summary>
@@ -183,7 +188,14 @@ internal static class SyncMappers
             C(SyncFields.DirectoryCommand.WorkingDirectoryOverride, nameof(TagDirectoryCommand.WorkingDirectoryOverride)),
             C(CreatedAt, nameof(TagDirectoryCommand.CreatedAt)),
         ],
-        []);
+        [])
+    {
+        // O botão de um comando que não é compartilhado fica com ele (ADR-066).
+        // Quem garante que o comando está no tracker é a captura.
+        LocalOnly = entry => CommandIsLocalOnly(
+            entry.Context,
+            (Guid)entry.Property(nameof(TagDirectoryCommand.DevelopmentCommandId)).CurrentValue!),
+    };
 
     public static readonly SyncEntityMapper Command = new TableMapper<DevelopmentCommand>(
         SyncRegistry.Command,
@@ -200,8 +212,16 @@ internal static class SyncMappers
             C(CreatedAt, nameof(DevelopmentCommand.CreatedAt)),
             C(UpdatedAt, nameof(DevelopmentCommand.UpdatedAt)),
         ],
-        [])
+        [
+            // Compartilhar é escolha deste computador (ADR-066).
+            nameof(DevelopmentCommand.IsShared),
+        ])
     {
+        LocalOnly = IsLocalOnlyCommand,
+
+        // O que chega de outro computador foi compartilhado lá.
+        Defaults = { [nameof(DevelopmentCommand.IsShared)] = true },
+
         Lists =
         [
             new SyncChildList(
@@ -353,6 +373,15 @@ internal static class SyncMappers
             [nameof(Domain.StickyNotes.StickyNote.Height)] = Domain.StickyNotes.StickyNote.DefaultHeight,
         },
     };
+
+    /// <summary>O comando global que este computador não compartilha (ADR-066).</summary>
+    public static bool IsLocalOnlyCommand(EntityEntry entry) =>
+        entry.Property(nameof(DevelopmentCommand.TagDirectoryId)).CurrentValue is null
+        && !(bool)entry.Property(nameof(DevelopmentCommand.IsShared)).CurrentValue!;
+
+    /// <summary>Pelo tracker: o comando fora dele conta como compartilhado.</summary>
+    public static bool CommandIsLocalOnly(DbContext context, Guid commandId) =>
+        context.Set<DevelopmentCommand>().Local.FindEntry(commandId) is { } entry && IsLocalOnlyCommand(entry);
 
     /// <summary>Em ordem de rank, como o registro do contrato.</summary>
     public static IReadOnlyList<SyncEntityMapper> All { get; } =

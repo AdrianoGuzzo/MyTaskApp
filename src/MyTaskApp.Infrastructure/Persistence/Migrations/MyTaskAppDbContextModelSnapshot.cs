@@ -241,6 +241,9 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("IsShared")
+                        .HasColumnType("INTEGER");
+
                     b.Property<bool>("KeepTerminalOpen")
                         .HasColumnType("INTEGER");
 
@@ -1386,6 +1389,9 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<bool>("IsDeleted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsDetached")
                         .HasColumnType("INTEGER");
 
                     b.Property<long?>("OriginCreatedAt")
