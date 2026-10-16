@@ -65,6 +65,7 @@ para o repositório nem para a imagem.**
 | `Database__MigrateOnStartup` | não | `true` aplica as migrations ao subir. Padrão: só em Development |
 | `ForwardedHeaders__KnownProxies__0` | atrás de proxy | IP do proxy reverso, para valer o `X-Forwarded-Proto` |
 | `Sync__DesktopRedirectUris__0` … | não | voltas aceitas do desktop. Padrão: `http://127.0.0.1:47833/callback` e `http://localhost:47833/callback` |
+| `Sync__MobileRedirectUris__0` … | não | voltas aceitas do celular (cliente `mytaskapp-mobile`, ADR-065). Padrão: `io.github.adrianoguzzo.mytaskapp://oauth/callback` |
 | `Sync__AccessTokenLifetime` | não | padrão `00:15:00` |
 | `Sync__RefreshTokenLifetime` | não | padrão `30.00:00:00`, deslizante e rotativo |
 | `Sync__RefreshTokenReuseLeeway` | não | padrão `00:00:30`: um refresh já trocado ainda vale, para a resposta perdida na rede |
@@ -80,6 +81,14 @@ Sem o cliente do Google, o servidor sobe, mas ninguém entra.
 As voltas do desktop padrão continuam valendo mesmo com
 `Sync__DesktopRedirectUris__*` na configuração: a lista configurada **soma** à
 padrão. A porta 47833 está fixa no app (`Sync:CallbackPort`).
+
+O servidor semeia dois clientes públicos ao subir, os dois sem secret e com
+PKCE obrigatório: `mytaskapp-desktop`, só com as voltas de loopback, e
+`mytaskapp-mobile`, só com o esquema do app do celular (`Sync__MobileRedirectUris__*`,
+que também soma à padrão). Um servidor de antes desta versão não conhece o
+cliente do celular: o login do app responde `invalid_client` até o servidor
+ser atualizado. Nada muda no cliente OAuth do Google — o celular entra pelo
+mesmo `/account/login` do servidor.
 
 ### Certificados do OpenIddict
 

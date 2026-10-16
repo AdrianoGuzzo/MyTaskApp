@@ -102,6 +102,45 @@ jobs:
           path: artifacts/server-integration/*.trx
           if-no-files-found: ignore
 
+  # O app do celular (ADR-065): a casca MAUI fica fora das duas solutions
+  # acima, que não precisam de workload. Aqui ela compila para Android em
+  # Release (trimming e tudo), e o APK precisa levar o SQLite nativo — sem ele,
+  # o app abre e morre na primeira consulta. Sem emulador: os testes do app
+  # são os do Mobile.Core (job build) e os de ponta a ponta do servidor.
+  mobile-android:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Instalar o workload do Android
+        run: dotnet workload install maui-android
+
+      - name: Compilar o APK (Release)
+        run: >
+          dotnet build src/MyTaskApp.Mobile/MyTaskApp.Mobile.csproj
+          -f net10.0-android -c Release
+          -p:SyncApiBaseUrl=https://sync.example.invalid/
+          -p:AcceptAndroidSDKLicenses=True
+
+      - name: Conferir o APK
+        shell: bash
+        run: |
+          apk=$(ls src/MyTaskApp.Mobile/bin/Release/net10.0-android/*-Signed.apk | head -1)
+          test -n "$apk" || { echo "APK ausente"; exit 1; }
+          unzip -l "$apk" | grep -q "lib/arm64-v8a/libe_sqlite3.so" \
+            || { echo "o APK não leva o SQLite nativo"; exit 1; }
+          echo "ok: $apk"
+
   # O publish self-contained é o que o instalador empacota. Quebrar aqui
   # significa release quebrada, e é barato descobrir antes da tag.
   publish-smoke:
