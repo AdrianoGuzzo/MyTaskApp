@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+	As cores do MyTaskApp no celular: os mesmos tons do desktop (ThemeCatalog),
+	Carvão no escuro e o claro neutro com índigo no claro. O tema segue o do
+	sistema. Os contrastes de texto foram escolhidos no desktop para passar de 4,5:1.
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
+
+    <Color x:Key="CanvasDark">#17181C</Color>
+    <Color x:Key="SurfaceDark">#1E2025</Color>
+    <Color x:Key="SurfaceHoverDark">#262930</Color>
+    <Color x:Key="StrokeDark">#2E313A</Color>
+    <Color x:Key="TextHighDark">#E9EAEE</Color>
+    <Color x:Key="TextMidDark">#9AA0AC</Color>
+    <Color x:Key="TextLowDark">#838996</Color>
+    <Color x:Key="AccentDark">#5F63EF</Color>
+    <Color x:Key="AccentSoftDark">#22233A</Color>
+    <Color x:Key="AccentTextDark">#9496F7</Color>
+    <Color x:Key="DangerDark">#F87171</Color>
+    <Color x:Key="DangerSoftDark">#2A1B1E</Color>
+    <Color x:Key="CautionDark">#FBBF24</Color>
+    <Color x:Key="CautionSoftDark">#2A2318</Color>
+    <Color x:Key="SuccessDark">#34D399</Color>
+    <Color x:Key="InfoDark">#60A5FA</Color>
+
+    <Color x:Key="CanvasLight">#F4F5F8</Color>
+    <Color x:Key="SurfaceLight">#FFFFFF</Color>
+    <Color x:Key="SurfaceHoverLight">#ECEEF3</Color>
+    <Color x:Key="StrokeLight">#D5D9E2</Color>
+    <Color x:Key="TextHighLight">#16181D</Color>
+    <Color x:Key="TextMidLight">#474D5B</Color>
+    <Color x:Key="TextLowLight">#646B7A</Color>
+    <Color x:Key="AccentLight">#4F46E5</Color>
+    <Color x:Key="AccentSoftLight">#E9E8FD</Color>
+    <Color x:Key="AccentTextLight">#4338CA</Color>
+    <Color x:Key="DangerLight">#C81E1E</Color>
+    <Color x:Key="DangerSoftLight">#FDECEC</Color>
+    <Color x:Key="CautionLight">#A34A06</Color>
+    <Color x:Key="CautionSoftLight">#FDF1DE</Color>
+    <Color x:Key="SuccessLight">#067A55</Color>
+    <Color x:Key="InfoLight">#1D5BD8</Color>
+
+    <Color x:Key="OnAccent">#FFFFFF</Color>
+
+</ResourceDictionary>

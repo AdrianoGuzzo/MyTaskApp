@@ -1,0 +1,32 @@
+name: Mobile iOS (manual)
+
+# O app do celular para iOS (ADR-067) só compila num Mac, com Xcode. A
+# configuração está pronta mas ainda não foi validada (docs/mobile.md); este
+# workflow é o primeiro passo dessa validação, rodado à mão num runner macOS.
+# Fica fora do CI dos PRs até passar a primeira vez.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ios-simulator:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Instalar o workload do iOS
+        run: dotnet workload install maui-ios
+
+      # Para o simulador: sem certificado nem perfil de provisionamento.
+      - name: Compilar para o simulador
+        run: >
+          dotnet build src/MyTaskApp.Mobile/MyTaskApp.Mobile.csproj
+          -f net10.0-ios -c Debug
+          -p:RuntimeIdentifier=iossimulator-arm64

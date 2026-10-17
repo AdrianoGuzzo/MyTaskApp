@@ -38,6 +38,11 @@ public sealed record SyncSchedule(TimeSpan Debounce, TimeSpan PollInterval, Time
 /// (ADR-015): um push interrompido no meio é reenviado no próximo início com
 /// os mesmos ids, e o servidor reconhece.
 /// </para>
+/// <para>
+/// <b>Parar e voltar.</b> O desktop liga uma vez e só desliga ao fechar. O
+/// celular (ADR-067) para ao ir para segundo plano — o sistema congela o
+/// processo de qualquer jeito — e volta com <see cref="Start"/> ao reabrir.
+/// </para>
 /// </remarks>
 public sealed class SyncScheduler(
     ISyncCycleRunner engine,
@@ -56,9 +61,15 @@ public sealed class SyncScheduler(
 
     private readonly Func<double> _random = random ?? Random.Shared.NextDouble;
 
-    private readonly CancellationTokenSource _stopping = new();
+    private readonly Lock _gate = new();
+
+    /// <summary>O cancelamento da volta atual do laço; um novo a cada <see cref="Start"/>.</summary>
+    private CancellationTokenSource? _stopping;
 
     private Task? _loop;
+
+    /// <summary>A volta que parou mas ainda não terminou (um push pendurado na rede).</summary>
+    private Task? _draining;
 
     private int _failures;
 
@@ -83,9 +94,87 @@ public sealed class SyncScheduler(
 
     public void Start()
     {
-        if (_loop is null && !_disposed)
+        lock (_gate)
         {
-            _loop = Task.Run(() => LoopAsync(_stopping.Token));
+            if (_loop is not null || _disposed)
+            {
+                return;
+            }
+
+            var stopping = new CancellationTokenSource();
+            var previous = _draining;
+            _stopping = stopping;
+            _draining = null;
+
+            // Nunca dois ciclos juntos, nem depois de parar e voltar: a volta
+            // anterior que ainda não terminou termina antes desta começar.
+            _loop = Task.Run(async () =>
+            {
+                await DrainAsync(previous);
+                await LoopAsync(stopping.Token);
+            });
+        }
+    }
+
+    /// <summary>
+    /// Para o laço e espera um pouco o ciclo em andamento (ADR-067). Pode voltar
+    /// com <see cref="Start"/>; o que não foi enviado continua no outbox.
+    /// </summary>
+    public async Task StopAsync()
+    {
+        CancellationTokenSource? stopping;
+        Task? loop;
+
+        lock (_gate)
+        {
+            stopping = _stopping;
+            loop = _loop;
+            _stopping = null;
+            _loop = null;
+            _draining = loop;
+        }
+
+        if (stopping is null)
+        {
+            return;
+        }
+
+        await stopping.CancelAsync();
+        await WaitBrieflyAsync(loop);
+        stopping.Dispose();
+    }
+
+    private static async Task DrainAsync(Task? previous)
+    {
+        if (previous is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await previous;
+        }
+        catch (Exception exception) when (exception is OperationCanceledException)
+        {
+            // Cancelada ao parar: é o esperado.
+        }
+    }
+
+    private static async Task WaitBrieflyAsync(Task? loop)
+    {
+        if (loop is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await loop.WaitAsync(ShutdownWait);
+        }
+        catch (Exception exception) when (exception is OperationCanceledException or TimeoutException)
+        {
+            // O encerramento não espera um push pendurado na rede.
         }
     }
 
@@ -192,48 +281,57 @@ public sealed class SyncScheduler(
 
     public void Dispose()
     {
-        if (_disposed)
+        if (!TryClaimDisposal(out var stopping, out var loop))
         {
             return;
         }
 
-        _disposed = true;
-        _stopping.Cancel();
+        stopping?.Cancel();
 
         try
         {
-            _loop?.Wait(ShutdownWait);
+            loop?.Wait(ShutdownWait);
         }
         catch (AggregateException)
         {
             // Cancelado no meio de um ciclo: o outbox guarda o que faltou.
         }
 
-        _stopping.Dispose();
+        stopping?.Dispose();
     }
 
     public async ValueTask DisposeAsync()
     {
-        if (_disposed)
+        if (!TryClaimDisposal(out var stopping, out var loop))
         {
             return;
         }
 
-        _disposed = true;
-        await _stopping.CancelAsync();
-
-        if (_loop is not null)
+        if (stopping is not null)
         {
-            try
-            {
-                await _loop.WaitAsync(ShutdownWait);
-            }
-            catch (Exception exception) when (exception is OperationCanceledException or TimeoutException)
-            {
-                // O encerramento não espera um push pendurado na rede.
-            }
+            await stopping.CancelAsync();
         }
 
-        _stopping.Dispose();
+        await WaitBrieflyAsync(loop);
+        stopping?.Dispose();
+    }
+
+    private bool TryClaimDisposal(out CancellationTokenSource? stopping, out Task? loop)
+    {
+        lock (_gate)
+        {
+            stopping = _stopping;
+            loop = _loop;
+
+            if (_disposed)
+            {
+                return false;
+            }
+
+            _disposed = true;
+            _stopping = null;
+            _loop = null;
+            return true;
+        }
     }
 }

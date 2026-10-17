@@ -9,8 +9,10 @@ namespace MyTaskApp.Infrastructure.Secrets;
 /// <remarks>
 /// Porta da Infrastructure, e não da Application: quem guarda e lê segredo é
 /// só a autenticação, e nenhum caso de uso precisa saber que ele existe.
+/// Pública só para o app do celular entregar o cofre da plataforma (ADR-067);
+/// as implementações do desktop continuam internas.
 /// </remarks>
-internal interface ISecretStore
+public interface ISecretStore
 {
     /// <summary><c>null</c> = nada guardado, ou guardado por outro usuário/máquina e ilegível aqui.</summary>
     Task<string?> ReadAsync(string name, CancellationToken cancellationToken = default);

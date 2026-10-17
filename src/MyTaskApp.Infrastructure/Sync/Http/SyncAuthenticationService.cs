@@ -9,14 +9,15 @@ using MyTaskApp.Sync.Contracts;
 namespace MyTaskApp.Infrastructure.Sync.Http;
 
 /// <summary>
-/// A conta da sincronização no desktop (ADR-061). Singleton: o access token
-/// fica na memória, e a renovação passa por um portão só.
+/// A conta da sincronização (ADR-061). Singleton: o access token fica na
+/// memória, e a renovação passa por um portão só. Desktop e celular usam a
+/// mesma; muda só por onde o login volta (<see cref="ISyncAuthorizationRedirect"/>, ADR-067).
 /// </summary>
 /// <remarks>
 /// <para>
 /// <b>Login pelo navegador com PKCE, sem secret.</b> O desktop é cliente
 /// público: o verificador nasce aqui e nunca sai deste processo, então um
-/// código interceptado na volta pelo loopback não serve para ninguém.
+/// código interceptado na volta (loopback ou esquema do app) não serve para ninguém.
 /// </para>
 /// <para>
 /// <b>O refresh token gira a cada uso</b> (o servidor revoga a cadeia se o
@@ -30,7 +31,8 @@ internal sealed class SyncAuthenticationService(
     ISecretStore secrets,
     IDeviceIdentity device,
     TimeProvider timeProvider,
-    ILogger<SyncAuthenticationService> logger) : ISyncAuthenticator, IDisposable
+    ILogger<SyncAuthenticationService> logger,
+    ISyncAuthorizationRedirect? redirect = null) : ISyncAuthenticator, IDisposable
 {
     public const string Scopes = "openid profile email offline_access sync";
 
@@ -49,11 +51,14 @@ internal sealed class SyncAuthenticationService(
 
     private CancellationTokenSource? _pending;
 
-    private LoopbackCallbackListener? _listener;
+    private ISyncAuthorizationSession? _listener;
 
     public bool IsAvailable => options.IsAvailable;
 
     public Uri? ServerBaseUrl => options.BaseUri;
+
+    /// <summary>Sem uma volta registrada pelo app, a do desktop: o loopback.</summary>
+    private ISyncAuthorizationRedirect Redirect => redirect ??= new LoopbackSyncAuthorizationRedirect(options, logger);
 
     public async Task<SyncAuthorization> BeginAuthorizationAsync(CancellationToken cancellationToken)
     {
@@ -62,7 +67,7 @@ internal sealed class SyncAuthenticationService(
             throw new DomainException("Esta versão do MyTaskApp não tem um servidor de sincronização configurado.");
         }
 
-        // Um clique novo desiste do anterior: a porta é uma só, e é solta aqui, na hora.
+        // Um clique novo desiste do anterior: a porta (ou a volta do app) é uma só, e é solta aqui, na hora.
         var previous = _pending;
         _pending = null;
 
@@ -71,18 +76,18 @@ internal sealed class SyncAuthenticationService(
             await previous.CancelAsync();
         }
 
-        _listener?.StopListening();
+        _listener?.Close();
 
         var pending = new CancellationTokenSource(options.AuthorizationTimeout);
         _pending = pending;
 
-        var listener = LoopbackCallbackListener.Start(options.CallbackPort, CallbackMessages, logger);
+        var listener = Redirect.Open();
         _listener = listener;
 
         var state = Pkce.NewSecret();
         var verifier = Pkce.NewSecret();
 
-        logger.LogInformation("SyncAuthorizationStarted {Port}", listener.Port);
+        logger.LogInformation("SyncAuthorizationStarted {Client} {RedirectUri}", Redirect.ClientId, Redirect.RedirectUri);
 
         return new SyncAuthorization(
             AuthorizeUrl(state, Pkce.ChallengeFor(verifier)),
@@ -110,7 +115,7 @@ internal sealed class SyncAuthenticationService(
                     {
                         ["grant_type"] = "refresh_token",
                         ["refresh_token"] = refresh,
-                        ["client_id"] = SyncSchema.DesktopClientId,
+                        ["client_id"] = Redirect.ClientId,
                     },
                     cancellationToken);
 
@@ -153,7 +158,7 @@ internal sealed class SyncAuthenticationService(
                         {
                             ["token"] = refresh,
                             ["token_type_hint"] = "refresh_token",
-                            ["client_id"] = SyncSchema.DesktopClientId,
+                            ["client_id"] = Redirect.ClientId,
                         },
                         cancellationToken);
                 }
@@ -177,16 +182,16 @@ internal sealed class SyncAuthenticationService(
     {
         _pending?.Cancel();
         _pending?.Dispose();
-        _listener?.StopListening();
+        _listener?.Close();
         _gate.Dispose();
     }
 
     private Uri AuthorizeUrl(string state, string challenge)
     {
         var query = new StringBuilder()
-            .Append("client_id=").Append(Uri.EscapeDataString(SyncSchema.DesktopClientId))
+            .Append("client_id=").Append(Uri.EscapeDataString(Redirect.ClientId))
             .Append("&response_type=code")
-            .Append("&redirect_uri=").Append(Uri.EscapeDataString(options.RedirectUri.ToString()))
+            .Append("&redirect_uri=").Append(Uri.EscapeDataString(Redirect.RedirectUri.ToString()))
             .Append("&scope=").Append(Uri.EscapeDataString(Scopes))
             .Append("&state=").Append(Uri.EscapeDataString(state))
             .Append("&code_challenge=").Append(Uri.EscapeDataString(challenge))
@@ -198,7 +203,7 @@ internal sealed class SyncAuthenticationService(
     }
 
     private async Task CompleteAsync(
-        LoopbackCallbackListener listener,
+        ISyncAuthorizationSession listener,
         string state,
         string verifier,
         CancellationTokenSource pending,
@@ -215,8 +220,8 @@ internal sealed class SyncAuthenticationService(
                 {
                     ["grant_type"] = "authorization_code",
                     ["code"] = code,
-                    ["redirect_uri"] = options.RedirectUri.ToString(),
-                    ["client_id"] = SyncSchema.DesktopClientId,
+                    ["redirect_uri"] = Redirect.RedirectUri.ToString(),
+                    ["client_id"] = Redirect.ClientId,
                     ["code_verifier"] = verifier,
                 },
                 linked.Token);

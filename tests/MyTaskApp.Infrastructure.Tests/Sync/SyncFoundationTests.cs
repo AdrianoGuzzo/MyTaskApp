@@ -57,6 +57,25 @@ public sealed class SyncFoundationTests : IDisposable
         DeviceIdentityFile.NicknameFor("PC", user).Should().Be(expected);
     }
 
+    [Theory]
+    [InlineData("Pixel 8", "Pixel 8")]
+    [InlineData("  Pixel da Ana  ", "Pixel da Ana")]
+    public void AnAppGivenNickname_WinsOverTheMachineName(string given, string expected)
+    {
+        var identity = new DeviceIdentityFile(_folder, NullLogger<DeviceIdentityFile>.Instance, given);
+
+        identity.DefaultNickname.Should().Be(expected);
+    }
+
+    [Fact]
+    public void ABlankOrLongAppNickname_FallsBackOrIsCut()
+    {
+        new DeviceIdentityFile(_folder, NullLogger<DeviceIdentityFile>.Instance, "   ").DefaultNickname
+            .Should().Be(DeviceIdentityFile.NicknameFor(Environment.MachineName, Environment.UserName));
+        new DeviceIdentityFile(_folder, NullLogger<DeviceIdentityFile>.Instance, new string('p', 100)).DefaultNickname
+            .Should().HaveLength(SyncSchema.MaxNicknameLength);
+    }
+
     [Fact]
     public void ALongWindowsUser_IsCutToTheLimit_KeepingTheMachine()
     {

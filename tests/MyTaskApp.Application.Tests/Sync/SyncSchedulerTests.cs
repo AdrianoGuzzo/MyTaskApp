@@ -143,6 +143,78 @@ public sealed class SyncSchedulerTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task StoppingInTheBackground_CancelsTheCycle_AndStartingAgainRunsAtOnce()
+    {
+        _cycle.Gate = new TaskCompletionSource();
+        Start();
+        await WaitUntilAsync(() => _cycle.Running == 1);
+
+        await _scheduler!.StopAsync();
+
+        _cycle.WasCancelled.Should().BeTrue();
+
+        // O próximo ciclo não fica preso no portão do que foi cancelado.
+        _cycle.Gate!.SetResult();
+        _scheduler.Start();
+        await WaitForCyclesAsync(2);
+    }
+
+    [Fact]
+    public async Task WhileStopped_NothingRuns_EvenWhenAsked()
+    {
+        Start();
+        await WaitForCyclesAsync(1);
+        await WaitUntilAsync(() => _cycle.Running == 0);
+
+        await _scheduler!.StopAsync();
+        _scheduler.RequestNow();
+        _trigger.Signal();
+        _clock.Advance(TimeSpan.FromMinutes(5));
+        await Task.Delay(50, Ct);
+
+        _cycle.Runs.Should().Be(1);
+
+        _scheduler.Start();
+        await WaitForCyclesAsync(2);
+    }
+
+    [Fact]
+    public async Task StoppingTwice_OrDisposingAfterStopping_IsHarmless()
+    {
+        Start();
+        await WaitForCyclesAsync(1);
+
+        await _scheduler!.StopAsync();
+        await _scheduler.StopAsync();
+        await _scheduler.DisposeAsync();
+
+        _scheduler.Start();
+        await Task.Delay(50, Ct);
+        _cycle.Runs.Should().Be(1, "descartado não volta");
+    }
+
+    [Fact]
+    public async Task ACycleStuckOnTheNetwork_FinishesBeforeTheNextStartRuns()
+    {
+        var stuck = new TaskCompletionSource();
+        _cycle.Stubborn = stuck;
+        Start();
+        await WaitUntilAsync(() => _cycle.Running == 1);
+
+        // O ciclo ignora o cancelamento: parar desiste de esperar depois de um tempo.
+        await _scheduler!.StopAsync();
+        _scheduler.Start();
+        await Task.Delay(100, Ct);
+
+        _cycle.Runs.Should().Be(0, "a volta nova espera a anterior");
+        _cycle.MaxConcurrent.Should().Be(1);
+
+        stuck.SetResult();
+        await WaitForCyclesAsync(2);
+        _cycle.MaxConcurrent.Should().Be(1);
+    }
+
+    [Fact]
     public async Task EveryCycle_IsReported()
     {
         var reported = new List<SyncCycleResult>();
@@ -248,6 +320,9 @@ public sealed class SyncSchedulerTests : IAsyncDisposable
 
         public TaskCompletionSource? Gate { get; set; }
 
+        /// <summary>Uma espera que ignora o cancelamento: o push pendurado na rede.</summary>
+        public TaskCompletionSource? Stubborn { get; set; }
+
         public int Runs { get; private set; }
 
         public int Running => _running;
@@ -276,6 +351,12 @@ public sealed class SyncSchedulerTests : IAsyncDisposable
                     }
 
                     Gate = null;
+                }
+
+                if (Stubborn is { } stubborn)
+                {
+                    Stubborn = null;
+                    await stubborn.Task;
                 }
 
                 return Next.TryDequeue(out var result) ? result : SyncCycleResult.Completed;

@@ -13,6 +13,10 @@
     <Project Path="src/MyTaskApp.Domain/MyTaskApp.Domain.csproj" />
     <Project Path="src/MyTaskApp.Infrastructure/MyTaskApp.Infrastructure.csproj" />
   </Folder>
+  <!-- E um celular (ADR-067): a composição e as telas do app, sem MAUI. -->
+  <Folder Name="/mobile/">
+    <Project Path="src/MyTaskApp.Mobile.Core/MyTaskApp.Mobile.Core.csproj" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/MyTaskApp.Server.Application.Tests/MyTaskApp.Server.Application.Tests.csproj" />
     <Project Path="tests/MyTaskApp.Server.IntegrationTests/MyTaskApp.Server.IntegrationTests.csproj" />

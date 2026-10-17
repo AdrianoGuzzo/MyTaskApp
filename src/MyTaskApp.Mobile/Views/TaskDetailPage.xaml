@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:MyTaskApp.Mobile.Core.ViewModels;assembly=MyTaskApp.Mobile.Core"
+             xmlns:pres="clr-namespace:MyTaskApp.Mobile.Core.Presentation;assembly=MyTaskApp.Mobile.Core"
+             x:Class="MyTaskApp.Mobile.Views.TaskDetailPage"
+             x:DataType="vm:TaskDetailViewModel"
+             Title="Tarefa">
+
+    <ContentPage.ToolbarItems>
+        <ToolbarItem Text="Editar" Command="{Binding EditCommand}" IsEnabled="{Binding CanEdit}" />
+    </ContentPage.ToolbarItems>
+
+    <Grid>
+        <ScrollView>
+            <VerticalStackLayout Padding="16" Spacing="8">
+
+                <Label Text="{Binding LoadError}" Style="{StaticResource Error}" IsVisible="{Binding LoadError, Converter={StaticResource HasValue}}" />
+
+                <Label Text="{Binding Title}" Style="{StaticResource Title}" SemanticProperties.HeadingLevel="Level1" />
+
+                <FlexLayout Wrap="Wrap" JustifyContent="Start">
+                    <Label Text="{Binding StatusLabel}" Style="{StaticResource Muted}" Margin="0,0,12,0" />
+                    <Label Text="{Binding PriorityLabel, StringFormat='Prioridade {0}'}" Style="{StaticResource Muted}" Margin="0,0,12,0" />
+                    <Label Text="{Binding Origin, StringFormat='Origem: {0}'}" Style="{StaticResource Muted}" />
+                </FlexLayout>
+
+                <Label Text="{Binding Deadline, StringFormat='Prazo: {0}'}" IsVisible="{Binding HasDeadline}" />
+
+                <FlexLayout Wrap="Wrap" BindableLayout.ItemsSource="{Binding Tags}" IsVisible="{Binding HasTags}">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="pres:TagChip">
+                            <Border Margin="0,4,6,0"
+                                    Padding="10,3"
+                                    StrokeThickness="1"
+                                    Stroke="{Binding ColorHex, Converter={StaticResource HexColor}}"
+                                    StrokeShape="RoundRectangle 10">
+                                <Label Text="{Binding Name}" FontSize="13" TextColor="{Binding ColorHex, Converter={StaticResource HexColor}}" />
+                            </Border>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </FlexLayout>
+
+                <Label Text="Descrição" Style="{StaticResource Section}" IsVisible="{Binding HasNotes}" />
+                <Border Style="{StaticResource Card}" IsVisible="{Binding HasNotes}">
+                    <Label Text="{Binding Notes}" LineBreakMode="WordWrap" />
+                </Border>
+
+                <!-- Os botões só aparecem quando a regra permite; quem decide continua sendo o caso de uso. -->
+                <Label Text="Ações" Style="{StaticResource Section}" />
+                <FlexLayout Wrap="Wrap" JustifyContent="Start">
+                    <Button Text="Concluir" Command="{Binding CompleteCommand}" IsVisible="{Binding CanComplete}" Margin="0,0,8,8" />
+                    <Button Text="Reabrir" Command="{Binding ReopenCommand}" IsVisible="{Binding CanReopen}" Margin="0,0,8,8" />
+                    <Button Text="Cancelar tarefa" Style="{StaticResource Secondary}" Command="{Binding CancelTaskCommand}" IsVisible="{Binding CanCancel}" Margin="0,0,8,8" />
+                    <Button Text="Arquivar" Style="{StaticResource Secondary}" Command="{Binding ArchiveCommand}" IsVisible="{Binding CanArchive}" Margin="0,0,8,8" />
+                    <Button Text="Restaurar do arquivo" Command="{Binding RestoreFromArchiveCommand}" IsVisible="{Binding CanRestoreFromArchive}" Margin="0,0,8,8" />
+                    <Button Text="Restaurar da lixeira" Command="{Binding RestoreFromTrashCommand}" IsVisible="{Binding CanRestoreFromTrash}" Margin="0,0,8,8" />
+                    <Button Text="Mover para a lixeira" Style="{StaticResource Destructive}" Command="{Binding MoveToTrashCommand}" IsVisible="{Binding CanMoveToTrash}" Margin="0,0,8,8" />
+                </FlexLayout>
+
+                <Label Text="Datas" Style="{StaticResource Section}" />
+                <VerticalStackLayout BindableLayout.ItemsSource="{Binding Dates}" Spacing="2">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="x:String">
+                            <Label Text="{Binding .}" Style="{StaticResource Muted}" />
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </VerticalStackLayout>
+                <Label Text="{Binding Provenance}" Style="{StaticResource Muted}" IsVisible="{Binding Provenance, Converter={StaticResource HasValue}}" />
+
+                <Label Text="Desenvolvimento (somente leitura)" Style="{StaticResource Section}" IsVisible="{Binding Developments, Converter={StaticResource HasValue}}" />
+                <VerticalStackLayout BindableLayout.ItemsSource="{Binding Developments}" Spacing="6">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="vm:DevelopmentLine">
+                            <Border Style="{StaticResource Card}">
+                                <VerticalStackLayout Spacing="2">
+                                    <Label Text="{Binding Repository}" FontAttributes="Bold" />
+                                    <Label Text="{Binding Branch}" Style="{StaticResource Muted}" />
+                                    <Label Text="{Binding Status}" Style="{StaticResource Muted}" />
+                                </VerticalStackLayout>
+                            </Border>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </VerticalStackLayout>
+
+                <Label Text="Histórico neste celular" Style="{StaticResource Section}" IsVisible="{Binding History, Converter={StaticResource HasValue}}" />
+                <VerticalStackLayout BindableLayout.ItemsSource="{Binding History}" Spacing="4" Margin="0,0,0,24">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="vm:HistoryLine">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <Label Text="{Binding What}" />
+                                <Label Grid.Column="1" Text="{Binding When}" Style="{StaticResource Muted}" />
+                            </Grid>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </VerticalStackLayout>
+            </VerticalStackLayout>
+        </ScrollView>
+
+        <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" VerticalOptions="Center" />
+    </Grid>
+</ContentPage>

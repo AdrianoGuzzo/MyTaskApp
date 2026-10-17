@@ -53,12 +53,21 @@ namespace MyTaskApp.Infrastructure;
 public static class DependencyInjection
 {
     /// <summary>
-    /// Liga as portas da Application aos adaptadores de SQLite. Nada aqui é
-    /// exposto como tipo concreto — o Desktop enxerga apenas as interfaces.
+    /// O que todo app do MyTaskApp precisa para trabalhar com os dados (ADR-067):
+    /// o SQLite com as migrations, os repositórios e as consultas, a captura e a
+    /// aplicação da sincronização e o cliente HTTP dela. Nada de processo, Git,
+    /// terminal, Jira, PostgreSQL nem cofre do sistema — é o que roda no celular.
     /// </summary>
-    public static IServiceCollection AddInfrastructure(
+    /// <remarks>
+    /// Quem chama sozinho (o celular) ainda registra o <see cref="ISecretStore"/>
+    /// do sistema e, se o login não volta pelo loopback, um
+    /// <see cref="ISyncAuthorizationRedirect"/>. O desktop chama por
+    /// <see cref="AddInfrastructure"/>, que completa o resto.
+    /// </remarks>
+    public static IServiceCollection AddLocalData(
         this IServiceCollection services,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        LocalDataOptions? local = null)
     {
         var databaseOptions =
             configuration.GetSection(DatabaseOptions.SectionName).Get<DatabaseOptions>()
@@ -84,8 +93,9 @@ public static class DependencyInjection
         // sincronização, comando que veio de outro computador espera revisão.
         services.AddScoped<ICommandReviewGate, SyncCommandReviewGate>();
         services.TryAddSingleton<IDeviceIdentity>(provider => new DeviceIdentityFile(
-            UserDataLocation.Current.LocalRoot,
-            provider.GetRequiredService<ILogger<DeviceIdentityFile>>()));
+            local?.DeviceIdentityFolder ?? UserDataLocation.Current.LocalRoot,
+            provider.GetRequiredService<ILogger<DeviceIdentityFile>>(),
+            local?.DeviceNickname));
 
         services.AddDbContext<MyTaskAppDbContext>(
             (provider, builder) => builder
@@ -124,19 +134,39 @@ public static class DependencyInjection
         services.AddScoped<IStickyNoteRepository, StickyNoteRepository>();
         services.AddScoped<IStickyNoteQuery, StickyNoteQuery>();
 
-        // Os sons dos avisos (ADR-042): os personalizados ficam com os dados do
-        // usuário; os do app são renderizados numa pasta descartável.
-        services.AddSingleton<ISoundLibrary>(provider => new SoundLibrary(
-            Path.Combine(UserDataLocation.Current.Root, "sounds"),
-            Path.Combine(UserDataLocation.Current.Temp, "sounds"),
-            provider.GetRequiredService<ILogger<SoundLibrary>>()));
-
         // Ciclo de vida: auditoria, configuracao de retencao e as consultas das
         // areas de arquivados/lixeira e da varredura automatica.
         services.AddScoped<ITaskAuditLog, EfTaskAuditLog>();
         services.AddScoped<IDataRetentionSettingsStore, DataRetentionSettingsStore>();
         services.AddScoped<IChecklistArchiveQuery, ChecklistArchiveQuery>();
         services.AddScoped<ILifecycleSweepQuery, LifecycleSweepQuery>();
+
+        // O relógio vem da Application; TryAdd para a Infrastructure subir sozinha nos testes.
+        services.TryAddSingleton(TimeProvider.System);
+
+        AddSyncClient(services, configuration);
+
+        return services;
+    }
+
+    /// <summary>
+    /// Liga as portas da Application aos adaptadores de SQLite. Nada aqui é
+    /// exposto como tipo concreto — o Desktop enxerga apenas as interfaces.
+    /// </summary>
+    public static IServiceCollection AddInfrastructure(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        // Os dados e a sincronização são os mesmos do celular (ADR-067); daqui
+        // para baixo é o que só o computador tem.
+        services.AddLocalData(configuration);
+
+        // Os sons dos avisos (ADR-042): os personalizados ficam com os dados do
+        // usuário; os do app são renderizados numa pasta descartável.
+        services.AddSingleton<ISoundLibrary>(provider => new SoundLibrary(
+            Path.Combine(UserDataLocation.Current.Root, "sounds"),
+            Path.Combine(UserDataLocation.Current.Temp, "sounds"),
+            provider.GetRequiredService<ILogger<SoundLibrary>>()));
 
         // Disco e Git (ADR-026, ADR-027). Singletons sem estado de escopo: o
         // cliente Git só guarda o caminho do executável que achou.
@@ -190,7 +220,6 @@ public static class DependencyInjection
 
         AddSecrets(services);
         AddJira(services, configuration);
-        AddSyncClient(services, configuration);
         AddDatabaseOperations(services, configuration);
 
         if (OperatingSystem.IsWindows())

@@ -399,6 +399,19 @@ o servidor em [`docs/sync-server.md`](docs/sync-server.md), e as decisões no
 - Na janela da tarefa: "Criada em Notebook · … · alterada por último neste
   computador".
 
+### No celular (Android; iOS configurado)
+
+O app do celular é mais um dispositivo da mesma sincronização
+([`docs/mobile.md`](docs/mobile.md), [ADR-067](docs/ARCHITECTURE.md)):
+
+- todas as tarefas de todos os dispositivos numa lista, com busca, atalhos
+  (pendentes, vencidas, concluídas) e filtros por prioridade, etiqueta e
+  origem (onde a tarefa aparece);
+- criar, editar, concluir, reabrir, arquivar e mandar para a lixeira, pelas
+  mesmas regras do desktop;
+- funciona sem rede, mostra o que está pendente e sobe quando a conexão volta;
+- entra com a mesma conta Google; o refresh token fica no Keystore/Keychain.
+
 ---
 
 ## Instalação
@@ -562,10 +575,13 @@ O repositório tem duas solutions:
 |---|---|
 | `MyTaskApp.slnx` | o app desktop: Domain, Application, Infrastructure, Mcp, Desktop e os testes deles |
 | `MyTaskApp.Server.slnx` | o servidor de sincronização opcional ([guia](docs/sync-server.md)): Server.Api, Server.Application, Server.Infrastructure e os testes deles |
+| `MyTaskApp.Mobile.slnx` | o app do celular ([guia](docs/mobile.md)): a casca .NET MAUI (precisa do workload `maui-android`) e o Mobile.Core |
 
 `MyTaskApp.Sync.Contracts` está nas duas, porque é o contrato entre elas. A do
 servidor também lista Domain, Application e Infrastructure, numa pasta
-`desktop`: os testes ponta a ponta sobem dois desktops inteiros contra a API.
+`desktop`: os testes ponta a ponta sobem dois desktops inteiros contra a API
+(e um celular, pelo Mobile.Core). O `MyTaskApp.Mobile.Core` e os testes dele
+também estão no `MyTaskApp.slnx`: sem MAUI, compilam sem workload.
 
 ```bash
 dotnet build MyTaskApp.slnx
@@ -718,6 +734,8 @@ Management).
 │   ├── MyTaskApp.Mcp/               servidor MCP local (Kestrel no loopback)
 │   ├── MyTaskApp.Sync.Contracts/    contrato da sincronização (desktop e servidor)
 │   ├── MyTaskApp.Server.*/          servidor de sincronização (ASP.NET Core + PostgreSQL)
+│   ├── MyTaskApp.Mobile.Core/       o app do celular sem MAUI: ViewModels, composição
+│   ├── MyTaskApp.Mobile/            o app do celular: .NET MAUI, Android e iOS
 │   └── MyTaskApp.Desktop/           app Avalonia (views, view models, temas)
 ├── tests/                           uma suíte por projeto + Packaging.Tests
 ├── deploy/sync-server/              docker compose do servidor de sincronização
@@ -733,6 +751,7 @@ Management).
 │   ├── mcp-server.md                servidor MCP: configuração e ferramentas
 │   ├── sync.md                      sincronização: o que vai, conflitos, limitações
 │   ├── sync-server.md               servidor de sincronização: Google, variáveis, implantação
+│   ├── mobile.md                    o app do celular: ambiente, Android, iOS, limitações
 │   └── release-process.md           versionamento e release
 ├── .github/workflows/               CI, título de PR, Release Please, release
 ├── Directory.Build.props            versão do produto e regras de build
@@ -805,9 +824,10 @@ fica em [`CHANGELOG.md`](CHANGELOG.md).
 
 | Documento | Conteúdo |
 |---|---|
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | decisões de arquitetura (ADR-001 a ADR-066), com o motivo de cada uma |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | decisões de arquitetura (ADR-001 a ADR-067), com o motivo de cada uma |
 | [`docs/sync.md`](docs/sync.md) | sincronização entre computadores: a tela, o que sincroniza, onde cada tarefa aparece, conflitos e limitações |
 | [`docs/sync-server.md`](docs/sync-server.md) | o servidor de sincronização: cliente OAuth do Google, configuração, migrations, implantação e testes |
+| [`docs/mobile.md`](docs/mobile.md) | o app do celular: arquitetura, login, sincronização, ambiente, rodar no Android, o que falta no iOS, testes e limitações |
 | [`docs/mcp-server.md`](docs/mcp-server.md) | servidor MCP local: ativar, porta, token, Claude Code, as ferramentas, segurança e limitações |
 | [`docs/database-operations.md`](docs/database-operations.md) | conexões PostgreSQL, ambientes, ferramentas, máscaras, cópia anonimizada de produção e solução de problemas |
 | [`docs/jira-oauth-app.md`](docs/jira-oauth-app.md) | registrar o app OAuth do Jira e pôr as credenciais no build |

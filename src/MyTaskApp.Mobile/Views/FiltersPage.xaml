@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:MyTaskApp.Mobile.Core.ViewModels;assembly=MyTaskApp.Mobile.Core"
+             x:Class="MyTaskApp.Mobile.Views.FiltersPage"
+             x:DataType="vm:TaskListViewModel"
+             Title="Filtros">
+
+    <ContentPage.ToolbarItems>
+        <ToolbarItem Text="Aplicar" Command="{Binding ApplyFiltersCommand}" />
+    </ContentPage.ToolbarItems>
+
+    <ScrollView>
+        <VerticalStackLayout Padding="16" Spacing="4">
+
+            <Label Text="Prioridade" Style="{StaticResource Section}" />
+            <VerticalStackLayout BindableLayout.ItemsSource="{Binding PriorityChoices}">
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="vm:PriorityChip">
+                        <Grid ColumnDefinitions="Auto,*">
+                            <CheckBox IsChecked="{Binding IsSelected}" SemanticProperties.Description="{Binding Label}" />
+                            <Label Grid.Column="1" Text="{Binding Label}" VerticalOptions="Center" />
+                        </Grid>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
+
+            <VerticalStackLayout IsVisible="{Binding ShowsOrigin}">
+                <Label Text="Origem (onde a tarefa aparece)" Style="{StaticResource Section}" />
+                <Picker ItemsSource="{Binding OriginChoices}"
+                        SelectedItem="{Binding SelectedOrigin}"
+                        Title="Origem" />
+            </VerticalStackLayout>
+
+            <Label Text="Etiquetas" Style="{StaticResource Section}" />
+            <Label Text="Qualquer uma das marcadas basta." Style="{StaticResource Muted}" />
+            <VerticalStackLayout BindableLayout.ItemsSource="{Binding TagChoices}">
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="vm:TagOption">
+                        <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="8">
+                            <CheckBox IsChecked="{Binding IsSelected}" SemanticProperties.Description="{Binding Label}" />
+                            <Ellipse Grid.Column="1"
+                                     WidthRequest="12"
+                                     HeightRequest="12"
+                                     VerticalOptions="Center"
+                                     Fill="{Binding ColorHex, Converter={StaticResource HexColor}}" />
+                            <Label Grid.Column="2" Text="{Binding Label}" VerticalOptions="Center" />
+                        </Grid>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
+
+            <Label Text="Ordenar por" Style="{StaticResource Section}" />
+            <Picker ItemsSource="{Binding Sorts}"
+                    SelectedItem="{Binding SelectedSort}"
+                    Title="Ordenar por" />
+
+            <Button Text="Aplicar filtros" Command="{Binding ApplyFiltersCommand}" Margin="0,24,0,8" />
+            <Button Text="Limpar tudo" Style="{StaticResource Secondary}" Command="{Binding ClearFiltersCommand}" />
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>
