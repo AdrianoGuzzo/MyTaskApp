@@ -25,14 +25,17 @@ namespace MyTaskApp.Server.IntegrationTests;
 /// baixo e um "Google" de mentira: o desafio dele já volta autenticado com o
 /// usuário do cabeçalho <see cref="FakeGoogleHandler.SubjectHeader"/>.
 /// </summary>
-internal sealed class ApiFactory(string connectionString, IReadOnlyDictionary<string, string?>? settings = null)
+internal sealed class ApiFactory(
+    string connectionString,
+    IReadOnlyDictionary<string, string?>? settings = null,
+    string environment = ServerSetup.TestingEnvironment)
     : WebApplicationFactory<Program>
 {
     public CapturingLoggerProvider Logs { get; } = new();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        builder.UseEnvironment(ServerSetup.TestingEnvironment);
+        builder.UseEnvironment(environment);
         builder.UseSetting("ConnectionStrings:Sync", connectionString);
         builder.UseSetting("Database:MigrateOnStartup", "false");
         builder.UseSetting("Sync:RefreshTokenReuseLeeway", "00:00:00");

@@ -1,4 +1,7 @@
+using System.Net;
 using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using MyTaskApp.Server.Application;
@@ -206,4 +209,73 @@ internal sealed class ProcessedOperationsPruner(IServiceProvider services, SyncS
         }
         while (await timer.WaitForNextTickAsync(stoppingToken));
     }
+}
+
+/// <summary>
+/// Development não serve a rede (ADR-070): ali o OAuth anda em HTTP e os
+/// certificados são os de desenvolvimento. Depois que o Kestrel abre as portas,
+/// um endereço fora do loopback derruba a subida. A exceção é explícita
+/// (<see cref="AllowNonLoopbackKey"/>): o contêiner do compose de
+/// desenvolvimento escuta em todas as interfaces dele, mas a porta só é
+/// publicada no 127.0.0.1 da máquina.
+/// </summary>
+internal sealed class DevelopmentLoopbackGuard(
+    IServer server,
+    IHostEnvironment environment,
+    IConfiguration configuration,
+    ILogger<DevelopmentLoopbackGuard> logger) : IHostedLifecycleService
+{
+    public const string AllowNonLoopbackKey = "Development:AllowNonLoopback";
+
+    public Task StartedAsync(CancellationToken cancellationToken)
+    {
+        if (!environment.IsDevelopment() || configuration.GetValue<bool>(AllowNonLoopbackKey))
+        {
+            return Task.CompletedTask;
+        }
+
+        var exposed = (server.Features.Get<IServerAddressesFeature>()?.Addresses ?? [])
+            .Where(address => !IsLoopback(address))
+            .ToList();
+
+        if (exposed.Count == 0)
+        {
+            return Task.CompletedTask;
+        }
+
+        var refusal = new InvalidOperationException(
+            $"Em Development o servidor só escuta no loopback, e está em {string.Join(", ", exposed)}. "
+            + "Para servir a rede, use Production atrás de TLS (docs/sync-server.md §5). "
+            + "No contêiner de desenvolvimento, com a porta publicada só no 127.0.0.1, Development__AllowNonLoopback=true.");
+
+        logger.LogCritical(refusal, "SyncServerDevelopmentOnNetwork {Addresses}", exposed);
+
+        throw refusal;
+    }
+
+    /// <summary><c>localhost</c>, 127.0.0.0/8 e ::1, e os sockets da própria máquina (Unix e pipe nomeado).</summary>
+    internal static bool IsLoopback(string address)
+    {
+        var binding = BindingAddress.Parse(address);
+
+        if (binding.IsUnixPipe || binding.IsNamedPipe)
+        {
+            return true;
+        }
+
+        var host = binding.Host.Trim('[', ']');
+
+        return string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase)
+            || (IPAddress.TryParse(host, out var ip) && IPAddress.IsLoopback(ip));
+    }
+
+    public Task StartingAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public Task StoppingAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public Task StoppedAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 }

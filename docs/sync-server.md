@@ -2,7 +2,8 @@
 
 O servidor da [sincronização](sync.md) é um ASP.NET Core com PostgreSQL:
 contas pelo Google, OAuth do desktop pelo OpenIddict, e a API `/api/v1`. A
-decisão está no [ADR-061](ARCHITECTURE.md).
+decisão está no [ADR-061](ARCHITECTURE.md), e a publicação em Production
+atrás de TLS, no ADR-070.
 
 Quem usa o app não precisa disto. Este guia é para quem publica o servidor, ou
 para quem desenvolve a sincronização.
@@ -51,8 +52,10 @@ O token do Google só abre a sessão no servidor. Ele nunca vira token da API.
 ## 2. Configuração
 
 Toda configuração vem de `appsettings.json`, de variáveis de ambiente
-(`Secao__Chave`) ou, em desenvolvimento, do user-secrets. **Nenhum segredo vai
-para o repositório nem para a imagem.**
+(`Secao__Chave`), de arquivos em `/run/secrets` ou, em desenvolvimento, do
+user-secrets. Em `/run/secrets`, cada arquivo é uma chave: o nome do arquivo é
+o da variável, e o conteúdo é o valor. É o que o compose de produção usa (§5).
+**Nenhum segredo vai para o repositório nem para a imagem.**
 
 | Variável | Obrigatória | O que é |
 |---|---|---|
@@ -64,6 +67,8 @@ para o repositório nem para a imagem.**
 | `Sync__EncryptionCertificate__Path` / `__Base64` / `__Password` | em produção | PFX que cifra os tokens |
 | `Database__MigrateOnStartup` | não | `true` aplica as migrations ao subir. Padrão: só em Development |
 | `ForwardedHeaders__KnownProxies__0` | atrás de proxy | IP do proxy reverso, para valer o `X-Forwarded-Proto` |
+| `AllowedHosts` | não | os nomes aceitos no `Host`. Padrão `*`; o compose de produção usa o nome público |
+| `Development__AllowNonLoopback` | não | `true` deixa Development escutar fora do loopback. Só no contêiner de desenvolvimento (§3) |
 | `Sync__DesktopRedirectUris__0` … | não | voltas aceitas do desktop. Padrão: `http://127.0.0.1:47833/callback` e `http://localhost:47833/callback` |
 | `Sync__MobileRedirectUris__0` … | não | voltas aceitas do celular (cliente `mytaskapp-mobile`, ADR-067). Padrão: `io.github.adrianoguzzo.mytaskapp://oauth/callback` |
 | `Sync__AccessTokenLifetime` | não | padrão `00:15:00` |
@@ -93,25 +98,74 @@ mesmo `/account/login` do servidor.
 ### Certificados do OpenIddict
 
 Em Development, o OpenIddict usa certificados de desenvolvimento gerados na
-máquina. Em produção, são obrigatórios dois PFX: um para assinar e outro para
-cifrar. Para gerar certificados autoassinados (eles não precisam de uma CA):
+máquina (`CN = OpenIddict Server Signing Certificate`). Eles são recriados
+quando somem ou vencem, e cada recriação derruba os refresh tokens: por isso
+Development não serve a rede (ADR-070). Em produção, são obrigatórios dois PFX:
+um para assinar e outro para cifrar. Para gerar certificados autoassinados,
+que não precisam de uma CA, já na pasta de segredos do compose (§5):
 
 ```bash
+cd deploy/sync-server/secrets
+
 openssl req -x509 -newkey rsa:2048 -nodes -days 730 -subj "/CN=MyTaskApp Sync Signing" \
   -keyout signing.key -out signing.crt -addext "keyUsage=digitalSignature"
-openssl pkcs12 -export -inkey signing.key -in signing.crt -out signing.pfx -passout pass:<senha>
+openssl rand -base64 24 | tr -d '\n' > signing_password
+openssl pkcs12 -export -inkey signing.key -in signing.crt -out signing.pfx -passout file:signing_password
 
 openssl req -x509 -newkey rsa:2048 -nodes -days 730 -subj "/CN=MyTaskApp Sync Encryption" \
   -keyout encryption.key -out encryption.crt -addext "keyUsage=keyEncipherment"
-openssl pkcs12 -export -inkey encryption.key -in encryption.crt -out encryption.pfx -passout pass:<senha>
+openssl rand -base64 24 | tr -d '\n' > encryption_password
+openssl pkcs12 -export -inkey encryption.key -in encryption.crt -out encryption.pfx -passout file:encryption_password
 
-base64 -w0 signing.pfx      # → Sync__SigningCertificate__Base64
-base64 -w0 encryption.pfx   # → Sync__EncryptionCertificate__Base64
+rm signing.key signing.crt encryption.key encryption.crt
 ```
+
+Fora do compose, o PFX também pode ir numa variável (`base64 -w0 signing.pfx`
+→ `Sync__SigningCertificate__Base64`).
 
 Os tokens são assinados e cifrados com esses certificados. Trocar qualquer um
 dos dois invalida os tokens em circulação, inclusive os refresh tokens, e cada
-computador precisa conectar de novo. Guarde os PFX junto com o backup do banco.
+computador precisa conectar de novo. Guarde os PFX e as senhas junto com o
+backup do banco, e fora do host.
+
+#### Rotação dos PFX
+
+Os certificados acima valem 730 dias. Para saber quando vencem:
+
+```bash
+cd deploy/sync-server/secrets
+openssl pkcs12 -in signing.pfx -passin file:signing_password -nokeys | openssl x509 -noout -subject -enddate
+openssl pkcs12 -in encryption.pfx -passin file:encryption_password -nokeys | openssl x509 -noout -subject -enddate
+```
+
+A troca é planejada (antes do vencimento) ou de emergência (um PFX ou uma senha
+vazou). Nos dois casos, o roteiro é o mesmo:
+
+1. Avise: depois da troca, cada computador e cada celular mostra "Entrar de
+   novo com o Google" uma vez. Os dados ficam; o que estava pendente no
+   aparelho sobe depois do login.
+2. Troque **os dois** PFX juntos, para o login cair uma vez só. Guarde a dupla
+   antiga fora do host até conferir a nova (passo 4), e depois apague.
+3. Gere a dupla nova por cima da antiga, com os comandos acima e senhas novas,
+   e recrie a API. O arquivo de segredo é montado ao criar o contêiner, por
+   isso `restart` não basta:
+
+   ```bash
+   docker compose -f docker-compose.prod.yml --env-file prod.env up -d --force-recreate api
+   ```
+
+4. Confira que o JWKS publica o certificado novo (o `notBefore` é de agora):
+
+   ```bash
+   curl -s https://<SYNC_HOST>/.well-known/jwks | jq -r '.keys[].x5c[0]' \
+     | base64 -d | openssl x509 -inform der -noout -subject -dates
+   ```
+
+Com os PFX novos, nenhum token antigo é aceito, nem um forjado com a chave que
+vazou: na emergência, a troca já basta.
+
+A troca não mexe nas chaves do DataProtection (no banco) nem no certificado TLS
+do Caddy (no volume `caddy-data`, renovado por ele).
 
 As chaves do DataProtection (cookies do login) ficam na tabela
 `DataProtectionKeys`, então várias instâncias podem rodar atrás de um balanceador.
@@ -135,6 +189,12 @@ O servidor sobe em `http://localhost:5280`, aplica as migrations sozinho (em
 Development) e responde `GET /health`. O `appsettings.Development.json` já
 aponta para o PostgreSQL do compose.
 
+**Development só escuta no loopback** (ADR-070). Ele anda em HTTP, com os
+certificados de desenvolvimento, e não serve a rede. Com `--urls
+http://0.0.0.0:5280`, um IP da LAN ou `ASPNETCORE_URLS=http://+:…`, o servidor
+registra `SyncServerDevelopmentOnNetwork` e não sobe. Para outra máquina usar
+o servidor, publique em Production (§5).
+
 Para rodar tudo em contêiner, com a API inclusive:
 
 ```powershell
@@ -143,7 +203,11 @@ docker compose -f deploy/sync-server/docker-compose.yml --profile api up -d --bu
 ```
 
 Nesse caso a API fica em `http://localhost:8080`, e o redirect do Google é
-`http://localhost:8080/signin-google`.
+`http://localhost:8080/signin-google`. Dentro do contêiner, a API escuta em
+todas as interfaces dele, mas a porta só é publicada no `127.0.0.1` da
+máquina. É a única exceção à regra do loopback, e por isso o compose de
+desenvolvimento liga `Development__AllowNonLoopback`. Não mude o `ports` dele
+para `0.0.0.0`.
 
 ### Apontar o desktop para o servidor local
 
@@ -195,16 +259,14 @@ Regras:
     --connection "$ConnectionStrings__Sync"
   ```
 
+  No compose de produção, é o serviço `migrate` (§5), que lê a connection
+  string do segredo.
+
 ## 5. Implantação
 
-```bash
-docker build -f src/MyTaskApp.Server.Api/Dockerfile -t mytaskapp-sync .
-```
-
-A imagem escuta em `8080`, sem TLS, e roda como usuário sem privilégio. Na
-frente dela vai um proxy reverso com TLS (Caddy, nginx, o balanceador do
-provedor), e o `ForwardedHeaders__KnownProxies__0` com o IP do proxy. Em
-produção, o servidor:
+O servidor vai para a rede só em **Production, atrás de um proxy com TLS**
+(ADR-070). A imagem escuta em `8080`, sem TLS, e roda como usuário sem
+privilégio. Em produção, o servidor:
 
 - redireciona HTTP para HTTPS e manda HSTS de 1 ano;
 - recusa OAuth sem TLS (o OpenIddict exige);
@@ -213,9 +275,120 @@ produção, o servidor:
 - não grava token, código, cabeçalho nem corpo no log. É uma linha por
   requisição: método, caminho sem query, status e tempo.
 
-**Ordem de uma atualização:** migrations (bundle), depois o servidor, depois os
-desktops. O servidor aceita clientes do `SyncSchema.MinimumClient` para cima, e
-abaixo disso responde 426 ("Atualize o MyTaskApp").
+O `deploy/sync-server/docker-compose.prod.yml` monta isso num host com Docker:
+
+| Serviço | O que faz |
+|---|---|
+| `proxy` | Caddy. É o único com porta publicada (80 e 443): termina o TLS e responde HTTP com 308 para HTTPS |
+| `api` | a imagem, em Production, sem porta publicada. Disco só de leitura e sem capabilities. Só aceita o `X-Forwarded-Proto` do IP fixo do Caddy (`ForwardedHeaders__KnownProxies__0`) e só o nome público no `Host` (`AllowedHosts`) |
+| `postgres` | numa rede interna: sem porta, sem saída, e só a API e o `migrate` o alcançam |
+| `migrate` | o bundle das migrations (§4), rodado sob demanda |
+
+Em outro provedor (um balanceador com TLS, nginx), vale o mesmo: Production,
+os dois PFX, o `KnownProxies` com o IP de quem fala com a API e nenhuma porta
+da API exposta além do proxy.
+
+### Passo a passo
+
+1. **Nome e certificado TLS.** O Google só aceita redirect em HTTPS com um
+   nome de domínio público: IP puro não serve, nem nome sem TLD público (`.lan`,
+   `.local`). Então `SYNC_HOST` é um nome como `sync.exemplo.com`. Ele pode
+   apontar para um IP da LAN. O certificado sai de um destes:
+   - `SYNC_TLS=internal`: o Caddy emite com uma CA própria. Serve para a LAN
+     com o desktop, que passa a confiar nessa CA (passo 7). O celular só
+     confia nas CAs do sistema, e com ela não conecta.
+   - `SYNC_TLS=<seu e-mail>`: Let's Encrypt. Exige as portas 80 e 443
+     alcançáveis da internet nesse nome. Serve para o desktop e para o celular.
+   - `SYNC_TLS=/etc/caddy/tls/cert.pem /etc/caddy/tls/key.pem`: um certificado
+     seu (de uma CA pública, por exemplo emitido por DNS-01 em outra máquina),
+     copiado para `deploy/sync-server/tls/`.
+2. **Cliente do Google.** No passo 1 deste guia, o redirect é
+   `https://<SYNC_HOST>/signin-google`.
+3. **Configuração.** No host, com o repositório clonado:
+
+   ```bash
+   cd deploy/sync-server
+   cp prod.env.example prod.env    # SYNC_HOST, SYNC_TLS e GOOGLE_CLIENT_ID
+   ```
+
+   Se `172.30.80.0/24` colidir com outra rede do host, troque
+   `SYNC_EDGE_SUBNET` e `SYNC_PROXY_IP` juntos.
+4. **Segredos.** Um arquivo por segredo em `deploy/sync-server/secrets/` (fora
+   do Git), sem quebra de linha no fim:
+
+   | Arquivo | Conteúdo | Na API vira |
+   |---|---|---|
+   | `postgres_password` | a senha do banco | — (é o `POSTGRES_PASSWORD_FILE` do PostgreSQL) |
+   | `connection_string` | `Host=postgres;Database=mytaskapp_sync;Username=mytaskapp;Password=<a mesma>` | `ConnectionStrings__Sync` |
+   | `google_client_secret` | a chave secreta do cliente do Google | `Authentication__Google__ClientSecret` |
+   | `signing.pfx`, `signing_password` | o PFX de assinatura e a senha dele (§2) | `Sync__SigningCertificate__Path` e `__Password` |
+   | `encryption.pfx`, `encryption_password` | o PFX de cifragem e a senha dele (§2) | `Sync__EncryptionCertificate__Path` e `__Password` |
+
+   ```bash
+   mkdir -p secrets && cd secrets
+   openssl rand -hex 24 | tr -d '\n' > postgres_password
+   printf 'Host=postgres;Database=mytaskapp_sync;Username=mytaskapp;Password=%s' "$(cat postgres_password)" > connection_string
+   printf '%s' '<chave secreta do Google>' > google_client_secret
+   # os dois PFX: os comandos de "Certificados do OpenIddict" (§2)
+   cd .. && chmod 700 secrets && chmod 444 secrets/*
+   ```
+
+   Sem Swarm, o compose monta o arquivo como ele está no host. A API roda com
+   o UID 1654 e o PostgreSQL com o 70, e os dois precisam ler o arquivo. O
+   `700` na pasta fecha os segredos para os outros usuários do host, e o `444`
+   deixa os contêineres lerem. Num editor do Windows, cuidado com o CRLF no
+   fim: ele vira parte da senha.
+5. **Subir.** Imagem, migrations e serviços:
+
+   ```bash
+   docker compose -f docker-compose.prod.yml --env-file prod.env build
+   docker compose -f docker-compose.prod.yml --env-file prod.env run --rm migrate
+   docker compose -f docker-compose.prod.yml --env-file prod.env up -d
+   ```
+
+6. **Conferir.** Estes são os critérios do G-01 da auditoria de segurança:
+
+   ```bash
+   H=https://<SYNC_HOST>
+   curl -s -D - -o /dev/null http://<SYNC_HOST>/health  # 308, Location: https://…
+   curl -s -D - -o /dev/null $H/health                  # 200 e strict-transport-security: max-age=31536000
+   curl -s $H/.well-known/openid-configuration | jq -r .issuer   # https://<SYNC_HOST>/
+   curl -s $H/.well-known/jwks | jq -r '.keys[].x5c[0]' | base64 -d \
+     | openssl x509 -inform der -noout -subject          # CN = MyTaskApp Sync Signing, nunca "OpenIddict Server Signing Certificate"
+
+   # HTTP direto na API, por dentro da rede do compose (mesmo com X-Forwarded-Proto forjado):
+   docker run --rm --network mytaskapp-sync_edge curlimages/curl:8.11.1 -s \
+     -H "Host: <SYNC_HOST>" -H "X-Forwarded-Proto: https" \
+     -X POST http://api:8080/connect/token -d grant_type=refresh_token
+   # 400 invalid_request, "This server only accepts HTTPS requests." (ID2083)
+   ```
+
+   Com `SYNC_TLS=internal`, passe `--cacert caddy-root.crt` ao `curl` (passo 7).
+   Se o issuer vier com `http://` e faltar o HSTS, o `KnownProxies` não bate
+   com o IP do Caddy: a API não acredita no `X-Forwarded-Proto` e recusa o
+   OAuth também pelo proxy.
+7. **Clientes.** O desktop de release recebe `https://<SYNC_HOST>/` (abaixo),
+   ou a seção `Sync` do `appsettings.user.json`. Com `SYNC_TLS=internal`, cada
+   computador precisa confiar na CA do Caddy:
+
+   ```bash
+   docker compose -f docker-compose.prod.yml --env-file prod.env cp \
+     proxy:/data/caddy/pki/authorities/local/root.crt caddy-root.crt
+   ```
+
+   ```powershell
+   Import-Certificate -FilePath caddy-root.crt -CertStoreLocation Cert:\CurrentUser\Root
+   ```
+
+   A CA fica no volume `caddy-data`. Perdido o volume, a CA é outra, e cada
+   computador precisa importá-la de novo.
+
+**Ordem de uma atualização:** `git pull` e `build`, depois as migrations
+(`run --rm migrate`), depois o servidor (`up -d`), depois os desktops. O
+servidor aceita clientes do `SyncSchema.MinimumClient` para cima, e abaixo
+disso responde 426 ("Atualize o MyTaskApp").
+
+Para trocar os PFX, veja "Rotação dos PFX" (§2).
 
 ### O desktop de release
 

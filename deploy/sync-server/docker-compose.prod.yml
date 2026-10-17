@@ -1,0 +1,142 @@
+# O servidor de sincronizacao em producao (ADR-070, docs/sync-server.md secao 5).
+#
+#   cd deploy/sync-server
+#   docker compose -f docker-compose.prod.yml --env-file prod.env build
+#   docker compose -f docker-compose.prod.yml --env-file prod.env run --rm migrate
+#   docker compose -f docker-compose.prod.yml --env-file prod.env up -d
+#
+# So o Caddy fala com a rede, e so em TLS. A API roda em Production, sem porta
+# publicada, e confia no X-Forwarded-Proto apenas do IP fixo do Caddy. O
+# PostgreSQL fica numa rede interna, sem porta e sem saida. Os segredos sao
+# arquivos em secrets/ (fora do Git), montados em /run/secrets: a API le cada
+# um como uma chave da configuracao (ConnectionStrings__Sync, ...).
+
+name: mytaskapp-sync
+
+services:
+  proxy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      SYNC_HOST: ${SYNC_HOST:?defina SYNC_HOST em prod.env}
+      SYNC_TLS: ${SYNC_TLS:-internal}
+    ports:
+      - "${SYNC_HTTP_PORT:-80}:80"
+      - "${SYNC_HTTPS_PORT:-443}:443"
+      - "${SYNC_HTTPS_PORT:-443}:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./tls:/etc/caddy/tls:ro
+      # A CA interna e os certificados emitidos: perder o volume troca a CA,
+      # e cada cliente precisa confiar na nova.
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      edge:
+        ipv4_address: ${SYNC_PROXY_IP:-172.30.80.10}
+
+  api:
+    build:
+      context: ../..
+      dockerfile: src/MyTaskApp.Server.Api/Dockerfile
+    image: mytaskapp-sync
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      AllowedHosts: ${SYNC_HOST}
+      ForwardedHeaders__KnownProxies__0: ${SYNC_PROXY_IP:-172.30.80.10}
+      Database__MigrateOnStartup: "false"
+      Authentication__Google__ClientId: ${GOOGLE_CLIENT_ID:?defina GOOGLE_CLIENT_ID em prod.env}
+      Sync__SigningCertificate__Path: /run/secrets/signing.pfx
+      Sync__EncryptionCertificate__Path: /run/secrets/encryption.pfx
+    secrets:
+      - source: connection_string
+        target: ConnectionStrings__Sync
+      - source: google_client_secret
+        target: Authentication__Google__ClientSecret
+      - source: signing_pfx
+        target: signing.pfx
+      - source: signing_password
+        target: Sync__SigningCertificate__Password
+      - source: encryption_pfx
+        target: encryption.pfx
+      - source: encryption_password
+        target: Sync__EncryptionCertificate__Password
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - edge
+      - db
+
+  # As migrations (bundle da imagem), antes de subir uma versao nova.
+  migrate:
+    image: mytaskapp-sync
+    profiles: ["migrate"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c", "exec /app/efbundle --connection \"$$(cat /run/secrets/ConnectionStrings__Sync)\""]
+    secrets:
+      - source: connection_string
+        target: ConnectionStrings__Sync
+    networks:
+      - db
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: mytaskapp_sync
+      POSTGRES_USER: mytaskapp
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    volumes:
+      - sync-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mytaskapp -d mytaskapp_sync"]
+      interval: 5s
+      retries: 10
+    networks:
+      - db
+
+networks:
+  # A rede do proxy e da API. O IP do proxy e fixo: e ele que vai no KnownProxies.
+  edge:
+    ipam:
+      config:
+        - subnet: ${SYNC_EDGE_SUBNET:-172.30.80.0/24}
+  # A rede do banco: sem saida para fora e sem porta publicada.
+  db:
+    internal: true
+
+secrets:
+  postgres_password:
+    file: ./secrets/postgres_password
+  connection_string:
+    file: ./secrets/connection_string
+  google_client_secret:
+    file: ./secrets/google_client_secret
+  signing_pfx:
+    file: ./secrets/signing.pfx
+  signing_password:
+    file: ./secrets/signing_password
+  encryption_pfx:
+    file: ./secrets/encryption.pfx
+  encryption_password:
+    file: ./secrets/encryption_password
+
+volumes:
+  sync-data:
+  caddy-data:
+  caddy-config:
