@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+	<!--
+		allowBackup="false": o backup automático levaria o device.json (o id deste
+		dispositivo na sincronização) e o cofre do SecureStorage para outro
+		celular, e os dois falariam em nome do mesmo dispositivo (ADR-067).
+	-->
+	<application
+		android:allowBackup="false"
+		android:fullBackupContent="false"
+		android:icon="@mipmap/appicon"
+		android:roundIcon="@mipmap/appicon_round"
+		android:supportsRtl="true"
+		android:networkSecurityConfig="@xml/network_security_config" />
+
+	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+	<uses-permission android:name="android.permission.INTERNET" />
+
+	<!-- O login abre no Custom Tabs do navegador do sistema (WebAuthenticator). -->
+	<queries>
+		<intent>
+			<action android:name="android.support.customtabs.action.CustomTabsService" />
+		</intent>
+	</queries>
+</manifest>

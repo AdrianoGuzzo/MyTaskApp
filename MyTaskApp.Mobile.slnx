@@ -1,0 +1,17 @@
+<Solution>
+  <Folder Name="/mobile/">
+    <Project Path="src/MyTaskApp.Mobile/MyTaskApp.Mobile.csproj" />
+    <Project Path="src/MyTaskApp.Mobile.Core/MyTaskApp.Mobile.Core.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/MyTaskApp.Application/MyTaskApp.Application.csproj" />
+    <Project Path="src/MyTaskApp.Domain/MyTaskApp.Domain.csproj" />
+    <Project Path="src/MyTaskApp.Infrastructure/MyTaskApp.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/shared/">
+    <Project Path="src/MyTaskApp.Sync.Contracts/MyTaskApp.Sync.Contracts.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MyTaskApp.Mobile.Core.Tests/MyTaskApp.Mobile.Core.Tests.csproj" />
+  </Folder>
+</Solution>

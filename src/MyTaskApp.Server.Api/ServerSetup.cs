@@ -49,7 +49,7 @@ public static class ServerSetup
         services.AddServerInfrastructure(connectionString);
         services.AddScoped<IAuthorizationRevoker, OpenIddictAuthorizationRevoker>();
         services.AddScoped<DeviceGate>();
-        services.AddHostedService<DesktopClientSeeder>();
+        services.AddHostedService<PublicClientSeeder>();
         services.AddHostedService<ProcessedOperationsPruner>();
 
         services.AddDataProtection()

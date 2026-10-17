@@ -6,6 +6,9 @@
     <Project Path="src/MyTaskApp.Infrastructure/MyTaskApp.Infrastructure.csproj" />
     <Project Path="src/MyTaskApp.Mcp/MyTaskApp.Mcp.csproj" />
   </Folder>
+  <Folder Name="/mobile/">
+    <Project Path="src/MyTaskApp.Mobile.Core/MyTaskApp.Mobile.Core.csproj" />
+  </Folder>
   <Folder Name="/shared/">
     <Project Path="src/MyTaskApp.Sync.Contracts/MyTaskApp.Sync.Contracts.csproj" />
   </Folder>
@@ -15,6 +18,7 @@
     <Project Path="tests/MyTaskApp.Domain.Tests/MyTaskApp.Domain.Tests.csproj" />
     <Project Path="tests/MyTaskApp.Infrastructure.Tests/MyTaskApp.Infrastructure.Tests.csproj" />
     <Project Path="tests/MyTaskApp.Mcp.Tests/MyTaskApp.Mcp.Tests.csproj" />
+    <Project Path="tests/MyTaskApp.Mobile.Core.Tests/MyTaskApp.Mobile.Core.Tests.csproj" />
     <Project Path="tests/MyTaskApp.Packaging.Tests/MyTaskApp.Packaging.Tests.csproj" />
     <Project Path="tests/MyTaskApp.Sync.Contracts.Tests/MyTaskApp.Sync.Contracts.Tests.csproj" />
   </Folder>

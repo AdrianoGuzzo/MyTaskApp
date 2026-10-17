@@ -22,6 +22,21 @@ public static class SyncSchema
     /// <summary>O cliente OAuth público do desktop (sem secret; PKCE obrigatório).</summary>
     public const string DesktopClientId = "mytaskapp-desktop";
 
+    /// <summary>
+    /// O cliente OAuth público do celular (ADR-067): também sem secret e com
+    /// PKCE, mas a volta do login é um esquema próprio do app, não o loopback.
+    /// </summary>
+    public const string MobileClientId = "mytaskapp-mobile";
+
+    /// <summary>
+    /// O esquema da volta do login no celular. Em domínio reverso (RFC 8252),
+    /// para não colidir com o de outro app instalado.
+    /// </summary>
+    public const string MobileRedirectScheme = "io.github.adrianoguzzo.mytaskapp";
+
+    /// <summary>O endereço exato de volta do celular; o servidor compara byte a byte.</summary>
+    public const string MobileRedirectUri = MobileRedirectScheme + "://oauth/callback";
+
     /// <summary>A claim e o parâmetro de autorização que carregam o dispositivo.</summary>
     public const string DeviceIdClaim = "device_id";
 

@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:MyTaskApp.Mobile.Core.ViewModels;assembly=MyTaskApp.Mobile.Core"
+             xmlns:pres="clr-namespace:MyTaskApp.Mobile.Core.Presentation;assembly=MyTaskApp.Mobile.Core"
+             xmlns:tasks="clr-namespace:MyTaskApp.Domain.Tasks;assembly=MyTaskApp.Domain"
+             xmlns:deadlines="clr-namespace:MyTaskApp.Domain.Deadlines;assembly=MyTaskApp.Domain"
+             x:Class="MyTaskApp.Mobile.Views.TaskListPage"
+             x:DataType="vm:TaskListViewModel"
+             x:Name="Page"
+             Title="Tarefas">
+
+    <ContentPage.ToolbarItems>
+        <ToolbarItem Text="{Binding Sync.Title, FallbackValue=''}"
+                     Command="{Binding OpenAccountCommand}"
+                     SemanticProperties.Description="Estado da sincronização. Toque para ver a conta." />
+        <ToolbarItem Text="{Binding FiltersLabel}"
+                     Command="{Binding OpenFiltersCommand}"
+                     SemanticProperties.Description="Abrir os filtros" />
+    </ContentPage.ToolbarItems>
+
+    <Grid RowDefinitions="Auto,Auto,*">
+
+        <SearchBar Grid.Row="0"
+                   Margin="8,8,8,0"
+                   Placeholder="Buscar tarefas"
+                   Text="{Binding SearchText}"
+                   SemanticProperties.Description="Buscar no título e na descrição das tarefas" />
+
+        <ScrollView Grid.Row="1" Orientation="Horizontal" HorizontalScrollBarVisibility="Never">
+            <HorizontalStackLayout Spacing="8" Padding="16,8" BindableLayout.ItemsSource="{Binding Presets}">
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="vm:PresetChip">
+                        <Button Style="{StaticResource Chip}"
+                                Text="{Binding Label}"
+                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:TaskListViewModel}}, x:DataType=vm:TaskListViewModel, Path=SelectPresetCommand}"
+                                CommandParameter="{Binding Value}">
+                            <Button.Triggers>
+                                <DataTrigger TargetType="Button" Binding="{Binding IsSelected}" Value="True">
+                                    <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource AccentLight}, Dark={StaticResource AccentDark}}" />
+                                    <Setter Property="TextColor" Value="{StaticResource OnAccent}" />
+                                    <Setter Property="BorderColor" Value="Transparent" />
+                                </DataTrigger>
+                            </Button.Triggers>
+                        </Button>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </HorizontalStackLayout>
+        </ScrollView>
+
+        <RefreshView Grid.Row="2"
+                     IsRefreshing="{Binding IsRefreshing}"
+                     Command="{Binding RefreshCommand}">
+            <CollectionView ItemsSource="{Binding Tasks}"
+                            SelectionMode="None"
+                            RemainingItemsThreshold="10"
+                            RemainingItemsThresholdReachedCommand="{Binding LoadMoreCommand}"
+                            Margin="0,0,0,0">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="pres:TaskRow">
+                        <SwipeView Margin="12,4">
+                            <SwipeView.LeftItems>
+                                <SwipeItems Mode="Execute">
+                                    <SwipeItem Text="{Binding ToggleLabel}"
+                                               IsVisible="{Binding CanToggle}"
+                                               BackgroundColor="{AppThemeBinding Light={StaticResource SuccessLight}, Dark={StaticResource SuccessDark}}"
+                                               Command="{Binding Source={RelativeSource AncestorType={x:Type vm:TaskListViewModel}}, x:DataType=vm:TaskListViewModel, Path=ToggleCommand}"
+                                               CommandParameter="{Binding .}" />
+                                </SwipeItems>
+                            </SwipeView.LeftItems>
+
+                            <Border Style="{StaticResource Card}"
+                                    Padding="0"
+                                    SemanticProperties.Description="{Binding AccessibleDescription}">
+                                <Border.GestureRecognizers>
+                                    <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type vm:TaskListViewModel}}, x:DataType=vm:TaskListViewModel, Path=OpenCommand}"
+                                                          CommandParameter="{Binding .}" />
+                                </Border.GestureRecognizers>
+
+                                <Grid ColumnDefinitions="4,*,Auto" ColumnSpacing="0">
+                                    <!-- A faixa da prioridade: gatilhos com AppThemeBinding acompanham a troca de tema. -->
+                                    <BoxView Grid.Column="0" Color="Transparent">
+                                        <BoxView.Triggers>
+                                            <DataTrigger TargetType="BoxView" Binding="{Binding Priority}" Value="{x:Static tasks:TaskPriority.Urgent}">
+                                                <Setter Property="Color" Value="{AppThemeBinding Light={StaticResource DangerLight}, Dark={StaticResource DangerDark}}" />
+                                            </DataTrigger>
+                                            <DataTrigger TargetType="BoxView" Binding="{Binding Priority}" Value="{x:Static tasks:TaskPriority.High}">
+                                                <Setter Property="Color" Value="{AppThemeBinding Light={StaticResource CautionLight}, Dark={StaticResource CautionDark}}" />
+                                            </DataTrigger>
+                                        </BoxView.Triggers>
+                                    </BoxView>
+
+                                    <VerticalStackLayout Grid.Column="1" Padding="12,10" Spacing="4">
+                                        <Label Text="{Binding Title}"
+                                               FontSize="16"
+                                               FontAttributes="Bold"
+                                               LineBreakMode="TailTruncation"
+                                               MaxLines="2"
+                                               TextDecorations="{Binding IsCompleted, Converter={StaticResource Strike}}" />
+
+                                        <Label Text="{Binding Summary}"
+                                               Style="{StaticResource Muted}"
+                                               MaxLines="1"
+                                               LineBreakMode="TailTruncation"
+                                               IsVisible="{Binding Summary, Converter={StaticResource HasValue}}" />
+
+                                        <HorizontalStackLayout Spacing="10">
+                                            <Label Text="{Binding StatusLabel}" Style="{StaticResource Muted}" />
+                                            <Label Text="{Binding PriorityLabel}" Style="{StaticResource Muted}" />
+                                            <Label Text="{Binding Origin}" Style="{StaticResource Muted}" />
+                                        </HorizontalStackLayout>
+
+                                        <Label Text="{Binding DeadlineLabel}"
+                                               Style="{StaticResource Muted}"
+                                               IsVisible="{Binding DeadlineLabel, Converter={StaticResource HasValue}}">
+                                            <Label.Triggers>
+                                                <DataTrigger TargetType="Label" Binding="{Binding DeadlineSeverity}" Value="{x:Static deadlines:DeadlineSeverity.Attention}">
+                                                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource CautionLight}, Dark={StaticResource CautionDark}}" />
+                                                </DataTrigger>
+                                                <DataTrigger TargetType="Label" Binding="{Binding DeadlineSeverity}" Value="{x:Static deadlines:DeadlineSeverity.Urgent}">
+                                                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource DangerLight}, Dark={StaticResource DangerDark}}" />
+                                                </DataTrigger>
+                                                <DataTrigger TargetType="Label" Binding="{Binding DeadlineSeverity}" Value="{x:Static deadlines:DeadlineSeverity.Overdue}">
+                                                    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource DangerLight}, Dark={StaticResource DangerDark}}" />
+                                                </DataTrigger>
+                                            </Label.Triggers>
+                                        </Label>
+
+                                        <FlexLayout Wrap="Wrap"
+                                                    BindableLayout.ItemsSource="{Binding Tags}"
+                                                    IsVisible="{Binding Tags, Converter={StaticResource HasValue}}">
+                                            <BindableLayout.ItemTemplate>
+                                                <DataTemplate x:DataType="pres:TagChip">
+                                                    <Border Margin="0,2,6,0"
+                                                            Padding="8,2"
+                                                            StrokeThickness="1"
+                                                            Stroke="{Binding ColorHex, Converter={StaticResource HexColor}}"
+                                                            StrokeShape="RoundRectangle 9">
+                                                        <Label Text="{Binding Name}"
+                                                               FontSize="12"
+                                                               TextColor="{Binding ColorHex, Converter={StaticResource HexColor}}" />
+                                                    </Border>
+                                                </DataTemplate>
+                                            </BindableLayout.ItemTemplate>
+                                        </FlexLayout>
+                                    </VerticalStackLayout>
+
+                                    <Button Grid.Column="2"
+                                            Style="{StaticResource Secondary}"
+                                            Margin="0,0,8,0"
+                                            VerticalOptions="Center"
+                                            Text="{Binding ToggleLabel}"
+                                            FontSize="13"
+                                            IsVisible="{Binding CanToggle}"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:TaskListViewModel}}, x:DataType=vm:TaskListViewModel, Path=ToggleCommand}"
+                                            CommandParameter="{Binding .}" />
+                                </Grid>
+                            </Border>
+                        </SwipeView>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+
+                <CollectionView.Footer>
+                    <VerticalStackLayout Padding="16,8,16,96">
+                        <ActivityIndicator IsRunning="{Binding IsLoadingMore}" IsVisible="{Binding IsLoadingMore}" HeightRequest="24" />
+                        <Label Text="Há muitas tarefas com estes filtros. Refine a busca para ver as mais antigas."
+                               Style="{StaticResource Muted}"
+                               HorizontalTextAlignment="Center"
+                               IsVisible="{Binding IsTruncated}" />
+                    </VerticalStackLayout>
+                </CollectionView.Footer>
+            </CollectionView>
+        </RefreshView>
+
+        <!-- Os estados da lista: cada um com a sua frase e o que fazer. -->
+        <ActivityIndicator Grid.Row="2" IsRunning="{Binding IsLoading}" IsVisible="{Binding IsLoading}" VerticalOptions="Center" />
+
+        <VerticalStackLayout Grid.Row="2" IsVisible="{Binding IsEmpty}" VerticalOptions="Center" Padding="32" Spacing="12">
+            <Label Text="Nenhuma tarefa ainda" Style="{StaticResource Title}" HorizontalTextAlignment="Center" />
+            <Label Text="Crie a primeira com o botão +, ou entre com sua conta para trazer as tarefas dos outros dispositivos."
+                   Style="{StaticResource Muted}"
+                   HorizontalTextAlignment="Center" />
+            <Button Text="Entrar com sua conta" Style="{StaticResource Secondary}" Command="{Binding OpenAccountCommand}" HorizontalOptions="Center" />
+        </VerticalStackLayout>
+
+        <VerticalStackLayout Grid.Row="2" IsVisible="{Binding IsNoResults}" VerticalOptions="Center" Padding="32" Spacing="12">
+            <Label Text="Nada com estes filtros" Style="{StaticResource Title}" HorizontalTextAlignment="Center" />
+            <Label Text="Nenhuma tarefa combina com a busca e os filtros escolhidos." Style="{StaticResource Muted}" HorizontalTextAlignment="Center" />
+            <Button Text="Limpar filtros" Command="{Binding ClearFiltersCommand}" HorizontalOptions="Center" />
+        </VerticalStackLayout>
+
+        <VerticalStackLayout Grid.Row="2" IsVisible="{Binding IsError}" VerticalOptions="Center" Padding="32" Spacing="12">
+            <Label Text="Não deu para mostrar as tarefas" Style="{StaticResource Title}" HorizontalTextAlignment="Center" />
+            <Label Text="{Binding ErrorMessage}" Style="{StaticResource Error}" HorizontalTextAlignment="Center" />
+            <Button Text="Tentar de novo" Command="{Binding LoadCommand}" HorizontalOptions="Center" />
+        </VerticalStackLayout>
+
+        <Button Grid.Row="2"
+                Text="+"
+                FontSize="28"
+                Padding="0"
+                WidthRequest="60"
+                HeightRequest="60"
+                CornerRadius="30"
+                HorizontalOptions="End"
+                VerticalOptions="End"
+                Margin="0,0,20,24"
+                Command="{Binding NewTaskCommand}"
+                SemanticProperties.Description="Nova tarefa" />
+    </Grid>
+</ContentPage>

@@ -27,6 +27,32 @@ internal static class PlacementPredicates
             || devices.Contains(task.PlacementDeviceId.Value));
     }
 
+    /// <summary>
+    /// A origem exata (ADR-067): só as compartilhadas — legado e "só no
+    /// computador" sem computador inclusos, como em <see cref="DevicePlacement.From"/> —
+    /// ou só as que moram nestes dispositivos.
+    /// </summary>
+    public static IQueryable<TaskItem> PlacedAt(this IQueryable<TaskItem> tasks, PlacementMatch? origin)
+    {
+        if (origin is null)
+        {
+            return tasks;
+        }
+
+        if (origin.SharedOnly)
+        {
+            return tasks.Where(task => task.PlacementKind == null
+                || task.PlacementKind == PlacementKind.Everywhere
+                || task.PlacementDeviceId == null);
+        }
+
+        var devices = origin.DeviceIds.ToArray();
+
+        return tasks.Where(task => task.PlacementKind == PlacementKind.Device
+            && task.PlacementDeviceId != null
+            && devices.Contains(task.PlacementDeviceId.Value));
+    }
+
     public static IQueryable<Tag> VisibleIn(this IQueryable<Tag> tags, PlacementFilter placement)
     {
         if (placement.DeviceIds is not { } ids)

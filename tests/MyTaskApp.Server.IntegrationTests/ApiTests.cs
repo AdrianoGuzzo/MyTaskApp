@@ -106,6 +106,71 @@ public sealed class ApiTests(PostgresFixture postgres) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ThePhoneLogsInThroughItsOwnClient_AndComesBackByTheAppScheme()
+    {
+        var session = await _api.LoginMobileAsync("ana", deviceName: "Pixel da Ana");
+
+        var me = await session.GetAsync<MeResponse>(ApiRoutes.Me);
+
+        me.Device!.DeviceId.Should().Be(session.DeviceId);
+        me.Device.Nickname.Should().Be("Pixel da Ana");
+        (await session.WorkspaceAsync()).Should().Be(await (await _api.LoginAsync("ana")).WorkspaceAsync(), "celular e desktop da mesma pessoa caem no mesmo workspace");
+    }
+
+    [Fact]
+    public async Task ThePhoneClient_NeverReturnsToTheLoopback()
+    {
+        var authorize = () => _api.AuthorizeAsync("ana", Guid.CreateVersion7(), clientId: SyncSchema.MobileClientId);
+
+        await authorize.Should().ThrowAsync<OAuthRefusedException>();
+    }
+
+    [Fact]
+    public async Task TheDesktopClient_NeverReturnsToTheAppScheme()
+    {
+        var authorize = () => _api.AuthorizeAsync("ana", Guid.CreateVersion7(), redirectUri: SyncSchema.MobileRedirectUri);
+
+        await authorize.Should().ThrowAsync<OAuthRefusedException>();
+    }
+
+    [Fact]
+    public async Task APhoneCode_IsWorthlessInTheDesktopClient()
+    {
+        var (code, verifier) = await _api.AuthorizeAsync("ana", Guid.CreateVersion7(), redirectUri: SyncSchema.MobileRedirectUri, clientId: SyncSchema.MobileClientId);
+
+        var exchange = () => _api.ExchangeAsync(code, verifier, SyncSchema.MobileRedirectUri, SyncSchema.DesktopClientId);
+
+        await exchange.Should().ThrowAsync<OAuthRefusedException>();
+    }
+
+    [Fact]
+    public async Task ThePhoneRefreshRotates_AndOnlyWorksForThePhoneClient()
+    {
+        var session = await _api.LoginMobileAsync("ana");
+
+        var asDesktop = () => _api.RefreshAsync(session.Tokens.RefreshToken, SyncSchema.DesktopClientId);
+        await asDesktop.Should().ThrowAsync<OAuthRefusedException>();
+
+        var renewed = await _api.RefreshAsync(session.Tokens.RefreshToken, SyncSchema.MobileClientId);
+
+        renewed.RefreshToken.Should().NotBe(session.Tokens.RefreshToken);
+        session.Tokens = renewed;
+        (await session.GetAsync<MeResponse>(ApiRoutes.Me)).Device!.DeviceId.Should().Be(session.DeviceId);
+    }
+
+    [Fact]
+    public async Task AConfiguredPhoneRedirect_IsAcceptedToo()
+    {
+        const string other = "io.github.adrianoguzzo.mytaskapp.dev://oauth/callback";
+        await using var api = await CreateApiAsync(new() { ["Sync:MobileRedirectUris:1"] = other });
+
+        var (code, verifier) = await api.AuthorizeAsync("ana", Guid.CreateVersion7(), redirectUri: other, clientId: SyncSchema.MobileClientId);
+        var tokens = await api.ExchangeAsync(code, verifier, other, SyncSchema.MobileClientId);
+
+        tokens.AccessToken.Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
     public async Task ARefreshGivesNewTokens_AndTheOldRefreshTokenStopsWorking()
     {
         var session = await _api.LoginAsync("ana");

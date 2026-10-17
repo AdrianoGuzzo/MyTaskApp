@@ -17,7 +17,9 @@ internal sealed class TaskSearchQuery(MyTaskAppDbContext context) : ITaskSearchQ
         TaskSearchCriteria criteria,
         CancellationToken cancellationToken = default)
     {
-        var tasks = context.Tasks.AsNoTracking().VisibleIn(criteria.Placement ?? PlacementFilter.All);
+        var tasks = context.Tasks.AsNoTracking()
+            .VisibleIn(criteria.Placement ?? PlacementFilter.All)
+            .PlacedAt(criteria.Origin);
 
         // A lixeira vence o arquivo, e o arquivo vence a conclusão — a mesma
         // precedência de TaskItem.Lifecycle e de ChecklistArchiveQuery.
