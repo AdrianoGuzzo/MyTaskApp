@@ -4,7 +4,7 @@
 #   dotnet run --project src/MyTaskApp.Server.Api        (ambiente Development)
 #
 # Ou tudo em conteiner, com o cliente Google em variaveis do shell:
-#   GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... docker compose -f deploy/sync-server/docker-compose.yml up -d
+#   GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... SYNC_ALLOWED_EMAIL=voce@gmail.com docker compose -f deploy/sync-server/docker-compose.yml up -d
 #
 # Senha de desenvolvimento, so para esta maquina. Para servir a rede, o
 # docker-compose.prod.yml: Production, TLS no Caddy e segredos em arquivo (ADR-070).
@@ -42,6 +42,8 @@ services:
       Database__MigrateOnStartup: "true"
       Authentication__Google__ClientId: ${GOOGLE_CLIENT_ID:-}
       Authentication__Google__ClientSecret: ${GOOGLE_CLIENT_SECRET:-}
+      # Sem ninguem na lista, ninguem entra (ADR-068).
+      Sync__Registration__AllowedEmails__0: ${SYNC_ALLOWED_EMAIL:-}
     ports:
       - "127.0.0.1:8080:8080"
 

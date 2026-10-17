@@ -31,6 +31,9 @@ internal sealed class ApiFactory(
     string environment = ServerSetup.TestingEnvironment)
     : WebApplicationFactory<Program>
 {
+    /// <summary>Quem entra quando o teste não mexe em <c>Sync:Registration</c> (ADR-068).</summary>
+    public static readonly string[] AllowedSubjects = ["ana", "bia", "google-1"];
+
     public CapturingLoggerProvider Logs { get; } = new();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -43,6 +46,15 @@ internal sealed class ApiFactory(
         builder.UseSetting("Sync:RateLimits:SyncPerMinute", "1000");
         builder.UseSetting("Sync:RateLimits:SyncBurst", "1000");
         builder.UseSetting("Sync:RateLimits:ApiPerMinute", "1000");
+
+        // A lista do teste substitui a padrão inteira: somar índices deixaria "ana" lá dentro.
+        if (settings?.Keys.Any(key => key.StartsWith("Sync:Registration:", StringComparison.Ordinal)) != true)
+        {
+            for (var index = 0; index < AllowedSubjects.Length; index++)
+            {
+                builder.UseSetting($"Sync:Registration:AllowedSubjects:{index}", AllowedSubjects[index]);
+            }
+        }
 
         foreach (var (key, value) in settings ?? new Dictionary<string, string?>())
         {
@@ -83,7 +95,9 @@ internal sealed class ApiFactory(
         string deviceName = "PC-TESTE",
         string redirectUri = DesktopSession.RedirectUri,
         bool withPkce = true,
-        string clientId = SyncSchema.DesktopClientId)
+        string clientId = SyncSchema.DesktopClientId,
+        bool emailVerified = true,
+        HttpClient? browser = null)
     {
         var verifier = Base64Url(RandomNumberGenerator.GetBytes(32));
         var challenge = Base64Url(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
@@ -106,7 +120,7 @@ internal sealed class ApiFactory(
             query["code_challenge_method"] = "S256";
         }
 
-        var callback = await FollowToCallbackAsync(googleSubject, "/connect/authorize?" + Encode(query));
+        var callback = await FollowToCallbackAsync(googleSubject, "/connect/authorize?" + Encode(query), emailVerified, browser);
         var parameters = Parse(callback.Query);
 
         parameters.GetValueOrDefault("state").Should().Be(state, "o state volta intacto");
@@ -119,11 +133,24 @@ internal sealed class ApiFactory(
         return (code, verifier);
     }
 
-    /// <summary>O navegador: segue os redirects até a volta para o loopback do desktop ou para o esquema do celular.</summary>
-    public async Task<Uri> FollowToCallbackAsync(string googleSubject, string start)
+    /// <summary>Um navegador com cookies, que o "Google" reconhece como <paramref name="googleSubject"/>.</summary>
+    public HttpClient Browser(string googleSubject, bool emailVerified = true)
     {
-        using var browser = CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = true });
+        var browser = CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = true });
         browser.DefaultRequestHeaders.Add(FakeGoogleHandler.SubjectHeader, googleSubject);
+        browser.DefaultRequestHeaders.Add(FakeGoogleHandler.EmailVerifiedHeader, emailVerified ? "true" : "false");
+        return browser;
+    }
+
+    /// <summary>
+    /// O navegador: segue os redirects até a volta para o loopback do desktop ou
+    /// para o esquema do celular. Com <paramref name="browser"/>, reaproveita a
+    /// sessão que ele já tem no servidor.
+    /// </summary>
+    public async Task<Uri> FollowToCallbackAsync(string googleSubject, string start, bool emailVerified = true, HttpClient? browser = null)
+    {
+        using var owned = browser is null ? Browser(googleSubject, emailVerified) : null;
+        browser ??= owned!;
 
         var next = start;
 
@@ -133,7 +160,7 @@ internal sealed class ApiFactory(
 
             if (response.StatusCode is not (HttpStatusCode.Redirect or HttpStatusCode.Found or HttpStatusCode.SeeOther))
             {
-                throw new OAuthRefusedException(response.StatusCode.ToString(), await response.Content.ReadAsStringAsync());
+                throw new OAuthRefusedException(response.StatusCode.ToString(), await response.Content.ReadAsStringAsync(), response.StatusCode);
             }
 
             var location = response.Headers.Location!;
@@ -233,10 +260,15 @@ internal sealed class ApiFactory(
 
 internal sealed record TokenSet(string AccessToken, string RefreshToken, int ExpiresIn);
 
-internal sealed class OAuthRefusedException(string? error, string? description)
+internal sealed class OAuthRefusedException(string? error, string? description, HttpStatusCode? status = null)
     : Exception($"{error}: {description}")
 {
     public string? Error { get; } = error;
+
+    public string? Description { get; } = description;
+
+    /// <summary>Quando a recusa foi uma página do servidor, e não a volta para o cliente.</summary>
+    public HttpStatusCode? Status { get; } = status;
 }
 
 /// <summary>Um desktop conectado: o id do dispositivo e os tokens.</summary>
@@ -283,11 +315,17 @@ internal sealed class DesktopSession(ApiFactory api, Guid deviceId, TokenSet tok
     }
 }
 
-/// <summary>O "Google" dos testes: o desafio já volta com a pessoa do cabeçalho autenticada.</summary>
+/// <summary>
+/// O "Google" dos testes: o desafio já volta com a pessoa do cabeçalho
+/// autenticada, com e-mail <c>{sub}@gmail.com</c>, verificado a menos que o
+/// cabeçalho <see cref="EmailVerifiedHeader"/> diga "false".
+/// </summary>
 internal sealed class FakeGoogleHandler(IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder)
     : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
 {
     public const string SubjectHeader = "X-Test-Google-Subject";
+
+    public const string EmailVerifiedHeader = "X-Test-Google-Email-Verified";
 
     protected override Task<AuthenticateResult> HandleAuthenticateAsync() => Task.FromResult(AuthenticateResult.NoResult());
 
@@ -301,6 +339,7 @@ internal sealed class FakeGoogleHandler(IOptionsMonitor<AuthenticationSchemeOpti
                 new Claim(ClaimTypes.NameIdentifier, subject),
                 new Claim(ClaimTypes.Email, $"{subject}@gmail.com"),
                 new Claim(ClaimTypes.Name, $"Pessoa {subject}"),
+                new Claim(AccountEndpoints.EmailVerifiedClaim, Request.Headers[EmailVerifiedHeader].ToString() == "false" ? "false" : "true"),
             ],
             Scheme.Name);
 

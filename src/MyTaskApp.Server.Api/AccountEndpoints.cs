@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using MyTaskApp.Server.Infrastructure.Persistence;
+using MyTaskApp.Sync.Contracts;
 
 namespace MyTaskApp.Server.Api;
 
@@ -16,6 +17,9 @@ namespace MyTaskApp.Server.Api;
 internal static class AccountEndpoints
 {
     public const string ExternalProvider = "Google";
+
+    /// <summary>"true" quando o Google diz que o e-mail da conta é verificado (ADR-068).</summary>
+    public const string EmailVerifiedClaim = "email_verified";
 
     public static void MapAccountEndpoints(this IEndpointRouteBuilder app)
     {
@@ -38,9 +42,10 @@ internal static class AccountEndpoints
     }
 
     /// <summary>
-    /// A volta do Google: acha ou cria a conta pelo login externo, garante o
-    /// workspace pessoal e abre a sessão. O e-mail do Google é só exibição;
-    /// a identidade é o par (provedor, id) do Google.
+    /// A volta do Google: confere a lista de quem pode entrar (ADR-068), acha
+    /// ou cria a conta pelo login externo, garante o workspace pessoal e abre a
+    /// sessão. A identidade é o par (provedor, id) do Google; o e-mail só abre
+    /// a lista se for verificado.
     /// </summary>
     private static async Task<IResult> ExternalCallbackAsync(
         string? returnUrl,
@@ -48,6 +53,7 @@ internal static class AccountEndpoints
         SignInManager<ApplicationUser> signIn,
         UserManager<ApplicationUser> users,
         WorkspaceProvisioner workspaces,
+        SyncServerOptions options,
         TimeProvider timeProvider,
         ILoggerFactory loggers,
         CancellationToken cancellationToken)
@@ -60,17 +66,31 @@ internal static class AccountEndpoints
             return Results.Problem("O login não foi concluído. Volte ao MyTaskApp e tente de novo.", statusCode: StatusCodes.Status400BadRequest);
         }
 
+        var email = info.Principal.FindFirstValue(ClaimTypes.Email);
+        var emailVerified = bool.TryParse(info.Principal.FindFirstValue(EmailVerifiedClaim), out var verified) && verified;
+
+        // Antes de achar ou criar: fora da lista, nem conta, nem workspace, nem sessão.
+        if (!options.Registration.Allows([info.ProviderKey], email, emailVerified))
+        {
+            await context.SignOutAsync(IdentityConstants.ExternalScheme);
+            logger.LogWarning("SyncRegistrationRefused {Provider} {Subject} {EmailVerified}", info.LoginProvider, info.ProviderKey, emailVerified);
+
+            return Results.Problem(
+                "Esta conta Google não tem acesso a este servidor. Peça a quem o administra para incluí-la.",
+                statusCode: StatusCodes.Status403Forbidden,
+                extensions: new Dictionary<string, object?> { ["code"] = SyncErrorCodes.RegistrationClosed });
+        }
+
         var user = await users.FindByLoginAsync(info.LoginProvider, info.ProviderKey);
 
         if (user is null)
         {
-            var email = info.Principal.FindFirstValue(ClaimTypes.Email);
             user = new ApplicationUser
             {
                 Id = Guid.CreateVersion7(),
                 UserName = $"{info.LoginProvider.ToLowerInvariant()}-{Guid.NewGuid():N}",
                 Email = email,
-                EmailConfirmed = email is not null,
+                EmailConfirmed = emailVerified,
                 DisplayName = info.Principal.FindFirstValue(ClaimTypes.Name) ?? email ?? "Usuário",
                 CreatedAt = timeProvider.GetUtcNow(),
             };
@@ -86,12 +106,32 @@ internal static class AccountEndpoints
 
             logger.LogInformation("SyncAccountCreated {UserId}", user.Id);
         }
+        else if (user.Email != email || user.EmailConfirmed != emailVerified)
+        {
+            // O /connect/token confere a lista pelo que está gravado: fica igual ao que o Google disse agora.
+            user.Email = email;
+            user.EmailConfirmed = emailVerified;
+            await users.UpdateAsync(user);
+        }
 
         await workspaces.EnsurePersonalAsync(user.Id, cancellationToken);
         await context.SignOutAsync(IdentityConstants.ExternalScheme);
         await signIn.SignInAsync(user, isPersistent: false);
 
         return Results.LocalRedirect(IsLocal(returnUrl) ? returnUrl! : "/");
+    }
+
+    /// <summary>
+    /// A conta que já existe continua na lista? Pelo que está gravado: o
+    /// <c>sub</c> de cada login do Google e o e-mail, se verificado.
+    /// </summary>
+    internal static async Task<bool> IsAllowedAsync(UserManager<ApplicationUser> users, ApplicationUser user, RegistrationOptions registration)
+    {
+        var subjects = (await users.GetLoginsAsync(user))
+            .Where(login => login.LoginProvider == ExternalProvider)
+            .Select(login => login.ProviderKey);
+
+        return registration.Allows(subjects, user.Email, user.EmailConfirmed);
     }
 
     /// <summary>Um formulário com o token antiforgery: sair também é uma ação que outro site não pode disparar.</summary>
