@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+	Só HTTPS para a rede. A exceção é o loopback do próprio aparelho: no
+	desenvolvimento, "adb reverse tcp:5280 tcp:5280" leva o localhost:5280 do
+	celular ao servidor de sincronização no computador, e nada passa em claro
+	pela rede. O app recusa HTTP fora do loopback de qualquer jeito (SyncOptions).
+-->
+<network-security-config>
+	<base-config cleartextTrafficPermitted="false" />
+	<domain-config cleartextTrafficPermitted="true">
+		<domain includeSubdomains="false">localhost</domain>
+		<domain includeSubdomains="false">127.0.0.1</domain>
+	</domain-config>
+</network-security-config>

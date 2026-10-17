@@ -274,6 +274,20 @@ um app atualizado sobe a versão do contrato, ele refaz a primeira conexão.
 - O refresh token fica no cofre do sistema (DPAPI). O access token fica só na
   memória.
 
+### O celular
+
+O app do celular ([`mobile.md`](mobile.md), ADR-067) é mais um dispositivo:
+entra com a mesma conta, aparece na lista de dispositivos e sincroniza pelo
+mesmo ciclo — só em primeiro plano. Diferenças:
+
+- a lista dele é de **todos** os dispositivos, com um filtro "Origem" exato
+  (compartilhadas, este celular, ou um computador);
+- tarefa criada no celular nasce **compartilhada**, e aparece na visão padrão
+  de todo computador;
+- o DeviceId fica na pasta de dados do app, fora do backup do sistema, e o
+  refresh token no Keystore/Keychain;
+- no desktop, o celular aparece em "Enviar para…" como mais um computador.
+
 ## Limitações conhecidas
 
 - **A mesma tarefa criada nos dois computadores antes da primeira sincronização

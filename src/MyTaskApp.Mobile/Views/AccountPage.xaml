@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:MyTaskApp.Mobile.Core.ViewModels;assembly=MyTaskApp.Mobile.Core"
+             x:Class="MyTaskApp.Mobile.Views.AccountPage"
+             x:DataType="vm:AccountViewModel"
+             Title="Conta">
+
+    <RefreshView Command="{Binding LoadCommand}" IsRefreshing="{Binding IsRefreshing}">
+        <ScrollView>
+            <VerticalStackLayout Padding="16" Spacing="8">
+
+                <Border Style="{StaticResource Card}">
+                    <VerticalStackLayout Spacing="4">
+                        <Label Text="{Binding Badge.Title, FallbackValue=''}" FontSize="18" FontAttributes="Bold" />
+                        <Label Text="{Binding Badge.Detail, FallbackValue=''}" Style="{StaticResource Muted}" />
+                        <Label Text="{Binding LastSync}" Style="{StaticResource Muted}" IsVisible="{Binding IsLinked}" />
+                        <Label Text="{Binding Counts}" Style="{StaticResource Muted}" IsVisible="{Binding IsLinked}" />
+                    </VerticalStackLayout>
+                </Border>
+
+                <VerticalStackLayout IsVisible="{Binding IsLinked}" Spacing="8">
+                    <Label Text="Conta" Style="{StaticResource Section}" />
+                    <Label Text="{Binding UserName}" FontAttributes="Bold" />
+                    <Label Text="{Binding UserEmail}" Style="{StaticResource Muted}" />
+                    <Label Text="{Binding Server, StringFormat='Servidor: {0}'}" Style="{StaticResource Muted}" />
+
+                    <Button Text="Sincronizar agora" Command="{Binding SyncNowCommand}" Margin="0,8,0,0" />
+                    <Button Text="Pausar a sincronização" Style="{StaticResource Secondary}" Command="{Binding TogglePauseCommand}" IsVisible="{Binding IsPaused, Converter={StaticResource Not}}" />
+                    <Button Text="Retomar a sincronização" Command="{Binding TogglePauseCommand}" IsVisible="{Binding IsPaused}" />
+                </VerticalStackLayout>
+
+                <VerticalStackLayout IsVisible="{Binding CanConnect}" Spacing="8">
+                    <Label Text="Entre com a mesma conta do computador para ver as tarefas de todos os dispositivos." Style="{StaticResource Muted}" />
+                    <Button Text="Entrar com sua conta" Command="{Binding ConnectCommand}" />
+                </VerticalStackLayout>
+
+                <Label Text="Não há servidor de sincronização nesta versão: as tarefas ficam só neste celular."
+                       Style="{StaticResource Muted}"
+                       IsVisible="{Binding IsAvailable, Converter={StaticResource Not}}" />
+
+                <!-- Conflitos: o valor deste celular perdeu para o servidor. -->
+                <Label Text="Conflitos" Style="{StaticResource Section}" IsVisible="{Binding HasConflicts}" />
+                <VerticalStackLayout BindableLayout.ItemsSource="{Binding Conflicts}" Spacing="8">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ConflictLine">
+                            <Border Style="{StaticResource Card}">
+                                <VerticalStackLayout Spacing="4">
+                                    <Label Text="{Binding What}" FontAttributes="Bold" />
+                                    <Label Text="{Binding Mine, StringFormat='Neste celular: {0}'}" Style="{StaticResource Muted}" />
+                                    <Label Text="{Binding Theirs, StringFormat='No servidor: {0}'}" Style="{StaticResource Muted}" />
+                                    <HorizontalStackLayout Spacing="8">
+                                        <Button Text="Reaplicar o meu"
+                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:AccountViewModel}}, x:DataType=vm:AccountViewModel, Path=ReapplyConflictCommand}"
+                                                CommandParameter="{Binding .}" />
+                                        <Button Text="Manter o do servidor"
+                                                Style="{StaticResource Secondary}"
+                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:AccountViewModel}}, x:DataType=vm:AccountViewModel, Path=KeepServerCommand}"
+                                                CommandParameter="{Binding .}" />
+                                    </HorizontalStackLayout>
+                                </VerticalStackLayout>
+                            </Border>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </VerticalStackLayout>
+
+                <!-- Recusadas: o servidor não aceitou; tentar de novo ou descartar. -->
+                <Label Text="Alterações recusadas" Style="{StaticResource Section}" IsVisible="{Binding HasFailures}" />
+                <VerticalStackLayout BindableLayout.ItemsSource="{Binding Failures}" Spacing="8">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="vm:FailureLine">
+                            <Border Style="{StaticResource Card}">
+                                <VerticalStackLayout Spacing="4">
+                                    <Label Text="{Binding What}" FontAttributes="Bold" />
+                                    <Label Text="{Binding Error}" Style="{StaticResource Error}" />
+                                    <HorizontalStackLayout Spacing="8">
+                                        <Button Text="Tentar de novo"
+                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:AccountViewModel}}, x:DataType=vm:AccountViewModel, Path=RetryFailureCommand}"
+                                                CommandParameter="{Binding .}" />
+                                        <Button Text="Descartar"
+                                                Style="{StaticResource Destructive}"
+                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:AccountViewModel}}, x:DataType=vm:AccountViewModel, Path=DiscardFailureCommand}"
+                                                CommandParameter="{Binding .}" />
+                                    </HorizontalStackLayout>
+                                </VerticalStackLayout>
+                            </Border>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </VerticalStackLayout>
+
+                <VerticalStackLayout IsVisible="{Binding IsLinked}" Spacing="8">
+                    <Label Text="Dispositivos" Style="{StaticResource Section}" />
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding Devices}" Spacing="6">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="vm:DeviceLine">
+                                <VerticalStackLayout>
+                                    <Label Text="{Binding Nickname}" FontAttributes="Bold" />
+                                    <Label Text="{Binding Detail}" Style="{StaticResource Muted}" />
+                                </VerticalStackLayout>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                    <Button Text="Renomear este celular" Style="{StaticResource Secondary}" Command="{Binding RenameThisDeviceCommand}" />
+                    <Button Text="Sair da conta" Style="{StaticResource Destructive}" Command="{Binding SignOutCommand}" Margin="0,16,0,24" />
+                </VerticalStackLayout>
+            </VerticalStackLayout>
+        </ScrollView>
+    </RefreshView>
+</ContentPage>

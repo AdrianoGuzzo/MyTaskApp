@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:MyTaskApp.Mobile.Core.ViewModels;assembly=MyTaskApp.Mobile.Core"
+             x:Class="MyTaskApp.Mobile.Views.TaskFormPage"
+             x:DataType="vm:TaskFormViewModel"
+             Title="{Binding PageTitle}">
+
+    <Shell.BackButtonBehavior>
+        <BackButtonBehavior Command="{Binding CloseCommand}" />
+    </Shell.BackButtonBehavior>
+
+    <ContentPage.ToolbarItems>
+        <ToolbarItem Text="Salvar" Command="{Binding SaveCommand}" IsEnabled="{Binding CanSave}" />
+    </ContentPage.ToolbarItems>
+
+    <ScrollView>
+        <VerticalStackLayout Padding="16" Spacing="6">
+
+            <Label Text="{Binding LoadError}" Style="{StaticResource Error}" IsVisible="{Binding LoadError, Converter={StaticResource HasValue}}" />
+
+            <Label Text="Título" Style="{StaticResource Section}" />
+            <Entry Text="{Binding Title}"
+                   Placeholder="O que precisa ser feito"
+                   MaxLength="250"
+                   ReturnType="Next"
+                   SemanticProperties.Description="Título da tarefa, obrigatório" />
+            <Grid ColumnDefinitions="*,Auto">
+                <Label Text="{Binding VisibleTitleError}" Style="{StaticResource Error}" IsVisible="{Binding VisibleTitleError, Converter={StaticResource HasValue}}" />
+                <Label Grid.Column="1" Text="{Binding TitleCount}" Style="{StaticResource Muted}" />
+            </Grid>
+
+            <Label Text="Descrição" Style="{StaticResource Section}" />
+            <Editor Text="{Binding Notes}"
+                    Placeholder="Detalhes, links, próximos passos"
+                    AutoSize="TextChanges"
+                    MinimumHeightRequest="96" />
+
+            <Label Text="Prioridade" Style="{StaticResource Section}" />
+            <Picker ItemsSource="{Binding PriorityOptions}"
+                    SelectedItem="{Binding Priority}"
+                    ItemDisplayBinding="{Binding Label, x:DataType=vm:PriorityChoice}"
+                    Title="Prioridade" />
+
+            <VerticalStackLayout IsVisible="{Binding ShowsStatus}">
+                <Label Text="Status" Style="{StaticResource Section}" />
+                <Picker ItemsSource="{Binding StatusOptions}"
+                        SelectedItem="{Binding Status}"
+                        ItemDisplayBinding="{Binding Label, x:DataType=vm:StatusChoice}"
+                        Title="Status" />
+            </VerticalStackLayout>
+
+            <VerticalStackLayout IsVisible="{Binding ShowsOrigin}">
+                <Label Text="Origem (onde aparece)" Style="{StaticResource Section}" />
+                <Picker ItemsSource="{Binding OriginOptions}"
+                        SelectedItem="{Binding Origin}"
+                        Title="Origem" />
+            </VerticalStackLayout>
+
+            <Label Text="Prazo" Style="{StaticResource Section}" />
+            <Grid ColumnDefinitions="*,Auto">
+                <Label Text="Tem prazo" VerticalOptions="Center" />
+                <Switch Grid.Column="1" IsToggled="{Binding HasDeadline}" SemanticProperties.Description="Tem prazo" />
+            </Grid>
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="12" IsVisible="{Binding HasDeadline}">
+                <DatePicker Date="{Binding DeadlineDate}" Format="dd/MM/yyyy" />
+                <TimePicker Grid.Column="1" Time="{Binding DeadlineTime}" Format="HH:mm" />
+            </Grid>
+
+            <Label Text="Etiquetas" Style="{StaticResource Section}" />
+            <Label Text="Nenhuma etiqueta cadastrada. Elas são criadas no computador."
+                   Style="{StaticResource Muted}"
+                   IsVisible="{Binding HasTags, Converter={StaticResource Not}}" />
+            <FlexLayout Wrap="Wrap" BindableLayout.ItemsSource="{Binding TagChoices}" Margin="0,0,0,32">
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="vm:TagOption">
+                        <Button Style="{StaticResource Chip}"
+                                Margin="0,4,8,0"
+                                Text="{Binding Label}"
+                                TextColor="{Binding ColorHex, Converter={StaticResource HexColor}}"
+                                BorderColor="{Binding ColorHex, Converter={StaticResource HexColor}}"
+                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:TaskFormViewModel}}, x:DataType=vm:TaskFormViewModel, Path=ToggleTagCommand}"
+                                CommandParameter="{Binding .}">
+                            <Button.Triggers>
+                                <DataTrigger TargetType="Button" Binding="{Binding IsSelected}" Value="True">
+                                    <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource AccentSoftLight}, Dark={StaticResource AccentSoftDark}}" />
+                                    <Setter Property="BorderWidth" Value="2" />
+                                    <Setter Property="FontAttributes" Value="Bold" />
+                                </DataTrigger>
+                            </Button.Triggers>
+                        </Button>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </FlexLayout>
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>
