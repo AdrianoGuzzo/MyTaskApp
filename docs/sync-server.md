@@ -79,8 +79,10 @@ o da variável, e o conteúdo é o valor. É o que o compose de produção usa (
 | `Sync__DeviceCacheLifetime` | não | padrão `00:00:30` |
 | `Sync__ProcessedOperationRetention` | não | padrão `90.00:00:00`, tempo de guarda dos resultados para o reenvio |
 | `Sync__RateLimits__AuthPerMinute` | não | login e token, por IP. Padrão 20 |
-| `Sync__RateLimits__SyncPerMinute` / `SyncBurst` | não | push, pull e fetch, por usuário. Padrão 60 por minuto, rajada de 20 |
-| `Sync__RateLimits__ApiPerMinute` | não | o resto da API, por usuário. Padrão 120 |
+| `Sync__RateLimits__SyncPerMinute` / `SyncBurst` | não | push, pull e fetch, por usuário (o `sub` do token). Padrão 60 por minuto, rajada de 20 |
+| `Sync__RateLimits__ApiPerMinute` | não | o resto da API, por usuário (o `sub` do token). Padrão 120 |
+| `Sync__RateLimits__AnonymousPerMinute` | não | rotas da API sem token válido (o que vai dar 401), por IP. Padrão 30 |
+| `Sync__RateLimits__GlobalPerMinute` | não | teto de proteção de qualquer rota, por IP, somado aos outros. Padrão 600; `0` desliga |
 | `Serilog__MinimumLevel__Default` | não | padrão `Information`. OpenIddict, ASP.NET e EF ficam em `Warning` |
 
 Sem o cliente do Google, o servidor sobe, mas ninguém entra.
@@ -294,6 +296,7 @@ privilégio. Em produção, o servidor:
 - recusa OAuth sem TLS (o OpenIddict exige);
 - marca cookies como `Secure`, `HttpOnly` e `SameSite=Lax` (Strict no antiforgery);
 - limita o corpo a 1 MB e o push a 100 operações;
+- limita a taxa de requisições (veja abaixo);
 - não grava token, código, cabeçalho nem corpo no log. É uma linha por
   requisição: método, caminho sem query, status e tempo.
 
@@ -419,6 +422,29 @@ Para trocar os PFX, veja "Rotação dos PFX" (§2).
 `Sync__Registration__*` **antes** de subir a versão nova. Sem a lista, quem já
 estava conectado perde a renovação do token em até 15 minutos, e conectar de
 novo é recusado com `registration_closed`.
+
+### Rate limit
+
+Os limites contam por minuto e respondem 429 com `Retry-After` e
+`"code": "rate_limited"`. São dois estágios (ADR-069):
+
+- **Borda, por IP, antes de qualquer autenticação:** o teto global
+  (`GlobalPerMinute`, em toda rota, inclusive `/health` e `/connect/revoke`) e
+  o login (`AuthPerMinute`, em `/account/*`, `/connect/authorize` e
+  `/connect/token`). Fica antes porque o OpenIddict responde os erros de
+  `/connect/*` dentro da autenticação, e eles também contam.
+- **API, depois de validar o Bearer:** com token válido, a cota é da conta (o
+  `sub`), e não do IP: duas contas atrás do mesmo NAT não dividem a cota. Sem
+  token, ou com token inválido, vencido ou revogado, a requisição cai no balde
+  anônimo do IP (`AnonymousPerMinute`) e não gasta a cota de nenhuma conta.
+
+**Atrás de proxy, o `ForwardedHeaders__KnownProxies__0` é obrigatório.** Sem
+ele, todo cliente aparece com o IP do proxy, e os limites por IP (global, login
+e anônimo) viram um só para o servidor inteiro. Os limites por conta continuam
+valendo.
+
+Os contadores ficam na memória de cada instância: com duas réplicas, cada uma
+conta o seu.
 
 ### O desktop de release
 

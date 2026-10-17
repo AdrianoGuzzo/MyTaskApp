@@ -46,6 +46,8 @@ internal sealed class ApiFactory(
         builder.UseSetting("Sync:RateLimits:SyncPerMinute", "1000");
         builder.UseSetting("Sync:RateLimits:SyncBurst", "1000");
         builder.UseSetting("Sync:RateLimits:ApiPerMinute", "1000");
+        builder.UseSetting("Sync:RateLimits:AnonymousPerMinute", "1000");
+        builder.UseSetting("Sync:RateLimits:GlobalPerMinute", "100000");
 
         // A lista do teste substitui a padrão inteira: somar índices deixaria "ana" lá dentro.
         if (settings?.Keys.Any(key => key.StartsWith("Sync:Registration:", StringComparison.Ordinal)) != true)
