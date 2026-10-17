@@ -40,6 +40,8 @@ internal sealed class ApiFactory(string connectionString, IReadOnlyDictionary<st
         builder.UseSetting("Sync:RateLimits:SyncPerMinute", "1000");
         builder.UseSetting("Sync:RateLimits:SyncBurst", "1000");
         builder.UseSetting("Sync:RateLimits:ApiPerMinute", "1000");
+        builder.UseSetting("Sync:RateLimits:AnonymousPerMinute", "1000");
+        builder.UseSetting("Sync:RateLimits:GlobalPerMinute", "100000");
 
         foreach (var (key, value) in settings ?? new Dictionary<string, string?>())
         {

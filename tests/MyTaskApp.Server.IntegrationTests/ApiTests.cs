@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -332,6 +333,105 @@ public sealed class ApiTests(PostgresFixture postgres) : IAsyncLifetime
         }
 
         var limited = statuses.Last();
+        limited.StatusCode.Should().Be(HttpStatusCode.TooManyRequests);
+        limited.Headers.RetryAfter.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task TheApiQuotaIsPerAccount_EvenFromTheSameAddress()
+    {
+        await using var api = await CreateApiAsync(new() { ["Sync:RateLimits:ApiPerMinute"] = "3" });
+        var ana = await api.LoginAsync("ana");
+        var bia = await api.LoginAsync("bia");
+        using var anaClient = ana.Api();
+        using var biaClient = bia.Api();
+
+        for (var call = 0; call < 3; call++)
+        {
+            (await anaClient.GetAsync(ApiRoutes.Me, Ct)).StatusCode.Should().Be(HttpStatusCode.OK);
+        }
+
+        using var limited = await anaClient.GetAsync(ApiRoutes.Me, Ct);
+        using var other = await biaClient.GetAsync(ApiRoutes.Me, Ct);
+
+        limited.StatusCode.Should().Be(HttpStatusCode.TooManyRequests);
+        limited.Headers.RetryAfter.Should().NotBeNull();
+        (await limited.Content.ReadAsStringAsync(Ct)).Should().Contain("rate_limited");
+        other.StatusCode.Should().Be(HttpStatusCode.OK, "a cota da ana não é a da bia");
+    }
+
+    [Fact]
+    public async Task TheSyncBucketIsPerAccount_EvenFromTheSameAddress()
+    {
+        await using var api = await CreateApiAsync(new()
+        {
+            ["Sync:RateLimits:SyncBurst"] = "2",
+            ["Sync:RateLimits:SyncPerMinute"] = "1",
+        });
+        var ana = await api.LoginAsync("ana");
+        var bia = await api.LoginAsync("bia");
+        var anaPull = ApiRoutes.Pull(await ana.WorkspaceAsync());
+        var biaPull = ApiRoutes.Pull(await bia.WorkspaceAsync());
+        using var anaClient = ana.Api();
+        using var biaClient = bia.Api();
+
+        for (var call = 0; call < 2; call++)
+        {
+            (await anaClient.GetAsync(anaPull, Ct)).StatusCode.Should().Be(HttpStatusCode.OK);
+        }
+
+        using var limited = await anaClient.GetAsync(anaPull, Ct);
+        using var other = await biaClient.GetAsync(biaPull, Ct);
+
+        limited.StatusCode.Should().Be(HttpStatusCode.TooManyRequests);
+        limited.Headers.RetryAfter.Should().NotBeNull();
+        other.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task RequestsWithoutAValidToken_HaveTheirOwnQuota_AndDoNotSpendTheAccounts()
+    {
+        await using var api = await CreateApiAsync(new()
+        {
+            ["Sync:RateLimits:ApiPerMinute"] = "3",
+            ["Sync:RateLimits:AnonymousPerMinute"] = "2",
+        });
+        var ana = await api.LoginAsync("ana");
+        using var anonymous = api.CreateClient();
+        using var forged = api.CreateClient();
+        forged.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "nao-e-um-token");
+
+        using var withoutToken = await anonymous.GetAsync(ApiRoutes.Me, Ct);
+        using var withBadToken = await forged.GetAsync(ApiRoutes.Me, Ct);
+        using var overAnonymous = await anonymous.GetAsync(ApiRoutes.Me, Ct);
+
+        withoutToken.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        withBadToken.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        overAnonymous.StatusCode.Should().Be(HttpStatusCode.TooManyRequests, "o balde anônimo é do IP, separado");
+
+        using var anaClient = ana.Api();
+
+        for (var call = 0; call < 3; call++)
+        {
+            (await anaClient.GetAsync(ApiRoutes.Me, Ct)).StatusCode.Should().Be(HttpStatusCode.OK, "os 401 não gastaram a cota da ana");
+        }
+
+        (await anaClient.GetAsync(ApiRoutes.Me, Ct)).StatusCode.Should().Be(HttpStatusCode.TooManyRequests);
+    }
+
+    [Fact]
+    public async Task TheGlobalCeiling_LimitsAnyRoute_PerAddress()
+    {
+        await using var api = await CreateApiAsync(new() { ["Sync:RateLimits:GlobalPerMinute"] = "3" });
+        using var client = api.CreateClient();
+
+        for (var call = 0; call < 3; call++)
+        {
+            (await client.GetAsync("/health", Ct)).StatusCode.Should().Be(HttpStatusCode.OK);
+        }
+
+        using var limited = await client.GetAsync("/health", Ct);
+
         limited.StatusCode.Should().Be(HttpStatusCode.TooManyRequests);
         limited.Headers.RetryAfter.Should().NotBeNull();
     }

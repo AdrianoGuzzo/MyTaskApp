@@ -52,19 +52,25 @@ public sealed class SyncServerOptions
     public CertificateOptions? EncryptionCertificate { get; set; }
 }
 
-/// <summary>Os limites por janela de um minuto (ADR-061).</summary>
+/// <summary>Os limites por janela de um minuto (ADR-061, ADR-069).</summary>
 public sealed class RateLimitOptions
 {
     /// <summary>Login e emissão de token, por IP.</summary>
     public int AuthPerMinute { get; set; } = 20;
 
-    /// <summary>Push, pull e fetch, por usuário.</summary>
+    /// <summary>Push, pull e fetch, pelo <c>sub</c> do token.</summary>
     public int SyncPerMinute { get; set; } = 60;
 
     public int SyncBurst { get; set; } = 20;
 
-    /// <summary>O resto da API, por usuário.</summary>
+    /// <summary>O resto da API, pelo <c>sub</c> do token.</summary>
     public int ApiPerMinute { get; set; } = 120;
+
+    /// <summary>Rotas da API sem token válido, por IP: não gastam a cota de ninguém.</summary>
+    public int AnonymousPerMinute { get; set; } = 30;
+
+    /// <summary>Teto de proteção de qualquer rota, por IP, somado aos outros. Zero desliga.</summary>
+    public int GlobalPerMinute { get; set; } = 600;
 }
 
 /// <summary>Um certificado PFX: por arquivo, ou em base64 numa variável de ambiente.</summary>
