@@ -47,6 +47,8 @@ public sealed class SyncServerOptions
 
     public RateLimitOptions RateLimits { get; set; } = new();
 
+    public RegistrationOptions Registration { get; set; } = new();
+
     public CertificateOptions? SigningCertificate { get; set; }
 
     public CertificateOptions? EncryptionCertificate { get; set; }
@@ -65,6 +67,25 @@ public sealed class RateLimitOptions
 
     /// <summary>O resto da API, por usuário.</summary>
     public int ApiPerMinute { get; set; } = 120;
+}
+
+/// <summary>
+/// Quem pode usar o servidor (ADR-068): a conta Google precisa estar numa das
+/// listas. As duas vazias = ninguém entra; o servidor nunca abre por esquecimento.
+/// </summary>
+public sealed class RegistrationOptions
+{
+    /// <summary>E-mails aceitos, sem diferença de maiúsculas. Só vale o e-mail que o Google diz verificado.</summary>
+    public string[] AllowedEmails { get; set; } = [];
+
+    /// <summary>O <c>sub</c> do Google: o id que não muda, nem quando o e-mail da conta muda.</summary>
+    public string[] AllowedSubjects { get; set; } = [];
+
+    public bool Allows(IEnumerable<string> subjects, string? email, bool emailVerified) =>
+        subjects.Any(subject => AllowedSubjects.Any(allowed => string.Equals(allowed.Trim(), subject, StringComparison.Ordinal)))
+        || (emailVerified
+            && !string.IsNullOrWhiteSpace(email)
+            && AllowedEmails.Any(allowed => string.Equals(allowed.Trim(), email.Trim(), StringComparison.OrdinalIgnoreCase)));
 }
 
 /// <summary>Um certificado PFX: por arquivo, ou em base64 numa variável de ambiente.</summary>
