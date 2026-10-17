@@ -1,6 +1,8 @@
 using System.Net;
 using System.Security.Cryptography.X509Certificates;
+using System.Text.Json;
 using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -141,6 +143,13 @@ public static class ServerSetup
                 options.SignInScheme = IdentityConstants.ExternalScheme;
                 options.AdditionalAuthorizationParameters["prompt"] = "select_account";
                 options.SaveTokens = false;
+
+                // O e-mail só abre a lista de cadastro se verificado (ADR-068). O userinfo v3 chama de email_verified; o v2, de verified_email.
+                options.ClaimActions.MapCustomJson(AccountEndpoints.EmailVerifiedClaim, user =>
+                    (user.TryGetProperty("email_verified", out var flag) || user.TryGetProperty("verified_email", out flag))
+                    && (flag.ValueKind == JsonValueKind.True || (flag.ValueKind == JsonValueKind.String && flag.GetString() == "true"))
+                        ? "true"
+                        : "false");
             });
         }
 

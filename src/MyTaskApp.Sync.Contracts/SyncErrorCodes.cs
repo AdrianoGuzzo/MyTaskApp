@@ -55,6 +55,9 @@ public static class SyncErrorCodes
 
     public const string DeviceRevoked = "device_revoked";
 
+    /// <summary>A conta Google não está na lista de quem pode usar o servidor (ADR-068).</summary>
+    public const string RegistrationClosed = "registration_closed";
+
     public const string CursorAhead = "cursor_ahead";
 
     public const string UpgradeRequired = "upgrade_required";
