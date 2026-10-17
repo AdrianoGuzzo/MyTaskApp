@@ -330,8 +330,11 @@ da API exposta além do proxy.
 
    ```bash
    cd deploy/sync-server
-   cp prod.env.example prod.env    # SYNC_HOST, SYNC_TLS e GOOGLE_CLIENT_ID
+   cp prod.env.example prod.env    # SYNC_HOST, SYNC_TLS, GOOGLE_CLIENT_ID e SYNC_ALLOWED_EMAIL
    ```
+
+   O `SYNC_ALLOWED_EMAIL` é a conta que pode entrar ("Quem pode entrar", §2).
+   Sem ele, o compose não sobe.
 
    Se `172.30.80.0/24` colidir com outra rede do host, troque
    `SYNC_EDGE_SUBNET` e `SYNC_PROXY_IP` juntos.

@@ -52,6 +52,8 @@ services:
       ForwardedHeaders__KnownProxies__0: ${SYNC_PROXY_IP:-172.30.80.10}
       Database__MigrateOnStartup: "false"
       Authentication__Google__ClientId: ${GOOGLE_CLIENT_ID:?defina GOOGLE_CLIENT_ID em prod.env}
+      # Sem ninguem na lista, ninguem entra (ADR-068). Mais contas: __1, __2, ...
+      Sync__Registration__AllowedEmails__0: ${SYNC_ALLOWED_EMAIL:?defina SYNC_ALLOWED_EMAIL em prod.env}
       Sync__SigningCertificate__Path: /run/secrets/signing.pfx
       Sync__EncryptionCertificate__Path: /run/secrets/encryption.pfx
     secrets:
