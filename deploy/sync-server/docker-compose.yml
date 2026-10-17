@@ -6,8 +6,8 @@
 # Ou tudo em conteiner, com o cliente Google em variaveis do shell:
 #   GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... SYNC_ALLOWED_EMAIL=voce@gmail.com docker compose -f deploy/sync-server/docker-compose.yml up -d
 #
-# Senha de desenvolvimento, so para esta maquina. Em producao, a connection
-# string vem de um segredo do provedor, e o servidor fica atras de TLS.
+# Senha de desenvolvimento, so para esta maquina. Para servir a rede, o
+# docker-compose.prod.yml: Production, TLS no Caddy e segredos em arquivo (ADR-070).
 
 services:
   postgres:
@@ -35,6 +35,9 @@ services:
         condition: service_healthy
     environment:
       ASPNETCORE_ENVIRONMENT: Development
+      # Development so escuta no loopback (ADR-070). No conteiner ele escuta em
+      # todas as interfaces, mas a porta so e publicada no 127.0.0.1 abaixo.
+      Development__AllowNonLoopback: "true"
       ConnectionStrings__Sync: "Host=postgres;Database=mytaskapp_sync;Username=mytaskapp;Password=mytaskapp"
       Database__MigrateOnStartup: "true"
       Authentication__Google__ClientId: ${GOOGLE_CLIENT_ID:-}

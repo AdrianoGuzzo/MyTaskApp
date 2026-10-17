@@ -1,0 +1,10 @@
+# O contexto da imagem do servidor de sincronização (src/MyTaskApp.Server.Api/Dockerfile).
+# O bin/obj de quem compilou fora do contêiner traz o restore de outra máquina,
+# e os segredos do compose de produção (ADR-070) não vão nem para o contexto.
+**/bin/
+**/obj/
+.git/
+.vs/
+deploy/sync-server/secrets/
+deploy/sync-server/tls/
+deploy/sync-server/prod.env

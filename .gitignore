@@ -9,3 +9,8 @@ obj/
 TestResults/
 logs/
 artifacts/
+
+# Os segredos e a configuração do servidor de sincronização em produção (ADR-070).
+deploy/sync-server/secrets/
+deploy/sync-server/tls/
+deploy/sync-server/prod.env

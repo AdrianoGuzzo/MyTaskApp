@@ -1,0 +1,15 @@
+# O proxy TLS do servidor de sincronizacao (ADR-070, docs/sync-server.md secao 5).
+#
+# SYNC_HOST: o nome (ou IP) que os clientes usam, sem esquema nem porta.
+# SYNC_TLS:  "internal" (CA propria do Caddy, para a LAN), um e-mail (Let's
+#            Encrypt, para um dominio publico) ou "<cert.pem> <key.pem>" de
+#            /etc/caddy/tls (um certificado seu).
+#
+# HTTP vira HTTPS com 308. O HSTS vem da API, que so o manda quando enxerga
+# X-Forwarded-Proto=https deste proxy (ForwardedHeaders__KnownProxies__0).
+
+{$SYNC_HOST} {
+	tls {$SYNC_TLS:internal}
+
+	reverse_proxy api:8080
+}
