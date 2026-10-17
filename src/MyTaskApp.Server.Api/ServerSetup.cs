@@ -89,8 +89,16 @@ public static class ServerSetup
         }
 
         app.UseRouting();
-        app.UseRateLimiter();
+
+        // O rate limit tem dois estágios (ADR-069). A borda, por IP, vem antes do
+        // UseAuthentication, porque é dentro dele que o OpenIddict responde os erros
+        // de /connect/*, e eles têm de gastar a cota de login. O da API vem depois,
+        // com o Bearer já validado, e antes do UseAuthorization, para contar também
+        // quem vai levar 401.
+        app.UseRateLimiter(EdgeRateLimits(app.Services.GetRequiredService<SyncServerOptions>().RateLimits));
         app.UseAuthentication();
+        app.Use(IdentifyApiCallerAsync);
+        app.UseRateLimiter();
         app.UseAuthorization();
         app.UseAntiforgery();
 
@@ -246,48 +254,110 @@ public static class ServerSetup
             .RequireAssertion(context => context.User.HasScope(SyncSchema.Scope))));
     }
 
-    private static void AddRateLimits(IServiceCollection services, SyncServerOptions options)
+    private static void AddRateLimits(IServiceCollection services, SyncServerOptions options) =>
+        services.AddRateLimiter(limiter => ApiRateLimits(limiter, options.RateLimits));
+
+    /// <summary>
+    /// A borda, por IP e antes de qualquer autenticação: o teto global de
+    /// proteção e o login. Sincronização e API passam; são do outro estágio.
+    /// </summary>
+    private static RateLimiterOptions EdgeRateLimits(RateLimitOptions limits)
     {
-        services.AddRateLimiter(limiter =>
+        var limiter = new RateLimiterOptions();
+        Reject(limiter);
+
+        if (limits.GlobalPerMinute > 0)
         {
-            limiter.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-            limiter.OnRejected = async (context, cancellationToken) =>
-            {
-                if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
-                {
-                    context.HttpContext.Response.Headers.RetryAfter = ((int)Math.Ceiling(retryAfter.TotalSeconds)).ToString(System.Globalization.CultureInfo.InvariantCulture);
-                }
-
-                await Results.Problem(
-                        title: "Muitas requisições. Tente de novo em instantes.",
-                        statusCode: StatusCodes.Status429TooManyRequests,
-                        extensions: new Dictionary<string, object?> { ["code"] = "rate_limited" })
-                    .ExecuteAsync(context.HttpContext);
-            };
-
-            limiter.AddPolicy(AuthLimiter, context => RateLimitPartition.GetFixedWindowLimiter(
+            limiter.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context => RateLimitPartition.GetFixedWindowLimiter(
                 ClientAddress(context),
-                _ => new FixedWindowRateLimiterOptions { PermitLimit = options.RateLimits.AuthPerMinute, Window = TimeSpan.FromMinutes(1) }));
+                _ => new FixedWindowRateLimiterOptions { PermitLimit = limits.GlobalPerMinute, Window = TimeSpan.FromMinutes(1) }));
+        }
 
-            limiter.AddPolicy(SyncLimiter, context => RateLimitPartition.GetTokenBucketLimiter(
-                UserOrAddress(context),
+        limiter.AddPolicy(AuthLimiter, context => RateLimitPartition.GetFixedWindowLimiter(
+            ClientAddress(context),
+            _ => new FixedWindowRateLimiterOptions { PermitLimit = limits.AuthPerMinute, Window = TimeSpan.FromMinutes(1) }));
+
+        limiter.AddPolicy(SyncLimiter, Unlimited);
+        limiter.AddPolicy(ApiLimiter, Unlimited);
+
+        return limiter;
+    }
+
+    /// <summary>
+    /// A API, pelo <c>sub</c> do Bearer validado. Sem token válido, a
+    /// requisição cai no balde anônimo do IP e não gasta a cota de ninguém. O
+    /// login passa; é da borda.
+    /// </summary>
+    private static void ApiRateLimits(RateLimiterOptions limiter, RateLimitOptions limits)
+    {
+        Reject(limiter);
+
+        limiter.AddPolicy(AuthLimiter, Unlimited);
+
+        limiter.AddPolicy(SyncLimiter, context => ApiSubject(context) is { } subject
+            ? RateLimitPartition.GetTokenBucketLimiter(
+                $"u:{subject}",
                 _ => new TokenBucketRateLimiterOptions
                 {
-                    TokenLimit = options.RateLimits.SyncBurst,
-                    TokensPerPeriod = Math.Max(1, options.RateLimits.SyncPerMinute),
+                    TokenLimit = limits.SyncBurst,
+                    TokensPerPeriod = Math.Max(1, limits.SyncPerMinute),
                     ReplenishmentPeriod = TimeSpan.FromMinutes(1),
-                }));
+                })
+            : AnonymousPartition(context, limits));
 
-            limiter.AddPolicy(ApiLimiter, context => RateLimitPartition.GetFixedWindowLimiter(
-                UserOrAddress(context),
-                _ => new FixedWindowRateLimiterOptions { PermitLimit = options.RateLimits.ApiPerMinute, Window = TimeSpan.FromMinutes(1) }));
-        });
+        limiter.AddPolicy(ApiLimiter, context => ApiSubject(context) is { } subject
+            ? RateLimitPartition.GetFixedWindowLimiter(
+                $"u:{subject}",
+                _ => new FixedWindowRateLimiterOptions { PermitLimit = limits.ApiPerMinute, Window = TimeSpan.FromMinutes(1) })
+            : AnonymousPartition(context, limits));
+    }
+
+    private static void Reject(RateLimiterOptions limiter)
+    {
+        limiter.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+        limiter.OnRejected = async (context, cancellationToken) =>
+        {
+            if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+            {
+                context.HttpContext.Response.Headers.RetryAfter = ((int)Math.Ceiling(retryAfter.TotalSeconds)).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            }
+
+            await Results.Problem(
+                    title: "Muitas requisições. Tente de novo em instantes.",
+                    statusCode: StatusCodes.Status429TooManyRequests,
+                    extensions: new Dictionary<string, object?> { ["code"] = "rate_limited" })
+                .ExecuteAsync(context.HttpContext);
+        };
+    }
+
+    /// <summary>
+    /// O <c>sub</c> do Bearer das rotas da API, validado pelo esquema do
+    /// OpenIddict (assinatura, validade e autorização não revogada). O handler
+    /// guarda o resultado, e a política <see cref="SyncPolicy"/> o reaproveita:
+    /// o token não é validado duas vezes. Token inválido ou ausente fica sem
+    /// <c>sub</c>, e a requisição cai no balde anônimo.
+    /// </summary>
+    private static async Task IdentifyApiCallerAsync(HttpContext context, RequestDelegate next)
+    {
+        if (context.GetEndpoint()?.Metadata.GetMetadata<EnableRateLimitingAttribute>()?.PolicyName is SyncLimiter or ApiLimiter)
+        {
+            var result = await context.AuthenticateAsync(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme);
+            context.Features.Set(new ApiCaller(result.Succeeded ? result.Principal.FindFirst(Claims.Subject)?.Value : null));
+        }
+
+        await next(context);
     }
 
     private static string ClientAddress(HttpContext context) => context.Connection.RemoteIpAddress?.ToString() ?? "desconhecido";
 
-    private static string UserOrAddress(HttpContext context) =>
-        context.User.FindFirst(Claims.Subject)?.Value is { } subject ? $"u:{subject}" : $"ip:{ClientAddress(context)}";
+    private static string? ApiSubject(HttpContext context) => context.Features.Get<ApiCaller>()?.Subject;
+
+    private static RateLimitPartition<string> AnonymousPartition(HttpContext context, RateLimitOptions limits) =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            $"anon:{ClientAddress(context)}",
+            _ => new FixedWindowRateLimiterOptions { PermitLimit = limits.AnonymousPerMinute, Window = TimeSpan.FromMinutes(1) });
+
+    private static RateLimitPartition<string> Unlimited(HttpContext context) => RateLimitPartition.GetNoLimiter(string.Empty);
 
     private static X509Certificate2 LoadCertificate(CertificateOptions? certificate, string purpose)
     {
@@ -304,4 +374,6 @@ public static class ServerSetup
         throw new InvalidOperationException(
             $"Falta o certificado de {purpose} do OpenIddict (Sync__SigningCertificate__Path ou __Base64, e Sync__EncryptionCertificate__…).");
     }
+
+    private sealed record ApiCaller(string? Subject);
 }
