@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.17.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.16.0...v1.17.0) (2026-10-17)
+
+
+### Added
+
+* app do celular em .NET MAUI como mais um dispositivo da sincronização (ADR-067) ([#92](https://github.com/AdrianoGuzzo/MyTaskApp/issues/92)) ([8a8d7fc](https://github.com/AdrianoGuzzo/MyTaskApp/commit/8a8d7fc0f03bccd1eb2470a0e43a2b6f5a9347ee))
+
 ## [1.16.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.15.0...v1.16.0) (2026-10-16)
 
 
