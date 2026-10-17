@@ -59,6 +59,8 @@ para o repositório nem para a imagem.**
 | `ConnectionStrings__Sync` | sim | connection string do PostgreSQL |
 | `Authentication__Google__ClientId` | sim | o ID do cliente do passo 1 |
 | `Authentication__Google__ClientSecret` | sim | a chave secreta do passo 1 |
+| `Sync__Registration__AllowedEmails__0` … | sim, esta ou a de baixo | e-mails das contas Google que podem usar o servidor (ADR-068). Sem diferença de maiúsculas, e só vale e-mail que o Google diz verificado |
+| `Sync__Registration__AllowedSubjects__0` … | sim, esta ou a de cima | o `sub` do Google das contas que podem usar o servidor. Não muda quando o e-mail da conta muda |
 | `Sync__SigningCertificate__Path` ou `__Base64` | em produção | PFX que assina os tokens do OpenIddict |
 | `Sync__SigningCertificate__Password` | se o PFX tiver | senha do PFX |
 | `Sync__EncryptionCertificate__Path` / `__Base64` / `__Password` | em produção | PFX que cifra os tokens |
@@ -79,6 +81,25 @@ para o repositório nem para a imagem.**
 | `Serilog__MinimumLevel__Default` | não | padrão `Information`. OpenIddict, ASP.NET e EF ficam em `Warning` |
 
 Sem o cliente do Google, o servidor sobe, mas ninguém entra.
+
+### Quem pode entrar
+
+O servidor é fechado (ADR-068): só entra a conta Google que está em
+`Sync__Registration__AllowedEmails__*` ou em `Sync__Registration__AllowedSubjects__*`.
+Com as duas listas vazias, **ninguém entra**, e esquecer a variável no deploy não
+abre o servidor.
+
+- Fora da lista, o `/account/external-callback` responde 403 com o código
+  `registration_closed` e não cria conta, workspace nem sessão. O log registra
+  `SyncRegistrationRefused` com o `sub` da conta recusada, que é o valor para
+  `AllowedSubjects` se ela tiver de entrar.
+- O e-mail só conta se o Google disser que é verificado (`email_verified`).
+  Para não depender do e-mail, use o `sub`.
+- Tirar uma conta da lista bloqueia também quem já tem conta: o `/connect/authorize`
+  responde `access_denied` e a renovação no `/connect/token`, `invalid_grant`. O
+  access token em mãos vale até vencer (`Sync__AccessTokenLifetime`, 15 minutos).
+  A lista é lida ao subir: mudou, reinicie. Nada é apagado, e a conta volta
+  com tudo se entrar na lista de novo.
 
 As voltas do desktop padrão continuam valendo mesmo com
 `Sync__DesktopRedirectUris__*` na configuração: a lista configurada **soma** à
@@ -128,6 +149,7 @@ docker compose -f deploy/sync-server/docker-compose.yml up -d postgres
 cd src/MyTaskApp.Server.Api
 dotnet user-secrets set "Authentication:Google:ClientId" "<id>"
 dotnet user-secrets set "Authentication:Google:ClientSecret" "<segredo>"
+dotnet user-secrets set "Sync:Registration:AllowedEmails:0" "<seu e-mail do Google>"
 cd ../..
 
 dotnet run --project src/MyTaskApp.Server.Api --launch-profile http
@@ -140,7 +162,7 @@ aponta para o PostgreSQL do compose.
 Para rodar tudo em contêiner, com a API inclusive:
 
 ```powershell
-$env:GOOGLE_CLIENT_ID = "<id>"; $env:GOOGLE_CLIENT_SECRET = "<segredo>"
+$env:GOOGLE_CLIENT_ID = "<id>"; $env:GOOGLE_CLIENT_SECRET = "<segredo>"; $env:SYNC_ALLOWED_EMAIL = "<seu e-mail do Google>"
 docker compose -f deploy/sync-server/docker-compose.yml --profile api up -d --build
 ```
 
@@ -220,6 +242,11 @@ produção, o servidor:
 desktops. O servidor aceita clientes do `SyncSchema.MinimumClient` para cima, e
 abaixo disso responde 426 ("Atualize o MyTaskApp").
 
+**Vindo de uma versão sem lista de cadastro** (antes do ADR-068): configure
+`Sync__Registration__*` **antes** de subir a versão nova. Sem a lista, quem já
+estava conectado perde a renovação do token em até 15 minutos, e conectar de
+novo é recusado com `registration_closed`.
+
 ### Rate limit
 
 Os limites contam por minuto e respondem 429 com `Retry-After` e
@@ -284,6 +311,10 @@ $env:MYTASKAPP_TEST_SERVER_POSTGRES = "Host=localhost;Port=5432;Username=postgre
 O usuário precisa criar bancos: cada teste cria o seu. Sem Docker e sem a
 variável, os testes **pulam** (é o caso do CI do Windows). No CI, o job
 `server-integration` roda no ubuntu, com Docker.
+
+O `ApiFactory` põe na lista de cadastro os sujeitos `ana`, `bia` e `google-1`. O
+teste que configura `Sync:Registration:*` troca a lista inteira, e o
+`RegistrationTests` cobre a recusa.
 
 Além da API, a suíte tem o ponta a ponta `TwoDeviceSyncTests`: dois desktops
 inteiros sobre SQLite, com login pelo navegador simulado e volta pela porta de
