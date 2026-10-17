@@ -53,6 +53,7 @@ public static class ServerSetup
         services.AddScoped<DeviceGate>();
         services.AddHostedService<PublicClientSeeder>();
         services.AddHostedService<ProcessedOperationsPruner>();
+        services.AddHostedService<DevelopmentLoopbackGuard>();
 
         services.AddDataProtection()
             .SetApplicationName("MyTaskApp.Sync")

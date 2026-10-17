@@ -4,6 +4,10 @@ using Serilog.Events;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Os segredos do compose de produção (ADR-070): um arquivo por chave em
+// /run/secrets, com "__" no lugar de ":" (ConnectionStrings__Sync, …).
+builder.Configuration.AddKeyPerFile("/run/secrets", optional: true);
+
 // Log sem segredo: o caminho da requisição (sem a query), o status e o tempo.
 // O OpenIddict e o ASP.NET ficam em Warning; o detalhe deles traria
 // parâmetros do protocolo para o log. Só o Serilog escreve no console; os
