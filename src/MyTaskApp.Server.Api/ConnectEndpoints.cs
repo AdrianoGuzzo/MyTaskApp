@@ -44,6 +44,7 @@ internal static class ConnectEndpoints
         IOpenIddictTokenManager tokens,
         WorkspaceProvisioner workspaces,
         DeviceGate gate,
+        SyncServerOptions options,
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
@@ -57,6 +58,13 @@ internal static class ConnectEndpoints
             return Results.Challenge(
                 new AuthenticationProperties { RedirectUri = context.Request.PathBase + context.Request.Path + context.Request.QueryString },
                 [IdentityConstants.ApplicationScheme]);
+        }
+
+        // A sessão vive dez minutos: a lista pode ter mudado desde o callback (ADR-068).
+        if (!await AccountEndpoints.IsAllowedAsync(users, user, options.Registration))
+        {
+            await context.SignOutAsync(IdentityConstants.ApplicationScheme);
+            return Forbid(Errors.AccessDenied, "Esta conta Google não tem acesso a este servidor.");
         }
 
         if (!Guid.TryParse((string?)request[SyncSchema.DeviceIdClaim], out var deviceId) || deviceId == Guid.Empty)
@@ -136,12 +144,14 @@ internal static class ConnectEndpoints
     /// <summary>
     /// A troca do código e a renovação. O OpenIddict já conferiu PKCE,
     /// redirect e a cadeia do refresh token (reuso revoga a cadeia); aqui só
-    /// se confere que a conta e o dispositivo continuam valendo.
+    /// se confere que a conta (ainda na lista, ADR-068) e o dispositivo
+    /// continuam valendo.
     /// </summary>
     private static async Task<IResult> TokenAsync(
         HttpContext context,
         UserManager<ApplicationUser> users,
         DeviceGate gate,
+        SyncServerOptions options,
         CancellationToken cancellationToken)
     {
         var request = context.GetOpenIddictServerRequest()
@@ -161,9 +171,14 @@ internal static class ConnectEndpoints
             return Forbid(Errors.InvalidGrant, "Autorização inválida.");
         }
 
-        if (await users.FindByIdAsync(userId.ToString()) is null)
+        if (await users.FindByIdAsync(userId.ToString()) is not { } user)
         {
             return Forbid(Errors.InvalidGrant, "A conta não existe mais.");
+        }
+
+        if (!await AccountEndpoints.IsAllowedAsync(users, user, options.Registration))
+        {
+            return Forbid(Errors.InvalidGrant, "Esta conta Google não tem acesso a este servidor.");
         }
 
         if (!await gate.IsActiveAsync(new SyncCaller(userId, deviceId), cancellationToken))
