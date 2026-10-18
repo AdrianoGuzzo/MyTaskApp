@@ -36,6 +36,12 @@ namespace MyTaskApp.Server.Application;
 /// atrasada dele é recusada. Só o vínculo puro (tarefa↔etiqueta) revive:
 /// marcar de novo a mesma etiqueta é um vínculo novo com o mesmo id.
 /// </para>
+/// <para>
+/// <b>A versão base é do servidor</b> (SEC-017). Ela decide o conflito de
+/// campo e o renascimento depois da exclusão, então só vale uma que o servidor
+/// deu: de 0 até a versão atual, e 0 para o que ele nunca viu. Fora disso, a
+/// operação é recusada com <c>invalid_base_version</c>.
+/// </para>
 /// </remarks>
 public sealed class PushProcessor(
     ISyncStore store,
@@ -152,6 +158,19 @@ public sealed class PushProcessor(
         }
 
         var current = await store.FindAsync(batch.WorkspaceId, operation.EntityType, operation.EntityId, cancellationToken);
+        var serverVersion = current?.Version ?? 0;
+
+        // A versão base é a que o dispositivo conhecia, e só o servidor dá versão:
+        // nunca negativa nem à frente da atual. Inventada, venceria todo conflito
+        // e reviveria o que outro excluiu. Entidade que o servidor nunca viu só aceita 0.
+        if (operation.BaseVersion < 0 || operation.BaseVersion > serverVersion)
+        {
+            return Rejected(
+                operation,
+                serverVersion,
+                SyncErrorCodes.InvalidBaseVersion,
+                $"Versão base {operation.BaseVersion} inválida; a do servidor é {serverVersion}.");
+        }
 
         if (operation.Kind == SyncOperationKind.Delete)
         {
@@ -161,7 +180,8 @@ public sealed class PushProcessor(
         // Quem já viu a exclusão (a versão base alcança a do tombstone) e manda a
         // entidade inteira está recriando de propósito: o comando que voltou a ser
         // compartilhado depois de excluído em outro computador (ADR-066). Quem não
-        // viu continua recebendo "excluído em outro dispositivo".
+        // viu continua recebendo "excluído em outro dispositivo". Alcançar é igualar:
+        // à frente do tombstone, a trava acima já recusou.
         var revive = current is { IsDeleted: true }
             && (definition.IsAssociation || operation.BaseVersion >= current.Version);
 

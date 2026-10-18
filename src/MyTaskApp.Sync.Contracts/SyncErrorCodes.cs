@@ -51,6 +51,13 @@ public static class SyncErrorCodes
     /// </summary>
     public const string QuotaExceeded = "quota_exceeded";
 
+    /// <summary>
+    /// A versão base é negativa ou está à frente da do servidor: não é uma que
+    /// ele deu. Permanente. Depois de um backup do servidor restaurado, o
+    /// desktop baixa a versão que conhecia para a que voltou na recusa.
+    /// </summary>
+    public const string InvalidBaseVersion = "invalid_base_version";
+
     // ---- Campo recusado (push) ----
 
     /// <summary>Outro dispositivo mudou o mesmo campo antes: vale o do servidor.</summary>

@@ -324,6 +324,11 @@ internal sealed class SyncLocalStore(
         Outcome outcome,
         CancellationToken cancellationToken)
     {
+        if (error.Code == SyncErrorCodes.InvalidBaseVersion)
+        {
+            await AdoptServerVersionAsync(operation, state, result.Version, cancellationToken);
+        }
+
         switch (error.Code)
         {
             case SyncErrorCodes.ParentMissing:
@@ -362,6 +367,35 @@ internal sealed class SyncLocalStore(
                 outcome.Failed++;
                 logger.LogWarning("SyncOperationFailed {EntityType} {Code}", operation.EntityType, error.Code);
                 return;
+        }
+    }
+
+    /// <summary>
+    /// A versão base estava à frente da do servidor (SEC-017): só acontece com um
+    /// backup do servidor restaurado. Vale a versão que voltou na recusa, para o
+    /// "Tentar de novo" e as próximas edições saírem com uma base que ele aceita.
+    /// A operação continua falhada: alguém decide se reenvia.
+    /// </summary>
+    private async Task AdoptServerVersionAsync(
+        SyncOutboxRow operation,
+        SyncEntityStateRow? state,
+        long serverVersion,
+        CancellationToken cancellationToken)
+    {
+        if (state is not null && state.ServerVersion > serverVersion)
+        {
+            state.ServerVersion = serverVersion;
+        }
+
+        // A que já saiu é reenviada com o mesmo id e precisa do mesmo conteúdo: recebe a própria recusa e se corrige nela.
+        var ahead = await context.SyncOutbox
+            .Where(row => row.EntityType == operation.EntityType && row.EntityId == operation.EntityId && row.BaseVersion > serverVersion
+                && (!row.Attempted || row.OpId == operation.OpId))
+            .ToListAsync(cancellationToken);
+
+        foreach (var row in ahead)
+        {
+            row.BaseVersion = serverVersion;
         }
     }
 

@@ -5715,6 +5715,20 @@ pendente mantém o valor local.
 - **Exclusão não ressuscita.** Excluir vira tombstone, propagado pelas
   referências. Update em tombstone volta `entity_deleted`. Só associações
   (tarefa ↔ etiqueta, com id UUIDv5 determinístico) podem reviver.
+- **Versão base do servidor (SEC-017).** A `baseVersion` decide o conflito de
+  campo e o renascimento depois da exclusão (ADR-066), então só vale uma que
+  o servidor deu: de 0 até a versão atual, tombstone incluído, e 0 para o que
+  ele nunca viu. Fora disso, a operação, de qualquer tipo, volta
+  `invalid_base_version` com a versão do servidor, e a recusa fica guardada
+  como as outras permanentes. Sem a trava, uma versão inventada (10^12)
+  venceria todo conflito e reviveria o que outro excluiu: inofensivo no
+  workspace pessoal da v1, mas não com Editores num workspace compartilhado.
+  O desktop sempre manda a versão que conhecia, que veio do servidor. A única
+  exceção é um backup do servidor restaurado. Nesse caso, a recusa baixa a
+  versão conhecida e a base das operações na fila para a que voltou, e a
+  operação fica em "falhas": o "Tentar de novo" e as próximas edições saem
+  com uma base válida. Uma futura poda de tombstones (ADR-072) precisa rever o
+  "0 para o que ele nunca viu".
 - **Isolamento.** Toda referência precisa existir **no mesmo workspace**. Quem
   não é membro recebe 404. O `device_id` da operação tem de ser o do token.
 
@@ -5874,9 +5888,16 @@ fora de escopo.
   - entrar de novo no mesmo dispositivo derruba o access anterior;
   - o dispositivo revogado leva 403 `device_revoked`, não 401, e o refresh
     dele `invalid_grant`.
+
+  Na versão base (SEC-017), `PushProcessorTests` e `ApiTests` cobrem:
+  - negativa, à frente da versão atual, para entidade que o servidor não tem
+    e além do tombstone → `invalid_base_version`, sem mudar nada;
+  - a versão inventada não vence o campo que outro dispositivo já mudou;
+  - os casos legítimos de conflito e de renascimento seguem iguais.
 - **Infrastructure:** captura, aplicação remota, cliente HTTP e motor contra um
   servidor roteirizado. O "sair" revoga access e refresh, e sem access na
-  memória só o refresh.
+  memória só o refresh. A recusa `invalid_base_version` de um servidor
+  restaurado baixa a versão conhecida, e o reenvio sai com ela.
 - **Desktop:** a janela, a linha de origem e o composition root real.
 
 ## ADR-062 — Cada computador com a sua lista: o "onde aparece" da tarefa
@@ -6524,7 +6545,8 @@ por campo do servidor aceita os campos daqui: quem marcou é quem vale.
 
 Se outro computador excluiu o comando nesse meio-tempo, ele volta. O servidor
 passa a reviver uma entidade excluída quando a versão base da operação alcança
-a do tombstone. Só quem já viu a exclusão chega a essa versão, e quem manda a
+a do tombstone, e alcançar é igualar: versão base à frente da do servidor é
+recusada antes, com `invalid_base_version` (SEC-017, ADR-061). Só quem já viu a exclusão chega a essa versão, e quem manda a
 entidade inteira está recriando de propósito. Quem não viu continua recebendo
 "excluído em outro dispositivo". Antes, só os vínculos (tarefa ↔ etiqueta)
 reviviam.
