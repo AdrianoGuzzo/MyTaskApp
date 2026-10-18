@@ -5733,6 +5733,35 @@ pendente mantém o valor local.
     na hora.
 - O celular é um segundo cliente público, `mytaskapp-mobile`, com as mesmas
   regras e a volta pelo esquema do app em vez do loopback (ADR-067).
+- **Issuer fixo (SEC-007).** Sem `SetIssuer`, o `Host` da requisição decidia
+  três coisas:
+  - o issuer e os endpoints do discovery (`Host: evil.example` publicava
+    `http://evil.example/`);
+  - o issuer que a validação aceita: o token emitido por `localhost:5280`
+    levava 401 ID2088 em `192.168.100.8:5280`;
+  - o `redirect_uri` mandado ao Google.
+
+  Agora:
+  - **`Sync:Issuer`** (`https://<nome público>/`) vai no `SetIssuer`. A
+    validação usa o servidor local e herda o mesmo issuer, então o token vale
+    por qualquer endereço que chegue ao servidor.
+  - **Fora de Development e dos testes, o servidor não sobe** sem o issuer,
+    sem `https`, com `AllowedHosts` vazio ou `*`, ou sem o nome do issuer na
+    lista. O compose de produção monta os dois a partir do `SYNC_HOST`.
+  - **`AllowedHosts` barra o `Host` forjado com 400**, antes do OpenIddict e
+    do Google. Ele cobre também o que o issuer fixo não cobre: o OpenIddict
+    monta os endpoints do discovery sobre o endereço da requisição, e o
+    handler do Google monta o `redirect_uri` com `Request.Scheme` e
+    `Request.Host`. Com o nome público no `Host` e o `X-Forwarded-Proto` do
+    Caddy (ADR-070), o `redirect_uri` é `https://<nome público>/signin-google`.
+  - **Development aceita só `localhost`, `127.0.0.1` e `[::1]`.** Ele continua
+    sem issuer fixo, porque `dotnet run` (5280) e o compose de desenvolvimento
+    (8080) usam portas diferentes.
+
+  Trocar o issuer invalida os tokens já emitidos, e todos entram de novo.
+  Alternativa descartada: fixar também os endpoints do discovery no issuer,
+  por um handler próprio do OpenIddict. Os clientes não leem o discovery, e
+  com `AllowedHosts` restrito o `Host` forjado já não chega a ele.
 - O token do Google nunca é token da API.
 - O desktop guarda o refresh token no cofre do sistema e o access token só na
   memória. A renovação é serializada, e um 401 renova uma vez e tenta de novo.
@@ -5794,6 +5823,13 @@ fora de escopo.
   inteiros: origem, mescla, conflito e reaplicação, exclusão sem ressurreição,
   resposta perdida e reinício, diretório por computador, instalação existente,
   revogação, token vencido no meio do ciclo e isolamento entre contas.
+  `IssuerTests` (SEC-007) cobre o issuer fixo e o `AllowedHosts`:
+  - `Host` forjado → 400;
+  - issuer fixo mesmo com `AllowedHosts` aberto;
+  - o token e o refresh valem por outro host, e sem issuer fixo levam 401;
+  - em Development, só os nomes do loopback;
+  - em Production, a recusa ao subir para cada configuração errada;
+  - o `redirect_uri` do Google no nome público.
 - **Infrastructure:** captura, aplicação remota, cliente HTTP e motor contra um
   servidor roteirizado.
 - **Desktop:** a janela, a linha de origem e o composition root real.
@@ -6961,7 +6997,8 @@ ele, nem nada que impedisse Development de servir a rede.
   está em docs/sync-server.md §2.
 - **Efeito colateral no SEC-007.** Com o Caddy só atendendo o `SYNC_HOST` e o
   `AllowedHosts` restrito, um `Host` forjado não chega ao discovery por esse
-  caminho. O `SetIssuer` fixo no código (G-07) continua pendente.
+  caminho. O issuer fixo (G-07) veio depois: `Sync__Issuer`, obrigatório
+  fora de Development (ADR-061, "Autenticação").
 - O teste da guarda roda em Development e, por isso, faz o OpenIddict criar
   (ou reaproveitar) os certificados de desenvolvimento no repositório de
   certificados do usuário que roda a suíte.
