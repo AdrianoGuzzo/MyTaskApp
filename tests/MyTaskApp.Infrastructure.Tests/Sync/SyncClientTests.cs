@@ -242,10 +242,10 @@ public sealed class SyncClientTests : IDisposable
     public async Task TheDeviceCap_TellsWhereToRevokeAnOldOne_AndStoresNothing()
     {
         var authorization = await _auth.BeginAuthorizationAsync(Ct);
-        var state = Form(authorization.AuthorizeUrl.Query.TrimStart('?'))["state"];
+        var query = Form(authorization.AuthorizeUrl.Query.TrimStart('?'));
 
         using var browser = new HttpClient();
-        await browser.GetAsync($"http://127.0.0.1:{_options.CallbackPort}/callback?state={state}&error={SyncErrorCodes.DeviceLimitReached}", Ct);
+        await browser.GetAsync($"{query["redirect_uri"]}?state={query["state"]}&error={SyncErrorCodes.DeviceLimitReached}", Ct);
 
         var completion = () => authorization.Completion.WaitAsync(TimeSpan.FromSeconds(10), Ct);
         (await completion.Should().ThrowAsync<DomainException>()).Which.Message.Should().Contain("limite de dispositivos").And.Contain("revogue");
