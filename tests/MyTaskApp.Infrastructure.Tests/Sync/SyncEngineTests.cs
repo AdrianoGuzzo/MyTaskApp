@@ -256,6 +256,40 @@ public sealed class SyncEngineTests : IAsyncLifetime
         (await _device.StoreAsync(store => store.ListFailedAsync(Ct))).Should().BeEmpty();
     }
 
+    /// <summary>
+    /// SEC-017: o servidor foi restaurado de um backup e a versão daqui ficou à
+    /// frente da dele. A recusa traz a versão que vale, e o reenvio sai com ela.
+    /// </summary>
+    [Fact]
+    public async Task ABaseVersionAheadOfARestoredServer_LowersTheKnownVersion_AndRetryGoesThrough()
+    {
+        var task = await LinkedTaskAsync();
+        await RenameAsync(task.Id, "Antes do backup");
+        _api.Respond = operation => new OperationResult(operation.OpId, OperationOutcome.Applied, false, 5, operation.BaseVersion, []);
+        await _device.Engine.RunCycleAsync(Ct);
+        (await ServerVersionAsync(task.Id)).Should().Be(5);
+
+        await RenameAsync(task.Id, "Depois do backup");
+        _api.Respond = operation => new OperationResult(
+            operation.OpId, OperationOutcome.Rejected, false, 2, 2, [], new SyncError(SyncErrorCodes.InvalidBaseVersion, "Versão base 5 inválida; a do servidor é 2."));
+        await _device.Engine.RunCycleAsync(Ct);
+
+        var failed = (await _device.StoreAsync(store => store.ListFailedAsync(Ct))).Should().ContainSingle().Subject;
+        failed.ErrorCode.Should().Be(SyncErrorCodes.InvalidBaseVersion);
+        (await ServerVersionAsync(task.Id)).Should().Be(2);
+        await RenameAsync(task.Id, "Na fila atrás da falha");
+
+        _api.Respond = ScriptedSyncApi.Applied;
+        var before = _api.Pushed.Count;
+        await _device.StoreAsync(store => store.RetryFailedAsync(failed.OpId, Ct));
+        await _device.Engine.RunCycleAsync(Ct);
+
+        _api.Pushed.Skip(before).Where(operation => operation.EntityId == task.Id)
+            .Should().HaveCount(2).And.OnlyContain(operation => operation.BaseVersion == 2);
+        (await _device.StoreAsync(store => store.ListFailedAsync(Ct))).Should().BeEmpty();
+        (await ServerVersionAsync(task.Id)).Should().Be(3);
+    }
+
     [Fact]
     public async Task AMissingParent_WaitsForTheNextCycle_WithoutSpinning()
     {
@@ -467,6 +501,12 @@ public sealed class SyncEngineTests : IAsyncLifetime
     }
 
     private Task RenameAsync(Guid taskId, string title) => EditAsync(taskId, task => task.Rename(title));
+
+    private Task<long> ServerVersionAsync(Guid taskId) =>
+        _device.ReadAsync(context => context.SyncEntityStates
+            .Where(state => state.EntityType == SyncEntityTypes.Task && state.EntityId == taskId)
+            .Select(state => state.ServerVersion)
+            .SingleAsync(Ct));
 
     private Task EditAsync(Guid taskId, Action<TaskItem> change) =>
         _device.RunAsync(async provider =>

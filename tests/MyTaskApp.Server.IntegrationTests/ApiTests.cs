@@ -397,6 +397,31 @@ public sealed class ApiTests(PostgresFixture postgres) : IAsyncLifetime
         (await response.Content.ReadAsStringAsync(Ct)).Should().Contain(SyncErrorCodes.DeviceMismatch);
     }
 
+    /// <summary>SEC-017 (T34): a versão base é uma que o servidor deu, nem negativa nem futura.</summary>
+    [Fact]
+    public async Task ABaseVersionTheServerNeverGave_IsRefused()
+    {
+        var session = await _api.LoginAsync("ana");
+        var workspace = await session.WorkspaceAsync();
+        var task = Guid.CreateVersion7();
+        await PushAsync(session, workspace, [Upsert(session, SyncEntityTypes.Task, task, 0, TaskFields("Pagar boleto"))]);
+
+        var push = await session.SendAsync<PushRequest, PushResponse>(HttpMethod.Post, ApiRoutes.Push(workspace), new PushRequest(
+            SyncSchema.Current,
+            session.DeviceId,
+            [
+                Upsert(session, SyncEntityTypes.Task, task, 1_000_000_000_000, new() { [SyncFields.Task.Title] = SyncValue.String("Do futuro") }),
+                Upsert(session, SyncEntityTypes.Task, task, -5, new() { [SyncFields.Task.Title] = SyncValue.String("Negativa") }),
+            ]));
+
+        push.Results.Should().HaveCount(2).And.OnlyContain(result =>
+            result.Outcome == OperationOutcome.Rejected && result.Error!.Code == SyncErrorCodes.InvalidBaseVersion && result.Version == 1);
+        var change = (await session.GetAsync<PullResponse>(ApiRoutes.Pull(workspace))).Changes.Should().ContainSingle().Subject;
+        change.Version.Should().Be(1);
+        change.Fields[SyncFields.Task.Title].GetString().Should().Be("Pagar boleto");
+        _api.Logs.Text.Should().NotContain("SyncServerUnhandled");
+    }
+
     /// <summary>
     /// SEC-008: membro nulo e caractere NUL nunca chegam a 500. O que é forma
     /// do pedido vira 400; o NUL num campo recusa só a operação, para um texto

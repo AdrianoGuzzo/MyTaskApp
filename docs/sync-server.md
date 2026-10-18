@@ -654,6 +654,10 @@ Sem a propriedade, o app de release não oferece sincronização. A janela diz
   frente** do servidor. O servidor responde 410, e o desktop refaz o pull desde
   o zero, sem perder o que tem localmente. O que foi criado nos desktops depois
   do backup sobe de novo pelo outbox, ou pela varredura da primeira conexão.
+- O push só aceita uma versão base que o servidor deu (SEC-017). Editar no
+  desktop algo que o backup levou para uma versão anterior aparece uma vez em
+  "falhas", com `invalid_base_version`. O desktop já adota a versão do
+  servidor, e o "Tentar de novo" reenvia a edição.
 - Restaurar também traz de volta os refresh tokens daquele momento. Um token
   rodado depois do backup não vale mais, e o computador precisa conectar de
   novo.
