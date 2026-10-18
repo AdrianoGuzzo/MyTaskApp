@@ -218,7 +218,7 @@ public sealed class PushLimitsTests
 
     private (InMemorySyncServer Server, Guid Workspace) Server(PushLimits? limits = null)
     {
-        var server = new InMemorySyncServer(limits);
+        var server = new InMemorySyncServer(pushLimits: limits);
         return (server, server.AddWorkspace(_user));
     }
 

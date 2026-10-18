@@ -206,9 +206,10 @@ subir, viram uma operação só.
 1. **Hello:** registra a versão do app e lê os apelidos dos dispositivos.
 2. **Push:** até 100 operações por lote. A operação é marcada como tentada
    *antes* de sair e mantém o mesmo `OpId` em toda tentativa.
-3. **Pull:** as mudanças desde o cursor, em páginas de 200. Cada página é
-   aplicada numa transação SQLite que também avança o cursor: ou entra a
-   página inteira, ou nada.
+3. **Pull:** as mudanças desde o cursor, em páginas de até 200. O servidor
+   corta a página antes, se ela passar do teto de entidades ou de bytes, e o
+   app segue para a próxima (ADR-071). Cada página é aplicada numa transação
+   SQLite que também avança o cursor: ou entra a página inteira, ou nada.
 
 O agendador roda 3 s depois de uma mudança local, a cada 60 s, e na hora com
 "Sincronizar agora". Uma falha passageira (rede, timeout, 429, 5xx) espera de
@@ -307,6 +308,9 @@ mesmo ciclo — só em primeiro plano. Diferenças:
 - Horas sobrepostas vindas de dois computadores são aceitas. Quem corrige é
   você.
 - O cronômetro só sincroniza quando para.
+- Texto com o caractere nulo (U+0000), em geral vindo de um colar, não
+  sincroniza: o servidor recusa a alteração, que fica como falha. O resto do
+  envio segue.
 - Os registros de exclusão (tombstones) não são podados nesta versão.
 - O texto dos comandos compartilhados viaja. Segredo digitado num comando
   compartilhado vai junto. A revisão local é a barreira, e não a solução.

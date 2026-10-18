@@ -179,6 +179,60 @@ internal sealed class EfSyncStore(ServerDbContext context) : ISyncStore, ISyncUn
                 .Select(row => new StoredReference(row.FromType, row.FromId, row.Field, row.ToType, row.ToId, (SyncDeleteBehavior)row.OnDelete)),
         ];
 
+    public async Task<IReadOnlySet<EntityRef>> FindDeliveredAsync(
+        Guid workspaceId,
+        IReadOnlyCollection<EntityRef> targets,
+        long afterSeq,
+        CancellationToken cancellationToken)
+    {
+        var ids = targets.Select(target => target.Id).Distinct().ToList();
+
+        var found = await context.SyncReferences.AsNoTracking()
+            .Where(reference => reference.WorkspaceId == workspaceId && ids.Contains(reference.ToId))
+            .Join(
+                context.SyncEntities.AsNoTracking().Where(row => row.WorkspaceId == workspaceId && row.LastSeq <= afterSeq && !row.IsDeleted),
+                reference => new { reference.FromType, reference.FromId },
+                row => new { FromType = row.EntityType, FromId = row.EntityId },
+                (reference, _) => new { reference.ToType, reference.ToId })
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        var wanted = targets.ToHashSet();
+
+        return found.Select(target => new EntityRef(target.ToType, target.ToId)).Where(wanted.Contains).ToHashSet();
+    }
+
+    /// <summary>
+    /// Uma consulta só: <c>DISTINCT ON</c> pelo alvo, na ordem do log, pelo
+    /// índice das referências e pela chave das entidades.
+    /// </summary>
+    public async Task<IReadOnlyList<StoredEntity>> FindFirstReferrersAsync(
+        Guid workspaceId,
+        string fromType,
+        string toType,
+        IReadOnlyCollection<Guid> toIds,
+        long afterSeq,
+        CancellationToken cancellationToken)
+    {
+        var ids = toIds.Distinct().ToArray();
+
+        var rows = await context.SyncEntities
+            .FromSql(
+                $"""
+                SELECT DISTINCT ON (r."ToId") e.*
+                FROM "SyncReferences" r
+                JOIN "SyncEntities" e
+                  ON e."WorkspaceId" = r."WorkspaceId" AND e."EntityType" = r."FromType" AND e."EntityId" = r."FromId"
+                WHERE r."WorkspaceId" = {workspaceId} AND r."FromType" = {fromType} AND r."ToType" = {toType}
+                  AND r."ToId" = ANY({ids}) AND e."LastSeq" > {afterSeq} AND NOT e."IsDeleted"
+                ORDER BY r."ToId", e."LastSeq"
+                """)
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+
+        return [.. rows.Select(ToModel)];
+    }
+
     public async Task AppendLogAsync(ChangeLogEntry entry, CancellationToken cancellationToken)
     {
         context.ChangeLog.Add(new ChangeLogRow

@@ -61,9 +61,23 @@ public sealed class PushProcessor(
             throw new SyncServerException(SyncErrorCodes.DeviceMismatch, 400, "O dispositivo do pedido não é o do token.");
         }
 
+        if (request.Operations is null)
+        {
+            throw SyncServerException.BadRequest("O envio veio sem a lista de operações.");
+        }
+
         if (request.Operations.Count > SyncSchema.MaxOperationsPerPush)
         {
             throw SyncServerException.BadRequest($"No máximo {SyncSchema.MaxOperationsPerPush} operações por envio.");
+        }
+
+        // O tipo entra na frase da recusa, que é gravada: com NUL, o banco não aceitaria.
+        if (request.Operations.Any(operation => operation is null
+            || string.IsNullOrEmpty(operation.EntityType)
+            || ReceivedText.HasControl(operation.EntityType)
+            || operation.Fields is null))
+        {
+            throw SyncServerException.BadRequest("Operação nula, sem tipo ou sem campos.");
         }
 
         var role = await access.RoleOfAsync(caller.UserId, workspaceId, cancellationToken) ?? throw SyncServerException.NotFound();

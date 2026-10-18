@@ -13,6 +13,13 @@ public sealed class SyncServerOptions
     public const string SectionName = "Sync";
 
     /// <summary>
+    /// O endereço público do servidor, como <c>https://sync.exemplo.com/</c>: o
+    /// issuer do discovery e dos tokens (SEC-007). Obrigatório fora de
+    /// Development. Vazio, quem decide é o <c>Host</c> da requisição.
+    /// </summary>
+    public Uri? Issuer { get; set; }
+
+    /// <summary>
     /// Os endereços de volta aceitos para o desktop. Fixos: o OpenIddict
     /// compara o redirect exatamente, e o desktop escuta numa porta conhecida.
     /// </summary>
@@ -49,6 +56,9 @@ public sealed class SyncServerOptions
     public RateLimitOptions RateLimits { get; set; } = new();
 
     public RegistrationOptions Registration { get; set; } = new();
+
+    /// <summary>Os tetos de entidades e de bytes por página do pull (ADR-071).</summary>
+    public PullLimits Pull { get; set; } = new();
 
     /// <summary>O teto de bytes por entidade e a cota do workspace no push (ADR-072).</summary>
     public PushLimits Push { get; set; } = new();

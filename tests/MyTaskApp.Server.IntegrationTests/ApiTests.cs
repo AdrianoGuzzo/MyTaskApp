@@ -288,6 +288,40 @@ public sealed class ApiTests(PostgresFixture postgres) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ATaskWithAThousandOccurrences_ComesPageByPage_WithoutTheWholeFamilyEachTime()
+    {
+        // SEC-005: cada página de limit=1 devolvia ~1.000 mudanças (~480 KB), e o cursor andava uma por vez.
+        await using var api = await CreateApiAsync(new() { ["Sync:RateLimits:SyncPerMinute"] = "100000", ["Sync:RateLimits:SyncBurst"] = "100000" });
+        var a = await api.LoginAsync("ana");
+        var workspace = await a.WorkspaceAsync();
+        var task = await PushTaskWithOccurrencesAsync(a, workspace, 1_000);
+        await PushAsync(a, workspace, [Upsert(a, SyncEntityTypes.Task, task, 1, new() { [SyncFields.Task.Title] = SyncValue.String("Renomeada") })]);
+
+        var pages = await PullAllAsync(a, workspace, limit: 1);
+        var changes = pages.SelectMany(page => page.Changes).ToList();
+
+        changes.Select(change => change.EntityId).Distinct().Should().HaveCount(1_001);
+        changes.Should().HaveCountLessThanOrEqualTo(1_002);
+        pages.Should().OnlyContain(page => page.Changes.Count <= 2);
+    }
+
+    [Fact]
+    public async Task ThePullPage_RespectsTheConfiguredCeiling()
+    {
+        await using var api = await CreateApiAsync(new() { ["Sync:Pull:MaxEntities"] = "50" });
+        var a = await api.LoginAsync("ana");
+        var workspace = await a.WorkspaceAsync();
+        await PushTaskWithOccurrencesAsync(a, workspace, 1_000);
+
+        var pages = await PullAllAsync(a, workspace, limit: SyncSchema.MaxPullLimit);
+        var changes = pages.SelectMany(page => page.Changes).ToList();
+
+        pages.Should().OnlyContain(page => page.Changes.Count <= 50);
+        changes.Select(change => change.EntityId).Distinct().Should().HaveCount(1_001);
+        changes.Should().HaveCountLessThanOrEqualTo(1_002);
+    }
+
+    [Fact]
     public async Task AnotherUser_GetsA404_ForMyWorkspace()
     {
         var ana = await _api.LoginAsync("ana");
@@ -317,6 +351,79 @@ public sealed class ApiTests(PostgresFixture postgres) : IAsyncLifetime
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         (await response.Content.ReadAsStringAsync(Ct)).Should().Contain(SyncErrorCodes.DeviceMismatch);
+    }
+
+    /// <summary>
+    /// SEC-008: membro nulo e caractere NUL nunca chegam a 500. O que é forma
+    /// do pedido vira 400; o NUL num campo recusa só a operação, para um texto
+    /// colado no desktop não travar o resto do lote.
+    /// </summary>
+    [Theory]
+    [InlineData("fetch entities null")]
+    [InlineData("push operations null")]
+    [InlineData("push operations missing")]
+    [InlineData("push operation null")]
+    [InlineData("push entityType null")]
+    [InlineData("push fields null")]
+    [InlineData("push nul in a known field")]
+    [InlineData("push nul in an unknown field")]
+    [InlineData("push nul in an unknown field name")]
+    [InlineData("device platform with nul")]
+    public async Task NullMembersAndNulCharacters_NeverBecomeA500(string body)
+    {
+        var session = await _api.LoginAsync("ana");
+        var workspace = await session.WorkspaceAsync();
+        var device = session.DeviceId;
+        var task = Guid.CreateVersion7();
+        var push = $$"""{"schemaVersion":{{SyncSchema.Current}},"deviceId":"{{device}}" """;
+        string Operation(string entityType, string fields) =>
+            $$"""{"opId":"{{Guid.CreateVersion7()}}","deviceId":"{{device}}","entityType":{{entityType}},"entityId":"{{task}}","kind":"upsert","baseVersion":0,"fields":{{fields}}}""";
+
+        using var client = session.Api();
+        using var response = body switch
+        {
+            "fetch entities null" => await PostJsonAsync(client, ApiRoutes.Fetch(workspace), """{"entities":null}"""),
+            "push operations null" => await PostJsonAsync(client, ApiRoutes.Push(workspace), push + ""","operations":null}"""),
+            "push operations missing" => await PostJsonAsync(client, ApiRoutes.Push(workspace), push + "}"),
+            "push operation null" => await PostJsonAsync(client, ApiRoutes.Push(workspace), push + ""","operations":[null]}"""),
+            "push entityType null" => await PostJsonAsync(client, ApiRoutes.Push(workspace), push + $$""","operations":[{{Operation("null", "{}")}}]}"""),
+            "push fields null" => await PostJsonAsync(client, ApiRoutes.Push(workspace), push + $$""","operations":[{{Operation($"\"{SyncEntityTypes.Task}\"", "null")}}]}"""),
+            "push nul in a known field" => await PushAsync(TaskFields("titulo\0nul")),
+            "push nul in an unknown field" => await PushAsync(new(TaskFields("Pagar boleto")) { ["colorOfTheFuture"] = SyncValue.String("a\0b") }),
+            "push nul in an unknown field name" => await PushAsync(new(TaskFields("Pagar boleto")) { ["color\0OfTheFuture"] = SyncValue.String("ab") }),
+            "device platform with nul" => await client.PutAsync(
+                ApiRoutes.CurrentDevice,
+                JsonContent.Create(new DeviceHello(null, "Win\0", "1.0.0", SyncSchema.Current), options: SyncJson.Options),
+                Ct),
+            _ => throw new ArgumentOutOfRangeException(nameof(body)),
+        };
+
+        if (body.StartsWith("push nul", StringComparison.Ordinal))
+        {
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+            var result = (await response.Content.ReadFromJsonAsync<PushResponse>(SyncJson.Options, Ct))!.Results.Single();
+            result.Outcome.Should().Be(OperationOutcome.Rejected);
+
+            // O campo que o contrato não conhece é recusado antes de olhar o valor (ADR-072).
+            result.Error!.Code.Should().Be(body.Contains("unknown", StringComparison.Ordinal) ? SyncErrorCodes.UnknownField : SyncErrorCodes.ValidationFailed);
+            result.Error.Message.Should().NotContain("\0");
+            (await session.GetAsync<PullResponse>(ApiRoutes.Pull(workspace))).Changes.Should().BeEmpty();
+        }
+        else
+        {
+            response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+            (await response.Content.ReadAsStringAsync(Ct)).Should().Contain(SyncErrorCodes.BadRequest);
+        }
+
+        _api.Logs.Text.Should().NotContain("SyncServerUnhandled");
+
+        Task<HttpResponseMessage> PushAsync(Dictionary<string, JsonElement> fields) =>
+            client.PostAsync(
+                ApiRoutes.Push(workspace),
+                JsonContent.Create(
+                    new PushRequest(SyncSchema.Current, device, [new SyncOperation(Guid.CreateVersion7(), device, SyncEntityTypes.Task, task, SyncOperationKind.Upsert, 0, fields, Created)]),
+                    options: SyncJson.Options),
+                Ct);
     }
 
     [Fact]
@@ -503,6 +610,63 @@ public sealed class ApiTests(PostgresFixture postgres) : IAsyncLifetime
         var api = new ApiFactory(connectionString, settings);
         _ = api.Server;
         return api;
+    }
+
+    private static Task<HttpResponseMessage> PostJsonAsync(HttpClient client, string path, string json) =>
+        client.PostAsync(path, new StringContent(json, System.Text.Encoding.UTF8, "application/json"), Ct);
+
+    private static SyncOperation Upsert(DesktopSession session, string type, Guid id, long baseVersion, Dictionary<string, JsonElement> fields) =>
+        new(Guid.CreateVersion7(), session.DeviceId, type, id, SyncOperationKind.Upsert, baseVersion, fields, Created);
+
+    private static async Task PushAsync(DesktopSession session, Guid workspace, IReadOnlyList<SyncOperation> operations)
+    {
+        var push = await session.SendAsync<PushRequest, PushResponse>(
+            HttpMethod.Post, ApiRoutes.Push(workspace), new PushRequest(SyncSchema.Current, session.DeviceId, operations));
+
+        push.Results.Should().OnlyContain(result => result.Outcome == OperationOutcome.Applied);
+    }
+
+    /// <summary>Uma tarefa e as ocorrências dela, em pushes do tamanho máximo.</summary>
+    private static async Task<Guid> PushTaskWithOccurrencesAsync(DesktopSession session, Guid workspace, int occurrences)
+    {
+        var task = Guid.CreateVersion7();
+        var operations = new List<SyncOperation> { Upsert(session, SyncEntityTypes.Task, task, 0, TaskFields("Recorrente")) };
+        operations.AddRange(Enumerable.Range(0, occurrences).Select(_ => Upsert(session, SyncEntityTypes.Occurrence, Guid.CreateVersion7(), 0, new()
+        {
+            [SyncFields.Occurrence.TaskId] = SyncValue.Guid(task),
+            [SyncFields.Occurrence.Schedule] = SyncValue.Object((SyncFields.Occurrence.Date, SyncValue.Null), (SyncFields.Occurrence.Time, SyncValue.Null)),
+            [SyncFields.Occurrence.State] = SyncValue.Object((SyncFields.Occurrence.Status, SyncValue.Integer(0)), (SyncFields.Occurrence.CompletedAt, SyncValue.Null)),
+        })));
+
+        foreach (var chunk in operations.Chunk(SyncSchema.MaxOperationsPerPush))
+        {
+            await PushAsync(session, workspace, chunk);
+        }
+
+        return task;
+    }
+
+    /// <summary>Do zero até o fim, pelo HTTP, conferindo que cada página anda o cursor.</summary>
+    private static async Task<List<PullResponse>> PullAllAsync(DesktopSession session, Guid workspace, int limit)
+    {
+        var pages = new List<PullResponse>();
+        var cursor = SyncCursor.Start;
+
+        while (pages.Count < 5_000)
+        {
+            var page = await session.GetAsync<PullResponse>($"{ApiRoutes.Pull(workspace)}?cursor={Uri.EscapeDataString(cursor)}&limit={limit}");
+            pages.Add(page);
+
+            if (!page.HasMore)
+            {
+                return pages;
+            }
+
+            page.NextCursor.Should().NotBe(cursor);
+            cursor = page.NextCursor;
+        }
+
+        throw new InvalidOperationException("O pull não terminou.");
     }
 
     private static Dictionary<string, JsonElement> TaskFields(string title) => new()

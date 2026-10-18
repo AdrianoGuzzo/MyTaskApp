@@ -15,7 +15,8 @@ public sealed record SyncFieldError(string Field, string Message);
 /// <see cref="Validate"/> não olha campo desconhecido: o desktop o roda no
 /// pull e ignora o que não conhece. Quem recusa é o servidor, no push, com
 /// <see cref="FindUnknown"/> (ADR-072) — guardar o que não está no contrato
-/// deixaria a entidade crescer sem limite.
+/// deixaria a entidade crescer sem limite. Nenhum campo, conhecido ou não,
+/// passa com U+0000: o banco do servidor não grava o caractere.
 /// </remarks>
 public static class SyncFieldValidator
 {
@@ -42,7 +43,8 @@ public static class SyncFieldValidator
             }
         }
 
-        return unknown;
+        // Sem o NUL, como no Validate: a frase da recusa também é gravada no servidor.
+        return [.. unknown.Select(path => path.Replace("\0", "\\0", StringComparison.Ordinal))];
     }
 
     private static void FindUnknown(SyncFieldDefinition field, JsonElement value, string path, List<string> unknown)
@@ -90,6 +92,15 @@ public static class SyncFieldValidator
             else if (isCreate && field.IsRequired)
             {
                 errors.Add(new SyncFieldError(field.Name, "Campo obrigatório ausente na criação."));
+            }
+        }
+
+        // O nome vai sem o NUL: a frase da recusa também é gravada no servidor.
+        foreach (var (name, value) in fields)
+        {
+            if (name.Contains('\0') || SyncValue.ContainsNul(value))
+            {
+                errors.Add(new SyncFieldError(name.Replace("\0", "\\0", StringComparison.Ordinal), "Texto com caractere nulo (U+0000)."));
             }
         }
 

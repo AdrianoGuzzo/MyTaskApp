@@ -69,7 +69,8 @@ o da variável, e o conteúdo é o valor. É o que o compose de produção usa (
 | `Sync__EncryptionCertificate__Path` / `__Base64` / `__Password` | em produção | PFX que cifra os tokens |
 | `Database__MigrateOnStartup` | não | `true` aplica as migrations ao subir. Padrão: só em Development |
 | `ForwardedHeaders__KnownProxies__0` | atrás de proxy | IP do proxy reverso, para valer o `X-Forwarded-Proto` |
-| `AllowedHosts` | não | os nomes aceitos no `Host`. Padrão `*`; o compose de produção usa o nome público |
+| `Sync__Issuer` | em produção | o endereço público do servidor, como `https://sync.exemplo.com/`: o issuer do OAuth, no discovery e nos tokens (SEC-007). Fora de Development, sem ele (ou sem `https`) o servidor não sobe. Vazio, o `Host` da requisição decide, e um token emitido por um endereço não vale no outro. Trocá-lo derruba o login de todos |
+| `AllowedHosts` | em produção | os nomes aceitos no `Host`, separados por `;`, sem porta. Fora de Development, tem de listar o nome do `Sync__Issuer` e não pode ser `*`: o `Host` forjado leva 400. Em Development, `localhost;127.0.0.1;[::1]` |
 | `Development__AllowNonLoopback` | não | `true` deixa Development escutar fora do loopback. Só no contêiner de desenvolvimento (§3) |
 | `Sync__DesktopRedirectUris__0` … | não | voltas aceitas do desktop. Padrão: `http://127.0.0.1:47833/callback` e `http://localhost:47833/callback` |
 | `Sync__MobileRedirectUris__0` … | não | voltas aceitas do celular (cliente `mytaskapp-mobile`, ADR-067). Padrão: `io.github.adrianoguzzo.mytaskapp://oauth/callback` |
@@ -83,6 +84,8 @@ o da variável, e o conteúdo é o valor. É o que o compose de produção usa (
 | `Sync__RateLimits__ApiPerMinute` | não | o resto da API, por usuário (o `sub` do token). Padrão 120 |
 | `Sync__RateLimits__AnonymousPerMinute` | não | rotas da API sem token válido (o que vai dar 401), por IP. Padrão 30 |
 | `Sync__RateLimits__GlobalPerMinute` | não | teto de proteção de qualquer rota, por IP, somado aos outros. Padrão 600; `0` desliga |
+| `Sync__Pull__MaxEntities` | não | entidades por página do pull, contando o que vem de carona (ADR-071). Padrão 1000 |
+| `Sync__Pull__MaxBytes` | não | bytes por página do pull, somando o JSON de cada mudança. Padrão 1048576 (1 MiB). Só um item maior que isso, sozinho, passa do teto |
 | `Sync__Push__MaxEntityBytes` | não | o JSON de uma entidade, já mesclado, em bytes UTF-8 (ADR-072). Padrão 786432 (768 KiB); acima, `entity_too_large`; `0` desliga |
 | `Sync__Push__MaxWorkspaceEntities` | não | entidades vivas por workspace (tombstone não conta). Padrão 100000; acima, `quota_exceeded`; `0` desliga |
 | `Sync__Push__MaxWorkspaceBytes` | não | soma do JSON de todas as linhas do workspace. Padrão 268435456 (256 MiB); acima, `quota_exceeded`; `0` desliga |
@@ -220,7 +223,9 @@ aponta para o PostgreSQL do compose.
 certificados de desenvolvimento, e não serve a rede. Com `--urls
 http://0.0.0.0:5280`, um IP da LAN ou `ASPNETCORE_URLS=http://+:…`, o servidor
 registra `SyncServerDevelopmentOnNetwork` e não sobe. Para outra máquina usar
-o servidor, publique em Production (§5).
+o servidor, publique em Production (§5). O `Host` também só aceita os nomes do
+loopback (`AllowedHosts` do `appsettings.Development.json`); o celular chega
+como `localhost` pelo `adb reverse` (docs/mobile.md).
 
 Para rodar tudo em contêiner, com a API inclusive:
 
@@ -308,7 +313,7 @@ O `deploy/sync-server/docker-compose.prod.yml` monta isso num host com Docker:
 | Serviço | O que faz |
 |---|---|
 | `proxy` | Caddy. É o único com porta publicada (80 e 443): termina o TLS e responde HTTP com 308 para HTTPS |
-| `api` | a imagem, em Production, sem porta publicada. Disco só de leitura e sem capabilities. Só aceita o `X-Forwarded-Proto` do IP fixo do Caddy (`ForwardedHeaders__KnownProxies__0`) e só o nome público no `Host` (`AllowedHosts`) |
+| `api` | a imagem, em Production, sem porta publicada. Disco só de leitura e sem capabilities. Só aceita o `X-Forwarded-Proto` do IP fixo do Caddy (`ForwardedHeaders__KnownProxies__0`) e só o nome público no `Host` (`AllowedHosts`). O issuer é fixo: `Sync__Issuer=https://<SYNC_HOST>/` |
 | `postgres` | numa rede interna: sem porta, sem saída, e só a API e o `migrate` o alcançam |
 | `migrate` | o bundle das migrations (§4), rodado sob demanda |
 
@@ -341,6 +346,10 @@ da API exposta além do proxy.
 
    O `SYNC_ALLOWED_EMAIL` é a conta que pode entrar ("Quem pode entrar", §2).
    Sem ele, o compose não sobe.
+
+   O issuer é `https://<SYNC_HOST>/`. Com `SYNC_HTTPS_PORT` diferente de 443,
+   defina `SYNC_ISSUER` com a porta (`https://sync.exemplo.com:8443/`): ele tem
+   de ser o endereço que os clientes usam.
 
    Se `172.30.80.0/24` colidir com outra rede do host, troque
    `SYNC_EDGE_SUBNET` e `SYNC_PROXY_IP` juntos.
@@ -392,12 +401,17 @@ da API exposta além do proxy.
      -H "Host: <SYNC_HOST>" -H "X-Forwarded-Proto: https" \
      -X POST http://api:8080/connect/token -d grant_type=refresh_token
    # 400 invalid_request, "This server only accepts HTTPS requests." (ID2083)
+
+   # Host forjado direto na API (G-07): 400, e o issuer nunca muda
+   docker run --rm --network mytaskapp-sync_edge curlimages/curl:8.11.1 -s -o /dev/null -w '%{http_code}\n' \
+     -H "Host: evil.example" http://api:8080/.well-known/openid-configuration
    ```
 
    Com `SYNC_TLS=internal`, passe `--cacert caddy-root.crt` ao `curl` (passo 7).
-   Se o issuer vier com `http://` e faltar o HSTS, o `KnownProxies` não bate
-   com o IP do Caddy: a API não acredita no `X-Forwarded-Proto` e recusa o
-   OAuth também pelo proxy.
+   O issuer é fixo e não denuncia o proxy. Se faltar o HSTS, ou se o
+   `/connect/token` pelo proxy responder ID2083, o `KnownProxies` não bate com o
+   IP do Caddy: a API não acredita no `X-Forwarded-Proto` e recusa o OAuth
+   também pelo proxy.
 7. **Clientes.** O desktop de release recebe `https://<SYNC_HOST>/` (abaixo),
    ou a seção `Sync` do `appsettings.user.json`. Com `SYNC_TLS=internal`, cada
    computador precisa confiar na CA do Caddy:

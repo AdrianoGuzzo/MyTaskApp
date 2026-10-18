@@ -5705,8 +5705,9 @@ pendente mantém o valor local.
 - **Cursor denso.** O push trava a linha do workspace (`SELECT … FOR UPDATE`)
   e numera cada mudança com `LastSeq + 1`. O número confirma em ordem, e
   nenhum leitor pula uma transação lenta. O pull lê as entidades compactadas
-  por `LastSeq`. O pai vai junto se ainda não foi entregue, e a ocorrência
-  anda com a tarefa. O cursor é opaco, e um cursor à frente do servidor
+  por `LastSeq`. O pai vai junto se ainda não foi entregue, e a tarefa nova
+  vai com uma ocorrência. A página tem teto de entidades e de bytes
+  (ADR-071). O cursor é opaco, e um cursor à frente do servidor
   (backup restaurado) recebe 410, e o cliente recomeça do zero.
 - **Idempotência.** `ProcessedOperations` guarda o resultado de cada `OpId`,
   com o hash do pedido. O reenvio devolve o mesmo resultado como duplicado, e o
@@ -5733,6 +5734,35 @@ pendente mantém o valor local.
     na hora.
 - O celular é um segundo cliente público, `mytaskapp-mobile`, com as mesmas
   regras e a volta pelo esquema do app em vez do loopback (ADR-067).
+- **Issuer fixo (SEC-007).** Sem `SetIssuer`, o `Host` da requisição decidia
+  três coisas:
+  - o issuer e os endpoints do discovery (`Host: evil.example` publicava
+    `http://evil.example/`);
+  - o issuer que a validação aceita: o token emitido por `localhost:5280`
+    levava 401 ID2088 em `192.168.100.8:5280`;
+  - o `redirect_uri` mandado ao Google.
+
+  Agora:
+  - **`Sync:Issuer`** (`https://<nome público>/`) vai no `SetIssuer`. A
+    validação usa o servidor local e herda o mesmo issuer, então o token vale
+    por qualquer endereço que chegue ao servidor.
+  - **Fora de Development e dos testes, o servidor não sobe** sem o issuer,
+    sem `https`, com `AllowedHosts` vazio ou `*`, ou sem o nome do issuer na
+    lista. O compose de produção monta os dois a partir do `SYNC_HOST`.
+  - **`AllowedHosts` barra o `Host` forjado com 400**, antes do OpenIddict e
+    do Google. Ele cobre também o que o issuer fixo não cobre: o OpenIddict
+    monta os endpoints do discovery sobre o endereço da requisição, e o
+    handler do Google monta o `redirect_uri` com `Request.Scheme` e
+    `Request.Host`. Com o nome público no `Host` e o `X-Forwarded-Proto` do
+    Caddy (ADR-070), o `redirect_uri` é `https://<nome público>/signin-google`.
+  - **Development aceita só `localhost`, `127.0.0.1` e `[::1]`.** Ele continua
+    sem issuer fixo, porque `dotnet run` (5280) e o compose de desenvolvimento
+    (8080) usam portas diferentes.
+
+  Trocar o issuer invalida os tokens já emitidos, e todos entram de novo.
+  Alternativa descartada: fixar também os endpoints do discovery no issuer,
+  por um handler próprio do OpenIddict. Os clientes não leem o discovery, e
+  com `AllowedHosts` restrito o `Host` forjado já não chega a ele.
 - O token do Google nunca é token da API.
 - O desktop guarda o refresh token no cofre do sistema e o access token só na
   memória. A renovação é serializada, e um 401 renova uma vez e tenta de novo.
@@ -5794,6 +5824,13 @@ fora de escopo.
   inteiros: origem, mescla, conflito e reaplicação, exclusão sem ressurreição,
   resposta perdida e reinício, diretório por computador, instalação existente,
   revogação, token vencido no meio do ciclo e isolamento entre contas.
+  `IssuerTests` (SEC-007) cobre o issuer fixo e o `AllowedHosts`:
+  - `Host` forjado → 400;
+  - issuer fixo mesmo com `AllowedHosts` aberto;
+  - o token e o refresh valem por outro host, e sem issuer fixo levam 401;
+  - em Development, só os nomes do loopback;
+  - em Production, a recusa ao subir para cada configuração errada;
+  - o `redirect_uri` do Google no nome público.
 - **Infrastructure:** captura, aplicação remota, cliente HTTP e motor contra um
   servidor roteirizado.
 - **Desktop:** a janela, a linha de origem e o composition root real.
@@ -6962,7 +6999,8 @@ ele, nem nada que impedisse Development de servir a rede.
   está em docs/sync-server.md §2.
 - **Efeito colateral no SEC-007.** Com o Caddy só atendendo o `SYNC_HOST` e o
   `AllowedHosts` restrito, um `Host` forjado não chega ao discovery por esse
-  caminho. O `SetIssuer` fixo no código (G-07) continua pendente.
+  caminho. O issuer fixo (G-07) veio depois: `Sync__Issuer`, obrigatório
+  fora de Development (ADR-061, "Autenticação").
 - O teste da guarda roda em Development e, por isso, faz o OpenIddict criar
   (ou reaproveitar) os certificados de desenvolvimento no repositório de
   certificados do usuário que roda a suíte.
@@ -6985,6 +7023,117 @@ ele, nem nada que impedisse Development de servir a rede.
   - `Host` forjado → 400;
   - a imagem em Development, escutando em `http://+:8080`, recusando subir sem
     a exceção.
+
+## ADR-071 — O pull com teto por página, sem reenviar a família da tarefa
+
+**Contexto:** a auditoria de segurança da API (SEC-005, ação G-04, P1) mediu
+o pull com 1 tarefa e 1.000 ocorrências. Cada página de `limit=1` devolveu
+cerca de 1.000 mudanças (480 KB, 700 ms), e o cursor andou uma entidade por
+vez. Um dispositivo novo baixaria cerca de 480 MB para 1.001 entidades.
+
+O `limit` só contava o log. Para cada item da página, o servidor:
+
+- buscava os pais, uma consulta por referência, com entidades rastreadas pelo
+  EF;
+- se o item fosse tarefa, buscava **todas** as ocorrências dela.
+
+O fecho era transitivo. A ocorrência da página puxava a tarefa de carona, e a
+tarefa puxava todas as irmãs. O cursor só andava pelo log, então, com a tarefa
+alterada depois das ocorrências, a família inteira voltava a cada página.
+Qualquer usuário autenticado derrubava o servidor, e uma tarefa recorrente
+longa deixava a sincronização lenta.
+
+Duas garantias do ADR-061 precisam continuar valendo no cliente (desktop e
+celular usam o mesmo motor):
+
+- **O pai antes do filho.** O SQLite tem FK imediata de ocorrência para
+  tarefa e de lançamento de horas para ocorrência. Um filho sem pai derruba a
+  página três vezes, e na quarta vira `apply_failed`, que só sai pelo "Tentar
+  de novo".
+- **A tarefa com ocorrência.** Não há constraint. Mas a tarefa sem ocorrência
+  some das listas, que partem da ocorrência, e os casos de uso esperam uma.
+  Basta **uma**: cada ocorrência que chega depois põe a tarefa no reconcile,
+  que recalcula a conclusão e os lembretes.
+
+**Decisão:** a página do pull continua fechada, mas só com o que o cliente
+pode não ter. Os relacionados vêm em lote, e a resposta inteira tem teto.
+
+- **"Já entregue" por evidência.** O cliente tem `X` se alguma entidade viva
+  que aponta para `X` tem `LastSeq` até o cursor. Quando esse filho foi
+  entregue, `X` foi junto. Por indução, a tarefa entregue já tem ocorrência
+  local. Do zero, nada foi entregue. O erro possível só vai para o lado de
+  mandar a mais.
+- **Pai de carona** só se estiver vivo, depois do cursor, fora da página e sem
+  evidência de entrega. Isso vale em cadeia: o lançamento de horas puxa a
+  ocorrência, que puxa a tarefa. O pai que o cliente já tem não volta a cada
+  página.
+- **Companheiro** (`TravelsWithParent`): a tarefa sem evidência de entrega e
+  sem ocorrência viva na página leva **uma** ocorrência, a viva de menor
+  `LastSeq` depois do cursor. Se houver alguma na janela da página, é ela,
+  então nada se repete. As outras vêm pelo próprio log.
+- **Em lote, sem rastreamento.** Os relacionados são carregados por nível a
+  partir da página:
+  - os pais por `WHERE EntityId IN (…)`;
+  - a primeira ocorrência de cada tarefa num `DISTINCT ON` só;
+  - a evidência de entrega numa consulta só, por `SyncReferences` ⋈
+    `SyncEntities`.
+
+  Tudo com `AsNoTracking`. São algumas consultas por página, qualquer que seja
+  o tamanho da família. A montagem em si é memória pura (`PullPageBuilder`).
+- **Teto da resposta** (`Sync:Pull`, `PullLimits`): `MaxEntities` (padrão
+  1.000) e `MaxBytes` (padrão 1 MiB, somando o JSON de cada mudança), contando
+  o que vem de carona.
+  - A página percorre o log em ordem e corta antes do item cujo fecho
+    passaria do teto. O cursor seguinte é o do último item incluído, e
+    `hasMore` fica verdadeiro.
+  - O primeiro item sempre entra, com o que ele exige, para o cursor andar.
+    Só ele, sozinho, passa do teto: uma tarefa com descrição maior que
+    `MaxBytes` vai numa página só dela. O teto por entidade é do G-05.
+
+O contrato não muda de forma, e o `SyncSchema.Current` não sobe. O cliente já
+segue `hasMore` e `NextCursor`, não espera a página cheia e ignora pela versão
+o que já tem.
+
+### Alternativas
+
+- **Guardar no cursor o que foi de carona.** O cursor deixaria de ser um
+  número e cresceria com a família. A evidência pelo próprio banco dá o mesmo
+  sem estado no cliente.
+- **Nenhum companheiro: as ocorrências só pelo log.** Uma tarefa nova cortada
+  no fim da página chegaria sem ocorrência e ficaria invisível até a página
+  seguinte. Uma ocorrência basta, e na prática é a que já viria.
+- **Só o teto, mantendo a família inteira.** Com 1.000 ocorrências e teto
+  menor, a tarefa não caberia em página nenhuma. E o reenvio a cada página
+  continuaria.
+
+### Consequências
+
+- Uma tarefa recorrente pode chegar com parte das ocorrências e completar nas
+  páginas seguintes do mesmo ciclo. Entre uma página e outra, a conclusão
+  derivada reflete o que já chegou.
+- 1 tarefa e 1.000 ocorrências custam 1.002 entidades no total. Antes, era
+  cerca de 1.000 por página.
+- Uma linha que falhou na aplicação isolada (`apply_failed`) não ganha mais
+  o pai de carona a cada página: ele só volta quando mudar ou pelo "Tentar de
+  novo". Antes, o reenvio constante às vezes a curava sozinho.
+- O `FindAsync` rastreado ficou só para o push, onde a escrita precisa dele.
+
+**Testes:**
+
+- **Server.Application:**
+  - 1 tarefa e 1.000 ocorrências, com a tarefa antes e depois delas, em
+    `limit=1` e no padrão: 1.001 distintas, no máximo 1.002 no total;
+  - o teto de entidades com o cursor sempre andando;
+  - o teto de bytes, com o item maior que ele indo sozinho;
+  - o pai já entregue fora da carona;
+  - o lançamento de horas com a ocorrência e a tarefa;
+  - o número de leituras do store, constante.
+- **Server.IntegrationTests (PostgreSQL real):**
+  - a reprodução da auditoria pelo HTTP, com no máximo 2 mudanças por página;
+  - `Sync:Pull:MaxEntities=50` respeitado;
+  - dois desktops com teto de 3 entidades: tarefas, etiqueta, horas,
+    ocorrências concluídas e tarefas renomeadas chegam inteiras, sem
+    `apply_failed`.
 
 ## ADR-072 — O push só guarda o contrato, com teto por entidade e cota por workspace
 
@@ -7018,7 +7167,9 @@ Antes de mudar, conferimos quem manda campo extra:
   `parameters[1].userId`). Vale para o topo, para o membro de objeto e para o
   membro do item de lista (`SyncFieldValidator.FindUnknown`). O
   `SyncFieldValidator.Validate` continua ignorando o desconhecido, porque o
-  desktop o roda no pull.
+  desktop o roda no pull. Essa recusa vem antes da do U+0000 (SEC-008): o
+  campo desconhecido com NUL leva `unknown_field`, e o NUL do nome vai escrito
+  como `\0` na frase, que também é gravada no servidor.
 - **Por operação, e não por campo.** O cliente de hoje transforma um
   `RejectedField` de motivo desconhecido em conflito visível e adota o valor do
   servidor. Um `Error` com código novo cai no caminho genérico: a operação fica

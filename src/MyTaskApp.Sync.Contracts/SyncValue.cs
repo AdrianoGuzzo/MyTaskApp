@@ -113,6 +113,18 @@ public static class SyncValue
     public static bool AreEqual(JsonElement left, JsonElement right) =>
         (IsNull(left) && IsNull(right)) || JsonElement.DeepEquals(left, right);
 
+    /// <summary>
+    /// Algum texto (ou nome de membro) com U+0000, em qualquer profundidade. O
+    /// PostgreSQL não grava esse caractere em <c>text</c> nem em <c>jsonb</c>.
+    /// </summary>
+    public static bool ContainsNul(JsonElement value) => value.ValueKind switch
+    {
+        JsonValueKind.String => value.GetString()!.Contains('\0'),
+        JsonValueKind.Object => value.EnumerateObject().Any(member => member.Name.Contains('\0') || ContainsNul(member.Value)),
+        JsonValueKind.Array => value.EnumerateArray().Any(ContainsNul),
+        _ => false,
+    };
+
     /// <summary>Uma cópia que sobrevive ao <see cref="JsonDocument"/> de onde o valor veio.</summary>
     public static JsonElement Detach(JsonElement value) => value.ValueKind == JsonValueKind.Undefined ? Null : value.Clone();
 

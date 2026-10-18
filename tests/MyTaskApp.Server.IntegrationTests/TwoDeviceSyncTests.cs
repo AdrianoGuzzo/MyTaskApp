@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Sync;
 using MyTaskApp.Application.Tasks;
@@ -6,6 +7,7 @@ using MyTaskApp.Domain.Commands;
 using MyTaskApp.Domain.Devices;
 using MyTaskApp.Domain.Tags;
 using MyTaskApp.Domain.Tasks;
+using MyTaskApp.Domain.TimeTracking;
 using MyTaskApp.Sync.Contracts;
 using MyTaskApp.Sync.Contracts.Definitions;
 
@@ -163,6 +165,50 @@ public sealed class TwoDeviceSyncTests(PostgresFixture postgres) : IAsyncLifetim
 
         await desktop.SyncedAsync(Ct);
         (await desktop.ReadAsync(context => context.Tasks.CountAsync(Ct))).Should().Be(1);
+    }
+
+    /// <summary>
+    /// ADR-071: com o teto do pull bem pequeno, a mesma família se espalha por
+    /// várias páginas. O pai tem de chegar antes do filho, e a tarefa com a
+    /// ocorrência, ou a página cai na FK do SQLite e vira "apply_failed".
+    /// </summary>
+    [Fact]
+    public async Task WithATinyPullPage_EverythingArrives_WithoutAnyFailedRow()
+    {
+        _api = await ServerAsync(new Dictionary<string, string?> { ["Sync:Pull:MaxEntities"] = "3" });
+        var notebook = await ConnectedAsync("Notebook");
+        var desktop = await ConnectedAsync("Desktop");
+        var tag = Tag.Create("Cliente", "#336699", Now);
+        var tasks = Enumerable.Range(1, 8).Select(index => TaskItem.Create($"Tarefa {index}", Now)).ToList();
+        tasks.ForEach(task => task.SetTags([tag.Id]));
+        await notebook.ChangeAsync(context =>
+        {
+            context.Add(tag);
+            context.AddRange(tasks);
+            context.AddRange(tasks.Select(task => TimeEntry.Manual(task.Occurrences[0].Id, Now.AddHours(-2), Now.AddHours(-1), null, Now)));
+        }, Ct);
+        await notebook.SyncedAsync(Ct);
+        await desktop.SyncedAsync(Ct);
+
+        // Depois do primeiro pull: horas novas, ocorrências e tarefas que mudaram depois delas.
+        await notebook.ChangeAsync(async context =>
+        {
+            foreach (var task in await context.Tasks.Include(task => task.Occurrences).ToListAsync(Ct))
+            {
+                context.Add(TimeEntry.Manual(task.Occurrences[0].Id, Now.AddHours(-4), Now.AddHours(-3), "mais", Now));
+                task.CompleteOccurrence(task.Occurrences[0].Id, Now);
+                task.Rename($"{task.Title} (feita)");
+            }
+        }, Ct);
+        await notebook.SyncedAsync(Ct);
+        await desktop.SyncedAsync(Ct);
+
+        var failures = await desktop.RunAsync(provider => provider.GetRequiredService<ISyncLocalStore>().ListApplyFailuresAsync(Ct));
+        failures.Should().BeEmpty();
+        var arrived = await desktop.ReadAsync(context => context.Tasks.Include(task => task.Occurrences).Include(task => task.Tags).ToListAsync(Ct));
+        arrived.Select(task => task.Title).Should().BeEquivalentTo(tasks.Select(task => $"{task.Title} (feita)"));
+        arrived.Should().OnlyContain(task => task.Occurrences.Single().Status == TaskItemStatus.Completed && task.Tags.Single().TagId == tag.Id);
+        (await desktop.ReadAsync(context => context.TimeEntries.CountAsync(Ct))).Should().Be(16);
     }
 
     [Fact]

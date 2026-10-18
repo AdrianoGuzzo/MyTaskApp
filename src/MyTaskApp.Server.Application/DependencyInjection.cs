@@ -9,6 +9,7 @@ public static class DependencyInjection
     public static IServiceCollection AddServerApplication(this IServiceCollection services)
     {
         services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton(new PullLimits());
         services.TryAddSingleton(new PushLimits());
         services.AddScoped<PushProcessor>();
         services.AddScoped<SyncQueries>();
