@@ -90,6 +90,18 @@ public sealed class AppLinkSyncLoginTests : IDisposable
     }
 
     [Fact]
+    public async Task ThePhoneOverTheDeviceCap_IsToldToRevokeAnOldOne()
+    {
+        var authorization = await _auth.BeginAuthorizationAsync(Ct);
+        var state = Form(authorization.AuthorizeUrl.Query.TrimStart('?'))["state"];
+
+        _redirect.Deliver(new Dictionary<string, string> { ["state"] = state, ["error"] = SyncErrorCodes.DeviceLimitReached });
+
+        var completion = () => authorization.Completion.WaitAsync(TimeSpan.FromSeconds(10), Ct);
+        (await completion.Should().ThrowAsync<DomainException>()).Which.Message.Should().Contain("revogue");
+    }
+
+    [Fact]
     public async Task ADeniedLogin_SaysSo_AndStoresNothing()
     {
         var authorization = await _auth.BeginAuthorizationAsync(Ct);

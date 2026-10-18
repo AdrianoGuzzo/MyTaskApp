@@ -114,6 +114,8 @@ public sealed record WorkspaceInfo(Guid Id, string Name, WorkspaceRole Role, boo
 /// <param name="Capabilities">
 /// O que este dispositivo sabe fazer além de sincronizar. Vazio na v1; é o
 /// ponto de extensão reservado para um futuro agente local, sem antecipá-lo.
+/// Até <see cref="SyncSchema.MaxCapabilities"/> itens de
+/// <see cref="SyncSchema.MaxCapabilityLength"/> caracteres; acima disso, 400.
 /// </param>
 public sealed record DeviceHello(
     string? Nickname,

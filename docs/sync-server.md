@@ -78,6 +78,7 @@ o da variável, e o conteúdo é o valor. É o que o compose de produção usa (
 | `Sync__RefreshTokenLifetime` | não | padrão `30.00:00:00`, deslizante e rotativo |
 | `Sync__RefreshTokenReuseLeeway` | não | padrão `00:00:30`: um refresh já trocado ainda vale, para a resposta perdida na rede |
 | `Sync__DeviceCacheLifetime` | não | padrão `00:00:30` |
+| `Sync__MaxActiveDevicesPerUser` | não | dispositivos não revogados por conta (SEC-015). Padrão 20; acima, o login de um dispositivo novo leva `device_limit_reached` e é preciso revogar um antigo; `0` desliga |
 | `Sync__ProcessedOperationRetention` | não | padrão `90.00:00:00`, tempo de guarda dos resultados para o reenvio |
 | `Sync__RateLimits__AuthPerMinute` | não | login e token, por IP. Padrão 20 |
 | `Sync__RateLimits__SyncPerMinute` / `SyncBurst` | não | push, pull e fetch, por usuário (o `sub` do token). Padrão 60 por minuto, rajada de 20 |
