@@ -158,16 +158,14 @@ jobs:
           -p:SyncApiBaseUrl=https://sync.example.invalid/
           -p:AcceptAndroidSDKLicenses=True
 
+      # A mesma conferência do APK da release (release.yml, job android), aqui
+      # só a parte do SQLite: este APK sai com a chave de debug de propósito.
       - name: Conferir o APK
         shell: bash
         run: |
           apk=$(ls src/MyTaskApp.Mobile/bin/Release/net10.0-android/*-Signed.apk | head -1)
           test -n "$apk" || { echo "APK ausente"; exit 1; }
-          # Sem -q: o grep -q sai no primeiro acerto, o unzip leva SIGPIPE (141)
-          # e o pipefail do Actions transforma isso em falha.
-          unzip -l "$apk" | grep "lib/arm64-v8a/libe_sqlite3.so" >/dev/null \
-            || { echo "o APK não leva o SQLite nativo"; exit 1; }
-          echo "ok: $apk"
+          bash scripts/check-android-apk.sh "$apk"
 
   # O publish self-contained é o que o instalador empacota. Quebrar aqui
   # significa release quebrada, e é barato descobrir antes da tag.

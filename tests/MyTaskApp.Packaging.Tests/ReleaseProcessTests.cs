@@ -118,7 +118,7 @@ public class ReleaseProcessTests
     {
         var checkouts = Regex.Matches(ReleaseWorkflow, @"uses: actions/checkout@[^\r\n]+\s+with:\s+ref: (.+)");
 
-        checkouts.Should().HaveCount(3);
+        checkouts.Should().HaveCount(4);
         checkouts.Select(match => match.Groups[1].Value.Trim())
             .Should().AllBe("refs/tags/${{ inputs.tag }}");
     }
@@ -142,9 +142,41 @@ public class ReleaseProcessTests
     [Theory]
     [InlineData("MyTaskApp-$VERSION-win-x64-setup.exe")]
     [InlineData("MyTaskApp-$VERSION-linux-x64.tar.gz")]
+    [InlineData("MyTaskApp-$VERSION-android.apk")]
     public void ArtifactNamesFollowProductVersionRuntime(string expected)
     {
         ReleaseWorkflow.Should().Contain(expected);
+    }
+
+    /// <summary>
+    /// O APK da release atualiza o do celular por cima só se a chave for
+    /// sempre a mesma: a keystore e as senhas vêm dos secrets, a keystore
+    /// fica fora do checkout, e as senhas nunca entram na linha de comando.
+    /// </summary>
+    [Fact]
+    public void TheAndroidPackageIsSignedWithTheReleaseKeystoreFromSecrets()
+    {
+        ReleaseWorkflow.Should().Contain("${{ secrets.ANDROID_KEYSTORE_BASE64 }}");
+        ReleaseWorkflow.Should().Contain("-p:AndroidSigningKeyStore=\"$RUNNER_TEMP/mytaskapp.jks\"");
+        ReleaseWorkflow.Should().Contain("-p:AndroidSigningStorePass=env:ANDROID_KEYSTORE_PASSWORD");
+        ReleaseWorkflow.Should().Contain("-p:AndroidSigningKeyPass=env:ANDROID_KEY_PASSWORD");
+    }
+
+    /// <summary>
+    /// Assinado com a chave de debug, ou com um versionCode que não é o da
+    /// tag, o APK instala no primeiro dia e trava a atualização seguinte.
+    /// </summary>
+    [Fact]
+    public void TheAndroidPackageIsCheckedBeforeItIsAttached()
+    {
+        var script = RepositoryFiles.Read(RepositoryFiles.AndroidApkCheckScript);
+
+        ReleaseWorkflow.Should().Contain(
+            "bash scripts/check-android-apk.sh \"artifacts/installer/MyTaskApp-$VERSION-android.apk\" \"$VERSION\"");
+        script.Should().Contain("apksigner\" verify --print-certs");
+        script.Should().Contain("CN=Android Debug");
+        script.Should().Contain("major * 10000 + minor * 100 + patch");
+        script.Should().Contain("lib/arm64-v8a/libe_sqlite3.so");
     }
 
     [Fact]

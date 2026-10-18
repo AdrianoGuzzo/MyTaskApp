@@ -425,6 +425,7 @@ nada antes.
 |---|---|
 | Windows x64 | `MyTaskApp-<versão>-win-x64-setup.exe` |
 | Linux x64 | `MyTaskApp-<versão>-linux-x64.tar.gz` |
+| Android (celular) | `MyTaskApp-<versão>-android.apk` ([como instalar](docs/mobile.md#android-apk-assinado-em-cada-release)) |
 | macOS | ainda não disponível ([roteiro](installer/macos/README.md)) |
 
 Cada release publica também um `SHA256SUMS`, para conferir o download:

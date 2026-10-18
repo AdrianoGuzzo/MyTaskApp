@@ -204,6 +204,7 @@ A análise de segurança é a da seção abaixo.
 | `verify` | tag no formato `vX.Y.Z`; `dotnet msbuild -getProperty:Version` igual à tag; a release existe, é rascunho e não tem artefatos |
 | `windows` | checkout **da tag** → `installer/windows/build.ps1` (testes → publish → Inno Setup) |
 | `linux` | checkout **da tag** → `installer/linux/build.sh` |
+| `android` | checkout **da tag** → confere os secrets da keystore e `SYNC_API_BASE_URL` → APK assinado → `scripts/check-android-apk.sh` (SQLite nativo, assinatura que não é a de debug, `versionCode` da tag) ([docs/mobile.md](mobile.md#android-apk-assinado-em-cada-release)) |
 | `publish` | confere os nomes → `SHA256SUMS` → `sha256sum -c` → anexa ao rascunho → acrescenta às notas o commit SHA, o link da execução e os hashes |
 
 Artefatos de cada release:
@@ -211,8 +212,12 @@ Artefatos de cada release:
 ```text
 MyTaskApp-1.5.0-win-x64-setup.exe
 MyTaskApp-1.5.0-linux-x64.tar.gz
+MyTaskApp-1.5.0-android.apk
 SHA256SUMS
 ```
+
+O `.ipa` do iOS não sai aqui: o workflow manual *Mobile iOS (manual)*, com o
+campo `tag`, o anexa ao rascunho depois (fora do `SHA256SUMS`).
 
 ### Configuração do repositório (uma vez)
 

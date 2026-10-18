@@ -46,6 +46,8 @@ internal static class RepositoryFiles
 
     public static string VulnerablePackagesScript => At("scripts", "check-vulnerable-packages.ps1");
 
+    public static string AndroidApkCheckScript => At("scripts", "check-android-apk.sh");
+
     public static IEnumerable<string> Workflows =>
         Directory.EnumerateFiles(At(".github", "workflows"), "*.yml");
 
