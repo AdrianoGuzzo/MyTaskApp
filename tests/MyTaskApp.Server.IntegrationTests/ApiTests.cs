@@ -98,12 +98,39 @@ public sealed class ApiTests(PostgresFixture postgres) : IAsyncLifetime
             .Select(grant => grant.GetString()).Should().BeEquivalentTo("authorization_code", "refresh_token");
     }
 
-    [Fact]
-    public async Task ARedirectThatWasNotRegistered_NeverReceivesACode()
+    /// <summary>No loopback só a porta é livre (ADR-074): host, esquema e caminho continuam exatos, e o <c>localhost</c> saiu.</summary>
+    [Theory]
+    [InlineData("http://127.0.0.1:9999/outra")]
+    [InlineData("http://localhost:47833/callback")]
+    [InlineData("https://127.0.0.1:9999/callback")]
+    [InlineData("http://127.0.0.2:9999/callback")]
+    [InlineData("http://sync.exemplo.com:9999/callback")]
+    public async Task ARedirectThatWasNotRegistered_NeverReceivesACode(string redirectUri)
     {
-        var authorize = () => _api.AuthorizeAsync("ana", Guid.CreateVersion7(), redirectUri: "http://127.0.0.1:9999/callback");
+        var authorize = () => _api.AuthorizeAsync("ana", Guid.CreateVersion7(), redirectUri: redirectUri);
 
         await authorize.Should().ThrowAsync<OAuthRefusedException>();
+    }
+
+    /// <summary>
+    /// A porta efêmera do desktop (RFC 8252 §7.3): qualquer uma no 127.0.0.1, e a
+    /// 47833 das versões antigas também. A troca exige a mesma do pedido.
+    /// </summary>
+    [Theory]
+    [InlineData(47833)]
+    [InlineData(51234)]
+    [InlineData(65535)]
+    public async Task TheLoopbackRedirect_TakesAnyPort_AndTheExchangeWantsTheSameOne(int port)
+    {
+        var redirectUri = $"http://127.0.0.1:{port}/callback";
+
+        var (code, verifier) = await _api.AuthorizeAsync("ana", Guid.CreateVersion7(), redirectUri: redirectUri);
+        var anotherPort = () => _api.ExchangeAsync(code, verifier, $"http://127.0.0.1:{port - 1}/callback");
+
+        await anotherPort.Should().ThrowAsync<OAuthRefusedException>();
+
+        (code, verifier) = await _api.AuthorizeAsync("ana", Guid.CreateVersion7(), redirectUri: redirectUri);
+        (await _api.ExchangeAsync(code, verifier, redirectUri)).AccessToken.Should().NotBeNullOrEmpty();
     }
 
     [Fact]

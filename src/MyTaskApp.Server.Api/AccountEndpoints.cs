@@ -118,9 +118,20 @@ internal static class AccountEndpoints
 
         await workspaces.EnsurePersonalAsync(user.Id, cancellationToken);
         await context.SignOutAsync(IdentityConstants.ExternalScheme);
-        await signIn.SignInAsync(user, isPersistent: false);
 
-        return Results.LocalRedirect(IsLocal(returnUrl) ? returnUrl! : "/");
+        var safeReturn = IsLocal(returnUrl) ? returnUrl : "/";
+
+        // Voltando para um /connect/authorize, a sessão leva a marca dele: só ele sai sem perguntar (ADR-074).
+        if (ConnectEndpoints.FlowKeyOf(context.Request.PathBase, safeReturn) is { } flow)
+        {
+            await signIn.SignInWithClaimsAsync(user, isPersistent: false, [new Claim(ConnectEndpoints.AuthorizeFlowClaim, flow)]);
+        }
+        else
+        {
+            await signIn.SignInAsync(user, isPersistent: false);
+        }
+
+        return Results.LocalRedirect(safeReturn);
     }
 
     /// <summary>
@@ -139,7 +150,7 @@ internal static class AccountEndpoints
     /// <summary>Um formulário com o token antiforgery: sair também é uma ação que outro site não pode disparar.</summary>
     private static IResult LogoutForm(HttpContext context, IAntiforgery antiforgery, IOptions<AntiforgeryOptions> antiforgeryOptions)
     {
-        if (RefuseWithoutHttps(context, antiforgeryOptions.Value) is { } refused)
+        if (RefuseWithoutHttps(context, antiforgeryOptions.Value, "Sair") is { } refused)
         {
             return refused;
         }
@@ -160,7 +171,7 @@ internal static class AccountEndpoints
 
     private static async Task<IResult> LogoutAsync(HttpContext context, IAntiforgery antiforgery, IOptions<AntiforgeryOptions> antiforgeryOptions)
     {
-        if (RefuseWithoutHttps(context, antiforgeryOptions.Value) is { } refused)
+        if (RefuseWithoutHttps(context, antiforgeryOptions.Value, "Sair") is { } refused)
         {
             return refused;
         }
@@ -185,8 +196,8 @@ internal static class AccountEndpoints
     /// Com o cookie do antiforgery só por HTTPS (fora dos testes), um pedido HTTP faria o antiforgery
     /// lançar: responde 400 dizendo o porquê (SEC-013). Em produção, o TLS e o redirect para HTTPS resolvem.
     /// </summary>
-    private static IResult? RefuseWithoutHttps(HttpContext context, AntiforgeryOptions antiforgery) =>
+    internal static IResult? RefuseWithoutHttps(HttpContext context, AntiforgeryOptions antiforgery, string action) =>
         antiforgery.Cookie.SecurePolicy == CookieSecurePolicy.Always && !context.Request.IsHttps
-            ? Results.Problem("Sair exige HTTPS. Abra este endereço por https://.", statusCode: StatusCodes.Status400BadRequest)
+            ? Results.Problem($"{action} exige HTTPS. Abra este endereço por https://.", statusCode: StatusCodes.Status400BadRequest)
             : null;
 }

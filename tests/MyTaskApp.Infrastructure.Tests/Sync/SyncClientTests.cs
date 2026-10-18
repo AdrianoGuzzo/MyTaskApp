@@ -1,5 +1,4 @@
 using System.Net;
-using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Time.Testing;
@@ -29,7 +28,7 @@ public sealed class SyncClientTests : IDisposable
 
     private readonly FakeDeviceIdentity _device = new() { DefaultNickname = "Notebook" };
 
-    private readonly SyncOptions _options = new() { ApiBaseUrl = "https://sync.exemplo.com", CallbackPort = FreePort() };
+    private readonly SyncOptions _options = new() { ApiBaseUrl = "https://sync.exemplo.com" };
 
     private readonly SyncAuthenticationService _auth;
 
@@ -191,13 +190,14 @@ public sealed class SyncClientTests : IDisposable
     public async Task TheBrowserLogin_UsesPkceAndTheLoopback_AndStoresOnlyTheRefreshToken()
     {
         string? challenge = null;
+        string? redirect = null;
         _server.On(ApiRoutes.Token, request =>
         {
             var form = Form(request.Content!.ReadAsStringAsync().GetAwaiter().GetResult());
             var verifier = form["code_verifier"];
             var expected = Convert.ToBase64String(SHA256.HashData(Encoding.ASCII.GetBytes(verifier))).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
-            return form["code"] == "codigo-do-navegador" && expected == challenge
+            return form["code"] == "codigo-do-navegador" && expected == challenge && form["redirect_uri"] == redirect
                 ? FakeJiraServer.Json(HttpStatusCode.OK, """{"access_token":"access-login","refresh_token":"refresh-login","expires_in":900}""")
                 : FakeJiraServer.Json(HttpStatusCode.BadRequest, """{"error":"invalid_grant"}""");
         });
@@ -205,17 +205,20 @@ public sealed class SyncClientTests : IDisposable
         var authorization = await _auth.BeginAuthorizationAsync(Ct);
         var query = Form(authorization.AuthorizeUrl.Query.TrimStart('?'));
         challenge = query["code_challenge"];
+        redirect = query["redirect_uri"];
+        var loopback = new Uri(redirect);
 
         authorization.AuthorizeUrl.AbsolutePath.Should().Be(ApiRoutes.Authorize);
         query["code_challenge_method"].Should().Be("S256");
         query["client_id"].Should().Be(SyncSchema.DesktopClientId);
-        query["redirect_uri"].Should().Be($"http://127.0.0.1:{_options.CallbackPort}/callback");
+        (loopback.Scheme, loopback.Host, loopback.AbsolutePath).Should().Be(("http", "127.0.0.1", "/callback"));
+        loopback.Port.Should().NotBe(0, "é a porta efêmera aberta para este login (ADR-074)");
         query[SyncSchema.DeviceIdClaim].Should().Be(_device.DeviceId.ToString());
         query[SyncSchema.DeviceNameParameter].Should().Be("Notebook");
         query.Should().NotContainKey("client_secret");
 
         using var browser = new HttpClient();
-        await browser.GetAsync($"http://127.0.0.1:{_options.CallbackPort}/callback?state={query["state"]}&code=codigo-do-navegador", Ct);
+        await browser.GetAsync($"{redirect}?state={query["state"]}&code=codigo-do-navegador", Ct);
         await authorization.Completion.WaitAsync(TimeSpan.FromSeconds(10), Ct);
 
         _secrets.Secrets[SyncOptions.SecretName].Should().Be("refresh-login");
@@ -226,10 +229,10 @@ public sealed class SyncClientTests : IDisposable
     public async Task ARevokedDevice_IsToldAsSuch_WhenLoggingInAgain()
     {
         var authorization = await _auth.BeginAuthorizationAsync(Ct);
-        var state = Form(authorization.AuthorizeUrl.Query.TrimStart('?'))["state"];
+        var query = Form(authorization.AuthorizeUrl.Query.TrimStart('?'));
 
         using var browser = new HttpClient();
-        await browser.GetAsync($"http://127.0.0.1:{_options.CallbackPort}/callback?state={state}&error=device_revoked", Ct);
+        await browser.GetAsync($"{query["redirect_uri"]}?state={query["state"]}&error=device_revoked", Ct);
 
         var completion = () => authorization.Completion.WaitAsync(TimeSpan.FromSeconds(10), Ct);
         (await completion.Should().ThrowAsync<SyncApiException>()).Which.Kind.Should().Be(SyncFailureKind.DeviceRevoked);
@@ -239,10 +242,10 @@ public sealed class SyncClientTests : IDisposable
     public async Task TheDeviceCap_TellsWhereToRevokeAnOldOne_AndStoresNothing()
     {
         var authorization = await _auth.BeginAuthorizationAsync(Ct);
-        var state = Form(authorization.AuthorizeUrl.Query.TrimStart('?'))["state"];
+        var query = Form(authorization.AuthorizeUrl.Query.TrimStart('?'));
 
         using var browser = new HttpClient();
-        await browser.GetAsync($"http://127.0.0.1:{_options.CallbackPort}/callback?state={state}&error={SyncErrorCodes.DeviceLimitReached}", Ct);
+        await browser.GetAsync($"{query["redirect_uri"]}?state={query["state"]}&error={SyncErrorCodes.DeviceLimitReached}", Ct);
 
         var completion = () => authorization.Completion.WaitAsync(TimeSpan.FromSeconds(10), Ct);
         (await completion.Should().ThrowAsync<DomainException>()).Which.Message.Should().Contain("limite de dispositivos").And.Contain("revogue");
@@ -316,13 +319,4 @@ public sealed class SyncClientTests : IDisposable
         text.Split('&', StringSplitOptions.RemoveEmptyEntries)
             .Select(pair => pair.Split('=', 2))
             .ToDictionary(pair => Uri.UnescapeDataString(pair[0]), pair => Uri.UnescapeDataString(pair[1].Replace('+', ' ')));
-
-    private static int FreePort()
-    {
-        var probe = new TcpListener(IPAddress.Loopback, 0);
-        probe.Start();
-        var port = ((IPEndPoint)probe.LocalEndpoint).Port;
-        probe.Stop();
-        return port;
-    }
 }

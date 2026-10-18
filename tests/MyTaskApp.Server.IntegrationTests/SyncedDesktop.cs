@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 using System.Net;
-using System.Net.Sockets;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -26,7 +26,7 @@ internal sealed class SyncedDesktop : IAsyncDisposable
 {
     private readonly ApiFactory _api;
 
-    private SyncedDesktop(ApiFactory api, string folder, ServiceProvider services, TestDevice device, MemorySecretStore secrets, Network network, int callbackPort)
+    private SyncedDesktop(ApiFactory api, string folder, ServiceProvider services, TestDevice device, MemorySecretStore secrets, Network network)
     {
         _api = api;
         Folder = folder;
@@ -34,7 +34,6 @@ internal sealed class SyncedDesktop : IAsyncDisposable
         Device = device;
         Secrets = secrets;
         Net = network;
-        CallbackPort = callbackPort;
     }
 
     public string Folder { get; }
@@ -47,23 +46,12 @@ internal sealed class SyncedDesktop : IAsyncDisposable
 
     public Network Net { get; }
 
-    public int CallbackPort { get; }
-
     public SyncEngine Engine => Services.GetRequiredService<SyncEngine>();
 
     public ISyncAccount Account => Services.GetRequiredService<ISyncAccount>();
 
-    /// <summary>Uma porta livre para a volta do login, registrada no servidor do teste.</summary>
-    public static int FreePort()
-    {
-        using var probe = new TcpListener(IPAddress.Loopback, 0);
-        probe.Start();
-        return ((IPEndPoint)probe.LocalEndpoint).Port;
-    }
-
     public static async Task<SyncedDesktop> CreateAsync(
         ApiFactory api,
-        int callbackPort,
         string nickname,
         CancellationToken cancellationToken,
         string? folder = null,
@@ -82,7 +70,6 @@ internal sealed class SyncedDesktop : IAsyncDisposable
                 ["Database:Directory"] = folder,
                 ["Application:TimeZoneId"] = "UTC",
                 ["Sync:ApiBaseUrl"] = "http://localhost/",
-                ["Sync:CallbackPort"] = callbackPort.ToString(System.Globalization.CultureInfo.InvariantCulture),
             })
             .Build();
 
@@ -109,14 +96,14 @@ internal sealed class SyncedDesktop : IAsyncDisposable
             await scope.ServiceProvider.GetRequiredService<IDatabaseInitializer>().InitializeAsync(cancellationToken);
         }
 
-        return new SyncedDesktop(api, folder, services, device, secrets, network, callbackPort);
+        return new SyncedDesktop(api, folder, services, device, secrets, network);
     }
 
     /// <summary>Fecha e abre o app de novo sobre o mesmo banco, o mesmo cofre e o mesmo DeviceId.</summary>
     public async Task<SyncedDesktop> RestartAsync(CancellationToken cancellationToken)
     {
         await DisposeAsync();
-        return await CreateAsync(_api, CallbackPort, Device.DefaultNickname, cancellationToken, Folder, Device, Secrets, Net);
+        return await CreateAsync(_api, Device.DefaultNickname, cancellationToken, Folder, Device, Secrets, Net);
     }
 
     /// <summary>"Conectar com o Google": o navegador segue os redirects e volta pela porta de loopback.</summary>
@@ -125,7 +112,10 @@ internal sealed class SyncedDesktop : IAsyncDisposable
         var authorization = await Account.BeginConnectAsync(cancellationToken);
         var callback = await _api.FollowToCallbackAsync(googleSubject, authorization.AuthorizeUrl.PathAndQuery);
 
-        callback.Port.Should().Be(CallbackPort);
+        // A porta efêmera que o desktop abriu para este login (ADR-074), sem nada registrado com ela no servidor.
+        var redirect = new Uri(QueryHelpers.ParseQuery(authorization.AuthorizeUrl.Query)["redirect_uri"].ToString());
+        redirect.Port.Should().NotBe(0);
+        callback.Port.Should().Be(redirect.Port);
 
         using (var browser = new HttpClient())
         {

@@ -19,6 +19,7 @@ public interface ISyncAuthorizationRedirect
     /// <summary>O cliente OAuth público deste app; o servidor só aceita a volta registrada para ele.</summary>
     string ClientId { get; }
 
+    /// <summary>A volta registrada no servidor. No loopback, sem porta: a de cada login é a da sessão.</summary>
     Uri RedirectUri { get; }
 
     /// <summary>Começa a esperar uma volta. Abrir de novo desiste da anterior.</summary>
@@ -28,6 +29,9 @@ public interface ISyncAuthorizationRedirect
 /// <summary>Uma espera pela volta do login.</summary>
 public interface ISyncAuthorizationSession : IAsyncDisposable
 {
+    /// <summary>O <c>redirect_uri</c> deste login, no pedido e na troca do código.</summary>
+    Uri RedirectUri { get; }
+
     /// <summary>
     /// O código da primeira volta com o <paramref name="expectedState"/>. Recusa
     /// do usuário ou do servidor vem como <see cref="DomainException"/>.
@@ -38,18 +42,24 @@ public interface ISyncAuthorizationSession : IAsyncDisposable
     void Close();
 }
 
-/// <summary>A volta pelo loopback do desktop: o <see cref="LoopbackCallbackListener"/> de sempre.</summary>
+/// <summary>
+/// A volta pelo loopback do desktop: o <see cref="LoopbackCallbackListener"/> de
+/// sempre, numa porta efêmera por login (ADR-074), a menos que
+/// <see cref="SyncOptions.CallbackPort"/> fixe uma.
+/// </summary>
 internal sealed class LoopbackSyncAuthorizationRedirect(SyncOptions options, ILogger logger) : ISyncAuthorizationRedirect
 {
     public string ClientId => SyncSchema.DesktopClientId;
 
-    public Uri RedirectUri => options.RedirectUri;
+    public Uri RedirectUri { get; } = new("http://127.0.0.1/callback");
 
     public ISyncAuthorizationSession Open() =>
         new Session(LoopbackCallbackListener.Start(options.CallbackPort, SyncAuthenticationService.CallbackMessages, logger));
 
     private sealed class Session(LoopbackCallbackListener listener) : ISyncAuthorizationSession
     {
+        public Uri RedirectUri { get; } = new($"http://127.0.0.1:{listener.Port}/callback");
+
         public Task<string> WaitForCodeAsync(string expectedState, CancellationToken cancellationToken) =>
             listener.WaitForCodeAsync(expectedState, cancellationToken);
 
@@ -133,6 +143,8 @@ public sealed class AppLinkAuthorizationRedirect(string clientId, Uri redirectUr
     {
         private readonly TaskCompletionSource<IReadOnlyDictionary<string, string>> _arrived =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Uri RedirectUri => owner.RedirectUri;
 
         public async Task<string> WaitForCodeAsync(string expectedState, CancellationToken cancellationToken)
         {

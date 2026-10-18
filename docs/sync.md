@@ -32,7 +32,9 @@ Numa build sem servidor de sincronização, a bolinha não aparece.
 *☰ → Sincronização…*:
 
 - **Conta.** "Conectar com o Google" abre o navegador. O MyTaskApp nunca vê a
-  senha: a volta é por `http://127.0.0.1:47833/callback`, com PKCE.
+  senha: a volta é por `http://127.0.0.1:<porta>/callback`, numa porta
+  efêmera aberta para aquele login, com PKCE. Se o navegador já tinha uma
+  sessão aberta por outro login, o servidor pergunta antes ("Conectar …?").
   "Desconectar" sai da conta neste computador e **não apaga nada**: tudo
   continua aqui, só para de sincronizar.
 - **Sincronização.** Liga e pausa, mostra a última sincronização e o último
@@ -316,8 +318,9 @@ mesmo ciclo — só em primeiro plano. Diferenças:
   compartilhado vai junto. A revisão local é a barreira, e não a solução.
 - Um botão de diretório criado em outro computador enquanto o comando estava
   desmarcado aqui não chega quando ele volta a ser compartilhado.
-- A porta de volta do login (47833) é fixa: o servidor só aceita o endereço
-  registrado.
+- A versão com porta efêmera no login (ADR-074) precisa do servidor
+  atualizado antes: um servidor antigo só aceita a 47833 e recusa a volta no
+  navegador. O desktop antigo continua entrando no servidor novo.
 - Um espaço pessoal por conta, sem convites. O esquema do servidor já tem
   membros e papéis.
 - Escondida não é privada: a tarefa só de um computador também está no
