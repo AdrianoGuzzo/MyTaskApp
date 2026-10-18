@@ -204,9 +204,15 @@ As chaves do DataProtection (cookies do login) ficam na tabela
 Com o Docker Desktop:
 
 ```powershell
+# A senha do banco, só desta máquina, no deploy/sync-server/.env (fora do Git)
+$b = New-Object byte[] 24; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b)
+$senha = -join ($b | ForEach-Object { $_.ToString("x2") })
+"POSTGRES_PASSWORD=$senha" | Set-Content -Encoding ascii deploy/sync-server/.env
+
 docker compose -f deploy/sync-server/docker-compose.yml up -d postgres
 
 cd src/MyTaskApp.Server.Api
+dotnet user-secrets set "ConnectionStrings:Sync" "Host=localhost;Port=5432;Database=mytaskapp_sync;Username=mytaskapp;Password=$senha"
 dotnet user-secrets set "Authentication:Google:ClientId" "<id>"
 dotnet user-secrets set "Authentication:Google:ClientSecret" "<segredo>"
 dotnet user-secrets set "Sync:Registration:AllowedEmails:0" "<seu e-mail do Google>"
@@ -216,8 +222,31 @@ dotnet run --project src/MyTaskApp.Server.Api --launch-profile http
 ```
 
 O servidor sobe em `http://localhost:5280`, aplica as migrations sozinho (em
-Development) e responde `GET /health`. O `appsettings.Development.json` já
-aponta para o PostgreSQL do compose.
+Development) e responde `GET /health`.
+
+**Nenhuma senha do banco fica no repositório** (SEC-012). O compose lê a
+`POSTGRES_PASSWORD` do `deploy/sync-server/.env`, que o Git ignora (modelo em
+`deploy/sync-server/.env.example`). Sem ela, ele não sobe e diz por quê:
+`required variable POSTGRES_PASSWORD is missing a value: defina
+POSTGRES_PASSWORD…`. O `dotnet run` lê a connection string do user-secrets
+(`UserSecretsId` `mytaskapp-sync-server`, fora do repositório, em
+`%APPDATA%\Microsoft\UserSecrets`); sem ela, o servidor não sobe e registra
+`Falta ConnectionStrings:Sync`. Para ver ou trocar: `dotnet user-secrets list`
+e `dotnet user-secrets set "ConnectionStrings:Sync" "…"`, dentro de
+`src/MyTaskApp.Server.Api`.
+
+O PostgreSQL só usa a `POSTGRES_PASSWORD` ao criar o volume `sync-data`. Um
+volume criado antes continua com a senha antiga, a que estava versionada, que
+deve ser tratada como pública. Troque-a no banco e use a nova no `.env` e no
+user-secrets:
+
+```powershell
+docker compose -f deploy/sync-server/docker-compose.yml exec postgres `
+  psql -U mytaskapp -d mytaskapp_sync -c "ALTER ROLE mytaskapp PASSWORD '<a do .env>'"
+```
+
+Ou recrie o volume, apagando os dados: `docker compose -f
+deploy/sync-server/docker-compose.yml down -v`.
 
 **Development só escuta no loopback** (ADR-070). Ele anda em HTTP, com os
 certificados de desenvolvimento, e não serve a rede. Com `--urls
@@ -227,7 +256,8 @@ o servidor, publique em Production (§5). O `Host` também só aceita os nomes d
 loopback (`AllowedHosts` do `appsettings.Development.json`); o celular chega
 como `localhost` pelo `adb reverse` (docs/mobile.md).
 
-Para rodar tudo em contêiner, com a API inclusive:
+Para rodar tudo em contêiner, com a API inclusive (a connection string da API
+também é montada a partir da `POSTGRES_PASSWORD` do `.env`):
 
 ```powershell
 $env:GOOGLE_CLIENT_ID = "<id>"; $env:GOOGLE_CLIENT_SECRET = "<segredo>"; $env:SYNC_ALLOWED_EMAIL = "<seu e-mail do Google>"
@@ -275,7 +305,7 @@ dotnet ef migrations add <Nome> -p src/MyTaskApp.Server.Infrastructure -s src/My
 
 # Aplicar no banco local
 dotnet ef database update -p src/MyTaskApp.Server.Infrastructure -s src/MyTaskApp.Server.Infrastructure `
-  --connection "Host=localhost;Database=mytaskapp_sync;Username=mytaskapp;Password=mytaskapp"
+  --connection "Host=localhost;Database=mytaskapp_sync;Username=mytaskapp;Password=<a do .env>"
 ```
 
 Regras:
