@@ -401,6 +401,9 @@ internal sealed class CapturingLoggerProvider : ILoggerProvider
 
     public string Text => string.Join(Environment.NewLine, _lines);
 
+    /// <summary>Uma entrada por evento: no <see cref="Text"/>, uma quebra de linha dentro de uma não aparece.</summary>
+    public IReadOnlyList<string> Lines => [.. _lines];
+
     public ILogger CreateLogger(string categoryName) => new Logger(categoryName, _lines);
 
     public void Dispose()

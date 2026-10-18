@@ -460,7 +460,9 @@ privilégio. Em produção, o servidor:
   do logout tem CSP e `X-Frame-Options: DENY`. O discovery e o JWKS
   continuam cacheáveis;
 - não grava token, código, cabeçalho nem corpo no log. É uma linha por
-  requisição: método, caminho sem query, status e tempo.
+  requisição: método, caminho sem query, status e tempo. O caminho vai
+  reescapado (`%0D%0A`, `%1B`), então a requisição não forja linha nem manda
+  sequência ANSI para o terminal (SEC-019).
 
 O `deploy/sync-server/docker-compose.prod.yml` monta isso num host com Docker:
 

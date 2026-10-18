@@ -2,9 +2,11 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using MyTaskApp.Server.Api;
 using MyTaskApp.Sync.Contracts;
 using MyTaskApp.Sync.Contracts.Definitions;
 
@@ -815,6 +817,35 @@ public sealed class ApiTests(PostgresFixture postgres) : IAsyncLifetime
         {
             log.Should().NotContain(secret);
         }
+    }
+
+    [Fact]
+    public async Task APathWithLineBreaksAndEscape_IsLoggedOnOneLine()
+    {
+        using var client = _api.CreateClient();
+
+        // SEC-019: o caminho chega decodificado; cru no log, forjava uma linha e mandava ESC ao terminal.
+        using var response = await client.GetAsync("/x%0d%0a%5B12:00:00%20INF%5D%20HTTP%20GET%20/forjado%20200%200%1b%5B31m", Ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        var line = _api.Logs.Lines.Should().ContainSingle(entry => entry.Contains("forjado")).Subject;
+        line.Should().Contain(typeof(RequestLog).FullName!).And.Contain("%0D%0A").And.Contain("%1B");
+        line.Should().NotContainAny("\r", "\n", "\u001b");
+    }
+
+    [Fact]
+    public async Task TheUnhandledErrorLog_EscapesThePath()
+    {
+        await using var scope = _api.Services.CreateAsyncScope();
+        var handler = ActivatorUtilities.CreateInstance<SyncExceptionHandler>(scope.ServiceProvider);
+        var context = new DefaultHttpContext { RequestServices = scope.ServiceProvider };
+        context.Request.Path = new PathString("/x\r\n\u001b[31m");
+
+        await handler.TryHandleAsync(context, new InvalidOperationException("falha"), Ct);
+
+        var line = _api.Logs.Lines.Should().ContainSingle(entry => entry.Contains("SyncServerUnhandled")).Subject;
+        line.Should().Contain("/x%0D%0A%1B");
+        line.Should().NotContainAny("\r", "\n", "\u001b");
     }
 
     [Fact]
