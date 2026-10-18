@@ -7,13 +7,18 @@
     Fica fora do MyTaskApp.slnx (que o CI do desktop compila sem workload);
     a solução dela é MyTaskApp.Mobile.slnx. O iOS só entra no macOS, ou com
     -p:IncludeIos=true para conferir a configuração em outro sistema.
+
+    -p:IncludeAndroid=false tira o Android: o restore avalia todos os alvos,
+    mesmo com -f, e pediria o workload do Android num Mac que só compila o
+    iOS (mobile-ios.yml).
   -->
 
   <PropertyGroup>
     <!-- O Directory.Build.props fixa net10.0 para todos; aqui são vários alvos. -->
     <TargetFramework></TargetFramework>
-    <TargetFrameworks>net10.0-android</TargetFrameworks>
+    <TargetFrameworks Condition="'$(IncludeAndroid)' != 'false'">net10.0-android</TargetFrameworks>
     <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('osx')) or '$(IncludeIos)' == 'true'">$(TargetFrameworks);net10.0-ios</TargetFrameworks>
+    <TargetFrameworks>$(TargetFrameworks.Trim(';'))</TargetFrameworks>
 
     <OutputType>Exe</OutputType>
     <RootNamespace>MyTaskApp.Mobile</RootNamespace>
