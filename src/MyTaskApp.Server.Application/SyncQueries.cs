@@ -78,9 +78,19 @@ public sealed class SyncQueries(ISyncStore store, IWorkspaceAccess access, IDevi
     {
         await EnsureMemberAsync(caller, workspaceId, cancellationToken);
 
+        if (request.Entities is null)
+        {
+            throw SyncServerException.BadRequest("O pedido veio sem a lista de entidades.");
+        }
+
         if (request.Entities.Count > SyncSchema.MaxFetchEntities)
         {
             throw SyncServerException.BadRequest($"No máximo {SyncSchema.MaxFetchEntities} entidades por pedido.");
+        }
+
+        if (request.Entities.Any(entity => entity is null || string.IsNullOrEmpty(entity.Type) || ReceivedText.HasControl(entity.Type)))
+        {
+            throw SyncServerException.BadRequest("Entidade nula ou sem tipo.");
         }
 
         var found = await store.FindManyAsync(workspaceId, request.Entities, cancellationToken);

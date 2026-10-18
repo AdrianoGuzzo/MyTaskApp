@@ -28,6 +28,11 @@ public sealed class DeviceUseCases(
             throw SyncServerException.UpgradeRequired();
         }
 
+        if (ReceivedText.HasControl(hello.Platform) || ReceivedText.HasControl(hello.AppVersion))
+        {
+            throw SyncServerException.BadRequest("Plataforma e versão não podem ter caracteres de controle.");
+        }
+
         var now = timeProvider.GetUtcNow();
         var device = await devices.FindAsync(caller.UserId, caller.DeviceId, cancellationToken);
 

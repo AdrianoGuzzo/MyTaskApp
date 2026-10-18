@@ -113,6 +113,41 @@ public sealed class SyncFieldValidatorTests
     }
 
     [Fact]
+    public void ANulCharacter_IsRefused_InAnyFieldKnownOrNot()
+    {
+        var cases = new Dictionary<string, JsonElement>[]
+        {
+            new() { [SyncFields.Task.Title] = SyncValue.String("titulo\0nul") },
+            new() { ["colorOfTheFuture"] = SyncValue.String("a\0b") },
+            new() { ["colorOfTheFuture"] = SyncValue.List([SyncValue.Object(("x\0y", SyncValue.Integer(1)))]) },
+            new() { [SyncFields.Task.Reminder] = SyncValue.Object(("note", SyncValue.String("\0"))) },
+        };
+
+        foreach (var fields in cases)
+        {
+            SyncFieldValidator.Validate(SyncRegistry.Task, fields, isCreate: false)
+                .Should().Contain(error => error.Message.Contains("U+0000"));
+        }
+    }
+
+    [Fact]
+    public void ANulInTheFieldName_IsRefused_WithoutTheNulInTheError()
+    {
+        var fields = new Dictionary<string, JsonElement> { ["ti\0tle"] = SyncValue.String("x") };
+
+        SyncFieldValidator.Validate(SyncRegistry.Task, fields, isCreate: false)
+            .Should().ContainSingle().Which.Field.Should().Be("ti\\0tle");
+    }
+
+    [Fact]
+    public void LineBreaksAndTabs_Pass()
+    {
+        var fields = new Dictionary<string, JsonElement> { [SyncFields.Task.Description] = SyncValue.String("linha 1\r\n\tlinha 2") };
+
+        SyncFieldValidator.Validate(SyncRegistry.Task, fields, isCreate: false).Should().BeEmpty();
+    }
+
+    [Fact]
     public void Placement_IsOptional_ForEverythingWrittenBeforeIt()
     {
         // ValidTask não tem placement, como tudo o que o servidor gravou antes do ADR-062.

@@ -261,6 +261,45 @@ public sealed class PushProcessorTests
     }
 
     [Fact]
+    public async Task ANulCharacter_RefusesOnlyItsOperation_AndTheRestOfTheBatchGoesOn()
+    {
+        var bad = Guid.CreateVersion7();
+        var good = Guid.CreateVersion7();
+
+        var response = await _server.Push.PushAsync(Caller, _workspace, Request(
+            Ops.Upsert(_device, SyncEntityTypes.Task, bad, 0, Ops.Task("titulo\0nul")),
+            Ops.Upsert(_device, SyncEntityTypes.Task, good, 0, Ops.Task())), Ct);
+
+        response.Results[0].Error!.Code.Should().Be(SyncErrorCodes.ValidationFailed);
+        response.Results[0].Error!.Message.Should().NotContain("\0");
+        response.Results[1].Outcome.Should().Be(OperationOutcome.Applied);
+        _server.Get(_workspace, SyncEntityTypes.Task, bad).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task AMalformedOperation_RefusesTheWholePush()
+    {
+        var valid = Ops.Upsert(_device, SyncEntityTypes.Task, Guid.CreateVersion7(), 0, Ops.Task());
+        var requests = new[]
+        {
+            new PushRequest(SyncSchema.Current, _device, null!),
+            Request([null!]),
+            Request(valid with { EntityType = null! }),
+            Request(valid with { EntityType = "task\0" }),
+            Request(valid with { Fields = null! }),
+        };
+
+        foreach (var request in requests)
+        {
+            var push = () => _server.Push.PushAsync(Caller, _workspace, request, Ct);
+
+            (await push.Should().ThrowAsync<SyncServerException>()).Which.Code.Should().Be(SyncErrorCodes.BadRequest);
+        }
+
+        _server.LastSeqOf(_workspace).Should().Be(0);
+    }
+
+    [Fact]
     public async Task AnUnknownType_IsRefused()
     {
         var result = await PushOneAsync(Ops.Upsert(_device, "calendarEvent", Guid.CreateVersion7(), 0, Ops.Task()));
