@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using MyTaskApp.Application.Sync;
 using MyTaskApp.Domain;
 using MyTaskApp.Infrastructure.Sync.Http;
+using MyTaskApp.Mobile.Core.Presentation;
 using MyTaskApp.Mobile.Core.SignIn;
 using MyTaskApp.Mobile.Core.Tests.Fakes;
 using MyTaskApp.Mobile.Core.ViewModels;
@@ -134,6 +135,22 @@ public sealed class ConnectAndAccountTests : IAsyncLifetime
 
         await account.ConnectAsync();
         _app.Navigator.Last.Should().Be("connect");
+    }
+
+    [Fact]
+    public void TheAccountTab_OffersTheDesktopThemes_AndAppliesOnTouch()
+    {
+        var account = _app.Get<AccountViewModel>();
+
+        account.ThemeOptions.Select(option => option.Label)
+            .Should().Equal("Automático", "Papel", "Sépia", "Carvão", "Nórdico", "Ameixa", "Verde Pecuária", "Alto contraste");
+        account.ThemeOptions.Single(option => option.IsSelected).Value.Should().Be(MobileThemeCatalog.SystemId);
+
+        account.UseTheme(account.ThemeOptions.Single(option => option.Value == "nordic"));
+
+        _app.Themes.Used.Should().Equal("nordic");
+        account.ThemeOptions.Single(option => option.IsSelected).Label.Should().Be("Nórdico");
+        account.ThemeOptions.Single(option => option.Value == "nordic").Accent.Should().Be(MobileThemeCatalog.Nordic.Palette.Accent);
     }
 
     [Fact]

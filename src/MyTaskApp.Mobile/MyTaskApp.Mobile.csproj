@@ -75,6 +75,8 @@
   <ItemGroup>
     <MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#17181C" />
     <MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#17181C" BaseSize="128,128" />
+    <!-- Os ícones das abas: traço preto, que a barra pinta na cor do tema. -->
+    <MauiImage Include="Resources\Images\*.svg" BaseSize="24,24" />
   </ItemGroup>
 
   <ItemGroup>

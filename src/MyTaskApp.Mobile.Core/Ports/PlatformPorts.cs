@@ -41,6 +41,18 @@ public interface IDialogService
 }
 
 /// <summary>
+/// O tema deste celular: a escolha fica no aparelho e vale na hora, sem
+/// reabrir. Os ids são os de <see cref="Presentation.MobileThemeCatalog"/>.
+/// </summary>
+public interface IThemeService
+{
+    /// <summary>Um id do catálogo, ou <see cref="Presentation.MobileThemeCatalog.SystemId"/> para seguir o sistema.</summary>
+    string Choice { get; }
+
+    void Use(string choice);
+}
+
+/// <summary>
 /// O navegador do sistema para o login (Custom Tabs no Android,
 /// <c>ASWebAuthenticationSession</c> no iOS): abre o endereço e devolve os
 /// parâmetros da volta pelo esquema do app.

@@ -1,4 +1,5 @@
 using MyTaskApp.Application.Sync;
+using MyTaskApp.Mobile.Adapters;
 using MyTaskApp.Mobile.Core.Composition;
 
 namespace MyTaskApp.Mobile;
@@ -16,9 +17,15 @@ public partial class App
 
     private readonly ISyncAccount _account;
 
-    public App(AppShell shell, MobileLifecycle lifecycle, ISyncAccount account)
+    private readonly MauiThemeService _themes;
+
+    public App(AppShell shell, MobileLifecycle lifecycle, ISyncAccount account, MauiThemeService themes)
     {
         InitializeComponent();
+
+        // As cores entram antes da primeira tela: os estilos pedem por DynamicResource.
+        themes.Attach(this);
+        _themes = themes;
         _shell = shell;
         _lifecycle = lifecycle;
         _account = account;
@@ -30,6 +37,8 @@ public partial class App
 
         window.Created += (_, _) =>
         {
+            // Antes da janela não há barra de status para pintar.
+            _themes.Refresh();
             _ = _lifecycle.StartAsync();
             Connectivity.Current.ConnectivityChanged += OnConnectivityChanged;
         };

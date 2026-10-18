@@ -4,6 +4,7 @@
              xmlns:vm="clr-namespace:MyTaskApp.Mobile.Core.ViewModels;assembly=MyTaskApp.Mobile.Core"
              x:Class="MyTaskApp.Mobile.Views.TaskFormPage"
              x:DataType="vm:TaskFormViewModel"
+             HideSoftInputOnTapped="True"
              Title="{Binding PageTitle}">
 
     <Shell.BackButtonBehavior>
@@ -23,7 +24,8 @@
             <Entry Text="{Binding Title}"
                    Placeholder="O que precisa ser feito"
                    MaxLength="250"
-                   ReturnType="Next"
+                   ReturnType="Done"
+                   Completed="OnTitleCompleted"
                    SemanticProperties.Description="Título da tarefa, obrigatório" />
             <Grid ColumnDefinitions="*,Auto">
                 <Label Text="{Binding VisibleTitleError}" Style="{StaticResource Error}" IsVisible="{Binding VisibleTitleError, Converter={StaticResource HasValue}}" />
@@ -74,21 +76,23 @@
             <FlexLayout Wrap="Wrap" BindableLayout.ItemsSource="{Binding TagChoices}" Margin="0,0,0,32">
                 <BindableLayout.ItemTemplate>
                     <DataTemplate x:DataType="vm:TagOption">
-                        <Button Style="{StaticResource Chip}"
-                                Margin="0,4,8,0"
-                                Text="{Binding Label}"
-                                TextColor="{Binding ColorHex, Converter={StaticResource HexColor}}"
-                                BorderColor="{Binding ColorHex, Converter={StaticResource HexColor}}"
-                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:TaskFormViewModel}}, x:DataType=vm:TaskFormViewModel, Path=ToggleTagCommand}"
-                                CommandParameter="{Binding .}">
-                            <Button.Triggers>
-                                <DataTrigger TargetType="Button" Binding="{Binding IsSelected}" Value="True">
-                                    <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource AccentSoftLight}, Dark={StaticResource AccentSoftDark}}" />
-                                    <Setter Property="BorderWidth" Value="2" />
-                                    <Setter Property="FontAttributes" Value="Bold" />
-                                </DataTrigger>
-                            </Button.Triggers>
-                        </Button>
+                        <!-- Marcada e desmarcada são dois botões, como os atalhos da lista (cor sem gatilho). -->
+                        <Grid Margin="0,4,8,0">
+                            <Button Style="{StaticResource Chip}"
+                                    Text="{Binding Label}"
+                                    TextColor="{Binding ColorHex, Converter={StaticResource HexColor}}"
+                                    BorderColor="{Binding ColorHex, Converter={StaticResource HexColor}}"
+                                    IsVisible="{Binding IsSelected, Converter={StaticResource Not}}"
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:TaskFormViewModel}}, x:DataType=vm:TaskFormViewModel, Path=ToggleTagCommand}"
+                                    CommandParameter="{Binding .}" />
+                            <Button Style="{StaticResource SelectedTagChip}"
+                                    Text="{Binding Label}"
+                                    TextColor="{Binding ColorHex, Converter={StaticResource HexColor}}"
+                                    BorderColor="{Binding ColorHex, Converter={StaticResource HexColor}}"
+                                    IsVisible="{Binding IsSelected}"
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:TaskFormViewModel}}, x:DataType=vm:TaskFormViewModel, Path=ToggleTagCommand}"
+                                    CommandParameter="{Binding .}" />
+                        </Grid>
                     </DataTemplate>
                 </BindableLayout.ItemTemplate>
             </FlexLayout>

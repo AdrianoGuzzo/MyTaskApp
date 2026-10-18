@@ -45,6 +45,8 @@ internal sealed class MobileHarness : IAsyncDisposable
 
     public FakeBrowser Browser => (FakeBrowser)Services.GetRequiredService<IWebAuthenticatorPort>();
 
+    public RecordingThemes Themes => (RecordingThemes)Services.GetRequiredService<IThemeService>();
+
     public IUseCaseRunner Runner => Services.GetRequiredService<IUseCaseRunner>();
 
     public static async Task<MobileHarness> CreateAsync(string? serverUrl = "https://sync.exemplo.com")
@@ -58,6 +60,7 @@ internal sealed class MobileHarness : IAsyncDisposable
             .AddSingleton<IUiDispatcher, InlineDispatcher>()
             .AddSingleton<INavigator, RecordingNavigator>()
             .AddSingleton<IDialogService, ScriptedDialogs>()
+            .AddSingleton<IThemeService, RecordingThemes>()
             .AddSingleton<IWebAuthenticatorPort, FakeBrowser>()
             .AddSingleton<ISecretStore, MemorySecretStore>()
             .AddMobileCore(new MobileHostOptions { DataDirectory = folder, DeviceName = "Pixel de teste", ServerUrl = serverUrl })
