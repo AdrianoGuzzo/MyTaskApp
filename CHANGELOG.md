@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.19.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.18.0...v1.19.0) (2026-10-18)
+
+
+### Added
+
+* APK do Android na release e .ipa de teste do iOS ([#124](https://github.com/AdrianoGuzzo/MyTaskApp/issues/124)) ([bd48336](https://github.com/AdrianoGuzzo/MyTaskApp/commit/bd48336640feeabbb7fdc751b3ee64c44cbb447d))
+
+
+### Fixed
+
+* **desktop:** "Abrir sincronização…" no painel da bolinha volta a abrir a janela ([#123](https://github.com/AdrianoGuzzo/MyTaskApp/issues/123)) ([f0630d9](https://github.com/AdrianoGuzzo/MyTaskApp/commit/f0630d958b12c457693e01da53cd1db63e56d98b))
+* **reminders:** aviso não fica mais preso com "Ocorrência não encontrada." ([#126](https://github.com/AdrianoGuzzo/MyTaskApp/issues/126)) ([42d58cc](https://github.com/AdrianoGuzzo/MyTaskApp/commit/42d58ccd349f29ee09b33c7c711e359a0ef1eee7))
+* **server:** consentimento no authorize fora do login recém-feito e loopback com porta efêmera (SEC-018, ADR-074) ([#121](https://github.com/AdrianoGuzzo/MyTaskApp/issues/121)) ([7c80bbe](https://github.com/AdrianoGuzzo/MyTaskApp/commit/7c80bbeb99b0816189d12a25c8f2175130752d72))
+
 ## [1.18.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.17.0...v1.18.0) (2026-10-18)
 
 
