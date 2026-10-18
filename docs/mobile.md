@@ -7,8 +7,11 @@ estão no [ADR-067](ARCHITECTURE.md#adr-067--o-celular-como-mais-um-dispositivo-
 
 | Plataforma | Estado |
 |---|---|
-| Android | compila (Debug e Release) e foi validado no emulador (API 36). |
-| iOS | configurado, **não validado**: não houve Mac. Veja [iOS](#ios). |
+| Android | validado no emulador (API 36). Cada release traz o APK assinado, `MyTaskApp-<versão>-android.apk`. |
+| iOS | configurado, **não validado num aparelho**. O workflow manual *Mobile iOS (manual)* gera um `.ipa` sem assinatura para instalar pelo Windows. Veja [iOS](#ios). |
+
+Para instalar no seu celular sem Play Store, sem conta Apple paga e só com
+Windows, veja [Teste pessoal sem custo, só com Windows](#teste-pessoal-sem-custo-só-com-windows).
 
 ## O que o app faz
 
@@ -219,43 +222,189 @@ dotnet build src/MyTaskApp.Mobile/MyTaskApp.Mobile.csproj -f net10.0-android -c 
 - O endereço do servidor é gravado no app na hora da build (como no desktop) e
   precisa ser HTTPS.
 - **Assinatura:** sem configuração, o Release sai assinado com a chave de debug.
-  Para publicar, configure `AndroidKeyStore`, `AndroidSigningKeyStore` e as
-  senhas por variável de ambiente, nunca no repositório.
+  O APK da release é assinado pelo `release.yml` (job `android`) com a keystore
+  guardada nos secrets do repositório: `AndroidKeyStore`,
+  `AndroidSigningKeyStore` e as senhas pelo prefixo `env:`, nunca no
+  repositório nem no log. Como criar a keystore e cadastrar os secrets:
+  [Teste pessoal sem custo](#android-apk-assinado-em-cada-release).
 - **Play Store:** exige alinhamento de 16 KB das bibliotecas nativas a partir do
   Android 15. Confira o `libe_sqlite3.so` antes de publicar.
 
 ### iOS
 
-Configurado e **não validado**: este ambiente não tem Mac.
+Configurado e **não validado num aparelho**: este ambiente não tem Mac.
 
 **O que está pronto:**
 
 - `net10.0-ios` entra no build no macOS ou com `-p:IncludeIos=true`.
 - `Info.plist` com o esquema de volta (`CFBundleURLTypes`) e
   `NSAllowsLocalNetworking`.
-- `Entitlements.plist` com o grupo do Keychain, usado pelo `SecureStorage`.
+- `Entitlements.plist` com o grupo do Keychain, usado pelo `SecureStorage`:
+  `$(AppIdentifierPrefix)io.github.adrianoguzzo.mytaskapp`, sem team ID fixo e
+  sem nada que exija conta paga (push, App Groups, iCloud, Associated Domains).
+  Assim um Apple ID gratuito consegue reassinar o app.
 - `UseInterpreter` ligado: o EF Core precisa dele sem JIT.
 - A pasta de dados fora do backup do iCloud.
+- O workflow manual *Mobile iOS (manual)* (`.github/workflows/mobile-ios.yml`),
+  num runner macOS:
+  1. compila para o simulador (valida a configuração);
+  2. compila para o aparelho **sem assinatura** e publica
+     `MyTaskApp-<versão>-ios-unsigned.ipa` como artifact `ios-ipa`;
+  3. com o campo `tag` preenchido, faz o checkout da tag e anexa o `.ipa` ao
+     rascunho daquela release (se ainda for rascunho).
 
 **O que falta para validar:**
 
-1. Um Mac com Xcode na versão que o workload `ios` do .NET 10 exige, e
-   `dotnet workload install maui-ios`.
-2. Compilar e rodar no simulador:
+1. Rodar o workflow pela primeira vez e conferir os dois builds.
+2. Instalar o `.ipa` num iPhone pelo Windows
+   ([iOS sem Mac](#ios-sem-mac-ipa-reassinado-com-um-apple-id-gratuito)) e
+   passar a lista de conferência de lá.
+3. Com um Mac, também dá para rodar no simulador:
 
    ```bash
    dotnet build src/MyTaskApp.Mobile/MyTaskApp.Mobile.csproj -t:Run -f net10.0-ios
    ```
 
-   Ou rodar o workflow manual *Mobile iOS (manual)*
-   (`.github/workflows/mobile-ios.yml`), que compila para o simulador num
-   runner macOS.
-3. Conferir no simulador:
-   - o login (volta pelo esquema);
-   - o Keychain guardando o refresh;
-   - o SQLite com o interpretador.
-4. Para um iPhone de verdade: conta de desenvolvedor Apple, certificado e perfil
-   de provisionamento.
+4. App Store ou TestFlight continuam exigindo a conta de desenvolvedor paga.
+
+## Teste pessoal sem custo, só com Windows
+
+Para usar o app no próprio celular sem Play Store, sem conta Apple Developer
+paga e sem Mac. Os comandos são de PowerShell.
+
+### Android: APK assinado em cada release
+
+Cada release traz `MyTaskApp-<versão>-android.apk`, assinado com uma keystore
+sua. A keystore é criada uma vez e vale para sempre: o Android só instala uma
+versão por cima da outra se as duas tiverem a mesma assinatura.
+
+**1. Criar a keystore (uma vez).** O JDK 21 que vem com o Visual Studio traz o
+`keytool`. Guarde a keystore **fora do repositório**:
+
+```powershell
+$dir = "$env:USERPROFILE\Documents\MyTaskApp-chaves"
+New-Item -ItemType Directory -Force $dir | Out-Null
+$keytool = (Resolve-Path "C:\Program Files (x86)\Android\openjdk\jdk-21.*\bin\keytool.exe" | Select-Object -Last 1).Path
+& $keytool -genkeypair -v -keystore "$dir\mytaskapp.jks" -alias mytaskapp `
+  -keyalg RSA -keysize 4096 -validity 10000
+```
+
+O `keytool` pede a senha da keystore, a da chave e o nome no certificado.
+
+> **Guarde a keystore e as senhas num lugar seguro** (gerenciador de senhas,
+> backup fora deste computador). Sem elas, a versão seguinte não instala por
+> cima: é preciso desinstalar o app, e **desinstalar apaga os dados do
+> celular** (o que ainda não tiver sincronizado se perde). Nunca coloque a
+> keystore no repositório.
+
+**2. Cadastrar no GitHub.** Em *Settings → Secrets and variables → Actions*:
+
+| Nome | Tipo | Valor |
+|---|---|---|
+| `ANDROID_KEYSTORE_BASE64` | secret | a keystore em base64 (abaixo) |
+| `ANDROID_KEY_ALIAS` | secret | `mytaskapp` (o `-alias` usado acima) |
+| `ANDROID_KEYSTORE_PASSWORD` | secret | a senha da keystore |
+| `ANDROID_KEY_PASSWORD` | secret | a senha da chave |
+| `SYNC_API_BASE_URL` | variável (aba *Variables*) | o servidor de sincronização, `https://…/` |
+
+A keystore em base64 vai direto para a área de transferência:
+
+```powershell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("$dir\mytaskapp.jks")) | Set-Clipboard
+```
+
+Ou, com o `gh`, sem passar pela tela (o `gh secret set` sem `--body` pede o
+valor sem ecoá-lo):
+
+```powershell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("$dir\mytaskapp.jks")) | gh secret set ANDROID_KEYSTORE_BASE64
+gh secret set ANDROID_KEY_ALIAS --body mytaskapp
+gh secret set ANDROID_KEYSTORE_PASSWORD
+gh secret set ANDROID_KEY_PASSWORD
+gh variable set SYNC_API_BASE_URL --body "https://sync.seudominio.com/"
+```
+
+Sem esses secrets, ou com `SYNC_API_BASE_URL` vazio ou sem `https://`, o
+`release.yml` **para** antes do build, com a mensagem do que falta. É de
+propósito: um APK com a chave de debug não atualizaria o que já está no
+celular.
+
+**3. Instalar no celular** (Android 7.0 ou mais novo):
+
+1. No celular, abra a release no GitHub e baixe o
+   `MyTaskApp-<versão>-android.apk`.
+2. Abra o arquivo. Na primeira vez, o Android pede para **permitir instalar
+   apps desta fonte** (o navegador ou o gerenciador de arquivos): permita.
+3. O Play Protect avisa que o app é desconhecido: *Mais detalhes → Instalar
+   mesmo assim*.
+4. **Atualizar:** baixe o APK da versão nova e instale por cima. Os dados
+   ficam.
+
+### iOS sem Mac: .ipa reassinado com um Apple ID gratuito
+
+O `.ipa` sai do CI sem assinatura. O Sideloadly (ou o AltServer) o assina no
+Windows com o seu Apple ID e o instala no iPhone pelo cabo.
+
+**1. Gerar o .ipa.** Em *Actions → Mobile iOS (manual) → Run workflow*:
+
+- `tag` vazio: o branch escolhido no disparo;
+- `tag` preenchido (ex. `v1.18.0`): o código da tag, e o `.ipa` também é
+  anexado ao rascunho daquela release.
+
+Baixe `ios-ipa` em *Artifacts*, no fim da execução (ou o `.ipa` da release) e
+extraia o `MyTaskApp-<versão>-ios-unsigned.ipa`. A variável
+`SYNC_API_BASE_URL` (acima) precisa estar cadastrada.
+
+**2. Preparar o Windows (uma vez):**
+
+- **iTunes** e **iCloud** baixados do site da Apple, **não** da Microsoft
+  Store: o Sideloadly usa os drivers e as bibliotecas da versão do site.
+- **Sideloadly**, de sideloadly.io.
+
+**3. Instalar:**
+
+1. Ligue o iPhone no cabo e toque em *Confiar neste computador*.
+2. Abra o Sideloadly, arraste o `.ipa`, escolha o iPhone e entre com o Apple
+   ID. De preferência um **Apple ID secundário**, só para isso.
+3. No iPhone:
+   1. *Ajustes → Privacidade e Segurança → Modo de Desenvolvedor*: ligue. O
+      iPhone reinicia e pede confirmação. (A opção só aparece depois que um
+      app assinado assim é instalado.)
+   2. *Ajustes → Geral → VPN e Gerenciamento de Dispositivos*: toque no perfil
+      do seu Apple ID e em *Confiar*.
+4. Abra o MyTaskApp.
+
+**Limites do Apple ID gratuito:**
+
+- O app **expira em 7 dias**. Reinstale pelo Sideloadly (os dados ficam,
+  desde que seja o mesmo Apple ID e o mesmo identificador do app).
+- No máximo **3 apps** assim por Apple ID ao mesmo tempo.
+- Não há simulador do iOS no Windows: o teste é sempre no aparelho.
+- **Alternativa que renova sozinha:** o AltServer para Windows instala o
+  AltStore no iPhone, e o AltStore renova os apps com o PC e o iPhone **na
+  mesma rede Wi-Fi** e o AltServer aberto. O AltStore pode instalar com outro
+  identificador; nesse caso, é outro app para o iPhone e os dados não passam de
+  um para o outro. Escolha um dos dois e fique nele.
+
+**Quando o app fecha sozinho:**
+
+- No Sideloadly, os **Device logs** mostram o log do iPhone ao vivo: deixe
+  aberto, reproduza o problema e procure por `MyTaskApp`.
+- O relatório do crash também fica no iPhone, em *Ajustes → Privacidade e
+  Segurança → Análise e Melhorias → Dados de Análise* (um arquivo
+  `MyTaskApp.Mobile-<data>.ips`), e dá para compartilhá-lo para o PC.
+
+**O que conferir no aparelho** (é o que nunca foi validado):
+
+- [ ] **Login com Google:** abre o navegador do sistema e **volta para o app**
+  pelo esquema `io.github.adrianoguzzo.mytaskapp://oauth/callback`.
+- [ ] **Keychain:** feche o app de vez (deslize na troca de apps) e reabra:
+  ele continua conectado, sem pedir login. É o refresh guardado pelo
+  `SecureStorage`.
+- [ ] **SQLite com o interpretador:** criar, editar, filtrar, buscar e
+  concluir tarefas sem erro; os dados continuam lá depois de reabrir.
+- [ ] **Sincronização com o desktop:** uma tarefa criada no celular aparece no
+  desktop e vice-versa; modo avião, alterar, voltar a rede e ver subir.
 
 ## Testes
 
@@ -273,8 +422,15 @@ dotnet test tests/MyTaskApp.Server.IntegrationTests --filter "PhoneSyncTests"   
   - sincroniza com um desktop nos dois sentidos;
   - fica sem rede e volta;
   - filtra por origem.
-- **CI:** o job `mobile-android` compila o APK em Release e confere que ele leva
-  o SQLite nativo. Não há emulador no CI.
+- **CI:** não há emulador. A conferência do APK é uma só,
+  `scripts/check-android-apk.sh`:
+  - nos PRs, o job `mobile-android` do `ci.yml` compila o APK em Release e
+    confere que ele leva o SQLite nativo;
+  - em cada release, o job `android` do `release.yml` gera o APK assinado e
+    confere também a assinatura (não pode ser a chave de debug) e o
+    `versionCode` (o da tag) antes de anexá-lo.
+- **iOS:** só no disparo manual do *Mobile iOS (manual)*, fora do CI dos PRs e
+  do `release.yml`: o minuto de macOS custa 10x o de Linux.
 
 ## Limitações conhecidas
 

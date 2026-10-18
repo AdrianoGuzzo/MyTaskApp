@@ -231,3 +231,10 @@ rascunho da release, antes de publicá-la:
    **desmarcada**.
 9. Desinstalar com `/VERYSILENT /DELETEDATA=1`; conferir que a pasta sumiu e
    que o valor em `Run` também.
+10. **Android:** num celular com a versão anterior instalada, baixar o
+    `MyTaskApp-<versão>-android.apk` do rascunho e instalar **por cima** (ver
+    [docs/mobile.md](../docs/mobile.md#android-apk-assinado-em-cada-release)).
+    Precisa atualizar sem pedir para desinstalar — pedir significa que a
+    keystore mudou, e a release não deve ser publicada. Abrir: as tarefas
+    continuam lá, o indicador chega a *Sincronizado*, e *Configurações → Apps
+    → MyTaskApp* mostra a versão nova.
