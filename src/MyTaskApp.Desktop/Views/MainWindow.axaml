@@ -150,7 +150,6 @@
                         <Button Classes="accent"
                                 FontSize="11"
                                 Content="{Binding SyncIndicator.DetailsLabel}"
-                                Command="{Binding OpenSyncCommand}"
                                 Click="OnSyncDetailsClick" />
                       </StackPanel>
                     </StackPanel>
@@ -432,7 +431,6 @@
                         <Button Classes="accent"
                                 FontSize="11"
                                 Content="{Binding SyncIndicator.DetailsLabel}"
-                                Command="{Binding OpenSyncCommand}"
                                 Click="OnSyncDetailsClick" />
                       </StackPanel>
                     </StackPanel>
