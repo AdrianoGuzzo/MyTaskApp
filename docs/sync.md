@@ -255,8 +255,10 @@ O que veio do servidor já tem estado, então não sobe de novo.
 
 ### Versões diferentes do app
 
-O contrato tem versão (`SyncSchema.Current`, hoje 1). Um campo que o app não
-conhece é preservado no servidor, e o app mais novo o enxerga. Abaixo da
+O contrato tem versão (`SyncSchema.Current`, hoje 1). O app ignora, no pull, o
+campo que não conhece. O servidor só guarda o que está no contrato dele e
+recusa o resto com `unknown_field` (ADR-072): campo novo pede o servidor
+atualizado antes dos apps. Abaixo da
 versão mínima, o servidor responde 426, e a janela pede para atualizar. Quando
 um app atualizado sobe a versão do contrato, ele refaz a primeira conexão.
 

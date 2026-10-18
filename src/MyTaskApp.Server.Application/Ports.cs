@@ -73,7 +73,15 @@ public interface ISyncStore
         CancellationToken cancellationToken);
 
     Task<long> CountAsync(Guid workspaceId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// O que o workspace ocupa, para a cota (ADR-072): as entidades vivas e a
+    /// soma de <see cref="StoredEntity.DataBytes"/> de todas as linhas.
+    /// </summary>
+    Task<WorkspaceUsage> UsageAsync(Guid workspaceId, CancellationToken cancellationToken);
 }
+
+public sealed record WorkspaceUsage(long Entities, long Bytes);
 
 /// <summary>Uma transação: ou tudo do push entra, ou nada entra.</summary>
 public interface ISyncUnitOfWork

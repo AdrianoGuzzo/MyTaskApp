@@ -1,5 +1,7 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.DependencyInjection;
 using MyTaskApp.Server.Application;
 using MyTaskApp.Server.Infrastructure.Persistence;
@@ -48,7 +50,7 @@ public sealed class ServerPersistenceTests(PostgresFixture postgres) : IAsyncLif
         var device = Guid.CreateVersion7();
         var task = Guid.CreateVersion7();
         var fields = TaskFields("Pagar boleto");
-        fields["colorOfTheFuture"] = SyncValue.String("campo de um cliente mais novo");
+        fields[SyncFields.Task.Description] = SyncValue.String("Anotação com acento, \"aspas\" e\nquebra de linha");
 
         await PushAsync(user, device, workspace, Upsert(device, SyncEntityTypes.Task, task, 0, fields));
         var pulled = await PullAsync(user, device, workspace, SyncCursor.Start);
@@ -61,6 +63,83 @@ public sealed class ServerPersistenceTests(PostgresFixture postgres) : IAsyncLif
         {
             SyncValue.AreEqual(change.Fields[name], value).Should().BeTrue(name);
         }
+    }
+
+    [Fact]
+    public async Task AFieldOutsideTheContract_IsRefused_AndNeverComesBackInThePull()
+    {
+        var (user, workspace) = await _server.CreateUserAsync(Ct);
+        var device = Guid.CreateVersion7();
+        var task = Guid.CreateVersion7();
+        var other = Guid.CreateVersion7();
+        var withJunk = TaskFields("Outra");
+        withJunk["isAdmin"] = SyncValue.Boolean(true);
+
+        await PushAsync(user, device, workspace, Upsert(device, SyncEntityTypes.Task, task, 0, TaskFields("Pagar boleto")));
+        var update = (await PushAsync(user, device, workspace, Upsert(device, SyncEntityTypes.Task, task, 1, new Dictionary<string, JsonElement>
+        {
+            [SyncFields.Task.Title] = SyncValue.String("Mudou"),
+            ["lixo0"] = SyncValue.String(new string('x', 300_000)),
+        }))).Results.Single();
+        var create = (await PushAsync(user, device, workspace, Upsert(device, SyncEntityTypes.Task, other, 0, withJunk))).Results.Single();
+        var pulled = await PullAsync(user, device, workspace, SyncCursor.Start);
+
+        update.Error!.Code.Should().Be(SyncErrorCodes.UnknownField);
+        create.Error!.Code.Should().Be(SyncErrorCodes.UnknownField);
+        var change = pulled.Changes.Should().ContainSingle().Subject;
+        change.EntityId.Should().Be(task);
+        change.Version.Should().Be(1);
+        change.Fields.Keys.Should().NotContain(["lixo0", "isAdmin"]);
+        change.Fields[SyncFields.Task.Title].GetString().Should().Be("Pagar boleto");
+    }
+
+    [Fact]
+    public async Task TheStoredSize_IsKeptPerRow_AndTheUsageAddsItUp()
+    {
+        var (user, workspace) = await _server.CreateUserAsync(Ct);
+        var device = Guid.CreateVersion7();
+        var kept = Guid.CreateVersion7();
+        var deleted = Guid.CreateVersion7();
+        var fields = TaskFields("Pagar boleto");
+        fields[SyncFields.Task.Description] = SyncValue.String("Ação"); // acento: bytes, não caracteres
+
+        await PushAsync(
+            user,
+            device,
+            workspace,
+            Upsert(device, SyncEntityTypes.Task, kept, 0, fields),
+            Upsert(device, SyncEntityTypes.Task, deleted, 0, TaskFields("Some")));
+        await PushAsync(user, device, workspace, Delete(device, SyncEntityTypes.Task, deleted, 1));
+
+        var (stored, tombstone, usage) = await _server.RunAsync(async provider =>
+        {
+            var store = provider.GetRequiredService<ISyncStore>();
+            return (
+                (await store.FindAsync(workspace, SyncEntityTypes.Task, kept, Ct))!,
+                (await store.FindAsync(workspace, SyncEntityTypes.Task, deleted, Ct))!,
+                await store.UsageAsync(workspace, Ct));
+        });
+
+        stored.DataBytes.Should().Be(StoredEntity.SizeOf(stored.Data));
+        tombstone.DataBytes.Should().Be(StoredEntity.SizeOf(tombstone.Data));
+        usage.Should().Be(new WorkspaceUsage(1, stored.DataBytes + tombstone.DataBytes), "o tombstone pesa nos bytes, mas não conta como entidade");
+    }
+
+    [Fact]
+    public async Task TheMigration_FillsTheSizeOfWhatWasAlreadyStored()
+    {
+        var (user, workspace) = await _server.CreateUserAsync(Ct);
+        var device = Guid.CreateVersion7();
+        var task = Guid.CreateVersion7();
+        await PushAsync(user, device, workspace, Upsert(device, SyncEntityTypes.Task, task, 0, TaskFields("De antes")));
+        await using var context = Context();
+        var migrator = context.GetService<IMigrator>();
+
+        await migrator.MigrateAsync("20261013055355_InitialServer", Ct);
+        await migrator.MigrateAsync(cancellationToken: Ct);
+
+        var row = await context.SyncEntities.AsNoTracking().SingleAsync(entity => entity.EntityId == task, Ct);
+        row.DataBytes.Should().BeGreaterThanOrEqualTo(StoredEntity.SizeOf(TaskFields("De antes")), "o texto do jsonb conta os espaços que ele põe");
     }
 
     [Fact]

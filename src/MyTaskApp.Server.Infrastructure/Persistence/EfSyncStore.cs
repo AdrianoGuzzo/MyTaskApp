@@ -128,6 +128,7 @@ internal sealed class EfSyncStore(ServerDbContext context) : ISyncStore, ISyncUn
         row.LastSeq = entity.LastSeq;
         row.Data = JsonSerializer.Serialize(entity.Data, SyncJson.Options);
         row.FieldVersions = JsonSerializer.Serialize(entity.FieldVersions, SyncJson.Options);
+        row.DataBytes = entity.DataBytes;
         row.UniqueKey = entity.UniqueKey;
         row.IsDeleted = entity.IsDeleted;
         row.CreatedByUserId = entity.CreatedByUserId;
@@ -216,6 +217,14 @@ internal sealed class EfSyncStore(ServerDbContext context) : ISyncStore, ISyncUn
     public async Task<long> CountAsync(Guid workspaceId, CancellationToken cancellationToken) =>
         await context.SyncEntities.LongCountAsync(row => row.WorkspaceId == workspaceId && !row.IsDeleted, cancellationToken);
 
+    public async Task<WorkspaceUsage> UsageAsync(Guid workspaceId, CancellationToken cancellationToken) =>
+        await context.SyncEntities.AsNoTracking()
+            .Where(row => row.WorkspaceId == workspaceId)
+            .GroupBy(row => row.WorkspaceId)
+            .Select(group => new WorkspaceUsage(group.LongCount(row => !row.IsDeleted), group.Sum(row => (long)row.DataBytes)))
+            .FirstOrDefaultAsync(cancellationToken)
+        ?? new WorkspaceUsage(0, 0);
+
     private static StoredEntity ToModel(SyncEntityRow row) => new()
     {
         WorkspaceId = row.WorkspaceId,
@@ -229,6 +238,7 @@ internal sealed class EfSyncStore(ServerDbContext context) : ISyncStore, ISyncUn
         FieldVersions = new Dictionary<string, FieldStamp>(
             JsonSerializer.Deserialize<Dictionary<string, FieldStamp>>(row.FieldVersions, SyncJson.Options) ?? [],
             StringComparer.Ordinal),
+        DataBytes = row.DataBytes,
         UniqueKey = row.UniqueKey,
         IsDeleted = row.IsDeleted,
         CreatedByUserId = row.CreatedByUserId,

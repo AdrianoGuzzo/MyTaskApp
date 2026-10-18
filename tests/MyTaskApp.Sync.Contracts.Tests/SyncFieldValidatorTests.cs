@@ -105,9 +105,65 @@ public sealed class SyncFieldValidatorTests
     }
 
     [Fact]
-    public void UnknownFields_Pass_ForNewerClients()
+    public void Validate_IgnoresUnknownFields_TheServerRefusesThemApart()
     {
+        // O desktop roda o Validate no pull e ignora o que não conhece; quem recusa é o push (ADR-072).
         var fields = new Dictionary<string, JsonElement> { ["colorOfTheFuture"] = SyncValue.String("?") };
+
+        SyncFieldValidator.Validate(SyncRegistry.Task, fields, isCreate: false).Should().BeEmpty();
+        SyncFieldValidator.FindUnknown(SyncRegistry.Task, fields).Should().Equal("colorOfTheFuture");
+    }
+
+    [Fact]
+    public void FindUnknown_PointsAtTheField_TheObjectMember_AndTheListItemMember()
+    {
+        var task = ValidTask();
+        task["isAdmin"] = SyncValue.Boolean(true);
+        task[SyncFields.Task.Reminder] = SyncValue.Object(
+            (SyncFields.Reminder.IsEnabled, SyncValue.Boolean(false)),
+            ("role", SyncValue.String("owner")));
+        var command = new Dictionary<string, JsonElement>
+        {
+            [SyncFields.Command.Parameters] = SyncValue.List([Parameter(), Parameter(("userId", SyncValue.Guid(Guid.NewGuid())))]),
+        };
+
+        SyncFieldValidator.FindUnknown(SyncRegistry.Task, task).Should().BeEquivalentTo("isAdmin", "reminder.role");
+        SyncFieldValidator.FindUnknown(SyncRegistry.Command, command).Should().Equal("parameters[1].userId");
+    }
+
+    [Fact]
+    public void FindUnknown_OnWhatTheContractKnows_IsEmpty()
+    {
+        var task = ValidTask();
+        task[SyncFields.Task.Placement] = SyncValue.Object(
+            (SyncFields.Placement.Kind, SyncValue.Integer(1)),
+            (SyncFields.Placement.DeviceId, SyncValue.Guid(Guid.NewGuid())));
+
+        SyncFieldValidator.FindUnknown(SyncRegistry.Task, task).Should().BeEmpty();
+        SyncFieldValidator.FindUnknown(
+                SyncRegistry.Command,
+                new Dictionary<string, JsonElement> { [SyncFields.Command.Parameters] = SyncValue.List([Parameter()]) })
+            .Should().BeEmpty();
+    }
+
+    [Fact]
+    public void TheOptionsOfAParameter_AreLimited_ToWhatTheDomainAllows()
+    {
+        Dictionary<string, JsonElement> WithOptions(int length) => new()
+        {
+            [SyncFields.Command.Parameters] = SyncValue.List([Parameter((SyncFields.CommandParameter.Options, SyncValue.String(new string('x', length))))]),
+        };
+
+        SyncFieldValidator.Validate(SyncRegistry.Command, WithOptions(25_049), isCreate: false).Should().BeEmpty();
+        SyncFieldValidator.Validate(SyncRegistry.Command, WithOptions(25_050), isCreate: false)
+            .Should().ContainSingle(error => error.Field == "parameters[0].options");
+    }
+
+    [Fact]
+    public void ALongDescription_HasNoFieldLimit()
+    {
+        // A descrição é segurada pelo teto da entidade no servidor, não por um máximo de campo.
+        var fields = new Dictionary<string, JsonElement> { [SyncFields.Task.Description] = SyncValue.String(new string('x', 100_000)) };
 
         SyncFieldValidator.Validate(SyncRegistry.Task, fields, isCreate: false).Should().BeEmpty();
     }
@@ -164,6 +220,28 @@ public sealed class SyncFieldValidatorTests
 
     private static Func<string, JsonElement> Lookup(Dictionary<string, JsonElement> fields) =>
         name => fields.GetValueOrDefault(name, SyncValue.Null);
+
+    /// <summary>Um item de <c>parameters</c> completo; os pares extras sobrescrevem ou acrescentam.</summary>
+    private static JsonElement Parameter(params (string Name, JsonElement Value)[] extra)
+    {
+        var members = new Dictionary<string, JsonElement>
+        {
+            [SyncFields.CommandParameter.Id] = SyncValue.Guid(Guid.NewGuid()),
+            [SyncFields.CommandParameter.Name] = SyncValue.String("ambiente"),
+            [SyncFields.CommandParameter.Label] = SyncValue.Null,
+            [SyncFields.CommandParameter.Type] = SyncValue.Integer(0),
+            [SyncFields.CommandParameter.DefaultValue] = SyncValue.Null,
+            [SyncFields.CommandParameter.IsRequired] = SyncValue.Boolean(true),
+            [SyncFields.CommandParameter.Options] = SyncValue.Null,
+        };
+
+        foreach (var (name, value) in extra)
+        {
+            members[name] = value;
+        }
+
+        return SyncValue.Object([.. members.Select(pair => (pair.Key, pair.Value))]);
+    }
 
     private static Dictionary<string, JsonElement> ValidTask() => new()
     {

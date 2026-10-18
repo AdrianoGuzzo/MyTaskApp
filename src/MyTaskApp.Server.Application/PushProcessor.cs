@@ -21,7 +21,15 @@ namespace MyTaskApp.Server.Application;
 /// </para>
 /// <para>
 /// <b>O pai que ainda não chegou</b> é a única recusa temporária: a operação
-/// não é guardada, e a próxima tentativa decide de novo.
+/// não é guardada, e a próxima tentativa decide de novo. A cota cheia também
+/// não é guardada — depende do que o workspace ocupa na hora —, mas não volta
+/// sozinha: pede que alguém exclua.
+/// </para>
+/// <para>
+/// <b>Só o contrato entra</b> (ADR-072). Campo fora do registro recusa a
+/// operação inteira; a entidade mesclada tem teto de bytes, e o workspace,
+/// cota de linhas e de bytes. Operação que não cresce passa mesmo acima da
+/// cota, para sempre dar para excluir e encolher.
 /// </para>
 /// <para>
 /// <b>Excluído não volta.</b> A exclusão deixa um tombstone; uma alteração
@@ -33,6 +41,7 @@ public sealed class PushProcessor(
     ISyncStore store,
     ISyncUnitOfWork unitOfWork,
     IWorkspaceAccess access,
+    PushLimits limits,
     TimeProvider timeProvider,
     ILogger<PushProcessor> logger)
 {
@@ -67,7 +76,8 @@ public sealed class PushProcessor(
         var results = await unitOfWork.ExecuteAsync(
             async token =>
             {
-                var batch = new Batch(caller, workspaceId, await store.LockWorkspaceAsync(workspaceId, token), timeProvider.GetUtcNow());
+                var seq = await store.LockWorkspaceAsync(workspaceId, token);
+                var batch = new Batch(caller, workspaceId, seq, timeProvider.GetUtcNow(), await store.UsageAsync(workspaceId, token));
                 var list = new List<OperationResult>(request.Operations.Count);
 
                 foreach (var operation in request.Operations)
@@ -107,7 +117,7 @@ public sealed class PushProcessor(
 
         var result = await ExecuteAsync(batch, operation, cancellationToken);
 
-        if (result.Error?.Code != SyncErrorCodes.ParentMissing)
+        if (result.Error?.Code is not (SyncErrorCodes.ParentMissing or SyncErrorCodes.QuotaExceeded))
         {
             await store.SaveProcessedAsync(
                 batch.WorkspaceId,
@@ -147,6 +157,16 @@ public sealed class PushProcessor(
         }
 
         var isCreate = current is null || revive;
+
+        if (SyncFieldValidator.FindUnknown(definition, operation.Fields) is { Count: > 0 } unknown)
+        {
+            return Rejected(
+                operation,
+                current?.Version ?? 0,
+                SyncErrorCodes.UnknownField,
+                $"Campos fora do contrato deste servidor: {string.Join(", ", unknown)}.");
+        }
+
         var errors = SyncFieldValidator.Validate(definition, operation.Fields, isCreate);
 
         if (errors.Count > 0)
@@ -178,9 +198,12 @@ public sealed class PushProcessor(
             rejected.AddRange(merge.Rejected);
         }
 
+        // O que um servidor de antes do ADR-072 guardou fora do contrato sai na próxima escrita.
         var data = isCreate
             ? new Dictionary<string, JsonElement>(StringComparer.Ordinal)
-            : new Dictionary<string, JsonElement>(current!.Data, StringComparer.Ordinal);
+            : new Dictionary<string, JsonElement>(
+                current!.Data.Where(pair => definition.FindField(pair.Key) is not null),
+                StringComparer.Ordinal);
 
         foreach (var (name, value) in applied)
         {
@@ -257,6 +280,24 @@ public sealed class PushProcessor(
                 rejected);
         }
 
+        var bytes = StoredEntity.SizeOf(data);
+
+        if (limits.MaxEntityBytes > 0 && bytes > limits.MaxEntityBytes)
+        {
+            return Rejected(
+                operation,
+                current?.Version ?? 0,
+                SyncErrorCodes.EntityTooLarge,
+                $"Ficaria com {bytes} bytes; o teto do servidor é {limits.MaxEntityBytes}.");
+        }
+
+        var wasLive = current is { IsDeleted: false };
+
+        if (QuotaProblem(batch, becomesLive: !wasLive, bytes - (current?.DataBytes ?? 0)) is { } quota)
+        {
+            return Rejected(operation, current?.Version ?? 0, SyncErrorCodes.QuotaExceeded, quota);
+        }
+
         var previous = current?.Version ?? 0;
         var entity = current ?? new StoredEntity
         {
@@ -294,7 +335,7 @@ public sealed class PushProcessor(
         entity.UpdatedByDeviceId = batch.Caller.DeviceId;
         entity.UpdatedAt = batch.Now;
 
-        await store.SaveAsync(entity, cancellationToken);
+        await SaveAsync(batch, entity, wasLive, bytes, cancellationToken);
         await store.ReplaceReferencesAsync(batch.WorkspaceId, entity.EntityType, entity.EntityId, ReferencesOf(definition, entity), cancellationToken);
         await LogAsync(batch, entity, operation.OpId, isCreate ? "create" : "update", [.. applied.Keys], cancellationToken);
 
@@ -339,6 +380,8 @@ public sealed class PushProcessor(
 
     private async Task TombstoneAsync(Batch batch, StoredEntity entity, Guid? opId, string kind, CancellationToken cancellationToken)
     {
+        var wasLive = entity.Version > 0 && !entity.IsDeleted;
+
         entity.Version++;
         entity.LastSeq = ++batch.Seq;
         entity.IsDeleted = true;
@@ -350,7 +393,7 @@ public sealed class PushProcessor(
         entity.UpdatedByDeviceId = batch.Caller.DeviceId;
         entity.UpdatedAt = batch.Now;
 
-        await store.SaveAsync(entity, cancellationToken);
+        await SaveAsync(batch, entity, wasLive, StoredEntity.SizeOf(entity.Data), cancellationToken);
         await store.ReplaceReferencesAsync(batch.WorkspaceId, entity.EntityType, entity.EntityId, [], cancellationToken);
         await LogAsync(batch, entity, opId, kind, [], cancellationToken);
     }
@@ -396,7 +439,7 @@ public sealed class PushProcessor(
             child.UpdatedByDeviceId = batch.Caller.DeviceId;
             child.UpdatedAt = batch.Now;
 
-            await store.SaveAsync(child, cancellationToken);
+            await SaveAsync(batch, child, wasLive: true, StoredEntity.SizeOf(child.Data), cancellationToken);
             await store.ReplaceReferencesAsync(batch.WorkspaceId, child.EntityType, child.EntityId, ReferencesOf(childDefinition, child), cancellationToken);
             await LogAsync(batch, child, null, "cascade_set_null", [reference.Field], cancellationToken);
         }
@@ -432,6 +475,31 @@ public sealed class PushProcessor(
                 batch.Now),
             cancellationToken);
 
+    /// <summary>Grava e mantém a conta do que o workspace ocupa durante o lote.</summary>
+    private async Task SaveAsync(Batch batch, StoredEntity entity, bool wasLive, int bytes, CancellationToken cancellationToken)
+    {
+        var before = entity.DataBytes;
+        entity.DataBytes = bytes;
+
+        await store.SaveAsync(entity, cancellationToken);
+
+        batch.Entities += (entity.IsDeleted ? 0 : 1) - (wasLive ? 1 : 0);
+        batch.Bytes += bytes - before;
+    }
+
+    /// <summary>Por que a escrita estoura a cota do workspace, ou <c>null</c>. Quem não cresce sempre passa.</summary>
+    private string? QuotaProblem(Batch batch, bool becomesLive, long growth)
+    {
+        if (becomesLive && limits.MaxWorkspaceEntities > 0 && batch.Entities >= limits.MaxWorkspaceEntities)
+        {
+            return $"O workspace chegou ao teto de {limits.MaxWorkspaceEntities} entidades; exclua algo para liberar.";
+        }
+
+        return growth > 0 && limits.MaxWorkspaceBytes > 0 && batch.Bytes + growth > limits.MaxWorkspaceBytes
+            ? $"O workspace chegou ao teto de {limits.MaxWorkspaceBytes} bytes; exclua ou encolha algo para liberar."
+            : null;
+    }
+
     private static OperationResult Rejected(SyncOperation operation, long version, string code, string message) =>
         new(operation.OpId, OperationOutcome.Rejected, false, version, version, [], new SyncError(code, message));
 
@@ -439,7 +507,7 @@ public sealed class PushProcessor(
     public static byte[] Hash(SyncOperation operation) =>
         SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(operation, SyncJson.Options));
 
-    private sealed class Batch(SyncCaller caller, Guid workspaceId, long seq, DateTimeOffset now)
+    private sealed class Batch(SyncCaller caller, Guid workspaceId, long seq, DateTimeOffset now, WorkspaceUsage usage)
     {
         public SyncCaller Caller { get; } = caller;
 
@@ -448,5 +516,9 @@ public sealed class PushProcessor(
         public long Seq { get; set; } = seq;
 
         public DateTimeOffset Now { get; } = now;
+
+        public long Entities { get; set; } = usage.Entities;
+
+        public long Bytes { get; set; } = usage.Bytes;
     }
 }

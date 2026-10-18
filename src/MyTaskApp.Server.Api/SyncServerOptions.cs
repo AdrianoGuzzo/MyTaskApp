@@ -1,3 +1,4 @@
+using MyTaskApp.Server.Application;
 using MyTaskApp.Sync.Contracts;
 
 namespace MyTaskApp.Server.Api;
@@ -48,6 +49,9 @@ public sealed class SyncServerOptions
     public RateLimitOptions RateLimits { get; set; } = new();
 
     public RegistrationOptions Registration { get; set; } = new();
+
+    /// <summary>O teto de bytes por entidade e a cota do workspace no push (ADR-072).</summary>
+    public PushLimits Push { get; set; } = new();
 
     public CertificateOptions? SigningCertificate { get; set; }
 

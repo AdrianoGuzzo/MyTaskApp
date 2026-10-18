@@ -19,6 +19,8 @@ public static class SyncRegistry
         rank: 0,
         [
             Text(SyncFields.Task.Title, 200, required: true),
+            // Sem teto de campo, de propósito: a anotação longa é do domínio. O que
+            // a segura no servidor é o teto da entidade (ADR-072).
             Text(SyncFields.Task.Description, max: null),
             Integer(SyncFields.Task.Priority, required: true, min: 0, max: 3),
             Text(SyncFields.Task.NextAction, 200),
@@ -221,7 +223,8 @@ public static class SyncRegistry
                         Integer(CommandParameter.Type, required: true, min: 0),
                         Text(CommandParameter.DefaultValue, 500),
                         new(CommandParameter.IsRequired, SyncFieldKind.Boolean) { IsRequired = true },
-                        Text(CommandParameter.Options, max: null),
+                        // 50 opções de 500, uma por linha (CommandParameterSpec.MaxOptionsLength).
+                        Text(CommandParameter.Options, 25_049),
                     ],
                 },
             },

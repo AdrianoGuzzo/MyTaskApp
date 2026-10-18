@@ -83,6 +83,9 @@ o da variável, e o conteúdo é o valor. É o que o compose de produção usa (
 | `Sync__RateLimits__ApiPerMinute` | não | o resto da API, por usuário (o `sub` do token). Padrão 120 |
 | `Sync__RateLimits__AnonymousPerMinute` | não | rotas da API sem token válido (o que vai dar 401), por IP. Padrão 30 |
 | `Sync__RateLimits__GlobalPerMinute` | não | teto de proteção de qualquer rota, por IP, somado aos outros. Padrão 600; `0` desliga |
+| `Sync__Push__MaxEntityBytes` | não | o JSON de uma entidade, já mesclado, em bytes UTF-8 (ADR-072). Padrão 786432 (768 KiB); acima, `entity_too_large`; `0` desliga |
+| `Sync__Push__MaxWorkspaceEntities` | não | entidades vivas por workspace (tombstone não conta). Padrão 100000; acima, `quota_exceeded`; `0` desliga |
+| `Sync__Push__MaxWorkspaceBytes` | não | soma do JSON de todas as linhas do workspace. Padrão 268435456 (256 MiB); acima, `quota_exceeded`; `0` desliga |
 | `Serilog__MinimumLevel__Default` | não | padrão `Information`. OpenIddict, ASP.NET e EF ficam em `Warning` |
 
 Sem o cliente do Google, o servidor sobe, mas ninguém entra.
@@ -445,6 +448,24 @@ valendo.
 
 Os contadores ficam na memória de cada instância: com duas réplicas, cada uma
 conta o seu.
+
+### Tetos de armazenamento
+
+O push só guarda o que está no contrato (ADR-072). Campo fora dele recusa a
+operação com `unknown_field`: **campo novo no contrato pede o servidor
+atualizado antes dos desktops e do celular**. Uma entidade que, já mesclada,
+passa de `Sync__Push__MaxEntityBytes` é recusada com `entity_too_large`. O
+workspace tem cota de entidades vivas e de bytes (`quota_exceeded`). Mesmo acima
+da cota, excluir, encolher e editar sem crescer continuam passando. Nos três
+casos, a operação aparece como falha na janela da sincronização, com a mensagem
+do servidor.
+
+Para ver o uso de um workspace:
+
+```sql
+SELECT count(*) FILTER (WHERE NOT "IsDeleted") AS vivas, sum("DataBytes") AS bytes
+FROM "SyncEntities" WHERE "WorkspaceId" = '…';
+```
 
 ### O desktop de release
 

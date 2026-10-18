@@ -320,6 +320,28 @@ public sealed class ApiTests(PostgresFixture postgres) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task TheEntityCap_ComesFromTheConfiguration()
+    {
+        await using var api = await CreateApiAsync(new() { ["Sync:Push:MaxEntityBytes"] = "4096" });
+        var session = await api.LoginAsync("ana");
+        var workspace = await session.WorkspaceAsync();
+        var small = TaskFields("Cabe");
+        var big = TaskFields("Não cabe");
+        big[SyncFields.Task.Description] = SyncValue.String(new string('x', 5_000));
+
+        var push = await session.SendAsync<PushRequest, PushResponse>(HttpMethod.Post, ApiRoutes.Push(workspace), new PushRequest(
+            SyncSchema.Current,
+            session.DeviceId,
+            [
+                new SyncOperation(Guid.CreateVersion7(), session.DeviceId, SyncEntityTypes.Task, Guid.CreateVersion7(), SyncOperationKind.Upsert, 0, small, Created),
+                new SyncOperation(Guid.CreateVersion7(), session.DeviceId, SyncEntityTypes.Task, Guid.CreateVersion7(), SyncOperationKind.Upsert, 0, big, Created),
+            ]));
+
+        push.Results.Select(result => result.Outcome).Should().Equal(OperationOutcome.Applied, OperationOutcome.Rejected);
+        push.Results[1].Error!.Code.Should().Be(SyncErrorCodes.EntityTooLarge);
+    }
+
+    [Fact]
     public async Task TooManyLoginRequests_Get429_WithRetryAfter()
     {
         await using var api = await CreateApiAsync(new() { ["Sync:RateLimits:AuthPerMinute"] = "2" });

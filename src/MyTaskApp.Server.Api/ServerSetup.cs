@@ -41,6 +41,7 @@ public static class ServerSetup
         var testing = environment.IsEnvironment(TestingEnvironment);
 
         services.AddSingleton(options);
+        services.AddSingleton(options.Push);
         services.AddSingleton(google);
         services.AddMemoryCache();
         services.AddProblemDetails();
