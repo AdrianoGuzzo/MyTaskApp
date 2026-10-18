@@ -42,6 +42,7 @@ public static class ServerSetup
 
         services.AddSingleton(options);
         services.AddSingleton(google);
+        services.AddSingleton(options.Pull);
         services.AddMemoryCache();
         services.AddProblemDetails();
         services.AddExceptionHandler<SyncExceptionHandler>();
