@@ -7,9 +7,11 @@
 
     <TabBar>
         <ShellContent Title="Tarefas"
+                      Icon="tab_tasks.png"
                       Route="tasks"
                       ContentTemplate="{DataTemplate views:TaskListPage}" />
         <ShellContent Title="Conta"
+                      Icon="tab_account.png"
                       Route="account"
                       ContentTemplate="{DataTemplate views:AccountPage}" />
     </TabBar>

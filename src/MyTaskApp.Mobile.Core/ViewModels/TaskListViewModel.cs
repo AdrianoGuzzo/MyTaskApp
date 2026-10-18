@@ -60,6 +60,12 @@ public sealed partial class TaskListViewModel : MobileViewModel, IDisposable
     /// <summary>O quanto "puxar para atualizar" espera o ciclo antes de reler o que já tem.</summary>
     public static readonly TimeSpan RefreshWait = TimeSpan.FromSeconds(15);
 
+    /// <summary>Quanto a barra "Desfazer" fica na tela depois de concluir ou reabrir.</summary>
+    public static readonly TimeSpan UndoWindow = TimeSpan.FromSeconds(8);
+
+    /// <summary>De quanto em quanto o "há N min" do topo é refeito; o estado em si muda por evento.</summary>
+    public static readonly TimeSpan TickEvery = TimeSpan.FromSeconds(30);
+
     private readonly IUseCaseRunner _runner;
 
     private readonly OriginCatalog _origins;
@@ -78,6 +84,8 @@ public sealed partial class TaskListViewModel : MobileViewModel, IDisposable
 
     private readonly TimeProvider _time;
 
+    private readonly ITimer _ticker;
+
     private int _generation;
 
     private CancellationTokenSource? _searchDelay;
@@ -86,6 +94,15 @@ public sealed partial class TaskListViewModel : MobileViewModel, IDisposable
     private bool _clearingSearch;
 
     private string _appliedOriginLabel = OriginCatalog.AnyOrigin.Label;
+
+    /// <summary>O caminho de volta do último toque em concluir/reabrir, enquanto a barra está na tela.</summary>
+    private (Guid OccurrenceId, bool Reopen)? _undo;
+
+    private CancellationTokenSource? _undoTimer;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasUndo))]
+    private string? _undoMessage;
 
     [ObservableProperty]
     private TaskFilter _filter = TaskFilter.Default;
@@ -115,6 +132,7 @@ public sealed partial class TaskListViewModel : MobileViewModel, IDisposable
     private int _total;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SyncLine))]
     private SyncBadge? _sync;
 
     [ObservableProperty]
@@ -165,6 +183,7 @@ public sealed partial class TaskListViewModel : MobileViewModel, IDisposable
         _scheduler.CycleStarted += OnCycleStarted;
         _scheduler.CycleCompleted += OnCycleCompleted;
         _scheduler.ChangeQueued += OnChangeQueued;
+        _ticker = time.CreateTimer(_ => _dispatcher.Post(() => OnPropertyChanged(nameof(SyncLine))), state: null, TickEvery, TickEvery);
     }
 
     public ObservableCollection<TaskRow> Tasks { get; } = [];
@@ -201,6 +220,16 @@ public sealed partial class TaskListViewModel : MobileViewModel, IDisposable
 
     /// <summary>"Filtros (2)": o botão mostra quantos estão ligados na folha.</summary>
     public string FiltersLabel => Filter.SheetCount > 0 ? $"Filtros ({Filter.SheetCount})" : "Filtros";
+
+    public bool HasUndo => UndoMessage is not null;
+
+    /// <summary>"Sincronizado · há 2 min": o estado de relance, com a idade quando está em dia.</summary>
+    public string SyncLine => Sync switch
+    {
+        null or { IsVisible: false } => string.Empty,
+        { Kind: SyncIndicatorKind.Synced or SyncIndicatorKind.Review, LastSuccessAt: { } at } => $"{Sync.Title} · {Labels.Ago(at, _time)}",
+        _ => Sync.Title,
+    };
 
     [RelayCommand]
     public Task LoadAsync() => LoadPageAsync(reset: true, keepLoaded: false);
@@ -259,7 +288,12 @@ public sealed partial class TaskListViewModel : MobileViewModel, IDisposable
         return LoadPageAsync(reset: true, keepLoaded: false);
     }
 
-    /// <summary>O gesto da linha: concluir a pendente, reabrir a concluída — pelos mesmos casos de uso do desktop.</summary>
+    /// <summary>
+    /// O gesto da linha: concluir a pendente, reabrir a concluída — pelos
+    /// mesmos casos de uso do desktop. Em vez de um aviso que some, a barra
+    /// "Desfazer" fica <see cref="UndoWindow"/> na tela: um toque errado no
+    /// celular acontece, e voltar atrás tem de ser um toque também.
+    /// </summary>
     [RelayCommand]
     public async Task ToggleAsync(TaskRow? row)
     {
@@ -270,17 +304,31 @@ public sealed partial class TaskListViewModel : MobileViewModel, IDisposable
 
         var reopening = row.IsCompleted;
 
-        var done = await TryAsync(
-            () => reopening
-                ? _runner.RunAsync<ReopenOccurrenceHandler>((handler, token) => handler.HandleAsync(new ReopenOccurrence(row.OccurrenceId), token))
-                : _runner.RunAsync<CompleteOccurrenceHandler>((handler, token) => handler.HandleAsync(new CompleteOccurrence(row.OccurrenceId), token)),
-            "MobileToggleFailed");
-
-        if (done)
+        if (await SetCompletedAsync(row.OccurrenceId, completed: !reopening))
         {
-            await Dialogs.ToastAsync(reopening ? "Tarefa reaberta." : "Tarefa concluída.");
-            _notifier.NotifyChanged(DataArea.Tasks);
+            OfferUndo(reopening ? "Tarefa reaberta." : "Tarefa concluída.", row.OccurrenceId, reopen: !reopening);
         }
+    }
+
+    /// <summary>"Desfazer": o caso de uso oposto, na mesma ocorrência.</summary>
+    [RelayCommand]
+    public async Task UndoAsync()
+    {
+        if (_undo is not { } undo)
+        {
+            return;
+        }
+
+        DismissUndo();
+        await SetCompletedAsync(undo.OccurrenceId, completed: !undo.Reopen);
+    }
+
+    [RelayCommand]
+    public void DismissUndo()
+    {
+        CancelUndoTimer();
+        _undo = null;
+        UndoMessage = null;
     }
 
     [RelayCommand]
@@ -369,6 +417,13 @@ public sealed partial class TaskListViewModel : MobileViewModel, IDisposable
         }
     }
 
+    /// <summary>
+    /// O tema mudou: o estado é o mesmo, mas a tela pinta a bolinha a partir
+    /// dele e precisa reler. Reler o status não basta: o <see cref="SyncBadge"/>
+    /// novo é igual ao velho, e a propriedade não avisaria.
+    /// </summary>
+    public void RepaintSync() => OnPropertyChanged(nameof(Sync));
+
     public void Dispose()
     {
         _notifier.Changed -= OnDataChanged;
@@ -376,7 +431,9 @@ public sealed partial class TaskListViewModel : MobileViewModel, IDisposable
         _scheduler.CycleStarted -= OnCycleStarted;
         _scheduler.CycleCompleted -= OnCycleCompleted;
         _scheduler.ChangeQueued -= OnChangeQueued;
+        _ticker.Dispose();
         CancelPendingSearch();
+        CancelUndoTimer();
     }
 
     partial void OnSearchTextChanged(string? value)
@@ -424,6 +481,61 @@ public sealed partial class TaskListViewModel : MobileViewModel, IDisposable
         _searchDelay?.Cancel();
         _searchDelay?.Dispose();
         _searchDelay = null;
+    }
+
+    private async Task<bool> SetCompletedAsync(Guid occurrenceId, bool completed)
+    {
+        var done = await TryAsync(
+            () => completed
+                ? _runner.RunAsync<CompleteOccurrenceHandler>((handler, token) => handler.HandleAsync(new CompleteOccurrence(occurrenceId), token))
+                : _runner.RunAsync<ReopenOccurrenceHandler>((handler, token) => handler.HandleAsync(new ReopenOccurrence(occurrenceId), token)),
+            "MobileToggleFailed");
+
+        if (done)
+        {
+            _notifier.NotifyChanged(DataArea.Tasks);
+        }
+
+        return done;
+    }
+
+    /// <summary>Uma barra nova substitui a anterior, e o prazo recomeça.</summary>
+    private void OfferUndo(string message, Guid occurrenceId, bool reopen)
+    {
+        CancelUndoTimer();
+        _undo = (occurrenceId, reopen);
+        UndoMessage = message;
+
+        var timer = new CancellationTokenSource();
+        _undoTimer = timer;
+        _ = HideUndoLaterAsync(timer.Token);
+    }
+
+    private async Task HideUndoLaterAsync(CancellationToken token)
+    {
+        try
+        {
+            await Task.Delay(UndoWindow, _time, token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        _dispatcher.Post(() =>
+        {
+            if (!token.IsCancellationRequested)
+            {
+                DismissUndo();
+            }
+        });
+    }
+
+    private void CancelUndoTimer()
+    {
+        _undoTimer?.Cancel();
+        _undoTimer?.Dispose();
+        _undoTimer = null;
     }
 
     /// <summary>

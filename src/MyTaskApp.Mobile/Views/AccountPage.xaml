@@ -88,6 +88,56 @@
                     </BindableLayout.ItemTemplate>
                 </VerticalStackLayout>
 
+                <!-- Os temas do desktop; vale ao tocar e fica guardado só neste celular. -->
+                <Label Text="Aparência" Style="{StaticResource Section}" />
+                <Border Style="{StaticResource Card}" Padding="0,4">
+                    <VerticalStackLayout BindableLayout.ItemsSource="{Binding ThemeOptions}">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="vm:ThemeOption">
+                                <Grid ColumnDefinitions="Auto,*,Auto"
+                                      ColumnSpacing="12"
+                                      Padding="14,8"
+                                      MinimumHeightRequest="52"
+                                      SemanticProperties.Description="{Binding Label, StringFormat='Tema {0}'}">
+                                    <Grid.GestureRecognizers>
+                                        <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type vm:AccountViewModel}}, x:DataType=vm:AccountViewModel, Path=UseThemeCommand}"
+                                                              CommandParameter="{Binding .}" />
+                                    </Grid.GestureRecognizers>
+
+                                    <!-- A amostra: o fundo do tema com o destaque dele no meio. -->
+                                    <Border WidthRequest="36"
+                                            HeightRequest="36"
+                                            VerticalOptions="Center"
+                                            StrokeShape="RoundRectangle 10"
+                                            StrokeThickness="1"
+                                            Stroke="{DynamicResource Stroke}"
+                                            BackgroundColor="{Binding ColorHex, Converter={StaticResource HexColor}}">
+                                        <BoxView WidthRequest="14"
+                                                 HeightRequest="14"
+                                                 CornerRadius="7"
+                                                 HorizontalOptions="Center"
+                                                 VerticalOptions="Center"
+                                                 Color="{Binding Accent, Converter={StaticResource HexColor}}" />
+                                    </Border>
+
+                                    <VerticalStackLayout Grid.Column="1" VerticalOptions="Center" Spacing="2">
+                                        <Label Text="{Binding Label}" FontAttributes="Bold" />
+                                        <Label Text="{Binding Description}" Style="{StaticResource Muted}" />
+                                    </VerticalStackLayout>
+
+                                    <Label Grid.Column="2"
+                                           Text="✓"
+                                           FontSize="18"
+                                           FontAttributes="Bold"
+                                           VerticalOptions="Center"
+                                           TextColor="{DynamicResource AccentText}"
+                                           IsVisible="{Binding IsSelected}" />
+                                </Grid>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                </Border>
+
                 <VerticalStackLayout IsVisible="{Binding IsLinked}" Spacing="8">
                     <Label Text="Dispositivos" Style="{StaticResource Section}" />
                     <VerticalStackLayout BindableLayout.ItemsSource="{Binding Devices}" Spacing="6">

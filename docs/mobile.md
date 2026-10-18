@@ -20,7 +20,12 @@ Windows, veja [Teste pessoal sem custo, só com Windows](#teste-pessoal-sem-cust
   - Busca por texto.
   - Atalhos: Todas, Pendentes, Vencidas, Concluídas, Canceladas.
   - Filtros por prioridade, etiquetas e origem; ordenação.
-  - Concluir e reabrir pela linha.
+  - Concluir e reabrir pela linha (ADR-075):
+    - pelo círculo à esquerda do cartão;
+    - ou arrastando para a direita, que só **revela** o botão "Concluir" e
+      não conclui sozinho.
+
+    Depois, a barra "Tarefa concluída · Desfazer" fica 8 s na tela.
   - Puxar para atualizar sincroniza.
 - **Detalhe:**
   - descrição, status, prioridade, origem, etiquetas com cor, prazo e datas;
@@ -37,9 +42,16 @@ Windows, veja [Teste pessoal sem custo, só com Windows](#teste-pessoal-sem-cust
   - entrar com Google, o estado da sincronização e os dispositivos;
   - conflitos ("Reaplicar o meu" ou "Manter o do servidor");
   - alterações recusadas (tentar de novo ou descartar);
-  - pausar e sair.
+  - pausar e sair;
+  - **Aparência:** os sete temas do desktop (Papel, Sépia, Carvão, Nórdico,
+    Ameixa, Verde Pecuária, Alto contraste) e "Automático", que segue o
+    claro/escuro do celular. Vale ao tocar e fica só neste aparelho.
+- **Teclado:** tocar fora do campo fecha o teclado. No iPhone há também o "OK"
+  em cima do teclado, e arrastar a lista para baixo o fecha.
 - **Funciona sem rede:** o que for feito fica guardado no celular e sobe quando
-  a conexão voltar. O indicador no topo diferencia:
+  a conexão voltar. A pílula no topo da lista mostra uma bolinha com as cores
+  do desktop e a frase ("Sincronizado · há 2 min"); tocar nela abre a Conta.
+  Ela diferencia:
   - Sincronizado
   - Pendente (N)
   - Sem conexão
@@ -415,6 +427,16 @@ extraia o `MyTaskApp-<versão>-ios-unsigned.ipa`. A variável
   concluir tarefas sem erro; os dados continuam lá depois de reabrir.
 - [ ] **Sincronização com o desktop:** uma tarefa criada no celular aparece no
   desktop e vice-versa; modo avião, alterar, voltar a rede e ver subir.
+- [ ] **Teclado (ADR-075):**
+  - o "OK" em cima do teclado fecha o teclado no título, na descrição e na
+    busca;
+  - arrastar a lista para baixo e tocar fora do campo também fecham.
+- [ ] **Concluir:**
+  - arrastar só revela o botão;
+  - a barra "Desfazer" aparece acima das abas e desfaz;
+  - "Tarefa salva" aparece ao salvar o formulário.
+- [ ] **Temas:** trocar na aba Conta muda o app na hora, a barra de status e o
+  teclado acompanham, e a escolha continua depois de fechar e reabrir.
 
 ## Testes
 
@@ -460,8 +482,10 @@ dotnet test tests/MyTaskApp.Server.IntegrationTests --filter "PhoneSyncTests"   
 - **Edição sem transação única.** Se um passo for recusado (por exemplo,
   concluir e mudar o prazo), o que veio antes já foi gravado. O formulário relê
   e mostra o estado real.
-- **Avisos curtos no iOS:** o iOS não tem um equivalente nativo; o resultado
-  aparece na própria tela.
+- **"Desfazer" não religa o cronômetro.** Concluir para o tempo que estava
+  correndo; desfazer reabre a tarefa, mas não volta a contar.
+- **Tema por aparelho:** a escolha não sincroniza com o desktop, que também
+  guarda o tema por computador. "Automático" não liga o Alto contraste sozinho.
 
 ## Integração futura com agentes de IA
 

@@ -46,6 +46,19 @@ public partial class TaskFormPage : IQueryAttributable
         }
     }
 
+    /// <summary>
+    /// "Concluído" no teclado do título: o teclado sai, e o resto do formulário
+    /// aparece. Esconder, e não tirar o foco: no Android, o foco tirado ia para
+    /// a descrição, e o teclado ficava.
+    /// </summary>
+    private async void OnTitleCompleted(object? sender, EventArgs e)
+    {
+        if (sender is Entry entry)
+        {
+            await entry.HideSoftInputAsync(CancellationToken.None);
+        }
+    }
+
     /// <summary>O botão voltar do Android: pergunta antes de perder o que foi escrito.</summary>
     protected override bool OnBackButtonPressed()
     {

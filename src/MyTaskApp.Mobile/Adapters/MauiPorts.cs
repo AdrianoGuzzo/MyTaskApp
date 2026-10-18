@@ -116,12 +116,14 @@ internal sealed class MauiDialogs : IDialogService
             maxLength: maxLength,
             initialValue: initialValue));
 
-    /// <summary>O aviso curto do Android; no iOS não há equivalente nativo, e a tela já mostra o resultado.</summary>
+    /// <summary>O aviso curto do Android; no iOS, que não tem um nativo, o nosso (<c>IosToast</c>).</summary>
     public Task ToastAsync(string message)
     {
 #if ANDROID
         MainThread.BeginInvokeOnMainThread(() =>
             Android.Widget.Toast.MakeText(Android.App.Application.Context, message, Android.Widget.ToastLength.Short)?.Show());
+#elif IOS
+        MainThread.BeginInvokeOnMainThread(() => IosToast.Show(message));
 #endif
         return Task.CompletedTask;
     }

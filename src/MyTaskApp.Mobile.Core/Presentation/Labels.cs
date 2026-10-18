@@ -68,6 +68,20 @@ public static class Labels
     public static string Instant(DateTimeOffset instant, TimeZoneInfo zone) =>
         TimeZoneInfo.ConvertTime(instant, zone).ToString("dd/MM/yyyy HH:mm", Culture);
 
+    /// <summary>"agora há pouco", "há 5 min", "há 2 h" — a mesma escala da bolinha do desktop.</summary>
+    public static string Ago(DateTimeOffset instant, TimeProvider time)
+    {
+        var elapsed = time.GetUtcNow() - instant;
+
+        return elapsed switch
+        {
+            { TotalMinutes: < 1 } => "agora há pouco",
+            { TotalMinutes: < 60 } => $"há {(int)elapsed.TotalMinutes} min",
+            { TotalHours: < 24 } => $"há {(int)elapsed.TotalHours} h",
+            _ => "em " + Instant(instant, time.LocalTimeZone),
+        };
+    }
+
     /// <summary>
     /// A primeira linha com texto da anotação, sem os marcadores do Markdown e
     /// curta o bastante para a lista. <c>null</c> = sem anotação.

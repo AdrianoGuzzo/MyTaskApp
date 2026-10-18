@@ -117,7 +117,8 @@ public sealed class TaskListViewModelTests : IAsyncLifetime
         await List.ToggleAsync(List.Tasks.Single());
 
         (await _app.DetailsAsync(task.TaskId)).Status.Should().Be(TaskItemStatus.Completed);
-        _app.Dialogs.Toasts.Should().Contain("Tarefa concluída.");
+        List.UndoMessage.Should().Be("Tarefa concluída.");
+        List.HasUndo.Should().BeTrue();
 
         // O aviso de mudança recarrega a lista, sem a tela pedir.
         await WaitUntilAsync(() => List.Tasks.Single().IsCompleted);
@@ -125,7 +126,90 @@ public sealed class TaskListViewModelTests : IAsyncLifetime
         await List.ToggleAsync(List.Tasks.Single());
 
         (await _app.DetailsAsync(task.TaskId)).Status.Should().Be(TaskItemStatus.Pending);
-        _app.Dialogs.Toasts.Should().Contain("Tarefa reaberta.");
+        List.UndoMessage.Should().Be("Tarefa reaberta.", "a barra nova substitui a anterior");
+        _app.Dialogs.Toasts.Should().BeEmpty("a barra Desfazer faz as vezes do aviso, igual no iOS e no Android");
+    }
+
+    [Fact]
+    public async Task Undo_ReopensWhatTheTouchCompleted()
+    {
+        var task = await _app.CreateTaskAsync("Pagar a conta de luz");
+        await List.LoadAsync();
+
+        await List.ToggleAsync(List.Tasks.Single());
+        await List.UndoAsync();
+
+        (await _app.DetailsAsync(task.TaskId)).Status.Should().Be(TaskItemStatus.Pending);
+        List.HasUndo.Should().BeFalse();
+        await WaitUntilAsync(() => !List.Tasks.Single().IsCompleted);
+
+        // Desfazer de novo, sem barra, não faz nada.
+        await List.UndoAsync();
+        (await _app.DetailsAsync(task.TaskId)).Status.Should().Be(TaskItemStatus.Pending);
+    }
+
+    [Fact]
+    public async Task Undo_CompletesAgainWhatTheTouchReopened()
+    {
+        var task = await _app.CreateTaskAsync("Revisar contrato");
+        await List.LoadAsync();
+        await List.ToggleAsync(List.Tasks.Single());
+        await WaitUntilAsync(() => List.Tasks.Single().IsCompleted);
+
+        await List.ToggleAsync(List.Tasks.Single());
+        await List.UndoAsync();
+
+        (await _app.DetailsAsync(task.TaskId)).Status.Should().Be(TaskItemStatus.Completed);
+    }
+
+    [Fact]
+    public async Task TheUndoBar_GoesAwayByItself()
+    {
+        await _app.CreateTaskAsync("Some depois");
+        await List.LoadAsync();
+
+        await List.ToggleAsync(List.Tasks.Single());
+        _app.Clock.Advance(TaskListViewModel.UndoWindow - TimeSpan.FromSeconds(1));
+        List.HasUndo.Should().BeTrue();
+
+        _app.Clock.Advance(TimeSpan.FromSeconds(1));
+        await WaitUntilAsync(() => !List.HasUndo);
+    }
+
+    [Fact]
+    public async Task ANewTouch_RestartsTheUndoWindow()
+    {
+        await _app.CreateTaskAsync("Primeira");
+        await _app.CreateTaskAsync("Segunda");
+        await List.LoadAsync();
+
+        await List.ToggleAsync(List.Tasks[0]);
+        await WaitUntilAsync(() => List.Tasks.Count(row => row.IsCompleted) == 1);
+        _app.Clock.Advance(TimeSpan.FromSeconds(4));
+        await List.ToggleAsync(List.Tasks.First(row => !row.IsCompleted));
+        _app.Clock.Advance(TimeSpan.FromSeconds(4));
+
+        List.HasUndo.Should().BeTrue("o prazo da primeira não apaga a barra da segunda");
+    }
+
+    [Fact]
+    public async Task TheSyncLine_SaysHowLongAgo_AndKeepsCounting()
+    {
+        var badge = new SyncBadge(SyncIndicatorKind.Synced, "Sincronizado", "Tudo em dia.", MobileHarness.Now);
+        var list = List;
+        list.Sync = badge;
+
+        list.SyncLine.Should().Be("Sincronizado · agora há pouco");
+
+        var changed = new List<string?>();
+        list.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+        _app.Clock.Advance(TaskListViewModel.TickEvery * 4);
+
+        changed.Should().Contain(nameof(TaskListViewModel.SyncLine), "o relógio refaz o texto sem reler o banco");
+        list.SyncLine.Should().Be("Sincronizado · há 2 min");
+
+        list.Sync = badge with { Kind = SyncIndicatorKind.Pending, Title = "Pendente (2)" };
+        list.SyncLine.Should().Be("Pendente (2)", "a idade só aparece quando está em dia");
     }
 
     [Fact]
