@@ -220,13 +220,13 @@ internal sealed class ApiFactory(
             ["client_id"] = clientId,
         });
 
-    public async Task RevokeAsync(string refreshToken)
+    public async Task RevokeAsync(string token, string hint = "refresh_token")
     {
         using var client = CreateClient();
         using var response = await client.PostAsync("/connect/revoke", new FormUrlEncodedContent(new Dictionary<string, string>
         {
-            ["token"] = refreshToken,
-            ["token_type_hint"] = "refresh_token",
+            ["token"] = token,
+            ["token_type_hint"] = hint,
             ["client_id"] = SyncSchema.DesktopClientId,
         }));
 

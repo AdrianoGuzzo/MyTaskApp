@@ -5730,8 +5730,39 @@ pendente mantém o valor local.
   - redirect exato em `127.0.0.1:47833`;
   - access token de 15 min e refresh rotativo de 30 dias;
   - uma autorização por dispositivo, com a claim `device_id`, e validação da
-    autorização a cada chamada. Revogar o dispositivo derruba os tokens dele
-    na hora.
+    autorização **e do token** a cada chamada. Revogar o dispositivo recusa
+    na hora toda chamada dele (403 `device_revoked`) e revoga o refresh.
+- **Revogação de token (SEC-010).** Só com `EnableAuthorizationEntryValidation`,
+  o `/connect/revoke` do access token respondia 200 e o token continuava
+  aceito até vencer (15 min). Revogar o refresh também não o derrubava. E,
+  comprovado por teste, nem a autorização revogada derrubava o access: sem a
+  validação do token, a da autorização não recusava nada. Agora:
+  - **`EnableTokenEntryValidation`** na validação: o access revogado leva 401
+    na hora, e a autorização revogada também (entrar de novo no mesmo
+    dispositivo derruba o access anterior). Custa uma busca por chave em
+    `OpenIddictTokens` a cada chamada, além da que a autorização já fazia.
+    Com o tráfego da sincronização (um ciclo por minuto por dispositivo,
+    token bucket por usuário), não há cache próprio. Se pesar, o caminho é um
+    cache curto, e a janela da revogação passa a ser o TTL dele.
+  - **Revogar o dispositivo revoga só o refresh (e o código que sobrou).** A
+    autorização e o access ficam: revogados, levariam 401, o app tentaria
+    renovar, levaria `invalid_grant` e pediria "conecte de novo" sem saber
+    que precisa de um id novo. Assim, o access segue chegando ao
+    `DeviceFilter`, que responde 403 `device_revoked` na hora, e o app se
+    registra como dispositivo novo. Era o que já valia de fato antes, já que
+    a validação da autorização não recusava. O tipo gravado do access é
+    `TokenTypeIdentifiers.AccessToken` (a URN), não o `TokenTypeHints`.
+  - **O "sair" revoga o access e o refresh.** Mesmo com a validação nova, o
+    OpenIddict revoga só o token pedido: revogar o refresh deixa o access de
+    pé. O `SignOutAsync` (desktop e celular) revoga primeiro o access que
+    está na memória, se ainda vale, e depois o refresh. Sem rede, os dois só
+    deixam de existir aqui, como antes.
+
+  Alternativa descartada: o "sair" revogar o dispositivo
+  (`POST /api/v1/devices/{id}/revoke`). Derrubaria tudo de uma vez, mas o
+  computador voltaria como dispositivo **novo** a cada saída (`device_revoked`
+  e `Rotate`), com o antigo sobrando revogado na lista. E não resolveria o
+  `/connect/revoke` para outros clientes (RFC 7009).
 - O celular é um segundo cliente público, `mytaskapp-mobile`, com as mesmas
   regras e a volta pelo esquema do app em vez do loopback (ADR-067).
 - **Issuer fixo (SEC-007).** Sem `SetIssuer`, o `Host` da requisição decidia
@@ -5831,8 +5862,17 @@ fora de escopo.
   - em Development, só os nomes do loopback;
   - em Production, a recusa ao subir para cada configuração errada;
   - o `redirect_uri` do Google no nome público.
+
+  Na revogação (SEC-010):
+  - o access revogado leva 401 na hora;
+  - revogar só o refresh deixa o access de pé (o motivo de o "sair" revogar
+    os dois);
+  - entrar de novo no mesmo dispositivo derruba o access anterior;
+  - o dispositivo revogado leva 403 `device_revoked`, não 401, e o refresh
+    dele `invalid_grant`.
 - **Infrastructure:** captura, aplicação remota, cliente HTTP e motor contra um
-  servidor roteirizado.
+  servidor roteirizado. O "sair" revoga access e refresh, e sem access na
+  memória só o refresh.
 - **Desktop:** a janela, a linha de origem e o composition root real.
 
 ## ADR-062 — Cada computador com a sua lista: o "onde aparece" da tarefa

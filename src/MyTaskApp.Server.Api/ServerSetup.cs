@@ -192,7 +192,7 @@ public static class ServerSetup
 
     /// <summary>
     /// O OpenIddict como servidor OAuth do desktop: só authorization code com
-    /// PKCE, refresh token que gira a cada uso e revogação. O id_token do
+    /// PKCE, refresh token que gira a cada uso e revogação que vale na hora. O id_token do
     /// Google nunca vira token desta API — ele só abre a sessão do Identity.
     /// </summary>
     private static void AddOAuthServer(IServiceCollection services, SyncServerOptions options, IHostEnvironment environment, bool testing)
@@ -252,8 +252,11 @@ public static class ServerSetup
                 validation.UseLocalServer();
                 validation.UseAspNetCore();
 
-                // Revogar a autorização derruba na hora os access tokens dela.
+                // O token e a autorização dele conferidos no banco a cada chamada (SEC-010): o /connect/revoke do access
+                // e a autorização revogada (entrar de novo no mesmo dispositivo) derrubam na hora. Só com a da autorização,
+                // nenhum dos dois derrubava. Custa uma busca por chave a mais por chamada.
                 validation.EnableAuthorizationEntryValidation();
+                validation.EnableTokenEntryValidation();
             });
 
         services.AddAuthorization(authorization => authorization.AddPolicy(SyncPolicy, policy => policy
