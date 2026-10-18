@@ -241,6 +241,114 @@ public sealed class SyncFieldValidatorTests
         SyncFieldValidator.Validate(SyncRegistry.Task, Placement(SyncValue.Null), isCreate: false).Should().ContainSingle();
     }
 
+    [Theory]
+    [InlineData("N")]
+    [InlineData("B")]
+    [InlineData("P")]
+    [InlineData("X")]
+    public void AGuidInAnotherFormat_Passes_AndIsNormalizedToD(string format)
+    {
+        // SEC-014: o mesmo GUID em N ou B escapava da chave de unicidade.
+        var tagId = Guid.NewGuid();
+        var fields = new Dictionary<string, JsonElement>
+        {
+            [SyncFields.TagDirectory.TagId] = SyncValue.String(tagId.ToString(format).ToUpperInvariant()),
+            [SyncFields.TagDirectory.Alias] = SyncValue.String("repo"),
+        };
+
+        SyncFieldValidator.Validate(SyncRegistry.TagDirectory, fields, isCreate: false).Should().BeEmpty();
+
+        var normalized = SyncFieldValidator.Normalize(SyncRegistry.TagDirectory, fields);
+        normalized[SyncFields.TagDirectory.TagId].GetString().Should().Be(tagId.ToString("D"));
+        normalized[SyncFields.TagDirectory.Alias].GetString().Should().Be("repo");
+        SyncUniqueKey.Build(SyncRegistry.TagDirectory, Lookup(new(normalized))).Should().Be($"{tagId:D}/repo");
+    }
+
+    [Fact]
+    public void Normalize_ReachesGuidsInsideObjectsAndListItems()
+    {
+        var device = Guid.NewGuid();
+        var parameter = Guid.NewGuid();
+        var task = new Dictionary<string, JsonElement>
+        {
+            [SyncFields.Task.Placement] = SyncValue.Object(
+                (SyncFields.Placement.Kind, SyncValue.Integer(1)),
+                (SyncFields.Placement.DeviceId, SyncValue.String(device.ToString("N")))),
+        };
+        var command = new Dictionary<string, JsonElement>
+        {
+            [SyncFields.Command.Parameters] = SyncValue.List(
+            [
+                Parameter((SyncFields.CommandParameter.Id, SyncValue.String(parameter.ToString("B")))),
+            ]),
+        };
+
+        var placement = SyncFieldValidator.Normalize(SyncRegistry.Task, task)[SyncFields.Task.Placement];
+        var item = SyncFieldValidator.Normalize(SyncRegistry.Command, command)[SyncFields.Command.Parameters][0];
+
+        placement.GetProperty(SyncFields.Placement.DeviceId).GetString().Should().Be(device.ToString("D"));
+        placement.GetProperty(SyncFields.Placement.Kind).GetInt64().Should().Be(1);
+        item.GetProperty(SyncFields.CommandParameter.Id).GetString().Should().Be(parameter.ToString("D"));
+        item.GetProperty(SyncFields.CommandParameter.Name).GetString().Should().Be("ambiente");
+    }
+
+    [Fact]
+    public void Normalize_LeavesWhatIsAlreadyCanonical_NullAndUnknownFieldsAlone()
+    {
+        var task = ValidTask();
+        task["colorOfTheFuture"] = SyncValue.String("{0x00}");
+
+        var normalized = SyncFieldValidator.Normalize(SyncRegistry.Task, task);
+
+        normalized.Should().HaveCount(task.Count);
+        normalized.Should().AllSatisfy(pair => pair.Value.GetRawText().Should().Be(task[pair.Key].GetRawText()));
+    }
+
+    [Theory]
+    [InlineData("2026-10-13T12:00:00")]
+    [InlineData("2026-10-13T12:00:00.0000000")]
+    [InlineData("2026-10-13 12:00:00Z")]
+    [InlineData("2026-10-13")]
+    [InlineData("13/10/2026 12:00:00 +00:00")]
+    public void AnInstantWithoutAnExplicitOffset_OrOutOfIso_IsRefused(string text)
+    {
+        var fields = new Dictionary<string, JsonElement> { [SyncFields.CreatedAt] = SyncValue.String(text) };
+
+        SyncFieldValidator.Validate(SyncRegistry.Task, fields, isCreate: false)
+            .Should().ContainSingle().Which.Message.Should().Contain("fuso");
+    }
+
+    [Theory]
+    [InlineData("2026-10-13T12:00:00.0000000Z")]
+    [InlineData("2026-10-13T12:00:00Z")]
+    [InlineData("2026-10-13T12:00:00.0000000+00:00")]
+    [InlineData("2026-10-13T09:00:00-03:00")]
+    [InlineData("2026-10-13T15:00:00.000+03:00")]
+    [InlineData("2026-10-13T15:00:00+0300")]
+    public void AnInstantWithAnOffset_Passes_AndIsNormalizedToUtc(string text)
+    {
+        var fields = new Dictionary<string, JsonElement> { [SyncFields.CreatedAt] = SyncValue.String(text) };
+
+        SyncFieldValidator.Validate(SyncRegistry.Task, fields, isCreate: false).Should().BeEmpty();
+        SyncFieldValidator.Normalize(SyncRegistry.Task, fields)[SyncFields.CreatedAt].GetString()
+            .Should().Be("2026-10-13T12:00:00.0000000Z");
+    }
+
+    [Fact]
+    public void AnInstantInsideAnObject_IsNormalizedToo()
+    {
+        var fields = new Dictionary<string, JsonElement>
+        {
+            [SyncFields.Occurrence.State] = SyncValue.Object(
+                (SyncFields.Occurrence.Status, SyncValue.Integer(1)),
+                (SyncFields.Occurrence.CompletedAt, SyncValue.String("2026-10-13T09:00:00-03:00"))),
+        };
+
+        SyncFieldValidator.Validate(SyncRegistry.Occurrence, fields, isCreate: false).Should().BeEmpty();
+        SyncFieldValidator.Normalize(SyncRegistry.Occurrence, fields)[SyncFields.Occurrence.State]
+            .GetProperty(SyncFields.Occurrence.CompletedAt).GetString().Should().Be("2026-10-13T12:00:00.0000000Z");
+    }
+
     [Fact]
     public void UniqueKey_IsCaseInsensitiveAndScoped()
     {

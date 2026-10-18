@@ -16,10 +16,17 @@ public sealed record SyncFieldError(string Field, string Message);
 /// pull e ignora o que não conhece. Quem recusa é o servidor, no push, com
 /// <see cref="FindUnknown"/> (ADR-072) — guardar o que não está no contrato
 /// deixaria a entidade crescer sem limite. Nenhum campo, conhecido ou não,
-/// passa com U+0000: o banco do servidor não grava o caractere.
+/// passa com U+0000: o banco do servidor não grava o caractere. O servidor
+/// grava o que sai de <see cref="Normalize"/>, não o texto que veio.
 /// </remarks>
 public static class SyncFieldValidator
 {
+    /// <summary>
+    /// O instante com fuso explícito: <c>Z</c> ou <c>±hh:mm</c>, fração de 0 a 7
+    /// dígitos (o formato <c>O</c> inclusive). Sem fuso, cada lado leria um horário.
+    /// </summary>
+    private static readonly string[] InstantFormats = ["yyyy-MM-dd'T'HH:mm:ss.FFFFFFF'Z'", "yyyy-MM-dd'T'HH:mm:ss.FFFFFFFzzz"];
+
     /// <summary>
     /// Os caminhos fora do contrato, no formato dos erros de <see cref="Validate"/>:
     /// o campo (<c>isAdmin</c>), o membro de objeto (<c>reminder.x</c>) e o
@@ -124,7 +131,7 @@ public static class SyncFieldValidator
             SyncFieldKind.String => CheckString(field, value),
             SyncFieldKind.Integer => CheckInteger(field, value),
             SyncFieldKind.Boolean => value.ValueKind is JsonValueKind.True or JsonValueKind.False ? null : "Esperado verdadeiro ou falso.",
-            SyncFieldKind.Instant => CheckText(value, text => DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.None, out _), "instante ISO 8601"),
+            SyncFieldKind.Instant => CheckText(value, text => TryParseInstant(text, out _), "instante ISO 8601 com fuso (Z ou ±hh:mm)"),
             SyncFieldKind.Date => CheckText(value, text => DateOnly.TryParseExact(text, SyncValue.DateFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out _), "data aaaa-MM-dd"),
             SyncFieldKind.Time => CheckText(value, text => TimeOnly.TryParseExact(text, SyncValue.TimeFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out _), "hora HH:mm:ss"),
             SyncFieldKind.Duration => CheckInteger(field, value),
@@ -218,6 +225,77 @@ public static class SyncFieldValidator
 
         return null;
     }
+
+    /// <summary>
+    /// Os campos de uma operação já validada, com todo <see cref="SyncFieldKind.Guid"/>
+    /// no formato <c>D</c> minúsculo e todo <see cref="SyncFieldKind.Instant"/> em
+    /// UTC, em qualquer profundidade — o que <see cref="SyncValue"/> escreve. A
+    /// chave de unicidade e a mescla comparam o texto: sem isso, o mesmo GUID em
+    /// <c>N</c> ou <c>B</c> passaria como outro valor (SEC-014).
+    /// </summary>
+    public static IReadOnlyDictionary<string, JsonElement> Normalize(
+        SyncEntityDefinition definition,
+        IReadOnlyDictionary<string, JsonElement> fields)
+    {
+        var normalized = new Dictionary<string, JsonElement>(fields.Count, StringComparer.Ordinal);
+
+        foreach (var (name, value) in fields)
+        {
+            normalized[name] = definition.FindField(name) is { } field ? Normalize(field, value) : value;
+        }
+
+        return normalized;
+    }
+
+    private static JsonElement Normalize(SyncFieldDefinition field, JsonElement value)
+    {
+        if (SyncValue.IsNull(value))
+        {
+            return value;
+        }
+
+        switch (field.Kind)
+        {
+            case SyncFieldKind.Guid when value.ValueKind == JsonValueKind.String && Guid.TryParse(value.GetString(), out var guid):
+                return SyncValue.Guid(guid);
+
+            case SyncFieldKind.Instant when value.ValueKind == JsonValueKind.String && TryParseInstant(value.GetString()!, out var instant):
+                return SyncValue.Instant(instant);
+
+            case SyncFieldKind.Object when value.ValueKind == JsonValueKind.Object:
+                var members = value.EnumerateObject()
+                    .Select(member => (member.Name, Original: member.Value, Value: field.Members.FirstOrDefault(known => known.Name == member.Name) is { } memberField
+                        ? Normalize(memberField, member.Value)
+                        : member.Value))
+                    .ToList();
+
+                return members.Any(member => !SameText(member.Original, member.Value))
+                    ? SyncValue.Object([.. members.Select(member => (member.Name, member.Value))])
+                    : value;
+
+            case SyncFieldKind.List when field.Item is { } item && value.ValueKind == JsonValueKind.Array:
+                var items = value.EnumerateArray().Select(element => (Original: element, Value: Normalize(item, element))).ToList();
+
+                return items.Any(element => !SameText(element.Original, element.Value))
+                    ? SyncValue.List(items.Select(element => element.Value))
+                    : value;
+
+            default:
+                return value;
+        }
+    }
+
+    /// <summary>Nada mudou: o objeto ou a lista volta como veio, sem ser reescrito.</summary>
+    private static bool SameText(JsonElement original, JsonElement normalized) =>
+        original.GetRawText() == normalized.GetRawText();
+
+    private static bool TryParseInstant(string text, out DateTimeOffset instant) =>
+        DateTimeOffset.TryParseExact(
+            text,
+            InstantFormats,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+            out instant);
 }
 
 /// <summary>
