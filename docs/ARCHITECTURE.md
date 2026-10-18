@@ -5812,6 +5812,28 @@ pendente mantém o valor local.
   memória. A renovação é serializada, e um 401 renova uma vez e tenta de novo.
   Um dispositivo revogado que tenta entrar recebe `device_revoked` e volta
   como dispositivo novo.
+- **Teto de dispositivos e textos do dispositivo (SEC-015).** Cada
+  `/connect/authorize` com um `device_id` novo criava um dispositivo, sem
+  teto: 15 logins, 15 dispositivos. O apelido aceitava `U+202E`, e a
+  plataforma e a versão, o ESC das sequências ANSI. Agora:
+  - **`Sync:MaxActiveDevicesPerUser`** (padrão 20; zero desliga) conta os
+    dispositivos não revogados da conta. O authorize de um dispositivo novo
+    acima dele volta com `device_limit_reached`, e nada é gravado. Entrar de
+    novo num que já existe não conta, e revogar um libera a vaga.
+  - O desktop e o celular mostram o código com orientação: revogar, num
+    computador já conectado (janela Sincronização), um dispositivo que não
+    se usa mais. O aparelho recusado não tem token, então não lista nem
+    revoga nada.
+  - O teto é brando: dois authorizes simultâneos de dispositivos novos podem
+    passar um do teto. Para uso pessoal, não vale uma trava no banco.
+  - Apelido, plataforma e versão perdem os caracteres das categorias `Cc` e
+    `Cf` (controles e formatação bidi), e só depois vale o tamanho: 60 no
+    apelido (vazio é recusado na renomeação e vira "Dispositivo" no registro)
+    e 40 cortados na plataforma e na versão. A plataforma com NUL deixou de
+    dar 400 (SEC-008): o NUL sai do texto como os outros controles. O ZWJ
+    também é `Cf`, então emojis compostos viram os emojis separados.
+  - `Capabilities` do "olá", ignoradas na v1, aceitam até 16 itens de 1 a 64
+    caracteres, sem `Cc`/`Cf`. Acima disso, 400 `bad_request`.
 - Rate limit: login por IP, sincronização em token bucket por usuário, resto
   da API por usuário. O 429 traz `Retry-After`, que o agendador respeita como
   piso. O "por usuário" só passou a valer com o ADR-069: antes, tudo caía no

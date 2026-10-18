@@ -28,9 +28,15 @@ public sealed class DeviceUseCases(
             throw SyncServerException.UpgradeRequired();
         }
 
-        if (ReceivedText.HasControl(hello.Platform) || ReceivedText.HasControl(hello.AppVersion))
+        // Ignoradas na v1, mas com teto: ninguém manda uma lista de 20.000 itens (SEC-015).
+        if (hello.Capabilities is { } capabilities
+            && (capabilities.Count > SyncSchema.MaxCapabilities
+                || capabilities.Any(capability => string.IsNullOrEmpty(capability)
+                    || capability.Length > SyncSchema.MaxCapabilityLength
+                    || ReceivedText.HasControlOrFormat(capability))))
         {
-            throw SyncServerException.BadRequest("Plataforma e versão não podem ter caracteres de controle.");
+            throw SyncServerException.BadRequest(
+                $"Até {SyncSchema.MaxCapabilities} capacidades, de 1 a {SyncSchema.MaxCapabilityLength} caracteres, sem caracteres de controle.");
         }
 
         var now = timeProvider.GetUtcNow();
@@ -104,18 +110,23 @@ public sealed class DeviceUseCases(
     public async Task<bool> IsActiveAsync(SyncCaller caller, CancellationToken cancellationToken) =>
         await devices.FindAsync(caller.UserId, caller.DeviceId, cancellationToken) is { IsRevoked: false };
 
+    /// <summary>
+    /// Sem controles nem formatação bidi (SEC-015): com o U+202E no meio,
+    /// <c>"disp‮exe.txt"</c> aparece na lista como "disptxt.exe".
+    /// </summary>
     public static string? CleanNickname(string? nickname)
     {
-        var trimmed = nickname?.Trim();
+        var trimmed = ReceivedText.Clean(nickname)?.Trim();
 
-        return string.IsNullOrEmpty(trimmed) || trimmed.Length > SyncSchema.MaxNicknameLength || trimmed.Any(char.IsControl)
+        return string.IsNullOrEmpty(trimmed) || trimmed.Length > SyncSchema.MaxNicknameLength
             ? null
             : trimmed;
     }
 
+    /// <summary>Plataforma e versão: sem controles (o ESC das sequências ANSI) nem formatação, e cortadas no teto.</summary>
     private static string Clip(string? value, int max)
     {
-        var trimmed = value?.Trim() ?? string.Empty;
+        var trimmed = ReceivedText.Clean(value)?.Trim() ?? string.Empty;
         return trimmed.Length > max ? trimmed[..max] : trimmed;
     }
 }
