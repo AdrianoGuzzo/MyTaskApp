@@ -2,8 +2,10 @@ using System.Diagnostics.CodeAnalysis;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using MyTaskApp.Server.Infrastructure.Persistence;
 using MyTaskApp.Sync.Contracts;
 
@@ -135,8 +137,13 @@ internal static class AccountEndpoints
     }
 
     /// <summary>Um formulário com o token antiforgery: sair também é uma ação que outro site não pode disparar.</summary>
-    private static IResult LogoutForm(HttpContext context, IAntiforgery antiforgery)
+    private static IResult LogoutForm(HttpContext context, IAntiforgery antiforgery, IOptions<AntiforgeryOptions> antiforgeryOptions)
     {
+        if (RefuseWithoutHttps(context, antiforgeryOptions.Value) is { } refused)
+        {
+            return refused;
+        }
+
         var tokens = antiforgery.GetAndStoreTokens(context);
 
         // A página não carrega nada, só posta para este servidor, e nenhum site a põe num frame (SEC-009).
@@ -151,8 +158,13 @@ internal static class AccountEndpoints
             "text/html; charset=utf-8");
     }
 
-    private static async Task<IResult> LogoutAsync(HttpContext context, IAntiforgery antiforgery)
+    private static async Task<IResult> LogoutAsync(HttpContext context, IAntiforgery antiforgery, IOptions<AntiforgeryOptions> antiforgeryOptions)
     {
+        if (RefuseWithoutHttps(context, antiforgeryOptions.Value) is { } refused)
+        {
+            return refused;
+        }
+
         if (!await antiforgery.IsRequestValidAsync(context))
         {
             return Results.Problem("Pedido recusado.", statusCode: StatusCodes.Status400BadRequest);
@@ -162,9 +174,19 @@ internal static class AccountEndpoints
         return Results.Content("Você saiu. Pode fechar esta aba.", "text/plain; charset=utf-8");
     }
 
-    /// <summary>Só caminho deste servidor: <c>/x</c>, nunca <c>//x</c> nem <c>/\x</c>.</summary>
+    /// <summary>
+    /// Só caminho deste servidor, pela regra do próprio <c>LocalRedirect</c>: <c>/x</c>, nunca <c>//x</c>,
+    /// <c>/\x</c> nem caractere de controle, e sem espaço (SEC-013). O que não passa vira <c>/</c>.
+    /// </summary>
     private static bool IsLocal([NotNullWhen(true)] string? url) =>
-        !string.IsNullOrEmpty(url)
-        && url[0] == '/'
-        && (url.Length == 1 || (url[1] != '/' && url[1] != '\\'));
+        RedirectHttpResult.IsLocalUrl(url) && !url.Any(char.IsWhiteSpace);
+
+    /// <summary>
+    /// Com o cookie do antiforgery só por HTTPS (fora dos testes), um pedido HTTP faria o antiforgery
+    /// lançar: responde 400 dizendo o porquê (SEC-013). Em produção, o TLS e o redirect para HTTPS resolvem.
+    /// </summary>
+    private static IResult? RefuseWithoutHttps(HttpContext context, AntiforgeryOptions antiforgery) =>
+        antiforgery.Cookie.SecurePolicy == CookieSecurePolicy.Always && !context.Request.IsHttps
+            ? Results.Problem("Sair exige HTTPS. Abra este endereço por https://.", statusCode: StatusCodes.Status400BadRequest)
+            : null;
 }

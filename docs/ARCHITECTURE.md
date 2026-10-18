@@ -5723,7 +5723,11 @@ pendente mantém o valor local.
 - O Identity só aceita login externo (Google, com `prompt=select_account`). O
   cookie dele vive 10 minutos e só serve para atravessar o
   `/connect/authorize`. **A API nunca aceita cookie**, só Bearer, então não há
-  CSRF possível nela. O logout por formulário tem antiforgery.
+  CSRF possível nela. O logout por formulário tem antiforgery, cujo cookie só
+  anda por HTTPS fora dos testes. Por HTTP, o logout responde 400 dizendo que
+  exige HTTPS. A volta do login (`returnUrl`) segue a regra do
+  `LocalRedirect` e não aceita espaço. O que não é caminho deste servidor
+  vira `/` (SEC-013).
 - O OpenIddict é o servidor OAuth do desktop:
   - cliente público `mytaskapp-desktop`, sem secret;
   - authorization code com **PKCE S256 obrigatório** (o `plain` foi removido);
