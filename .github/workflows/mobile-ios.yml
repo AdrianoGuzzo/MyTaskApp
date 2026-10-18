@@ -43,6 +43,17 @@ jobs:
         with:
           ref: ${{ inputs.tag != '' && format('refs/tags/{0}', inputs.tag) || '' }}
 
+      # O workflow vem do branch do disparo, mas o código vem da tag. Uma tag
+      # anterior ao IncludeAndroid (v1.19.0 e antes) cairia num NETSDK1147
+      # pedindo o workload do Android, sem dizer por quê.
+      - name: A tag já compila no Mac
+        if: inputs.tag != ''
+        run: |
+          if ! grep -q "IncludeAndroid" src/MyTaskApp.Mobile/MyTaskApp.Mobile.csproj; then
+            echo "::error::$TAG é anterior ao build do iOS no Mac (sem IncludeAndroid no csproj). Rode sem tag, ou com uma tag mais nova."
+            exit 1
+          fi
+
       # O Xcode padrão do runner muda sem aviso; aqui é o do workload (env).
       - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
         with:
@@ -57,11 +68,16 @@ jobs:
 
       # IncludeAndroid=false: o restore avalia todos os alvos do csproj, mesmo
       # com -f, e sem isso pediria o workload do Android, que aqui não existe.
+      # CodesignKey=-: com Entitlements.plist preenchido, o SDK exige perfil de
+      # provisionamento e certificado até para o simulador; "-" é a assinatura
+      # ad-hoc, que o simulador aceita. Sem perfil, o $(AppIdentifierPrefix)
+      # não expande (aviso W0109b), o que não importa para só compilar.
       - name: Compilar para o simulador
         run: >
           dotnet build src/MyTaskApp.Mobile/MyTaskApp.Mobile.csproj
           -f net10.0-ios -c Debug
           -p:IncludeAndroid=false
+          -p:CodesignKey=-
           -p:RuntimeIdentifier=iossimulator-arm64
 
   # Para o iPhone, sem assinatura: a conta Apple gratuita não gera certificado
