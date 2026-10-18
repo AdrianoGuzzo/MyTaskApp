@@ -27,10 +27,10 @@ internal sealed class InMemorySyncServer : ISyncStore, ISyncUnitOfWork, IWorkspa
 
     private readonly Dictionary<(Guid, Guid), DeviceRecord> _devices = [];
 
-    public InMemorySyncServer()
+    public InMemorySyncServer(PullLimits? pullLimits = null)
     {
         Push = new PushProcessor(this, this, this, Clock, NullLogger<PushProcessor>.Instance);
-        Queries = new SyncQueries(this, this, this);
+        Queries = new SyncQueries(this, this, this, pullLimits ?? new PullLimits());
         Devices = new DeviceUseCases(this, this, Clock, NullLogger<DeviceUseCases>.Instance);
     }
 
@@ -45,6 +45,9 @@ internal sealed class InMemorySyncServer : ISyncStore, ISyncUnitOfWork, IWorkspa
     public List<ChangeLogEntry> Log { get; } = [];
 
     public List<(Guid User, Guid Device)> Revoked { get; } = [];
+
+    /// <summary>Quantas leituras de entidade ou referência o store atendeu: o N+1 apareceria aqui.</summary>
+    public int Reads { get; set; }
 
     public Guid AddWorkspace(Guid owner, WorkspaceRole role = WorkspaceRole.Owner)
     {
@@ -88,12 +91,18 @@ internal sealed class InMemorySyncServer : ISyncStore, ISyncUnitOfWork, IWorkspa
         return Task.CompletedTask;
     }
 
-    public Task<StoredEntity?> FindAsync(Guid workspaceId, string entityType, Guid entityId, CancellationToken cancellationToken) =>
-        Task.FromResult(Get(workspaceId, entityType, entityId));
+    public Task<StoredEntity?> FindAsync(Guid workspaceId, string entityType, Guid entityId, CancellationToken cancellationToken)
+    {
+        Reads++;
+        return Task.FromResult(Get(workspaceId, entityType, entityId));
+    }
 
-    public Task<IReadOnlyList<StoredEntity>> FindManyAsync(Guid workspaceId, IReadOnlyCollection<EntityRef> entities, CancellationToken cancellationToken) =>
-        Task.FromResult<IReadOnlyList<StoredEntity>>(
+    public Task<IReadOnlyList<StoredEntity>> FindManyAsync(Guid workspaceId, IReadOnlyCollection<EntityRef> entities, CancellationToken cancellationToken)
+    {
+        Reads++;
+        return Task.FromResult<IReadOnlyList<StoredEntity>>(
             [.. entities.Select(entity => Get(workspaceId, entity.Type, entity.Id)).OfType<StoredEntity>()]);
+    }
 
     public Task<Guid?> FindByUniqueKeyAsync(Guid workspaceId, string entityType, string uniqueKey, Guid excluding, CancellationToken cancellationToken) =>
         Task.FromResult(_entities.Values
@@ -115,8 +124,46 @@ internal sealed class InMemorySyncServer : ISyncStore, ISyncUnitOfWork, IWorkspa
         return Task.CompletedTask;
     }
 
-    public Task<IReadOnlyList<StoredReference>> FindReferencesToAsync(Guid workspaceId, string toType, Guid toId, CancellationToken cancellationToken) =>
-        Task.FromResult<IReadOnlyList<StoredReference>>([.. _references.Where(reference => reference.ToType == toType && reference.ToId == toId)]);
+    public Task<IReadOnlyList<StoredReference>> FindReferencesToAsync(Guid workspaceId, string toType, Guid toId, CancellationToken cancellationToken)
+    {
+        Reads++;
+        return Task.FromResult<IReadOnlyList<StoredReference>>([.. _references.Where(reference => reference.ToType == toType && reference.ToId == toId)]);
+    }
+
+    public Task<IReadOnlySet<EntityRef>> FindDeliveredAsync(Guid workspaceId, IReadOnlyCollection<EntityRef> targets, long afterSeq, CancellationToken cancellationToken)
+    {
+        Reads++;
+        var wanted = targets.ToHashSet();
+
+        return Task.FromResult<IReadOnlySet<EntityRef>>(_references
+            .Where(reference => wanted.Contains(new EntityRef(reference.ToType, reference.ToId))
+                && _entities.TryGetValue((workspaceId, reference.FromType, reference.FromId), out var from)
+                && from.LastSeq <= afterSeq && !from.IsDeleted)
+            .Select(reference => new EntityRef(reference.ToType, reference.ToId))
+            .ToHashSet());
+    }
+
+    public Task<IReadOnlyList<StoredEntity>> FindFirstReferrersAsync(
+        Guid workspaceId,
+        string fromType,
+        string toType,
+        IReadOnlyCollection<Guid> toIds,
+        long afterSeq,
+        CancellationToken cancellationToken)
+    {
+        Reads++;
+        var wanted = toIds.ToHashSet();
+
+        return Task.FromResult<IReadOnlyList<StoredEntity>>(
+        [
+            .. _references
+                .Where(reference => reference.FromType == fromType && reference.ToType == toType && wanted.Contains(reference.ToId))
+                .Select(reference => (reference.ToId, From: _entities.GetValueOrDefault((workspaceId, reference.FromType, reference.FromId))))
+                .Where(pair => pair.From is { IsDeleted: false } from && from.LastSeq > afterSeq)
+                .GroupBy(pair => pair.ToId)
+                .Select(group => Clone(group.MinBy(pair => pair.From!.LastSeq).From!)),
+        ]);
+    }
 
     public Task AppendLogAsync(ChangeLogEntry entry, CancellationToken cancellationToken)
     {
@@ -124,8 +171,10 @@ internal sealed class InMemorySyncServer : ISyncStore, ISyncUnitOfWork, IWorkspa
         return Task.CompletedTask;
     }
 
-    public Task<IReadOnlyList<StoredEntity>> ReadChangesAsync(Guid workspaceId, long afterSeq, int limit, bool includeDeleted, CancellationToken cancellationToken) =>
-        Task.FromResult<IReadOnlyList<StoredEntity>>(
+    public Task<IReadOnlyList<StoredEntity>> ReadChangesAsync(Guid workspaceId, long afterSeq, int limit, bool includeDeleted, CancellationToken cancellationToken)
+    {
+        Reads++;
+        return Task.FromResult<IReadOnlyList<StoredEntity>>(
         [
             .. _entities.Values
                 .Where(entity => entity.WorkspaceId == workspaceId && entity.LastSeq > afterSeq && (includeDeleted || !entity.IsDeleted))
@@ -133,6 +182,7 @@ internal sealed class InMemorySyncServer : ISyncStore, ISyncUnitOfWork, IWorkspa
                 .Take(limit)
                 .Select(Clone),
         ]);
+    }
 
     public Task<long> CountAsync(Guid workspaceId, CancellationToken cancellationToken) =>
         Task.FromResult((long)_entities.Values.Count(entity => entity.WorkspaceId == workspaceId && !entity.IsDeleted));
@@ -224,6 +274,16 @@ internal static class Ops
         [SyncFields.Occurrence.State] = SyncValue.Object(
             (SyncFields.Occurrence.Status, SyncValue.Integer(0)),
             (SyncFields.Occurrence.CompletedAt, SyncValue.Null)),
+    };
+
+    public static Dictionary<string, JsonElement> TimeEntry(Guid occurrenceId) => new()
+    {
+        [SyncFields.TimeEntry.OccurrenceId] = SyncValue.Guid(occurrenceId),
+        [SyncFields.TimeEntry.StartedAt] = SyncValue.Instant(Created),
+        [SyncFields.TimeEntry.EndedAt] = SyncValue.Instant(Created.AddMinutes(30)),
+        [SyncFields.TimeEntry.Source] = SyncValue.Integer(0),
+        [SyncFields.CreatedAt] = SyncValue.Instant(Created),
+        [SyncFields.UpdatedAt] = SyncValue.Instant(Created),
     };
 
     public static Dictionary<string, JsonElement> Tag(string name, string color = "#00FF00") => new()

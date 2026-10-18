@@ -62,6 +62,29 @@ public interface ISyncStore
         Guid toId,
         CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Dos alvos, os que têm alguém vivo apontando para eles com <c>LastSeq</c>
+    /// até <paramref name="afterSeq"/>: esse filho já foi entregue, e o pai foi
+    /// junto (ADR-071).
+    /// </summary>
+    Task<IReadOnlySet<EntityRef>> FindDeliveredAsync(
+        Guid workspaceId,
+        IReadOnlyCollection<EntityRef> targets,
+        long afterSeq,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Por alvo, quem do tipo <paramref name="fromType"/> aponta para ele, está
+    /// vivo e tem o menor <c>LastSeq</c> depois de <paramref name="afterSeq"/>.
+    /// </summary>
+    Task<IReadOnlyList<StoredEntity>> FindFirstReferrersAsync(
+        Guid workspaceId,
+        string fromType,
+        string toType,
+        IReadOnlyCollection<Guid> toIds,
+        long afterSeq,
+        CancellationToken cancellationToken);
+
     Task AppendLogAsync(ChangeLogEntry entry, CancellationToken cancellationToken);
 
     /// <summary>As entidades com <c>LastSeq</c> depois do cursor, em ordem de <c>LastSeq</c>.</summary>

@@ -83,6 +83,8 @@ o da variável, e o conteúdo é o valor. É o que o compose de produção usa (
 | `Sync__RateLimits__ApiPerMinute` | não | o resto da API, por usuário (o `sub` do token). Padrão 120 |
 | `Sync__RateLimits__AnonymousPerMinute` | não | rotas da API sem token válido (o que vai dar 401), por IP. Padrão 30 |
 | `Sync__RateLimits__GlobalPerMinute` | não | teto de proteção de qualquer rota, por IP, somado aos outros. Padrão 600; `0` desliga |
+| `Sync__Pull__MaxEntities` | não | entidades por página do pull, contando o que vem de carona (ADR-071). Padrão 1000 |
+| `Sync__Pull__MaxBytes` | não | bytes por página do pull, somando o JSON de cada mudança. Padrão 1048576 (1 MiB). Só um item maior que isso, sozinho, passa do teto |
 | `Serilog__MinimumLevel__Default` | não | padrão `Information`. OpenIddict, ASP.NET e EF ficam em `Warning` |
 
 Sem o cliente do Google, o servidor sobe, mas ninguém entra.
