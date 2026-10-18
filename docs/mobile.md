@@ -252,6 +252,13 @@ Configurado e **não validado num aparelho**: este ambiente não tem Mac.
      `MyTaskApp-<versão>-ios-unsigned.ipa` como artifact `ios-ipa`;
   3. com o campo `tag` preenchido, faz o checkout da tag e anexa o `.ipa` ao
      rascunho daquela release (se ainda for rascunho).
+- **Xcode e workload fixos, juntos:** Xcode 26.6 e o workload set `10.0.401`
+  (iOS 26.5.10318), no topo do `mobile-ios.yml`. Sem versão, o workload viria
+  com o iOS 27.0, que exige o Xcode 27. Subir para o Xcode 27 pede antes o
+  ciclo de vida UIScene no app: sem ele, um app compilado com o Xcode 27 fecha
+  ao abrir.
+- **`-p:IncludeAndroid=false`:** o restore avalia todos os alvos do csproj,
+  mesmo com `-f`. Sem isso, o Mac pediria o workload do Android.
 
 **O que falta para validar:**
 
@@ -262,7 +269,7 @@ Configurado e **não validado num aparelho**: este ambiente não tem Mac.
 3. Com um Mac, também dá para rodar no simulador:
 
    ```bash
-   dotnet build src/MyTaskApp.Mobile/MyTaskApp.Mobile.csproj -t:Run -f net10.0-ios
+   dotnet build src/MyTaskApp.Mobile/MyTaskApp.Mobile.csproj -t:Run -f net10.0-ios -p:IncludeAndroid=false
    ```
 
 4. App Store ou TestFlight continuam exigindo a conta de desenvolvedor paga.
