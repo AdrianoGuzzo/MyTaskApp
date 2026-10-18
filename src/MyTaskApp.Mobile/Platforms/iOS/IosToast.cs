@@ -32,11 +32,16 @@ internal static class IosToast
         {
             Text = message,
             TextColor = UIColor.White,
-            Font = UIFont.GetPreferredFontForTextStyle(UIFontTextStyle.Subheadline) ?? UIFont.SystemFontOfSize(15),
             AdjustsFontForContentSizeCategory = true,
             Lines = 0,
             TextAlignment = UITextAlignment.Center,
         };
+
+        // O binding declara a fonte do sistema como anulável; sem ela, fica a padrão do rótulo.
+        if (UIFont.GetPreferredFontForTextStyle(UIFontTextStyle.Subheadline) is { } font)
+        {
+            label.Font = font;
+        }
 
         var size = label.SizeThatFits(new CGSize(window.Bounds.Width - 96, double.MaxValue));
         var toast = new UIView
