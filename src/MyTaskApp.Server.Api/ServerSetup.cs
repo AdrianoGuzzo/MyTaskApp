@@ -36,8 +36,13 @@ public static class ServerSetup
     {
         var options = configuration.GetSection(SyncServerOptions.SectionName).Get<SyncServerOptions>() ?? new SyncServerOptions();
         var google = configuration.GetSection(GoogleOptions.SectionName).Get<GoogleOptions>() ?? new GoogleOptions();
-        var connectionString = configuration.GetConnectionString("Sync")
-            ?? throw new InvalidOperationException("Falta ConnectionStrings:Sync (variável ConnectionStrings__Sync).");
+        // O appsettings.json traz "Sync": "" (a chave documentada), então vazio também é falta.
+        var connectionString = configuration.GetConnectionString("Sync");
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            throw new InvalidOperationException("Falta ConnectionStrings:Sync (variável ConnectionStrings__Sync; em Development, dotnet user-secrets set ConnectionStrings:Sync \"…\").");
+        }
+
         var testing = environment.IsEnvironment(TestingEnvironment);
 
         EnsurePublicAddress(options, configuration, deployed: !testing && !environment.IsDevelopment());
