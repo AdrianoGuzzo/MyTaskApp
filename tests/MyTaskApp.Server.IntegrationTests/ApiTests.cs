@@ -195,6 +195,47 @@ public sealed class ApiTests(PostgresFixture postgres) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ARevokedAccessToken_Is401RightAway()
+    {
+        var session = await _api.LoginAsync("ana");
+        (await session.GetAsync<MeResponse>(ApiRoutes.Me)).Device!.DeviceId.Should().Be(session.DeviceId);
+
+        await _api.RevokeAsync(session.Tokens.AccessToken, "access_token");
+
+        using var client = session.Api();
+        (await client.GetAsync(ApiRoutes.Me, Ct)).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task RevokingTheRefreshToken_LeavesTheAccessTokenAlive()
+    {
+        var session = await _api.LoginAsync("ana");
+
+        await _api.RevokeAsync(session.Tokens.RefreshToken);
+
+        // O OpenIddict revoga só o token pedido: por isso o "sair" do app revoga os dois (SEC-010).
+        using var client = session.Api();
+        (await client.GetAsync(ApiRoutes.Me, Ct)).StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task LoggingInAgainOnTheSameDevice_DropsTheOldAccessTokenRightAway()
+    {
+        var device = Guid.CreateVersion7();
+        var before = await _api.LoginAsync("ana", device);
+
+        var after = await _api.LoginAsync("ana", device);
+
+        // A autorização anterior foi revogada; sem a validação do token (SEC-010), o access dela seguia aceito.
+        using (var client = before.Api())
+        {
+            (await client.GetAsync(ApiRoutes.Me, Ct)).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        }
+
+        (await after.GetAsync<MeResponse>(ApiRoutes.Me)).Device!.DeviceId.Should().Be(device);
+    }
+
+    [Fact]
     public async Task AnExpiredAccessToken_Is401_AndTheRefreshedOneWorks()
     {
         await using var api = await CreateApiAsync(new() { ["Sync:AccessTokenLifetime"] = "00:00:02" });
@@ -250,15 +291,18 @@ public sealed class ApiTests(PostgresFixture postgres) : IAsyncLifetime
 
         await desktop.SendAsync<object, DeviceInfo>(HttpMethod.Post, ApiRoutes.RevokeDevice(laptop.DeviceId), new { });
 
+        // 403 com o código, e não 401: é assim que o app sabe que precisa de um id novo (SEC-010 não pode tirar isso).
         using (var client = laptop.Api())
+        using (var me = await client.GetAsync(ApiRoutes.Me, Ct))
         {
-            (await client.GetAsync(ApiRoutes.Me, Ct)).StatusCode.Should().BeOneOf(HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden);
+            me.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+            (await me.Content.ReadAsStringAsync(Ct)).Should().Contain(SyncErrorCodes.DeviceRevoked);
         }
 
         var refresh = () => _api.RefreshAsync(laptop.Tokens.RefreshToken);
         var again = () => _api.AuthorizeAsync("ana", laptop.DeviceId);
 
-        await refresh.Should().ThrowAsync<OAuthRefusedException>();
+        (await refresh.Should().ThrowAsync<OAuthRefusedException>()).Which.Error.Should().Be("invalid_grant");
         (await again.Should().ThrowAsync<OAuthRefusedException>()).Which.Error.Should().Be(SyncErrorCodes.DeviceRevoked);
 
         var devices = await desktop.GetAsync<List<DeviceInfo>>(ApiRoutes.Devices);

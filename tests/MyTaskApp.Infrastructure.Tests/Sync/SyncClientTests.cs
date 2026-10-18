@@ -242,7 +242,9 @@ public sealed class SyncClientTests : IDisposable
 
         await _auth.SignOutAsync(Ct);
 
-        _server.Requests.Should().Contain(request => request.Uri.AbsolutePath == ApiRoutes.Revocation && request.Body!.Contains("token_type_hint=refresh_token"));
+        // Os dois: revogar só o refresh deixaria o access valendo até vencer (SEC-010).
+        var revoked = _server.Requests.Where(request => request.Uri.AbsolutePath == ApiRoutes.Revocation).Select(request => Form(request.Body!)).ToList();
+        revoked.Select(form => (form["token"], form["token_type_hint"])).Should().Equal(("access-1", "access_token"), ("refresh-1", "refresh_token"));
         _secrets.Secrets.Should().BeEmpty();
         (await _auth.HasCredentialsAsync(Ct)).Should().BeFalse();
 
@@ -250,6 +252,19 @@ public sealed class SyncClientTests : IDisposable
         _server.Offline = true;
         await _auth.SignOutAsync(Ct);
         _secrets.Secrets.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task SigningOut_WithoutAnAccessTokenInMemory_RevokesOnlyTheRefresh()
+    {
+        _secrets.Secrets[SyncOptions.SecretName] = "refresh-0";
+        _server.On(ApiRoutes.Revocation, HttpStatusCode.OK, "");
+
+        await _auth.SignOutAsync(Ct);
+
+        _server.Requests.Where(request => request.Uri.AbsolutePath == ApiRoutes.Revocation)
+            .Select(request => Form(request.Body!)["token_type_hint"])
+            .Should().Equal("refresh_token");
     }
 
     [Fact]

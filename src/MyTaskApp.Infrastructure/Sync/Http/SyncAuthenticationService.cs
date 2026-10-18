@@ -148,24 +148,17 @@ internal sealed class SyncAuthenticationService(
 
         try
         {
-            if (await secrets.ReadAsync(SyncOptions.SecretName, cancellationToken) is { } refresh && options.IsAvailable)
+            if (options.IsAvailable)
             {
-                try
+                // O servidor revoga só o token pedido: o refresh sozinho deixaria o access valendo até vencer (SEC-010).
+                if (_access is { } access && access.ExpiresAt > timeProvider.GetUtcNow())
                 {
-                    using var _ = await http.PostFormAsync(
-                        ApiRoutes.Revocation,
-                        new Dictionary<string, string>
-                        {
-                            ["token"] = refresh,
-                            ["token_type_hint"] = "refresh_token",
-                            ["client_id"] = Redirect.ClientId,
-                        },
-                        cancellationToken);
+                    await RevokeAsync(access.Value, "access_token", cancellationToken);
                 }
-                catch (SyncApiException exception)
+
+                if (await secrets.ReadAsync(SyncOptions.SecretName, cancellationToken) is { } refresh)
                 {
-                    // Sem rede, o token só deixa de existir aqui; ele expira sozinho lá.
-                    logger.LogWarning("SyncRevocationFailed {Kind}", exception.Kind);
+                    await RevokeAsync(refresh, "refresh_token", cancellationToken);
                 }
             }
 
@@ -259,6 +252,27 @@ internal sealed class SyncAuthenticationService(
             {
                 _pending = null;
             }
+        }
+    }
+
+    private async Task RevokeAsync(string token, string hint, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var _ = await http.PostFormAsync(
+                ApiRoutes.Revocation,
+                new Dictionary<string, string>
+                {
+                    ["token"] = token,
+                    ["token_type_hint"] = hint,
+                    ["client_id"] = Redirect.ClientId,
+                },
+                cancellationToken);
+        }
+        catch (SyncApiException exception)
+        {
+            // Sem rede, o token só deixa de existir aqui; ele expira sozinho lá.
+            logger.LogWarning("SyncRevocationFailed {Kind}", exception.Kind);
         }
     }
 

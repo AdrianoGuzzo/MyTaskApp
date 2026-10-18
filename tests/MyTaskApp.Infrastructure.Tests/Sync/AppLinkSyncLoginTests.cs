@@ -72,8 +72,9 @@ public sealed class AppLinkSyncLoginTests : IDisposable
 
         _server.On(ApiRoutes.Revocation, HttpStatusCode.OK, "");
         await _auth.SignOutAsync(Ct);
-        Form(_server.Requests.Single(request => request.Uri.AbsolutePath == ApiRoutes.Revocation).Body!)["client_id"]
-            .Should().Be(SyncSchema.MobileClientId);
+        _server.Requests.Where(request => request.Uri.AbsolutePath == ApiRoutes.Revocation)
+            .Select(request => Form(request.Body!)["client_id"])
+            .Should().HaveCount(2).And.OnlyContain(clientId => clientId == SyncSchema.MobileClientId);
     }
 
     [Fact]
