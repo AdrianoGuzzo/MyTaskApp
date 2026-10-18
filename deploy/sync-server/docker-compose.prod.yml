@@ -49,6 +49,8 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       AllowedHosts: ${SYNC_HOST}
+      # O issuer fixo (SEC-007): o mesmo endereco que os clientes usam.
+      Sync__Issuer: ${SYNC_ISSUER:-https://${SYNC_HOST}/}
       ForwardedHeaders__KnownProxies__0: ${SYNC_PROXY_IP:-172.30.80.10}
       Database__MigrateOnStartup: "false"
       Authentication__Google__ClientId: ${GOOGLE_CLIENT_ID:?defina GOOGLE_CLIENT_ID em prod.env}

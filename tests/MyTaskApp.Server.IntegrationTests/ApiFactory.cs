@@ -28,7 +28,8 @@ namespace MyTaskApp.Server.IntegrationTests;
 internal sealed class ApiFactory(
     string connectionString,
     IReadOnlyDictionary<string, string?>? settings = null,
-    string environment = ServerSetup.TestingEnvironment)
+    string environment = ServerSetup.TestingEnvironment,
+    bool fakeGoogle = true)
     : WebApplicationFactory<Program>
 {
     /// <summary>Quem entra quando o teste não mexe em <c>Sync:Registration</c> (ADR-068).</summary>
@@ -65,8 +66,13 @@ internal sealed class ApiFactory(
 
         builder.ConfigureTestServices(services =>
         {
-            services.AddAuthentication()
-                .AddScheme<AuthenticationSchemeOptions, FakeGoogleHandler>(AccountEndpoints.ExternalProvider, null);
+            // Sem o falso, vale o handler do Google de verdade, se Authentication:Google estiver configurado.
+            if (fakeGoogle)
+            {
+                services.AddAuthentication()
+                    .AddScheme<AuthenticationSchemeOptions, FakeGoogleHandler>(AccountEndpoints.ExternalProvider, null);
+            }
+
             services.AddSingleton<ILoggerProvider>(Logs);
         });
     }

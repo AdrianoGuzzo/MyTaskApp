@@ -40,6 +40,8 @@ public static class ServerSetup
             ?? throw new InvalidOperationException("Falta ConnectionStrings:Sync (variável ConnectionStrings__Sync).");
         var testing = environment.IsEnvironment(TestingEnvironment);
 
+        EnsurePublicAddress(options, configuration, deployed: !testing && !environment.IsDevelopment());
+
         services.AddSingleton(options);
         services.AddSingleton(google);
         services.AddSingleton(options.Pull);
@@ -203,6 +205,12 @@ public static class ServerSetup
                     .SetTokenEndpointUris("connect/token")
                     .SetRevocationEndpointUris("connect/revoke");
 
+                // Sem issuer fixo, o Host da requisição vira o issuer publicado e o validado (SEC-007).
+                if (options.Issuer is { } issuer)
+                {
+                    server.SetIssuer(issuer);
+                }
+
                 server.AllowAuthorizationCodeFlow().AllowRefreshTokenFlow();
                 server.RequireProofKeyForCodeExchange();
 
@@ -360,6 +368,48 @@ public static class ServerSetup
             _ => new FixedWindowRateLimiterOptions { PermitLimit = limits.AnonymousPerMinute, Window = TimeSpan.FromMinutes(1) });
 
     private static RateLimitPartition<string> Unlimited(HttpContext context) => RateLimitPartition.GetNoLimiter(string.Empty);
+
+    /// <summary>
+    /// O endereço público (SEC-007). Fora de Development e dos testes, o issuer
+    /// é obrigatório e em HTTPS, e o <c>AllowedHosts</c> lista o nome dele, sem
+    /// <c>*</c>: o <c>Host</c> forjado leva 400 antes de chegar ao discovery ou
+    /// ao <c>redirect_uri</c> do Google.
+    /// </summary>
+    private static void EnsurePublicAddress(SyncServerOptions options, IConfiguration configuration, bool deployed)
+    {
+        if (options.Issuer is { } given
+            && (!given.IsAbsoluteUri || given.Scheme is not ("http" or "https") || given.Query.Length > 0 || given.Fragment.Length > 0))
+        {
+            throw new InvalidOperationException($"Sync:Issuer precisa ser um endereço absoluto, como https://sync.exemplo.com/ (veio \"{given}\").");
+        }
+
+        if (!deployed)
+        {
+            return;
+        }
+
+        var issuer = options.Issuer
+            ?? throw new InvalidOperationException("Falta Sync:Issuer (variável Sync__Issuer): o endereço público do servidor, como https://sync.exemplo.com/.");
+
+        if (issuer.Scheme != Uri.UriSchemeHttps)
+        {
+            throw new InvalidOperationException($"Sync:Issuer precisa ser https fora de Development (veio \"{issuer}\").");
+        }
+
+        var hosts = (configuration["AllowedHosts"] ?? string.Empty).Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        if (hosts.Length == 0 || hosts.Contains("*"))
+        {
+            throw new InvalidOperationException("AllowedHosts precisa listar o nome público do servidor, e não \"*\" (variável AllowedHosts=sync.exemplo.com).");
+        }
+
+        // Como o filtro do ASP.NET: o nome exato ou "*.dominio".
+        if (!hosts.Any(host => string.Equals(host, issuer.Host, StringComparison.OrdinalIgnoreCase)
+            || (host.StartsWith("*.", StringComparison.Ordinal) && issuer.Host.EndsWith(host[1..], StringComparison.OrdinalIgnoreCase))))
+        {
+            throw new InvalidOperationException($"O nome do Sync:Issuer ({issuer.Host}) precisa estar no AllowedHosts ({string.Join(';', hosts)}).");
+        }
+    }
 
     private static X509Certificate2 LoadCertificate(CertificateOptions? certificate, string purpose)
     {
