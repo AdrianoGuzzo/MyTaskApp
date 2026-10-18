@@ -43,6 +43,7 @@ public static class ServerSetup
         EnsurePublicAddress(options, configuration, deployed: !testing && !environment.IsDevelopment());
 
         services.AddSingleton(options);
+        services.AddSingleton(options.Push);
         services.AddSingleton(google);
         services.AddSingleton(options.Pull);
         services.AddMemoryCache();

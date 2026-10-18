@@ -10,6 +10,7 @@ public static class DependencyInjection
     {
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton(new PullLimits());
+        services.TryAddSingleton(new PushLimits());
         services.AddScoped<PushProcessor>();
         services.AddScoped<SyncQueries>();
         services.AddScoped<DeviceUseCases>();

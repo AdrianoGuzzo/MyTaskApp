@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
+using MyTaskApp.Domain.Commands;
+using MyTaskApp.Domain.StickyNotes;
 using MyTaskApp.Infrastructure.Persistence;
 using MyTaskApp.Infrastructure.Sync.Mapping;
 using MyTaskApp.Infrastructure.Tests.Persistence;
@@ -77,6 +79,22 @@ public sealed class SyncClassificationTests
                 definition.MaxLength.Should().Be(databaseLimit, $"{type}.{column.Field}{(column.Member is null ? "" : "." + column.Member)}");
             }
         }
+    }
+
+    [Fact]
+    public void TextLimitsOnlyTheDomainHas_AreTheSameInTheContract()
+    {
+        // Colunas sem teto no banco: o limite é do domínio, e o contrato repete (ADR-072).
+        var parameter = SyncRegistry.Command.FindField(SyncFields.Command.Parameters)!.Item!;
+        int? Member(string name) => parameter.Members.Single(member => member.Name == name).MaxLength;
+
+        Member(SyncFields.CommandParameter.Name).Should().Be(CommandParameterSpec.MaxNameLength);
+        Member(SyncFields.CommandParameter.Label).Should().Be(CommandParameterSpec.MaxLabelLength);
+        Member(SyncFields.CommandParameter.DefaultValue).Should().Be(CommandParameterSpec.MaxValueLength);
+        Member(SyncFields.CommandParameter.Options).Should().Be(CommandParameterSpec.MaxOptionsLength);
+        SyncRegistry.StickyNote.FindField(SyncFields.StickyNote.Content)!.MaxLength.Should().Be(StickyNote.MaxContentLength);
+        SyncRegistry.Task.FindField(SyncFields.Task.Description)!.MaxLength
+            .Should().BeNull("a anotação longa não tem teto no domínio; no servidor, quem a segura é o teto da entidade");
     }
 
     [Fact]

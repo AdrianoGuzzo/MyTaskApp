@@ -11,12 +11,19 @@ public sealed record SyncCaller(Guid UserId, Guid DeviceId);
 public sealed record FieldStamp(long Version, Guid DeviceId);
 
 /// <summary>
-/// Uma entidade guardada no servidor: o JSON do contrato como veio — campo
-/// desconhecido incluído, para o cliente mais novo não perder o que mandou —
-/// e, por campo, a versão e o dispositivo da última escrita.
+/// Uma entidade guardada no servidor: o JSON do contrato — só os campos que o
+/// registro conhece (ADR-072) — e, por campo, a versão e o dispositivo da
+/// última escrita.
 /// </summary>
 public sealed class StoredEntity
 {
+    /// <summary>
+    /// O tamanho do JSON em bytes UTF-8, com as opções do contrato: o mesmo
+    /// texto que o banco grava e que o pull devolve.
+    /// </summary>
+    public static int SizeOf(IReadOnlyDictionary<string, JsonElement> data) =>
+        JsonSerializer.SerializeToUtf8Bytes(data, SyncJson.Options).Length;
+
     public required Guid WorkspaceId { get; init; }
 
     public required string EntityType { get; init; }
@@ -31,6 +38,9 @@ public sealed class StoredEntity
     public Dictionary<string, JsonElement> Data { get; set; } = new(StringComparer.Ordinal);
 
     public Dictionary<string, FieldStamp> FieldVersions { get; set; } = new(StringComparer.Ordinal);
+
+    /// <summary>O <see cref="SizeOf"/> do <see cref="Data"/> gravado; a loja preenche ao salvar.</summary>
+    public int DataBytes { get; set; }
 
     public string? UniqueKey { get; set; }
 

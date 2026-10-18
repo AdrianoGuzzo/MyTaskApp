@@ -79,6 +79,9 @@ internal sealed class SyncEntityRow
 
     public string FieldVersions { get; set; } = "{}";
 
+    /// <summary>O tamanho do <see cref="Data"/> em bytes UTF-8, para a cota do workspace sem ler o JSON (ADR-072).</summary>
+    public int DataBytes { get; set; }
+
     public string? UniqueKey { get; set; }
 
     public bool IsDeleted { get; set; }

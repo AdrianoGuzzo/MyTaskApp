@@ -387,6 +387,9 @@ namespace MyTaskApp.Server.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("jsonb");
 
+                    b.Property<int>("DataBytes")
+                        .HasColumnType("integer");
+
                     b.Property<DateTimeOffset?>("DeletedAt")
                         .HasColumnType("timestamp with time zone");
 

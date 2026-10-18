@@ -6,9 +6,9 @@ namespace MyTaskApp.Sync.Contracts;
 /// abaixo de <see cref="MinimumClient"/>.
 /// </summary>
 /// <remarks>
-/// Campo desconhecido não quebra ninguém: o servidor guarda o JSON como veio e
-/// o cliente mais velho ignora o que não conhece. Por isso a maioria das
-/// mudanças cabe na mesma versão.
+/// Campo novo cabe na mesma versão, desde que o <b>servidor seja atualizado
+/// antes</b> (ADR-072): ele recusa o campo que não conhece (<c>unknown_field</c>),
+/// e o cliente mais velho ignora o que não conhece no pull.
 /// </remarks>
 public static class SyncSchema
 {

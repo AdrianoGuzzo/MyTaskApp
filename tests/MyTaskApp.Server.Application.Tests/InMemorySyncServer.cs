@@ -27,9 +27,9 @@ internal sealed class InMemorySyncServer : ISyncStore, ISyncUnitOfWork, IWorkspa
 
     private readonly Dictionary<(Guid, Guid), DeviceRecord> _devices = [];
 
-    public InMemorySyncServer(PullLimits? pullLimits = null)
+    public InMemorySyncServer(PullLimits? pullLimits = null, PushLimits? pushLimits = null)
     {
-        Push = new PushProcessor(this, this, this, Clock, NullLogger<PushProcessor>.Instance);
+        Push = new PushProcessor(this, this, this, pushLimits ?? new PushLimits(), Clock, NullLogger<PushProcessor>.Instance);
         Queries = new SyncQueries(this, this, this, pullLimits ?? new PullLimits());
         Devices = new DeviceUseCases(this, this, Clock, NullLogger<DeviceUseCases>.Instance);
     }
@@ -63,6 +63,9 @@ internal sealed class InMemorySyncServer : ISyncStore, ISyncUnitOfWork, IWorkspa
         _entities.TryGetValue((workspace, type, id), out var entity) ? Clone(entity) : null;
 
     public long LastSeqOf(Guid workspace) => _lastSeq.GetValueOrDefault(workspace);
+
+    /// <summary>Grava direto, como o servidor de antes de uma regra nova teria gravado.</summary>
+    public void Seed(StoredEntity entity) => _entities[(entity.WorkspaceId, entity.EntityType, entity.EntityId)] = Clone(entity);
 
     // ---- ISyncUnitOfWork ----
 
@@ -187,6 +190,12 @@ internal sealed class InMemorySyncServer : ISyncStore, ISyncUnitOfWork, IWorkspa
     public Task<long> CountAsync(Guid workspaceId, CancellationToken cancellationToken) =>
         Task.FromResult((long)_entities.Values.Count(entity => entity.WorkspaceId == workspaceId && !entity.IsDeleted));
 
+    public Task<WorkspaceUsage> UsageAsync(Guid workspaceId, CancellationToken cancellationToken)
+    {
+        var rows = _entities.Values.Where(entity => entity.WorkspaceId == workspaceId).ToList();
+        return Task.FromResult(new WorkspaceUsage(rows.Count(entity => !entity.IsDeleted), rows.Sum(entity => (long)entity.DataBytes)));
+    }
+
     // ---- IWorkspaceAccess ----
 
     public Task<WorkspaceRole?> RoleOfAsync(Guid userId, Guid workspaceId, CancellationToken cancellationToken) =>
@@ -227,6 +236,7 @@ internal sealed class InMemorySyncServer : ISyncStore, ISyncUnitOfWork, IWorkspa
         LastSeq = entity.LastSeq,
         Data = entity.Data.ToDictionary(pair => pair.Key, pair => pair.Value.Clone(), StringComparer.Ordinal),
         FieldVersions = new Dictionary<string, FieldStamp>(entity.FieldVersions, StringComparer.Ordinal),
+        DataBytes = entity.DataBytes,
         UniqueKey = entity.UniqueKey,
         IsDeleted = entity.IsDeleted,
         CreatedByUserId = entity.CreatedByUserId,
