@@ -14,7 +14,8 @@ public sealed record SyncFieldError(string Field, string Message);
 /// <remarks>
 /// Campo desconhecido <b>passa</b>: pode ser de um cliente mais novo, e o
 /// servidor guarda como veio. O que não passa é o campo conhecido com valor
-/// fora do formato ou dos limites.
+/// fora do formato ou dos limites. Nenhum campo, conhecido ou não, passa com
+/// U+0000: o banco do servidor não grava o caractere.
 /// </remarks>
 public static class SyncFieldValidator
 {
@@ -34,6 +35,15 @@ public static class SyncFieldValidator
             else if (isCreate && field.IsRequired)
             {
                 errors.Add(new SyncFieldError(field.Name, "Campo obrigatório ausente na criação."));
+            }
+        }
+
+        // O nome vai sem o NUL: a frase da recusa também é gravada no servidor.
+        foreach (var (name, value) in fields)
+        {
+            if (name.Contains('\0') || SyncValue.ContainsNul(value))
+            {
+                errors.Add(new SyncFieldError(name.Replace("\0", "\\0", StringComparison.Ordinal), "Texto com caractere nulo (U+0000)."));
             }
         }
 

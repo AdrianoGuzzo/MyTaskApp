@@ -319,6 +319,74 @@ public sealed class ApiTests(PostgresFixture postgres) : IAsyncLifetime
         (await response.Content.ReadAsStringAsync(Ct)).Should().Contain(SyncErrorCodes.DeviceMismatch);
     }
 
+    /// <summary>
+    /// SEC-008: membro nulo e caractere NUL nunca chegam a 500. O que é forma
+    /// do pedido vira 400; o NUL num campo recusa só a operação, para um texto
+    /// colado no desktop não travar o resto do lote.
+    /// </summary>
+    [Theory]
+    [InlineData("fetch entities null")]
+    [InlineData("push operations null")]
+    [InlineData("push operations missing")]
+    [InlineData("push operation null")]
+    [InlineData("push entityType null")]
+    [InlineData("push fields null")]
+    [InlineData("push nul in a known field")]
+    [InlineData("push nul in an unknown field")]
+    [InlineData("device platform with nul")]
+    public async Task NullMembersAndNulCharacters_NeverBecomeA500(string body)
+    {
+        var session = await _api.LoginAsync("ana");
+        var workspace = await session.WorkspaceAsync();
+        var device = session.DeviceId;
+        var task = Guid.CreateVersion7();
+        var push = $$"""{"schemaVersion":{{SyncSchema.Current}},"deviceId":"{{device}}" """;
+        string Operation(string entityType, string fields) =>
+            $$"""{"opId":"{{Guid.CreateVersion7()}}","deviceId":"{{device}}","entityType":{{entityType}},"entityId":"{{task}}","kind":"upsert","baseVersion":0,"fields":{{fields}}}""";
+
+        using var client = session.Api();
+        using var response = body switch
+        {
+            "fetch entities null" => await PostJsonAsync(client, ApiRoutes.Fetch(workspace), """{"entities":null}"""),
+            "push operations null" => await PostJsonAsync(client, ApiRoutes.Push(workspace), push + ""","operations":null}"""),
+            "push operations missing" => await PostJsonAsync(client, ApiRoutes.Push(workspace), push + "}"),
+            "push operation null" => await PostJsonAsync(client, ApiRoutes.Push(workspace), push + ""","operations":[null]}"""),
+            "push entityType null" => await PostJsonAsync(client, ApiRoutes.Push(workspace), push + $$""","operations":[{{Operation("null", "{}")}}]}"""),
+            "push fields null" => await PostJsonAsync(client, ApiRoutes.Push(workspace), push + $$""","operations":[{{Operation($"\"{SyncEntityTypes.Task}\"", "null")}}]}"""),
+            "push nul in a known field" => await PushAsync(TaskFields("titulo\0nul")),
+            "push nul in an unknown field" => await PushAsync(new(TaskFields("Pagar boleto")) { ["colorOfTheFuture"] = SyncValue.String("a\0b") }),
+            "device platform with nul" => await client.PutAsync(
+                ApiRoutes.CurrentDevice,
+                JsonContent.Create(new DeviceHello(null, "Win\0", "1.0.0", SyncSchema.Current), options: SyncJson.Options),
+                Ct),
+            _ => throw new ArgumentOutOfRangeException(nameof(body)),
+        };
+
+        if (body.StartsWith("push nul", StringComparison.Ordinal))
+        {
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+            var result = (await response.Content.ReadFromJsonAsync<PushResponse>(SyncJson.Options, Ct))!.Results.Single();
+            result.Outcome.Should().Be(OperationOutcome.Rejected);
+            result.Error!.Code.Should().Be(SyncErrorCodes.ValidationFailed);
+            (await session.GetAsync<PullResponse>(ApiRoutes.Pull(workspace))).Changes.Should().BeEmpty();
+        }
+        else
+        {
+            response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+            (await response.Content.ReadAsStringAsync(Ct)).Should().Contain(SyncErrorCodes.BadRequest);
+        }
+
+        _api.Logs.Text.Should().NotContain("SyncServerUnhandled");
+
+        Task<HttpResponseMessage> PushAsync(Dictionary<string, JsonElement> fields) =>
+            client.PostAsync(
+                ApiRoutes.Push(workspace),
+                JsonContent.Create(
+                    new PushRequest(SyncSchema.Current, device, [new SyncOperation(Guid.CreateVersion7(), device, SyncEntityTypes.Task, task, SyncOperationKind.Upsert, 0, fields, Created)]),
+                    options: SyncJson.Options),
+                Ct);
+    }
+
     [Fact]
     public async Task TooManyLoginRequests_Get429_WithRetryAfter()
     {
@@ -482,6 +550,9 @@ public sealed class ApiTests(PostgresFixture postgres) : IAsyncLifetime
         _ = api.Server;
         return api;
     }
+
+    private static Task<HttpResponseMessage> PostJsonAsync(HttpClient client, string path, string json) =>
+        client.PostAsync(path, new StringContent(json, System.Text.Encoding.UTF8, "application/json"), Ct);
 
     private static Dictionary<string, JsonElement> TaskFields(string title) => new()
     {

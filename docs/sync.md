@@ -305,6 +305,9 @@ mesmo ciclo — só em primeiro plano. Diferenças:
 - Horas sobrepostas vindas de dois computadores são aceitas. Quem corrige é
   você.
 - O cronômetro só sincroniza quando para.
+- Texto com o caractere nulo (U+0000), em geral vindo de um colar, não
+  sincroniza: o servidor recusa a alteração, que fica como falha. O resto do
+  envio segue.
 - Os registros de exclusão (tombstones) não são podados nesta versão.
 - O texto dos comandos compartilhados viaja. Segredo digitado num comando
   compartilhado vai junto. A revisão local é a barreira, e não a solução.
