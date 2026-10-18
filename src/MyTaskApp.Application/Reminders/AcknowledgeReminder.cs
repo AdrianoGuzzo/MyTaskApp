@@ -8,6 +8,11 @@ namespace MyTaskApp.Application.Reminders;
 /// O usuário finalmente deu atenção. É este caso de uso — e só ele — que encerra
 /// um lembrete: ter mostrado a notificação não encerra nada.
 /// </summary>
+/// <remarks>
+/// Idempotente: se o lembrete já não pede atenção — a ocorrência sumiu ou já foi
+/// atendida por outro caminho —, só tira o aviso da tela. Recusar aqui deixava o
+/// aviso preso, porque a janela não tem outro jeito de sair.
+/// </remarks>
 public sealed record AcknowledgeReminder(Guid OccurrenceId, ReminderAcknowledgement By);
 
 public sealed class AcknowledgeReminderHandler(
@@ -21,10 +26,17 @@ public sealed class AcknowledgeReminderHandler(
         AcknowledgeReminder command,
         CancellationToken cancellationToken = default)
     {
-        var task = await tasks.GetByOccurrenceIdAsync(command.OccurrenceId, cancellationToken);
+        var task = await tasks.FindByOccurrenceIdAsync(command.OccurrenceId, cancellationToken);
+        var occurrence = task?.GetOccurrence(command.OccurrenceId);
 
-        task.GetOccurrence(command.OccurrenceId)
-            .AcknowledgeReminder(timeProvider.GetUtcNow(), command.By);
+        if (occurrence is null || occurrence.Reminder.IsAcknowledged)
+        {
+            await presenter.DismissAsync(command.OccurrenceId, cancellationToken);
+            logger.LogInformation("ReminderAlreadySettled {OccurrenceId}", command.OccurrenceId);
+            return;
+        }
+
+        occurrence.AcknowledgeReminder(timeProvider.GetUtcNow(), command.By);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -34,7 +46,7 @@ public sealed class AcknowledgeReminderHandler(
 
         logger.LogInformation(
             "ReminderAcknowledged {TaskId} {OccurrenceId} {By}",
-            task.Id,
+            occurrence.TaskItemId,
             command.OccurrenceId,
             command.By);
     }

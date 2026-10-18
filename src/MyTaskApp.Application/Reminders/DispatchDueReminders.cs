@@ -168,7 +168,8 @@ public sealed class DispatchDueRemindersHandler(
         var digest = new ReminderDigest(
             alerts.Count,
             alerts.MaxBy(alert => alert.Level.Step)!.Level,
-            alerts.Max(alert => alert.Waiting));
+            alerts.Max(alert => alert.Waiting),
+            alerts.Select(alert => alert.OccurrenceId).ToArray());
 
         try
         {

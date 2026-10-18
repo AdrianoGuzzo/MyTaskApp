@@ -35,19 +35,42 @@ public sealed partial class ReminderAlertViewModel(
     [ObservableProperty]
     private string? _errorMessage;
 
-    public Guid OccurrenceId { get; private set; }
+    /// <summary>
+    /// As ocorrências que os botões atendem: uma no aviso comum, todas as
+    /// agregadas no resumo.
+    /// </summary>
+    public IReadOnlyList<Guid> OccurrenceIds { get; private set; } = [];
+
+    public bool IsDigest { get; private set; }
 
     /// <summary>Avisa a janela de que o usuário reagiu e ela pode sair da tela.</summary>
     public event Action<ReminderAlertViewModel>? Acted;
 
     public void Show(ReminderAlert alert)
     {
-        OccurrenceId = alert.OccurrenceId;
+        OccurrenceIds = [alert.OccurrenceId];
+        IsDigest = false;
         Title = alert.Title;
         TimeLabel = alert.TimeLabel;
-        Step = alert.Level.Step;
-        IsProminent = alert.Level.Prominent;
-        WaitingLabel = DescribeWait(alert.Waiting);
+        Fill(alert.Level, alert.Waiting);
+    }
+
+    public void ShowDigest(ReminderDigest digest)
+    {
+        OccurrenceIds = digest.OccurrenceIds;
+        IsDigest = true;
+        Title = digest.Count == 1
+            ? "1 checklist está esperando sua atenção"
+            : $"{digest.Count} checklists estão esperando sua atenção";
+        TimeLabel = null;
+        Fill(digest.Level, digest.LongestWait);
+    }
+
+    private void Fill(AlertLevel level, TimeSpan waiting)
+    {
+        Step = level.Step;
+        IsProminent = level.Prominent;
+        WaitingLabel = DescribeWait(waiting);
         ErrorMessage = null;
     }
 
@@ -69,10 +92,8 @@ public sealed partial class ReminderAlertViewModel(
             return;
         }
 
-        var occurrenceId = OccurrenceId;
-
-        await RunAsync(
-            () => runner.RunAsync<SnoozeReminderHandler>(
+        await RunForEachAsync(
+            occurrenceId => runner.RunAsync<SnoozeReminderHandler>(
                 (handler, token) => handler.HandleAsync(
                     new SnoozeReminder(occurrenceId, TimeSpan.FromMinutes(parsed)), token),
                 cancellationToken),
@@ -111,26 +132,33 @@ public sealed partial class ReminderAlertViewModel(
 
     private Task AcknowledgeAsync(
         ReminderAcknowledgement by,
-        CancellationToken cancellationToken)
-    {
-        var occurrenceId = OccurrenceId;
-
-        return RunAsync(
-            () => runner.RunAsync<AcknowledgeReminderHandler>(
+        CancellationToken cancellationToken) =>
+        RunForEachAsync(
+            occurrenceId => runner.RunAsync<AcknowledgeReminderHandler>(
                 (handler, token) => handler.HandleAsync(
                     new AcknowledgeReminder(occurrenceId, by), token),
                 cancellationToken),
             "Não foi possível registrar que você viu este lembrete.");
-    }
 
-    /// <summary>Mesmo caminho de erro do resto do app (ADR-008).</summary>
-    private async Task RunAsync(Func<Task> operation, string fallbackMessage)
+    /// <summary>
+    /// Uma ocorrência por vez, cada uma no seu caso de uso. Se uma falhar no meio,
+    /// o aviso fica e repetir é seguro: as já atendidas só saem da tela de novo.
+    /// Mesmo caminho de erro do resto do app (ADR-008).
+    /// </summary>
+    private async Task RunForEachAsync(Func<Guid, Task> operation, string fallbackMessage)
     {
         ErrorMessage = null;
+        var occurrenceIds = OccurrenceIds;
+        var current = Guid.Empty;
 
         try
         {
-            await operation();
+            foreach (var occurrenceId in occurrenceIds)
+            {
+                current = occurrenceId;
+                await operation(occurrenceId);
+            }
+
             Acted?.Invoke(this);
         }
         catch (DomainException exception)
@@ -139,7 +167,7 @@ public sealed partial class ReminderAlertViewModel(
         }
         catch (Exception exception)
         {
-            logger.LogError(exception, "ReminderAlertActionFailed {OccurrenceId}", OccurrenceId);
+            logger.LogError(exception, "ReminderAlertActionFailed {OccurrenceId}", current);
             ErrorMessage = fallbackMessage;
         }
     }
