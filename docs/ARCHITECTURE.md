@@ -7363,6 +7363,13 @@ não esteja no banco.
    gera a próxima chave já cifrada. Isso vale também para um backup antigo
    restaurado. Como a chave já revogada fica de fora, as linhas não crescem a
    cada subida.
+   - **Ele parte antes do serviço do próprio Data Protection.** O
+     `DataProtectionHostedService` carrega o key ring ao subir. No .NET 10, um
+     ring invalidado (a revogação o invalida) continua sendo entregue enquanto
+     se atualiza em segundo plano. Carregado antes da revogação, o primeiro
+     login ainda sairia com a chave em claro. Por isso o revogador é
+     registrado antes do `AddDataProtection`. O teste pegou isso só sob carga,
+     na suíte inteira.
 
 ### Alternativas
 
@@ -7406,8 +7413,9 @@ não esteja no banco.
   `key` de `DataProtectionKeys` tem `encryptedSecret`.
 - **Sem o certificado, fora de Production**, o login funciona e a chave fica
   em claro.
-- **Chave em claro de antes:** subir com o certificado a revoga, a chave nova
-  sai cifrada, login e logout funcionam, e subir de novo não revoga outra vez.
+- **Chave em claro de antes:** subir com o certificado a revoga, o primeiro
+  `Protect` logo depois de subir já usa outra chave, a chave nova sai cifrada,
+  login e logout funcionam, e subir de novo não revoga outra vez.
 - **Rotação:** um payload protegido com o PFX antigo abre no servidor com o
   novo e o antigo na lista dos anteriores.
 - **Emergência:** sem o antigo, o payload não abre, e o login funciona com uma

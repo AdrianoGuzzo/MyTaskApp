@@ -139,11 +139,21 @@ public static class ServerSetup
     /// </summary>
     private static void AddKeyProtection(IServiceCollection services, SyncServerOptions options, bool deployed)
     {
+        var certificate = TryLoadCertificate(options.DataProtectionCertificate);
+
+        // Antes do AddDataProtection: o serviço dele carrega o key ring ao subir, e um
+        // ring carregado antes da revogação ainda volta, enquanto se atualiza em segundo
+        // plano, com a chave em claro de padrão.
+        if (certificate is not null)
+        {
+            services.AddHostedService<PlaintextKeyRevoker>();
+        }
+
         var keys = services.AddDataProtection()
             .SetApplicationName("MyTaskApp.Sync")
             .PersistKeysToDbContext<ServerDbContext>();
 
-        if (TryLoadCertificate(options.DataProtectionCertificate) is not { } certificate)
+        if (certificate is null)
         {
             if (deployed)
             {
@@ -165,8 +175,6 @@ public static class ServerSetup
         {
             keys.UnprotectKeysWithAnyCertificate(previous);
         }
-
-        services.AddHostedService<PlaintextKeyRevoker>();
     }
 
     /// <summary>

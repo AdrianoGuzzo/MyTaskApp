@@ -4,6 +4,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -71,6 +72,8 @@ public sealed partial class DataProtectionTests(PostgresFixture postgres)
 
         await using (var after = new ApiFactory(database, certificate))
         {
+            // Logo ao subir: o ring carregado antes da revogação não volta com ela de padrão.
+            ProtectedWith(Protector(after).Protect("o primeiro cookie")).Should().NotBe(plaintext);
             await LoginAndLogoutAsync(after);
         }
 
@@ -214,6 +217,9 @@ public sealed partial class DataProtectionTests(PostgresFixture postgres)
             .ToList();
 
     private static Guid KeyId(XElement key) => Guid.Parse((string)key.Attribute("id")!);
+
+    /// <summary>A chave que protegeu o payload: o id vem logo depois dos 4 bytes do cabeçalho.</summary>
+    private static Guid ProtectedWith(string payload) => new(WebEncoders.Base64UrlDecode(payload).AsSpan(4, 16));
 
     private static bool IsEncrypted(XElement key) =>
         key.Descendants().Any(child => child.Name.LocalName == "encryptedSecret");
