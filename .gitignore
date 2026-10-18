@@ -14,3 +14,5 @@ artifacts/
 deploy/sync-server/secrets/
 deploy/sync-server/tls/
 deploy/sync-server/prod.env
+# A senha do banco do compose de desenvolvimento (SEC-012).
+deploy/sync-server/.env

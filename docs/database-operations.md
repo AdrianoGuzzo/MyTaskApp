@@ -697,8 +697,9 @@ das ferramentas cliente instaladas (ou mais antiga). Os testes criam e apagam
 bancos de teste, e cobrem a cópia comum e a mascarada:
 
 ```bash
-docker run -d --name pg-teste -e POSTGRES_PASSWORD=teste -p 55432:5432 postgres:17
-export MYTASKAPP_TEST_POSTGRES="Host=localhost;Port=55432;Username=postgres;Password=teste;Database=postgres"
+PG_TESTE_SENHA=$(openssl rand -hex 12)
+docker run -d --name pg-teste -e POSTGRES_PASSWORD="$PG_TESTE_SENHA" -p 55432:5432 postgres:17
+export MYTASKAPP_TEST_POSTGRES="Host=localhost;Port=55432;Username=postgres;Password=$PG_TESTE_SENHA;Database=postgres"
 dotnet test tests/MyTaskApp.Infrastructure.Tests --filter "FullyQualifiedName~PostgresIntegrationTests"
 ```
 

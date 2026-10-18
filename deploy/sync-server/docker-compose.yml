@@ -4,10 +4,13 @@
 #   dotnet run --project src/MyTaskApp.Server.Api        (ambiente Development)
 #
 # Ou tudo em conteiner, com o cliente Google em variaveis do shell:
-#   GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... SYNC_ALLOWED_EMAIL=voce@gmail.com docker compose -f deploy/sync-server/docker-compose.yml up -d
+#   GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... SYNC_ALLOWED_EMAIL=voce@gmail.com docker compose -f deploy/sync-server/docker-compose.yml --profile api up -d
 #
-# Senha de desenvolvimento, so para esta maquina. Para servir a rede, o
-# docker-compose.prod.yml: Production, TLS no Caddy e segredos em arquivo (ADR-070).
+# A senha do banco vem de POSTGRES_PASSWORD, no .env ao lado deste arquivo (fora
+# do Git; modelo em .env.example). Sem ela, o compose nao sobe (SEC-012). O
+# dotnet run le a connection string do user-secrets (docs/sync-server.md secao 3).
+# Para servir a rede, o docker-compose.prod.yml: Production, TLS no Caddy e
+# segredos em arquivo (ADR-070).
 
 services:
   postgres:
@@ -15,7 +18,7 @@ services:
     environment:
       POSTGRES_DB: mytaskapp_sync
       POSTGRES_USER: mytaskapp
-      POSTGRES_PASSWORD: mytaskapp
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no deploy/sync-server/.env (modelo em .env.example)}"
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
@@ -38,7 +41,7 @@ services:
       # Development so escuta no loopback (ADR-070). No conteiner ele escuta em
       # todas as interfaces, mas a porta so e publicada no 127.0.0.1 abaixo.
       Development__AllowNonLoopback: "true"
-      ConnectionStrings__Sync: "Host=postgres;Database=mytaskapp_sync;Username=mytaskapp;Password=mytaskapp"
+      ConnectionStrings__Sync: "Host=postgres;Database=mytaskapp_sync;Username=mytaskapp;Password=${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no deploy/sync-server/.env (modelo em .env.example)}"
       Database__MigrateOnStartup: "true"
       Authentication__Google__ClientId: ${GOOGLE_CLIENT_ID:-}
       Authentication__Google__ClientSecret: ${GOOGLE_CLIENT_SECRET:-}
