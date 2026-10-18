@@ -63,7 +63,7 @@ public class PgToolRunnerTests
         var request = Dump(Connection(DatabaseEnvironment.Production)) with { IncludeData = false, Jobs = 1, Snapshot = "00000003-0000001B-1" };
 
         PgArguments.Dump(request, 60).Should().Equal(
-            "--host", "192.168.15.112", "--port", "5432", "--username", "backup_user",
+            "--host", "198.51.100.112", "--port", "5432", "--username", "backup_user",
             "--dbname", "eco_core",
             "--format=directory", "--file", @"C:\ws\anonymized\archive",
             "--jobs", "1", "--verbose", "--no-password", "--lock-wait-timeout=60s",
@@ -116,7 +116,7 @@ public class PgToolRunnerTests
         var arguments = PgArguments.Restore(new PgRestoreRequest(Connection(DatabaseEnvironment.Development, "eco_dev"), @"C:\ws\a", true, false, 2, []));
 
         arguments.Should().Equal(
-            "--host", "192.168.15.112", "--port", "5432", "--username", "backup_user",
+            "--host", "198.51.100.112", "--port", "5432", "--username", "backup_user",
             "--dbname", "eco_dev", "--no-owner", "--no-privileges", "--no-security-labels", "--exit-on-error",
             "--jobs", "2", "--verbose", "--no-password", "--schema-only", @"C:\ws\a");
     }

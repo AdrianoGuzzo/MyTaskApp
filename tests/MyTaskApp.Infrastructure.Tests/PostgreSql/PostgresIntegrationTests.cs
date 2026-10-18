@@ -61,7 +61,7 @@ public sealed class PostgresIntegrationTests : IAsyncLifetime
             "CREATE TABLE pedidos_2026 PARTITION OF pedidos FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');" +
             "INSERT INTO pedidos (cliente_id, criado, valor) SELECT 1 + g % 250, date '2026-01-01' + g % 300, g * 1.5 FROM generate_series(1, 600) g;" +
             "CREATE TABLE auditoria (id serial PRIMARY KEY, cliente_id int REFERENCES clientes (id), ip inet NOT NULL);" +
-            "INSERT INTO auditoria (cliente_id, ip) SELECT 1 + g % 250, '10.0.0.1' FROM generate_series(1, 100) g;");
+            "INSERT INTO auditoria (cliente_id, ip) SELECT 1 + g % 250, '198.51.100.1' FROM generate_series(1, 100) g;");
     }
 
     public async ValueTask DisposeAsync()

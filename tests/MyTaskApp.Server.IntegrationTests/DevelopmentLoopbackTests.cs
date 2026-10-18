@@ -17,7 +17,7 @@ public sealed class DevelopmentLoopbackTests(PostgresFixture postgres)
     [Theory]
     [InlineData("http://0.0.0.0:5280")]
     [InlineData("http://+:8080")]
-    [InlineData("http://192.168.100.8:5280")]
+    [InlineData("http://192.0.2.8:5280")]
     [InlineData("http://localhost:5280;http://[::]:5281")]
     public async Task InDevelopment_AnAddressOnTheNetwork_RefusesToStart(string urls)
     {
@@ -67,7 +67,7 @@ public sealed class DevelopmentLoopbackTests(PostgresFixture postgres)
     [InlineData("http://[::]:5280", false)]
     [InlineData("http://+:8080", false)]
     [InlineData("http://*:8080", false)]
-    [InlineData("http://192.168.100.8:5280", false)]
+    [InlineData("http://192.0.2.8:5280", false)]
     [InlineData("https://sync.exemplo.com:443", false)]
     public void WhatCountsAsLoopback(string address, bool loopback) =>
         DevelopmentLoopbackGuard.IsLoopback(address).Should().Be(loopback);

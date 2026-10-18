@@ -667,7 +667,7 @@ internal sealed class DatabaseCopyScenario
     {
         var everything = ConnectionPermissions.FromFlags(ConnectionPermission.All);
         Copier = new FakeMaskedCopier(Tools.Calls);
-        Production = DatabaseConnection.Create("ECO Produção", "192.168.15.112", 5432, "eco_core", "backup_user",
+        Production = DatabaseConnection.Create("ECO Produção", "198.51.100.112", 5432, "eco_core", "backup_user",
             sourceEnvironment, DatabaseSslMode.Prefer, null, everything, Now);
         Development = DatabaseConnection.Create("ECO Desenvolvimento", "localhost", 5432, "eco_dev", "postgres",
             sourceEnvironment == DatabaseEnvironment.CriticalProduction ? DatabaseEnvironment.Test : DatabaseEnvironment.Development,

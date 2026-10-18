@@ -37,12 +37,12 @@ public class ServerOnlyConnectionTests
     public void AConnection_CanBeJustTheServer(string? database)
     {
         var connection = DatabaseConnection.Create(
-            "ECO", "192.168.15.112", 5432, database, "backup_user",
+            "ECO", "198.51.100.112", 5432, database, "backup_user",
             DatabaseEnvironment.Production, DatabaseSslMode.Prefer, null, Everything, Now);
 
         connection.Database.Should().BeNull();
         connection.Snapshot().HasDatabase.Should().BeFalse();
-        connection.Snapshot().EndpointKey.Should().Be("192.168.15.112:5432/*");
+        connection.Snapshot().EndpointKey.Should().Be("198.51.100.112:5432/*");
     }
 
     [Fact]

@@ -28,7 +28,7 @@ public class ServerOnlyCopyTests
         var everything = ConnectionPermissions.FromFlags(ConnectionPermission.All);
         var now = DatabaseCopyScenario.Now;
 
-        _server = DatabaseConnection.Create("ECO Servidor", "10.0.0.5", 5432, null, "backup_user",
+        _server = DatabaseConnection.Create("ECO Servidor", "198.51.100.5", 5432, null, "backup_user",
             DatabaseEnvironment.Production, DatabaseSslMode.Prefer, null, everything, now);
         _local = DatabaseConnection.Create("Local", "localhost", 5432, null, "postgres",
             DatabaseEnvironment.Development, DatabaseSslMode.Prefer, null, everything with { RequireAnonymization = false }, now);
@@ -70,7 +70,7 @@ public class ServerOnlyCopyTests
 
         plan.Source.Database.Should().Be("eco_core_1010");
         plan.AnonymizationProfile!.Id.Should().Be(_profile.Id);
-        plan.ProtectedEndpoints.Should().Contain("10.0.0.5:5432/*");
+        plan.ProtectedEndpoints.Should().Contain("198.51.100.5:5432/*");
     }
 
     [Fact]
@@ -208,7 +208,7 @@ public class ServerOnlyCopyTests
     [Fact]
     public async Task TheTypedConfirmation_IsTheChosenDatabase()
     {
-        var critical = DatabaseConnection.Create("ECO Crítico", "10.0.0.9", 5432, null, "backup_user",
+        var critical = DatabaseConnection.Create("ECO Crítico", "198.51.100.9", 5432, null, "backup_user",
             DatabaseEnvironment.CriticalProduction, DatabaseSslMode.Prefer, null,
             ConnectionPermissions.FromFlags(ConnectionPermission.All), DatabaseCopyScenario.Now);
         Catalog.Connections.Seed(critical);

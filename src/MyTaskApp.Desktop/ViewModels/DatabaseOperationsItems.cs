@@ -109,7 +109,7 @@ public sealed class DatabaseConnectionItemViewModel(DatabaseConnectionRow row)
 
     public bool IsDevelopment => Row.Environment == DatabaseEnvironment.Development;
 
-    /// <summary>"backup_user@192.168.15.112:5432/eco_core"; só o servidor, "…:5432 (banco na cópia)".</summary>
+    /// <summary>"backup_user@198.51.100.112:5432/eco_core"; só o servidor, "…:5432 (banco na cópia)".</summary>
     public string Endpoint => Row.Database is { } database
         ? string.Create(CultureInfo.InvariantCulture, $"{Row.Username}@{Row.Host}:{Row.Port}/{database}")
         : string.Create(CultureInfo.InvariantCulture, $"{Row.Username}@{Row.Host}:{Row.Port} (banco na cópia)");

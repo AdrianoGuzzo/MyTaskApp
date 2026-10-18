@@ -21,7 +21,7 @@ public class DatabaseOperationsPersistenceTests
 
     private static DatabaseConnection Connection(string name, DatabaseEnvironment environment, string? database) =>
         DatabaseConnection.Create(
-            name, "192.168.15.112", 5432, database, "backup_user", environment, DatabaseSslMode.Require, "descrição", Everything, Now);
+            name, "198.51.100.112", 5432, database, "backup_user", environment, DatabaseSslMode.Require, "descrição", Everything, Now);
 
     private static Task SeedAsync(TempSqliteDatabase db, params object[] entities) =>
         db.SeedOnOlderSchemaAsync(Ct, entities);
@@ -40,7 +40,7 @@ public class DatabaseOperationsPersistenceTests
 
         reloaded.Should().NotBeNull();
         reloaded!.Name.Should().Be("ECO Produção");
-        reloaded.Host.Should().Be("192.168.15.112");
+        reloaded.Host.Should().Be("198.51.100.112");
         reloaded.Environment.Should().Be(DatabaseEnvironment.Production);
         reloaded.SslMode.Should().Be(DatabaseSslMode.Require);
         reloaded.SecretReference.Should().Be(production.SecretNameForThis());
@@ -248,7 +248,7 @@ public class DatabaseOperationsPersistenceTests
         var reloaded = await new DatabaseConnectionRepository(read).FindByIdAsync(server.Id, Ct);
 
         reloaded!.Database.Should().BeNull();
-        reloaded.Snapshot().EndpointKey.Should().Be("192.168.15.112:5432/*");
+        reloaded.Snapshot().EndpointKey.Should().Be("198.51.100.112:5432/*");
     }
 
     [Fact]

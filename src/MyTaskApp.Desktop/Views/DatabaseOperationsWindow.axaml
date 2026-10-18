@@ -247,7 +247,7 @@
                 <Grid ColumnDefinitions="*,8,90">
                   <StackPanel Spacing="3">
                     <TextBlock Classes="field" Text="Servidor" />
-                    <TextBox PlaceholderText="192.168.15.112" Text="{Binding Host}" />
+                    <TextBox PlaceholderText="198.51.100.112" Text="{Binding Host}" />
                   </StackPanel>
                   <StackPanel Grid.Column="2" Spacing="3">
                     <TextBlock Classes="field" Text="Porta" />

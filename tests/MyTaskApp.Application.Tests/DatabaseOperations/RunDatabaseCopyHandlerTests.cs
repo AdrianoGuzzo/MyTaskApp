@@ -167,7 +167,7 @@ public class RunDatabaseCopyHandlerTests
     [Fact]
     public async Task AProductionDestination_IsRefusedBeforeAnything_AndAuditedAsBlocked()
     {
-        var otherProduction = DatabaseConnection.Create("Outra produção", "10.0.0.9", 5432, "outra", "u",
+        var otherProduction = DatabaseConnection.Create("Outra produção", "198.51.100.9", 5432, "outra", "u",
             DatabaseEnvironment.Production, DatabaseSslMode.Prefer, null, default, DatabaseCopyScenario.Now);
         _scenario.Catalog.Connections.Seed(otherProduction);
 

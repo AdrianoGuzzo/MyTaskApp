@@ -50,7 +50,7 @@ public class ServerOnlyScreenTests
     {
         var viewModel = new DatabaseConnectionsViewModel(_runner, _confirmation, NullLogger<DatabaseConnectionsViewModel>.Instance);
         viewModel.Name = "ECO Servidor";
-        viewModel.Host = "10.0.0.5";
+        viewModel.Host = "198.51.100.5";
         viewModel.Username = "backup_user";
 
         viewModel.SaveCommand.CanExecute(null).Should().BeTrue();
@@ -69,7 +69,7 @@ public class ServerOnlyScreenTests
         var item = new DatabaseConnectionItemViewModel(DatabaseScreen.Server);
 
         item.HasDatabase.Should().BeFalse();
-        item.Endpoint.Should().Be("backup_user@192.168.15.112:5432 (banco na cópia)");
+        item.Endpoint.Should().Be("backup_user@198.51.100.112:5432 (banco na cópia)");
         new DatabaseConnectionItemViewModel(DatabaseScreen.Production).Endpoint.Should().EndWith("/eco_core");
     }
 

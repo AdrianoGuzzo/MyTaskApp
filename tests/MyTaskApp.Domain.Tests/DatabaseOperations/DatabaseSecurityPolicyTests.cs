@@ -330,8 +330,8 @@ public class DatabaseSecurityPolicyTests
     [Fact]
     public void ADevelopmentLabel_OnAProductionDatabase_IsStillProduction()
     {
-        var production = Snapshot(DatabaseEnvironment.Production, host: "192.168.15.112", database: "eco_core");
-        var disguised = Snapshot(DatabaseEnvironment.Development, host: "192.168.15.112", database: "eco_core", username: "outro");
+        var production = Snapshot(DatabaseEnvironment.Production, host: "198.51.100.112", database: "eco_core");
+        var disguised = Snapshot(DatabaseEnvironment.Development, host: "198.51.100.112", database: "eco_core", username: "outro");
         var source = Snapshot(DatabaseEnvironment.Staging, database: "homolog");
 
         var decision = _policy.Evaluate(new DatabaseOperationRequest(

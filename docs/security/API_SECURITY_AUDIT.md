@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Sistema** | `MyTaskApp.Server.Api` — servidor de sincronização (ADR-061) |
-| **Endpoint analisado** | `http://192.168.100.8:5280` (rede privada) |
+| **Endpoint analisado** | `http://<host>:5280`, um IP da rede privada |
 | **Data** | 17/10/2026 |
 | **Código analisado** | branch `feature/auditoria-de-seguranca-de-api-asp-net-core`, commit `7de5b72` (versão 1.16.0) |
 | **Tipo** | Análise estática + testes dinâmicos autorizados de baixo impacto |
@@ -19,9 +19,9 @@
 **Objetivo.** Saber se a API de sincronização pode ir para a internet e o que precisa mudar
 antes disso.
 
-**Ambiente.** O endereço `192.168.100.8:5280` é a própria API: OpenIddict + minimal APIs, sem
+**Ambiente.** O endereço `<host>:5280` é a própria API: OpenIddict + minimal APIs, sem
 Swagger nem interface administrativa. Ela roda em outra máquina da LAN, em HTTP e com a
-configuração de **Development**. A máquina de teste (`192.168.100.7`) chega a ela diretamente e
+configuração de **Development**. A máquina de teste chega a ela diretamente e
 também por um `portproxy` local em `localhost:5280`.
 
 **Resultado geral.** O núcleo de segurança se sustentou em todos os testes executados:
@@ -137,7 +137,7 @@ política exige o esquema de validação do OpenIddict (nunca o cookie), as clai
 
 ### B.4 Limitações do ambiente de teste
 
-- Sem acesso ao host `192.168.100.8`: não foi possível ver configuração, variáveis, firewall,
+- Sem acesso ao host da API: não foi possível ver configuração, variáveis, firewall,
   `pg_hba.conf` nem a versão exata publicada. O código auditado é o do commit `7de5b72`.
   Todos os comportamentos observados no servidor real batem com esse código.
 - Uma só conta real disponível: o isolamento entre duas contas foi testado na instância isolada.
@@ -216,7 +216,7 @@ I = instância isolada, E = estática.
 | T21 | Fetch com 101 entidades, JSON quebrado, tipo errado, corpo > 1 MiB (413), sem `Content-Type` (415) | R | aprovado | — |
 | T22 | Fetch com `entities: null` | R | reprovado | SEC-008 |
 | T23 | Token real adulterado, truncado, e id_token no lugar do access → 401 | R | aprovado | — |
-| T24 | Token emitido via `localhost` usado no host `192.168.100.8` → 401 (issuer) | R+I | aprovado | (evidência de SEC-007) |
+| T24 | Token emitido via `localhost` usado no host da API → 401 (issuer) | R+I | aprovado | (evidência de SEC-007) |
 | T25 | `Cache-Control` em respostas 200 com dados pessoais | R | reprovado | SEC-009 |
 | T26 | Revogação do próprio dispositivo → 403 imediato e refresh `invalid_grant` | R | aprovado | — |
 | T27 | BOLA entre duas contas por HTTP: pull, status, fetch e push no workspace alheio; PATCH e revoke do dispositivo alheio; fetch de entidade alheia no próprio workspace | I | aprovado | — |
@@ -249,7 +249,7 @@ I = instância isolada, E = estática.
 | P01 | BOLA entre duas contas reais no servidor real | Há uma só conta disponível; coberto na instância isolada (T27) | Criar uma segunda conta Google de teste e repetir T27 contra o servidor real, com tokens de auditoria |
 | P02 | Rate limit no servidor real | Comprovar exige passar de 120 req/min, o que se aproxima de flood; comprovado na isolada (T28) | Subir o servidor de homologação com `Sync__RateLimits__ApiPerMinute=3` e repetir T28 |
 | P03 | Push e escritas de dados no servidor real | Restrição de não alterar dados reais | Homologação com banco descartável |
-| P04 | Infraestrutura do host `192.168.100.8`: autenticação do PostgreSQL, `pg_hba.conf`, serviço na porta 5000, configuração do SSH, firewall | Sem acesso ao host; não testar outros serviços | No próprio host: `Get-NetTCPConnection -State Listen`, `pg_hba.conf`, regras do firewall |
+| P04 | Infraestrutura do host da API: autenticação do PostgreSQL, `pg_hba.conf`, serviço na porta 5000, configuração do SSH, firewall | Sem acesso ao host; não testar outros serviços | No próprio host: `Get-NetTCPConnection -State Listen`, `pg_hba.conf`, regras do firewall |
 | P05 | Configuração de produção: TLS no proxy, `KnownProxies`, certificados PFX, ambiente Production | Ainda não existe | Repetir T10–T16 e T25 contra a homologação atrás do proxy |
 | P06 | Expiração do access token real | Exigiria esperar 15 min; coberto pelo teste existente `ApiTests.cs` (token expirado → 401) | Repetir T23 com um token com mais de 15 min |
 | P07 ✅ | Login CSRF / emissão silenciosa de código por navegação cruzada (SEC-018) | Exige navegador com sessão ativa e uma página de terceiro | **Executado (G-18), reproduzido.** Chrome headless por CDP contra uma instância isolada (Testing, Kestrel, PostgreSQL descartável, Google falso), página do terceiro em `localhost` (outro site em relação a `127.0.0.1`). Antes: GET com `Sec-Fetch-Site: cross-site` levou `.AspNetCore.Identity.Application`, 302 para `127.0.0.1:47833/callback?code=…` e dispositivo "Dispositivo do terceiro (GET)" gravado; POST de outro site sem o cookie (`SchemefulSameSiteLax`) → login. Depois: o GET recebe 200 com a tela de consentimento e nada é gravado; "Conectar" (POST com antiforgery, mesma origem) → 302 até o loopback com código, sem bloqueio da CSP. Página: `poc/sec-018-authorize-cross-site.html` |
@@ -266,7 +266,7 @@ I = instância isolada, E = estática.
 
 ### C.6 Restrições adotadas
 
-- Nenhum teste fora de `192.168.100.8:5280`, exceto a conexão TCP às 12 portas (autorizada) e a
+- Nenhum teste fora de `<host>:5280`, exceto a conexão TCP às 12 portas (autorizada) e a
   instância local.
 - Nenhuma tentativa de login no PostgreSQL ou em outros serviços.
 - Sem flood, força bruta, carga ou DoS.
@@ -280,8 +280,8 @@ I = instância isolada, E = estática.
 
 | ID | Vulnerabilidade | Severidade | Endpoint / componente | Status | Prioridade |
 |---|---|---|---|---|---|
-| SEC-001 | OAuth e tokens em HTTP puro, servidor em Development com certificados de desenvolvimento | Média | Implantação em `192.168.100.8:5280` | Confirmado | P0 |
-| SEC-002 | PostgreSQL (5432) acessível pela rede no host da API | Média | Host `192.168.100.8` | Confirmado (porta); credencial pendente | P0 |
+| SEC-001 | OAuth e tokens em HTTP puro, servidor em Development com certificados de desenvolvimento | Média | Implantação em `<host>:5280` | Confirmado | P0 |
+| SEC-002 | PostgreSQL (5432) acessível pela rede no host da API | Média | Host da API | Confirmado (porta); credencial pendente | P0 |
 | SEC-003 | Rate limit "por usuário" é por IP e compartilhado entre todos | Média | `UseRateLimiter` / políticas `sync` e `api` | Confirmado | P1 |
 | SEC-004 | Cadastro aberto a qualquer conta Google, sem cota por conta | Média | `/account/external-callback` | Confirmado (código) | P1 |
 | SEC-005 | Pull com expansão de relacionados sem teto (custo quadrático) | Média | `GET …/sync/pull` | Confirmado | P1 |
@@ -317,7 +317,7 @@ para não introduzir imprecisão.
     integral aos dados da conta.
   - **Prioridade P0.**
   - Vetor: `CVSS:4.0/AV:A/AC:L/AT:P/PR:N/UI:N/VC:H/VI:H/VA:N/SC:N/SI:N/SA:N`.
-- **Componente:** implantação em `192.168.100.8:5280`; `ServerSetup.cs:83-87, 199-221`.
+- **Componente:** implantação em `<host>:5280`; `ServerSetup.cs:83-87, 199-221`.
 - **Descrição:** o servidor responde OAuth em HTTP, sem TLS. Isso só é possível com
   `DisableTransportSecurityRequirement()`, que o código liga apenas em Development e Testing.
   - Os certificados são os de desenvolvimento do OpenIddict, recriados no host (o `notBefore`
@@ -327,13 +327,13 @@ para não introduzir imprecisão.
     `appsettings.Development.json` (ver SEC-012).
 - **Evidências:**
   ```text
-  GET /.well-known/openid-configuration → 200, "issuer": "http://192.168.100.8:5280/"
+  GET /.well-known/openid-configuration → 200, "issuer": "http://<host>:5280/"
   JWKS x5c: subject=CN = OpenIddict Server Signing Certificate
             notBefore=Oct 15 22:38:25 2026 GMT  notAfter=Oct 15 22:38:25 2028 GMT
-  https://192.168.100.8:5280/health → falha de conexão TLS; :7280 → fechada
+  https://<host>:5280/health → falha de conexão TLS; :7280 → fechada
   POST /connect/token em HTTP → resposta OAuth normal (em produção o OpenIddict recusaria)
   ```
-- **Reprodução:** `curl -s http://192.168.100.8:5280/.well-known/openid-configuration`; extrair
+- **Reprodução:** `curl -s http://<host>:5280/.well-known/openid-configuration`; extrair
   `x5c` do `/.well-known/jwks` e ler com `openssl x509 -inform der -noout -subject -dates`.
 - **Impacto:** quem enxerga o tráfego da LAN captura o código de autorização (sem o verificador
   PKCE, ele não basta), o access token e o **refresh token** na troca e na renovação. Com o
@@ -360,16 +360,16 @@ para não introduzir imprecisão.
     caso a severidade seria **Alta** (leitura e escrita direta de todos os dados).
   - A credencial não foi testada, por restrição do escopo.
   - **Prioridade P0.**
-- **Componente:** host `192.168.100.8` (porta 5432). Também abertas: 22 (SSH) e 5000 (serviço não
+- **Componente:** host da API (porta 5432). Também abertas: 22 (SSH) e 5000 (serviço não
   identificado, não sondado).
 - **Descrição:** o `docker-compose.yml` do repositório publica o PostgreSQL só em `127.0.0.1`, mas
   no host da API a porta 5432 responde para a rede.
 - **Evidência:**
   ```text
-  TCP connect 192.168.100.8: 22 aberta · 5280 aberta · 5432 aberta · 5000 aberta
+  TCP connect <host>: 22 aberta · 5280 aberta · 5432 aberta · 5000 aberta
                              80/443/3389/5281/6379/7280/8080/2375 fechadas ou filtradas
   ```
-- **Reprodução:** `timeout 2 bash -c "exec 3<>/dev/tcp/192.168.100.8/5432"`.
+- **Reprodução:** `timeout 2 bash -c "exec 3<>/dev/tcp/<host>/5432"`.
 - **Impacto:** qualquer máquina da LAN pode tentar autenticar no banco. Com a credencial certa
   (vazada, fraca ou a de desenvolvimento), o atacante tem acesso total aos dados de todos os
   usuários, às chaves do Data Protection (SEC-011) e às tabelas do OpenIddict.
@@ -383,7 +383,7 @@ para não introduzir imprecisão.
 - **Referências:** OWASP API8:2023; CIS PostgreSQL Benchmark (rede e `pg_hba`).
 - **Status:** confirmado (exposição da porta); pendente (credencial, P04).
   - **17/10/2026, no host:** a 5432 não era o banco do sync, e sim outro PostgreSQL do mesmo host.
-    Ela ficou restrita ao 192.168.100.7. A senha do sync já era diferente da versionada. A API
+    Ela ficou restrita à máquina de teste. A senha do sync já era diferente da versionada. A API
     passou a usar um papel sem superusuário. Detalhes e pendências na F.4.
 
 ### SEC-003 — Rate limit "por usuário" é por IP e compartilhado entre todos
@@ -562,10 +562,10 @@ para não introduzir imprecisão.
   ```text
   GET discovery com "Host: evil.example" → "issuer": "http://evil.example/",
                                            "token_endpoint": "http://evil.example/connect/token"
-  token emitido via http://localhost:5280 usado em http://192.168.100.8:5280/api/v1/me
+  token emitido via http://localhost:5280 usado em http://<host>:5280/api/v1/me
       → 401 invalid_token "The issuer associated to the specified token is not valid." (ID2088)
   ```
-- **Reprodução:** `curl -H "Host: evil.example" http://192.168.100.8:5280/.well-known/openid-configuration`.
+- **Reprodução:** `curl -H "Host: evil.example" http://<host>:5280/.well-known/openid-configuration`.
 - **Impacto:**
   - Se um proxy ou CDN fizer cache do discovery por caminho, um atacante pode publicar endpoints
     apontando para o host dele.
@@ -937,7 +937,7 @@ e `EnforceCodeStyleInBuild`. Não há `AnalysisLevel`/`AnalysisMode` além do pa
   `POSTGRES_PASSWORD`).
 - **Imagem:** não há publicação de imagem do servidor no CI.
 
-### F.4 Host da API (`192.168.100.8`)
+### F.4 Host da API
 
 | Porta | Estado | Observação |
 |---|---|---|
@@ -945,57 +945,56 @@ e `EnforceCodeStyleInBuild`. Não há `AnalysisLevel`/`AnalysisMode` além do pa
 | 5432 | aberta | PostgreSQL acessível pela LAN (SEC-002) |
 | 22 | aberta | SSH — configuração não verificada (P04) |
 | 5000 | aberta | Serviço não identificado, não sondado por estar fora do escopo (P04) |
-| 80, 443, 3389, 5281, 6379, 7280, 8080, 2375 | fechadas ou filtradas | — |
+| demais portas sondadas | fechadas ou filtradas | — |
 
 A ausência de acesso ao host não é evidência de que ele esteja seguro: firewall, atualizações do
 SO, `pg_hba.conf` e usuários do banco ficaram sem verificação.
 
 #### Verificação e correção no host (17/10/2026, G-02)
 
-Feita por SSH a partir do 192.168.100.7. O host é Debian 13. O sync roda no Docker Swarm, gerido
-pelo Dokploy. Nenhum dado foi apagado.
+Feita por SSH a partir da máquina de teste. O host é Linux e roda o sync em contêineres,
+junto com outros serviços. Nenhum dado foi apagado.
 
-**Quem atende cada porta (`ss -tlnp` e `docker ps`):**
+**Quem atende cada porta:**
 
-| Porta | Processo | Situação |
-|---|---|---|
-| 5432 | contêiner `postgres14BigData` (postgres:14, fora do Swarm), cópias de bancos de clientes (~55 bancos, ~150 GB) | Antes aberta para a LAN e no IPv6 global. Agora só o 192.168.100.7 |
-| 5432 do sync | serviço `mytaskappsync-postgres` (postgres:17) | Nunca foi publicada. Só a rede overlay `dokploy-network` alcança |
-| 5000 | `my-registry` (registry:2 do Dokploy), com `htpasswd` (`/v2/_catalog` → 401) | Mantida: é o registry das imagens |
-| 22 | sshd | Mantida. Passou a aceitar só chave |
-| 5280 | API do sync (ingress do Swarm) | Mantida (SEC-001). Removida em 18/10 (abaixo) |
-| 5433, 3000, 9000, 7000, 7777, 7778, 2377, 7946 | pgvector, Dokploy, Portainer, odysseus, servidores MCP, Swarm | Abertas para a LAN. Fora do escopo, pendentes |
+- **5432:** outro PostgreSQL do mesmo host, sem relação com o sync, com cópias de bancos de
+  clientes. Estava aberta para a LAN e no IPv6. Agora só a máquina de teste alcança.
+- **5432 do sync:** o banco do sync nunca teve porta publicada. Só a rede interna dos contêineres
+  chega nele.
+- **5000:** o registry das imagens, com autenticação (`/v2/_catalog` → 401). Mantida.
+- **22:** sshd. Mantida, e passou a aceitar só chave.
+- **5280:** a API do sync. Mantida (SEC-001). Removida em 18/10 (abaixo).
+- **Outras portas de serviços de gerência e de outros projetos:** abertas para a LAN, fora do
+  escopo e pendentes.
 
-O `nftables` do host não tinha regra nenhuma, e as portas publicadas pelo Docker passam por fora
+O firewall do host não tinha regra nenhuma, e as portas publicadas pelo Docker passam por fora
 dele.
 
 **O que mudou:**
 
 - **5432.**
-  - Uma regra em `DOCKER-USER` descarta o tráfego de `enp4s0` com porta original 5432 que não venha
-    do 192.168.100.7. O .7 ficou liberado porque é a origem da conexão "Produção" das cópias
-    anonimizadas do desktop.
-  - No IPv6, a 5432 foi fechada no `INPUT`.
-  - O serviço `sec002-pg5432.service` reaplica as regras quando o Docker sobe.
-- **SSH.** `/etc/ssh/sshd_config.d/10-sec002-so-chave.conf` tem `PasswordAuthentication no` e
-  `KbdInteractiveAuthentication no`.
+  - Uma regra do Docker descarta o tráfego da LAN para a 5432 que não venha da máquina de teste.
+    Ela ficou liberada porque é a origem da conexão "Produção" das cópias anonimizadas do desktop.
+  - No IPv6, a 5432 foi fechada.
+  - Um serviço do sistema reaplica as regras quando o Docker sobe.
+- **SSH.** `PasswordAuthentication no` e `KbdInteractiveAuthentication no`.
 - **Banco do sync.**
   - Não dá para tirar o superusuário do `mytaskapp`: é o bootstrap superuser (oid 10), e o
     PostgreSQL 17 recusa (`The bootstrap superuser must have the SUPERUSER attribute`).
   - Foi criado o papel `mytaskapp_app` (`NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION
     NOBYPASSRLS`), dono do banco `mytaskapp_sync` e dos 62 objetos do `public`.
-  - A senha dele é aleatória. Só existe na variável `ConnectionStrings__Sync` do app no Dokploy e
-    num arquivo `600` no home do usuário no host.
+  - A senha dele é aleatória. Só existe na variável `ConnectionStrings__Sync` da implantação e
+    num arquivo `600` no host.
   - `pg_hba.conf`: `trust` só no socket e no loopback de dentro do contêiner. De fora, só
-    `host all all all scram-sha-256`, e o contêiner só está na `dokploy-network`.
+    `host all all all scram-sha-256`, e o contêiner só está na rede interna.
 
 **Critério de aceite:**
 
-- **TCP na 5432 de outra máquina falha.** Atendido para qualquer origem da LAN exceto o .7, que foi
-  liberado de propósito.
-  - Prova: com o .7 sondando a porta, uma regra temporária que também descartava o .7 fechou a porta
-    de 21:38:21 a 21:38:40 UTC, e ela reabriu ao remover a regra.
-  - No IPv6 global ela fica fechada.
+- **TCP na 5432 de outra máquina falha.** Atendido para qualquer origem da LAN exceto a máquina de
+  teste, liberada de propósito.
+  - Prova: com a máquina de teste sondando a porta, uma regra temporária que também a descartava
+    fechou a porta por cerca de 20 segundos, e ela reabriu ao remover a regra.
+  - No IPv6 ela fica fechada.
 - **Senha em uso diferente da versionada.** Atendido. Já era diferente antes, tanto em
   `ConnectionStrings__Sync` quanto em `POSTGRES_PASSWORD`. A comparação foi feita no host, sem
   exibir senha. A senha agora é a do `mytaskapp_app`.
@@ -1006,48 +1005,44 @@ dele.
 
 **Pendências:**
 
-- O `mytaskapp` continua superusuário com a senha do `POSTGRES_PASSWORD`, alcançável pela
-  `dokploy-network`. Ao confirmar que nada do Dokploy (backups) depende dele, trocar a senha por
-  uma descartada ou removê-la.
-- `postgres14BigData` e `postgres-vector` usam o superusuário `postgres` com senha de 8
-  caracteres. O pgvector (5433) segue aberto para a LAN.
-- Portainer, Dokploy e a gerência do Swarm (2377/7946) estão abertos para a LAN.
+- O `mytaskapp` continua superusuário com a senha do `POSTGRES_PASSWORD`, alcançável pela rede
+  interna. Ao confirmar que nenhuma rotina da implantação (backups) depende dele, trocar a senha
+  por uma descartada ou removê-la.
+- Outros bancos do host usam superusuário com senha fraca, e um deles segue aberto para a LAN.
+- Serviços de gerência do host estão abertos para a LAN.
 - O host tem IPv6 global. Conferir no roteador se entrada IPv6 é bloqueada.
-- O `postgres14BigData` também tem um banco `mytaskapp_sync` (9 MB), sem relação com o servidor em
+- O outro PostgreSQL também tem um banco `mytaskapp_sync` antigo, sem relação com o servidor em
   uso.
 - A senha literal saiu do repositório (SEC-012, G-12), mas continua no histórico desde `fef8021`:
   se o servidor da LAN a usa, ela é pública e precisa ser trocada.
 
 #### 5280 fechada (18/10/2026)
 
-Em 18/10 a API já rodava em Production atrás do Traefik do Dokploy
-(`Sync__Issuer=https://adrianoguzzo.duckdns.org/`). Mesmo assim, o serviço
-`mytaskappsync-api-rulbqu` ainda publicava `*:5280->8080` no ingress do Swarm. A porta ficava
-fora do TLS: o OAuth em HTTP era recusado (ID2083), mas um cliente apontado para
-`http://192.168.100.8:5280` mandaria o Bearer em claro.
+Em 18/10 a API já rodava em Production atrás do proxy TLS da implantação
+(`Sync__Issuer=https://<dominio-publico>/`). Mesmo assim, o serviço da API ainda publicava
+`*:5280->8080` no host. A porta ficava fora do TLS: o OAuth em HTTP era recusado (ID2083), mas um
+cliente apontado para `http://<host>:5280` mandaria o Bearer em claro.
 
 **Antes de fechar:**
 
-- O desktop do .7 já usava `https://adrianoguzzo.duckdns.org/` em `appsettings.user.json`.
+- O desktop da máquina de teste já usava a URL `https` pública em `appsettings.user.json`.
 - O app do celular é gerado com `vars.SYNC_API_BASE_URL`, que é a mesma URL `https`.
 - Não havia outro cliente.
 - Nenhum serviço ou contêiner do host citava a 5280 no env ou no healthcheck.
-- A rota do Traefik (`/etc/dokploy/traefik/dynamic/mytaskappsync-api-rulbqu.yml`) leva a
-  `http://tasks.mytaskappsync-api-rulbqu:8080` pela `dokploy-network`, sem depender da porta
-  publicada.
+- A rota do proxy leva ao contêiner da API pela rede interna, sem depender da porta publicada.
 
-**O que mudou:** a porta foi removida no Dokploy (Advanced → Ports), seguida de redeploy. A API
-ficou só na `dokploy-network`.
+**O que mudou:** a porta publicada foi removida da implantação, seguida de redeploy. A API ficou
+só na rede interna.
 
 **Critério de aceite:**
 
 - `docker service inspect … .Endpoint.Spec` → `{"Mode":"vip"}`, sem `Ports`.
-- TCP 5280 no 192.168.100.8 → `Connection refused`.
-- `https://adrianoguzzo.duckdns.org/health` → 200.
+- TCP 5280 no host da API → `Connection refused`.
+- `https://<dominio-publico>/health` → 200.
 - O desktop deu `PUT /api/v1/devices/current`, `push` e `pull` 200 às 20:57 UTC, depois da subida
   das 20:55, sem pedir login.
 
-O `portproxy` `127.0.0.1:5280 → 192.168.100.8:5280` do .7 ficou sem destino e pode ser apagado.
+O `portproxy` local da máquina de teste para a 5280 ficou sem destino e pode ser apagado.
 
 ---
 

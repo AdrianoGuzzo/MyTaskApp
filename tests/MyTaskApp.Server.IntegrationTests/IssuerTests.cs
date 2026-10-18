@@ -55,9 +55,9 @@ public sealed class IssuerTests(PostgresFixture postgres)
         var session = await api.LoginAsync("ana");
 
         (await MeStatusAsync(api, "http://localhost/", session.Tokens.AccessToken)).Should().Be(HttpStatusCode.OK);
-        (await MeStatusAsync(api, "http://192.168.100.8:5280/", session.Tokens.AccessToken)).Should().Be(HttpStatusCode.OK);
+        (await MeStatusAsync(api, "http://192.0.2.8:5280/", session.Tokens.AccessToken)).Should().Be(HttpStatusCode.OK);
 
-        using var other = Client(api, "http://192.168.100.8:5280/");
+        using var other = Client(api, "http://192.0.2.8:5280/");
         using var refresh = await other.PostAsync("/connect/token", new FormUrlEncodedContent(new Dictionary<string, string>
         {
             ["grant_type"] = "refresh_token",
@@ -74,7 +74,7 @@ public sealed class IssuerTests(PostgresFixture postgres)
         await using var api = await CreateApiAsync();
         var session = await api.LoginAsync("ana");
 
-        (await MeStatusAsync(api, "http://192.168.100.8:5280/", session.Tokens.AccessToken)).Should().Be(HttpStatusCode.Unauthorized);
+        (await MeStatusAsync(api, "http://192.0.2.8:5280/", session.Tokens.AccessToken)).Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Theory]
@@ -82,7 +82,7 @@ public sealed class IssuerTests(PostgresFixture postgres)
     [InlineData("http://127.0.0.1:5280/", HttpStatusCode.OK)]
     [InlineData("http://[::1]:5280/", HttpStatusCode.OK)]
     [InlineData("http://evil.example/", HttpStatusCode.BadRequest)]
-    [InlineData("http://192.168.100.8:5280/", HttpStatusCode.BadRequest)]
+    [InlineData("http://192.0.2.8:5280/", HttpStatusCode.BadRequest)]
     public async Task InDevelopment_OnlyTheLoopbackNamesAreAccepted(string baseAddress, HttpStatusCode expected)
     {
         await using var api = await CreateApiAsync(environment: Environments.Development);

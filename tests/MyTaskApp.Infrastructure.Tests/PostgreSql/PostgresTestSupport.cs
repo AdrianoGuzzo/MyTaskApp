@@ -14,7 +14,7 @@ internal static class PostgresTestSupport
         DatabaseEnvironment environment,
         string? database = "eco_core",
         string username = "backup_user",
-        string host = "192.168.15.112") =>
+        string host = "198.51.100.112") =>
         DatabaseConnection.Create(
                 environment.ToString(), host, 5432, database, username, environment, DatabaseSslMode.Require, null,
                 ConnectionPermissions.FromFlags(ConnectionPermission.All & ~ConnectionPermission.RequireAnonymization), Now)

@@ -11,7 +11,7 @@ public class DatabaseConnectionTests
     {
         var connection = DatabaseConnection.Create(
             "  ECO Produção ",
-            "192.168.15.112",
+            "198.51.100.112",
             5432,
             "eco_core",
             "backup_user",
@@ -22,7 +22,7 @@ public class DatabaseConnectionTests
             Now);
 
         connection.Name.Should().Be("ECO Produção");
-        connection.Host.Should().Be("192.168.15.112");
+        connection.Host.Should().Be("198.51.100.112");
         connection.Database.Should().Be("eco_core");
         connection.Username.Should().Be("backup_user");
         connection.Description.Should().Be("Banco principal");

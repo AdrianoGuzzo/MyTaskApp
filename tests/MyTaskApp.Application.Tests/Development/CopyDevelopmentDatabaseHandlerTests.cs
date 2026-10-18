@@ -33,7 +33,7 @@ public class CopyDevelopmentDatabaseHandlerTests
         var everything = ConnectionPermissions.FromFlags(ConnectionPermission.All);
         var now = DatabaseCopyScenario.Now;
 
-        _server = DatabaseConnection.Create("ECO Servidor", "10.0.0.5", 5432, null, "backup_user",
+        _server = DatabaseConnection.Create("ECO Servidor", "198.51.100.5", 5432, null, "backup_user",
             DatabaseEnvironment.Production, DatabaseSslMode.Prefer, null, everything, now);
         _local = DatabaseConnection.Create("Local", "localhost", 5433, null, "postgres",
             DatabaseEnvironment.Development, DatabaseSslMode.Prefer, null, everything with { RequireAnonymization = false }, now);

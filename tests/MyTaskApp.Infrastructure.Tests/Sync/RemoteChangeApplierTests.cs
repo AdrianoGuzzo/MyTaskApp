@@ -439,7 +439,7 @@ public sealed class RemoteChangeApplierTests : IAsyncLifetime
             DevicePlacement.On(kit.Device.DeviceId));
         task.SetTags([tag.Id]);
         task.ChangePlan("Escrever o interceptor", TimeSpan.FromMinutes(90));
-        task.LinkExternal(ExternalLink.Create("jira", "ECO-42", "Sync", "https://eco.atlassian.net/browse/ECO-42", "Story", "Doing", Now));
+        task.LinkExternal(ExternalLink.Create("jira", "ECO-42", "Sync", "https://empresa.atlassian.net/browse/ECO-42", "Story", "Doing", Now));
         task.SetOccurrenceDeadline(task.Occurrences.Single().Id, new TaskDeadline(new DateOnly(2026, 10, 20), new TimeOnly(18, 0)), DeadlineAlertStage.None);
         var development = task.BeginDevelopment(null, @"C:\Projects\core", "origin/develop", "feature/sync", @"C:\Projects\core-sync", Now, "v1.2.0");
         task.SetDevelopmentCommands(development.Id, ["dotnet restore", "dotnet build"], Now);

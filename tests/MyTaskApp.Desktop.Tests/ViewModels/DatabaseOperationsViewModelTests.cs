@@ -45,7 +45,7 @@ internal static class DatabaseScreen
         Guid.CreateVersion7(), "lock_eco_core_1010", Server.Id, "eco_core_1010", Profile.Id, Now);
 
     public static DatabaseConnectionRow Row(string name, DatabaseEnvironment environment, string? database, bool hasPassword = false) => new(
-        Guid.CreateVersion7(), name, "192.168.15.112", 5432, database, "backup_user", environment, DatabaseSslMode.Prefer, null, true,
+        Guid.CreateVersion7(), name, "198.51.100.112", 5432, database, "backup_user", environment, DatabaseSslMode.Prefer, null, true,
         ConnectionPermissions.FromFlags(EnvironmentPolicy.For(environment).Defaults), hasPassword, Now);
 
     public static FakeUseCaseRunner Runner()
@@ -208,7 +208,7 @@ public class DatabaseConnectionsViewModelTests
 
         viewModel.Connections.Select(item => item.Badge).Should().Equal("PRODUCTION", "DEVELOPMENT");
         viewModel.Connections[0].IsProduction.Should().BeTrue();
-        viewModel.Connections[0].Endpoint.Should().Be("backup_user@192.168.15.112:5432/eco_core");
+        viewModel.Connections[0].Endpoint.Should().Be("backup_user@198.51.100.112:5432/eco_core");
         viewModel.Connections[0].PasswordLabel.Should().Contain("guardada");
         viewModel.IsEmpty.Should().BeFalse();
     }
@@ -249,7 +249,7 @@ public class DatabaseConnectionsViewModelTests
         var changed = 0;
         viewModel.Changed += () => changed++;
         viewModel.Name = "ECO Teste";
-        viewModel.Host = "10.0.0.5";
+        viewModel.Host = "198.51.100.5";
         viewModel.Database = "eco_test";
         viewModel.Username = "app";
         viewModel.Password = "s3nh4";
