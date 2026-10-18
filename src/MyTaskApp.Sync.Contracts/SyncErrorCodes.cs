@@ -36,6 +36,21 @@ public static class SyncErrorCodes
     /// <summary>O papel no workspace não deixa escrever. Permanente.</summary>
     public const string Forbidden = "forbidden";
 
+    /// <summary>
+    /// Campo fora do contrato que este servidor conhece (ADR-072). Permanente:
+    /// o campo novo só entra depois que o servidor é atualizado.
+    /// </summary>
+    public const string UnknownField = "unknown_field";
+
+    /// <summary>A entidade, já mesclada, passa do teto de bytes do servidor (ADR-072). Permanente.</summary>
+    public const string EntityTooLarge = "entity_too_large";
+
+    /// <summary>
+    /// O workspace chegou à cota de entidades ou de bytes (ADR-072). Excluir ou
+    /// encolher libera; a operação não fica guardada, e o reenvio decide de novo.
+    /// </summary>
+    public const string QuotaExceeded = "quota_exceeded";
+
     // ---- Campo recusado (push) ----
 
     /// <summary>Outro dispositivo mudou o mesmo campo antes: vale o do servidor.</summary>

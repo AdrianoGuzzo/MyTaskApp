@@ -12,13 +12,70 @@ public sealed record SyncFieldError(string Field, string Message);
 /// antes de gravar; o desktop roda antes de aplicar o que veio de fora.
 /// </summary>
 /// <remarks>
-/// Campo desconhecido <b>passa</b>: pode ser de um cliente mais novo, e o
-/// servidor guarda como veio. O que não passa é o campo conhecido com valor
-/// fora do formato ou dos limites. Nenhum campo, conhecido ou não, passa com
-/// U+0000: o banco do servidor não grava o caractere.
+/// <see cref="Validate"/> não olha campo desconhecido: o desktop o roda no
+/// pull e ignora o que não conhece. Quem recusa é o servidor, no push, com
+/// <see cref="FindUnknown"/> (ADR-072) — guardar o que não está no contrato
+/// deixaria a entidade crescer sem limite. Nenhum campo, conhecido ou não,
+/// passa com U+0000: o banco do servidor não grava o caractere.
 /// </remarks>
 public static class SyncFieldValidator
 {
+    /// <summary>
+    /// Os caminhos fora do contrato, no formato dos erros de <see cref="Validate"/>:
+    /// o campo (<c>isAdmin</c>), o membro de objeto (<c>reminder.x</c>) e o
+    /// membro do item de lista (<c>parameters[2].x</c>).
+    /// </summary>
+    public static IReadOnlyList<string> FindUnknown(
+        SyncEntityDefinition definition,
+        IReadOnlyDictionary<string, JsonElement> fields)
+    {
+        var unknown = new List<string>();
+
+        foreach (var (name, value) in fields)
+        {
+            if (definition.FindField(name) is { } field)
+            {
+                FindUnknown(field, value, name, unknown);
+            }
+            else
+            {
+                unknown.Add(name);
+            }
+        }
+
+        // Sem o NUL, como no Validate: a frase da recusa também é gravada no servidor.
+        return [.. unknown.Select(path => path.Replace("\0", "\\0", StringComparison.Ordinal))];
+    }
+
+    private static void FindUnknown(SyncFieldDefinition field, JsonElement value, string path, List<string> unknown)
+    {
+        if (field.Kind == SyncFieldKind.Object && value.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var member in value.EnumerateObject())
+            {
+                var memberPath = $"{path}.{member.Name}";
+
+                if (field.Members.FirstOrDefault(known => known.Name == member.Name) is { } memberField)
+                {
+                    FindUnknown(memberField, member.Value, memberPath, unknown);
+                }
+                else
+                {
+                    unknown.Add(memberPath);
+                }
+            }
+        }
+        else if (field is { Kind: SyncFieldKind.List, Item: { } item } && value.ValueKind == JsonValueKind.Array)
+        {
+            var index = 0;
+
+            foreach (var element in value.EnumerateArray())
+            {
+                FindUnknown(item, element, $"{path}[{index++}]", unknown);
+            }
+        }
+    }
+
     public static IReadOnlyList<SyncFieldError> Validate(
         SyncEntityDefinition definition,
         IReadOnlyDictionary<string, JsonElement> fields,

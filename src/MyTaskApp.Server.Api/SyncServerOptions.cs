@@ -60,6 +60,9 @@ public sealed class SyncServerOptions
     /// <summary>Os tetos de entidades e de bytes por página do pull (ADR-071).</summary>
     public PullLimits Pull { get; set; } = new();
 
+    /// <summary>O teto de bytes por entidade e a cota do workspace no push (ADR-072).</summary>
+    public PushLimits Push { get; set; } = new();
+
     public CertificateOptions? SigningCertificate { get; set; }
 
     public CertificateOptions? EncryptionCertificate { get; set; }

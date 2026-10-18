@@ -367,6 +367,7 @@ public sealed class ApiTests(PostgresFixture postgres) : IAsyncLifetime
     [InlineData("push fields null")]
     [InlineData("push nul in a known field")]
     [InlineData("push nul in an unknown field")]
+    [InlineData("push nul in an unknown field name")]
     [InlineData("device platform with nul")]
     public async Task NullMembersAndNulCharacters_NeverBecomeA500(string body)
     {
@@ -389,6 +390,7 @@ public sealed class ApiTests(PostgresFixture postgres) : IAsyncLifetime
             "push fields null" => await PostJsonAsync(client, ApiRoutes.Push(workspace), push + $$""","operations":[{{Operation($"\"{SyncEntityTypes.Task}\"", "null")}}]}"""),
             "push nul in a known field" => await PushAsync(TaskFields("titulo\0nul")),
             "push nul in an unknown field" => await PushAsync(new(TaskFields("Pagar boleto")) { ["colorOfTheFuture"] = SyncValue.String("a\0b") }),
+            "push nul in an unknown field name" => await PushAsync(new(TaskFields("Pagar boleto")) { ["color\0OfTheFuture"] = SyncValue.String("ab") }),
             "device platform with nul" => await client.PutAsync(
                 ApiRoutes.CurrentDevice,
                 JsonContent.Create(new DeviceHello(null, "Win\0", "1.0.0", SyncSchema.Current), options: SyncJson.Options),
@@ -401,7 +403,10 @@ public sealed class ApiTests(PostgresFixture postgres) : IAsyncLifetime
             response.StatusCode.Should().Be(HttpStatusCode.OK);
             var result = (await response.Content.ReadFromJsonAsync<PushResponse>(SyncJson.Options, Ct))!.Results.Single();
             result.Outcome.Should().Be(OperationOutcome.Rejected);
-            result.Error!.Code.Should().Be(SyncErrorCodes.ValidationFailed);
+
+            // O campo que o contrato não conhece é recusado antes de olhar o valor (ADR-072).
+            result.Error!.Code.Should().Be(body.Contains("unknown", StringComparison.Ordinal) ? SyncErrorCodes.UnknownField : SyncErrorCodes.ValidationFailed);
+            result.Error.Message.Should().NotContain("\0");
             (await session.GetAsync<PullResponse>(ApiRoutes.Pull(workspace))).Changes.Should().BeEmpty();
         }
         else
@@ -419,6 +424,28 @@ public sealed class ApiTests(PostgresFixture postgres) : IAsyncLifetime
                     new PushRequest(SyncSchema.Current, device, [new SyncOperation(Guid.CreateVersion7(), device, SyncEntityTypes.Task, task, SyncOperationKind.Upsert, 0, fields, Created)]),
                     options: SyncJson.Options),
                 Ct);
+    }
+
+    [Fact]
+    public async Task TheEntityCap_ComesFromTheConfiguration()
+    {
+        await using var api = await CreateApiAsync(new() { ["Sync:Push:MaxEntityBytes"] = "4096" });
+        var session = await api.LoginAsync("ana");
+        var workspace = await session.WorkspaceAsync();
+        var small = TaskFields("Cabe");
+        var big = TaskFields("Não cabe");
+        big[SyncFields.Task.Description] = SyncValue.String(new string('x', 5_000));
+
+        var push = await session.SendAsync<PushRequest, PushResponse>(HttpMethod.Post, ApiRoutes.Push(workspace), new PushRequest(
+            SyncSchema.Current,
+            session.DeviceId,
+            [
+                new SyncOperation(Guid.CreateVersion7(), session.DeviceId, SyncEntityTypes.Task, Guid.CreateVersion7(), SyncOperationKind.Upsert, 0, small, Created),
+                new SyncOperation(Guid.CreateVersion7(), session.DeviceId, SyncEntityTypes.Task, Guid.CreateVersion7(), SyncOperationKind.Upsert, 0, big, Created),
+            ]));
+
+        push.Results.Select(result => result.Outcome).Should().Equal(OperationOutcome.Applied, OperationOutcome.Rejected);
+        push.Results[1].Error!.Code.Should().Be(SyncErrorCodes.EntityTooLarge);
     }
 
     [Fact]

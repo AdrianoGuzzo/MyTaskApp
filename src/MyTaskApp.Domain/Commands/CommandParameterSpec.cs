@@ -26,6 +26,9 @@ public sealed record CommandParameterSpec(
 
     public const int MaxOptions = 50;
 
+    /// <summary>As opções gravadas juntas, uma por linha: o maior texto que as regras acima deixam.</summary>
+    public const int MaxOptionsLength = (MaxOptions * MaxValueLength) + (MaxOptions - 1);
+
     /// <summary>O parâmetro sem definição: texto obrigatório.</summary>
     public static CommandParameterSpec Plain(string name) => new(name);
 

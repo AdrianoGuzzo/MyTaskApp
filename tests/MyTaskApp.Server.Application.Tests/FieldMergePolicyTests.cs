@@ -125,14 +125,6 @@ public sealed class FieldMergePolicyTests
         merge.Applied.Should().BeEmpty();
     }
 
-    [Fact]
-    public void AFieldThisServerDoesNotKnow_IsKept_ForNewerClients()
-    {
-        var merge = Merge(DeviceB, baseVersion: 1, ("colorOfTheFuture", SyncValue.String("#123456")));
-
-        merge.Applied.Keys.Should().Equal("colorOfTheFuture");
-    }
-
     private static FieldMerge Merge(Guid device, long baseVersion, params (string Name, JsonElement Value)[] fields)
     {
         var current = Current();
