@@ -318,6 +318,80 @@ public sealed class PushProcessorTests
     }
 
     [Fact]
+    public async Task ANegativeBaseVersion_IsRefused()
+    {
+        var task = Guid.CreateVersion7();
+        await PushOneAsync(Ops.Upsert(_device, SyncEntityTypes.Task, task, 0, Ops.Task()));
+
+        var update = await PushOneAsync(Ops.Upsert(_device, SyncEntityTypes.Task, task, -5, new() { [SyncFields.Task.Title] = SyncValue.String("Negativa") }));
+        var creation = await PushOneAsync(Ops.Upsert(_device, SyncEntityTypes.Task, Guid.CreateVersion7(), -1, Ops.Task()));
+
+        update.Error!.Code.Should().Be(SyncErrorCodes.InvalidBaseVersion);
+        update.Version.Should().Be(1, "a recusa diz a versão do servidor");
+        creation.Error!.Code.Should().Be(SyncErrorCodes.InvalidBaseVersion);
+        SyncErrorCodes.IsRetryable(update.Error.Code).Should().BeFalse();
+        _server.Get(_workspace, SyncEntityTypes.Task, task)!.Data[SyncFields.Task.Title].GetString().Should().NotBe("Negativa");
+        _server.Log.Should().ContainSingle();
+    }
+
+    /// <summary>SEC-017: com uma versão inventada, quem mandou venceria o campo que outro já mudou.</summary>
+    [Fact]
+    public async Task ABaseVersionAheadOfTheServer_IsRefused_AndDoesNotWinTheConflict()
+    {
+        var task = Guid.CreateVersion7();
+        var other = Guid.CreateVersion7();
+        await PushOneAsync(Ops.Upsert(_device, SyncEntityTypes.Task, task, 0, Ops.Task()));
+        await _server.Push.PushAsync(new SyncCaller(_user, other), _workspace, new PushRequest(SyncSchema.Current, other,
+            [Ops.Upsert(other, SyncEntityTypes.Task, task, 1, new() { [SyncFields.Task.Title] = SyncValue.String("De B") })]), Ct);
+
+        var forged = Ops.Upsert(_device, SyncEntityTypes.Task, task, 1_000_000_000_000, new() { [SyncFields.Task.Title] = SyncValue.String("De A") });
+        var result = await PushOneAsync(forged);
+        var again = await PushOneAsync(forged);
+
+        result.Outcome.Should().Be(OperationOutcome.Rejected);
+        result.Error!.Code.Should().Be(SyncErrorCodes.InvalidBaseVersion);
+        result.Version.Should().Be(2);
+        again.Duplicate.Should().BeTrue("a recusa é permanente e fica guardada");
+        again.Error!.Code.Should().Be(SyncErrorCodes.InvalidBaseVersion);
+        var stored = _server.Get(_workspace, SyncEntityTypes.Task, task)!;
+        stored.Data[SyncFields.Task.Title].GetString().Should().Be("De B");
+        stored.Version.Should().Be(2);
+    }
+
+    /// <summary>SEC-017: só reviver com a versão do tombstone, que é a de quem viu a exclusão.</summary>
+    [Fact]
+    public async Task ABaseVersionPastTheTombstone_DoesNotRevive()
+    {
+        var task = Guid.CreateVersion7();
+        await PushOneAsync(Ops.Upsert(_device, SyncEntityTypes.Task, task, 0, Ops.Task()));
+        await PushOneAsync(Ops.Delete(_device, SyncEntityTypes.Task, task, 1));
+
+        var forged = await PushOneAsync(Ops.Upsert(_device, SyncEntityTypes.Task, task, 1_000_000_000_000, Ops.Task("De volta")));
+
+        forged.Error!.Code.Should().Be(SyncErrorCodes.InvalidBaseVersion);
+        var stored = _server.Get(_workspace, SyncEntityTypes.Task, task)!;
+        stored.IsDeleted.Should().BeTrue();
+        stored.Version.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task ABaseVersionForAnEntityTheServerNeverSaw_IsRefused()
+    {
+        var created = Guid.CreateVersion7();
+        var deleted = Guid.CreateVersion7();
+
+        var creation = await PushOneAsync(Ops.Upsert(_device, SyncEntityTypes.Task, created, 3, Ops.Task()));
+        var delete = await PushOneAsync(Ops.Delete(_device, SyncEntityTypes.Task, deleted, 3));
+
+        creation.Error!.Code.Should().Be(SyncErrorCodes.InvalidBaseVersion);
+        creation.Version.Should().Be(0);
+        delete.Error!.Code.Should().Be(SyncErrorCodes.InvalidBaseVersion);
+        _server.Get(_workspace, SyncEntityTypes.Task, created).Should().BeNull();
+        _server.Get(_workspace, SyncEntityTypes.Task, deleted).Should().BeNull("nem tombstone");
+        _server.LastSeqOf(_workspace).Should().Be(0);
+    }
+
+    [Fact]
     public async Task AnInvalidValue_IsAPermanentRefusal()
     {
         var result = await PushOneAsync(Ops.Upsert(_device, SyncEntityTypes.Task, Guid.CreateVersion7(), 0, Ops.Task(new string('x', 201))));

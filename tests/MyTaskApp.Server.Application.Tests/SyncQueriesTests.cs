@@ -303,6 +303,8 @@ public sealed class SyncQueriesTests
     [InlineData("")]
     [InlineData("   ")]
     [InlineData("um apelido com mais de sessenta caracteres, que não cabe na lista")]
+    [InlineData("‮")]
+    [InlineData(" ‏\t\u001b ")]
     public async Task ABadNickname_IsRefused(string nickname)
     {
         await _server.Devices.HelloAsync(Caller, new DeviceHello("Notebook", "Windows", "1.0", SyncSchema.Current), Ct);
@@ -310,6 +312,64 @@ public sealed class SyncQueriesTests
         var rename = () => _server.Devices.RenameAsync(Caller, _device, nickname, Ct);
 
         (await rename.Should().ThrowAsync<SyncServerException>()).Which.Status.Should().Be(400);
+    }
+
+    [Theory]
+    [InlineData("<b>disp</b>‮exe.txt", "<b>disp</b>exe.txt")]
+    [InlineData(" Note​book⁦ ", "Notebook")]
+    [InlineData(" a\tb\u001b[2J ", "ab[2J")]
+    [InlineData("Família 😀", "Família 😀")]
+    public void TheNickname_LosesControlAndFormatCharacters(string nickname, string expected) =>
+        DeviceUseCases.CleanNickname(nickname).Should().Be(expected);
+
+    [Fact]
+    public void TheNicknameLimit_CountsWhatIsLeft()
+    {
+        var sixty = new string('a', SyncSchema.MaxNicknameLength);
+
+        DeviceUseCases.CleanNickname("‮" + sixty + "‬").Should().Be(sixty);
+        DeviceUseCases.CleanNickname(sixty + "b").Should().BeNull();
+    }
+
+    [Fact]
+    public async Task PlatformAndVersion_LoseControlAndFormatCharacters_AndKeepTheirLimit()
+    {
+        var device = await _server.Devices.HelloAsync(Caller, new DeviceHello("Notebook", "Win\u001b[2J\0", "1.0‎", SyncSchema.Current), Ct);
+        var longer = await _server.Devices.HelloAsync(Caller, new DeviceHello(null, "‮" + new string('w', 50), "1.0", SyncSchema.Current), Ct);
+
+        device.Platform.Should().Be("Win[2J");
+        device.AppVersion.Should().Be("1.0");
+        longer.Platform.Should().Be(new string('w', 40));
+    }
+
+    [Theory]
+    [InlineData(17, 8, null)]
+    [InlineData(1, 65, null)]
+    [InlineData(1, 8, "")]
+    [InlineData(1, 8, "agente‮")]
+    [InlineData(1, 8, "agente\u001b")]
+    public async Task CapabilitiesBeyondTheLimit_AreRefused(int count, int length, string? odd)
+    {
+        var capabilities = Enumerable.Range(0, count).Select(_ => new string('c', length)).ToList();
+
+        if (odd is not null)
+        {
+            capabilities[0] = odd;
+        }
+
+        var hello = () => _server.Devices.HelloAsync(Caller, new DeviceHello("Notebook", "Windows", "1.0", SyncSchema.Current, capabilities), Ct);
+
+        (await hello.Should().ThrowAsync<SyncServerException>()).Which.Status.Should().Be(400);
+    }
+
+    [Fact]
+    public async Task CapabilitiesWithinTheLimit_Pass()
+    {
+        var capabilities = Enumerable.Range(0, SyncSchema.MaxCapabilities).Select(_ => new string('c', SyncSchema.MaxCapabilityLength)).ToList();
+
+        var device = await _server.Devices.HelloAsync(Caller, new DeviceHello("Notebook", "Windows", "1.0", SyncSchema.Current, capabilities), Ct);
+
+        device.Platform.Should().Be("Windows");
     }
 
     private Task<PushResponse> PushAsync(params SyncOperation[] operations) =>

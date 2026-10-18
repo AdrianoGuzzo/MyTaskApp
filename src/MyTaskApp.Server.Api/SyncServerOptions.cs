@@ -47,6 +47,12 @@ public sealed class SyncServerOptions
     /// <summary>Por quanto tempo "este dispositivo não foi revogado" fica em memória.</summary>
     public TimeSpan DeviceCacheLifetime { get; set; } = TimeSpan.FromSeconds(30);
 
+    /// <summary>
+    /// Quantos dispositivos ativos (não revogados) uma conta pode ter (SEC-015).
+    /// O seguinte é recusado no authorize com <c>device_limit_reached</c>. Zero desliga.
+    /// </summary>
+    public int MaxActiveDevicesPerUser { get; set; } = 20;
+
     /// <summary>Por quanto tempo o resultado de uma operação fica guardado para o reenvio.</summary>
     public TimeSpan ProcessedOperationRetention { get; set; } = TimeSpan.FromDays(90);
 

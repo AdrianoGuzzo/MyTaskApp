@@ -51,6 +51,13 @@ public static class SyncErrorCodes
     /// </summary>
     public const string QuotaExceeded = "quota_exceeded";
 
+    /// <summary>
+    /// A versão base é negativa ou está à frente da do servidor: não é uma que
+    /// ele deu. Permanente. Depois de um backup do servidor restaurado, o
+    /// desktop baixa a versão que conhecia para a que voltou na recusa.
+    /// </summary>
+    public const string InvalidBaseVersion = "invalid_base_version";
+
     // ---- Campo recusado (push) ----
 
     /// <summary>Outro dispositivo mudou o mesmo campo antes: vale o do servidor.</summary>
@@ -69,6 +76,12 @@ public static class SyncErrorCodes
     // ---- Resposta inteira ----
 
     public const string DeviceRevoked = "device_revoked";
+
+    /// <summary>
+    /// A conta chegou ao teto de dispositivos ativos (SEC-015). Vem no
+    /// <c>/connect/authorize</c> de um dispositivo novo; revogar um antigo libera a vaga.
+    /// </summary>
+    public const string DeviceLimitReached = "device_limit_reached";
 
     /// <summary>A conta Google não está na lista de quem pode usar o servidor (ADR-068).</summary>
     public const string RegistrationClosed = "registration_closed";

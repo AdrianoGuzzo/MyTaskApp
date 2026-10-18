@@ -45,6 +45,11 @@ public static class SyncSchema
 
     public const int MaxNicknameLength = 60;
 
+    /// <summary>O teto das capacidades do "olá" (SEC-015): quantas e o tamanho de cada uma.</summary>
+    public const int MaxCapabilities = 16;
+
+    public const int MaxCapabilityLength = 64;
+
     public const int MaxOperationsPerPush = 100;
 
     public const int DefaultPullLimit = 200;

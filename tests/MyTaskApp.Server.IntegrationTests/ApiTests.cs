@@ -424,10 +424,36 @@ public sealed class ApiTests(PostgresFixture postgres) : IAsyncLifetime
         (await response.Content.ReadAsStringAsync(Ct)).Should().Contain(SyncErrorCodes.DeviceMismatch);
     }
 
+    /// <summary>SEC-017 (T34): a versão base é uma que o servidor deu, nem negativa nem futura.</summary>
+    [Fact]
+    public async Task ABaseVersionTheServerNeverGave_IsRefused()
+    {
+        var session = await _api.LoginAsync("ana");
+        var workspace = await session.WorkspaceAsync();
+        var task = Guid.CreateVersion7();
+        await PushAsync(session, workspace, [Upsert(session, SyncEntityTypes.Task, task, 0, TaskFields("Pagar boleto"))]);
+
+        var push = await session.SendAsync<PushRequest, PushResponse>(HttpMethod.Post, ApiRoutes.Push(workspace), new PushRequest(
+            SyncSchema.Current,
+            session.DeviceId,
+            [
+                Upsert(session, SyncEntityTypes.Task, task, 1_000_000_000_000, new() { [SyncFields.Task.Title] = SyncValue.String("Do futuro") }),
+                Upsert(session, SyncEntityTypes.Task, task, -5, new() { [SyncFields.Task.Title] = SyncValue.String("Negativa") }),
+            ]));
+
+        push.Results.Should().HaveCount(2).And.OnlyContain(result =>
+            result.Outcome == OperationOutcome.Rejected && result.Error!.Code == SyncErrorCodes.InvalidBaseVersion && result.Version == 1);
+        var change = (await session.GetAsync<PullResponse>(ApiRoutes.Pull(workspace))).Changes.Should().ContainSingle().Subject;
+        change.Version.Should().Be(1);
+        change.Fields[SyncFields.Task.Title].GetString().Should().Be("Pagar boleto");
+        _api.Logs.Text.Should().NotContain("SyncServerUnhandled");
+    }
+
     /// <summary>
     /// SEC-008: membro nulo e caractere NUL nunca chegam a 500. O que é forma
     /// do pedido vira 400; o NUL num campo recusa só a operação, para um texto
-    /// colado no desktop não travar o resto do lote.
+    /// colado no desktop não travar o resto do lote. O NUL na plataforma do
+    /// dispositivo sai do texto (SEC-015): veja o teste do ESC, logo abaixo.
     /// </summary>
     [Theory]
     [InlineData("fetch entities null")]
@@ -439,7 +465,6 @@ public sealed class ApiTests(PostgresFixture postgres) : IAsyncLifetime
     [InlineData("push nul in a known field")]
     [InlineData("push nul in an unknown field")]
     [InlineData("push nul in an unknown field name")]
-    [InlineData("device platform with nul")]
     public async Task NullMembersAndNulCharacters_NeverBecomeA500(string body)
     {
         var session = await _api.LoginAsync("ana");
@@ -462,10 +487,6 @@ public sealed class ApiTests(PostgresFixture postgres) : IAsyncLifetime
             "push nul in a known field" => await PushAsync(TaskFields("titulo\0nul")),
             "push nul in an unknown field" => await PushAsync(new(TaskFields("Pagar boleto")) { ["colorOfTheFuture"] = SyncValue.String("a\0b") }),
             "push nul in an unknown field name" => await PushAsync(new(TaskFields("Pagar boleto")) { ["color\0OfTheFuture"] = SyncValue.String("ab") }),
-            "device platform with nul" => await client.PutAsync(
-                ApiRoutes.CurrentDevice,
-                JsonContent.Create(new DeviceHello(null, "Win\0", "1.0.0", SyncSchema.Current), options: SyncJson.Options),
-                Ct),
             _ => throw new ArgumentOutOfRangeException(nameof(body)),
         };
 
@@ -495,6 +516,96 @@ public sealed class ApiTests(PostgresFixture postgres) : IAsyncLifetime
                     new PushRequest(SyncSchema.Current, device, [new SyncOperation(Guid.CreateVersion7(), device, SyncEntityTypes.Task, task, SyncOperationKind.Upsert, 0, fields, Created)]),
                     options: SyncJson.Options),
                 Ct);
+    }
+
+    /// <summary>
+    /// SEC-015: o 21º dispositivo ativo é recusado com código próprio, e nada
+    /// é gravado. Entrar de novo num que já existe passa; revogar um libera a vaga.
+    /// </summary>
+    [Fact]
+    public async Task TheTwentyFirstActiveDevice_IsRefused_AndRevokingOneFreesTheSlot()
+    {
+        var devices = new List<DesktopSession>();
+
+        for (var i = 0; i < 20; i++)
+        {
+            devices.Add(await _api.LoginAsync("ana", deviceName: $"PC-{i:00}"));
+        }
+
+        var newcomer = Guid.CreateVersion7();
+        var refused = () => _api.AuthorizeAsync("ana", newcomer);
+
+        var refusal = (await refused.Should().ThrowAsync<OAuthRefusedException>()).Which;
+        refusal.Error.Should().Be(SyncErrorCodes.DeviceLimitReached);
+        refusal.Description.Should().Contain("20").And.Contain("Revogue");
+
+        var again = await _api.LoginAsync("ana", devices[0].DeviceId);
+        (await again.GetAsync<List<DeviceInfo>>(ApiRoutes.Devices)).Should().HaveCount(20).And.NotContain(device => device.DeviceId == newcomer);
+
+        await again.SendAsync<object, DeviceInfo>(HttpMethod.Post, ApiRoutes.RevokeDevice(devices[1].DeviceId), new { });
+        var admitted = await _api.LoginAsync("ana", newcomer);
+
+        var listed = await admitted.GetAsync<List<DeviceInfo>>(ApiRoutes.Devices);
+        listed.Count(device => device.RevokedAt is null).Should().Be(20);
+        listed.Should().Contain(device => device.DeviceId == newcomer);
+    }
+
+    [Fact]
+    public async Task TheDeviceCap_ComesFromTheConfiguration_AndZeroTurnsItOff()
+    {
+        await using (var capped = await CreateApiAsync(new() { ["Sync:MaxActiveDevicesPerUser"] = "1" }))
+        {
+            await capped.LoginAsync("ana");
+            var second = () => capped.AuthorizeAsync("ana", Guid.CreateVersion7());
+
+            (await second.Should().ThrowAsync<OAuthRefusedException>()).Which.Error.Should().Be(SyncErrorCodes.DeviceLimitReached);
+        }
+
+        await using var open = await CreateApiAsync(new() { ["Sync:MaxActiveDevicesPerUser"] = "0" });
+
+        for (var i = 0; i < 22; i++)
+        {
+            await open.AuthorizeAsync("ana", Guid.CreateVersion7());
+        }
+    }
+
+    /// <summary>
+    /// SEC-015: o apelido sai sem o U+202E (que inverteria o nome na lista) e a
+    /// plataforma sem o ESC das sequências ANSI nem o NUL (SEC-008), sem 400.
+    /// </summary>
+    [Fact]
+    public async Task DeviceTexts_LoseControlAndFormatCharacters()
+    {
+        var session = await _api.LoginAsync("ana", deviceName: "<b>disp</b>‮exe.txt");
+
+        var device = await session.SendAsync<DeviceHello, DeviceInfo>(
+            HttpMethod.Put,
+            ApiRoutes.CurrentDevice,
+            new DeviceHello(null, "Win\u001b[2J\0", "1.0.0‏", SyncSchema.Current));
+
+        device.Nickname.Should().Be("<b>disp</b>exe.txt");
+        device.Platform.Should().Be("Win[2J");
+        device.AppVersion.Should().Be("1.0.0");
+
+        var listed = (await session.GetAsync<List<DeviceInfo>>(ApiRoutes.Devices)).Single();
+        listed.Nickname.Should().NotContain("‮");
+        listed.Platform.Should().NotContain("\u001b");
+        _api.Logs.Text.Should().NotContain("SyncServerUnhandled");
+    }
+
+    [Fact]
+    public async Task AnEndlessCapabilityList_IsRefused()
+    {
+        var session = await _api.LoginAsync("ana");
+        using var client = session.Api();
+
+        using var response = await client.PutAsync(
+            ApiRoutes.CurrentDevice,
+            JsonContent.Create(new DeviceHello(null, "Windows", "1.0.0", SyncSchema.Current, [.. Enumerable.Repeat("agente", 20_000)]), options: SyncJson.Options),
+            Ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync(Ct)).Should().Contain(SyncErrorCodes.BadRequest);
     }
 
     [Fact]
