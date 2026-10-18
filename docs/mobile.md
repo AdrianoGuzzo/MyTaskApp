@@ -269,8 +269,11 @@ Configurado e **não validado num aparelho**: este ambiente não tem Mac.
 3. Com um Mac, também dá para rodar no simulador:
 
    ```bash
-   dotnet build src/MyTaskApp.Mobile/MyTaskApp.Mobile.csproj -t:Run -f net10.0-ios -p:IncludeAndroid=false
+   dotnet build src/MyTaskApp.Mobile/MyTaskApp.Mobile.csproj -t:Run -f net10.0-ios -p:IncludeAndroid=false -p:CodesignKey=-
    ```
+
+   O `-p:CodesignKey=-` assina ad-hoc. Sem ele, o `Entitlements.plist`
+   preenchido faz o SDK exigir certificado e perfil até para o simulador.
 
 4. App Store ou TestFlight continuam exigindo a conta de desenvolvedor paga.
 
