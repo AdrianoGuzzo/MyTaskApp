@@ -1,0 +1,40 @@
+# Atualizações de dependência (SEC-016). Os PRs do Dependabot passam pelo
+# mesmo CI de qualquer PR, inclusive o portão de pacotes vulneráveis.
+# Processo em docs/release-process.md §4.
+#
+# Os títulos saem como "build(deps): …" e "ci(deps): …": passam no
+# pr-title.yml e não geram versão sozinhos. Correção de vulnerabilidade que
+# deva sair numa release: troque o título para "fix(deps): …" antes do merge.
+version: 2
+
+updates:
+  # Lê o Directory.Packages.props (versões centralizadas).
+  - package-ecosystem: nuget
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: build
+      include: scope
+    groups:
+      # Todos os patches num PR só; minor e major vêm um por pacote.
+      patch:
+        update-types: [patch]
+        # A versão do MAUI acompanha o workload maui-android instalado: vem
+        # sozinha, para não arrastar o resto se pedir workload novo.
+        exclude-patterns: ["Microsoft.Maui.*"]
+
+  # As actions pinadas por SHA: o Dependabot troca o SHA e o comentário da
+  # versão juntos.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: ci
+      include: scope
+    groups:
+      patch:
+        update-types: [patch]

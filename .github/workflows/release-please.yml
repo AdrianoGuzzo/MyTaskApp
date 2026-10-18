@@ -36,7 +36,7 @@ jobs:
       # nasce sem CI (eventos desse token não disparam workflows). Isso não
       # deixa passar nada: o release.yml refaz build e testes na tag antes de
       # anexar qualquer artefato.
-      - uses: googleapis/release-please-action@v4
+      - uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4.4.1
         id: release
         with:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
