@@ -1,4 +1,6 @@
 using System.Net;
+using System.Xml.Linq;
+using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
@@ -193,6 +195,54 @@ internal sealed class PublicClientSeeder(IServiceProvider services, SyncServerOp
             await applications.CreateAsync(descriptor, cancellationToken);
         }
     }
+}
+
+/// <summary>
+/// A chave do Data Protection gravada em claro (SEC-011, ADR-073): a de antes
+/// do certificado, ou a que voltou com um backup antigo. Quem leu o banco a
+/// conhece, então ela é revogada ao subir e não assina mais cookie nenhum; a
+/// próxima o Data Protection gera já cifrada. Só sobe com o certificado.
+/// </summary>
+internal sealed class PlaintextKeyRevoker(IServiceProvider services, IKeyManager keys, ILogger<PlaintextKeyRevoker> logger) : IHostedService
+{
+    public async Task StartAsync(CancellationToken cancellationToken)
+    {
+        await using var scope = services.CreateAsyncScope();
+        var stored = await scope.ServiceProvider.GetRequiredService<ServerDbContext>().DataProtectionKeys
+            .AsNoTracking()
+            .Select(row => row.Xml)
+            .ToListAsync(cancellationToken);
+
+        // As linhas de revogação são <revocation>, e não <key>: ficam de fora.
+        var plaintext = stored
+            .Where(xml => !string.IsNullOrEmpty(xml))
+            .Select(xml => XElement.Parse(xml!))
+            .Where(element => element.Name.LocalName == "key"
+                && !element.Descendants().Any(child => child.Name.LocalName == "encryptedSecret"))
+            .Select(element => Guid.Parse((string)element.Attribute("id")!))
+            .ToHashSet();
+
+        if (plaintext.Count == 0)
+        {
+            return;
+        }
+
+        // A já revogada fica como está: revogar de novo só somaria linhas a cada subida.
+        var revoked = 0;
+
+        foreach (var key in keys.GetAllKeys().Where(key => !key.IsRevoked && plaintext.Contains(key.KeyId)))
+        {
+            keys.RevokeKey(key.KeyId, "SEC-011: chave gravada em claro no banco.");
+            revoked++;
+        }
+
+        if (revoked > 0)
+        {
+            logger.LogWarning("SyncServerPlaintextKeysRevoked {Count}", revoked);
+        }
+    }
+
+    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 }
 
 /// <summary>Esquece os resultados de operação antigos: depois de 90 dias, nenhum cliente reenvia.</summary>

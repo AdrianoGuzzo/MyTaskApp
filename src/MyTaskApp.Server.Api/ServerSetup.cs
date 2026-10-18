@@ -44,8 +44,9 @@ public static class ServerSetup
         }
 
         var testing = environment.IsEnvironment(TestingEnvironment);
+        var deployed = !testing && !environment.IsDevelopment();
 
-        EnsurePublicAddress(options, configuration, deployed: !testing && !environment.IsDevelopment());
+        EnsurePublicAddress(options, configuration, deployed);
 
         services.AddSingleton(options);
         services.AddSingleton(options.Push);
@@ -64,10 +65,7 @@ public static class ServerSetup
         services.AddHostedService<ProcessedOperationsPruner>();
         services.AddHostedService<DevelopmentLoopbackGuard>();
 
-        services.AddDataProtection()
-            .SetApplicationName("MyTaskApp.Sync")
-            .PersistKeysToDbContext<ServerDbContext>();
-
+        AddKeyProtection(services, options, deployed);
         AddAccounts(services, google, testing);
         AddOAuthServer(services, options, environment, testing);
         AddRateLimits(services, options);
@@ -130,6 +128,45 @@ public static class ServerSetup
 
         await using var scope = app.Services.CreateAsyncScope();
         await scope.ServiceProvider.GetRequiredService<ServerDbContext>().Database.MigrateAsync();
+    }
+
+    /// <summary>
+    /// As chaves do Data Protection (cookies do login, antiforgery) ficam no
+    /// banco, para várias instâncias dividirem a mesma, e cifradas com um PFX
+    /// fora dele (SEC-011, ADR-073). Os PFX anteriores só decifram, durante a
+    /// rotação. Com o certificado, a chave gravada antes em claro é revogada
+    /// ao subir: quem leu o banco ainda a conhece.
+    /// </summary>
+    private static void AddKeyProtection(IServiceCollection services, SyncServerOptions options, bool deployed)
+    {
+        var keys = services.AddDataProtection()
+            .SetApplicationName("MyTaskApp.Sync")
+            .PersistKeysToDbContext<ServerDbContext>();
+
+        if (TryLoadCertificate(options.DataProtectionCertificate) is not { } certificate)
+        {
+            if (deployed)
+            {
+                throw new InvalidOperationException(
+                    "Falta o certificado do Data Protection (Sync__DataProtectionCertificate__Path ou __Base64): sem ele, as chaves dos cookies ficam em claro no banco (SEC-011).");
+            }
+
+            return;
+        }
+
+        keys.ProtectKeysWithCertificate(certificate);
+
+        var previous = options.DataProtectionPreviousCertificates
+            .Select((entry, index) => TryLoadCertificate(entry)
+                ?? throw new InvalidOperationException($"Sync:DataProtectionPreviousCertificates:{index} sem Path nem Base64."))
+            .ToArray();
+
+        if (previous.Length > 0)
+        {
+            keys.UnprotectKeysWithAnyCertificate(previous);
+        }
+
+        services.AddHostedService<PlaintextKeyRevoker>();
     }
 
     /// <summary>
@@ -420,7 +457,12 @@ public static class ServerSetup
         }
     }
 
-    private static X509Certificate2 LoadCertificate(CertificateOptions? certificate, string purpose)
+    private static X509Certificate2 LoadCertificate(CertificateOptions? certificate, string purpose) =>
+        TryLoadCertificate(certificate)
+        ?? throw new InvalidOperationException(
+            $"Falta o certificado de {purpose} do OpenIddict (Sync__SigningCertificate__Path ou __Base64, e Sync__EncryptionCertificate__…).");
+
+    private static X509Certificate2? TryLoadCertificate(CertificateOptions? certificate)
     {
         if (certificate?.Base64 is { Length: > 0 } base64)
         {
@@ -432,8 +474,7 @@ public static class ServerSetup
             return X509CertificateLoader.LoadPkcs12FromFile(path, certificate.Password);
         }
 
-        throw new InvalidOperationException(
-            $"Falta o certificado de {purpose} do OpenIddict (Sync__SigningCertificate__Path ou __Base64, e Sync__EncryptionCertificate__…).");
+        return null;
     }
 
     private sealed record ApiCaller(string? Subject);
