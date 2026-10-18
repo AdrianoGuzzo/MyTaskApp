@@ -10,18 +10,25 @@ namespace MyTaskApp.Server.Application;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Página fechada.</b> O filho não chega sem o pai: se o pai também mudou
-/// depois do cursor e ficou fora do limite, ele entra junto. E a ocorrência
-/// anda com a tarefa nos dois sentidos — o banco local não tem tarefa sem
-/// ocorrência. O cursor seguinte é o do último item <i>da página</i>; o que
-/// veio de carona volta depois, e o cliente o ignora pela versão.
+/// <b>Página fechada.</b> O filho não chega sem o pai: se o cliente pode não
+/// ter o pai, ele vem de carona. E a tarefa que o cliente pode não ter chega
+/// com uma ocorrência — o banco local não tem tarefa sem ocorrência. As outras
+/// ocorrências vêm pelo próprio log, e não a família inteira a cada página
+/// (ADR-071). O cursor seguinte é o do último item do log <i>na página</i>; o
+/// que veio de carona volta depois, e o cliente o ignora pela versão.
+/// </para>
+/// <para>
+/// <b>Teto.</b> O <c>limit</c> conta o log; <see cref="PullLimits"/> conta a
+/// resposta inteira. A página corta antes do item que passaria do teto, e o
+/// cliente segue pelo <c>hasMore</c>. Os relacionados vêm em lote, sem uma
+/// consulta por referência.
 /// </para>
 /// <para>
 /// <b>Do zero não há tombstone.</b> Quem nunca sincronizou não tem o que
 /// apagar.
 /// </para>
 /// </remarks>
-public sealed class SyncQueries(ISyncStore store, IWorkspaceAccess access, IDeviceRegistry devices)
+public sealed class SyncQueries(ISyncStore store, IWorkspaceAccess access, IDeviceRegistry devices, PullLimits limits)
 {
     public async Task<PullResponse> PullAsync(
         SyncCaller caller,
@@ -46,31 +53,21 @@ public sealed class SyncQueries(ISyncStore store, IWorkspaceAccess access, IDevi
         }
 
         var rows = await store.ReadChangesAsync(workspaceId, after, take + 1, includeDeleted: after > 0, cancellationToken);
-        var hasMore = rows.Count > take;
         var primary = rows.Take(take).ToList();
-        var next = hasMore ? primary[^1].LastSeq : last;
+        var page = await BuildPageAsync(workspaceId, primary, after, cancellationToken);
 
-        var page = primary.ToDictionary(entity => (entity.EntityType, entity.EntityId));
-        var queue = new Queue<StoredEntity>(primary);
+        // O primeiro sempre cabe: o cursor anda, mesmo com um item maior que o teto.
+        var taken = 0;
 
-        while (queue.TryDequeue(out var entity))
+        while (taken < primary.Count && page.TryAdd(primary[taken]))
         {
-            foreach (var related in await RelatedAsync(workspaceId, entity, cancellationToken))
-            {
-                if (!related.IsDeleted && related.LastSeq > after && page.TryAdd((related.EntityType, related.EntityId), related))
-                {
-                    queue.Enqueue(related);
-                }
-            }
+            taken++;
         }
 
-        var changes = page.Values
-            .OrderBy(entity => SyncRegistry.Find(entity.EntityType)?.Rank ?? int.MaxValue)
-            .ThenBy(entity => entity.LastSeq)
-            .Select(entity => entity.ToChange())
-            .ToList();
+        var hasMore = rows.Count > take || taken < primary.Count;
+        var next = hasMore ? primary[taken - 1].LastSeq : last;
 
-        return new PullResponse(changes, SyncCursor.Encode(next), hasMore);
+        return new PullResponse(page.Changes(), SyncCursor.Encode(next), hasMore);
     }
 
     public async Task<FetchResponse> FetchAsync(
@@ -123,42 +120,77 @@ public sealed class SyncQueries(ISyncStore store, IWorkspaceAccess access, IDevi
         }
     }
 
-    /// <summary>Os pais da entidade e, se ela for pai de quem anda junto, esses filhos.</summary>
-    private async Task<IReadOnlyList<StoredEntity>> RelatedAsync(Guid workspaceId, StoredEntity entity, CancellationToken cancellationToken)
+    /// <summary>
+    /// Carrega, em lote e por nível, tudo o que a página pode exigir: os pais
+    /// (e os pais deles), a primeira ocorrência de cada tarefa e o que o
+    /// cliente já tem. Algumas consultas por página, qualquer que seja o tamanho
+    /// da família.
+    /// </summary>
+    private async Task<PullPageBuilder> BuildPageAsync(
+        Guid workspaceId,
+        IReadOnlyList<StoredEntity> primary,
+        long after,
+        CancellationToken cancellationToken)
     {
-        var related = new List<StoredEntity>();
+        var loaded = primary.ToDictionary(entity => (entity.EntityType, entity.EntityId));
+        var firstCompanions = new Dictionary<(string, string, Guid), StoredEntity>();
+        var asked = new HashSet<(string, string, Guid)>();
+        var frontier = primary.Where(entity => !entity.IsDeleted).ToList();
 
-        if (entity.IsDeleted || SyncRegistry.Find(entity.EntityType) is not { } definition)
+        while (frontier.Count > 0)
         {
-            return related;
-        }
+            var found = new List<StoredEntity>();
+            var parents = frontier
+                .SelectMany(PullPageBuilder.ParentsOf)
+                .Where(parent => !loaded.ContainsKey((parent.Type, parent.Id)))
+                .Distinct()
+                .ToList();
 
-        foreach (var reference in definition.References)
-        {
-            if (SyncValue.ReadGuid(entity.Data.GetValueOrDefault(reference.Field, SyncValue.Null)) is { } parentId
-                && await store.FindAsync(workspaceId, reference.TargetType, parentId, cancellationToken) is { } parent)
+            if (parents.Count > 0)
             {
-                related.Add(parent);
+                found.AddRange(await store.FindManyAsync(workspaceId, parents, cancellationToken));
             }
-        }
 
-        var companions = SyncRegistry.All
-            .Where(candidate => candidate.TravelsWithParent && candidate.References.Any(reference => reference.TargetType == entity.EntityType))
-            .Select(candidate => candidate.Type)
-            .ToHashSet(StringComparer.Ordinal);
+            var slots = frontier
+                .SelectMany(entity => PullPageBuilder.CompanionsOf(entity.EntityType)
+                    .Select(companion => (Companion: companion.Type, entity.EntityType, entity.EntityId)))
+                .Where(asked.Add)
+                .GroupBy(slot => (slot.Companion, slot.EntityType));
 
-        if (companions.Count > 0)
-        {
-            foreach (var reference in await store.FindReferencesToAsync(workspaceId, entity.EntityType, entity.EntityId, cancellationToken))
+            foreach (var group in slots)
             {
-                if (companions.Contains(reference.FromType)
-                    && await store.FindAsync(workspaceId, reference.FromType, reference.FromId, cancellationToken) is { } child)
+                var (companion, parentType) = group.Key;
+                var reference = SyncRegistry.Find(companion)!.References.First(reference => reference.TargetType == parentType);
+                var firsts = await store.FindFirstReferrersAsync(
+                    workspaceId,
+                    companion,
+                    parentType,
+                    [.. group.Select(slot => slot.EntityId)],
+                    after,
+                    cancellationToken);
+
+                foreach (var first in firsts)
                 {
-                    related.Add(child);
+                    if (SyncValue.ReadGuid(first.Data.GetValueOrDefault(reference.Field, SyncValue.Null)) is { } parentId)
+                    {
+                        firstCompanions[(companion, parentType, parentId)] = first;
+                        found.Add(first);
+                    }
                 }
             }
+
+            // Só o que pode vir de carona precisa dos pais dele.
+            frontier = [.. found.Where(entity => loaded.TryAdd((entity.EntityType, entity.EntityId), entity) && !entity.IsDeleted && entity.LastSeq > after)];
         }
 
-        return related;
+        IReadOnlySet<EntityRef> delivered = after > 0
+            ? await store.FindDeliveredAsync(
+                workspaceId,
+                [.. loaded.Values.Where(entity => !entity.IsDeleted).Select(entity => new EntityRef(entity.EntityType, entity.EntityId))],
+                after,
+                cancellationToken)
+            : new HashSet<EntityRef>();
+
+        return new PullPageBuilder(after, limits, loaded, firstCompanions, delivered);
     }
 }

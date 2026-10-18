@@ -288,6 +288,40 @@ public sealed class ApiTests(PostgresFixture postgres) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ATaskWithAThousandOccurrences_ComesPageByPage_WithoutTheWholeFamilyEachTime()
+    {
+        // SEC-005: cada página de limit=1 devolvia ~1.000 mudanças (~480 KB), e o cursor andava uma por vez.
+        await using var api = await CreateApiAsync(new() { ["Sync:RateLimits:SyncPerMinute"] = "100000", ["Sync:RateLimits:SyncBurst"] = "100000" });
+        var a = await api.LoginAsync("ana");
+        var workspace = await a.WorkspaceAsync();
+        var task = await PushTaskWithOccurrencesAsync(a, workspace, 1_000);
+        await PushAsync(a, workspace, [Upsert(a, SyncEntityTypes.Task, task, 1, new() { [SyncFields.Task.Title] = SyncValue.String("Renomeada") })]);
+
+        var pages = await PullAllAsync(a, workspace, limit: 1);
+        var changes = pages.SelectMany(page => page.Changes).ToList();
+
+        changes.Select(change => change.EntityId).Distinct().Should().HaveCount(1_001);
+        changes.Should().HaveCountLessThanOrEqualTo(1_002);
+        pages.Should().OnlyContain(page => page.Changes.Count <= 2);
+    }
+
+    [Fact]
+    public async Task ThePullPage_RespectsTheConfiguredCeiling()
+    {
+        await using var api = await CreateApiAsync(new() { ["Sync:Pull:MaxEntities"] = "50" });
+        var a = await api.LoginAsync("ana");
+        var workspace = await a.WorkspaceAsync();
+        await PushTaskWithOccurrencesAsync(a, workspace, 1_000);
+
+        var pages = await PullAllAsync(a, workspace, limit: SyncSchema.MaxPullLimit);
+        var changes = pages.SelectMany(page => page.Changes).ToList();
+
+        pages.Should().OnlyContain(page => page.Changes.Count <= 50);
+        changes.Select(change => change.EntityId).Distinct().Should().HaveCount(1_001);
+        changes.Should().HaveCountLessThanOrEqualTo(1_002);
+    }
+
+    [Fact]
     public async Task AnotherUser_GetsA404_ForMyWorkspace()
     {
         var ana = await _api.LoginAsync("ana");
@@ -553,6 +587,60 @@ public sealed class ApiTests(PostgresFixture postgres) : IAsyncLifetime
 
     private static Task<HttpResponseMessage> PostJsonAsync(HttpClient client, string path, string json) =>
         client.PostAsync(path, new StringContent(json, System.Text.Encoding.UTF8, "application/json"), Ct);
+
+    private static SyncOperation Upsert(DesktopSession session, string type, Guid id, long baseVersion, Dictionary<string, JsonElement> fields) =>
+        new(Guid.CreateVersion7(), session.DeviceId, type, id, SyncOperationKind.Upsert, baseVersion, fields, Created);
+
+    private static async Task PushAsync(DesktopSession session, Guid workspace, IReadOnlyList<SyncOperation> operations)
+    {
+        var push = await session.SendAsync<PushRequest, PushResponse>(
+            HttpMethod.Post, ApiRoutes.Push(workspace), new PushRequest(SyncSchema.Current, session.DeviceId, operations));
+
+        push.Results.Should().OnlyContain(result => result.Outcome == OperationOutcome.Applied);
+    }
+
+    /// <summary>Uma tarefa e as ocorrências dela, em pushes do tamanho máximo.</summary>
+    private static async Task<Guid> PushTaskWithOccurrencesAsync(DesktopSession session, Guid workspace, int occurrences)
+    {
+        var task = Guid.CreateVersion7();
+        var operations = new List<SyncOperation> { Upsert(session, SyncEntityTypes.Task, task, 0, TaskFields("Recorrente")) };
+        operations.AddRange(Enumerable.Range(0, occurrences).Select(_ => Upsert(session, SyncEntityTypes.Occurrence, Guid.CreateVersion7(), 0, new()
+        {
+            [SyncFields.Occurrence.TaskId] = SyncValue.Guid(task),
+            [SyncFields.Occurrence.Schedule] = SyncValue.Object((SyncFields.Occurrence.Date, SyncValue.Null), (SyncFields.Occurrence.Time, SyncValue.Null)),
+            [SyncFields.Occurrence.State] = SyncValue.Object((SyncFields.Occurrence.Status, SyncValue.Integer(0)), (SyncFields.Occurrence.CompletedAt, SyncValue.Null)),
+        })));
+
+        foreach (var chunk in operations.Chunk(SyncSchema.MaxOperationsPerPush))
+        {
+            await PushAsync(session, workspace, chunk);
+        }
+
+        return task;
+    }
+
+    /// <summary>Do zero até o fim, pelo HTTP, conferindo que cada página anda o cursor.</summary>
+    private static async Task<List<PullResponse>> PullAllAsync(DesktopSession session, Guid workspace, int limit)
+    {
+        var pages = new List<PullResponse>();
+        var cursor = SyncCursor.Start;
+
+        while (pages.Count < 5_000)
+        {
+            var page = await session.GetAsync<PullResponse>($"{ApiRoutes.Pull(workspace)}?cursor={Uri.EscapeDataString(cursor)}&limit={limit}");
+            pages.Add(page);
+
+            if (!page.HasMore)
+            {
+                return pages;
+            }
+
+            page.NextCursor.Should().NotBe(cursor);
+            cursor = page.NextCursor;
+        }
+
+        throw new InvalidOperationException("O pull não terminou.");
+    }
 
     private static Dictionary<string, JsonElement> TaskFields(string title) => new()
     {

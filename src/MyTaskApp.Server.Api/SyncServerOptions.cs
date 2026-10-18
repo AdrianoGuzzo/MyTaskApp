@@ -1,3 +1,4 @@
+using MyTaskApp.Server.Application;
 using MyTaskApp.Sync.Contracts;
 
 namespace MyTaskApp.Server.Api;
@@ -48,6 +49,9 @@ public sealed class SyncServerOptions
     public RateLimitOptions RateLimits { get; set; } = new();
 
     public RegistrationOptions Registration { get; set; } = new();
+
+    /// <summary>Os tetos de entidades e de bytes por página do pull (ADR-071).</summary>
+    public PullLimits Pull { get; set; } = new();
 
     public CertificateOptions? SigningCertificate { get; set; }
 
