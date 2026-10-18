@@ -11,7 +11,10 @@ builder.Configuration.AddKeyPerFile("/run/secrets", optional: true);
 // Log sem segredo: o caminho da requisição (sem a query), o status e o tempo.
 // O OpenIddict e o ASP.NET ficam em Warning; o detalhe deles traria
 // parâmetros do protocolo para o log. Só o Serilog escreve no console; os
-// provedores registrados depois (os testes) recebem os mesmos eventos.
+// provedores registrados depois (os testes) recebem os mesmos eventos. Cada
+// host fica com o seu logger, e não com o Log.Logger estático: com vários
+// servidores no mesmo processo (os testes em paralelo), o evento de um ia
+// parar nos provedores de outro.
 builder.Logging.ClearProviders();
 builder.Host.UseSerilog(
     (context, logger) => logger
@@ -21,6 +24,7 @@ builder.Host.UseSerilog(
         .MinimumLevel.Override("OpenIddict", LogEventLevel.Warning)
         .Enrich.FromLogContext()
         .WriteTo.Console(),
+    preserveStaticLogger: true,
     writeToProviders: true);
 
 builder.WebHost.ConfigureKestrel(kestrel => kestrel.Limits.MaxRequestBodySize = 1024 * 1024);

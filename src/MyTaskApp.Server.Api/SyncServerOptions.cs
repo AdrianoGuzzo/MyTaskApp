@@ -13,6 +13,13 @@ public sealed class SyncServerOptions
     public const string SectionName = "Sync";
 
     /// <summary>
+    /// O endereço público do servidor, como <c>https://sync.exemplo.com/</c>: o
+    /// issuer do discovery e dos tokens (SEC-007). Obrigatório fora de
+    /// Development. Vazio, quem decide é o <c>Host</c> da requisição.
+    /// </summary>
+    public Uri? Issuer { get; set; }
+
+    /// <summary>
     /// Os endereços de volta aceitos para o desktop. Fixos: o OpenIddict
     /// compara o redirect exatamente, e o desktop escuta numa porta conhecida.
     /// </summary>
