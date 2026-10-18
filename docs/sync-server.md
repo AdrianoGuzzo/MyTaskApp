@@ -74,7 +74,7 @@ o da variável, e o conteúdo é o valor. É o que o compose de produção usa (
 | `Sync__Issuer` | em produção | o endereço público do servidor, como `https://sync.exemplo.com/`: o issuer do OAuth, no discovery e nos tokens (SEC-007). Fora de Development, sem ele (ou sem `https`) o servidor não sobe. Vazio, o `Host` da requisição decide, e um token emitido por um endereço não vale no outro. Trocá-lo derruba o login de todos |
 | `AllowedHosts` | em produção | os nomes aceitos no `Host`, separados por `;`, sem porta. Fora de Development, tem de listar o nome do `Sync__Issuer` e não pode ser `*`: o `Host` forjado leva 400. Em Development, `localhost;127.0.0.1;[::1]` |
 | `Development__AllowNonLoopback` | não | `true` deixa Development escutar fora do loopback. Só no contêiner de desenvolvimento (§3) |
-| `Sync__DesktopRedirectUris__0` … | não | voltas aceitas do desktop. Padrão: `http://127.0.0.1:47833/callback` e `http://localhost:47833/callback` |
+| `Sync__DesktopRedirectUris__0` … | não | voltas aceitas do desktop. Padrão: `http://127.0.0.1/callback`, que no loopback aceita qualquer porta (ADR-074) |
 | `Sync__MobileRedirectUris__0` … | não | voltas aceitas do celular (cliente `mytaskapp-mobile`, ADR-067). Padrão: `io.github.adrianoguzzo.mytaskapp://oauth/callback` |
 | `Sync__AccessTokenLifetime` | não | padrão `00:15:00` |
 | `Sync__RefreshTokenLifetime` | não | padrão `30.00:00:00`, deslizante e rotativo |
@@ -116,7 +116,17 @@ abre o servidor.
 
 As voltas do desktop padrão continuam valendo mesmo com
 `Sync__DesktopRedirectUris__*` na configuração: a lista configurada **soma** à
-padrão. A porta 47833 está fixa no app (`Sync:CallbackPort`).
+padrão. Os clientes são nativos: uma volta de loopback registrada **sem
+porta** aceita a porta efêmera que o desktop abre a cada login (RFC 8252 §7.3),
+e o resto do endereço continua exato (ADR-074). Atualize o servidor **antes**
+do desktop. O desktop novo num servidor antigo, que só conhece a 47833, recebe
+"redirect_uri inválido" no navegador. O desktop antigo, na 47833, entra no
+servidor novo.
+
+O `/connect/authorize` só emite o código sem perguntar logo depois do login
+que o próprio pedido começou. Uma sessão do Identity que sobrou (10 minutos)
+mostra antes uma tela "Conectar …?", com antiforgery, e por isso exige HTTPS
+como o logout. No log: `SyncAuthorizeConsentShown`, `…Given` e `…Denied`.
 
 O servidor semeia dois clientes públicos ao subir, os dois sem secret e com
 PKCE obrigatório: `mytaskapp-desktop`, só com as voltas de loopback, e

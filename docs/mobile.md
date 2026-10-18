@@ -83,7 +83,7 @@ volta:
 | | Desktop | Celular |
 |---|---|---|
 | Cliente OAuth | `mytaskapp-desktop` | `mytaskapp-mobile` |
-| Volta do login | `http://127.0.0.1:47833/callback` (loopback) | `io.github.adrianoguzzo.mytaskapp://oauth/callback` (esquema do app) |
+| Volta do login | `http://127.0.0.1:<porta efêmera>/callback` (loopback, ADR-074) | `io.github.adrianoguzzo.mytaskapp://oauth/callback` (esquema do app) |
 | Navegador | o padrão do sistema | Custom Tabs (Android) / `ASWebAuthenticationSession` (iOS), pelo `WebAuthenticator` |
 | Refresh token | DPAPI / secret-tool | `SecureStorage` (Keystore / Keychain) |
 | Access token | só na memória | só na memória |

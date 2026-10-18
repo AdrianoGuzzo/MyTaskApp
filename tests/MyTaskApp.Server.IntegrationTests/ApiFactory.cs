@@ -6,6 +6,7 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Encodings.Web;
+using System.Text.RegularExpressions;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
@@ -25,7 +26,7 @@ namespace MyTaskApp.Server.IntegrationTests;
 /// baixo e um "Google" de mentira: o desafio dele já volta autenticado com o
 /// usuário do cabeçalho <see cref="FakeGoogleHandler.SubjectHeader"/>.
 /// </summary>
-internal sealed class ApiFactory(
+internal sealed partial class ApiFactory(
     string connectionString,
     IReadOnlyDictionary<string, string?>? settings = null,
     string environment = ServerSetup.TestingEnvironment,
@@ -107,10 +108,35 @@ internal sealed class ApiFactory(
         bool emailVerified = true,
         HttpClient? browser = null)
     {
-        var verifier = Base64Url(RandomNumberGenerator.GetBytes(32));
-        var challenge = Base64Url(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
+        var verifier = NewVerifier();
         var state = Guid.NewGuid().ToString("N");
 
+        var start = AuthorizePath(deviceId, deviceName, state, withPkce ? verifier : null, redirectUri, clientId);
+        var callback = await FollowToCallbackAsync(googleSubject, start, emailVerified, browser);
+        var parameters = Parse(callback.Query);
+
+        parameters.GetValueOrDefault("state").Should().Be(state, "o state volta intacto");
+
+        if (!parameters.TryGetValue("code", out var code))
+        {
+            throw new OAuthRefusedException(parameters.GetValueOrDefault("error"), parameters.GetValueOrDefault("error_description"));
+        }
+
+        return (code, verifier);
+    }
+
+    public static string NewVerifier() => Base64Url(RandomNumberGenerator.GetBytes(32));
+
+    /// <summary>O <c>/connect/authorize</c> como o app o monta; sem <paramref name="verifier"/>, sem PKCE.</summary>
+    public static string AuthorizePath(
+        Guid deviceId,
+        string deviceName,
+        string state,
+        string? verifier,
+        string redirectUri = DesktopSession.RedirectUri,
+        string clientId = SyncSchema.DesktopClientId,
+        string? prompt = null)
+    {
         var query = new Dictionary<string, string>
         {
             ["client_id"] = clientId,
@@ -122,23 +148,32 @@ internal sealed class ApiFactory(
             [SyncSchema.DeviceNameParameter] = deviceName,
         };
 
-        if (withPkce)
+        if (verifier is not null)
         {
-            query["code_challenge"] = challenge;
+            query["code_challenge"] = Base64Url(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
             query["code_challenge_method"] = "S256";
         }
 
-        var callback = await FollowToCallbackAsync(googleSubject, "/connect/authorize?" + Encode(query), emailVerified, browser);
-        var parameters = Parse(callback.Query);
-
-        parameters.GetValueOrDefault("state").Should().Be(state, "o state volta intacto");
-
-        if (!parameters.TryGetValue("code", out var code))
+        if (prompt is not null)
         {
-            throw new OAuthRefusedException(parameters.GetValueOrDefault("error"), parameters.GetValueOrDefault("error_description"));
+            query["prompt"] = prompt;
         }
 
-        return (code, verifier);
+        return "/connect/authorize?" + Encode(query);
+    }
+
+    /// <summary>
+    /// Responde à tela de consentimento (ADR-074) como o navegador: devolve os
+    /// campos dela, com o antiforgery, e o botão escolhido.
+    /// </summary>
+    public static async Task<HttpResponseMessage> AnswerConsentAsync(HttpClient browser, string page, string answer, bool withAntiforgery = true)
+    {
+        var fields = HiddenInputs().Matches(page)
+            .Select(match => KeyValuePair.Create(WebUtility.HtmlDecode(match.Groups[1].Value), WebUtility.HtmlDecode(match.Groups[2].Value)))
+            .Where(field => withAntiforgery || !field.Key.StartsWith("__RequestVerificationToken", StringComparison.Ordinal))
+            .Append(KeyValuePair.Create("consent", answer));
+
+        return await browser.PostAsync("/connect/authorize", new FormUrlEncodedContent(fields));
     }
 
     /// <summary>Um navegador com cookies, que o "Google" reconhece como <paramref name="googleSubject"/>.</summary>
@@ -264,6 +299,9 @@ internal sealed class ApiFactory(
             .ToDictionary(pair => Uri.UnescapeDataString(pair[0]), pair => pair.Length > 1 ? Uri.UnescapeDataString(pair[1].Replace('+', ' ')) : string.Empty);
 
     private static string Base64Url(byte[] bytes) => Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+
+    [GeneratedRegex("<input type=\"hidden\" name=\"([^\"]*)\" value=\"([^\"]*)\">")]
+    private static partial Regex HiddenInputs();
 }
 
 internal sealed record TokenSet(string AccessToken, string RefreshToken, int ExpiresIn);

@@ -1,8 +1,16 @@
+using System.Buffers.Text;
+using System.Net;
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.AspNetCore;
+using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Primitives;
 using MyTaskApp.Server.Application;
 using MyTaskApp.Server.Infrastructure.Persistence;
 using MyTaskApp.Sync.Contracts;
@@ -31,10 +39,26 @@ internal static class ConnectEndpoints
     }
 
     /// <summary>
+    /// Na sessão aberta pelo login que este pedido começou: a chave do fluxo
+    /// (<see cref="FlowKey(string?, string?, string?, string?, string?)"/>). Vale uma vez (ADR-074).
+    /// </summary>
+    public const string AuthorizeFlowClaim = "mytaskapp_authorize_flow";
+
+    /// <summary>O botão da tela de consentimento: <see cref="ConsentAccept"/> ou qualquer outra coisa, que cancela.</summary>
+    private const string ConsentField = "consent";
+
+    private const string ConsentAccept = "accept";
+
+    /// <summary>
     /// Sem sessão, manda entrar (pelo Google) e volta. Com sessão, registra o
     /// dispositivo do parâmetro <c>device_id</c>, troca a autorização dele —
     /// a anterior é revogada — e emite o código com a claim do dispositivo.
     /// </summary>
+    /// <remarks>
+    /// Sem pergunta, só logo depois do login que este mesmo pedido começou. Uma
+    /// sessão que sobrou atende qualquer navegação, até a que veio de outro site,
+    /// então nela a pessoa confirma numa tela, com antiforgery (SEC-018, ADR-074).
+    /// </remarks>
     private static async Task<IResult> AuthorizeAsync(
         HttpContext context,
         UserManager<ApplicationUser> users,
@@ -46,6 +70,9 @@ internal static class ConnectEndpoints
         DeviceGate gate,
         SyncServerOptions options,
         TimeProvider timeProvider,
+        IAntiforgery antiforgery,
+        IOptions<AntiforgeryOptions> antiforgeryOptions,
+        ILoggerFactory loggers,
         CancellationToken cancellationToken)
     {
         var request = context.GetOpenIddictServerRequest()
@@ -80,6 +107,60 @@ internal static class ConnectEndpoints
             return Forbid(SyncErrorCodes.DeviceRevoked, "Este dispositivo foi revogado. Conecte de novo como um dispositivo novo.");
         }
 
+        var application = await applications.FindByClientIdAsync(request.ClientId!, cancellationToken)
+            ?? throw new InvalidOperationException("Cliente OAuth desconhecido.");
+
+        var logger = loggers.CreateLogger("MyTaskApp.Server.Api.Connect");
+        var answer = HttpMethods.IsPost(context.Request.Method) ? (string?)request[ConsentField] : null;
+
+        if (answer is not null)
+        {
+            if (AccountEndpoints.RefuseWithoutHttps(context, antiforgeryOptions.Value, "Confirmar a conexão") is { } refused)
+            {
+                return refused;
+            }
+
+            if (!await antiforgery.IsRequestValidAsync(context))
+            {
+                return Results.Problem("Pedido recusado.", statusCode: StatusCodes.Status400BadRequest);
+            }
+
+            if (answer != ConsentAccept)
+            {
+                logger.LogInformation("SyncAuthorizeConsentDenied {Client} {DeviceId}", request.ClientId, deviceId);
+                return Forbid(Errors.AccessDenied, "A conexão foi cancelada.");
+            }
+
+            logger.LogInformation("SyncAuthorizeConsentGiven {Client} {DeviceId}", request.ClientId, deviceId);
+        }
+        else if (session.Principal.Identity is ClaimsIdentity sessionIdentity
+            && sessionIdentity.FindFirst(AuthorizeFlowClaim) is { } flow
+            && flow.Value == FlowKey(request))
+        {
+            // Gasta a marca, com o mesmo vencimento: reabrir este endereço já pede a confirmação.
+            sessionIdentity.RemoveClaim(flow);
+            await context.SignInAsync(IdentityConstants.ApplicationScheme, session.Principal, session.Properties);
+        }
+        else if (request.HasPromptValue(PromptValues.None))
+        {
+            return Forbid(Errors.ConsentRequired, "Confirme a conexão no navegador.");
+        }
+        else
+        {
+            if (AccountEndpoints.RefuseWithoutHttps(context, antiforgeryOptions.Value, "Confirmar a conexão") is { } refused)
+            {
+                return refused;
+            }
+
+            logger.LogInformation("SyncAuthorizeConsentShown {Client} {DeviceId}", request.ClientId, deviceId);
+
+            var nickname = device?.Nickname
+                ?? DeviceUseCases.CleanNickname((string?)request[SyncSchema.DeviceNameParameter])
+                ?? DeviceUseCases.DefaultNickname;
+
+            return ConsentPage(context, request, antiforgery, user, await applications.GetDisplayNameAsync(application, cancellationToken), nickname);
+        }
+
         var now = timeProvider.GetUtcNow();
 
         if (device is null)
@@ -97,9 +178,6 @@ internal static class ConnectEndpoints
         device.LastSeenAt = now;
 
         await workspaces.EnsurePersonalAsync(user.Id, cancellationToken);
-
-        var application = await applications.FindByClientIdAsync(request.ClientId!, cancellationToken)
-            ?? throw new InvalidOperationException("Cliente OAuth desconhecido.");
 
         var identity = new ClaimsIdentity(
             authenticationType: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme,
@@ -190,6 +268,90 @@ internal static class ConnectEndpoints
         identity.SetDestinations(Destinations);
 
         return Results.SignIn(new ClaimsPrincipal(identity), authenticationScheme: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+    }
+
+    /// <summary>
+    /// A chave de um pedido de autorização: o que o cliente sorteou para este
+    /// login (<c>state</c> e <c>code_challenge</c>), para quem e para qual
+    /// dispositivo. Outro pedido, mesmo do mesmo app, tem outra chave.
+    /// </summary>
+    internal static string FlowKey(string? clientId, string? redirectUri, string? state, string? codeChallenge, string? deviceId) =>
+        Base64Url.EncodeToString(SHA256.HashData(Encoding.UTF8.GetBytes(
+            string.Join('\n', clientId, redirectUri, state, codeChallenge, deviceId))));
+
+    /// <summary>
+    /// A chave do pedido para o qual o login volta, se o <paramref name="returnUrl"/>
+    /// (já conferido como local) é o <c>/connect/authorize</c>.
+    /// </summary>
+    internal static string? FlowKeyOf(PathString pathBase, string returnUrl)
+    {
+        var split = returnUrl.IndexOf('?', StringComparison.Ordinal);
+
+        if (split < 0 || !string.Equals(returnUrl[..split], pathBase + ApiRoutes.Authorize, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var query = QueryHelpers.ParseQuery(returnUrl[split..]);
+
+        return FlowKey(query["client_id"], query["redirect_uri"], query["state"], query["code_challenge"], query[SyncSchema.DeviceIdClaim]);
+    }
+
+    private static string FlowKey(OpenIddictRequest request) =>
+        FlowKey(request.ClientId, request.RedirectUri, request.State, request.CodeChallenge, (string?)request[SyncSchema.DeviceIdClaim]);
+
+    /// <summary>
+    /// "Conectar este dispositivo à sua conta?": o pedido inteiro volta num POST
+    /// para cá, com o antiforgery. Nenhum site a põe num frame, e o formulário só
+    /// vai para este servidor e, no 302 que vem depois, para a volta do cliente.
+    /// </summary>
+    private static IResult ConsentPage(
+        HttpContext context,
+        OpenIddictRequest request,
+        IAntiforgery antiforgery,
+        ApplicationUser user,
+        string? clientName,
+        string deviceName)
+    {
+        var form = antiforgery.GetAndStoreTokens(context);
+        var html = new StringBuilder()
+            .Append("<!doctype html><html lang=\"pt-BR\"><head><meta charset=\"utf-8\">")
+            .Append("<meta name=\"viewport\" content=\"width=device-width\"><title>MyTaskApp</title></head><body>")
+            .Append("<p>Conectar <strong>").Append(WebUtility.HtmlEncode(deviceName)).Append("</strong> (")
+            .Append(WebUtility.HtmlEncode(clientName ?? request.ClientId)).Append(") à conta <strong>")
+            .Append(WebUtility.HtmlEncode(user.DisplayName)).Append("</strong>")
+            .Append(user.Email is { } email ? $" ({WebUtility.HtmlEncode(email)})" : string.Empty).Append("?</p>")
+            .Append("<p>Se você não acabou de pedir isso no MyTaskApp, cancele.</p>")
+            .Append("<form method=\"post\" action=\"").Append(WebUtility.HtmlEncode(context.Request.PathBase + ApiRoutes.Authorize)).Append("\">");
+
+        foreach (var (name, value) in request.GetParameters())
+        {
+            if (name is ConsentField || name == form.FormFieldName)
+            {
+                continue;
+            }
+
+            foreach (var item in (StringValues)value)
+            {
+                html.Append("<input type=\"hidden\" name=\"").Append(WebUtility.HtmlEncode(name))
+                    .Append("\" value=\"").Append(WebUtility.HtmlEncode(item)).Append("\">");
+            }
+        }
+
+        html.Append("<input type=\"hidden\" name=\"").Append(form.FormFieldName)
+            .Append("\" value=\"").Append(WebUtility.HtmlEncode(form.RequestToken)).Append("\">")
+            .Append("<button type=\"submit\" name=\"").Append(ConsentField).Append("\" value=\"").Append(ConsentAccept).Append("\">Conectar</button> ")
+            .Append("<button type=\"submit\" name=\"").Append(ConsentField).Append("\" value=\"deny\">Cancelar</button>")
+            .Append("</form></body></html>");
+
+        // O Chrome confere o form-action também no redirect depois do POST: a volta (já validada pelo OpenIddict) entra.
+        var redirect = new Uri(request.RedirectUri!);
+        var target = redirect.Scheme is "http" or "https" ? redirect.GetLeftPart(UriPartial.Authority) : redirect.Scheme + ":";
+
+        context.Response.Headers.ContentSecurityPolicy = $"default-src 'none'; form-action 'self' {target}; frame-ancestors 'none'";
+        context.Response.Headers.XFrameOptions = "DENY";
+
+        return Results.Content(html.ToString(), "text/html; charset=utf-8");
     }
 
     /// <summary>

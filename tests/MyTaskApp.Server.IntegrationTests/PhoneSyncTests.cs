@@ -16,8 +16,6 @@ public sealed class PhoneSyncTests(PostgresFixture postgres) : IAsyncLifetime
 {
     private const string Ana = "ana";
 
-    private readonly int _port = SyncedDesktop.FreePort();
-
     private readonly List<SyncedDesktop> _desktops = [];
 
     private readonly List<SyncedPhone> _phones = [];
@@ -29,7 +27,7 @@ public sealed class PhoneSyncTests(PostgresFixture postgres) : IAsyncLifetime
     public async ValueTask InitializeAsync()
     {
         var connectionString = await postgres.CreateDatabaseAsync(Ct);
-        _api = new ApiFactory(connectionString, new Dictionary<string, string?> { ["Sync:DesktopRedirectUris:0"] = $"http://127.0.0.1:{_port}/callback" });
+        _api = new ApiFactory(connectionString);
         _ = _api.Server;
     }
 
@@ -149,7 +147,7 @@ public sealed class PhoneSyncTests(PostgresFixture postgres) : IAsyncLifetime
 
     private async Task<SyncedDesktop> DesktopAsync(string nickname)
     {
-        var desktop = await SyncedDesktop.CreateAsync(_api, _port, nickname, Ct);
+        var desktop = await SyncedDesktop.CreateAsync(_api, nickname, Ct);
         _desktops.Add(desktop);
         await desktop.ConnectAsync(Ana, Ct);
         await desktop.SyncedAsync(Ct);
