@@ -146,8 +146,45 @@ restore → build Release (TreatWarningsAsErrors) → testes das 5 suítes
 Qualquer passo vermelho reprova o PR. O `PR title` (`.github/workflows/pr-title.yml`)
 roda junto e reprova título fora do padrão.
 
-Não há analyzer extra. O lint é o próprio build: `TreatWarningsAsErrors` +
-`EnforceCodeStyleInBuild`.
+O lint é o próprio build: `TreatWarningsAsErrors` + `EnforceCodeStyleInBuild`.
+A análise de segurança é a da seção abaixo.
+
+### Segurança (SEC-016)
+
+| Check | Onde | Reprova quando |
+|---|---|---|
+| Pacotes vulneráveis | job `vulnerable-packages` do `ci.yml` → `scripts/check-vulnerable-packages.ps1` | algum pacote NuGet, direto ou transitivo, das duas solutions tem advisory conhecido |
+| NuGetAudit | `dotnet restore` de qualquer job | o mesmo, como erro NU1901–NU1904 (`TreatWarningsAsErrors`); cobre também a casca MAUI do `mobile-android` |
+| CodeQL | `.github/workflows/codeql.yml` (PR, push e toda segunda) | alerta novo de severidade alta ou crítica no PR (check *Code scanning results*). Analisa o C# das duas solutions, com build e `security-extended`, e os próprios workflows |
+| Dependabot | `.github/dependabot.yml` | não reprova: abre PR semanal para NuGet (`Directory.Packages.props`) e para as actions, com os patches agrupados num PR só |
+| Secret scanning | configuração do repositório | o push protection recusa o push com um segredo reconhecido |
+
+- **Pacotes vulneráveis.** O `dotnet list package --vulnerable` só lista: sai
+  com 0 mesmo achando. O script lê a saída em `--format json` e reprova; um
+  problema de nível `error` (a base de vulnerabilidades não respondeu) também
+  reprova. Local, depois do restore:
+
+  ```powershell
+  dotnet restore MyTaskApp.slnx -p:TreatWarningsAsErrors=false
+  dotnet restore MyTaskApp.Server.slnx -p:TreatWarningsAsErrors=false
+  .\scripts\check-vulnerable-packages.ps1
+  ```
+
+  Sem o `-p:TreatWarningsAsErrors=false`, o próprio restore já para no
+  NU190x. Para corrigir, suba a versão em `Directory.Packages.props`. Se o
+  vulnerável for transitivo, declare nele uma versão corrigida: a pinagem
+  transitiva central (`CentralPackageTransitivePinningEnabled`) faz valer.
+- **Resultados.** Alertas do CodeQL em *Security → Code scanning*; do
+  Dependabot em *Security → Dependabot*. Os PRs do Dependabot saem como
+  `build(deps): …` e `ci(deps): …`, que não geram versão. Uma correção de
+  vulnerabilidade que deva sair numa release ganha o título `fix(deps): …`
+  antes do merge.
+- **Actions pinadas por SHA.** Toda `uses:` de fora do repositório vai por
+  SHA completo, com a versão em comentário
+  (`actions/checkout@11d5960… # v4.4.0`): uma tag pode ser movida por quem
+  controla a action, um SHA não. O Dependabot troca os dois juntos, e o
+  `CiSecurityTests` reprova uma `uses:` sem pin. Para pinar à mão:
+  `gh api repos/<dono>/<action>/commits/<tag> --jq .sha`.
 
 ## 5. Pipeline de release
 
@@ -183,6 +220,10 @@ SHA256SUMS
   "Pull request title" (ou "title and description").
 - *Settings → Actions → General → Workflow permissions*: marcar **Allow GitHub
   Actions to create and approve pull requests** (o Release Please abre PR).
+- *Settings → Code security*: **Dependabot alerts**, **Dependabot security
+  updates**, **Secret scanning** e **Push protection** ligados. O CodeQL usa o
+  `codeql.yml` (advanced setup): o *default setup* fica desligado, senão os
+  dois disputam o mesmo resultado.
 - Opcional: secret **`RELEASE_PLEASE_TOKEN`**, um PAT fine-grained com
   *Contents* e *Pull requests* de escrita neste repositório. Sem ele, o PR de
   release nasce sem CI, porque eventos do `GITHUB_TOKEN` não disparam

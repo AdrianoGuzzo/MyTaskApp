@@ -116,7 +116,7 @@ public class ReleaseProcessTests
     [Fact]
     public void EveryBuildJobChecksOutTheTag()
     {
-        var checkouts = Regex.Matches(ReleaseWorkflow, @"uses: actions/checkout@v\d+\s+with:\s+ref: (.+)");
+        var checkouts = Regex.Matches(ReleaseWorkflow, @"uses: actions/checkout@[^\r\n]+\s+with:\s+ref: (.+)");
 
         checkouts.Should().HaveCount(3);
         checkouts.Select(match => match.Groups[1].Value.Trim())
@@ -133,7 +133,7 @@ public class ReleaseProcessTests
     {
         var releasePlease = RepositoryFiles.Read(RepositoryFiles.ReleasePleaseWorkflow);
 
-        releasePlease.Should().Contain("googleapis/release-please-action@v4");
+        releasePlease.Should().Contain("googleapis/release-please-action@");
         releasePlease.Should().Contain("uses: ./.github/workflows/release.yml");
         releasePlease.Should().Contain("release_created == 'true'");
         ReleaseWorkflow.Should().Contain("workflow_call:");
