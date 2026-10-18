@@ -5717,6 +5717,15 @@ pendente mantém o valor local.
   (tarefa ↔ etiqueta, com id UUIDv5 determinístico) podem reviver.
 - **Isolamento.** Toda referência precisa existir **no mesmo workspace**. Quem
   não é membro recebe 404. O `device_id` da operação tem de ser o do token.
+- **Um valor, um texto (SEC-014).** O push grava o que sai de
+  `SyncFieldValidator.Normalize`: todo `Guid` em `D` minúsculo e todo
+  `Instant` em UTC (`…fffffff'Z'`), também dentro de objeto e de item de lista,
+  como o `SyncValue` escreve. Antes, o mesmo `tagId` em `N` ou `B` passava pela
+  chave de unicidade como outro valor e criava duplicata que o banco local
+  recusaria no pull. O `Instant` exige fuso explícito (`Z` ou `±hh:mm`); sem
+  ele, cada lado leria um horário. O hash da idempotência continua sobre o
+  pedido como veio. O que um servidor de antes gravou fora do formato fica
+  como está: os clientes sempre mandaram o canônico.
 
 ### Autenticação
 

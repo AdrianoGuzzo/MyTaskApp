@@ -192,6 +192,9 @@ public sealed class PushProcessor(
                 string.Join("; ", errors.Select(error => $"{error.Field}: {error.Message}")));
         }
 
+        // O mesmo GUID ou instante escrito de outro jeito é o mesmo valor: a chave de unicidade e a mescla comparam o texto.
+        operation = operation with { Fields = SyncFieldValidator.Normalize(definition, operation.Fields) };
+
         Dictionary<string, JsonElement> applied;
         var rejected = new List<RejectedField>();
 
