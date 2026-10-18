@@ -88,10 +88,15 @@ internal sealed class SyncExceptionHandler(IProblemDetailsService problems, ILog
     }
 }
 
-/// <summary>Revoga, no OpenIddict, a autorização viva do dispositivo e os tokens dela.</summary>
+/// <summary>
+/// Revoga, no OpenIddict, o refresh token do dispositivo (e o código, se
+/// sobrou um). A autorização e o access token ficam: com a validação do token
+/// (SEC-010), revogados eles levariam só 401, e o app não saberia que precisa
+/// de um id novo. Até vencer, o access leva 403 <c>device_revoked</c> do
+/// <see cref="DeviceFilter"/>.
+/// </summary>
 internal sealed class OpenIddictAuthorizationRevoker(
     ServerDbContext database,
-    IOpenIddictAuthorizationManager authorizations,
     IOpenIddictTokenManager tokens) : IAuthorizationRevoker
 {
     public async Task RevokeDeviceAsync(Guid userId, Guid deviceId, CancellationToken cancellationToken)
@@ -104,12 +109,22 @@ internal sealed class OpenIddictAuthorizationRevoker(
             return;
         }
 
-        if (await authorizations.FindByIdAsync(authorizationId, cancellationToken) is { } authorization)
+        // Lidos antes: revogar no meio da leitura seria um segundo comando na mesma conexão.
+        var alive = new List<object>();
+
+        await foreach (var token in tokens.FindByAuthorizationIdAsync(authorizationId, cancellationToken))
         {
-            await authorizations.TryRevokeAsync(authorization, cancellationToken);
+            if (await tokens.HasStatusAsync(token, Statuses.Valid, cancellationToken)
+                && !await tokens.HasTypeAsync(token, TokenTypeIdentifiers.AccessToken, cancellationToken))
+            {
+                alive.Add(token);
+            }
         }
 
-        await tokens.RevokeByAuthorizationIdAsync(authorizationId, cancellationToken);
+        foreach (var token in alive)
+        {
+            await tokens.TryRevokeAsync(token, cancellationToken);
+        }
     }
 }
 

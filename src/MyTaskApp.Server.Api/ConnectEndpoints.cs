@@ -116,7 +116,7 @@ internal static class ConnectEndpoints
             Scopes.OpenId, Scopes.Profile, Scopes.Email, Scopes.OfflineAccess, SyncSchema.Scope,
         ]));
 
-        // Uma autorização por dispositivo: entrar de novo revoga a anterior, e revogar o dispositivo revoga esta.
+        // Uma autorização por dispositivo: entrar de novo revoga a anterior, e revogar o dispositivo revoga o refresh desta.
         var authorization = await authorizations.CreateAsync(
             identity,
             user.Id.ToString(),
