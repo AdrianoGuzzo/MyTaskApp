@@ -2,7 +2,14 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- O SecureStorage guarda o refresh token da sincronização no Keychain. -->
+	<!--
+		O SecureStorage guarda o refresh token da sincronização no Keychain.
+
+		Precisa funcionar com um Apple ID gratuito, reassinado pelo Sideloadly
+		ou pelo AltServer (docs/mobile.md): o prefixo vem de $(AppIdentifierPrefix),
+		nunca de um team ID fixo, e nada aqui pode exigir conta paga (push,
+		App Groups, iCloud, Associated Domains).
+	-->
 	<key>keychain-access-groups</key>
 	<array>
 		<string>$(AppIdentifierPrefix)io.github.adrianoguzzo.mytaskapp</string>
