@@ -71,7 +71,7 @@ internal sealed class SyncExceptionHandler(IProblemDetailsService problems, ILog
 
         if (status >= 500)
         {
-            logger.LogError(exception, "SyncServerUnhandled {Path}", httpContext.Request.Path);
+            logger.LogError(exception, "SyncServerUnhandled {Path}", httpContext.Request.Path.ToUriComponent());
         }
 
         httpContext.Response.StatusCode = status;
