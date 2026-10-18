@@ -87,10 +87,10 @@ internal sealed class SyncAuthenticationService(
         var state = Pkce.NewSecret();
         var verifier = Pkce.NewSecret();
 
-        logger.LogInformation("SyncAuthorizationStarted {Client} {RedirectUri}", Redirect.ClientId, Redirect.RedirectUri);
+        logger.LogInformation("SyncAuthorizationStarted {Client} {RedirectUri}", Redirect.ClientId, listener.RedirectUri);
 
         return new SyncAuthorization(
-            AuthorizeUrl(state, Pkce.ChallengeFor(verifier)),
+            AuthorizeUrl(listener.RedirectUri, state, Pkce.ChallengeFor(verifier)),
             CompleteAsync(listener, state, verifier, pending, cancellationToken));
     }
 
@@ -179,12 +179,12 @@ internal sealed class SyncAuthenticationService(
         _gate.Dispose();
     }
 
-    private Uri AuthorizeUrl(string state, string challenge)
+    private Uri AuthorizeUrl(Uri redirectUri, string state, string challenge)
     {
         var query = new StringBuilder()
             .Append("client_id=").Append(Uri.EscapeDataString(Redirect.ClientId))
             .Append("&response_type=code")
-            .Append("&redirect_uri=").Append(Uri.EscapeDataString(Redirect.RedirectUri.ToString()))
+            .Append("&redirect_uri=").Append(Uri.EscapeDataString(redirectUri.ToString()))
             .Append("&scope=").Append(Uri.EscapeDataString(Scopes))
             .Append("&state=").Append(Uri.EscapeDataString(state))
             .Append("&code_challenge=").Append(Uri.EscapeDataString(challenge))
@@ -213,7 +213,7 @@ internal sealed class SyncAuthenticationService(
                 {
                     ["grant_type"] = "authorization_code",
                     ["code"] = code,
-                    ["redirect_uri"] = Redirect.RedirectUri.ToString(),
+                    ["redirect_uri"] = listener.RedirectUri.ToString(),
                     ["client_id"] = Redirect.ClientId,
                     ["code_verifier"] = verifier,
                 },

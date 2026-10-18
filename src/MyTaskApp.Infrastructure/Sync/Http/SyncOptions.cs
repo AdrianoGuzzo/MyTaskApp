@@ -29,9 +29,10 @@ internal sealed class SyncOptions
 
     /// <summary>
     /// A porta da volta do login, em <c>http://127.0.0.1:{porta}/callback</c>.
-    /// Fixa: o servidor só aceita o endereço exato registrado.
+    /// 0 (o padrão) é uma porta efêmera a cada login: o servidor aceita
+    /// qualquer porta no loopback (RFC 8252 §7.3, ADR-074).
     /// </summary>
-    public int CallbackPort { get; set; } = 47833;
+    public int CallbackPort { get; set; }
 
     public int RequestTimeoutSeconds { get; set; } = 30;
 
@@ -49,8 +50,6 @@ internal sealed class SyncOptions
             : null;
 
     public bool IsAvailable => BaseUri is not null;
-
-    public Uri RedirectUri => new($"http://127.0.0.1:{CallbackPort}/callback");
 
     public TimeSpan RequestTimeout => TimeSpan.FromSeconds(Math.Clamp(RequestTimeoutSeconds, 5, 120));
 

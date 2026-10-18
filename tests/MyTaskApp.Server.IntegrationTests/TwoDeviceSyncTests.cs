@@ -23,8 +23,6 @@ public sealed class TwoDeviceSyncTests(PostgresFixture postgres) : IAsyncLifetim
 {
     private const string Ana = "ana";
 
-    private readonly int _port = SyncedDesktop.FreePort();
-
     private readonly List<SyncedDesktop> _desktops = [];
 
     private readonly List<ApiFactory> _servers = [];
@@ -509,8 +507,6 @@ public sealed class TwoDeviceSyncTests(PostgresFixture postgres) : IAsyncLifetim
     private async Task<ApiFactory> ServerAsync(Dictionary<string, string?>? settings = null)
     {
         var connectionString = await postgres.CreateDatabaseAsync(Ct);
-        settings ??= [];
-        settings["Sync:DesktopRedirectUris:0"] = $"http://127.0.0.1:{_port}/callback";
         var server = new ApiFactory(connectionString, settings);
         _ = server.Server;
         _servers.Add(server);
@@ -519,7 +515,7 @@ public sealed class TwoDeviceSyncTests(PostgresFixture postgres) : IAsyncLifetim
 
     private async Task<SyncedDesktop> DesktopAsync(string nickname)
     {
-        var desktop = await SyncedDesktop.CreateAsync(_api, _port, nickname, Ct);
+        var desktop = await SyncedDesktop.CreateAsync(_api, nickname, Ct);
         _desktops.Add(desktop);
         return desktop;
     }

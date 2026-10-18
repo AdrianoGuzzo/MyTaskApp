@@ -136,6 +136,11 @@ internal sealed class OpenIddictAuthorizationRevoker(
 /// esquema próprio do app para o celular (ADR-067). Cada cliente só aceita os
 /// seus: um código emitido para um não vira token no outro.
 /// </summary>
+/// <remarks>
+/// Nativos: com o redirect de loopback registrado sem porta, o OpenIddict
+/// aceita qualquer porta nele (RFC 8252 §7.3), e o desktop escuta numa porta
+/// efêmera (ADR-074). O resto do endereço continua exato.
+/// </remarks>
 internal sealed class PublicClientSeeder(IServiceProvider services, SyncServerOptions options) : IHostedService
 {
     public async Task StartAsync(CancellationToken cancellationToken)
@@ -162,6 +167,7 @@ internal sealed class PublicClientSeeder(IServiceProvider services, SyncServerOp
     {
         var descriptor = new OpenIddictApplicationDescriptor
         {
+            ApplicationType = ApplicationTypes.Native,
             ClientId = clientId,
             ClientType = ClientTypes.Public,
             ConsentType = ConsentTypes.Implicit,

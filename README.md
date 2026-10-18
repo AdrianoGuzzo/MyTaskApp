@@ -542,7 +542,7 @@ mudar algum deles sem editar o diretório de instalação, crie um
 | `Jira:RequestTimeoutSeconds` | 8 | quanto uma chamada ao Jira espera antes de desistir |
 | `Jira:ClientId` / `ClientSecret` | do build | o app OAuth da Atlassian ([como registrar](docs/jira-oauth-app.md)) |
 | `Sync:ApiBaseUrl` | do build | o servidor de sincronização; HTTPS, ou HTTP só no loopback. Vazio = sem sincronização ([servidor](docs/sync-server.md)) |
-| `Sync:CallbackPort` | 47833 | porta da volta do login da sincronização; precisa ser uma das registradas no servidor |
+| `Sync:CallbackPort` | 0 | porta da volta do login da sincronização; 0 = uma porta efêmera por login, aceita pelo servidor em qualquer número no `127.0.0.1` (ADR-074) |
 | `DatabaseOperations:*` | ver o guia | tempos limite e pasta das cópias de banco ([detalhes](docs/database-operations.md#configuração)) |
 
 Linha de comando: `MyTaskApp.exe --startup` abre direto na bandeja. É o

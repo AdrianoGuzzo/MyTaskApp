@@ -20,14 +20,11 @@ public sealed class SyncServerOptions
     public Uri? Issuer { get; set; }
 
     /// <summary>
-    /// Os endereços de volta aceitos para o desktop. Fixos: o OpenIddict
-    /// compara o redirect exatamente, e o desktop escuta numa porta conhecida.
+    /// Os endereços de volta aceitos para o desktop. O loopback vai sem porta:
+    /// o cliente é nativo, e o OpenIddict aceita nele a porta efêmera que o
+    /// desktop abriu (RFC 8252 §7.3, ADR-074). O resto é comparado exatamente.
     /// </summary>
-    public string[] DesktopRedirectUris { get; set; } =
-    [
-        "http://127.0.0.1:47833/callback",
-        "http://localhost:47833/callback",
-    ];
+    public string[] DesktopRedirectUris { get; set; } = ["http://127.0.0.1/callback"];
 
     /// <summary>
     /// Os endereços de volta aceitos para o celular (ADR-067): o esquema
