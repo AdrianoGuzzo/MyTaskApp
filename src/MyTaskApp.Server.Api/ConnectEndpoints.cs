@@ -84,6 +84,15 @@ internal static class ConnectEndpoints
 
         if (device is null)
         {
+            // Só o dispositivo novo conta; entrar de novo num que já existe passa sempre.
+            if (options.MaxActiveDevicesPerUser > 0
+                && await database.Devices.CountAsync(row => row.UserId == user.Id && row.RevokedAt == null, cancellationToken) >= options.MaxActiveDevicesPerUser)
+            {
+                return Forbid(
+                    SyncErrorCodes.DeviceLimitReached,
+                    $"A conta chegou ao teto de {options.MaxActiveDevicesPerUser} dispositivos ativos. Revogue um que não usa mais e conecte de novo.");
+            }
+
             device = new DeviceRow
             {
                 UserId = user.Id,

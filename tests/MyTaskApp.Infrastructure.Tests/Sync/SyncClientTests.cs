@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Time.Testing;
 using MyTaskApp.Application.Sync;
+using MyTaskApp.Domain;
 using MyTaskApp.Infrastructure.Sync.Http;
 using MyTaskApp.Infrastructure.Tests.Jira;
 using MyTaskApp.Sync.Contracts;
@@ -232,6 +233,20 @@ public sealed class SyncClientTests : IDisposable
 
         var completion = () => authorization.Completion.WaitAsync(TimeSpan.FromSeconds(10), Ct);
         (await completion.Should().ThrowAsync<SyncApiException>()).Which.Kind.Should().Be(SyncFailureKind.DeviceRevoked);
+    }
+
+    [Fact]
+    public async Task TheDeviceCap_TellsWhereToRevokeAnOldOne_AndStoresNothing()
+    {
+        var authorization = await _auth.BeginAuthorizationAsync(Ct);
+        var state = Form(authorization.AuthorizeUrl.Query.TrimStart('?'))["state"];
+
+        using var browser = new HttpClient();
+        await browser.GetAsync($"http://127.0.0.1:{_options.CallbackPort}/callback?state={state}&error={SyncErrorCodes.DeviceLimitReached}", Ct);
+
+        var completion = () => authorization.Completion.WaitAsync(TimeSpan.FromSeconds(10), Ct);
+        (await completion.Should().ThrowAsync<DomainException>()).Which.Message.Should().Contain("limite de dispositivos").And.Contain("revogue");
+        _secrets.Secrets.Should().NotContainKey(SyncOptions.SecretName);
     }
 
     [Fact]

@@ -236,6 +236,13 @@ internal sealed class SyncAuthenticationService(
         {
             throw new SyncApiException(SyncFailureKind.DeviceRevoked, "Este computador foi revogado na sua conta. Ele será registrado como um dispositivo novo.");
         }
+        catch (AuthorizationRefusedException refused) when (refused.Error == SyncErrorCodes.DeviceLimitReached)
+        {
+            // Este aparelho ainda não entrou, então não lista nem revoga: quem faz isso é um computador já conectado.
+            throw new DomainException(
+                "Sua conta chegou ao limite de dispositivos ativos. Num computador já conectado, abra Sincronização, "
+                + "revogue um dispositivo que você não usa mais e conecte de novo.");
+        }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && _pending != pending)
         {
             throw new DomainException("O login foi substituído por outro.");
