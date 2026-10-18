@@ -196,15 +196,22 @@ public class DispatchDueRemindersHandlerTests
     public async Task MoreThanFiveDue_CollapseIntoOneDigest()
     {
         // Abrir o app depois de um mês não pode jogar 40 janelas na tela.
+        var occurrenceIds = new List<Guid>();
+
         for (var index = 0; index < 6; index++)
         {
-            SeedArmed(ThreePm.AddSeconds(-index), $"Tarefa {index}");
+            occurrenceIds.Add(SeedArmed(ThreePm.AddSeconds(-index), $"Tarefa {index}").Id);
         }
 
         await Handler().HandleAsync(new DispatchDueReminders(), Ct);
 
         _presenter.Presented.Should().BeEmpty();
-        _presenter.Digests.Should().ContainSingle().Which.Count.Should().Be(6);
+        var digest = _presenter.Digests.Should().ContainSingle().Subject;
+        digest.Count.Should().Be(6);
+
+        // Os botões do resumo atendem estas: sem elas, o aviso ficava preso na
+        // tela com "Ocorrência não encontrada."
+        digest.OccurrenceIds.Should().BeEquivalentTo(occurrenceIds);
     }
 
     [Fact]

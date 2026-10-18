@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Domain;
+using MyTaskApp.Domain.Tasks;
 
 namespace MyTaskApp.Application.Reminders;
 
@@ -34,17 +35,30 @@ public sealed class SnoozeReminderHandler(
             throw new DomainException("Não é possível adiar um lembrete por mais de 24 horas.");
         }
 
-        var task = await tasks.GetByOccurrenceIdAsync(command.OccurrenceId, cancellationToken);
+        var task = await tasks.FindByOccurrenceIdAsync(command.OccurrenceId, cancellationToken);
+        var occurrence = task?.GetOccurrence(command.OccurrenceId);
+
+        // Sumiu, foi atendido ou concluído enquanto o aviso estava na tela: não
+        // há o que adiar, e recusar deixaria o aviso preso (ver AcknowledgeReminder).
+        if (occurrence is null
+            || occurrence.Status is not TaskItemStatus.Pending
+            || occurrence.Reminder.IsAcknowledged)
+        {
+            await presenter.DismissAsync(command.OccurrenceId, cancellationToken);
+            logger.LogInformation("ReminderAlreadySettled {OccurrenceId}", command.OccurrenceId);
+            return;
+        }
+
         var until = timeProvider.GetUtcNow() + command.For;
 
-        task.GetOccurrence(command.OccurrenceId).SnoozeReminder(until);
+        occurrence.SnoozeReminder(until);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await presenter.DismissAsync(command.OccurrenceId, cancellationToken);
 
         logger.LogInformation(
             "ReminderSnoozed {TaskId} {OccurrenceId} {Until}",
-            task.Id,
+            occurrence.TaskItemId,
             command.OccurrenceId,
             until);
     }

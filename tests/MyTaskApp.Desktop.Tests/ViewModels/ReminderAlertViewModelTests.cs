@@ -98,6 +98,57 @@ public class ReminderAlertViewModelTests
             "Não foi possível registrar que você viu este lembrete.");
     }
 
+    [Fact]
+    public void ShowingADigest_SaysHowManyAreWaiting()
+    {
+        var viewModel = Digest(Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7());
+
+        viewModel.IsDigest.Should().BeTrue();
+        viewModel.Title.Should().Be("3 checklists estão esperando sua atenção");
+        viewModel.TimeLabel.Should().BeNull();
+        viewModel.WaitingLabel.Should().Be("Aguardando sua atenção há 2 horas.");
+    }
+
+    [Fact]
+    public async Task MarkingADigestAsSeen_AcknowledgesEveryReminderInIt()
+    {
+        // Antes o resumo mandava Guid.Empty: "Ocorrência não encontrada." e o
+        // aviso não saía mais da tela.
+        var viewModel = Digest(Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7());
+        var acted = 0;
+        viewModel.Acted += _ => acted++;
+
+        await viewModel.MarkSeenAsync(Ct);
+
+        _runner.Invoked.Should().Equal(Enumerable.Repeat(typeof(AcknowledgeReminderHandler), 3));
+        acted.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task SnoozingADigest_SnoozesEveryReminderInIt()
+    {
+        var viewModel = Digest(Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7());
+
+        await viewModel.SnoozeAsync("30", Ct);
+
+        _runner.Invoked.Should().Equal(Enumerable.Repeat(typeof(SnoozeReminderHandler), 3));
+    }
+
+    [Fact]
+    public async Task AFailedDigestAction_StaysOnScreen()
+    {
+        var viewModel = Digest(Guid.CreateVersion7(), Guid.CreateVersion7());
+        var acted = false;
+        viewModel.Acted += _ => acted = true;
+        _runner.NextFailure = new InvalidOperationException("SQLITE_BUSY");
+
+        await viewModel.MarkSeenAsync(Ct);
+
+        acted.Should().BeFalse();
+        viewModel.ErrorMessage.Should().Be(
+            "Não foi possível registrar que você viu este lembrete.");
+    }
+
     [Theory]
     [InlineData(0, "Esperando a sua atenção agora.")]
     [InlineData(1, "Aguardando sua atenção há 1 minuto.")]
@@ -124,6 +175,21 @@ public class ReminderAlertViewModelTests
             "15:30",
             ReminderEscalation.LevelFor(step, AlertChannels.All),
             waiting ?? TimeSpan.Zero));
+
+        return viewModel;
+    }
+
+    private ReminderAlertViewModel Digest(params Guid[] occurrenceIds)
+    {
+        var viewModel = new ReminderAlertViewModel(
+            _runner,
+            NullLogger<ReminderAlertViewModel>.Instance);
+
+        viewModel.ShowDigest(new ReminderDigest(
+            occurrenceIds.Length,
+            ReminderEscalation.LevelFor(1, AlertChannels.All),
+            TimeSpan.FromHours(2),
+            occurrenceIds));
 
         return viewModel;
     }
