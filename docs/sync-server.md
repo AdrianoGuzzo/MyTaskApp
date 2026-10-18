@@ -303,6 +303,10 @@ privilégio. Em produção, o servidor:
 - redireciona HTTP para HTTPS e manda HSTS de 1 ano;
 - recusa OAuth sem TLS (o OpenIddict exige);
 - marca cookies como `Secure`, `HttpOnly` e `SameSite=Lax` (Strict no antiforgery);
+  por isso, sem HTTPS (inclusive em Development), o logout responde 400 dizendo
+  que exige HTTPS;
+- só volta do login para um caminho do próprio servidor: `returnUrl` externo,
+  com `//`, `/\`, espaço ou caractere de controle vira `/`;
 - limita o corpo a 1 MB e o push a 100 operações;
 - limita a taxa de requisições (veja abaixo);
 - manda `Cache-Control: no-store` em `/api/v1`, `/connect` e `/account`, e
