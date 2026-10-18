@@ -100,11 +100,11 @@ public sealed class IssuerTests(PostgresFixture postgres)
     [InlineData("https://sync.test/", "*", "AllowedHosts precisa listar o nome público*")]
     [InlineData("https://sync.test/", "outro.test", "O nome do Sync:Issuer (sync.test) precisa estar no AllowedHosts*")]
     [InlineData("https://sync.test/?a=1", "sync.test", "Sync:Issuer precisa ser um endereço absoluto*")]
-    [InlineData("https://sync.test/", "localhost;sync.test", "Falta o certificado de assinatura*")]
-    [InlineData("https://a.sync.test/", "*.sync.test", "Falta o certificado de assinatura*")]
+    [InlineData("https://sync.test/", "localhost;sync.test", "Falta o certificado do Data Protection*")]
+    [InlineData("https://a.sync.test/", "*.sync.test", "Falta o certificado do Data Protection*")]
     public async Task InProduction_TheIssuerAndAllowedHostsAreRequired(string? issuer, string? allowedHosts, string message)
     {
-        // Com tudo certo, o próximo a faltar é o certificado: a conferência do endereço passou.
+        // Com tudo certo, o próximo a faltar é um certificado: a conferência do endereço passou.
         await using var api = await CreateApiAsync(
             new() { ["Sync:Issuer"] = issuer, ["AllowedHosts"] = allowedHosts },
             Environments.Production);

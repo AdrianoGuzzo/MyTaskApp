@@ -66,6 +66,16 @@ public sealed class SyncServerOptions
     public CertificateOptions? SigningCertificate { get; set; }
 
     public CertificateOptions? EncryptionCertificate { get; set; }
+
+    /// <summary>
+    /// O PFX que cifra as chaves do Data Protection no banco (SEC-011,
+    /// ADR-073). Obrigatório fora de Development; sem ele, quem lê a tabela
+    /// forja o cookie do login.
+    /// </summary>
+    public CertificateOptions? DataProtectionCertificate { get; set; }
+
+    /// <summary>Os PFX de antes da rotação: só decifram as chaves que eles cifraram.</summary>
+    public CertificateOptions[] DataProtectionPreviousCertificates { get; set; } = [];
 }
 
 /// <summary>Os limites por janela de um minuto (ADR-061, ADR-069).</summary>
