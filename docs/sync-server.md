@@ -302,6 +302,10 @@ privilégio. Em produção, o servidor:
 - marca cookies como `Secure`, `HttpOnly` e `SameSite=Lax` (Strict no antiforgery);
 - limita o corpo a 1 MB e o push a 100 operações;
 - limita a taxa de requisições (veja abaixo);
+- manda `Cache-Control: no-store` em `/api/v1`, `/connect` e `/account`, e
+  `X-Content-Type-Options: nosniff` em tudo, sem o header `Server`. A página
+  do logout tem CSP e `X-Frame-Options: DENY`. O discovery e o JWKS
+  continuam cacheáveis;
 - não grava token, código, cabeçalho nem corpo no log. É uma linha por
   requisição: método, caminho sem query, status e tempo.
 
