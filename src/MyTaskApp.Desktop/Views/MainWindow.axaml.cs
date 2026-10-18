@@ -1107,12 +1107,20 @@ public partial class MainWindow : Window
 
     /// <summary>
     /// "Abrir sincronização…"/"Conectar…" no painel da bolinha (ADR-063): a
-    /// janela abre por cima, e o painel não fica pendurado atrás dela.
+    /// janela abre por cima, e o painel não fica pendurado atrás dela. Não é
+    /// <c>Command</c> no XAML: o Button dispara o <c>Click</c> antes do
+    /// comando, e fechar o painel tira o conteúdo da árvore — o binding zera o
+    /// <c>Command</c> e a janela não abria.
     /// </summary>
     private void OnSyncDetailsClick(object? sender, RoutedEventArgs e)
     {
         SyncStatusButton.Flyout?.Hide();
         HudSyncStatusButton.Flyout?.Hide();
+
+        if (DataContext is TodayViewModel today)
+        {
+            today.OpenSync();
+        }
     }
 
     /// <summary>

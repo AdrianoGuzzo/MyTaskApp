@@ -1,3 +1,5 @@
+using Avalonia.Automation.Peers;
+using Avalonia.Automation.Provider;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Headless.XUnit;
@@ -252,6 +254,34 @@ public class SyncIndicatorViewModelTests
         actions.Should().Equal("Sincronizar agora", "Abrir sincronização…");
 
         flyout.Hide();
+    }
+
+    /// <summary>
+    /// O botão de detalhes fecha o painel e abre a janela. Fechar o painel
+    /// desliga o binding do conteúdo; com <c>Command</c> no XAML, o Button não
+    /// tinha mais o que executar depois do <c>Click</c>.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task ThePanelDetailsButton_OpensTheSyncWindow_AndClosesThePanel()
+    {
+        var today = Today();
+        var indicator = ViewModel();
+        await indicator.LoadAsync(Ct);
+        today.SyncIndicator = indicator;
+        var window = new MainWindow { DataContext = today };
+        window.Show();
+        var requests = 0;
+        today.SyncRequested += () => requests++;
+
+        var flyout = (Flyout)SyncButton(window).Flyout!;
+        flyout.ShowAt(SyncButton(window));
+        var details = ((Control)flyout.Content!).GetSelfAndLogicalDescendants().OfType<Button>()
+            .Single(action => Equals(action.Content, "Abrir sincronização…"));
+
+        ((IInvokeProvider)ControlAutomationPeer.CreatePeerForElement(details)).Invoke();
+
+        requests.Should().Be(1);
+        flyout.IsOpen.Should().BeFalse();
     }
 
     private static Button SyncButton(MainWindow window) =>
