@@ -493,6 +493,45 @@ public sealed class ApiTests(PostgresFixture postgres) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task AGuidInAnotherFormat_DoesNotDodgeTheUniqueKey_AndAnInstantNeedsAnOffset()
+    {
+        // SEC-014: tagId em D, N e B com o mesmo alias eram aplicados os três.
+        var session = await _api.LoginAsync("ana");
+        var workspace = await session.WorkspaceAsync();
+        var tag = Guid.CreateVersion7();
+        var directories = new[] { "D", "N", "B" }.Select(format => (Id: Guid.CreateVersion7(), Format: format)).ToList();
+        Dictionary<string, JsonElement> Directory(string tagId) => new()
+        {
+            [SyncFields.TagDirectory.TagId] = SyncValue.String(tagId),
+            [SyncFields.TagDirectory.Alias] = SyncValue.String("repo"),
+            [SyncFields.CreatedAt] = SyncValue.Instant(Created),
+        };
+
+        var push = await session.SendAsync<PushRequest, PushResponse>(HttpMethod.Post, ApiRoutes.Push(workspace), new PushRequest(
+            SyncSchema.Current,
+            session.DeviceId,
+            [
+                Upsert(session, SyncEntityTypes.Tag, tag, 0, new()
+                {
+                    [SyncFields.Tag.Name] = SyncValue.String("Casa"),
+                    [SyncFields.Tag.ColorHex] = SyncValue.String("#00FF00"),
+                    [SyncFields.CreatedAt] = SyncValue.Instant(Created),
+                }),
+                .. directories.Select(directory => Upsert(session, SyncEntityTypes.TagDirectory, directory.Id, 0, Directory(tag.ToString(directory.Format)))),
+                Upsert(session, SyncEntityTypes.Task, Guid.CreateVersion7(), 0, new(TaskFields("Sem fuso")) { [SyncFields.CreatedAt] = SyncValue.String("2026-10-13T12:00:00") }),
+            ]));
+
+        push.Results.Select(result => result.Error?.Code).Should().Equal(
+            null, null, SyncErrorCodes.UniqueViolation, SyncErrorCodes.UniqueViolation, SyncErrorCodes.ValidationFailed);
+
+        var pulled = (await session.GetAsync<PullResponse>(ApiRoutes.Pull(workspace))).Changes
+            .Where(change => change.EntityType == SyncEntityTypes.TagDirectory)
+            .Should().ContainSingle().Subject;
+        pulled.EntityId.Should().Be(directories[0].Id);
+        pulled.Fields[SyncFields.TagDirectory.TagId].GetString().Should().Be(tag.ToString("D"));
+    }
+
+    [Fact]
     public async Task TooManyLoginRequests_Get429_WithRetryAfter()
     {
         await using var api = await CreateApiAsync(new() { ["Sync:RateLimits:AuthPerMinute"] = "2" });

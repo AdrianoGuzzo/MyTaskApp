@@ -208,6 +208,72 @@ public sealed class PushProcessorTests
     }
 
     [Fact]
+    public async Task TheSameGuidInAnotherFormat_IsTheSameValue_ForTheUniqueKey()
+    {
+        // SEC-014: tagId em D, N e B com o mesmo alias passavam os três.
+        var tag = Guid.CreateVersion7();
+        await PushOneAsync(Ops.Upsert(_device, SyncEntityTypes.Tag, tag, 0, Ops.Tag("Casa")));
+        var first = Guid.CreateVersion7();
+        await PushOneAsync(Ops.Upsert(_device, SyncEntityTypes.TagDirectory, first, 0, Ops.TagDirectory(tag.ToString("D"), "repo")));
+
+        var inN = await PushOneAsync(Ops.Upsert(_device, SyncEntityTypes.TagDirectory, Guid.CreateVersion7(), 0, Ops.TagDirectory(tag.ToString("N"), "repo")));
+        var inB = await PushOneAsync(Ops.Upsert(_device, SyncEntityTypes.TagDirectory, Guid.CreateVersion7(), 0, Ops.TagDirectory(tag.ToString("B").ToUpperInvariant(), "REPO")));
+
+        foreach (var duplicate in new[] { inN, inB })
+        {
+            duplicate.Error!.Code.Should().Be(SyncErrorCodes.UniqueViolation);
+            duplicate.RejectedFields.Should().OnlyContain(field => field.ConflictingEntityId == first);
+        }
+    }
+
+    [Fact]
+    public async Task AGuidInAnotherFormat_IsStoredInD()
+    {
+        var tag = Guid.CreateVersion7();
+        var directory = Guid.CreateVersion7();
+        await PushOneAsync(Ops.Upsert(_device, SyncEntityTypes.Tag, tag, 0, Ops.Tag("Casa")));
+
+        var result = await PushOneAsync(Ops.Upsert(_device, SyncEntityTypes.TagDirectory, directory, 0, Ops.TagDirectory(tag.ToString("B").ToUpperInvariant(), "repo")));
+
+        result.Outcome.Should().Be(OperationOutcome.Applied);
+        var stored = _server.Get(_workspace, SyncEntityTypes.TagDirectory, directory)!;
+        stored.Data[SyncFields.TagDirectory.TagId].GetString().Should().Be(tag.ToString("D"));
+        stored.UniqueKey.Should().Be($"{tag:D}/repo");
+    }
+
+    [Fact]
+    public async Task TheParentResentInAnotherFormat_IsNotAChangeToAnImmutableField()
+    {
+        var tag = Guid.CreateVersion7();
+        var directory = Guid.CreateVersion7();
+        await PushOneAsync(Ops.Upsert(_device, SyncEntityTypes.Tag, tag, 0, Ops.Tag("Casa")));
+        await PushOneAsync(Ops.Upsert(_device, SyncEntityTypes.TagDirectory, directory, 0, Ops.TagDirectory(tag.ToString("D"), "repo")));
+
+        var result = await PushOneAsync(Ops.Upsert(_device, SyncEntityTypes.TagDirectory, directory, 1, new()
+        {
+            [SyncFields.TagDirectory.TagId] = SyncValue.String(tag.ToString("N")),
+        }));
+
+        result.Outcome.Should().Be(OperationOutcome.Noop);
+        result.Error.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task AnInstantWithoutAnOffset_IsRefused_AndOneWithAnOffset_IsStoredInUtc()
+    {
+        var withoutOffset = await PushOneAsync(Ops.Upsert(_device, SyncEntityTypes.Task, Guid.CreateVersion7(), 0,
+            Ops.Task().With(SyncFields.CreatedAt, SyncValue.String("2026-10-13T12:00:00"))));
+        var task = Guid.CreateVersion7();
+        var withOffset = await PushOneAsync(Ops.Upsert(_device, SyncEntityTypes.Task, task, 0,
+            Ops.Task().With(SyncFields.CreatedAt, SyncValue.String("2026-10-13T09:00:00-03:00"))));
+
+        withoutOffset.Error!.Code.Should().Be(SyncErrorCodes.ValidationFailed);
+        withoutOffset.Error.Message.Should().Contain(SyncFields.CreatedAt);
+        withOffset.Outcome.Should().Be(OperationOutcome.Applied);
+        _server.Get(_workspace, SyncEntityTypes.Task, task)!.Data[SyncFields.CreatedAt].GetString().Should().Be("2026-10-13T12:00:00.0000000Z");
+    }
+
+    [Fact]
     public async Task RenamingIntoAnotherName_KeepsTheOldName_AndAppliesTheRest()
     {
         var home = Guid.CreateVersion7();

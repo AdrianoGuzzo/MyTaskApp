@@ -309,6 +309,14 @@ internal static class Ops
         [SyncFields.TaskTag.TagId] = SyncValue.Guid(tagId),
     };
 
+    /// <summary>O <paramref name="tagId"/> vai como texto, para o teste escolher o formato do GUID.</summary>
+    public static Dictionary<string, JsonElement> TagDirectory(string tagId, string alias) => new()
+    {
+        [SyncFields.TagDirectory.TagId] = SyncValue.String(tagId),
+        [SyncFields.TagDirectory.Alias] = SyncValue.String(alias),
+        [SyncFields.CreatedAt] = SyncValue.Instant(Created),
+    };
+
     public static Dictionary<string, JsonElement> StickyNote(Guid? tagId) => new()
     {
         [SyncFields.StickyNote.Content] = SyncValue.String("Ligar"),
