@@ -32,7 +32,7 @@ internal static class IosToast
         {
             Text = message,
             TextColor = UIColor.White,
-            Font = UIFont.GetPreferredFontForTextStyle(UIFontTextStyle.Subheadline),
+            Font = UIFont.GetPreferredFontForTextStyle(UIFontTextStyle.Subheadline) ?? UIFont.SystemFontOfSize(15),
             AdjustsFontForContentSizeCategory = true,
             Lines = 0,
             TextAlignment = UITextAlignment.Center,
