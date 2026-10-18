@@ -753,7 +753,8 @@ Management).
 │   ├── sync-server.md               servidor de sincronização: Google, variáveis, implantação
 │   ├── mobile.md                    o app do celular: ambiente, Android, iOS, limitações
 │   └── release-process.md           versionamento e release
-├── .github/workflows/               CI, título de PR, Release Please, release
+├── .github/workflows/               CI, CodeQL, título de PR, Release Please, release
+├── .github/dependabot.yml           atualizações de NuGet e de actions
 ├── Directory.Build.props            versão do produto e regras de build
 ├── Directory.Packages.props         versões dos pacotes
 └── global.json                      SDK fixado
@@ -789,7 +790,10 @@ Management).
 
 O CI roda em todo PR: build Release, as suítes (o servidor de sincronização num job ubuntu, com PostgreSQL), o portão de cobertura
 (com comentário no PR) e um `publish` self-contained para `win-x64` e
-`linux-x64`.
+`linux-x64`. Também reprova um pacote NuGet com vulnerabilidade conhecida, e o
+CodeQL analisa o C# e os workflows; o Dependabot abre os PRs de atualização.
+Onde fica cada check e como rodar o de pacotes local:
+[docs/release-process.md §4](docs/release-process.md#segurança-sec-016).
 
 ---
 

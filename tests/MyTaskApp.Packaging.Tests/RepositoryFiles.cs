@@ -38,6 +38,17 @@ internal static class RepositoryFiles
 
     public static string PullRequestTitleWorkflow => At(".github", "workflows", "pr-title.yml");
 
+    public static string CiWorkflow => At(".github", "workflows", "ci.yml");
+
+    public static string CodeQlWorkflow => At(".github", "workflows", "codeql.yml");
+
+    public static string DependabotConfig => At(".github", "dependabot.yml");
+
+    public static string VulnerablePackagesScript => At("scripts", "check-vulnerable-packages.ps1");
+
+    public static IEnumerable<string> Workflows =>
+        Directory.EnumerateFiles(At(".github", "workflows"), "*.yml");
+
     public static string At(params string[] segments) =>
         Path.Combine([Root, .. segments]);
 

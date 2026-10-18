@@ -1,0 +1,65 @@
+name: CodeQL
+
+# Análise estática de segurança (SEC-016): o C# das duas solutions e os
+# próprios workflows (injeção de expressão, permissões, actions sem pin). Os
+# alertas ficam em Security → Code scanning; num PR, o que for novo aparece
+# como anotação na aba Files changed. A execução semanal pega as consultas
+# novas do CodeQL num código que não mudou.
+
+on:
+  push:
+    branches: [master, main, "release/v*"]
+  pull_request:
+  schedule:
+    - cron: "23 6 * * 1" # segunda, 06:23 UTC
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analisar (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      security-events: write # enviar o resultado para o Code scanning
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # manual: o CodeQL acompanha o build de verdade, com as mesmas
+          # referências e geradores de código do CI.
+          - language: csharp
+            build-mode: manual
+          - language: actions
+            build-mode: none
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - if: matrix.language == 'csharp'
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          global-json-file: global.json
+
+      - uses: github/codeql-action/init@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          queries: security-extended
+
+      # As duas solutions do CI: o desktop e o servidor de sincronização. Tudo é
+      # net10.0, então compila no Linux; a casca MAUI do celular fica de fora,
+      # como no job build (precisaria do workload).
+      - if: matrix.language == 'csharp'
+        name: Compilar
+        shell: bash
+        run: |
+          dotnet build MyTaskApp.slnx -c Release
+          dotnet build MyTaskApp.Server.slnx -c Release
+
+      - uses: github/codeql-action/analyze@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        with:
+          category: /language:${{ matrix.language }}
