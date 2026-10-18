@@ -309,6 +309,12 @@ E), com o status e a correção de cada um. Aqui entram só o que mudou e os ach
     `Sync__Issuer`, `AllowedHosts`, `ForwardedHeaders__KnownProxies__0` e os três PFX.
   - Repetir T14, T15 e T47 contra ele.
   - O desktop instalado vai pedir login de novo e precisa confiar na CA (ou num certificado público).
+- **Depois desta auditoria (18/10, fim do dia):**
+  - O serviço passou a rodar em Production atrás do Traefik do Dokploy, com
+    `Sync__Issuer=https://<dominio-publico>/`.
+  - A 5280 publicada no ingress foi removida.
+  - Evidência em `API_SECURITY_AUDIT.md`, F.4, "5280 fechada".
+  - T14, T15 e T47 contra o servidor real continuam pendentes.
 
 ### SEC-019 — *Log forging* pelo caminho da requisição
 
@@ -400,6 +406,7 @@ E), com o status e a correção de cada um. Aqui entram só o que mudou e os ach
   - `postgres-outro` e `postgres-vector` com senha curta;
   - Portainer, Dokploy e Swarm abertos para a LAN;
   - IPv6.
+- Mais tarde em 18/10, com o host de volta, a 5280 da API foi fechada (F.4 de `API_SECURITY_AUDIT.md`).
 
 ---
 

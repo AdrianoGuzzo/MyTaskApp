@@ -963,7 +963,7 @@ pelo Dokploy. Nenhum dado foi apagado.
 | 5432 do sync | serviço `mytaskappsync-postgres` (postgres:17) | Nunca foi publicada. Só a rede overlay `dokploy-network` alcança |
 | 5000 | `my-registry` (registry:2 do Dokploy), com `htpasswd` (`/v2/_catalog` → 401) | Mantida: é o registry das imagens |
 | 22 | sshd | Mantida. Passou a aceitar só chave |
-| 5280 | API do sync (ingress do Swarm) | Mantida (SEC-001) |
+| 5280 | API do sync (ingress do Swarm) | Mantida (SEC-001). Removida em 18/10 (abaixo) |
 | 5433, 3000, 9000, 7000, 7777, 7778, 2377, 7946 | pgvector, Dokploy, Portainer, odysseus, servidores MCP, Swarm | Abertas para a LAN. Fora do escopo, pendentes |
 
 O `nftables` do host não tinha regra nenhuma, e as portas publicadas pelo Docker passam por fora
@@ -1017,6 +1017,37 @@ dele.
   uso.
 - A senha literal saiu do repositório (SEC-012, G-12), mas continua no histórico desde `fef8021`:
   se o servidor da LAN a usa, ela é pública e precisa ser trocada.
+
+#### 5280 fechada (18/10/2026)
+
+Em 18/10 a API já rodava em Production atrás do Traefik do Dokploy
+(`Sync__Issuer=https://<dominio-publico>/`). Mesmo assim, o serviço
+`mytaskappsync-api` ainda publicava `*:5280->8080` no ingress do Swarm. A porta ficava
+fora do TLS: o OAuth em HTTP era recusado (ID2083), mas um cliente apontado para
+`http://192.0.2.8:5280` mandaria o Bearer em claro.
+
+**Antes de fechar:**
+
+- O desktop do .7 já usava `https://<dominio-publico>/` em `appsettings.user.json`.
+- O app do celular é gerado com `vars.SYNC_API_BASE_URL`, que é a mesma URL `https`.
+- Não havia outro cliente.
+- Nenhum serviço ou contêiner do host citava a 5280 no env ou no healthcheck.
+- A rota do Traefik (`/etc/dokploy/traefik/dynamic/mytaskappsync-api.yml`) leva a
+  `http://tasks.mytaskappsync-api:8080` pela `dokploy-network`, sem depender da porta
+  publicada.
+
+**O que mudou:** a porta foi removida no Dokploy (Advanced → Ports), seguida de redeploy. A API
+ficou só na `dokploy-network`.
+
+**Critério de aceite:**
+
+- `docker service inspect … .Endpoint.Spec` → `{"Mode":"vip"}`, sem `Ports`.
+- TCP 5280 no 192.0.2.8 → `Connection refused`.
+- `https://<dominio-publico>/health` → 200.
+- O desktop deu `PUT /api/v1/devices/current`, `push` e `pull` 200 às 20:57 UTC, depois da subida
+  das 20:55, sem pedir login.
+
+O `portproxy` `127.0.0.1:5280 → 192.0.2.8:5280` do .7 ficou sem destino e pode ser apagado.
 
 ---
 
