@@ -67,6 +67,8 @@ o da variável, e o conteúdo é o valor. É o que o compose de produção usa (
 | `Sync__SigningCertificate__Path` ou `__Base64` | em produção | PFX que assina os tokens do OpenIddict |
 | `Sync__SigningCertificate__Password` | se o PFX tiver | senha do PFX |
 | `Sync__EncryptionCertificate__Path` / `__Base64` / `__Password` | em produção | PFX que cifra os tokens |
+| `Sync__DataProtectionCertificate__Path` / `__Base64` / `__Password` | em produção | PFX que cifra as chaves do Data Protection (cookies do login) no banco (SEC-011, ADR-073). Fora de Development, sem ele o servidor não sobe |
+| `Sync__DataProtectionPreviousCertificates__0__Path` / `__Base64` / `__Password` … | não | PFX de antes da rotação: só decifram as chaves que eles cifraram |
 | `Database__MigrateOnStartup` | não | `true` aplica as migrations ao subir. Padrão: só em Development |
 | `ForwardedHeaders__KnownProxies__0` | atrás de proxy | IP do proxy reverso, para valer o `X-Forwarded-Proto` |
 | `Sync__Issuer` | em produção | o endereço público do servidor, como `https://sync.exemplo.com/`: o issuer do OAuth, no discovery e nos tokens (SEC-007). Fora de Development, sem ele (ou sem `https`) o servidor não sobe. Vazio, o `Host` da requisição decide, e um token emitido por um endereço não vale no outro. Trocá-lo derruba o login de todos |
@@ -193,11 +195,112 @@ vazou). Nos dois casos, o roteiro é o mesmo:
 Com os PFX novos, nenhum token antigo é aceito, nem um forjado com a chave que
 vazou: na emergência, a troca já basta.
 
-A troca não mexe nas chaves do DataProtection (no banco) nem no certificado TLS
+A troca não mexe nas chaves do Data Protection (abaixo) nem no certificado TLS
 do Caddy (no volume `caddy-data`, renovado por ele).
 
-As chaves do DataProtection (cookies do login) ficam na tabela
-`DataProtectionKeys`, então várias instâncias podem rodar atrás de um balanceador.
+### Certificado do Data Protection
+
+As chaves do Data Protection protegem o cookie do login, o cookie do retorno
+do Google e o token antiforgery. Elas ficam na tabela `DataProtectionKeys`,
+para que várias instâncias possam rodar atrás de um balanceador. Sem
+certificado, o XML de cada chave vai em claro para o banco, e quem lê a tabela
+(ou um backup) forja o cookie do login de qualquer conta e, com ele, tira
+tokens da API (SEC-011). Com o certificado, a chave vai cifrada (o XML leva um
+`encryptedSecret`), e só quem tem o PFX a abre (ADR-073).
+
+Em Production, o PFX é obrigatório; em Development e nos testes, opcional. Ele
+é um terceiro PFX, separado dos dois do OpenIddict, e é gerado da mesma forma:
+
+```bash
+cd deploy/sync-server/secrets
+
+openssl req -x509 -newkey rsa:2048 -nodes -days 730 -subj "/CN=MyTaskApp Sync Data Protection" \
+  -keyout dataprotection.key -out dataprotection.crt -addext "keyUsage=keyEncipherment"
+openssl rand -base64 24 | tr -d '\n' > dataprotection_password
+openssl pkcs12 -export -inkey dataprotection.key -in dataprotection.crt -out dataprotection.pfx -passout file:dataprotection_password
+
+rm dataprotection.key dataprotection.crt
+```
+
+Guarde o PFX e a senha com os outros, fora do host. **Não guarde junto do
+backup do banco:** quem tem os dois volta a ter as chaves.
+
+Para conferir, cada `key-…` tem de sair com `cifrada = t`:
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file prod.env exec postgres \
+  psql -U mytaskapp -d mytaskapp_sync \
+  -c "SELECT \"FriendlyName\", \"Xml\" LIKE '%encryptedSecret%' AS cifrada FROM \"DataProtectionKeys\" ORDER BY \"Id\";"
+```
+
+As linhas `revocation-…` não têm segredo e não são cifradas.
+
+#### As chaves gravadas antes do certificado
+
+Ligar o certificado não cifra o que já está na tabela. A chave gravada em
+claro continua legível no banco e nos backups, e seria a chave em uso por até
+90 dias: quem já leu o banco continuaria forjando o cookie. Por isso, ao subir
+com o certificado, a API **revoga sozinha** toda chave sem `encryptedSecret`
+(log `SyncServerPlaintextKeysRevoked`, em Warning) e gera a próxima já cifrada.
+A revogação fica na tabela. Na subida seguinte não há o que revogar, e nada
+muda.
+
+- Quem estava no meio de um login (o cookie dura 10 minutos) volta para o
+  Google uma vez. Os tokens dos aparelhos não dependem dessas chaves, e
+  ninguém precisa conectar de novo.
+- Restaurar um backup de antes do certificado traz a chave em claro de volta.
+  A primeira subida a revoga de novo.
+- A chave revogada continua na tabela, em claro, mas não vale mais para nada.
+  Para tirá-la do banco (e dos próximos backups), apague as linhas antigas
+  com a API no ar, depois da revogação:
+
+  ```sql
+  DELETE FROM "DataProtectionKeys" WHERE "Xml" NOT LIKE '%encryptedSecret%' AND "FriendlyName" LIKE 'key-%';
+  ```
+
+  Os backups feitos antes continuam com ela: eles também merecem o cuidado de
+  um segredo.
+
+#### Rotação do certificado do Data Protection
+
+O Data Protection gera uma chave nova a cada 90 dias, cifrada com o
+certificado atual. A chave antiga continua no banco, cifrada com o certificado
+que existia quando ela foi criada.
+
+**Troca planejada** (antes do vencimento do PFX), sem que ninguém perceba:
+
+1. Renomeie o par atual para `dataprotection_previous.pfx` e
+   `dataprotection_previous_password`, e gere o novo com os comandos acima.
+2. No `docker-compose.prod.yml`, monte o anterior e aponte para ele:
+
+   ```yaml
+   # em api.environment:
+   Sync__DataProtectionPreviousCertificates__0__Path: /run/secrets/dataprotection_previous.pfx
+   # em api.secrets:
+   - source: dataprotection_previous_pfx
+     target: dataprotection_previous.pfx
+   - source: dataprotection_previous_password
+     target: Sync__DataProtectionPreviousCertificates__0__Password
+   # em secrets:
+   dataprotection_previous_pfx:
+     file: ./secrets/dataprotection_previous.pfx
+   dataprotection_previous_password:
+     file: ./secrets/dataprotection_previous_password
+   ```
+
+3. Recrie a API (`up -d --force-recreate api`). As chaves novas saem com o
+   PFX novo, e o anterior só decifra as que já existiam.
+4. A chave em uso pode ser ainda a do PFX anterior, por até 90 dias. Depois
+   disso (90 dias mais uma margem), tire o anterior do compose, recrie a API e
+   apague o par antigo.
+
+**Troca de emergência** (o PFX ou a senha vazou junto com uma cópia do banco):
+gere o novo, **não** configure o anterior e recrie a API. As chaves antigas
+ficam ilegíveis: o Data Protection as deixa de lado e gera uma nova, cifrada
+com o PFX novo. Um cookie forjado com uma chave antiga não abre mais.
+O custo é o mesmo da revogação: quem estava no meio de um login volta para o
+Google uma vez. Esse caminho também serve para a troca planejada, se esse
+custo não importar.
 
 ## 3. Rodar localmente
 
@@ -335,6 +438,8 @@ privilégio. Em produção, o servidor:
 - marca cookies como `Secure`, `HttpOnly` e `SameSite=Lax` (Strict no antiforgery);
   por isso, sem HTTPS (inclusive em Development), o logout responde 400 dizendo
   que exige HTTPS;
+- cifra no banco as chaves que protegem esses cookies (o PFX do Data
+  Protection, §2), e não sobe sem ele;
 - só volta do login para um caminho do próprio servidor: `returnUrl` externo,
   com `//`, `/\`, espaço ou caractere de controle vira `/`;
 - limita o corpo a 1 MB e o push a 100 operações;
@@ -356,7 +461,7 @@ O `deploy/sync-server/docker-compose.prod.yml` monta isso num host com Docker:
 | `migrate` | o bundle das migrations (§4), rodado sob demanda |
 
 Em outro provedor (um balanceador com TLS, nginx), vale o mesmo: Production,
-os dois PFX, o `KnownProxies` com o IP de quem fala com a API e nenhuma porta
+os três PFX, o `KnownProxies` com o IP de quem fala com a API e nenhuma porta
 da API exposta além do proxy.
 
 ### Passo a passo
@@ -401,13 +506,14 @@ da API exposta além do proxy.
    | `google_client_secret` | a chave secreta do cliente do Google | `Authentication__Google__ClientSecret` |
    | `signing.pfx`, `signing_password` | o PFX de assinatura e a senha dele (§2) | `Sync__SigningCertificate__Path` e `__Password` |
    | `encryption.pfx`, `encryption_password` | o PFX de cifragem e a senha dele (§2) | `Sync__EncryptionCertificate__Path` e `__Password` |
+   | `dataprotection.pfx`, `dataprotection_password` | o PFX do Data Protection e a senha dele (§2) | `Sync__DataProtectionCertificate__Path` e `__Password` |
 
    ```bash
    mkdir -p secrets && cd secrets
    openssl rand -hex 24 | tr -d '\n' > postgres_password
    printf 'Host=postgres;Database=mytaskapp_sync;Username=mytaskapp;Password=%s' "$(cat postgres_password)" > connection_string
    printf '%s' '<chave secreta do Google>' > google_client_secret
-   # os dois PFX: os comandos de "Certificados do OpenIddict" (§2)
+   # os três PFX: os comandos de "Certificados do OpenIddict" e de "Certificado do Data Protection" (§2)
    cd .. && chmod 700 secrets && chmod 444 secrets/*
    ```
 
@@ -471,7 +577,13 @@ da API exposta além do proxy.
 servidor aceita clientes do `SyncSchema.MinimumClient` para cima, e abaixo
 disso responde 426 ("Atualize o MyTaskApp").
 
-Para trocar os PFX, veja "Rotação dos PFX" (§2).
+Para trocar os PFX, veja "Rotação dos PFX" e "Rotação do certificado do Data
+Protection" (§2).
+
+**Vindo de uma versão sem o certificado do Data Protection** (antes do
+ADR-073): gere o `dataprotection.pfx` e a senha (§2) **antes** de subir a
+versão nova, que em Production não sobe sem eles. Na primeira subida, a chave
+gravada em claro é revogada ("As chaves gravadas antes do certificado", §2).
 
 **Vindo de uma versão sem lista de cadastro** (antes do ADR-068): configure
 `Sync__Registration__*` **antes** de subir a versão nova. Sem a lista, quem já
@@ -533,7 +645,10 @@ Sem a propriedade, o app de release não oferece sincronização. A janela diz
 ### Backup e restauração
 
 - Faça backup do banco inteiro (`pg_dump -Fc`). Ele tem contas, autorizações,
-  chaves do DataProtection e os dados sincronizados.
+  chaves do Data Protection (cifradas com o PFX dele) e os dados
+  sincronizados. Guarde os PFX à parte: o backup sozinho não abre as chaves.
+- Restaurado sem o mesmo PFX do Data Protection, as chaves do backup ficam
+  ilegíveis e o servidor gera outra; só quem estava no meio de um login sente.
 - Depois de restaurar um backup antigo, o cursor dos desktops pode estar **à
   frente** do servidor. O servidor responde 410, e o desktop refaz o pull desde
   o zero, sem perder o que tem localmente. O que foi criado nos desktops depois

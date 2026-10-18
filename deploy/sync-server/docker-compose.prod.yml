@@ -58,6 +58,10 @@ services:
       Sync__Registration__AllowedEmails__0: ${SYNC_ALLOWED_EMAIL:?defina SYNC_ALLOWED_EMAIL em prod.env}
       Sync__SigningCertificate__Path: /run/secrets/signing.pfx
       Sync__EncryptionCertificate__Path: /run/secrets/encryption.pfx
+      # As chaves dos cookies do login, cifradas no banco (SEC-011, ADR-073).
+      # Na rotacao, o PFX antigo entra em Sync__DataProtectionPreviousCertificates__0__Path
+      # (docs/sync-server.md secao 2).
+      Sync__DataProtectionCertificate__Path: /run/secrets/dataprotection.pfx
     secrets:
       - source: connection_string
         target: ConnectionStrings__Sync
@@ -71,6 +75,10 @@ services:
         target: encryption.pfx
       - source: encryption_password
         target: Sync__EncryptionCertificate__Password
+      - source: dataprotection_pfx
+        target: dataprotection.pfx
+      - source: dataprotection_password
+        target: Sync__DataProtectionCertificate__Password
     read_only: true
     tmpfs:
       - /tmp
@@ -139,6 +147,10 @@ secrets:
     file: ./secrets/encryption.pfx
   encryption_password:
     file: ./secrets/encryption_password
+  dataprotection_pfx:
+    file: ./secrets/dataprotection.pfx
+  dataprotection_password:
+    file: ./secrets/dataprotection_password
 
 volumes:
   sync-data:
