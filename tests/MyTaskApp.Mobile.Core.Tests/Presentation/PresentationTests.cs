@@ -248,6 +248,55 @@ public sealed class PresentationTests
         hidden.IsVisible.Should().BeFalse();
     }
 
+    [Fact]
+    public void TheBadge_CarriesTheLastSuccess_ForTheAgeAtTheTop()
+    {
+        var at = new DateTimeOffset(2026, 10, 15, 14, 58, 0, TimeSpan.Zero);
+        var status = new SyncStatusView(true, null, SyncLocalState.Unlinked with { State = SyncLinkState.Linked, IsEnabled = true, LastSuccessAt = at }, new SyncCounts(0, 0, 0, 0, 0), false, null);
+
+        SyncStatusText.Describe(status, syncing: false).LastSuccessAt.Should().Be(at);
+    }
+
+    [Theory]
+    [InlineData(20, "agora há pouco")]
+    [InlineData(5 * 60, "há 5 min")]
+    [InlineData(3 * 60 * 60, "há 3 h")]
+    public void Ago_IsTheDesktopScale(int seconds, string expected)
+    {
+        var time = new Microsoft.Extensions.Time.Testing.FakeTimeProvider(new DateTimeOffset(2026, 10, 15, 15, 0, 0, TimeSpan.Zero));
+
+        Labels.Ago(time.GetUtcNow().AddSeconds(-seconds), time).Should().Be(expected);
+        Labels.Ago(time.GetUtcNow().AddDays(-2), time).Should().StartWith("em 13/10/2026");
+    }
+
+    [Fact]
+    public void TheThemes_AreTheDesktopSeven_AndAutomaticFollowsThePhone()
+    {
+        MobileThemeCatalog.All.Select(theme => theme.Id)
+            .Should().Equal("paper", "sepia", "charcoal", "nordic", "plum", "ponta", "high-contrast");
+        MobileThemeCatalog.All.Should().OnlyHaveUniqueItems(theme => theme.Id);
+
+        MobileThemeCatalog.Normalize(null).Should().Be(MobileThemeCatalog.SystemId);
+        MobileThemeCatalog.Normalize("removido").Should().Be(MobileThemeCatalog.SystemId, "um id que sumiu volta para o automático");
+        MobileThemeCatalog.Normalize("plum").Should().Be("plum");
+
+        MobileThemeCatalog.Resolve(MobileThemeCatalog.SystemId, systemIsDark: true).Should().BeSameAs(MobileThemeCatalog.Charcoal);
+        MobileThemeCatalog.Resolve(null, systemIsDark: false).Should().BeSameAs(MobileThemeCatalog.Paper);
+        MobileThemeCatalog.Resolve("sepia", systemIsDark: true).Should().BeSameAs(MobileThemeCatalog.Sepia, "a escolha explícita ganha do sistema");
+    }
+
+    [Fact]
+    public void EveryPalette_HasEveryColor_InHex()
+    {
+        foreach (var theme in MobileThemeCatalog.All)
+        {
+            var entries = theme.Palette.Entries();
+
+            entries.Should().HaveCount(typeof(MobilePalette).GetProperties().Length, theme.Name);
+            entries.Should().OnlyContain(entry => System.Text.RegularExpressions.Regex.IsMatch(entry.Value, "^#[0-9A-F]{6}$"), theme.Name);
+        }
+    }
+
     private static DeviceInfo Device(Guid id, string nickname, bool current = false, bool revoked = false) =>
         new(id, nickname, "Android", "1.15.0", DateTimeOffset.UnixEpoch, null, revoked ? DateTimeOffset.UnixEpoch : null, current);
 

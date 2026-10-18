@@ -3,7 +3,8 @@ using MyTaskApp.Application.Sync;
 namespace MyTaskApp.Mobile.Core.Presentation;
 
 /// <summary>O estado da sincronização como o celular mostra: curto no topo, explicado na Conta.</summary>
-public sealed record SyncBadge(SyncIndicatorKind Kind, string Title, string Detail)
+/// <param name="LastSuccessAt">A última sincronização que deu certo, para o "há 2 min" do topo da lista.</param>
+public sealed record SyncBadge(SyncIndicatorKind Kind, string Title, string Detail, DateTimeOffset? LastSuccessAt = null)
 {
     /// <summary>Sincronizado, pendente e falha precisam ser distinguíveis de relance.</summary>
     public bool NeedsAttention => Kind is SyncIndicatorKind.Attention or SyncIndicatorKind.Review;
@@ -28,7 +29,11 @@ public static class SyncStatusText
         var kind = SyncIndicatorClassifier.Classify(status, syncing);
         var pending = status.Counts.Pending;
 
-        return kind switch
+        return Text(kind, status, pending) with { LastSuccessAt = status.Local.LastSuccessAt };
+    }
+
+    private static SyncBadge Text(SyncIndicatorKind kind, SyncStatusView status, int pending) =>
+        kind switch
         {
             SyncIndicatorKind.Hidden => new(kind, string.Empty, "Esta versão não tem servidor de sincronização."),
             SyncIndicatorKind.LocalOnly => new(kind, "Só neste celular", "Entre com sua conta para ver as tarefas dos outros dispositivos."),
@@ -40,7 +45,6 @@ public static class SyncStatusText
             SyncIndicatorKind.Review => new(kind, "Para revisar", Review(status.Counts)),
             _ => new(kind, "Sincronizado", "Tudo em dia com o servidor."),
         };
-    }
 
     private static string Attention(SyncStatusView status) => status switch
     {

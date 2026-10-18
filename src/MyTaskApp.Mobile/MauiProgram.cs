@@ -34,6 +34,9 @@ public static class MauiProgram
 
 #if IOS
         BackupExclusion.Apply(data);
+        KeyboardMappings.Apply();
+#elif ANDROID
+        builder.ConfigureMauiHandlers(handlers => handlers.AddHandler<Shell, ThemedShellRenderer>());
 #endif
 
         builder.Services.AddSingleton<ISecretStore, MauiSecretStore>();
@@ -41,6 +44,8 @@ public static class MauiProgram
         builder.Services.AddSingleton<IUiDispatcher, MauiDispatcher>();
         builder.Services.AddSingleton<INavigator, ShellNavigator>();
         builder.Services.AddSingleton<IDialogService, MauiDialogs>();
+        builder.Services.AddSingleton<MauiThemeService>();
+        builder.Services.AddSingleton<IThemeService>(provider => provider.GetRequiredService<MauiThemeService>());
 
         builder.Services.AddMobileCore(new MobileHostOptions
         {

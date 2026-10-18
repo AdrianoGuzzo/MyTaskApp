@@ -6,11 +6,16 @@
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <ResourceDictionary Source="Resources/Styles/Colors.xaml" />
+                <!-- As cores não estão aqui: vêm do tema escolhido (MauiThemeService). -->
                 <ResourceDictionary Source="Resources/Styles/Styles.xaml" />
             </ResourceDictionary.MergedDictionaries>
 
             <adapters:HexColorConverter x:Key="HexColor" />
+            <adapters:SoftHexColorConverter x:Key="SoftHexColor" />
+            <adapters:PriorityColorConverter x:Key="PriorityColor" />
+            <adapters:DeadlineColorConverter x:Key="DeadlineColor" />
+            <adapters:SyncDotFillConverter x:Key="SyncDotFill" />
+            <adapters:SyncDotRingConverter x:Key="SyncDotRing" />
             <adapters:StrikeConverter x:Key="Strike" />
             <adapters:InvertedBoolConverter x:Key="Not" />
             <adapters:HasValueConverter x:Key="HasValue" />

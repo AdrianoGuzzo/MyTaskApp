@@ -27,3 +27,12 @@ public sealed class PriorityChip(TaskPriority value, string label) : Choice<Task
 
 /// <summary>Uma etiqueta marcável, com a cor dela.</summary>
 public sealed class TagOption(Guid value, string label, string colorHex) : Choice<Guid>(value, label, colorHex);
+
+/// <summary>Um tema na aba Conta: o fundo e o destaque dele, para ver antes de escolher.</summary>
+public sealed class ThemeOption(string value, string label, string description, string swatch, string accent)
+    : Choice<string>(value, label, swatch)
+{
+    public string Description { get; } = description;
+
+    public string Accent { get; } = accent;
+}

@@ -199,6 +199,7 @@ public sealed class AccountLinkedTests
         new SyncScheduler(Substitute.For<ISyncCycleRunner>(), new SyncTrigger(), new FakeTimeProvider(Now), NullLogger<SyncScheduler>.Instance),
         new InlineDispatcher(),
         new RecordingNavigator(),
+        new RecordingThemes(),
         _dialogs,
         new FakeTimeProvider(Now),
         NullLogger<AccountViewModel>.Instance);

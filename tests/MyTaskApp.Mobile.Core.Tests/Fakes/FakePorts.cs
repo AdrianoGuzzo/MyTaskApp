@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using MyTaskApp.Infrastructure.Secrets;
 using MyTaskApp.Mobile.Core.Ports;
+using MyTaskApp.Mobile.Core.Presentation;
 
 namespace MyTaskApp.Mobile.Core.Tests.Fakes;
 
@@ -76,6 +77,20 @@ internal sealed class ScriptedDialogs : IDialogService
     {
         Questions.Add(title);
         return Task.FromResult(PromptAnswer);
+    }
+}
+
+/// <summary>Guarda o tema escolhido, como o celular guardaria nas preferências.</summary>
+internal sealed class RecordingThemes : IThemeService
+{
+    public List<string> Used { get; } = [];
+
+    public string Choice { get; set; } = MobileThemeCatalog.SystemId;
+
+    public void Use(string choice)
+    {
+        Used.Add(choice);
+        Choice = MobileThemeCatalog.Normalize(choice);
     }
 }
 

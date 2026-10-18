@@ -2,6 +2,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\MyTaskApp.Desktop\MyTaskApp.Desktop.csproj" />
+
+    <!-- Só para comparar os temas do celular com os do desktop (ThemeParityTests). -->
+    <ProjectReference Include="..\..\src\MyTaskApp.Mobile.Core\MyTaskApp.Mobile.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

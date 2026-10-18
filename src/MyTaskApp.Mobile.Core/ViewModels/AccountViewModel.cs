@@ -33,6 +33,8 @@ public sealed partial class AccountViewModel : MobileViewModel, IDisposable
 
     private readonly INavigator _navigator;
 
+    private readonly IThemeService _themes;
+
     private readonly TimeProvider _time;
 
     [ObservableProperty]
@@ -51,6 +53,7 @@ public sealed partial class AccountViewModel : MobileViewModel, IDisposable
         SyncScheduler scheduler,
         IUiDispatcher dispatcher,
         INavigator navigator,
+        IThemeService themes,
         IDialogService dialogs,
         TimeProvider time,
         ILogger<AccountViewModel> logger)
@@ -61,9 +64,29 @@ public sealed partial class AccountViewModel : MobileViewModel, IDisposable
         _scheduler = scheduler;
         _dispatcher = dispatcher;
         _navigator = navigator;
+        _themes = themes;
         _time = time;
+
+        ThemeOptions =
+        [
+            new(
+                MobileThemeCatalog.SystemId,
+                "Automático",
+                "Papel no modo claro do celular, Carvão no escuro.",
+                MobileThemeCatalog.Paper.Palette.Canvas,
+                MobileThemeCatalog.Charcoal.Palette.Canvas),
+            .. MobileThemeCatalog.All.Select(theme => new ThemeOption(theme.Id, theme.Name, theme.Description, theme.Palette.Canvas, theme.Palette.Accent)),
+        ];
+        MarkTheme();
+
+        // O cartão do topo acompanha o ciclo ao vivo: começou, guardou, terminou.
+        _scheduler.CycleStarted += OnCycleChanged;
+        _scheduler.ChangeQueued += OnCycleChanged;
         _scheduler.CycleCompleted += OnCycleCompleted;
     }
+
+    /// <summary>"Automático" primeiro, depois os temas na ordem do desktop.</summary>
+    public IReadOnlyList<ThemeOption> ThemeOptions { get; }
 
     public ObservableCollection<DeviceLine> Devices { get; } = [];
 
@@ -133,6 +156,19 @@ public sealed partial class AccountViewModel : MobileViewModel, IDisposable
 
     [RelayCommand]
     public Task ConnectAsync() => _navigator.OpenConnectAsync();
+
+    /// <summary>O tema vale ao tocar, sem botão de salvar: a tela já mostra como ficou.</summary>
+    [RelayCommand]
+    public void UseTheme(ThemeOption? option)
+    {
+        if (option is null)
+        {
+            return;
+        }
+
+        _themes.Use(option.Value);
+        MarkTheme();
+    }
 
     [RelayCommand]
     public async Task TogglePauseAsync()
@@ -220,7 +256,22 @@ public sealed partial class AccountViewModel : MobileViewModel, IDisposable
         }
     }
 
-    public void Dispose() => _scheduler.CycleCompleted -= OnCycleCompleted;
+    public void Dispose()
+    {
+        _scheduler.CycleStarted -= OnCycleChanged;
+        _scheduler.ChangeQueued -= OnCycleChanged;
+        _scheduler.CycleCompleted -= OnCycleCompleted;
+    }
+
+    private void MarkTheme()
+    {
+        var choice = MobileThemeCatalog.Normalize(_themes.Choice);
+
+        foreach (var option in ThemeOptions)
+        {
+            option.IsSelected = option.Value == choice;
+        }
+    }
 
     /// <summary>O que este celular sabe sem perguntar ao servidor: estado, conflitos e recusas.</summary>
     private async Task<bool> LoadLocalAsync()
@@ -315,6 +366,8 @@ public sealed partial class AccountViewModel : MobileViewModel, IDisposable
 
         return new DeviceLine(device.DeviceId, device.Nickname, isCurrent ? "Este celular · " + detail : detail, isCurrent, device.RevokedAt is not null);
     }
+
+    private void OnCycleChanged() => _dispatcher.Post(() => _ = LoadLocalAsync());
 
     private void OnCycleCompleted(SyncCycleResult result) => _dispatcher.Post(() => _ = LoadLocalAsync());
 }
