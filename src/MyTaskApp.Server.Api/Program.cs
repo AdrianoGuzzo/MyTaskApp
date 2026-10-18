@@ -23,13 +23,19 @@ builder.Host.UseSerilog(
         .WriteTo.Console(),
     writeToProviders: true);
 
-builder.WebHost.ConfigureKestrel(kestrel => kestrel.Limits.MaxRequestBodySize = 1024 * 1024);
+// Sem "Server: Kestrel" nas respostas (SEC-009).
+builder.WebHost.ConfigureKestrel(kestrel =>
+{
+    kestrel.Limits.MaxRequestBodySize = 1024 * 1024;
+    kestrel.AddServerHeader = false;
+});
 
 builder.Services.AddSyncServer(builder.Configuration, builder.Environment);
 
 var app = builder.Build();
 
 app.UseMiddleware<RequestLog>();
+app.UseMiddleware<SecurityHeaders>();
 app.UseSyncServer();
 
 await app.MigrateIfConfiguredAsync();

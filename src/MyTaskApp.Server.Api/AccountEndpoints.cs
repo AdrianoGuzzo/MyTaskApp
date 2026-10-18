@@ -139,6 +139,10 @@ internal static class AccountEndpoints
     {
         var tokens = antiforgery.GetAndStoreTokens(context);
 
+        // A página não carrega nada, só posta para este servidor, e nenhum site a põe num frame (SEC-009).
+        context.Response.Headers.ContentSecurityPolicy = "default-src 'none'; form-action 'self'; frame-ancestors 'none'";
+        context.Response.Headers.XFrameOptions = "DENY";
+
         return Results.Content(
             "<!doctype html><html lang=\"pt-BR\"><head><meta charset=\"utf-8\"><title>MyTaskApp</title></head><body>"
             + "<form method=\"post\" action=\"/account/logout\">"
