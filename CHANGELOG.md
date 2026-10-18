@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.18.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.17.0...v1.18.0) (2026-10-18)
+
+
+### Added
+
+* servidor de sincronização fechado, com lista de quem pode entrar (ADR-068) ([#96](https://github.com/AdrianoGuzzo/MyTaskApp/issues/96)) ([590059f](https://github.com/AdrianoGuzzo/MyTaskApp/commit/590059f12b368a2dfc6592a0e19e83fcd7373e2e))
+* servidor de sync em Production atrás de TLS, e Development só no loopback (ADR-070) ([#94](https://github.com/AdrianoGuzzo/MyTaskApp/issues/94)) ([ee766d3](https://github.com/AdrianoGuzzo/MyTaskApp/commit/ee766d3f043377b2f7b110dd2790863e3b27d686))
+
+
+### Fixed
+
+* **server:** access token revogado leva 401 na hora, e o sair revoga access e refresh (SEC-010) ([#104](https://github.com/AdrianoGuzzo/MyTaskApp/issues/104)) ([96635d1](https://github.com/AdrianoGuzzo/MyTaskApp/commit/96635d1fcc84d7c4fa85e4066525ed5db5986535))
+* **server:** chaves do Data Protection cifradas com certificado e as em claro revogadas (SEC-011, ADR-073) ([#103](https://github.com/AdrianoGuzzo/MyTaskApp/issues/103)) ([bdb4ca9](https://github.com/AdrianoGuzzo/MyTaskApp/commit/bdb4ca9407355a69ca5223eda08bc84447a634c1))
+* **server:** corpos com nulos e NUL viram 400 ou recusa da operação, não 500 (SEC-008) ([#99](https://github.com/AdrianoGuzzo/MyTaskApp/issues/99)) ([6ad1a6a](https://github.com/AdrianoGuzzo/MyTaskApp/commit/6ad1a6aa6f75478993927e202785c75da0ac706f))
+* **server:** GUID em qualquer formato vira D e instante exige fuso no push (SEC-014) ([#107](https://github.com/AdrianoGuzzo/MyTaskApp/issues/107)) ([2ffd779](https://github.com/AdrianoGuzzo/MyTaskApp/commit/2ffd77977f79831bcb76fe1bfd33083bc7fd934d))
+* **server:** issuer fixo do OpenIddict e AllowedHosts com o nome público (SEC-007) ([#100](https://github.com/AdrianoGuzzo/MyTaskApp/issues/100)) ([e62e704](https://github.com/AdrianoGuzzo/MyTaskApp/commit/e62e704762af1a2187efa51e2c461305a5edb87b))
+* **server:** no-store e nosniff nas respostas, sem header Server e CSP no logout (SEC-009) ([#102](https://github.com/AdrianoGuzzo/MyTaskApp/issues/102)) ([b8a6cb8](https://github.com/AdrianoGuzzo/MyTaskApp/commit/b8a6cb8678e651613caead19fd48b901d947bc50))
+* **server:** pull com teto por página e sem reenviar a família da tarefa (SEC-005, ADR-071) ([#98](https://github.com/AdrianoGuzzo/MyTaskApp/issues/98)) ([2df9d60](https://github.com/AdrianoGuzzo/MyTaskApp/commit/2df9d60355e6d2af99ca07c7805b11cc7e5a4ed5))
+* **server:** push recusa baseVersion negativa ou à frente do servidor (SEC-017) ([#120](https://github.com/AdrianoGuzzo/MyTaskApp/issues/120)) ([01e21a2](https://github.com/AdrianoGuzzo/MyTaskApp/commit/01e21a255eb589c5d0eb54a095f1f3a411ad91e6))
+* **server:** push recusa campo fora do contrato e limita entidade e workspace (SEC-006, ADR-072) ([#101](https://github.com/AdrianoGuzzo/MyTaskApp/issues/101)) ([5f67c4c](https://github.com/AdrianoGuzzo/MyTaskApp/commit/5f67c4c6ecc50ed6ebaf4f55ccd7cd15fb8ff823))
+* **server:** rate limit da API por conta, e não por IP (SEC-003, ADR-069) ([#95](https://github.com/AdrianoGuzzo/MyTaskApp/issues/95)) ([66eb4f7](https://github.com/AdrianoGuzzo/MyTaskApp/commit/66eb4f738c63b725be4369817bdee404b9d7b06d))
+* **server:** returnUrl com caractere de controle vira "/" e logout em HTTP dá 400 (SEC-013) ([#105](https://github.com/AdrianoGuzzo/MyTaskApp/issues/105)) ([01fbfd5](https://github.com/AdrianoGuzzo/MyTaskApp/commit/01fbfd52963554f11b63a00e6eabdf311d7c1412))
+* **server:** senha do banco de desenvolvimento por variável e user-secrets (SEC-012) ([#106](https://github.com/AdrianoGuzzo/MyTaskApp/issues/106)) ([f4fd593](https://github.com/AdrianoGuzzo/MyTaskApp/commit/f4fd5932f0850027c95427b8326044bc88e1e9c7))
+* **server:** teto de dispositivos ativos por conta e textos do dispositivo sem Cc/Cf (SEC-015) ([#119](https://github.com/AdrianoGuzzo/MyTaskApp/issues/119)) ([82a118d](https://github.com/AdrianoGuzzo/MyTaskApp/commit/82a118d71c32ae738b531a2a6fddaf80abb857db))
+
 ## [1.17.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.16.0...v1.17.0) (2026-10-17)
 
 
