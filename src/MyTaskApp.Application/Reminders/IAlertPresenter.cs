@@ -15,7 +15,15 @@ public sealed record ReminderAlert(
 /// Vários lembretes vencidos de uma vez viram um aviso só. Sem isto, abrir o app
 /// depois de um mês jogaria dezenas de janelas na tela.
 /// </summary>
-public sealed record ReminderDigest(int Count, AlertLevel Level, TimeSpan LongestWait);
+/// <remarks>
+/// Leva as ocorrências agregadas: os botões do resumo agem em todas. Sem elas o
+/// resumo não tinha o que atender, e o aviso ficava preso na tela.
+/// </remarks>
+public sealed record ReminderDigest(
+    int Count,
+    AlertLevel Level,
+    TimeSpan LongestWait,
+    IReadOnlyList<Guid> OccurrenceIds);
 
 public interface IAlertPresenter
 {

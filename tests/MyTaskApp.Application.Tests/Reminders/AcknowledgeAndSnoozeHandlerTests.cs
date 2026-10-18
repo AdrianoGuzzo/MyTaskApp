@@ -44,26 +44,32 @@ public class AcknowledgeAndSnoozeHandlerTests
     }
 
     [Fact]
-    public async Task AcknowledgingTwice_SaysSoInsteadOfPretendingItWorked()
+    public async Task AcknowledgingTwice_OnlyTakesTheAlertOffTheScreenAgain()
     {
+        // Atendido por outro caminho com o aviso ainda na tela: recusar deixaria
+        // a janela presa, porque ela não tem outro jeito de sair.
         var occurrence = SeedFiredOccurrence();
         await AckHandler().HandleAsync(
             new AcknowledgeReminder(occurrence.Id, ReminderAcknowledgement.Opened), Ct);
 
-        var again = async () => await AckHandler().HandleAsync(
+        await AckHandler().HandleAsync(
             new AcknowledgeReminder(occurrence.Id, ReminderAcknowledgement.MarkedSeen), Ct);
 
-        await again.Should().ThrowAsync<DomainException>().WithMessage("*já foi atendido*");
+        occurrence.Reminder.AcknowledgedBy.Should().Be(ReminderAcknowledgement.Opened);
+        _repository.SaveCount.Should().Be(1);
+        _presenter.Dismissed.Should().Equal(occurrence.Id, occurrence.Id);
     }
 
     [Fact]
-    public async Task AcknowledgingAnUnknownOccurrence_SaysSoInWordsTheUserUnderstands()
+    public async Task AcknowledgingAnOccurrenceThatNoLongerExists_OnlyTakesTheAlertOffTheScreen()
     {
-        var acknowledge = async () => await AckHandler().HandleAsync(
-            new AcknowledgeReminder(Guid.NewGuid(), ReminderAcknowledgement.Opened), Ct);
+        var gone = Guid.NewGuid();
 
-        await acknowledge.Should().ThrowAsync<DomainException>()
-            .WithMessage("*não encontrada*");
+        await AckHandler().HandleAsync(
+            new AcknowledgeReminder(gone, ReminderAcknowledgement.Opened), Ct);
+
+        _presenter.Dismissed.Should().ContainSingle().Which.Should().Be(gone);
+        _repository.SaveCount.Should().Be(0);
     }
 
     [Fact]
@@ -91,16 +97,43 @@ public class AcknowledgeAndSnoozeHandlerTests
     }
 
     [Fact]
-    public async Task SnoozingAnAcknowledgedReminder_IsRefused()
+    public async Task SnoozingAnAcknowledgedReminder_OnlyTakesTheAlertOffTheScreen()
     {
         var occurrence = SeedFiredOccurrence();
         await AckHandler().HandleAsync(
             new AcknowledgeReminder(occurrence.Id, ReminderAcknowledgement.Opened), Ct);
 
-        var snooze = async () => await SnoozeHandler().HandleAsync(
+        await SnoozeHandler().HandleAsync(
             new SnoozeReminder(occurrence.Id, TimeSpan.FromMinutes(10)), Ct);
 
-        await snooze.Should().ThrowAsync<DomainException>().WithMessage("*já foi atendido*");
+        occurrence.Reminder.IsAcknowledged.Should().BeTrue();
+        _repository.SaveCount.Should().Be(1);
+        _presenter.Dismissed.Should().Equal(occurrence.Id, occurrence.Id);
+    }
+
+    [Fact]
+    public async Task SnoozingACompletedOccurrence_OnlyTakesTheAlertOffTheScreen()
+    {
+        var occurrence = SeedFiredOccurrence();
+        var task = await _repository.FindByOccurrenceIdAsync(occurrence.Id, Ct);
+        task!.CompleteOccurrence(occurrence.Id, ThreePm);
+
+        await SnoozeHandler().HandleAsync(
+            new SnoozeReminder(occurrence.Id, TimeSpan.FromMinutes(10)), Ct);
+
+        _repository.SaveCount.Should().Be(0);
+        _presenter.Dismissed.Should().ContainSingle().Which.Should().Be(occurrence.Id);
+    }
+
+    [Fact]
+    public async Task SnoozingAnOccurrenceThatNoLongerExists_OnlyTakesTheAlertOffTheScreen()
+    {
+        var gone = Guid.NewGuid();
+
+        await SnoozeHandler().HandleAsync(new SnoozeReminder(gone, TimeSpan.FromMinutes(10)), Ct);
+
+        _presenter.Dismissed.Should().ContainSingle().Which.Should().Be(gone);
+        _repository.SaveCount.Should().Be(0);
     }
 
     [Theory]

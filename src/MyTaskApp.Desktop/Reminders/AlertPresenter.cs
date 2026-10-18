@@ -6,6 +6,7 @@ using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Deadlines;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Domain.Deadlines;
+using MyTaskApp.Domain.Reminders;
 using MyTaskApp.Desktop.ViewModels;
 using MyTaskApp.Desktop.Views;
 
@@ -92,42 +93,46 @@ internal sealed class AlertPresenter(
         Position(window);
     }
 
-    private void Present(ReminderAlert alert)
+    private void Present(ReminderAlert alert) =>
+        PresentReminder(alert.OccurrenceId, alert.Level, viewModel => viewModel.Show(alert));
+
+    /// <param name="id">A ocorrência, ou <see cref="Guid.Empty"/> para o resumo.</param>
+    private void PresentReminder(Guid id, AlertLevel level, Action<ReminderAlertViewModel> fill)
     {
         // Já há janela para esta ocorrência: atualiza no lugar. Sem isto, um
         // lembrete repetindo empilha uma janela nova a cada 15 minutos enquanto
         // o usuário está fora.
-        if (_open.TryGetValue((false, alert.OccurrenceId), out var existing))
+        if (_open.TryGetValue((false, id), out var existing))
         {
-            ((ReminderAlertViewModel)existing.DataContext!).Show(alert);
-            Escalate(existing, alert);
+            fill((ReminderAlertViewModel)existing.DataContext!);
+            Escalate(existing, level);
             return;
         }
 
         if (_open.Count >= MaxVisible)
         {
-            logger.LogDebug("ReminderAlertSuppressed {OccurrenceId}", alert.OccurrenceId);
+            logger.LogDebug("ReminderAlertSuppressed {OccurrenceId}", id);
             return;
         }
 
         var viewModel = services.GetRequiredService<ReminderAlertViewModel>();
-        viewModel.Show(alert);
+        fill(viewModel);
 
         var window = new AlertWindow { DataContext = viewModel };
 
         viewModel.Acted += _ =>
         {
-            Close((false, alert.OccurrenceId));
+            Close((false, id));
             Acted?.Invoke();
         };
 
-        _open[(false, alert.OccurrenceId)] = window;
+        _open[(false, id)] = window;
 
         // Nunca modal: o aviso não pode impedir o usuário de trabalhar.
         window.Show();
 
         Position(window);
-        Escalate(window, alert);
+        Escalate(window, level);
     }
 
     // ---------------------------------------------------------------------
@@ -211,20 +216,12 @@ internal sealed class AlertPresenter(
     /// <summary>"Abrir" no aviso de prazo: o composition root sabe abrir a tarefa.</summary>
     public event Action<Guid>? OpenRequested;
 
-    private void PresentDigest(ReminderDigest digest)
-    {
-        var alert = new ReminderAlert(
-            Guid.Empty,
-            Guid.Empty,
-            digest.Count == 1
-                ? "1 checklist está esperando sua atenção"
-                : $"{digest.Count} checklists estão esperando sua atenção",
-            null,
-            digest.Level,
-            digest.LongestWait);
-
-        Present(alert);
-    }
+    /// <summary>
+    /// Uma janela só, de chave vazia, atualizada no lugar a cada resumo. Os
+    /// botões dela atendem as ocorrências que o resumo leva.
+    /// </summary>
+    private void PresentDigest(ReminderDigest digest) =>
+        PresentReminder(Guid.Empty, digest.Level, viewModel => viewModel.ShowDigest(digest));
 
     private void Close((bool IsDeadline, Guid Id) key)
     {
@@ -274,11 +271,11 @@ internal sealed class AlertPresenter(
     /// roubar o cursor — é isso que "insistente, mas sem impedir de trabalhar"
     /// quer dizer na prática.
     /// </summary>
-    private void Escalate(Window window, ReminderAlert alert)
+    private void Escalate(Window window, AlertLevel level)
     {
-        window.Topmost = alert.Level.Prominent;
+        window.Topmost = level.Prominent;
 
-        if (!alert.Level.BringToFront)
+        if (!level.BringToFront)
         {
             return;
         }
