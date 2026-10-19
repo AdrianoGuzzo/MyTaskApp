@@ -163,7 +163,10 @@ rm signing.key signing.crt encryption.key encryption.crt
 ```
 
 Fora do compose, o PFX também pode ir numa variável (`base64 -w0 signing.pfx`
-→ `Sync__SigningCertificate__Base64`).
+→ `Sync__SigningCertificate__Base64`). Evite: a variável aparece para quem roda
+`docker inspect` ou `docker service inspect` e fica no painel do orquestrador.
+Prefira o arquivo em `/run/secrets` com `__Path` (no Dokploy, §5). Com os dois,
+vale o `__Base64`.
 
 Os tokens são assinados e cifrados com esses certificados. Trocar qualquer um
 dos dois invalida os tokens em circulação, inclusive os refresh tokens, e cada
@@ -641,6 +644,42 @@ migrations (`run --rm migrate`) também rodam com o `mytaskapp_app`.
 `Sync__Registration__*` **antes** de subir a versão nova. Sem a lista, quem já
 estava conectado perde a renovação do token em até 15 minutos, e conectar de
 novo é recusado com `registration_closed`.
+
+### No Dokploy
+
+O Dokploy (v0.25) publica a API como serviço do Swarm. A cada deploy, ele
+reescreve o spec inteiro do serviço a partir do painel: env, mounts, portas e
+rede. Um secret do Swarm posto à mão (`docker service update --secret-add`)
+some no deploy seguinte, e a API sobe sem os PFX e não arranca. Por isso os
+segredos ficam numa pasta do host, montada em `/run/secrets` por um **Bind
+Mount** do painel, com o mesmo layout do compose (§5, passo 4):
+
+| Arquivo em `/srv/mytaskapp-sync/secrets` | Na API vira |
+|---|---|
+| `ConnectionStrings__Sync` | a connection string |
+| `Authentication__Google__ClientSecret` | a chave secreta do Google |
+| `signing.pfx`, `Sync__SigningCertificate__Password` | o PFX de assinatura e a senha |
+| `encryption.pfx`, `Sync__EncryptionCertificate__Password` | o PFX de cifragem e a senha |
+| `dataprotection.pfx`, `Sync__DataProtectionCertificate__Password` | o PFX do Data Protection e a senha |
+
+- A pasta é `root:1654` com `0750`, e os arquivos, `root:1654` com `0440`. A API
+  (UID e GID 1654) lê os arquivos, mas não consegue alterá-los.
+- No painel: **Advanced → Volumes → Bind Mount**, host
+  `/srv/mytaskapp-sync/secrets`, destino `/run/secrets`. Em **Environment**, só o
+  que não é segredo, mais os caminhos:
+  `Sync__SigningCertificate__Path=/run/secrets/signing.pfx`,
+  `Sync__EncryptionCertificate__Path=/run/secrets/encryption.pfx` e
+  `Sync__DataProtectionCertificate__Path=/run/secrets/dataprotection.pfx`.
+  Nenhum `__Base64`, `__Password`, `ClientSecret` ou `ConnectionStrings__Sync` no
+  env.
+- O arquivo é lido ao subir. Mudou um segredo? Faça um Deploy (ou
+  `docker service update --force`).
+- Ao tirar um segredo do env, o `docker service inspect` ainda o mostra no
+  `PreviousSpec`. Um segundo Deploy o limpa. Os contêineres parados das tasks
+  antigas também guardam o env (`docker inspect`); apague-os:
+  `docker ps -a -f name=<serviço> -f status=exited -q | xargs -r docker rm`.
+- Para conferir: `docker service inspect <serviço> | grep -cE
+  'Base64|Password|ClientSecret|ConnectionStrings'` dá `0`.
 
 ### Rate limit
 

@@ -5,8 +5,9 @@ namespace MyTaskApp.Server.Api;
 
 /// <summary>
 /// A configuração do servidor (ADR-061). Os segredos — client secret do
-/// Google, certificados do OpenIddict, senha do banco — vêm de variáveis de
-/// ambiente ou do user-secrets, nunca do repositório.
+/// Google, certificados do OpenIddict, senha do banco — vêm de arquivos em
+/// <c>/run/secrets</c>, de variáveis de ambiente ou do user-secrets, nunca do
+/// repositório.
 /// </summary>
 public sealed class SyncServerOptions
 {
