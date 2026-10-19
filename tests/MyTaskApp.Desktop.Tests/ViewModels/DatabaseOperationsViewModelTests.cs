@@ -249,7 +249,7 @@ public class DatabaseConnectionsViewModelTests
         var changed = 0;
         viewModel.Changed += () => changed++;
         viewModel.Name = "ECO Teste";
-        viewModel.Host = "10.0.0.5";
+        viewModel.Host = "198.51.100.5";
         viewModel.Database = "eco_test";
         viewModel.Username = "app";
         viewModel.Password = "s3nh4";

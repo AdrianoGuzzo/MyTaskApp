@@ -50,7 +50,7 @@ public class ServerOnlyScreenTests
     {
         var viewModel = new DatabaseConnectionsViewModel(_runner, _confirmation, NullLogger<DatabaseConnectionsViewModel>.Instance);
         viewModel.Name = "ECO Servidor";
-        viewModel.Host = "10.0.0.5";
+        viewModel.Host = "198.51.100.5";
         viewModel.Username = "backup_user";
 
         viewModel.SaveCommand.CanExecute(null).Should().BeTrue();

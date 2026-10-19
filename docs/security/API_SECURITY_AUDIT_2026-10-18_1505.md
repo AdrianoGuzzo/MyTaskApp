@@ -8,7 +8,7 @@
 | **Código analisado** | `master` em `94f174c` (versão 1.18.0), imagem `sha256:b39d0b76…` |
 | **Ambiente** | Homologação local: `docker-compose.prod.yml` do repositório, `ASPNETCORE_ENVIRONMENT=Production`, Caddy com TLS (CA interna), PFX próprios gerados na hora, PostgreSQL 17 descartável em rede interna |
 | **Tipo** | Revalidação dos achados, pendências da seção C.4 e critérios da seção H |
-| **Escopo** | A homologação acima, as suítes do servidor e uma checagem de alcance do host `192.0.2.8` |
+| **Escopo** | A homologação acima, as suítes do servidor e uma checagem de alcance do host da API |
 
 > Este relatório não afirma que a API é segura. Ele registra o que foi testado em 18/10/2026, o que
 > passou, o que falhou e o que ficou pendente, com o motivo. Hipóteses aparecem como tal.
@@ -25,7 +25,7 @@ pendências P01–P09 e revisar a recomendação de publicação.
   do repositório sem alteração. Um arquivo de override, fora do repositório, aponta os segredos para
   uma pasta temporária, põe as contas de teste na lista de cadastro e acrescenta o apelido
   `sync-homolog.localhost` (motivo na C.2). O banco, os PFX e a CA do Caddy foram descartados no fim.
-- **Servidor da LAN.** O `192.0.2.8` estava inalcançável em 18/10: "Host de destino
+- **Servidor da LAN.** O host da API estava inalcançável em 18/10: "Host de destino
   inacessível" e nenhuma porta respondendo, nem a 22. Por isso não foi reverificado.
 
 **Resultado geral.**
@@ -242,7 +242,7 @@ Ficam como melhoria opcional:
 
 ### C.6 Restrições adotadas
 
-- Nenhum teste fora da homologação, exceto o ping e o TCP ao `192.0.2.8`, que falharam.
+- Nenhum teste fora da homologação, exceto o ping e o TCP ao host da API, que falharam.
 - Nenhuma tentativa de login em serviço algum. Sem flood, força bruta ou carga.
 - Segredos e PFX só em pasta temporária fora do repositório, apagados no fim (seção J). O client
   secret do Google não foi usado (ver C.4).
@@ -302,17 +302,17 @@ E), com o status e a correção de cada um. Aqui entram só o que mudou e os ach
   - JWKS sem certificado de desenvolvimento;
   - `/connect/token` em HTTP direto recusado com ID2083, mesmo com `X-Forwarded-Proto` forjado,
     porque o IP de origem não é o do `KnownProxies`.
-- **Na implantação real: aberto.** Até a última verificação (17/10), o `192.0.2.8` rodava em
+- **Na implantação real: aberto.** Até a última verificação (17/10), o host da API rodava em
   Development e HTTP. Em 18/10 o host estava inalcançável. Nada indica que a configuração dele mudou.
 - **Para fechar:**
-  - Migrar o serviço do Dokploy para `ASPNETCORE_ENVIRONMENT=Production` atrás do proxy TLS, com
+  - Migrar a implantação para `ASPNETCORE_ENVIRONMENT=Production` atrás do proxy TLS, com
     `Sync__Issuer`, `AllowedHosts`, `ForwardedHeaders__KnownProxies__0` e os três PFX.
   - Repetir T14, T15 e T47 contra ele.
   - O desktop instalado vai pedir login de novo e precisa confiar na CA (ou num certificado público).
 - **Depois desta auditoria (18/10, fim do dia):**
-  - O serviço passou a rodar em Production atrás do Traefik do Dokploy, com
+  - O serviço passou a rodar em Production atrás do proxy TLS da implantação, com
     `Sync__Issuer=https://<dominio-publico>/`.
-  - A 5280 publicada no ingress foi removida.
+  - A 5280 publicada no host foi removida.
   - Evidência em `API_SECURITY_AUDIT.md`, F.4, "5280 fechada".
   - T14, T15 e T47 contra o servidor real continuam pendentes.
 
@@ -401,10 +401,10 @@ E), com o status e a correção de cada um. Aqui entram só o que mudou e os ach
   - Na subida, a API registra `Cannot load library libgssapi_krb5.so.2`. É o Npgsql sondando o
     Kerberos, sem efeito, porque a autenticação é por senha. É informativo; dá para calar com
     `Integrated Security=false` ou instalando `libgssapi-krb5-2`.
-- **Host `192.0.2.8`:** inalcançável em 18/10. As pendências da F.4 original continuam valendo:
+- **Host da API:** inalcançável em 18/10. As pendências da F.4 original continuam valendo:
   - superusuário `mytaskapp`;
-  - `postgres-outro` e `postgres-vector` com senha curta;
-  - Portainer, Dokploy e Swarm abertos para a LAN;
+  - outros bancos do host com senha fraca;
+  - serviços de gerência abertos para a LAN;
   - IPv6.
 - Mais tarde em 18/10, com o host de volta, a 5280 da API foi fechada (F.4 de `API_SECURITY_AUDIT.md`).
 
@@ -515,7 +515,7 @@ API na internet.
 **Riscos residuais, mesmo depois disso:**
 - SEC-019, até ser corrigido;
 - SEC-018, até o PR #121 entrar;
-- o host Debian compartilhado com outros serviços abertos para a LAN (F.4 original);
+- o host compartilhado com outros serviços abertos para a LAN (F.4 original);
 - a dependência da disponibilidade e da política do Google para o login;
 - o que só testes de carga e um pentest com DAST ativo revelariam, ambos fora do escopo.
 

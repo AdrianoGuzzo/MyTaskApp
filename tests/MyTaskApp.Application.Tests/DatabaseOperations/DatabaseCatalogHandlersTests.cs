@@ -20,7 +20,7 @@ public class DatabaseCatalogHandlersTests
         string name = "ECO Homologação",
         DatabaseEnvironment environment = DatabaseEnvironment.Staging,
         string? password = "s3nh4-forte") =>
-        new(null, name, "10.0.0.5", 5432, "eco_hml", "app", environment, DatabaseSslMode.Require, "homologação",
+        new(null, name, "198.51.100.5", 5432, "eco_hml", "app", environment, DatabaseSslMode.Require, "homologação",
             ConnectionPermissions.FromFlags(ConnectionPermission.All), SecretText.FromOptional(password));
 
     private SaveDatabaseConnectionHandler SaveHandler() =>
@@ -163,7 +163,7 @@ public class DatabaseCatalogHandlersTests
             Catalog.Connections, _scenario.Inspector, _scenario.Policy, _scenario.Clock, NullLogger<TestDatabaseConnectionHandler>.Instance);
 
         var result = await handler.HandleAsync(
-            new TestDatabaseConnection(null, "", "10.0.0.5", 5432, "eco", "app", DatabaseEnvironment.Production, DatabaseSslMode.Prefer, new SecretText("digitada")),
+            new TestDatabaseConnection(null, "", "198.51.100.5", 5432, "eco", "app", DatabaseEnvironment.Production, DatabaseSslMode.Prefer, new SecretText("digitada")),
             Ct);
 
         result.Connected.Should().BeTrue();
@@ -181,7 +181,7 @@ public class DatabaseCatalogHandlersTests
             Catalog.Connections, _scenario.Inspector, _scenario.Policy, _scenario.Clock, NullLogger<TestDatabaseConnectionHandler>.Instance);
 
         await handler.HandleAsync(
-            new TestDatabaseConnection(id, "ECO Homologação", "10.0.0.5", 5432, "eco_hml", "app", DatabaseEnvironment.Staging, DatabaseSslMode.Require, null),
+            new TestDatabaseConnection(id, "ECO Homologação", "198.51.100.5", 5432, "eco_hml", "app", DatabaseEnvironment.Staging, DatabaseSslMode.Require, null),
             Ct);
 
         var test = _scenario.Inspector.Tests.Single();

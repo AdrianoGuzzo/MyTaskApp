@@ -5799,7 +5799,7 @@ pendente mantém o valor local.
   - o issuer e os endpoints do discovery (`Host: evil.example` publicava
     `http://evil.example/`);
   - o issuer que a validação aceita: o token emitido por `localhost:5280`
-    levava 401 ID2088 em `192.0.2.8:5280`;
+    levava 401 ID2088 no IP da LAN, na mesma porta;
   - o `redirect_uri` mandado ao Google.
 
   Agora:
