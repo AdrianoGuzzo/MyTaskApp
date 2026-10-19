@@ -3,7 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:vm="clr-namespace:MyTaskApp.Mobile.Core.ViewModels;assembly=MyTaskApp.Mobile.Core"
              x:Class="MyTaskApp.Mobile.Views.FiltersPage"
-             x:DataType="vm:TaskListViewModel"
+             x:DataType="vm:TaskListViewModelBase"
              Title="Filtros">
 
     <ContentPage.ToolbarItems>
@@ -23,13 +23,6 @@
                         </Grid>
                     </DataTemplate>
                 </BindableLayout.ItemTemplate>
-            </VerticalStackLayout>
-
-            <VerticalStackLayout IsVisible="{Binding ShowsOrigin}">
-                <Label Text="Origem (onde a tarefa aparece)" Style="{StaticResource Section}" />
-                <Picker ItemsSource="{Binding OriginChoices}"
-                        SelectedItem="{Binding SelectedOrigin}"
-                        Title="Origem" />
             </VerticalStackLayout>
 
             <Label Text="Etiquetas" Style="{StaticResource Section}" />

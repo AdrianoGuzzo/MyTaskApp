@@ -64,10 +64,22 @@ public sealed class PresentationTests
         search.TagIds.Should().Equal(tag);
         search.Origin.Should().Be(PlacementMatch.Shared);
         search.Sort.Should().Be(TaskSort.Deadline);
-        filter.SheetCount.Should().Be(3);
+        filter.SheetCount.Should().Be(2, "o dispositivo fica nos chips, fora da folha");
         filter.IsNarrowed.Should().BeTrue();
         TaskFilter.Default.IsNarrowed.Should().BeFalse();
         (TaskFilter.Default with { Sort = TaskSort.Title }).IsNarrowed.Should().BeFalse("ordenar não esconde nada");
+        (TaskFilter.Default with { Origin = PlacementMatch.Shared }).IsNarrowed.Should().BeTrue();
+    }
+
+    [Fact]
+    public void EachTabStartsFromItsPreset_AndOnlyAnotherOneNarrows()
+    {
+        var pending = TaskFilter.For(TaskListPreset.Pending);
+
+        pending.IsNarrowed.Should().BeFalse();
+        pending.ToSearch(0, 50).Statuses.Should().Equal(TaskItemStatus.Pending);
+        (pending with { Preset = TaskListPreset.Overdue }).IsNarrowed.Should().BeTrue();
+        TaskFilter.For(TaskListPreset.Completed).ToSearch(0, 50).Statuses.Should().Equal(TaskItemStatus.Completed);
     }
 
     [Theory]
@@ -106,6 +118,7 @@ public sealed class PresentationTests
 
         catalog.IsActive.Should().BeFalse();
         catalog.FilterOptions().Should().Equal(OriginCatalog.AnyOrigin);
+        catalog.MatchFor(OriginCatalog.SharedKey).Should().BeNull("sem conta, nenhuma escolha filtra");
         catalog.FormChoices().Should().BeEmpty();
         catalog.DefaultForNew().Should().BeNull("sem conta, a tarefa nasce como no desktop desconectado");
         catalog.Label(null).Should().Be(OriginCatalog.Shared);
@@ -129,8 +142,18 @@ public sealed class PresentationTests
         var catalog = new OriginCatalog(placements, directory);
 
         catalog.FilterOptions().Select(option => option.Label)
-            .Should().Equal("Todas as origens", "Compartilhadas", "Este celular", "Notebook", "PC antigo (removido)");
+            .Should().Equal("Todas", "Compartilhadas", "Este celular", "Notebook", "PC antigo (removido)");
         catalog.FilterOptions()[3].Match!.DeviceIds.Should().Equal(notebook);
+        catalog.FilterOptions().Select(option => option.Key)
+            .Should().Equal(OriginCatalog.AnyKey, OriginCatalog.SharedKey, OriginCatalog.HereKey, notebook.ToString("D"), old.ToString("D"));
+
+        catalog.MatchFor(OriginCatalog.AnyKey).Should().BeNull();
+        catalog.MatchFor(OriginCatalog.SharedKey).Should().Be(PlacementMatch.Shared);
+        catalog.MatchFor(OriginCatalog.HereKey)!.DeviceIds.Should().Contain(phone);
+        catalog.MatchFor(notebook.ToString("D"))!.DeviceIds.Should().Equal(notebook);
+        catalog.MatchFor(old.ToString("D"))!.DeviceIds.Should().Equal([old], "o que ficou no removido ainda se acha");
+        catalog.MatchFor(Guid.CreateVersion7().ToString("D")).Should().BeNull("a conta não tem esse dispositivo");
+        catalog.MatchFor("lixo").Should().BeNull();
 
         catalog.FormChoices().Select(choice => choice.Label)
             .Should().Equal("Compartilhada (todos os dispositivos)", "Só neste celular", "Só em Notebook");

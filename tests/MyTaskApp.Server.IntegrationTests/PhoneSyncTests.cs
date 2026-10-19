@@ -134,14 +134,10 @@ public sealed class PhoneSyncTests(PostgresFixture postgres) : IAsyncLifetime
         var phone = await PhoneAsync();
         var list = phone.List;
 
-        await list.OpenFiltersAsync();
-        list.SelectedOrigin = list.OriginChoices.Single(option => option.Label == "Notebook");
-        await list.ApplyFiltersAsync();
+        await list.SelectDeviceAsync(list.Devices.Single(chip => chip.Label == "Notebook").Value);
         list.Tasks.Select(row => row.Title).Should().Equal("Só do notebook");
 
-        await list.OpenFiltersAsync();
-        list.SelectedOrigin = list.OriginChoices.Single(option => option.Label == "Compartilhadas");
-        await list.ApplyFiltersAsync();
+        await list.SelectDeviceAsync(OriginCatalog.SharedKey);
         list.Tasks.Select(row => row.Title).Should().Equal("De todos");
     }
 

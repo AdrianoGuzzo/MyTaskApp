@@ -8,6 +8,7 @@ using MyTaskApp.Application.Tags;
 using MyTaskApp.Application.Tasks;
 using MyTaskApp.Infrastructure.Sync.Http;
 using MyTaskApp.Mobile.Core.Composition;
+using MyTaskApp.Mobile.Core.Presentation;
 using MyTaskApp.Mobile.Core.ViewModels;
 using MyTaskApp.Sync.Contracts;
 
@@ -66,6 +67,8 @@ public sealed class MobileCompositionTests : IAsyncLifetime
     public void TheSingletons_AreTheSameAcrossTheApp()
     {
         _app.Get<TaskListViewModel>().Should().BeSameAs(_app.Get<TaskListViewModel>());
+        _app.Get<HistoryViewModel>().Should().BeSameAs(_app.Get<HistoryViewModel>());
+        _app.Get<DeviceFocus>().Should().BeSameAs(_app.Get<DeviceFocus>(), "as duas abas olham o mesmo dispositivo");
         _app.Get<AccountViewModel>().Should().BeSameAs(_app.Get<AccountViewModel>());
         _app.Get<SyncScheduler>().Should().BeSameAs(_app.Get<SyncScheduler>());
     }

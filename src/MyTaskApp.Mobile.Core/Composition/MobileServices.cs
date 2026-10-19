@@ -31,7 +31,8 @@ public sealed class MobileHostOptions
 /// A composição do celular (ADR-067): a mesma Application e os mesmos dados do
 /// desktop (<see cref="DependencyInjection.AddLocalData"/>), e nada de
 /// processo, Git, terminal ou Jira. A casca MAUI registra as portas da
-/// plataforma (<see cref="Ports"/> e o <see cref="Infrastructure.Secrets.ISecretStore"/>).
+/// plataforma (<see cref="Ports"/>, inclusive o <see cref="Ports.IPreferenceStore"/>,
+/// e o <see cref="Infrastructure.Secrets.ISecretStore"/>).
 /// </summary>
 public static class MobileServices
 {
@@ -69,9 +70,11 @@ public static class MobileServices
 
         services.AddSingleton<MobileLifecycle>();
         services.AddSingleton<OriginCatalog>();
+        services.AddSingleton<DeviceFocus>();
 
-        // A lista fica viva entre as telas: voltar do detalhe não recarrega do zero.
+        // As listas ficam vivas entre as telas: voltar do detalhe não recarrega do zero.
         services.AddSingleton<TaskListViewModel>();
+        services.AddSingleton<HistoryViewModel>();
         services.AddSingleton<AccountViewModel>();
         services.AddTransient<ConnectViewModel>();
         services.AddTransient<TaskDetailViewModel>();

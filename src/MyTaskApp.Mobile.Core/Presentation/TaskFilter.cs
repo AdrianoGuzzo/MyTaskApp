@@ -25,9 +25,15 @@ public sealed record TaskFilter
 {
     public static TaskFilter Default { get; } = new();
 
+    /// <summary>O ponto de partida de uma aba: Pendentes na aba Tarefas, Concluídas no Histórico.</summary>
+    public static TaskFilter For(TaskListPreset preset) => new() { Preset = preset, BasePreset = preset };
+
     public string? Text { get; init; }
 
     public TaskListPreset Preset { get; init; } = TaskListPreset.All;
+
+    /// <summary>O atalho de quando nada foi mexido; escolher outro estreita.</summary>
+    public TaskListPreset BasePreset { get; init; } = TaskListPreset.All;
 
     public IReadOnlyCollection<TaskPriority> Priorities { get; init; } = [];
 
@@ -39,10 +45,10 @@ public sealed record TaskFilter
 
     /// <summary>Há algo além do padrão — é o que distingue "nenhuma tarefa" de "nada com estes filtros".</summary>
     public bool IsNarrowed =>
-        !string.IsNullOrWhiteSpace(Text) || Preset != TaskListPreset.All || Priorities.Count > 0 || TagIds.Count > 0 || Origin is not null;
+        !string.IsNullOrWhiteSpace(Text) || Preset != BasePreset || Priorities.Count > 0 || TagIds.Count > 0 || Origin is not null;
 
-    /// <summary>Quantos filtros da folha estão ligados, para o selo do botão.</summary>
-    public int SheetCount => (Priorities.Count > 0 ? 1 : 0) + (TagIds.Count > 0 ? 1 : 0) + (Origin is not null ? 1 : 0);
+    /// <summary>Quantos filtros da folha estão ligados, para o selo do botão; o dispositivo fica nos chips.</summary>
+    public int SheetCount => (Priorities.Count > 0 ? 1 : 0) + (TagIds.Count > 0 ? 1 : 0);
 
     public SearchTasks ToSearch(int offset, int limit) => new(
         Text: string.IsNullOrWhiteSpace(Text) ? null : Text.Trim(),
