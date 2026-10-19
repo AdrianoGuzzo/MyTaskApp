@@ -15,7 +15,8 @@ public interface INavigator
 
     Task EditTaskAsync(Guid taskId);
 
-    Task OpenFiltersAsync();
+    /// <summary>A folha de filtros da aba Tarefas ou, com <paramref name="history"/>, da aba Histórico.</summary>
+    Task OpenFiltersAsync(bool history = false);
 
     Task OpenConnectAsync();
 
@@ -50,6 +51,19 @@ public interface IThemeService
     string Choice { get; }
 
     void Use(string choice);
+}
+
+/// <summary>
+/// Escolhas pequenas da tela que voltam na próxima abertura (o dispositivo da
+/// lista). Não é lugar de segredo: esses vão no <c>ISecretStore</c>.
+/// </summary>
+public interface IPreferenceStore
+{
+    /// <summary><c>null</c> = nunca gravado.</summary>
+    string? Get(string key);
+
+    /// <summary><c>null</c> apaga.</summary>
+    void Set(string key, string? value);
 }
 
 /// <summary>

@@ -32,6 +32,9 @@ public sealed record TaskRow(
 
     public bool IsHighPriority => Priority is TaskPriority.High or TaskPriority.Urgent;
 
+    /// <summary>Na aba das pendentes, "Pendente" em toda linha não diz nada: só aparece o que foge disso.</summary>
+    public bool ShowsStatus => Status != TaskItemStatus.Pending || Lifecycle != TaskLifecycle.Active;
+
     /// <summary>Concluir e reabrir pelo gesto só na lista principal; arquivada e lixeira pedem o detalhe.</summary>
     public bool CanToggle => Lifecycle is TaskLifecycle.Active or TaskLifecycle.Completed && Status != TaskItemStatus.Cancelled;
 

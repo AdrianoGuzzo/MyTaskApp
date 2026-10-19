@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using MyTaskApp.Application.Sync;
 using MyTaskApp.Mobile.Adapters;
 using MyTaskApp.Mobile.Core.Composition;
@@ -6,11 +5,10 @@ using MyTaskApp.Mobile.Core.ViewModels;
 
 namespace MyTaskApp.Mobile.Views;
 
+/// <summary>A aba Tarefas: as pendentes. A lista em si é a <see cref="TaskListView"/>, a mesma do Histórico.</summary>
 public partial class TaskListPage
 {
     private const string ConnectOfferedKey = "connect-offered";
-
-    private const string PulseAnimation = "sync-pulse";
 
     private readonly TaskListViewModel _viewModel;
 
@@ -23,7 +21,6 @@ public partial class TaskListPage
         InitializeComponent();
         BindingContext = _viewModel = viewModel;
         _lifecycle = lifecycle;
-        _viewModel.PropertyChanged += OnViewModelChanged;
         themes.Changed += OnThemeChanged;
     }
 
@@ -76,81 +73,13 @@ public partial class TaskListPage
         }
     }
 
-    /// <summary>"Buscar" no teclado: a busca já está correndo, então o teclado sai da frente.</summary>
-    private async void OnSearchPressed(object? sender, EventArgs e)
-    {
-        if (sender is SearchBar search)
-        {
-            await search.HideSoftInputAsync(CancellationToken.None);
-        }
-    }
-
-    private void OnViewModelChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        switch (e.PropertyName)
-        {
-            case nameof(TaskListViewModel.HasUndo):
-                _ = ShowUndoAsync(_viewModel.HasUndo);
-                break;
-
-            case nameof(TaskListViewModel.Sync):
-                Pulse(_viewModel.Sync?.Kind == SyncIndicatorKind.Syncing);
-                break;
-        }
-    }
-
-    private async Task ShowUndoAsync(bool show)
-    {
-        UndoBar.AbortAnimation("FadeTo");
-        UndoBar.AbortAnimation("TranslateTo");
-
-        if (show)
-        {
-            UndoBar.TranslationY = 24;
-            UndoBar.IsVisible = true;
-            SemanticScreenReader.Default.Announce(_viewModel.UndoMessage + " Desfazer disponível.");
-            await Task.WhenAll(UndoBar.FadeToAsync(1, 180, Easing.CubicOut), UndoBar.TranslateToAsync(0, 0, 180, Easing.CubicOut));
-        }
-        else
-        {
-            await Task.WhenAll(UndoBar.FadeToAsync(0, 150, Easing.CubicIn), UndoBar.TranslateToAsync(0, 24, 150, Easing.CubicIn));
-
-            if (!_viewModel.HasUndo)
-            {
-                UndoBar.IsVisible = false;
-            }
-        }
-    }
-
-    /// <summary>Sincronizando, a bolinha pulsa como a do desktop; parada, fica acesa.</summary>
-    private void Pulse(bool on)
-    {
-        if (!on)
-        {
-            SyncDot.AbortAnimation(PulseAnimation);
-            SyncDot.Opacity = 1;
-            return;
-        }
-
-        if (SyncDot.AnimationIsRunning(PulseAnimation))
-        {
-            return;
-        }
-
-        new Animation
-        {
-            { 0, 0.5, new Animation(value => SyncDot.Opacity = value, 1, 0.3) },
-            { 0.5, 1, new Animation(value => SyncDot.Opacity = value, 0.3, 1) },
-        }.Commit(SyncDot, PulseAnimation, length: 1200, repeat: () => _viewModel.Sync?.Kind == SyncIndicatorKind.Syncing);
-    }
-
     /// <summary>Na primeira vez, sem conta e com servidor, sugere entrar; depois, fica na aba Conta.</summary>
     private async Task OfferConnectionOnceAsync()
     {
         if (_viewModel.Sync?.Kind == SyncIndicatorKind.LocalOnly && !Preferences.Default.Get(ConnectOfferedKey, false))
         {
             Preferences.Default.Set(ConnectOfferedKey, true);
-            await Shell.Current.GoToAsync(Adapters.ShellNavigator.Connect);
+            await Shell.Current.GoToAsync(ShellNavigator.Connect);
         }
     }
 }

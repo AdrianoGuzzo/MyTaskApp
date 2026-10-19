@@ -22,6 +22,9 @@ public partial class Choice<T>(T value, string label, string? colorHex = null) :
 /// <summary>Um atalho do topo da lista (Todas, Pendentes…). Concreto para o XAML compilar o binding.</summary>
 public sealed class PresetChip(TaskListPreset value, string label) : Choice<TaskListPreset>(value, label);
 
+/// <summary>Um dispositivo no topo da lista (Todas, Compartilhadas, Este celular, Notebook…); o valor é a chave gravada.</summary>
+public sealed class DeviceChip(string value, string label) : Choice<string>(value, label);
+
 /// <summary>Uma prioridade marcável na folha de filtros.</summary>
 public sealed class PriorityChip(TaskPriority value, string label) : Choice<TaskPriority>(value, label);
 

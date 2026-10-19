@@ -1,0 +1,332 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+    A lista das abas Tarefas e Histórico (ADR-076): o ViewModel de cada aba
+    muda só os atalhos de status e as frases. Os comandos das linhas sobem
+    até o ViewModel pela base comum.
+-->
+<ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:MyTaskApp.Mobile.Core.ViewModels;assembly=MyTaskApp.Mobile.Core"
+             xmlns:pres="clr-namespace:MyTaskApp.Mobile.Core.Presentation;assembly=MyTaskApp.Mobile.Core"
+             x:Class="MyTaskApp.Mobile.Views.TaskListView"
+             x:DataType="vm:TaskListViewModelBase">
+
+    <Grid RowDefinitions="Auto,Auto,Auto,Auto,*">
+
+        <!--
+            O estado da sincronização, sempre à vista: a bolinha com as cores do
+            desktop (ADR-063) e a frase curta. Tocar leva à aba Conta, com o detalhe.
+        -->
+        <Border Grid.Row="0"
+                Style="{StaticResource Pill}"
+                HorizontalOptions="Start"
+                Margin="16,4,16,0"
+                IsVisible="{Binding Sync.IsVisible, FallbackValue=False}"
+                SemanticProperties.Description="{Binding Sync.Detail, StringFormat='Sincronização: {0} Toque para ver a conta.', FallbackValue=''}">
+            <Border.GestureRecognizers>
+                <TapGestureRecognizer Command="{Binding OpenAccountCommand}" />
+            </Border.GestureRecognizers>
+            <HorizontalStackLayout Spacing="8">
+                <!-- Miolo e anel por conversor, que lê a cor do tema: sem gatilho de cor (veja Converters.cs). -->
+                <Ellipse x:Name="SyncDot"
+                         WidthRequest="10"
+                         HeightRequest="10"
+                         VerticalOptions="Center"
+                         StrokeThickness="2"
+                         Fill="{Binding Sync.Kind, Converter={StaticResource SyncDotFill}, FallbackValue={x:Null}}"
+                         Stroke="{Binding Sync.Kind, Converter={StaticResource SyncDotRing}, FallbackValue={x:Null}}" />
+                <Label Text="{Binding SyncLine}"
+                       FontSize="13"
+                       TextColor="{DynamicResource TextMid}"
+                       VerticalOptions="Center" />
+            </HorizontalStackLayout>
+        </Border>
+
+        <SearchBar Grid.Row="1"
+                   Margin="8,4,8,0"
+                   Placeholder="Buscar tarefas"
+                   Text="{Binding SearchText}"
+                   SearchButtonPressed="OnSearchPressed"
+                   SemanticProperties.Description="Buscar no título e na descrição das tarefas" />
+
+        <!-- O dispositivo em foco: vale para as duas abas e volta na próxima abertura do app. -->
+        <ScrollView x:Name="DeviceScroll"
+                    Grid.Row="2"
+                    Orientation="Horizontal"
+                    HorizontalScrollBarVisibility="Never"
+                    IsVisible="{Binding ShowsDevices}">
+            <HorizontalStackLayout x:Name="DeviceChips"
+                                   Spacing="8"
+                                   Padding="16,8,16,0"
+                                   SizeChanged="OnDeviceChipsSized"
+                                   BindableLayout.ItemsSource="{Binding Devices}">
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="vm:DeviceChip">
+                        <!-- Dois botões, e não um com gatilho, como nos atalhos abaixo. -->
+                        <Grid>
+                            <Button Style="{StaticResource Chip}"
+                                    Text="{Binding Label}"
+                                    IsVisible="{Binding IsSelected, Converter={StaticResource Not}}"
+                                    SemanticProperties.Description="{Binding Label, StringFormat='Mostrar as tarefas de {0}'}"
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:TaskListViewModelBase}}, x:DataType=vm:TaskListViewModelBase, Path=SelectDeviceCommand}"
+                                    CommandParameter="{Binding Value}" />
+                            <Button Style="{StaticResource SelectedDeviceChip}"
+                                    Text="{Binding Label}"
+                                    IsVisible="{Binding IsSelected}"
+                                    SemanticProperties.Description="{Binding Label, StringFormat='Mostrando as tarefas de {0}'}"
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:TaskListViewModelBase}}, x:DataType=vm:TaskListViewModelBase, Path=SelectDeviceCommand}"
+                                    CommandParameter="{Binding Value}" />
+                        </Grid>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </HorizontalStackLayout>
+        </ScrollView>
+
+        <ScrollView Grid.Row="3" Orientation="Horizontal" HorizontalScrollBarVisibility="Never">
+            <HorizontalStackLayout Spacing="8" Padding="16,8" BindableLayout.ItemsSource="{Binding Presets}">
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="vm:PresetChip">
+                        <!--
+                            Dois botões, e não um com gatilho: no Button, o gatilho que sai
+                            devolvia a cor do tema de antes de uma troca de tema.
+                        -->
+                        <Grid>
+                            <Button Style="{StaticResource Chip}"
+                                    Text="{Binding Label}"
+                                    IsVisible="{Binding IsSelected, Converter={StaticResource Not}}"
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:TaskListViewModelBase}}, x:DataType=vm:TaskListViewModelBase, Path=SelectPresetCommand}"
+                                    CommandParameter="{Binding Value}" />
+                            <Button Style="{StaticResource SelectedChip}"
+                                    Text="{Binding Label}"
+                                    IsVisible="{Binding IsSelected}"
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:TaskListViewModelBase}}, x:DataType=vm:TaskListViewModelBase, Path=SelectPresetCommand}"
+                                    CommandParameter="{Binding Value}" />
+                        </Grid>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </HorizontalStackLayout>
+        </ScrollView>
+
+        <RefreshView Grid.Row="4"
+                     IsRefreshing="{Binding IsRefreshing}"
+                     Command="{Binding RefreshCommand}">
+            <CollectionView ItemsSource="{Binding Tasks}"
+                            SelectionMode="None"
+                            RemainingItemsThreshold="10"
+                            RemainingItemsThresholdReachedCommand="{Binding LoadMoreCommand}"
+                            Margin="0,0,0,0">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="pres:TaskRow">
+                        <!--
+                            Arrastar só revela o botão: concluir é tocar nele. Arrastar
+                            sem querer não muda nada, e o que muda tem "Desfazer".
+                        -->
+                        <SwipeView Margin="12,4">
+                            <SwipeView.LeftItems>
+                                <SwipeItems Mode="Reveal" SwipeBehaviorOnInvoked="Close">
+                                    <SwipeItem Text="{Binding ToggleLabel}"
+                                               IsVisible="{Binding CanToggle}"
+                                               BackgroundColor="{DynamicResource Success}"
+                                               Command="{Binding Source={RelativeSource AncestorType={x:Type vm:TaskListViewModelBase}}, x:DataType=vm:TaskListViewModelBase, Path=ToggleCommand}"
+                                               CommandParameter="{Binding .}" />
+                                </SwipeItems>
+                            </SwipeView.LeftItems>
+
+                            <Border Style="{StaticResource Card}"
+                                    Padding="0"
+                                    SemanticProperties.Description="{Binding AccessibleDescription}">
+                                <Border.GestureRecognizers>
+                                    <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type vm:TaskListViewModelBase}}, x:DataType=vm:TaskListViewModelBase, Path=OpenCommand}"
+                                                          CommandParameter="{Binding .}" />
+                                </Border.GestureRecognizers>
+
+                                <Grid ColumnDefinitions="4,Auto,*" ColumnSpacing="0">
+                                    <!--
+                                        A faixa da prioridade. Nas linhas, nenhuma cor do tema passa por
+                                        gatilho: no Android, o gatilho que sai numa linha reciclada
+                                        devolvia a cor do tema de antes de uma troca (Converters.cs).
+                                    -->
+                                    <BoxView Grid.Column="0" Color="{Binding Priority, Converter={StaticResource PriorityColor}}" />
+
+                                    <!--
+                                        O círculo de concluir, como nos Lembretes do iOS: 24 pontos de
+                                        desenho, 44 de toque. Concluída fica cheia, com o visto.
+                                    -->
+                                    <Grid Grid.Column="1"
+                                          WidthRequest="48"
+                                          HeightRequest="48"
+                                          Margin="2,0,0,0"
+                                          VerticalOptions="Start"
+                                          IsVisible="{Binding CanToggle}"
+                                          SemanticProperties.Description="{Binding ToggleLabel}">
+                                        <Grid.GestureRecognizers>
+                                            <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type vm:TaskListViewModelBase}}, x:DataType=vm:TaskListViewModelBase, Path=ToggleCommand}"
+                                                                  CommandParameter="{Binding .}" />
+                                        </Grid.GestureRecognizers>
+                                        <!-- Vazio e cheio são duas formas, alternadas: cor sem gatilho. -->
+                                        <Border WidthRequest="24"
+                                                HeightRequest="24"
+                                                HorizontalOptions="Center"
+                                                VerticalOptions="Center"
+                                                StrokeShape="RoundRectangle 12"
+                                                StrokeThickness="2"
+                                                Stroke="{DynamicResource TextLow}"
+                                                BackgroundColor="Transparent"
+                                                IsVisible="{Binding IsCompleted, Converter={StaticResource Not}}" />
+                                        <Border WidthRequest="24"
+                                                HeightRequest="24"
+                                                HorizontalOptions="Center"
+                                                VerticalOptions="Center"
+                                                StrokeShape="RoundRectangle 12"
+                                                StrokeThickness="2"
+                                                Stroke="{DynamicResource Success}"
+                                                BackgroundColor="{DynamicResource Success}"
+                                                IsVisible="{Binding IsCompleted}">
+                                            <Label Text="✓"
+                                                   FontSize="14"
+                                                   FontAttributes="Bold"
+                                                   HorizontalOptions="Center"
+                                                   VerticalOptions="Center"
+                                                   TextColor="{DynamicResource Canvas}" />
+                                        </Border>
+                                    </Grid>
+
+                                    <VerticalStackLayout Grid.Column="2" Padding="4,12,14,12" Spacing="4">
+                                        <!-- Concluída fica riscada e esmaecida: opacidade, que não é cor do tema. -->
+                                        <Label Text="{Binding Title}"
+                                               FontSize="16"
+                                               FontAttributes="Bold"
+                                               LineBreakMode="TailTruncation"
+                                               MaxLines="2"
+                                               TextDecorations="{Binding IsCompleted, Converter={StaticResource Strike}}">
+                                            <Label.Triggers>
+                                                <DataTrigger TargetType="Label" Binding="{Binding IsCompleted}" Value="True">
+                                                    <Setter Property="Opacity" Value="0.6" />
+                                                </DataTrigger>
+                                            </Label.Triggers>
+                                        </Label>
+
+                                        <Label Text="{Binding Summary}"
+                                               Style="{StaticResource Muted}"
+                                               MaxLines="1"
+                                               LineBreakMode="TailTruncation"
+                                               IsVisible="{Binding Summary, Converter={StaticResource HasValue}}" />
+
+                                        <!-- "Pendente" em toda linha da aba Tarefas não diz nada: o status só aparece quando foge disso. -->
+                                        <HorizontalStackLayout Spacing="10">
+                                            <Label Text="{Binding StatusLabel}" Style="{StaticResource Muted}" IsVisible="{Binding ShowsStatus}" />
+                                            <Label Text="{Binding PriorityLabel}" Style="{StaticResource Muted}" />
+                                            <Label Text="{Binding Origin}" Style="{StaticResource Muted}" />
+                                        </HorizontalStackLayout>
+
+                                        <Label Text="{Binding DeadlineLabel}"
+                                               Style="{StaticResource Muted}"
+                                               TextColor="{Binding DeadlineSeverity, Converter={StaticResource DeadlineColor}}"
+                                               IsVisible="{Binding DeadlineLabel, Converter={StaticResource HasValue}}" />
+
+                                        <FlexLayout Wrap="Wrap"
+                                                    BindableLayout.ItemsSource="{Binding Tags}"
+                                                    IsVisible="{Binding Tags, Converter={StaticResource HasValue}}">
+                                            <BindableLayout.ItemTemplate>
+                                                <DataTemplate x:DataType="pres:TagChip">
+                                                    <Border Margin="0,2,6,0"
+                                                            Padding="8,2"
+                                                            StrokeThickness="1"
+                                                            BackgroundColor="{Binding ColorHex, Converter={StaticResource SoftHexColor}}"
+                                                            Stroke="{Binding ColorHex, Converter={StaticResource HexColor}}"
+                                                            StrokeShape="RoundRectangle 9">
+                                                        <Label Text="{Binding Name}"
+                                                               FontSize="12"
+                                                               TextColor="{Binding ColorHex, Converter={StaticResource HexColor}}" />
+                                                    </Border>
+                                                </DataTemplate>
+                                            </BindableLayout.ItemTemplate>
+                                        </FlexLayout>
+                                    </VerticalStackLayout>
+                                </Grid>
+                            </Border>
+                        </SwipeView>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+
+                <CollectionView.Footer>
+                    <!-- Espaço para o botão + e a barra Desfazer não cobrirem a última tarefa. -->
+                    <VerticalStackLayout Padding="16,8,16,112">
+                        <ActivityIndicator IsRunning="{Binding IsLoadingMore}" IsVisible="{Binding IsLoadingMore}" HeightRequest="24" />
+                        <Label Text="Há muitas tarefas com estes filtros. Refine a busca para ver as mais antigas."
+                               Style="{StaticResource Muted}"
+                               HorizontalTextAlignment="Center"
+                               IsVisible="{Binding IsTruncated}" />
+                    </VerticalStackLayout>
+                </CollectionView.Footer>
+            </CollectionView>
+        </RefreshView>
+
+        <!-- Os estados da lista: cada um com a sua frase e o que fazer. -->
+        <ActivityIndicator Grid.Row="4" IsRunning="{Binding IsLoading}" IsVisible="{Binding IsLoading}" VerticalOptions="Center" />
+
+        <VerticalStackLayout Grid.Row="4" IsVisible="{Binding IsEmpty}" VerticalOptions="Center" Padding="32" Spacing="12">
+            <Label Text="{Binding EmptyTitle}" Style="{StaticResource Title}" HorizontalTextAlignment="Center" />
+            <Label Text="{Binding EmptyMessage}"
+                   Style="{StaticResource Muted}"
+                   HorizontalTextAlignment="Center" />
+            <Button Text="Entrar com sua conta"
+                    Style="{StaticResource Secondary}"
+                    Command="{Binding OpenAccountCommand}"
+                    IsVisible="{Binding OffersSignInWhenEmpty}"
+                    HorizontalOptions="Center" />
+        </VerticalStackLayout>
+
+        <VerticalStackLayout Grid.Row="4" IsVisible="{Binding IsNoResults}" VerticalOptions="Center" Padding="32" Spacing="12">
+            <Label Text="Nada com estes filtros" Style="{StaticResource Title}" HorizontalTextAlignment="Center" />
+            <Label Text="Nenhuma tarefa combina com a busca, o dispositivo e os filtros escolhidos." Style="{StaticResource Muted}" HorizontalTextAlignment="Center" />
+            <Button Text="Limpar filtros" Command="{Binding ClearFiltersCommand}" HorizontalOptions="Center" />
+        </VerticalStackLayout>
+
+        <VerticalStackLayout Grid.Row="4" IsVisible="{Binding IsError}" VerticalOptions="Center" Padding="32" Spacing="12">
+            <Label Text="Não deu para mostrar as tarefas" Style="{StaticResource Title}" HorizontalTextAlignment="Center" />
+            <Label Text="{Binding ErrorMessage}" Style="{StaticResource Error}" HorizontalTextAlignment="Center" />
+            <Button Text="Tentar de novo" Command="{Binding LoadCommand}" HorizontalOptions="Center" />
+        </VerticalStackLayout>
+
+        <!-- "Tarefa concluída · Desfazer": igual no iOS e no Android, some sozinha. -->
+        <Border x:Name="UndoBar"
+                Grid.Row="4"
+                Style="{StaticResource Snackbar}"
+                VerticalOptions="End"
+                Margin="16,0,96,30"
+                IsVisible="False"
+                Opacity="0">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                <Label Text="{Binding UndoMessage}"
+                       VerticalOptions="Center"
+                       LineBreakMode="TailTruncation" />
+                <Button Grid.Column="1"
+                        Text="Desfazer"
+                        Style="{StaticResource TextAction}"
+                        Command="{Binding UndoCommand}"
+                        SemanticProperties.Description="Desfazer a última conclusão" />
+            </Grid>
+        </Border>
+
+        <!-- O Histórico não cria tarefa: o que nasce é pendente, e mora na aba Tarefas. -->
+        <Button Grid.Row="4"
+                Text="+"
+                FontSize="30"
+                FontAttributes="None"
+                Padding="0"
+                WidthRequest="60"
+                HeightRequest="60"
+                CornerRadius="30"
+                HorizontalOptions="End"
+                VerticalOptions="End"
+                Margin="0,0,20,24"
+                IsVisible="{Binding IsHistory, Converter={StaticResource Not}}"
+                Command="{Binding NewTaskCommand}"
+                SemanticProperties.Description="Nova tarefa">
+            <Button.Shadow>
+                <Shadow Brush="Black" Opacity="0.3" Radius="10" Offset="0,4" />
+            </Button.Shadow>
+        </Button>
+    </Grid>
+</ContentView>

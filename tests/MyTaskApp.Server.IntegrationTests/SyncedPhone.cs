@@ -50,6 +50,7 @@ internal sealed class SyncedPhone : IAsyncDisposable
             .AddSingleton<ISecretStore, MemorySecretStore>()
             .AddSingleton<IUiDispatcher, Inline>()
             .AddSingleton<INavigator, NoNavigation>()
+            .AddSingleton<IPreferenceStore, MemoryPreferences>()
             .AddSingleton<IDialogService, SilentDialogs>()
             .AddSingleton<IWebAuthenticatorPort>(new ServerBrowser(api, googleSubject))
             .AddMobileCore(new MobileHostOptions { DataDirectory = folder, DeviceName = nickname, ServerUrl = "http://localhost/" })
@@ -127,6 +128,25 @@ internal sealed class SyncedPhone : IAsyncDisposable
         public void Post(Action action) => action();
     }
 
+    private sealed class MemoryPreferences : IPreferenceStore
+    {
+        private readonly Dictionary<string, string> _values = [];
+
+        public string? Get(string key) => _values.GetValueOrDefault(key);
+
+        public void Set(string key, string? value)
+        {
+            if (value is null)
+            {
+                _values.Remove(key);
+            }
+            else
+            {
+                _values[key] = value;
+            }
+        }
+    }
+
     private sealed class NoNavigation : INavigator
     {
         public Task OpenTaskAsync(Guid taskId) => Task.CompletedTask;
@@ -135,7 +155,7 @@ internal sealed class SyncedPhone : IAsyncDisposable
 
         public Task EditTaskAsync(Guid taskId) => Task.CompletedTask;
 
-        public Task OpenFiltersAsync() => Task.CompletedTask;
+        public Task OpenFiltersAsync(bool history = false) => Task.CompletedTask;
 
         public Task OpenConnectAsync() => Task.CompletedTask;
 

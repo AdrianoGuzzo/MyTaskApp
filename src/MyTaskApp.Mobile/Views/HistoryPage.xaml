@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:MyTaskApp.Mobile.Core.ViewModels;assembly=MyTaskApp.Mobile.Core"
+             xmlns:views="clr-namespace:MyTaskApp.Mobile.Views"
+             x:Class="MyTaskApp.Mobile.Views.HistoryPage"
+             x:DataType="vm:HistoryViewModel"
+             HideSoftInputOnTapped="True"
+             Title="Histórico">
+
+    <ContentPage.ToolbarItems>
+        <ToolbarItem Text="{Binding FiltersLabel}"
+                     Command="{Binding OpenFiltersCommand}"
+                     SemanticProperties.Description="Abrir os filtros" />
+    </ContentPage.ToolbarItems>
+
+    <views:TaskListView />
+</ContentPage>

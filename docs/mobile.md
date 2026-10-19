@@ -15,11 +15,22 @@ Windows, veja [Teste pessoal sem custo, só com Windows](#teste-pessoal-sem-cust
 
 ## O que o app faz
 
-- **Tarefas:** todas as tarefas de todos os dispositivos numa lista só, em
-  páginas.
+- **Tarefas:** só o que falta fazer, de todos os dispositivos, em páginas
+  (ADR-076).
+  - Atalhos: Pendentes (o padrão) e Vencidas.
+  - **Dispositivo no topo:** chips Todas, Compartilhadas, Este celular e cada
+    computador da conta. Um toque filtra, e a escolha **volta na próxima
+    abertura do app**. Vale também para o Histórico. Sem conta ligada, os
+    chips não aparecem.
   - Busca por texto.
-  - Atalhos: Todas, Pendentes, Vencidas, Concluídas, Canceladas.
-  - Filtros por prioridade, etiquetas e origem; ordenação.
+  - Filtros por prioridade e etiquetas; ordenação.
+  - Concluir pela linha tira a tarefa da lista; ela passa para o Histórico.
+  - "Limpar filtros" volta a Pendentes e a todos os dispositivos.
+- **Histórico:** a aba do meio, com as concluídas e as canceladas.
+  - Atalhos: Concluídas (o padrão) e Canceladas.
+  - Mesma busca, mesmos filtros e o mesmo dispositivo da aba Tarefas.
+  - Reabrir uma concluída a devolve para a aba Tarefas.
+- **Nas duas listas:**
   - Concluir e reabrir pela linha (ADR-075):
     - pelo círculo à esquerda do cartão;
     - ou arrastando para a direita, que só **revela** o botão "Concluir" e
@@ -62,7 +73,8 @@ Windows, veja [Teste pessoal sem custo, só com Windows](#teste-pessoal-sem-cust
 
 - **Origem** é onde a tarefa aparece (ADR-062): compartilhada, só neste
   celular, ou só num computador da conta.
-  - O filtro é exato: "Notebook" mostra só as do notebook.
+  - O filtro de dispositivo (os chips do topo) é exato: "Notebook" mostra só
+    as do notebook, sem as compartilhadas.
   - Tarefa criada no celular nasce **compartilhada**, para aparecer na visão
     padrão do desktop.
 - **Etiquetas** são as do desktop. O celular escolhe entre elas, mas não as cria
@@ -437,6 +449,9 @@ extraia o `MyTaskApp-<versão>-ios-unsigned.ipa`. A variável
   - "Tarefa salva" aparece ao salvar o formulário.
 - [ ] **Temas:** trocar na aba Conta muda o app na hora, a barra de status e o
   teclado acompanham, e a escolha continua depois de fechar e reabrir.
+- [ ] **Dispositivo (ADR-076):** escolher um computador nos chips, fechar o app
+  de vez e reabrir: ele continua escolhido e à vista. Concluir uma tarefa a leva
+  para o Histórico.
 
 ## Testes
 
@@ -453,7 +468,7 @@ dotnet test tests/MyTaskApp.Server.IntegrationTests --filter "PhoneSyncTests"   
   - o celular entra pela tela Entrar contra a API de verdade (Google falso);
   - sincroniza com um desktop nos dois sentidos;
   - fica sem rede e volta;
-  - filtra por origem.
+  - filtra pelos chips de dispositivo.
 - **CI:** não há emulador. A conferência do APK é uma só,
   `scripts/check-android-apk.sh`:
   - nos PRs, o job `mobile-android` do `ci.yml` compila o APK em Release e

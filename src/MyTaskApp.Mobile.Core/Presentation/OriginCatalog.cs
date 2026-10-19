@@ -4,8 +4,11 @@ using MyTaskApp.Domain.Devices;
 
 namespace MyTaskApp.Mobile.Core.Presentation;
 
-/// <summary>Uma opção do filtro "Origem"; <see cref="Match"/> nulo = todas.</summary>
-public sealed record OriginFilterOption(string Label, PlacementMatch? Match)
+/// <summary>
+/// Uma opção do filtro de dispositivo; <see cref="Match"/> nulo = todas.
+/// <see cref="Key"/> é o que fica gravado para a próxima abertura.
+/// </summary>
+public sealed record OriginFilterOption(string Key, string Label, PlacementMatch? Match)
 {
     public override string ToString() => Label;
 }
@@ -34,7 +37,13 @@ public sealed class OriginCatalog(DevicePlacementState placements, SyncDeviceDir
 
     public const string RemovedDevice = "Dispositivo removido";
 
-    public static readonly OriginFilterOption AnyOrigin = new("Todas as origens", null);
+    public const string AnyKey = "all";
+
+    public const string SharedKey = "shared";
+
+    public const string HereKey = "here";
+
+    public static readonly OriginFilterOption AnyOrigin = new(AnyKey, "Todas", null);
 
     /// <summary>A escolha só faz sentido com a conta ligada.</summary>
     public bool IsActive => placements.IsActive;
@@ -51,16 +60,40 @@ public sealed class OriginCatalog(DevicePlacementState placements, SyncDeviceDir
             .OrderBy(device => device.RevokedAt is not null)
             .ThenBy(device => device.Nickname, StringComparer.Create(Labels.Culture, ignoreCase: true))
             .Select(device => new OriginFilterOption(
+                device.DeviceId.ToString("D"),
                 device.RevokedAt is null ? device.Nickname : $"{device.Nickname} (removido)",
                 PlacementMatch.On([device.DeviceId])));
 
         return
         [
             AnyOrigin,
-            new("Compartilhadas", PlacementMatch.Shared),
-            new(ThisPhone, PlacementMatch.On(placements.HereIds)),
+            new(SharedKey, "Compartilhadas", PlacementMatch.Shared),
+            new(HereKey, ThisPhone, PlacementMatch.On(placements.HereIds)),
             .. others,
         ];
+    }
+
+    /// <summary>
+    /// O filtro de uma escolha gravada, sem depender da lista de opções: o
+    /// diretório de dispositivos pode ainda não ter chegado na abertura, e a
+    /// escolha já vale. Um dispositivo que o diretório (já lido) não conhece
+    /// mais, ou a conta desligada, voltam a "Todas".
+    /// </summary>
+    public PlacementMatch? MatchFor(string? key)
+    {
+        if (!placements.IsActive)
+        {
+            return null;
+        }
+
+        return key switch
+        {
+            SharedKey => PlacementMatch.Shared,
+            HereKey => PlacementMatch.On(placements.HereIds),
+            _ when Guid.TryParse(key, out var id) && !placements.IsHere(id) && (directory.Devices.Count == 0 || directory.Devices.ContainsKey(id))
+                => PlacementMatch.On([id]),
+            _ => null,
+        };
     }
 
     /// <summary>

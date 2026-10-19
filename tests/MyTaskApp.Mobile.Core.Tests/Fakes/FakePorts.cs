@@ -24,7 +24,7 @@ internal sealed class RecordingNavigator : INavigator
 
     public Task EditTaskAsync(Guid taskId) => Record($"task/{taskId}/edit");
 
-    public Task OpenFiltersAsync() => Record("filters");
+    public Task OpenFiltersAsync(bool history = false) => Record(history ? "filters/history" : "filters");
 
     public Task OpenConnectAsync() => Record("connect");
 
@@ -123,6 +123,26 @@ internal sealed class FakeBrowser : IWebAuthenticatorPort
             .ToDictionary(pair => Uri.UnescapeDataString(pair[0]), pair => pair.Length > 1 ? Uri.UnescapeDataString(pair[1]) : string.Empty);
 
         return Task.FromResult(Answer(query));
+    }
+}
+
+/// <summary>As preferências do aparelho, em memória: um ViewModel novo com o mesmo store é "abrir o app de novo".</summary>
+internal sealed class MemoryPreferences : IPreferenceStore
+{
+    public ConcurrentDictionary<string, string> Values { get; } = new();
+
+    public string? Get(string key) => Values.TryGetValue(key, out var value) ? value : null;
+
+    public void Set(string key, string? value)
+    {
+        if (value is null)
+        {
+            Values.TryRemove(key, out _);
+        }
+        else
+        {
+            Values[key] = value;
+        }
     }
 }
 

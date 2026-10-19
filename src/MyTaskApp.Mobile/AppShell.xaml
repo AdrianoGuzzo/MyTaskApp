@@ -10,6 +10,10 @@
                       Icon="tab_tasks.png"
                       Route="tasks"
                       ContentTemplate="{DataTemplate views:TaskListPage}" />
+        <ShellContent Title="Histórico"
+                      Icon="tab_history.png"
+                      Route="history"
+                      ContentTemplate="{DataTemplate views:HistoryPage}" />
         <ShellContent Title="Conta"
                       Icon="tab_account.png"
                       Route="account"

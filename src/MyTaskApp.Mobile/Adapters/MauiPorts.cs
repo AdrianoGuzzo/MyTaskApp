@@ -60,7 +60,25 @@ internal sealed class MauiDispatcher : IUiDispatcher
     public void Post(Action action) => MainThread.BeginInvokeOnMainThread(action);
 }
 
-/// <summary>As rotas da Shell; as abas são <c>//tasks</c> e <c>//account</c>.</summary>
+/// <summary>As preferências do sistema (SharedPreferences no Android, NSUserDefaults no iOS).</summary>
+internal sealed class MauiPreferences : IPreferenceStore
+{
+    public string? Get(string key) => Preferences.Default.Get<string?>(key, null);
+
+    public void Set(string key, string? value)
+    {
+        if (value is null)
+        {
+            Preferences.Default.Remove(key);
+        }
+        else
+        {
+            Preferences.Default.Set(key, value);
+        }
+    }
+}
+
+/// <summary>As rotas da Shell; as abas são <c>//tasks</c>, <c>//history</c> e <c>//account</c>.</summary>
 internal sealed class ShellNavigator : INavigator
 {
     public const string Task = "task";
@@ -77,7 +95,7 @@ internal sealed class ShellNavigator : INavigator
 
     public Task EditTaskAsync(Guid taskId) => GoAsync($"{TaskForm}?id={taskId:D}");
 
-    public Task OpenFiltersAsync() => GoAsync(Filters);
+    public Task OpenFiltersAsync(bool history = false) => GoAsync(history ? $"{Filters}?for=history" : Filters);
 
     public Task OpenConnectAsync() => GoAsync(Connect);
 

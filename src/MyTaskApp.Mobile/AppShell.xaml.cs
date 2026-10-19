@@ -3,7 +3,7 @@ using MyTaskApp.Mobile.Views;
 
 namespace MyTaskApp.Mobile;
 
-/// <summary>Duas abas, Tarefas e Conta; o resto entra por cima delas.</summary>
+/// <summary>Três abas, Tarefas, Histórico e Conta; o resto entra por cima delas.</summary>
 public partial class AppShell
 {
     public AppShell()
