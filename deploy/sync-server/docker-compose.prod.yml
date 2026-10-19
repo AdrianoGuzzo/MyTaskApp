@@ -10,6 +10,10 @@
 # PostgreSQL fica numa rede interna, sem porta e sem saida. Os segredos sao
 # arquivos em secrets/ (fora do Git), montados em /run/secrets: a API le cada
 # um como uma chave da configuracao (ConnectionStrings__Sync, ...).
+#
+# A API e o migrate entram no banco como mytaskapp_app, sem superusuario e dono
+# do banco (SEC-020). O initdb/ cria esse papel na primeira subida. O mytaskapp
+# do POSTGRES_USER e o bootstrap superuser: a API nao o usa.
 
 name: mytaskapp-sync
 
@@ -113,8 +117,12 @@ services:
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
     secrets:
       - postgres_password
+      # A senha do mytaskapp_app, lida pelo initdb/ (docs/sync-server.md secao 5).
+      - postgres_app_password
     volumes:
       - sync-data:/var/lib/postgresql/data
+      # So roda com o volume vazio. Quem ja subiu roda o script a mao (secao 5).
+      - ./initdb:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U mytaskapp -d mytaskapp_sync"]
       interval: 5s
@@ -135,6 +143,8 @@ networks:
 secrets:
   postgres_password:
     file: ./secrets/postgres_password
+  postgres_app_password:
+    file: ./secrets/postgres_app_password
   connection_string:
     file: ./secrets/connection_string
   google_client_secret:
