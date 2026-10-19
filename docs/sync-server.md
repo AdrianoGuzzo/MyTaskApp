@@ -514,8 +514,9 @@ da API exposta além do proxy.
 
    | Arquivo | Conteúdo | Na API vira |
    |---|---|---|
-   | `postgres_password` | a senha do banco | — (é o `POSTGRES_PASSWORD_FILE` do PostgreSQL) |
-   | `connection_string` | `Host=postgres;Database=mytaskapp_sync;Username=mytaskapp;Password=<a mesma>` | `ConnectionStrings__Sync` |
+   | `postgres_password` | a senha do `mytaskapp`, o superusuário do bootstrap. A API não o usa | — (é o `POSTGRES_PASSWORD_FILE` do PostgreSQL) |
+   | `postgres_app_password` | a senha do `mytaskapp_app`, o papel da API | — (o `initdb/` cria o papel com ela) |
+   | `connection_string` | `Host=postgres;Database=mytaskapp_sync;Username=mytaskapp_app;Password=<a do postgres_app_password>` | `ConnectionStrings__Sync` |
    | `google_client_secret` | a chave secreta do cliente do Google | `Authentication__Google__ClientSecret` |
    | `signing.pfx`, `signing_password` | o PFX de assinatura e a senha dele (§2) | `Sync__SigningCertificate__Path` e `__Password` |
    | `encryption.pfx`, `encryption_password` | o PFX de cifragem e a senha dele (§2) | `Sync__EncryptionCertificate__Path` e `__Password` |
@@ -524,7 +525,8 @@ da API exposta além do proxy.
    ```bash
    mkdir -p secrets && cd secrets
    openssl rand -hex 24 | tr -d '\n' > postgres_password
-   printf 'Host=postgres;Database=mytaskapp_sync;Username=mytaskapp;Password=%s' "$(cat postgres_password)" > connection_string
+   openssl rand -hex 24 | tr -d '\n' > postgres_app_password
+   printf 'Host=postgres;Database=mytaskapp_sync;Username=mytaskapp_app;Password=%s' "$(cat postgres_app_password)" > connection_string
    printf '%s' '<chave secreta do Google>' > google_client_secret
    # os três PFX: os comandos de "Certificados do OpenIddict" e de "Certificado do Data Protection" (§2)
    cd .. && chmod 700 secrets && chmod 444 secrets/*
@@ -535,6 +537,12 @@ da API exposta além do proxy.
    `700` na pasta fecha os segredos para os outros usuários do host, e o `444`
    deixa os contêineres lerem. Num editor do Windows, cuidado com o CRLF no
    fim: ele vira parte da senha.
+
+   A API e as migrations entram no banco como `mytaskapp_app`: sem
+   superusuário e dono do banco e do schema `public` (SEC-020). Na primeira
+   subida, com o volume vazio, o `initdb/10-mytaskapp-app.sql` cria esse papel.
+   O `mytaskapp` é o superusuário do bootstrap, e o PostgreSQL não deixa tirar
+   isso dele. Ele fica para o healthcheck e a manutenção, só na rede interna.
 5. **Subir.** Imagem, migrations e serviços:
 
    ```bash
@@ -562,6 +570,14 @@ da API exposta além do proxy.
    # Host forjado direto na API (G-07): 400, e o issuer nunca muda
    docker run --rm --network mytaskapp-sync_edge curlimages/curl:8.11.1 -s -o /dev/null -w '%{http_code}\n' \
      -H "Host: evil.example" http://api:8080/.well-known/openid-configuration
+
+   # A API sem superusuário (G-20): pela senha dela, por TCP, como a API conecta
+   docker run --rm --network mytaskapp-sync_db -v "$PWD/secrets/postgres_app_password:/pw:ro" \
+     postgres:17-alpine sh -c 'PGPASSWORD="$(cat /pw)" psql -h postgres -U mytaskapp_app -d mytaskapp_sync \
+     -tAc "SELECT rolsuper FROM pg_roles WHERE rolname = current_user"'   # f
+   # e a sessão aberta pela própria API: mytaskapp_app
+   docker compose -f docker-compose.prod.yml --env-file prod.env exec postgres psql -U mytaskapp -d mytaskapp_sync \
+     -tAc "SELECT DISTINCT usename FROM pg_stat_activity WHERE datname = 'mytaskapp_sync' AND usename <> 'mytaskapp'"
    ```
 
    Com `SYNC_TLS=internal`, passe `--cacert caddy-root.crt` ao `curl` (passo 7).
@@ -597,6 +613,29 @@ Protection" (§2).
 ADR-073): gere o `dataprotection.pfx` e a senha (§2) **antes** de subir a
 versão nova, que em Production não sobe sem eles. Na primeira subida, a chave
 gravada em claro é revogada ("As chaves gravadas antes do certificado", §2).
+
+**Vindo de uma versão com a API como superusuário** (antes do SEC-020): o
+`initdb/` só roda com o volume vazio, então o papel sai à mão. O script pode
+rodar mais de uma vez, e passa para o `mytaskapp_app` as tabelas que as
+migrations criaram com o `mytaskapp`.
+
+```bash
+git pull
+openssl rand -hex 24 | tr -d '\n' > secrets/postgres_app_password && chmod 444 secrets/postgres_app_password
+# recria o postgres com o segredo novo montado; o volume fica
+docker compose -f docker-compose.prod.yml --env-file prod.env up -d postgres
+docker compose -f docker-compose.prod.yml --env-file prod.env exec -T postgres \
+  psql -U mytaskapp -d mytaskapp_sync < initdb/10-mytaskapp-app.sql
+chmod 644 secrets/connection_string
+printf 'Host=postgres;Database=mytaskapp_sync;Username=mytaskapp_app;Password=%s' \
+  "$(cat secrets/postgres_app_password)" > secrets/connection_string
+chmod 444 secrets/connection_string
+# o compose não percebe a mudança no conteúdo do segredo: o --force-recreate a aplica
+docker compose -f docker-compose.prod.yml --env-file prod.env up -d --force-recreate api
+```
+
+Depois, confira com os comandos do G-20 no passo 6. A partir daí, as
+migrations (`run --rm migrate`) também rodam com o `mytaskapp_app`.
 
 **Vindo de uma versão sem lista de cadastro** (antes do ADR-068): configure
 `Sync__Registration__*` **antes** de subir a versão nova. Sem a lista, quem já
