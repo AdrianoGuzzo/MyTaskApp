@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.20.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.19.0...v1.20.0) (2026-10-19)
+
+
+### Added
+
+* **mobile:** pendentes na frente, Histórico numa aba e o dispositivo lembrado (ADR-076) ([#136](https://github.com/AdrianoGuzzo/MyTaskApp/issues/136)) ([9a08abb](https://github.com/AdrianoGuzzo/MyTaskApp/commit/9a08abb906dd82884bcef221c05ec2a5537b50f2))
+* **mobile:** temas do desktop, concluir sem acidente e teclado que fecha (ADR-075) ([#132](https://github.com/AdrianoGuzzo/MyTaskApp/issues/132)) ([97f96dc](https://github.com/AdrianoGuzzo/MyTaskApp/commit/97f96dc95c7c1b060163efccef0164d74b017447))
+
+
+### Fixed
+
+* **mobile:** build do iOS sem workload do Android e com Xcode fixo ([#127](https://github.com/AdrianoGuzzo/MyTaskApp/issues/127)) ([dd33903](https://github.com/AdrianoGuzzo/MyTaskApp/commit/dd339031a4c370c2c49bcd628cafa4fa4fd50688))
+* **mobile:** simulador do iOS sem certificado e aviso para tag antiga ([#129](https://github.com/AdrianoGuzzo/MyTaskApp/issues/129)) ([4cc86b3](https://github.com/AdrianoGuzzo/MyTaskApp/commit/4cc86b336c1c3a184ab87dfebf798f455f2a0ed3))
+* **server:** API do compose de produção sem superusuário do banco (SEC-020) ([#133](https://github.com/AdrianoGuzzo/MyTaskApp/issues/133)) ([927b7c4](https://github.com/AdrianoGuzzo/MyTaskApp/commit/927b7c457896fb4086efa8eadecc81de8a1e3eb5))
+* **server:** caminho reescapado no log (SEC-019) ([#130](https://github.com/AdrianoGuzzo/MyTaskApp/issues/130)) ([d76d88f](https://github.com/AdrianoGuzzo/MyTaskApp/commit/d76d88fcb798b3f1d4a218bc209a022da3af964c))
+
 ## [1.19.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.18.0...v1.19.0) (2026-10-18)
 
 
