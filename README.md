@@ -746,6 +746,7 @@ Management).
 │   └── macos/                       roteiro (não implementado)
 ├── scripts/
 │   ├── coverage.ps1                 testes + cobertura + portão mínimo
+│   ├── run-android.ps1              emulador + build + app do celular aberto
 │   └── generate-icon-font.py        fonte de ícones embutida (ADR-046)
 ├── docs/
 │   ├── ARCHITECTURE.md              ADRs
