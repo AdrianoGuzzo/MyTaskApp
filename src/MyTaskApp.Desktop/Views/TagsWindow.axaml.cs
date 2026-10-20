@@ -1,5 +1,8 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Media;
+using Avalonia.Media.Immutable;
 using MyTaskApp.Desktop.ViewModels;
 
 namespace MyTaskApp.Desktop.Views;
@@ -69,6 +72,42 @@ public sealed partial class TagsWindow : Window
         }
 
         menu.ShowAt(anchor);
+    }
+
+    /// <summary>
+    /// "Importar de outro computador…" (ADR-077): uma linha por etiqueta que
+    /// está só em outro computador, com a cor dela e de onde vem.
+    /// </summary>
+    private void OnImportClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control anchor && DataContext is TagsViewModel viewModel)
+        {
+            BuildImportMenu(viewModel).ShowAt(anchor);
+        }
+    }
+
+    internal static MenuFlyout BuildImportMenu(TagsViewModel viewModel)
+    {
+        var menu = new MenuFlyout { Placement = PlacementMode.BottomEdgeAlignedRight };
+
+        foreach (var choice in viewModel.ImportableTags)
+        {
+            menu.Items.Add(new MenuItem
+            {
+                Header = choice.Label,
+                Icon = new Border
+                {
+                    Width = 12,
+                    Height = 12,
+                    CornerRadius = new CornerRadius(3),
+                    Background = new ImmutableSolidColorBrush(Color.Parse(choice.ColorHex)),
+                },
+                Command = viewModel.ImportTagCommand,
+                CommandParameter = choice,
+            });
+        }
+
+        return menu;
     }
 
     /// <summary>
