@@ -117,6 +117,16 @@ public sealed partial class DatabaseProfilesViewModel(
     [ObservableProperty]
     private string _tableFilter = string.Empty;
 
+    /// <summary>A tabela do próximo filtro de linhas sem máscara: "schema.tabela", escolhida da lista ou digitada.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(AddRowFilterCommand))]
+    private string _newRowFilterTable = string.Empty;
+
+    /// <summary>A condição do próximo filtro: o WHERE, sem a palavra.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(AddRowFilterCommand))]
+    private string _newRowFilterCondition = string.Empty;
+
     private ObservableCollection<AnonymizationRuleItemViewModel>? _rules;
 
     private ObservableCollection<SkippedTableItemViewModel>? _tables;
@@ -140,6 +150,20 @@ public sealed partial class DatabaseProfilesViewModel(
     public ObservableCollection<SkippedTableItemViewModel> Tables => _tables ??= TrackTables();
 
     public bool HasTables => Tables.Count > 0;
+
+    /// <summary>
+    /// As linhas sem máscara do perfil (ADR-079): por tabela, a condição das
+    /// linhas que vão para o destino com os valores reais.
+    /// </summary>
+    public ObservableCollection<RowFilterItemViewModel> RowFilters { get; } = [];
+
+    public bool HasRowFilters => RowFilters.Count > 0;
+
+    /// <summary>As tabelas para escolher no filtro: as lidas do banco.</summary>
+    public IEnumerable<string> RowFilterTableChoices => Tables.Select(table => table.TableKey);
+
+    /// <summary>"public.usuarios: 3 linha(s) vão sem máscara", da última pré-visualização.</summary>
+    public ObservableCollection<string> PreviewNotes { get; } = [];
 
     /// <summary>"3 de 120 tabela(s) vão sem dados" — e quantas o filtro escondeu.</summary>
     public string TablesSummary
@@ -178,7 +202,7 @@ public sealed partial class DatabaseProfilesViewModel(
 
     public bool HasRules => Rules.Count > 0;
 
-    public bool HasPreview => Previews.Count > 0 || PreviewProblems.Count > 0;
+    public bool HasPreview => Previews.Count > 0 || PreviewProblems.Count > 0 || PreviewNotes.Count > 0;
 
     public string RulesSummary =>
         $"{Rules.Count(rule => rule.IsConfirmed)} de {Rules.Count} coluna(s) confirmada(s).";
@@ -367,6 +391,7 @@ public sealed partial class DatabaseProfilesViewModel(
         TableFilter = string.Empty;
         Rules.Clear();
         Tables.Clear();
+        ClearRowFilters([]);
         ClearPreview();
         NotifyRules();
     }
@@ -384,9 +409,71 @@ public sealed partial class DatabaseProfilesViewModel(
         ClearPreview();
         Replace(Tables, profile.SkippedTables.Select(table => new SkippedTableItemViewModel(table.Schema, table.Table, skipped: true)));
         Replace(Rules, profile.Rules.Select(rule => new AnonymizationRuleItemViewModel(rule, confirmed: true)));
+        ClearRowFilters(profile.RowFilters.Select(filter => new RowFilterItemViewModel(filter.Schema, filter.Table, filter.Condition)));
         MarkSkippedRules();
         NotifyRules();
     }
+
+    private void ClearRowFilters(IEnumerable<RowFilterItemViewModel> filters)
+    {
+        Replace(RowFilters, filters);
+        NewRowFilterTable = string.Empty;
+        NewRowFilterCondition = string.Empty;
+        OnPropertyChanged(nameof(HasRowFilters));
+    }
+
+    private bool CanAddRowFilter() => !string.IsNullOrWhiteSpace(NewRowFilterTable) && !string.IsNullOrWhiteSpace(NewRowFilterCondition);
+
+    /// <summary>
+    /// Inclui a condição das linhas sem máscara de uma tabela. A forma é
+    /// conferida aqui (sem ;, sem comentário, parênteses fechados); se a
+    /// expressão roda, quem diz é a pré-visualização, no servidor.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanAddRowFilter))]
+    public void AddRowFilter()
+    {
+        ErrorMessage = null;
+        var (schema, table) = SplitTable(NewRowFilterTable.Trim());
+
+        if (RowFilters.Any(filter => filter.TableKey == $"{schema}.{table}"))
+        {
+            ErrorMessage = $"{schema}.{table} já tem uma condição: edite a da lista.";
+            return;
+        }
+
+        string condition;
+
+        try
+        {
+            condition = RowFilterCondition.Normalize(NewRowFilterCondition, $"{schema}.{table}");
+        }
+        catch (DomainException exception)
+        {
+            ErrorMessage = exception.Message;
+            return;
+        }
+
+        RowFilters.Add(new RowFilterItemViewModel(schema, table, condition));
+        NewRowFilterTable = string.Empty;
+        NewRowFilterCondition = string.Empty;
+        OnPropertyChanged(nameof(HasRowFilters));
+    }
+
+    [RelayCommand]
+    public void RemoveRowFilter(RowFilterItemViewModel filter)
+    {
+        RowFilters.Remove(filter);
+        OnPropertyChanged(nameof(HasRowFilters));
+    }
+
+    /// <summary>"public.usuarios" → ("public", "usuarios"); sem ponto, o schema é public.</summary>
+    private static (string Schema, string Table) SplitTable(string qualified)
+    {
+        var dot = qualified.IndexOf('.', StringComparison.Ordinal);
+        return dot < 0 ? ("public", qualified) : (qualified[..dot].Trim(), qualified[(dot + 1)..].Trim());
+    }
+
+    private List<RowFilterRow> RowFilterRows() => RowFilters.Select(filter => filter.ToRow()).ToList();
 
     partial void OnTableFilterChanged(string value)
     {
@@ -445,6 +532,7 @@ public sealed partial class DatabaseProfilesViewModel(
     {
         OnPropertyChanged(nameof(HasTables));
         OnPropertyChanged(nameof(TablesSummary));
+        OnPropertyChanged(nameof(RowFilterTableChoices));
     }
 
     private List<SkippedTableRow> SkippedTableRows() =>
@@ -612,6 +700,7 @@ public sealed partial class DatabaseProfilesViewModel(
             Rules.Where(rule => rule.IsConfirmed).Select(rule => rule.ToRow()).ToList())
         {
             SkippedTables = SkippedTableRows(),
+            RowFilters = RowFilterRows(),
             ExpectedUpdatedAt = _editingAnonymizationVersion,
         };
 
@@ -675,6 +764,7 @@ public sealed partial class DatabaseProfilesViewModel(
             Rules.Where(rule => rule.IsConfirmed).Select(rule => rule.ToRow()).ToList())
         {
             SkippedTables = SkippedTableRows(),
+            RowFilters = RowFilterRows(),
         };
 
         ClearPreview();
@@ -691,6 +781,9 @@ public sealed partial class DatabaseProfilesViewModel(
 
         Replace(PreviewProblems, result.Problems);
         Replace(Previews, result.Columns.Select(column => new MaskedPreviewItemViewModel(column)));
+        Replace(PreviewNotes, result.UnmaskedRows
+            .Where(count => count.Error is null)
+            .Select(count => $"{count.Table}: {count.Rows.ToString("N0", DatabaseLabels.Culture)} linha(s) vão sem máscara, com os valores reais."));
         OnPropertyChanged(nameof(HasPreview));
         StatusMessage = result.Problems.Count == 0
             ? "Valores já mascarados pelo servidor. O dado real não saiu de lá."
@@ -701,6 +794,7 @@ public sealed partial class DatabaseProfilesViewModel(
     {
         Previews.Clear();
         PreviewProblems.Clear();
+        PreviewNotes.Clear();
         OnPropertyChanged(nameof(HasPreview));
     }
 

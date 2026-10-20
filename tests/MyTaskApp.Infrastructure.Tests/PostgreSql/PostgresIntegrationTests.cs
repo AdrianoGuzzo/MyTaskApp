@@ -127,8 +127,8 @@ public sealed class PostgresIntegrationTests : IAsyncLifetime
             // Sem máscara, a coluna chega igual: é exatamente o que a verificação acusa.
             var column = new ColumnReference("public", "clientes", "email");
             VerificationEvaluator.CompareSensitive(
-                    await inspector.FingerprintAsync(source, column, "sal", 100, Ct),
-                    await inspector.FingerprintAsync(destination, column, "sal", 100, Ct))
+                    await inspector.FingerprintAsync(source, column, "sal", 100, cancellationToken: Ct),
+                    await inspector.FingerprintAsync(destination, column, "sal", 100, cancellationToken: Ct))
                 .Outcome.Should().Be(CheckOutcome.Fail);
         }
         finally
@@ -168,15 +168,29 @@ public sealed class PostgresIntegrationTests : IAsyncLifetime
             new AnonymizationRuleSpec("public", "pedidos", "valor", MaskingMethod.NumberNoise, "20", ColumnSensitivity.Low),
         ], PostgresTestSupport.Now);
         profile.ReplaceSkippedTables([new SkippedTableSpec("public", "auditoria")], PostgresTestSupport.Now);
+        profile.ReplaceRowFilters([new RowFilterSpec("public", "clientes", "email = 'pessoa2@exemplo.com'")], PostgresTestSupport.Now);
+        var inspector = new PostgresServerInspector(sessions, NullLogger<PostgresServerInspector>.Instance);
 
         try
         {
             // Como a cópia: a versão da origem escolhe o conjunto de ferramentas.
-            var version = (await new PostgresServerInspector(sessions, NullLogger<PostgresServerInspector>.Instance)
-                .TestAsync(source, cancellationToken: Ct)).ServerVersion;
+            var version = (await inspector.TestAsync(source, cancellationToken: Ct)).ServerVersion;
             var catalog = await copier.ReadCatalogAsync(source, Ct);
-            var validation = MaskingPlanner.Plan(profile, catalog);
+            var validation = await UnmaskedRows.CountAsync(inspector, source, MaskingPlanner.Plan(profile, catalog), Ct);
             validation.Problems.Should().BeEmpty();
+            validation.UnmaskedRows.Should().Equal(new UnmaskedRowCount("public.clientes", "email = 'pessoa2@exemplo.com'", 1));
+
+            // Uma condição que o servidor recusa vira problema antes da cópia, com a mensagem dele.
+            var refused = AnonymizationProfile.Create("x", null, Guid.CreateVersion7(), PostgresTestSupport.Now);
+            refused.ReplaceRules([new AnonymizationRuleSpec("public", "clientes", "email", MaskingMethod.FakeEmail, null, ColumnSensitivity.High)], PostgresTestSupport.Now);
+            refused.ReplaceRowFilters([new RowFilterSpec("public", "clientes", "nao_existe = 1")], PostgresTestSupport.Now);
+            (await UnmaskedRows.CountAsync(inspector, source, MaskingPlanner.Plan(refused, catalog), Ct)).Problems
+                .Should().ContainSingle().Which.Should().Contain("42703");
+
+            // Na origem só-leitura, nem uma função que escreve passa.
+            refused.ReplaceRowFilters([new RowFilterSpec("public", "clientes", "nextval('clientes_id_seq') > 0")], PostgresTestSupport.Now);
+            (await UnmaskedRows.CountAsync(inspector, source, MaskingPlanner.Plan(refused, catalog), Ct)).Problems
+                .Should().ContainSingle().Which.Should().Contain("25006");
             validation.Tables.Select(table => table.QualifiedName).Should().BeEquivalentTo(["public.auditoria", "public.clientes", "public.pedidos_2026"]);
             validation.Tables.Single(table => table.Table == "auditoria").SkipData.Should().BeTrue();
 
@@ -191,8 +205,9 @@ public sealed class PostgresIntegrationTests : IAsyncLifetime
             validation.Tables.Single(table => table.Table == "pedidos_2026").Columns.Single(column => column.Name == "valor").IsMasked
                 .Should().BeTrue("a regra da tabela particionada vale para a partição");
 
-            var preview = await copier.PreviewAsync(source, validation.Tables, 3, Ct);
-            preview.Single(column => column.Column == "email").Values.Should().OnlyContain(value => value!.EndsWith("@exemplo.invalid"));
+            var preview = await copier.PreviewAsync(source, validation.Tables, 300, Ct);
+            preview.Single(column => column.Column == "email").Values.Should().HaveCount(249, "a linha sem máscara fica fora da pré-visualização")
+                .And.OnlyContain(value => value!.EndsWith("@exemplo.invalid"));
 
             await using (var session = await copier.OpenAsync(source, Ct))
             {
@@ -218,7 +233,6 @@ public sealed class PostgresIntegrationTests : IAsyncLifetime
                 (await session.CopySequencesAsync(Ct)).Should().BeGreaterThan(0);
             }
 
-            var inspector = new PostgresServerInspector(sessions, NullLogger<PostgresServerInspector>.Instance);
             VerificationEvaluator.CompareRows(
                     await inspector.CountRowsAsync(source, ["public.clientes", "public.pedidos"], 1_000_000, Ct),
                     await inspector.CountRowsAsync(destination, ["public.clientes", "public.pedidos"], 1_000_000, Ct))
@@ -235,6 +249,15 @@ public sealed class PostgresIntegrationTests : IAsyncLifetime
             ((string)row[2]!).Should().NotStartWith("Fulano");
             row[3].Should().Be(((string)row[2]!).ToLowerInvariant(), "a coluna gerada é recalculada a partir do nome mascarado");
             ((long)row[4]!).Should().BeGreaterThan(250, "a sequence continua de onde a origem parou");
+
+            // A linha do filtro (ADR-079) chega com os valores reais; a verificação a deixa de fora.
+            var kept = await QueryRowAsync(_masked, "SELECT email, cpf, nome FROM clientes WHERE id = 2");
+            kept.Should().Equal("pessoa2@exemplo.com", "002.456.789-09", "Fulano 2");
+            var email = new ColumnReference("public", "clientes", "email");
+            VerificationEvaluator.CompareSensitive(
+                    await inspector.FingerprintAsync(source, email, "sal", 1000, "email = 'pessoa2@exemplo.com'", Ct),
+                    await inspector.FingerprintAsync(destination, email, "sal", 1000, cancellationToken: Ct))
+                .Should().Match<CheckResult>(check => check.Outcome == CheckOutcome.Pass && check.Detail!.StartsWith("249 de 249"));
 
             // Nada foi instalado nem marcado na origem.
             (await QueryRowAsync(_source, "SELECT count(*) FROM pg_extension WHERE extname = 'anon'"))[0].Should().Be(0L);

@@ -370,7 +370,7 @@ public class ServerOnlyCopyTests
     [Fact]
     public async Task ThePreview_OnAServer_ReadsTheChosenDatabase()
     {
-        var handler = new PreviewMaskingHandler(Catalog.Connections, _scenario.Copier, _scenario.Policy, _scenario.Clock);
+        var handler = new PreviewMaskingHandler(Catalog.Connections, _scenario.Copier, _scenario.Inspector, _scenario.Policy, _scenario.Clock);
         var rules = _profile.Rules.Select(rule => new AnonymizationRuleRow(rule.Schema, rule.Table, rule.Column, rule.Method, rule.Argument, rule.Sensitivity)).ToList();
 
         await FluentActions.Awaiting(() => handler.HandleAsync(new PreviewMasking(_server.Id, null, rules), Ct))

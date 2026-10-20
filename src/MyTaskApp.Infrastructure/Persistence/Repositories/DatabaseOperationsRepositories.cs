@@ -33,6 +33,7 @@ internal sealed class AnonymizationProfileRepository(MyTaskAppDbContext context)
         context.AnonymizationProfiles
             .Include(profile => profile.Rules)
             .Include(profile => profile.SkippedTables)
+            .Include(profile => profile.RowFilters)
             .AsSplitQuery()
             .SingleOrDefaultAsync(profile => profile.Id == id, cancellationToken);
 
@@ -40,6 +41,7 @@ internal sealed class AnonymizationProfileRepository(MyTaskAppDbContext context)
         await context.AnonymizationProfiles
             .Include(profile => profile.Rules)
             .Include(profile => profile.SkippedTables)
+            .Include(profile => profile.RowFilters)
             .AsSplitQuery()
             .OrderBy(profile => profile.Name)
             .ToListAsync(cancellationToken);

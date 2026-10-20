@@ -81,6 +81,47 @@ public partial class MaskedSelectBuilderTests
     }
 
     [Fact]
+    public void WithARowFilter_TheMatchingRowsKeepTheRealValue_AndOnlyTheMaskedColumnsChange()
+    {
+        var table = Table(new MaskedColumnPlan("id", "integer"), new MaskedColumnPlan("email", "text", MaskingMethod.FakeEmail)) with
+        {
+            RowFilter = "id = 1 or email like '%@empresa.com.br'",
+        };
+
+        var copy = MaskedSelectBuilder.CopyOut(table);
+
+        copy.Should().StartWith(
+            "COPY (SELECT \"id\", CASE WHEN (id = 1 or email like '%@empresa.com.br') THEN \"email\" ELSE CAST(CASE WHEN \"email\"");
+        copy.Should().EndWith("END AS text) END FROM ONLY \"public\".\"clientes\") TO STDOUT", "nenhuma linha some: só a máscara muda");
+    }
+
+    [Fact]
+    public void WithARowFilter_ThePreviewShowsOnlyTheRowsThatAreMasked()
+    {
+        var table = Table(new MaskedColumnPlan("cpf", "text", MaskingMethod.Hash)) with { RowFilter = "id = 1" };
+
+        MaskedSelectBuilder.Preview(table, 5).Should().EndWith(
+            "FROM ONLY \"public\".\"clientes\" WHERE NOT coalesce((id = 1), false) LIMIT 5");
+        MaskedSelectBuilder.CountMatching("public.clientes", "id = 1")
+            .Should().Be("SELECT count(*) FROM ONLY \"public\".\"clientes\" WHERE (id = 1)");
+        PostgresQueries.Fingerprint(new ColumnReference("public", "clientes", "cpf"), ["id"], 10, excluding: "id = 1")
+            .Should().Contain("FROM \"public\".\"clientes\" WHERE NOT coalesce((id = 1), false) ORDER BY \"id\" LIMIT 10");
+    }
+
+    [Theory]
+    [InlineData("id = 1) or (true")]
+    [InlineData("true; drop table x")]
+    [InlineData("true -- ")]
+    public void ARowFilterThatWouldLeaveItsParentheses_NeverReachesTheSql(string condition)
+    {
+        var table = Table(new MaskedColumnPlan("cpf", "text", MaskingMethod.Hash)) with { RowFilter = condition };
+
+        FluentActions.Invoking(() => MaskedSelectBuilder.CopyOut(table)).Should().Throw<DomainException>();
+        FluentActions.Invoking(() => MaskedSelectBuilder.Preview(table, 1)).Should().Throw<DomainException>();
+        FluentActions.Invoking(() => MaskedSelectBuilder.CountMatching("public.clientes", condition)).Should().Throw<DomainException>();
+    }
+
+    [Fact]
     public void OnlyFixedMasks_HaveAValueToCount()
     {
         MaskedSelectBuilder.CountNotMasked(new ColumnReference("public", "t", "c"), new MaskedColumnPlan("c", "integer", MaskingMethod.FixedNumber, "0"))
@@ -104,7 +145,10 @@ public partial class MaskedSelectBuilderTests
     public void EveryMaskedSelect_OnlyReads()
     {
         var table = Table([.. Enum.GetValues<MaskingMethod>().Select(method =>
-            new MaskedColumnPlan($"c{(int)method}", "text", method, MaskingCatalog.Of(method).DefaultArgument))]);
+            new MaskedColumnPlan($"c{(int)method}", "text", method, MaskingCatalog.Of(method).DefaultArgument))]) with
+        {
+            RowFilter = "c0 is not null",
+        };
 
         var copy = MaskedSelectBuilder.CopyOut(table);
         var select = copy["COPY (".Length..copy.LastIndexOf(") TO STDOUT", StringComparison.Ordinal)];

@@ -15,6 +15,9 @@ public sealed record AnonymizationRuleSpec(
 /// <summary>Uma tabela que vai para o destino vazia: a estrutura sim, as linhas não.</summary>
 public sealed record SkippedTableSpec(string Schema, string Table);
 
+/// <summary>As linhas de uma tabela que vão para o destino sem máscara: as que batem na condição (ADR-079).</summary>
+public sealed record RowFilterSpec(string Schema, string Table, string Condition);
+
 /// <summary>
 /// Um perfil de anonimização (ADR-058): as colunas de um banco que saem
 /// mascaradas, e como. Nada disso vai para o servidor de origem: o app monta
@@ -32,6 +35,11 @@ public sealed record SkippedTableSpec(string Schema, string Table);
 /// fica vazia. Serve para logs, auditoria, filas, ou dados pessoais que o
 /// desenvolvimento não precisa.
 /// </para>
+/// <para>
+/// <see cref="RowFilters"/>: por tabela, uma condição (o WHERE, escrito pelo
+/// usuário) que escolhe as linhas copiadas com os valores reais — usuário de
+/// teste, registro de sistema. As outras linhas continuam mascaradas (ADR-079).
+/// </para>
 /// </remarks>
 public sealed class AnonymizationProfile
 {
@@ -43,9 +51,13 @@ public sealed class AnonymizationProfile
 
     public const int MaxSkippedTables = 2000;
 
+    public const int MaxRowFilters = 2000;
+
     private readonly List<AnonymizationRule> _rules = [];
 
     private readonly List<AnonymizationSkippedTable> _skippedTables = [];
+
+    private readonly List<AnonymizationRowFilter> _rowFilters = [];
 
     private AnonymizationProfile(Guid id, DateTimeOffset createdAt)
     {
@@ -74,6 +86,9 @@ public sealed class AnonymizationProfile
 
     /// <summary>As tabelas que vão vazias para o destino; vale também para as partições de uma tabela particionada.</summary>
     public IReadOnlyList<AnonymizationSkippedTable> SkippedTables => _skippedTables;
+
+    /// <summary>As linhas que vão sem máscara, uma condição por tabela; vale também para as partições.</summary>
+    public IReadOnlyList<AnonymizationRowFilter> RowFilters => _rowFilters;
 
     public static AnonymizationProfile Create(
         string name,
@@ -162,6 +177,37 @@ public sealed class AnonymizationProfile
 
         _skippedTables.Clear();
         _skippedTables.AddRange(tables);
+        UpdatedAt = confirmedAt;
+    }
+
+    /// <summary>
+    /// O conjunto inteiro de filtros de linhas sem máscara, como confirmado
+    /// agora. Atômico, como as regras: uma tabela tem no máximo uma condição.
+    /// </summary>
+    public void ReplaceRowFilters(IEnumerable<RowFilterSpec> specs, DateTimeOffset confirmedAt)
+    {
+        var filters = new List<AnonymizationRowFilter>();
+        var keys = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var spec in specs)
+        {
+            var filter = AnonymizationRowFilter.Create(Id, spec, confirmedAt);
+
+            if (!keys.Add(filter.TableKey))
+            {
+                throw new DomainException($"A tabela {filter.TableKey} aparece duas vezes nas linhas sem máscara.");
+            }
+
+            filters.Add(filter);
+        }
+
+        if (filters.Count > MaxRowFilters)
+        {
+            throw new DomainException($"Um perfil tem no máximo {MaxRowFilters} filtros de linhas sem máscara.");
+        }
+
+        _rowFilters.Clear();
+        _rowFilters.AddRange(filters);
         UpdatedAt = confirmedAt;
     }
 
@@ -318,4 +364,50 @@ public sealed class AnonymizationSkippedTable
         Table = AnonymizationRule.Identifier(spec.Table, "a tabela"),
         ConfirmedAt = confirmedAt,
     };
+}
+
+/// <summary>
+/// As linhas de uma tabela de um <see cref="AnonymizationProfile"/> que vão
+/// para o destino com os valores reais: as que batem em <see cref="Condition"/>.
+/// </summary>
+public sealed class AnonymizationRowFilter
+{
+    // Exigido pela materialização do EF Core.
+    private AnonymizationRowFilter()
+    {
+        Schema = string.Empty;
+        Table = string.Empty;
+        Condition = string.Empty;
+    }
+
+    public Guid Id { get; private set; }
+
+    public Guid ProfileId { get; private set; }
+
+    public string Schema { get; private set; }
+
+    public string Table { get; private set; }
+
+    /// <summary>O WHERE, sem a palavra: <c>id = 1</c>. Já passou por <see cref="RowFilterCondition.Normalize"/>.</summary>
+    public string Condition { get; private set; }
+
+    public DateTimeOffset ConfirmedAt { get; private set; }
+
+    public string TableKey => $"{Schema}.{Table}";
+
+    internal static AnonymizationRowFilter Create(Guid profileId, RowFilterSpec spec, DateTimeOffset confirmedAt)
+    {
+        var schema = AnonymizationRule.Identifier(spec.Schema, "o schema");
+        var table = AnonymizationRule.Identifier(spec.Table, "a tabela");
+
+        return new AnonymizationRowFilter
+        {
+            Id = Guid.CreateVersion7(confirmedAt),
+            ProfileId = profileId,
+            Schema = schema,
+            Table = table,
+            Condition = RowFilterCondition.Normalize(spec.Condition, $"{schema}.{table}"),
+            ConfirmedAt = confirmedAt,
+        };
+    }
 }

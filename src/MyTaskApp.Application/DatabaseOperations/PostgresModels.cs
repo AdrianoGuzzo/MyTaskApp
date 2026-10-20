@@ -213,6 +213,8 @@ public sealed record MaskedColumnPlan(string Name, string DataType, MaskingMetho
 /// <summary>
 /// Uma tabela a copiar: as colunas na ordem, sem as geradas.
 /// <see cref="SkipData"/>: a tabela vai vazia — nenhuma linha sai da origem.
+/// <see cref="RowFilter"/>: a condição do usuário; as linhas que batem nela
+/// saem com os valores reais (ADR-079).
 /// </summary>
 public sealed record MaskedTablePlan(
     string Schema,
@@ -220,12 +222,19 @@ public sealed record MaskedTablePlan(
     long Bytes,
     IReadOnlyList<MaskedColumnPlan> Columns,
     long EstimatedRows = 0,
-    bool SkipData = false)
+    bool SkipData = false,
+    string? RowFilter = null)
 {
     public string QualifiedName => $"{Schema}.{Table}";
 
     public bool HasMaskedColumns => Columns.Any(column => column.IsMasked);
+
+    /// <summary>O filtro só muda alguma coisa onde há máscara.</summary>
+    public bool HasUnmaskedRows => RowFilter is not null && HasMaskedColumns && !SkipData;
 }
+
+/// <summary>Quantas linhas de uma tabela batem no filtro e vão sem máscara; <see cref="Error"/> quando o servidor recusou a condição.</summary>
+public sealed record UnmaskedRowCount(string Table, string Condition, long Rows, string? Error = null);
 
 /// <summary>Uma coluna mascarada como o servidor devolveu, para a pré-visualização: nunca o valor real.</summary>
 public sealed record MaskedPreview(string Schema, string Table, string Column, IReadOnlyList<string?> Values)

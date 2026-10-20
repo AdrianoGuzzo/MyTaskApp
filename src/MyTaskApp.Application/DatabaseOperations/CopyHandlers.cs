@@ -55,7 +55,8 @@ public sealed class ValidateDatabaseCopyHandler(
 
             if (plan is { Anonymizes: true, AnonymizationProfile: { } profile } && source.Connected)
             {
-                var validation = MaskingPlanner.Plan(profile, await copier.ReadCatalogAsync(plan.Source, cancellationToken));
+                var validation = await UnmaskedRows.CountAsync(inspector, plan.Source,
+                    MaskingPlanner.Plan(profile, await copier.ReadCatalogAsync(plan.Source, cancellationToken)), cancellationToken);
                 checks.AddRange(MaskingChecks(validation));
                 decision = policy.Evaluate(plan.ToPolicyRequest(DatabaseCopyRun.SourceFacts(plan, validation)));
             }
@@ -447,7 +448,8 @@ internal sealed class DatabaseCopyRun(
 
     /// <summary>
     /// As regras do perfil contra as colunas da origem (ADR-058): o que copiar,
-    /// como mascarar, e o que impede. Só catálogo — nenhuma linha é lida.
+    /// como mascarar, e o que impede. Só catálogo — nenhuma linha é lida —, e a
+    /// contagem das linhas sem máscara, quando o perfil tem (ADR-079).
     /// </summary>
     private async Task ValidateMaskingAsync(CancellationToken cancellationToken)
     {
@@ -460,7 +462,8 @@ internal sealed class DatabaseCopyRun(
         Begin(DatabaseCopyStep.ValidateMasking, "Lendo as colunas da origem e conferindo as regras…");
 
         var profile = plan.AnonymizationProfile!;
-        var validation = MaskingPlanner.Plan(profile, await copier.ReadCatalogAsync(plan.Source, cancellationToken));
+        var validation = await UnmaskedRows.CountAsync(inspector, plan.Source,
+            MaskingPlanner.Plan(profile, await copier.ReadCatalogAsync(plan.Source, cancellationToken)), cancellationToken);
 
         if (!validation.IsValid)
         {

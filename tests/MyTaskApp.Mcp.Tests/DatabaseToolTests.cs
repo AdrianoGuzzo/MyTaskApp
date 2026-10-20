@@ -206,6 +206,10 @@ public class DatabaseToolTests
         details.GetProperty("rules").EnumerateArray().Select(rule => rule.GetProperty("column").GetString())
             .Should().BeEquivalentTo("public.clientes.cpf", "public.clientes.email", "public.clientes.nome");
         details.GetProperty("skippedTables").EnumerateArray().Select(table => table.GetString()).Should().Equal("public.logs");
+        var filter = details.GetProperty("rowFilters").EnumerateArray().Should().ContainSingle().Subject;
+        filter.GetProperty("table").GetString().Should().Be("public.clientes");
+        filter.GetProperty("condition").GetString().Should().Be("id = 1");
+        details.GetProperty("profile").GetProperty("rowFilters").GetInt32().Should().Be(1);
         details.GetProperty("connection").GetProperty("name").GetString().Should().Be("ECO Dev");
 
         var schema = await client.CallJsonAsync("anonymization_profile_get_schema", null, Ct);
@@ -266,9 +270,10 @@ public class DatabaseToolTests
             ["public.clientes.nome"] = "FixedText",
         });
 
-        // Tabelas sem dados não citadas continuam lá.
-        (await client.CallJsonAsync("anonymization_profile_get_details", new() { ["profileId"] = profile.ToString() }, Ct))
-            .GetProperty("skippedTables").GetArrayLength().Should().Be(1);
+        // Tabelas sem dados e linhas sem máscara não citadas continuam lá.
+        var details = await client.CallJsonAsync("anonymization_profile_get_details", new() { ["profileId"] = profile.ToString() }, Ct);
+        details.GetProperty("skippedTables").GetArrayLength().Should().Be(1);
+        details.GetProperty("rowFilters")[0].GetProperty("condition").GetString().Should().Be("id = 1");
     }
 
     [Fact]
@@ -388,6 +393,7 @@ public class DatabaseToolTests
                     ])
                 {
                     SkippedTables = [new SkippedTableRow("public", "logs")],
+                    RowFilters = [new RowFilterRow("public", "clientes", "id = 1")],
                 },
                 token),
             Ct);

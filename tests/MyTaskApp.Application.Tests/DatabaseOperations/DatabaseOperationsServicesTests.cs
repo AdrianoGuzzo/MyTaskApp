@@ -356,6 +356,17 @@ public class DatabaseOperationsServicesTests
     }
 
     [Fact]
+    public void AFixedMask_ToleratesOnlyTheRowsLeftUnmaskedOnPurpose()
+    {
+        var column = new ColumnReference("public", "a", "telefone");
+
+        VerificationEvaluator.CompareFixed(column, 0).Outcome.Should().Be(CheckOutcome.Pass);
+        VerificationEvaluator.CompareFixed(column, 2).Outcome.Should().Be(CheckOutcome.Fail);
+        VerificationEvaluator.CompareFixed(column, 2, unmasked: 3).Outcome.Should().Be(CheckOutcome.Pass);
+        VerificationEvaluator.CompareFixed(column, 4, unmasked: 3).Outcome.Should().Be(CheckOutcome.Fail, "uma linha a mais que o filtro escapou da máscara");
+    }
+
+    [Fact]
     public void TheReport_SummarizesTheWorstOfEachCategory()
     {
         var report = new VerificationReport(

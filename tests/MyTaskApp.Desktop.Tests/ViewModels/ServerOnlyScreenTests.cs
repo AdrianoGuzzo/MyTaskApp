@@ -431,7 +431,7 @@ public class ServerOnlyScreenTests
     }
 
     /// <summary>Só responde às colunas, e anota o banco em que foram lidas.</summary>
-    private sealed class CapturingInspector(Action<SuggestSensitiveColumns> seen) : IPostgresServerInspector
+    internal sealed class CapturingInspector(Action<SuggestSensitiveColumns> seen) : IPostgresServerInspector
     {
         public Task<IReadOnlyList<ColumnInfo>> ListColumnsAsync(DatabaseConnectionSnapshot connection, CancellationToken cancellationToken = default)
         {
@@ -461,7 +461,11 @@ public class ServerOnlyScreenTests
             throw new NotSupportedException();
 
         public Task<ColumnFingerprint> FingerprintAsync(
-            DatabaseConnectionSnapshot connection, ColumnReference column, string salt, int limit, CancellationToken cancellationToken = default) =>
+            DatabaseConnectionSnapshot connection, ColumnReference column, string salt, int limit, string? excluding = null, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<long> CountMatchingAsync(
+            DatabaseConnectionSnapshot connection, string table, string condition, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
     }
 }

@@ -385,6 +385,24 @@ public sealed partial class SkippedTableItemViewModel(string schema, string tabl
     public SkippedTableRow ToRow() => new(Schema, Table);
 }
 
+/// <summary>
+/// As linhas de uma tabela que vão sem máscara (ADR-079): as que batem em
+/// <see cref="Condition"/>, que o usuário escreve e pode corrigir na lista.
+/// </summary>
+public sealed partial class RowFilterItemViewModel(string schema, string table, string condition) : ObservableObject
+{
+    public string Schema { get; } = schema;
+
+    public string Table { get; } = table;
+
+    public string TableKey => $"{Schema}.{Table}";
+
+    [ObservableProperty]
+    private string _condition = condition;
+
+    public RowFilterRow ToRow() => new(Schema, Table, Condition);
+}
+
 /// <summary>Uma operação no histórico.</summary>
 public sealed class DatabaseOperationItemViewModel(DatabaseOperationRow row)
 {

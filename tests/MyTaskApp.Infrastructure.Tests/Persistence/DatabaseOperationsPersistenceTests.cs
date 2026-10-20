@@ -119,6 +119,7 @@ public class DatabaseOperationsPersistenceTests
             new AnonymizationRuleSpec("public", "clientes", "obs", MaskingMethod.FixedText, "(removido)", ColumnSensitivity.Low),
         ], Now);
         profile.ReplaceSkippedTables([new SkippedTableSpec("public", "auditoria"), new SkippedTableSpec("public", "Auditoria")], Now);
+        profile.ReplaceRowFilters([new RowFilterSpec("public", "clientes", "email like '%@empresa.com.br'")], Now);
         await SeedAsync(db, masked, profile);
 
         await using (var read = db.CreateContext())
@@ -139,8 +140,13 @@ public class DatabaseOperationsPersistenceTests
             reloaded.SkippedTables.Select(table => table.TableKey).Should().BeEquivalentTo("public.auditoria", "public.Auditoria");
             (await profiles.ListAsync(Ct)).Single().SkippedTables.Should().HaveCount(2);
 
+            reloaded.RowFilters.Should().ContainSingle().Which.Should().Match<AnonymizationRowFilter>(
+                filter => filter.TableKey == "public.clientes" && filter.Condition == "email like '%@empresa.com.br'");
+            (await profiles.ListAsync(Ct)).Single().RowFilters.Should().HaveCount(1);
+
             reloaded.ReplaceRules([new AnonymizationRuleSpec("public", "clientes", "cpf", MaskingMethod.Partial, "0,2", ColumnSensitivity.High)], Now);
             reloaded.ReplaceSkippedTables([new SkippedTableSpec("logs", "eventos")], Now);
+            reloaded.ReplaceRowFilters([new RowFilterSpec("public", "usuarios", "id = 1"), new RowFilterSpec("public", "Usuarios", "id = 2")], Now);
             await read.SaveChangesAsync(Ct);
         }
 
@@ -149,6 +155,8 @@ public class DatabaseOperationsPersistenceTests
             (await read.Set<AnonymizationRule>().CountAsync(Ct)).Should().Be(1);
             (await read.Set<AnonymizationSkippedTable>().Select(table => table.Schema + "." + table.Table).ToListAsync(Ct))
                 .Should().Equal("logs.eventos");
+            (await read.Set<AnonymizationRowFilter>().OrderBy(filter => filter.Condition).Select(filter => filter.Table + ": " + filter.Condition).ToListAsync(Ct))
+                .Should().Equal("usuarios: id = 1", "Usuarios: id = 2");
             var profiles = new AnonymizationProfileRepository(read);
             profiles.Remove((await profiles.FindByIdAsync(profile.Id, Ct))!);
             await read.SaveChangesAsync(Ct);
@@ -157,6 +165,7 @@ public class DatabaseOperationsPersistenceTests
         await using var check = db.CreateContext();
         (await check.Set<AnonymizationRule>().CountAsync(Ct)).Should().Be(0);
         (await check.Set<AnonymizationSkippedTable>().CountAsync(Ct)).Should().Be(0, "as tabelas sem dados saem com o perfil");
+        (await check.Set<AnonymizationRowFilter>().CountAsync(Ct)).Should().Be(0, "as linhas sem máscara saem com o perfil");
     }
 
     [Fact]

@@ -28,6 +28,61 @@ public class MaskingPlannerTests
         return profile;
     }
 
+    private static AnonymizationProfile Keeping(AnonymizationProfile profile, params (string Table, string Condition)[] filters)
+    {
+        profile.ReplaceRowFilters(filters.Select(filter => new RowFilterSpec("public", filter.Table, filter.Condition)), Now);
+        return profile;
+    }
+
+    // --- Linhas sem máscara (ADR-079) --------------------------------------------
+
+    [Fact]
+    public void ARowFilter_GoesWithTheTable_AndPartitionsInheritIt()
+    {
+        var catalog = Catalog(
+        [
+            new SourceTable("public", "usuarios", 10, 1, [new SourceColumn("id", "integer", false, false), new SourceColumn("email", "text", true, false)]),
+            new SourceTable("public", "eventos_2026", 10, 1, [new SourceColumn("ip", "text", true, false)], "public.eventos"),
+            new SourceTable("public", "pedidos", 10, 1, [new SourceColumn("valor", "numeric", false, false)]),
+        ]);
+
+        var plan = MaskingPlanner.Plan(
+            Keeping(Profile(Rule("usuarios", "email", MaskingMethod.FakeEmail), Rule("eventos", "ip", MaskingMethod.Hash)),
+                ("usuarios", "id = 1"), ("eventos", "ip = '127.0.0.1'")),
+            catalog);
+
+        plan.IsValid.Should().BeTrue(string.Join(" ", plan.Problems));
+        plan.Tables.Single(table => table.Table == "usuarios").RowFilter.Should().Be("id = 1");
+        plan.Tables.Single(table => table.Table == "eventos_2026").RowFilter.Should().Be("ip = '127.0.0.1'");
+        plan.Tables.Single(table => table.Table == "pedidos").RowFilter.Should().BeNull();
+        plan.FilteredTables.Select(table => table.Table).Should().BeEquivalentTo(["usuarios", "eventos_2026"]);
+        plan.Warnings.Should().BeEmpty();
+        plan.NotCompared.Should().BeEmpty("nenhuma linha some: a contagem continua igual");
+    }
+
+    [Fact]
+    public void ARowFilter_OnASkippedTable_IsAProblem()
+    {
+        var catalog = Catalog([new SourceTable("public", "usuarios", 10, 1, [new SourceColumn("email", "text", true, false)])]);
+
+        MaskingPlanner.Plan(Keeping(Skipping(Profile(), "usuarios"), ("usuarios", "id = 1")), catalog).Problems
+            .Should().ContainSingle().Which.Should().Contain("public.usuarios").And.Contain("escolha um dos dois");
+    }
+
+    [Fact]
+    public void ARowFilter_ThatChangesNothing_OrPointsNowhere_IsAWarning()
+    {
+        var catalog = Catalog([new SourceTable("public", "pedidos", 10, 1, [new SourceColumn("valor", "numeric", false, false)])]);
+
+        var plan = MaskingPlanner.Plan(Keeping(Profile(), ("pedidos", "valor > 0"), ("sumiu", "id = 1")), catalog);
+
+        plan.IsValid.Should().BeTrue();
+        plan.FilteredTables.Should().BeEmpty("sem máscara, não há o que deixar de mascarar");
+        plan.Warnings.Should().HaveCount(2);
+        plan.Warnings.Should().Contain(warning => warning.Contains("public.sumiu") && warning.Contains("não existe"));
+        plan.Warnings.Should().Contain(warning => warning.Contains("public.pedidos") && warning.Contains("não muda nada"));
+    }
+
     // --- Tabelas sem dados ------------------------------------------------------
 
     [Fact]

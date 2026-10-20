@@ -1,3 +1,4 @@
+using MyTaskApp.Domain;
 using MyTaskApp.Domain.DatabaseOperations;
 
 namespace MyTaskApp.Application.DatabaseOperations;
@@ -22,11 +23,58 @@ public sealed record MaskingValidation(
     /// <summary>Tabelas (partições contadas uma a uma) que vão vazias para o destino.</summary>
     public int SkippedTables => Tables.Count(table => table.SkipData);
 
+    /// <summary>Tabelas com linhas que vão sem máscara (ADR-079): a condição precisa ser conferida no servidor.</summary>
+    public IReadOnlyList<MaskedTablePlan> FilteredTables => Tables.Where(table => table.HasUnmaskedRows).ToList();
+
     /// <summary>
     /// Fora da comparação de linhas: as tabelas sem dados e as particionadas de
     /// cima delas, que no destino têm menos linhas que na origem, de propósito.
     /// </summary>
     public IReadOnlyCollection<string> NotCompared { get; init; } = [];
+
+    /// <summary>As contagens de <see cref="UnmaskedRows.CountAsync"/>; vazio até alguém conferir no servidor.</summary>
+    public IReadOnlyList<UnmaskedRowCount> UnmaskedRows { get; init; } = [];
+}
+
+/// <summary>
+/// A condição de cada tabela com linhas sem máscara (ADR-079), rodada na
+/// origem antes da cópia: quantas linhas saem com o valor real, ou por que o
+/// servidor recusou — e aí a cópia não começa, em vez de quebrar no meio do COPY.
+/// </summary>
+public static class UnmaskedRows
+{
+    public static async Task<MaskingValidation> CountAsync(
+        IPostgresServerInspector inspector,
+        DatabaseConnectionSnapshot source,
+        MaskingValidation validation,
+        CancellationToken cancellationToken = default)
+    {
+        var counts = new List<UnmaskedRowCount>();
+
+        foreach (var table in validation.FilteredTables)
+        {
+            try
+            {
+                counts.Add(new UnmaskedRowCount(table.QualifiedName, table.RowFilter!,
+                    await inspector.CountMatchingAsync(source, table.QualifiedName, table.RowFilter!, cancellationToken)));
+            }
+            catch (DomainException exception)
+            {
+                counts.Add(new UnmaskedRowCount(table.QualifiedName, table.RowFilter!, 0, exception.Message));
+            }
+        }
+
+        return counts.Count == 0
+            ? validation
+            : validation with
+            {
+                Problems = [.. validation.Problems, .. counts.Where(count => count.Error is not null)
+                    .Select(count => $"A condição das linhas sem máscara de {count.Table} não roda na origem: {count.Error}")],
+                Warnings = [.. validation.Warnings, .. counts.Where(count => count.Error is null)
+                    .Select(count => $"{count.Table}: {count.Rows} linha(s) vão sem máscara, com os valores reais ({count.Condition}).")],
+                UnmaskedRows = counts,
+            };
+    }
 }
 
 /// <summary>
@@ -48,6 +96,12 @@ public sealed record MaskingValidation(
 /// FKs são criadas depois das linhas; uma linha de <c>pedidos</c> apontando
 /// para um <c>clientes</c> vazio faria a FK falhar no destino.
 /// </para>
+/// <para>
+/// <b>Linhas sem máscara (ADR-079).</b> O filtro de uma tabela vai junto no
+/// plano, e o de uma particionada vale para as partições. Numa tabela sem
+/// dados ele não tem o que escolher: é erro, para o usuário decidir qual dos
+/// dois queria.
+/// </para>
 /// </remarks>
 public static class MaskingPlanner
 {
@@ -60,12 +114,26 @@ public static class MaskingPlanner
             .GroupBy(key => key.ColumnKey, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.Select(key => key.Role).ToHashSet(), StringComparer.Ordinal);
         var skipping = new SkippedTables(profile, catalog);
+        var filters = (profile?.RowFilters ?? []).ToDictionary(filter => filter.TableKey, StringComparer.Ordinal);
+        var filtered = new HashSet<string>(StringComparer.Ordinal);
         var tables = new List<MaskedTablePlan>();
 
         foreach (var table in catalog.Tables)
         {
+            var filter = filters.GetValueOrDefault(table.QualifiedName) ?? (table.Root is { } filterRoot ? filters.GetValueOrDefault(filterRoot) : null);
+
+            if (filter is not null)
+            {
+                filtered.Add(filter.TableKey);
+            }
+
             if (skipping.Skips(table.QualifiedName))
             {
+                if (filter is not null)
+                {
+                    problems.Add($"{filter.TableKey} está nas tabelas sem dados e nas linhas sem máscara: escolha um dos dois.");
+                }
+
                 // Nenhuma linha sai: as regras dela não têm o que mascarar, e não são um erro.
                 foreach (var column in table.Columns)
                 {
@@ -115,7 +183,7 @@ public static class MaskingPlanner
                     : new MaskedColumnPlan(column.Name, column.DataType, rule.Method, rule.Argument));
             }
 
-            tables.Add(new MaskedTablePlan(table.Schema, table.Table, table.Bytes, columns, table.EstimatedRows));
+            tables.Add(new MaskedTablePlan(table.Schema, table.Table, table.Bytes, columns, table.EstimatedRows, RowFilter: filter?.Condition));
         }
 
         foreach (var rule in rules.Values.Where(rule => !used.Contains(rule.ColumnKey)))
@@ -133,6 +201,11 @@ public static class MaskingPlanner
         }
 
         warnings.AddRange(skipping.Missing().Select(name => $"{name} está nas tabelas sem dados, mas não existe no banco de origem."));
+        warnings.AddRange(filters.Keys.Where(name => !filtered.Contains(name)).Order(StringComparer.Ordinal)
+            .Select(name => $"{name} tem linhas sem máscara, mas não existe no banco de origem."));
+        warnings.AddRange(tables
+            .Where(table => table.RowFilter is not null && !table.SkipData && !table.HasMaskedColumns)
+            .Select(table => $"{table.QualifiedName} tem linhas sem máscara, mas nenhuma coluna mascarada: o filtro não muda nada."));
 
         return new MaskingValidation(tables, problems.Distinct().ToList(), warnings, Uncovered(catalog, rules.Keys, skipping))
         {
@@ -248,6 +321,8 @@ public static class MaskingPlanner
 /// Depois da cópia mascarada: cada coluna com regra precisa ter chegado
 /// mascarada. Máscara variável (hash, parcial, nome…) não pode bater com a
 /// origem; máscara fixa (texto, número, nulo) precisa estar em todas as linhas.
+/// Numa tabela com linhas sem máscara (ADR-079), essas linhas ficam fora da
+/// comparação: chegaram iguais de propósito.
 /// </summary>
 public interface IMaskingVerifier
 {
@@ -286,12 +361,17 @@ public sealed class MaskingVerifier(IPostgresServerInspector inspector, IDatabas
             if (column.Method is MaskingMethod.Null or MaskingMethod.FixedText or MaskingMethod.FixedNumber)
             {
                 var different = await inspector.CountNotMaskedAsync(destination, reference, column, cancellationToken);
-                results.Add(VerificationEvaluator.CompareFixed(reference, different));
+
+                // A condição pode citar a coluna mascarada: no destino ela já não vale. Conta-se na origem.
+                var unmasked = table.RowFilter is { } condition
+                    ? await inspector.CountMatchingAsync(source, table.QualifiedName, condition, cancellationToken)
+                    : 0;
+                results.Add(VerificationEvaluator.CompareFixed(reference, different, unmasked));
                 continue;
             }
 
-            var before = await inspector.FingerprintAsync(source, reference, salt, VerificationRows, cancellationToken);
-            var after = await inspector.FingerprintAsync(destination, reference, salt, VerificationRows, cancellationToken);
+            var before = await inspector.FingerprintAsync(source, reference, salt, VerificationRows, table.RowFilter, cancellationToken);
+            var after = await inspector.FingerprintAsync(destination, reference, salt, VerificationRows, cancellationToken: cancellationToken);
             results.Add(VerificationEvaluator.CompareSensitive(before, after));
         }
 

@@ -275,6 +275,61 @@ public class DatabaseCatalogHandlersTests
     }
 
     [Fact]
+    public async Task RowFilters_AreSavedWithTheProfile_AndGoAlongWhenItIsDuplicated()
+    {
+        var save = new SaveAnonymizationProfileHandler(
+            Catalog.AnonymizationProfiles, Catalog.Connections, Catalog, _scenario.Clock, NullLogger<SaveAnonymizationProfileHandler>.Instance);
+
+        var id = await save.HandleAsync(new SaveAnonymizationProfile(null, "Com usuário de teste", null, _scenario.Production.Id, [])
+        {
+            RowFilters = [new RowFilterRow("public", "usuarios", "WHERE login = 'teste'"), new RowFilterRow("public", "config", "true")],
+        }, Ct);
+        var copy = await new DuplicateAnonymizationProfileHandler(Catalog.AnonymizationProfiles, save)
+            .HandleAsync(new DuplicateAnonymizationProfile(id, "Variante"), Ct);
+
+        var rows = await new GetAnonymizationProfilesHandler(Catalog.AnonymizationProfiles).HandleAsync(new GetAnonymizationProfiles(), Ct);
+        rows.Single(profile => profile.Id == id).RowFilters.Should().Equal(
+            new RowFilterRow("public", "config", "true"), new RowFilterRow("public", "usuarios", "login = 'teste'"));
+        rows.Single(profile => profile.Id == copy).RowFilters.Should().Equal(rows.Single(profile => profile.Id == id).RowFilters);
+
+        var comparison = await new CompareAnonymizationProfilesHandler(Catalog.AnonymizationProfiles)
+            .HandleAsync(new CompareAnonymizationProfiles(_scenario.Profile.Id, id), Ct);
+        comparison.RowFilters.Select(change => (change.Table, change.Kind)).Should().Equal(
+            ("public.config", ChangeKind.Added), ("public.usuarios", ChangeKind.Added));
+    }
+
+    [Fact]
+    public async Task ThePreview_CountsTheRowsThatGoUnmasked_AndShowsOnlyTheOthers()
+    {
+        _scenario.Inspector.Matching["public.clientes"] = 3;
+
+        var result = await PreviewHandler().HandleAsync(new PreviewMasking(_scenario.Production.Id, null,
+            [new AnonymizationRuleRow("public", "clientes", "email", MaskingMethod.FakeEmail, null, ColumnSensitivity.High)])
+        {
+            RowFilters = [new RowFilterRow("public", "clientes", "id < 4")],
+        }, Ct);
+
+        result.Problems.Should().BeEmpty();
+        result.UnmaskedRows.Should().Equal(new UnmaskedRowCount("public.clientes", "id < 4", 3));
+        _scenario.Copier.Previews.Single().Tables.Single().RowFilter.Should().Be("id < 4", "o SELECT da pré-visualização deixa essas linhas de fora");
+    }
+
+    [Fact]
+    public async Task ThePreview_OfAConditionTheServerRefuses_SaysWhy_AndSkipsThatTable()
+    {
+        _scenario.Inspector.RefusedCondition = "x = 1";
+
+        var result = await PreviewHandler().HandleAsync(new PreviewMasking(_scenario.Production.Id, null,
+            [new AnonymizationRuleRow("public", "clientes", "email", MaskingMethod.FakeEmail, null, ColumnSensitivity.High)])
+        {
+            RowFilters = [new RowFilterRow("public", "clientes", "x = 1")],
+        }, Ct);
+
+        result.Problems.Should().ContainSingle().Which.Should().Contain("public.clientes").And.Contain("42703");
+        _scenario.Copier.Previews.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task TheSourceTables_ShowAPartitionedTableOnce_WithItsPartsAdded()
     {
         _scenario.Copier.Catalog = new SourceCatalog(
@@ -354,7 +409,7 @@ public class DatabaseCatalogHandlersTests
         _scenario.Inspector.Calls.Should().NotContain(call => call.StartsWith("fingerprint", StringComparison.Ordinal));
     }
 
-    private PreviewMaskingHandler PreviewHandler() => new(Catalog.Connections, _scenario.Copier, _scenario.Policy, _scenario.Clock);
+    private PreviewMaskingHandler PreviewHandler() => new(Catalog.Connections, _scenario.Copier, _scenario.Inspector, _scenario.Policy, _scenario.Clock);
 
     [Fact]
     public async Task ThePreview_ShowsOnlyMaskedValues_OfTheMarkedColumns()

@@ -720,6 +720,37 @@
                     </Border>
                   </StackPanel>
 
+                  <!-- Linhas sem máscara (ADR-079): as que batem na condição vão com os valores reais. -->
+                  <StackPanel Spacing="4" Margin="0,6,0,0">
+                    <TextBlock Text="Linhas sem máscara" FontWeight="SemiBold" />
+                    <TextBlock Classes="meta" TextWrapping="Wrap"
+                               Text="Por tabela, uma condição (o WHERE, sem a palavra). As linhas que batem nela vão para o destino com os valores reais; as outras continuam mascaradas. Bom para usuários de teste e registros de sistema." />
+                    <Grid ColumnDefinitions="220,*,Auto" ColumnSpacing="8">
+                      <AutoCompleteBox x:Name="RowFilterTableBox" HorizontalAlignment="Stretch" VerticalAlignment="Top"
+                                       MinimumPrefixLength="0" FilterMode="Contains"
+                                       PlaceholderText="schema.tabela"
+                                       ItemsSource="{Binding RowFilterTableChoices}" Text="{Binding NewRowFilterTable}" />
+                      <TextBox Grid.Column="1" x:Name="RowFilterConditionBox" AcceptsReturn="True" TextWrapping="Wrap"
+                               PlaceholderText="id = 1 or email like '%@empresa.com.br'" Text="{Binding NewRowFilterCondition}"
+                               ToolTip.Tip="SQL do PostgreSQL, rodado só na origem e em modo somente leitura. Sem ; e sem comentários." />
+                      <Button Grid.Column="2" x:Name="AddRowFilterButton" Content="Adicionar" VerticalAlignment="Top"
+                              Command="{Binding AddRowFilterCommand}" />
+                    </Grid>
+                    <ItemsControl x:Name="RowFilterList" ItemsSource="{Binding RowFilters}" IsVisible="{Binding HasRowFilters}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:RowFilterItemViewModel">
+                          <Grid ColumnDefinitions="220,*,Auto" ColumnSpacing="8" Margin="0,2">
+                            <TextBlock Classes="code" Text="{Binding TableKey}" VerticalAlignment="Center" />
+                            <TextBox Grid.Column="1" AcceptsReturn="True" TextWrapping="Wrap" Text="{Binding Condition}" />
+                            <Button Grid.Column="2" Classes="rowAction danger" Content="Remover" VerticalAlignment="Center"
+                                    Command="{Binding #Root.((vm:DatabaseOperationsViewModel)DataContext).Profiles.RemoveRowFilterCommand}"
+                                    CommandParameter="{Binding}" />
+                          </Grid>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+
                   <Grid ColumnDefinitions="*,Auto" Margin="0,6,0,0">
                     <StackPanel>
                       <TextBlock Text="Colunas a mascarar" FontWeight="SemiBold" />
@@ -818,6 +849,13 @@
                         <ItemsControl.ItemTemplate>
                           <DataTemplate x:DataType="x:String">
                             <TextBlock Classes="error" Text="{Binding StringFormat='⛔ {0}'}" />
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                      <ItemsControl x:Name="PreviewNotesList" ItemsSource="{Binding PreviewNotes}">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="x:String">
+                            <TextBlock Classes="meta" TextWrapping="Wrap" Text="{Binding}" />
                           </DataTemplate>
                         </ItemsControl.ItemTemplate>
                       </ItemsControl>

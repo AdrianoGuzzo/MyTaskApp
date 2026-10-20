@@ -28,6 +28,14 @@ public sealed record SkippedTableRow(string Schema, string Table)
     public SkippedTableSpec ToSpec() => new(Schema, Table);
 }
 
+/// <summary>As linhas de uma tabela que vão sem máscara: as que batem em <see cref="Condition"/> (ADR-079).</summary>
+public sealed record RowFilterRow(string Schema, string Table, string Condition)
+{
+    public string TableKey => $"{Schema}.{Table}";
+
+    public RowFilterSpec ToSpec() => new(Schema, Table, Condition);
+}
+
 public sealed record AnonymizationProfileRow(
     Guid Id,
     string Name,
@@ -38,6 +46,8 @@ public sealed record AnonymizationProfileRow(
     DateTimeOffset UpdatedAt)
 {
     public IReadOnlyList<SkippedTableRow> SkippedTables { get; init; } = [];
+
+    public IReadOnlyList<RowFilterRow> RowFilters { get; init; } = [];
 }
 
 public sealed record GetAnonymizationProfiles;
@@ -68,10 +78,15 @@ public sealed class GetAnonymizationProfilesHandler(IAnonymizationProfileReposit
             .ThenBy(table => table.Table, StringComparer.Ordinal)
             .Select(table => new SkippedTableRow(table.Schema, table.Table))
             .ToList(),
+        RowFilters = profile.RowFilters
+            .OrderBy(filter => filter.Schema, StringComparer.Ordinal)
+            .ThenBy(filter => filter.Table, StringComparer.Ordinal)
+            .Select(filter => new RowFilterRow(filter.Schema, filter.Table, filter.Condition))
+            .ToList(),
     };
 }
 
-/// <summary>Criar ou editar um perfil, com o conjunto inteiro de regras confirmadas e de tabelas sem dados.</summary>
+/// <summary>Criar ou editar um perfil, com o conjunto inteiro de regras confirmadas, de tabelas sem dados e de linhas sem máscara.</summary>
 public sealed record SaveAnonymizationProfile(
     Guid? Id,
     string Name,
@@ -80,6 +95,8 @@ public sealed record SaveAnonymizationProfile(
     IReadOnlyList<AnonymizationRuleRow> Rules)
 {
     public IReadOnlyList<SkippedTableRow> SkippedTables { get; init; } = [];
+
+    public IReadOnlyList<RowFilterRow> RowFilters { get; init; } = [];
 
     /// <summary>
     /// O <c>UpdatedAt</c> do perfil quando a tela o abriu. Com ele, salvar
@@ -140,10 +157,13 @@ public sealed class SaveAnonymizationProfileHandler(
 
         profile.ReplaceRules(command.Rules.Select(rule => rule.ToSpec()), now);
         profile.ReplaceSkippedTables(command.SkippedTables.Select(table => table.ToSpec()), now);
+        profile.ReplaceRowFilters(command.RowFilters.Select(filter => filter.ToSpec()), now);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        // A condição não vai para o log: pode citar um valor real ("email = 'fulano@…'").
         logger.LogInformation(
-            "AnonymizationProfileSaved {ProfileId} {Rules} {SkippedTables}", profile.Id, profile.Rules.Count, profile.SkippedTables.Count);
+            "AnonymizationProfileSaved {ProfileId} {Rules} {SkippedTables} {RowFilters}",
+            profile.Id, profile.Rules.Count, profile.SkippedTables.Count, profile.RowFilters.Count);
         return new SavedAnonymizationProfile(profile.Id, profile.UpdatedAt);
     }
 }
@@ -279,15 +299,26 @@ public sealed record PreviewMasking(
 {
     /// <summary>As tabelas sem dados da tela: uma FK que elas quebrariam aparece como problema.</summary>
     public IReadOnlyList<SkippedTableRow> SkippedTables { get; init; } = [];
+
+    /// <summary>
+    /// As linhas sem máscara da tela (ADR-079): a condição roda na origem, só
+    /// para contar, e a pré-visualização mostra só as linhas mascaradas.
+    /// </summary>
+    public IReadOnlyList<RowFilterRow> RowFilters { get; init; } = [];
 }
 
 public sealed record MaskingPreviewResult(
     IReadOnlyList<string> Problems,
-    IReadOnlyList<MaskedPreview> Columns);
+    IReadOnlyList<MaskedPreview> Columns)
+{
+    /// <summary>Quantas linhas de cada tabela com filtro vão sem máscara.</summary>
+    public IReadOnlyList<UnmaskedRowCount> UnmaskedRows { get; init; } = [];
+}
 
 public sealed class PreviewMaskingHandler(
     IDatabaseConnectionRepository connections,
     IPostgresMaskedCopier copier,
+    IPostgresServerInspector inspector,
     IDatabaseSecurityPolicy policy,
     TimeProvider timeProvider)
 {
@@ -302,15 +333,19 @@ public sealed class PreviewMaskingHandler(
         var draft = AnonymizationProfile.Create("Pré-visualização", null, connection.Id, timeProvider.GetUtcNow());
         draft.ReplaceRules(query.Rules.Select(rule => rule.ToSpec()), timeProvider.GetUtcNow());
         draft.ReplaceSkippedTables(query.SkippedTables.Select(table => table.ToSpec()), timeProvider.GetUtcNow());
+        draft.ReplaceRowFilters(query.RowFilters.Select(filter => filter.ToSpec()), timeProvider.GetUtcNow());
 
         var catalog = await copier.ReadCatalogAsync(connection, cancellationToken);
-        var validation = MaskingPlanner.Plan(draft, catalog);
-        var tables = validation.Tables.Where(table => table.HasMaskedColumns).ToList();
+        var validation = await UnmaskedRows.CountAsync(inspector, connection, MaskingPlanner.Plan(draft, catalog), cancellationToken);
+
+        // Uma condição que o servidor recusou derrubaria a pré-visualização inteira: essa tabela fica de fora.
+        var refused = validation.UnmaskedRows.Where(count => count.Error is not null).Select(count => count.Table).ToHashSet(StringComparer.Ordinal);
+        var tables = validation.Tables.Where(table => table.HasMaskedColumns && !refused.Contains(table.QualifiedName)).ToList();
         var preview = tables.Count == 0
             ? []
             : await copier.PreviewAsync(connection, tables, Math.Clamp(query.Rows, 1, 20), cancellationToken);
 
-        return new MaskingPreviewResult(validation.Problems, preview);
+        return new MaskingPreviewResult(validation.Problems, preview) { UnmaskedRows = validation.UnmaskedRows };
     }
 }
 
