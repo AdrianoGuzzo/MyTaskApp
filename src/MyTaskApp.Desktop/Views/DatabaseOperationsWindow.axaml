@@ -720,7 +720,7 @@
                     </Border>
                   </StackPanel>
 
-                  <!-- Linhas sem máscara (ADR-079): as que batem na condição vão com os valores reais. -->
+                  <!-- Linhas sem máscara (ADR-080): as que batem na condição vão com os valores reais. -->
                   <StackPanel Spacing="4" Margin="0,6,0,0">
                     <TextBlock Text="Linhas sem máscara" FontWeight="SemiBold" />
                     <TextBlock Classes="meta" TextWrapping="Wrap"

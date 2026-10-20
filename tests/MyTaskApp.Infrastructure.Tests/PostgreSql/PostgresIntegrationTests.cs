@@ -250,7 +250,7 @@ public sealed class PostgresIntegrationTests : IAsyncLifetime
             row[3].Should().Be(((string)row[2]!).ToLowerInvariant(), "a coluna gerada é recalculada a partir do nome mascarado");
             ((long)row[4]!).Should().BeGreaterThan(250, "a sequence continua de onde a origem parou");
 
-            // A linha do filtro (ADR-079) chega com os valores reais; a verificação a deixa de fora.
+            // A linha do filtro (ADR-080) chega com os valores reais; a verificação a deixa de fora.
             var kept = await QueryRowAsync(_masked, "SELECT email, cpf, nome FROM clientes WHERE id = 2");
             kept.Should().Equal("pessoa2@exemplo.com", "002.456.789-09", "Fulano 2");
             var email = new ColumnReference("public", "clientes", "email");

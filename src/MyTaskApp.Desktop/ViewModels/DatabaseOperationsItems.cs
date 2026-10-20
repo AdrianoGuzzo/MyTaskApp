@@ -386,7 +386,7 @@ public sealed partial class SkippedTableItemViewModel(string schema, string tabl
 }
 
 /// <summary>
-/// As linhas de uma tabela que vão sem máscara (ADR-079): as que batem em
+/// As linhas de uma tabela que vão sem máscara (ADR-080): as que batem em
 /// <see cref="Condition"/>, que o usuário escreve e pode corrigir na lista.
 /// </summary>
 public sealed partial class RowFilterItemViewModel(string schema, string table, string condition) : ObservableObject

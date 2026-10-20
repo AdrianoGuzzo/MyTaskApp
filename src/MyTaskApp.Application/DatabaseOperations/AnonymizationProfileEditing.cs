@@ -227,7 +227,7 @@ public sealed class ChangeAnonymizationProfileHandler(
             draft.ReplaceRules(proposedRules.Select(rule => rule.ToSpec()), now);
             draft.ReplaceSkippedTables(proposedSkipped.Select(table => table.ToSpec()), now);
 
-            // As linhas sem máscara não mudam por aqui (ADR-079): seguem como estão, para o rascunho validar igual à cópia.
+            // As linhas sem máscara não mudam por aqui (ADR-080): seguem como estão, para o rascunho validar igual à cópia.
             draft.ReplaceRowFilters(before.RowFilters.Select(filter => filter.ToSpec()), now);
         }
         catch (DomainException exception)

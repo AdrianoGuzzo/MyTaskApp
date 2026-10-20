@@ -166,7 +166,7 @@ public static class VerificationEvaluator
 
     /// <summary>
     /// Uma máscara fixa (texto, número, nulo) tem de estar em todas as linhas do
-    /// destino — menos nas <paramref name="unmasked"/> linhas sem máscara (ADR-079).
+    /// destino — menos nas <paramref name="unmasked"/> linhas sem máscara (ADR-080).
     /// </summary>
     public static CheckResult CompareFixed(ColumnReference column, long notMasked, long unmasked = 0)
     {

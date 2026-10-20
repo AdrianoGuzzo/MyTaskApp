@@ -13,6 +13,15 @@
     <ScrollView>
         <VerticalStackLayout Padding="16" Spacing="4">
 
+            <!-- O antigo atalho "Vencidas" (ADR-079): só nas pendentes, o Histórico não tem prazo a vencer. -->
+            <VerticalStackLayout IsVisible="{Binding IsHistory, Converter={StaticResource Not}}">
+                <Label Text="Prazo" Style="{StaticResource Section}" />
+                <Grid ColumnDefinitions="Auto,*">
+                    <CheckBox IsChecked="{Binding OverdueChoice}" SemanticProperties.Description="Só as vencidas" />
+                    <Label Grid.Column="1" Text="Só as vencidas" VerticalOptions="Center" />
+                </Grid>
+            </VerticalStackLayout>
+
             <Label Text="Prioridade" Style="{StaticResource Section}" />
             <VerticalStackLayout BindableLayout.ItemsSource="{Binding PriorityChoices}">
                 <BindableLayout.ItemTemplate>

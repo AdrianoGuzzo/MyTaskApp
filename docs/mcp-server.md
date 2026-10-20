@@ -430,7 +430,7 @@ A resposta é o período como ficou gravado:
 | Senha que não muda de endereço | Numa conexão com senha guardada, servidor, porta, usuário e SSL só mudam pela tela. Senão, editar o host e testar mandaria a senha para onde o cliente quisesse. Pelo MCP, o ambiente só fica igual ou mais restrito |
 | Porta exclusiva | O socket do Kestrel é aberto com `SO_EXCLUSIVEADDRUSE` no Windows: outro processo não escuta na mesma porta, nem com `SO_REUSEADDR` |
 | Contra enxurrada | Até 64 conexões ao mesmo tempo. Pedidos barrados entram no log e na tela no máximo uma vez por segundo, com a contagem do resto |
-| Sem SQL livre, sem comandos | Não há ferramenta que execute SQL, cópia, restore ou comandos do sistema. Os comandos cadastrados só se listam. A condição das linhas sem máscara de um perfil (ADR-079) só se escreve na tela: o MCP a mostra e a mantém, mas não grava nem executa |
+| Sem SQL livre, sem comandos | Não há ferramenta que execute SQL, cópia, restore ou comandos do sistema. Os comandos cadastrados só se listam. A condição das linhas sem máscara de um perfil (ADR-080) só se escreve na tela: o MCP a mostra e a mantém, mas não grava nem executa |
 | Exclusão recuperável | `task_delete` manda para a lixeira; a exclusão definitiva não existe pelo MCP |
 | Erros sem detalhe interno | `DomainException` vira a frase da regra; qualquer outra exceção vira um código, e a pilha fica só no log |
 | Logs | Só o nome da ferramenta, o resultado e a duração. Os argumentos não vão para o log nem para a tela. O SDK loga a partir de `Warning` |

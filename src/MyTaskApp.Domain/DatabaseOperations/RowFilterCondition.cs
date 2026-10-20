@@ -1,7 +1,7 @@
 namespace MyTaskApp.Domain.DatabaseOperations;
 
 /// <summary>
-/// A condição de um filtro de linhas sem máscara (ADR-079): o único SQL do
+/// A condição de um filtro de linhas sem máscara (ADR-080): o único SQL do
 /// usuário que o app roda — e só como expressão, dentro de parênteses, numa
 /// sessão só-leitura da origem.
 /// </summary>

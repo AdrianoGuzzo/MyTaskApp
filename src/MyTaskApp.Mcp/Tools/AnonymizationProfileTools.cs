@@ -637,7 +637,7 @@ public sealed record ProfileSummary(
         profile.UpdatedAt);
 }
 
-/// <summary>As linhas de uma tabela que vão sem máscara (ADR-079): só se lê por aqui; edita-se na tela.</summary>
+/// <summary>As linhas de uma tabela que vão sem máscara (ADR-080): só se lê por aqui; edita-se na tela.</summary>
 public sealed record RowFilterInfo(string Table, string Condition);
 
 public sealed record ProfileDetail(
@@ -692,7 +692,7 @@ public sealed record ProfileSchema(
             "Coluna PK ou FK não se mascara: quebraria as ligações. Índice único só aceita máscara que mantém valores únicos (Hash, FakeEmail).",
             "Tabela sem dados vai só com a estrutura; uma FK de tabela com dados para ela impede a cópia.",
             "Linhas sem máscara (rowFilters): por tabela, uma condição SQL escrita pelo usuário na tela; as linhas que batem nela " +
-            "vão com os valores reais (ADR-079). O MCP só as mostra: não grava nem executa a condição, e as alterações por aqui as mantêm.",
+            "vão com os valores reais (ADR-080). O MCP só as mostra: não grava nem executa a condição, e as alterações por aqui as mantêm.",
             "O perfil não tem campos além destes: nada fica oculto ou sem interpretação.",
             "As máscaras não são instaladas no banco (sem PostgreSQL Anonymizer): entram no SELECT de cada cópia (ADR-058).",
         ]);

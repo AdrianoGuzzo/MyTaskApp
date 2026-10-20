@@ -152,7 +152,7 @@ public sealed partial class DatabaseProfilesViewModel(
     public bool HasTables => Tables.Count > 0;
 
     /// <summary>
-    /// As linhas sem máscara do perfil (ADR-079): por tabela, a condição das
+    /// As linhas sem máscara do perfil (ADR-080): por tabela, a condição das
     /// linhas que vão para o destino com os valores reais.
     /// </summary>
     public ObservableCollection<RowFilterItemViewModel> RowFilters { get; } = [];

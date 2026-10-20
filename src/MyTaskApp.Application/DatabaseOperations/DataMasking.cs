@@ -23,7 +23,7 @@ public sealed record MaskingValidation(
     /// <summary>Tabelas (partições contadas uma a uma) que vão vazias para o destino.</summary>
     public int SkippedTables => Tables.Count(table => table.SkipData);
 
-    /// <summary>Tabelas com linhas que vão sem máscara (ADR-079): a condição precisa ser conferida no servidor.</summary>
+    /// <summary>Tabelas com linhas que vão sem máscara (ADR-080): a condição precisa ser conferida no servidor.</summary>
     public IReadOnlyList<MaskedTablePlan> FilteredTables => Tables.Where(table => table.HasUnmaskedRows).ToList();
 
     /// <summary>
@@ -37,7 +37,7 @@ public sealed record MaskingValidation(
 }
 
 /// <summary>
-/// A condição de cada tabela com linhas sem máscara (ADR-079), rodada na
+/// A condição de cada tabela com linhas sem máscara (ADR-080), rodada na
 /// origem antes da cópia: quantas linhas saem com o valor real, ou por que o
 /// servidor recusou — e aí a cópia não começa, em vez de quebrar no meio do COPY.
 /// </summary>
@@ -97,7 +97,7 @@ public static class UnmaskedRows
 /// para um <c>clientes</c> vazio faria a FK falhar no destino.
 /// </para>
 /// <para>
-/// <b>Linhas sem máscara (ADR-079).</b> O filtro de uma tabela vai junto no
+/// <b>Linhas sem máscara (ADR-080).</b> O filtro de uma tabela vai junto no
 /// plano, e o de uma particionada vale para as partições. Numa tabela sem
 /// dados ele não tem o que escolher: é erro, para o usuário decidir qual dos
 /// dois queria.
@@ -321,7 +321,7 @@ public static class MaskingPlanner
 /// Depois da cópia mascarada: cada coluna com regra precisa ter chegado
 /// mascarada. Máscara variável (hash, parcial, nome…) não pode bater com a
 /// origem; máscara fixa (texto, número, nulo) precisa estar em todas as linhas.
-/// Numa tabela com linhas sem máscara (ADR-079), essas linhas ficam fora da
+/// Numa tabela com linhas sem máscara (ADR-080), essas linhas ficam fora da
 /// comparação: chegaram iguais de propósito.
 /// </summary>
 public interface IMaskingVerifier

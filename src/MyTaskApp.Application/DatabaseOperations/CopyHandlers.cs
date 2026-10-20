@@ -449,7 +449,7 @@ internal sealed class DatabaseCopyRun(
     /// <summary>
     /// As regras do perfil contra as colunas da origem (ADR-058): o que copiar,
     /// como mascarar, e o que impede. Só catálogo — nenhuma linha é lida —, e a
-    /// contagem das linhas sem máscara, quando o perfil tem (ADR-079).
+    /// contagem das linhas sem máscara, quando o perfil tem (ADR-080).
     /// </summary>
     private async Task ValidateMaskingAsync(CancellationToken cancellationToken)
     {

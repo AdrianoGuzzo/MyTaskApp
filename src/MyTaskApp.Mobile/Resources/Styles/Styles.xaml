@@ -124,16 +124,6 @@
         <Setter Property="BorderColor" Value="{DynamicResource Accent}" />
     </Style>
 
-    <!--
-        O dispositivo em foco no topo da lista: suave, para não competir com o
-        atalho de status marcado logo abaixo, que é cheio.
-    -->
-    <Style x:Key="SelectedDeviceChip" TargetType="Button" BasedOn="{StaticResource Chip}">
-        <Setter Property="BackgroundColor" Value="{DynamicResource AccentSoft}" />
-        <Setter Property="TextColor" Value="{DynamicResource AccentText}" />
-        <Setter Property="BorderColor" Value="{DynamicResource AccentLine}" />
-    </Style>
-
     <!-- Uma etiqueta marcada no formulário: o fundo suave do destaque e a borda mais grossa. -->
     <Style x:Key="SelectedTagChip" TargetType="Button" BasedOn="{StaticResource Chip}">
         <Setter Property="BackgroundColor" Value="{DynamicResource AccentSoft}" />

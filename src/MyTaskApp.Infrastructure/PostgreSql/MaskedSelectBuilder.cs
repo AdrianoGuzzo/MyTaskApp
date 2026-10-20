@@ -18,7 +18,7 @@ namespace MyTaskApp.Infrastructure.PostgreSql;
 /// do <c>CAST</c> vem do <c>format_type</c> do próprio servidor, já citado por ele.
 /// </para>
 /// <para>
-/// A exceção é a condição das linhas sem máscara (ADR-079): ela entra como
+/// A exceção é a condição das linhas sem máscara (ADR-080): ela entra como
 /// está, já conferida por <see cref="RowFilterCondition"/>, sempre entre
 /// parênteses e só na leitura da origem, que é somente leitura.
 /// </para>

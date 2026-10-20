@@ -214,7 +214,7 @@ public sealed record MaskedColumnPlan(string Name, string DataType, MaskingMetho
 /// Uma tabela a copiar: as colunas na ordem, sem as geradas.
 /// <see cref="SkipData"/>: a tabela vai vazia — nenhuma linha sai da origem.
 /// <see cref="RowFilter"/>: a condição do usuário; as linhas que batem nela
-/// saem com os valores reais (ADR-079).
+/// saem com os valores reais (ADR-080).
 /// </summary>
 public sealed record MaskedTablePlan(
     string Schema,

@@ -34,7 +34,7 @@ public class MaskingPlannerTests
         return profile;
     }
 
-    // --- Linhas sem máscara (ADR-079) --------------------------------------------
+    // --- Linhas sem máscara (ADR-080) --------------------------------------------
 
     [Fact]
     public void ARowFilter_GoesWithTheTable_AndPartitionsInheritIt()

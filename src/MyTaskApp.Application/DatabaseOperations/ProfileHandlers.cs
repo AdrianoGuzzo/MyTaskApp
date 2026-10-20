@@ -28,7 +28,7 @@ public sealed record SkippedTableRow(string Schema, string Table)
     public SkippedTableSpec ToSpec() => new(Schema, Table);
 }
 
-/// <summary>As linhas de uma tabela que vão sem máscara: as que batem em <see cref="Condition"/> (ADR-079).</summary>
+/// <summary>As linhas de uma tabela que vão sem máscara: as que batem em <see cref="Condition"/> (ADR-080).</summary>
 public sealed record RowFilterRow(string Schema, string Table, string Condition)
 {
     public string TableKey => $"{Schema}.{Table}";
@@ -301,7 +301,7 @@ public sealed record PreviewMasking(
     public IReadOnlyList<SkippedTableRow> SkippedTables { get; init; } = [];
 
     /// <summary>
-    /// As linhas sem máscara da tela (ADR-079): a condição roda na origem, só
+    /// As linhas sem máscara da tela (ADR-080): a condição roda na origem, só
     /// para contar, e a pré-visualização mostra só as linhas mascaradas.
     /// </summary>
     public IReadOnlyList<RowFilterRow> RowFilters { get; init; } = [];

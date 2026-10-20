@@ -66,7 +66,7 @@ public interface IPostgresServerInspector
     /// <summary>
     /// Os hashes salgados de uma coluna, pela chave primária. Tabela sem chave
     /// primária devolve vazio: sem chave não há como parear origem e destino.
-    /// <paramref name="excluding"/>: a condição das linhas sem máscara (ADR-079), que ficam de fora.
+    /// <paramref name="excluding"/>: a condição das linhas sem máscara (ADR-080), que ficam de fora.
     /// </summary>
     Task<ColumnFingerprint> FingerprintAsync(
         DatabaseConnectionSnapshot connection,
@@ -78,7 +78,7 @@ public interface IPostgresServerInspector
 
     /// <summary>
     /// Quantas linhas da tabela batem na condição de linhas sem máscara
-    /// (ADR-079) — a única condição do usuário que roda, sempre em sessão
+    /// (ADR-080) — a única condição do usuário que roda, sempre em sessão
     /// somente leitura. Condição que o servidor recusa lança com a mensagem dele.
     /// </summary>
     Task<long> CountMatchingAsync(

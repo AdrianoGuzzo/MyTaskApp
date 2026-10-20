@@ -15,7 +15,7 @@ public sealed record AnonymizationRuleSpec(
 /// <summary>Uma tabela que vai para o destino vazia: a estrutura sim, as linhas não.</summary>
 public sealed record SkippedTableSpec(string Schema, string Table);
 
-/// <summary>As linhas de uma tabela que vão para o destino sem máscara: as que batem na condição (ADR-079).</summary>
+/// <summary>As linhas de uma tabela que vão para o destino sem máscara: as que batem na condição (ADR-080).</summary>
 public sealed record RowFilterSpec(string Schema, string Table, string Condition);
 
 /// <summary>
@@ -38,7 +38,7 @@ public sealed record RowFilterSpec(string Schema, string Table, string Condition
 /// <para>
 /// <see cref="RowFilters"/>: por tabela, uma condição (o WHERE, escrito pelo
 /// usuário) que escolhe as linhas copiadas com os valores reais — usuário de
-/// teste, registro de sistema. As outras linhas continuam mascaradas (ADR-079).
+/// teste, registro de sistema. As outras linhas continuam mascaradas (ADR-080).
 /// </para>
 /// </remarks>
 public sealed class AnonymizationProfile

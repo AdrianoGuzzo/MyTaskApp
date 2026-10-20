@@ -11,7 +11,7 @@ using NSubstitute;
 namespace MyTaskApp.Desktop.Tests.ViewModels;
 
 /// <summary>
-/// As linhas sem máscara do perfil de anonimização (ADR-079): a condição por
+/// As linhas sem máscara do perfil de anonimização (ADR-080): a condição por
 /// tabela entra pela tela, é conferida na hora, volta ao editar e vai junto
 /// ao salvar e ao pré-visualizar.
 /// </summary>

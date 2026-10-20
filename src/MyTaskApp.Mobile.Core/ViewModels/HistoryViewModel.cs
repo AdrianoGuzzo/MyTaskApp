@@ -42,6 +42,10 @@ public sealed class HistoryViewModel(
 {
     public override bool IsHistory => true;
 
+    public override string TabTitle => "Histórico";
+
+    public override string HeaderCaption => "Histórico";
+
     public override string EmptyTitle => "Nada no histórico";
 
     public override string EmptyMessage => "O que você concluir ou cancelar aparece aqui.";

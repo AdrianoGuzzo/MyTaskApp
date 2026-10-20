@@ -150,7 +150,7 @@ internal static class PostgresQueries
     /// <summary>
     /// Os pares salgados de uma coluna: $1 = o sal. O valor fica no servidor;
     /// só o hash, com sal novo a cada execução, chega ao app.
-    /// <paramref name="excluding"/>: as linhas sem máscara (ADR-079) ficam de fora.
+    /// <paramref name="excluding"/>: as linhas sem máscara (ADR-080) ficam de fora.
     /// </summary>
     public static string Fingerprint(ColumnReference column, IReadOnlyList<string> primaryKey, int limit, string? excluding = null)
     {

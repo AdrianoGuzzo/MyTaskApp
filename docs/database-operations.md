@@ -390,7 +390,7 @@ para todas as partições. Cada tabela tem uma condição; para corrigir, edite 
 da lista.
 
 A condição é SQL do PostgreSQL e roda **só na origem, só para ler**
-(ADR-079):
+(ADR-080):
 
 - ao adicionar e ao salvar, o app recusa o que poderia sair da expressão:
   `;`, comentário (`--`, `/* */`), `$`, barra invertida dentro de texto,

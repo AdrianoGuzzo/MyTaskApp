@@ -138,6 +138,15 @@ internal sealed class MauiDialogs : IDialogService
             maxLength: maxLength,
             initialValue: initialValue));
 
+    /// <summary>A folha devolve o texto tocado; volta ao índice pela primeira opção igual.</summary>
+    public async Task<int?> ChooseAsync(string title, IReadOnlyList<string> options)
+    {
+        var answer = await MainThread.InvokeOnMainThreadAsync(() => Shell.Current.DisplayActionSheetAsync(title, "Cancelar", null, [.. options]));
+        var index = answer is null ? -1 : options.ToList().IndexOf(answer);
+
+        return index >= 0 ? index : null;
+    }
+
     /// <summary>O aviso curto do Android; no iOS, que não tem um nativo, o nosso (<c>IosToast</c>).</summary>
     public Task ToastAsync(string message)
     {
