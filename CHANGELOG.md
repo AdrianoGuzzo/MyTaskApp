@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.21.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.20.0...v1.21.0) (2026-10-20)
+
+
+### Added
+
+* **desktop:** importar etiqueta de outro computador (ADR-077) ([#141](https://github.com/AdrianoGuzzo/MyTaskApp/issues/141)) ([cdeed70](https://github.com/AdrianoGuzzo/MyTaskApp/commit/cdeed70f9628db56db735ae3157263bb9cb380bc))
+* **sync:** servidor de sincronização configurado pelo usuário, sem servidor embutido (ADR-078) ([#144](https://github.com/AdrianoGuzzo/MyTaskApp/issues/144)) ([7453854](https://github.com/AdrianoGuzzo/MyTaskApp/commit/7453854dfefde82f973c084e78a0eadde053d552))
+
 ## [1.20.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.19.0...v1.20.0) (2026-10-19)
 
 
