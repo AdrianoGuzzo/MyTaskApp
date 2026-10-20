@@ -222,6 +222,21 @@ Notas:
 
 ### Rodar no Android
 
+Um comando faz tudo no Windows: liga o emulador (se não houver aparelho
+conectado), espera o Android iniciar, faz o `adb reverse`, prepara o Chrome
+para o login e compila com `-t:Run`:
+
+```powershell
+.\scripts\run-android.ps1                                                # servidor local na 5280
+.\scripts\run-android.ps1 -SyncApiBaseUrl https://sync.seudominio.com/   # outro servidor
+```
+
+`-Avd`, `-Serial`, `-InstallOnly`, `-AndroidSdk` e `-JavaSdk` estão no
+`Get-Help .\scripts\run-android.ps1 -Detailed`. O servidor também pode vir da
+variável `MYTASKAPP_MOBILE_SYNC_URL`.
+
+Na mão, os passos são:
+
 ```bash
 # a partir da raiz do repositório
 dotnet build src/MyTaskApp.Mobile/MyTaskApp.Mobile.csproj -t:Run -f net10.0-android \
