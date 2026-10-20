@@ -16,16 +16,22 @@ Windows, veja [Teste pessoal sem custo, só com Windows](#teste-pessoal-sem-cust
 ## O que o app faz
 
 - **Tarefas:** só o que falta fazer, de todos os dispositivos, em páginas
-  (ADR-076).
-  - Atalhos: Pendentes (o padrão) e Vencidas.
-  - **Dispositivo no topo:** chips Todas, Compartilhadas, Este celular e cada
-    computador da conta. Um toque filtra, e a escolha **volta na próxima
-    abertura do app**. Vale também para o Histórico. Sem conta ligada, os
-    chips não aparecem.
-  - Busca por texto.
-  - Filtros por prioridade e etiquetas; ordenação.
+  (ADR-076, ADR-079).
+  - **Dispositivo no título:** o topo da lista mostra, grande, o dispositivo
+    em foco ("Notebook ⌄").
+    - Um toque abre a folha com Todos os dispositivos, Compartilhadas, Este
+      celular e cada computador da conta.
+    - A escolha **volta na próxima abertura do app** e vale também para o
+      Histórico.
+    - Sem conta ligada, o título é "Tarefas".
+  - Busca por texto, atrás da lupa do topo.
+  - Filtros pelo funil do topo, que ganha um ponto quando há algo ligado:
+    - só as vencidas;
+    - prioridade e etiquetas;
+    - ordenação.
+  - "＋ Nova tarefa" no rodapé, discreta, sem cobrir a lista.
   - Concluir pela linha tira a tarefa da lista; ela passa para o Histórico.
-  - "Limpar filtros" volta a Pendentes e a todos os dispositivos.
+  - "Limpar filtros" volta às pendentes e a todos os dispositivos.
 - **Histórico:** a aba do meio, com as concluídas e as canceladas.
   - Atalhos: Concluídas (o padrão) e Canceladas.
   - Mesma busca, mesmos filtros e o mesmo dispositivo da aba Tarefas.
@@ -73,7 +79,7 @@ Windows, veja [Teste pessoal sem custo, só com Windows](#teste-pessoal-sem-cust
 
 - **Origem** é onde a tarefa aparece (ADR-062): compartilhada, só neste
   celular, ou só num computador da conta.
-  - O filtro de dispositivo (os chips do topo) é exato: "Notebook" mostra só
+  - O filtro de dispositivo (o título da lista) é exato: "Notebook" mostra só
     as do notebook, sem as compartilhadas.
   - Tarefa criada no celular nasce **compartilhada**, para aparecer na visão
     padrão do desktop.
@@ -533,9 +539,15 @@ extraia o `MyTaskApp-<versão>-ios-unsigned.ipa`. O servidor de sincronização
   - "Tarefa salva" aparece ao salvar o formulário.
 - [ ] **Temas:** trocar na aba Conta muda o app na hora, a barra de status e o
   teclado acompanham, e a escolha continua depois de fechar e reabrir.
-- [ ] **Dispositivo (ADR-076):** escolher um computador nos chips, fechar o app
-  de vez e reabrir: ele continua escolhido e à vista. Concluir uma tarefa a leva
-  para o Histórico.
+- [ ] **Dispositivo (ADR-076, ADR-079):**
+  - tocar no título e escolher um computador na folha;
+  - fechar o app de vez e reabrir: ele continua no título;
+  - concluir uma tarefa a leva para o Histórico.
+- [ ] **Topo enxuto (ADR-079):**
+  - a lupa abre a busca com o teclado, e tocar de novo fecha e limpa;
+  - "Só as vencidas" na folha acende o ponto do funil;
+  - "＋ Nova tarefa" abre o formulário;
+  - a barra Desfazer não cobre a última tarefa.
 
 ## Testes
 
@@ -552,7 +564,7 @@ dotnet test tests/MyTaskApp.Server.IntegrationTests --filter "PhoneSyncTests"   
   - o celular entra pela tela Entrar contra a API de verdade (Google falso);
   - sincroniza com um desktop nos dois sentidos;
   - fica sem rede e volta;
-  - filtra pelos chips de dispositivo;
+  - filtra pelo dispositivo escolhido;
   - troca de servidor com alteração pendente: só a revogação vai ao antigo,
     nada vai ao novo antes do login, e a tarefa sobe depois de entrar.
 - **Servidor configurável** (`SyncServerViewModelTests`, ADR-078): primeira

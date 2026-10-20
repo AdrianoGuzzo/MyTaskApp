@@ -11,9 +11,6 @@ public enum TaskListPreset
     Pending = 1,
     Completed = 2,
     Cancelled = 3,
-
-    /// <summary>Pendentes que passaram da data ou do prazo — o mesmo critério do quadro Hoje.</summary>
-    Overdue = 4,
 }
 
 /// <summary>
@@ -39,16 +36,19 @@ public sealed record TaskFilter
 
     public IReadOnlyCollection<Guid> TagIds { get; init; } = [];
 
+    /// <summary>Só as que passaram da data ou do prazo — o mesmo critério do quadro Hoje. Fica na folha (ADR-079).</summary>
+    public bool OverdueOnly { get; init; }
+
     public PlacementMatch? Origin { get; init; }
 
     public TaskSort Sort { get; init; } = TaskSort.Created;
 
     /// <summary>Há algo além do padrão — é o que distingue "nenhuma tarefa" de "nada com estes filtros".</summary>
     public bool IsNarrowed =>
-        !string.IsNullOrWhiteSpace(Text) || Preset != BasePreset || Priorities.Count > 0 || TagIds.Count > 0 || Origin is not null;
+        !string.IsNullOrWhiteSpace(Text) || Preset != BasePreset || Priorities.Count > 0 || TagIds.Count > 0 || OverdueOnly || Origin is not null;
 
-    /// <summary>Quantos filtros da folha estão ligados, para o selo do botão; o dispositivo fica nos chips.</summary>
-    public int SheetCount => (Priorities.Count > 0 ? 1 : 0) + (TagIds.Count > 0 ? 1 : 0);
+    /// <summary>Quantos filtros da folha estão ligados, para o selo do botão; o dispositivo fica no título.</summary>
+    public int SheetCount => (OverdueOnly ? 1 : 0) + (Priorities.Count > 0 ? 1 : 0) + (TagIds.Count > 0 ? 1 : 0);
 
     public SearchTasks ToSearch(int offset, int limit) => new(
         Text: string.IsNullOrWhiteSpace(Text) ? null : Text.Trim(),
@@ -61,7 +61,7 @@ public sealed record TaskFilter
         },
         TagIds: TagIds.Count > 0 ? TagIds : null,
         Priorities: Priorities.Count > 0 ? Priorities : null,
-        OverdueOnly: Preset == TaskListPreset.Overdue,
+        OverdueOnly: OverdueOnly,
         Sort: Sort,
         Limit: limit,
         Offset: offset,

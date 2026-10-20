@@ -28,17 +28,16 @@ public sealed class PresentationTests
     }
 
     [Theory]
-    [InlineData(TaskListPreset.All, null, false)]
-    [InlineData(TaskListPreset.Pending, TaskItemStatus.Pending, false)]
-    [InlineData(TaskListPreset.Completed, TaskItemStatus.Completed, false)]
-    [InlineData(TaskListPreset.Cancelled, TaskItemStatus.Cancelled, false)]
-    [InlineData(TaskListPreset.Overdue, null, true)]
-    public void EveryPreset_BecomesTheSameSearchAsTheDesktop(TaskListPreset preset, TaskItemStatus? status, bool overdue)
+    [InlineData(TaskListPreset.All, null)]
+    [InlineData(TaskListPreset.Pending, TaskItemStatus.Pending)]
+    [InlineData(TaskListPreset.Completed, TaskItemStatus.Completed)]
+    [InlineData(TaskListPreset.Cancelled, TaskItemStatus.Cancelled)]
+    public void EveryPreset_BecomesTheSameSearchAsTheDesktop(TaskListPreset preset, TaskItemStatus? status)
     {
         var search = (TaskFilter.Default with { Preset = preset }).ToSearch(offset: 50, limit: 50);
 
         search.Statuses.Should().BeEquivalentTo(status is { } only ? new[] { only } : null);
-        search.OverdueOnly.Should().Be(overdue);
+        search.OverdueOnly.Should().BeFalse();
         search.Device.Should().Be(DeviceView.All, "a lista do celular é de todos os dispositivos");
         search.Offset.Should().Be(50);
         search.Limit.Should().Be(50);
@@ -64,7 +63,7 @@ public sealed class PresentationTests
         search.TagIds.Should().Equal(tag);
         search.Origin.Should().Be(PlacementMatch.Shared);
         search.Sort.Should().Be(TaskSort.Deadline);
-        filter.SheetCount.Should().Be(2, "o dispositivo fica nos chips, fora da folha");
+        filter.SheetCount.Should().Be(2, "o dispositivo fica no título, fora da folha");
         filter.IsNarrowed.Should().BeTrue();
         TaskFilter.Default.IsNarrowed.Should().BeFalse();
         (TaskFilter.Default with { Sort = TaskSort.Title }).IsNarrowed.Should().BeFalse("ordenar não esconde nada");
@@ -78,8 +77,21 @@ public sealed class PresentationTests
 
         pending.IsNarrowed.Should().BeFalse();
         pending.ToSearch(0, 50).Statuses.Should().Equal(TaskItemStatus.Pending);
-        (pending with { Preset = TaskListPreset.Overdue }).IsNarrowed.Should().BeTrue();
+        (pending with { Preset = TaskListPreset.All }).IsNarrowed.Should().BeTrue();
         TaskFilter.For(TaskListPreset.Completed).ToSearch(0, 50).Statuses.Should().Equal(TaskItemStatus.Completed);
+    }
+
+    [Fact]
+    public void OnlyOverdue_IsASheetFilter_OnTopOfPending()
+    {
+        var overdue = TaskFilter.For(TaskListPreset.Pending) with { OverdueOnly = true };
+
+        var search = overdue.ToSearch(0, 50);
+
+        search.OverdueOnly.Should().BeTrue("o mesmo critério do quadro Hoje");
+        search.Statuses.Should().Equal(TaskItemStatus.Pending);
+        overdue.SheetCount.Should().Be(1);
+        overdue.IsNarrowed.Should().BeTrue();
     }
 
     [Theory]
@@ -142,7 +154,7 @@ public sealed class PresentationTests
         var catalog = new OriginCatalog(placements, directory);
 
         catalog.FilterOptions().Select(option => option.Label)
-            .Should().Equal("Todas", "Compartilhadas", "Este celular", "Notebook", "PC antigo (removido)");
+            .Should().Equal("Todos os dispositivos", "Compartilhadas", "Este celular", "Notebook", "PC antigo (removido)");
         catalog.FilterOptions()[3].Match!.DeviceIds.Should().Equal(notebook);
         catalog.FilterOptions().Select(option => option.Key)
             .Should().Equal(OriginCatalog.AnyKey, OriginCatalog.SharedKey, OriginCatalog.HereKey, notebook.ToString("D"), old.ToString("D"));

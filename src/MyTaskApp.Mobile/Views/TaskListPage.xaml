@@ -6,13 +6,9 @@
              x:Class="MyTaskApp.Mobile.Views.TaskListPage"
              x:DataType="vm:TaskListViewModel"
              HideSoftInputOnTapped="True"
+             Shell.NavBarIsVisible="False"
              Title="Tarefas">
 
-    <ContentPage.ToolbarItems>
-        <ToolbarItem Text="{Binding FiltersLabel}"
-                     Command="{Binding OpenFiltersCommand}"
-                     SemanticProperties.Description="Abrir os filtros" />
-    </ContentPage.ToolbarItems>
-
+    <!-- O topo é da própria lista (ADR-079): o dispositivo como título, a lupa e o funil. -->
     <views:TaskListView />
 </ContentPage>

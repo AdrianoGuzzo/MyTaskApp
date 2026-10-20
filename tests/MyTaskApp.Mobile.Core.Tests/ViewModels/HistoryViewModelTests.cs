@@ -27,6 +27,7 @@ public sealed class HistoryViewModelTests : IAsyncLifetime
         await History.LoadAsync();
 
         History.Presets.Select(choice => choice.Label).Should().Equal("Concluídas", "Canceladas");
+        History.ShowsPresets.Should().BeTrue("no Histórico há o que escolher");
         History.Tasks.Select(row => row.Title).Should().Equal("Feita");
         History.Tasks.Single().ShowsStatus.Should().BeTrue();
         History.Tasks.Single().ToggleLabel.Should().Be("Reabrir");

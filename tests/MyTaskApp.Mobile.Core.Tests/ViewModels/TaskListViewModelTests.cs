@@ -10,6 +10,7 @@ using MyTaskApp.Domain.Tasks;
 using MyTaskApp.Mobile.Core.Ports;
 using MyTaskApp.Mobile.Core.Presentation;
 using MyTaskApp.Mobile.Core.ViewModels;
+using MyTaskApp.Sync.Contracts;
 using NSubstitute;
 
 namespace MyTaskApp.Mobile.Core.Tests.ViewModels;
@@ -87,8 +88,8 @@ public sealed class TaskListViewModelTests : IAsyncLifetime
 
         List.Tasks.Select(row => row.Title).Should().Equal("Por fazer");
         List.Tasks.Single().ShowsStatus.Should().BeFalse("\"Pendente\" em toda linha não diz nada");
-        List.Presets.Select(choice => choice.Label).Should().Equal("Pendentes", "Vencidas");
-        List.Presets.Single(choice => choice.IsSelected).Value.Should().Be(TaskListPreset.Pending);
+        List.Presets.Select(choice => choice.Label).Should().Equal("Pendentes");
+        List.ShowsPresets.Should().BeFalse("um atalho só não é escolha: a aba é das pendentes");
         List.Filter.IsNarrowed.Should().BeFalse("pendentes é o ponto de partida da aba");
     }
 
@@ -106,16 +107,38 @@ public sealed class TaskListViewModelTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Overdue_IsTheBoardsCriterion()
+    public async Task OnlyOverdue_IsInTheSheet_WithTheBoardsCriterion()
     {
         var late = await _app.CreateTaskAsync("Vence amanhã", deadline: new TaskDeadline(new DateOnly(2026, 10, 16), new TimeOnly(9, 0)));
         await _app.CreateTaskAsync("Sem prazo");
         _app.Clock.Advance(TimeSpan.FromDays(2));
 
-        await List.SelectPresetAsync(TaskListPreset.Overdue);
+        await List.OpenFiltersAsync();
+        List.OverdueChoice.Should().BeFalse();
+        List.OverdueChoice = true;
+        await List.ApplyFiltersAsync();
 
         List.Tasks.Should().ContainSingle().Which.TaskId.Should().Be(late.TaskId);
         List.Tasks[0].IsOverdue.Should().BeTrue();
+        List.FiltersLabel.Should().Be("Filtros (1)");
+        List.HasSheetFilters.Should().BeTrue("o funil ganha o ponto");
+
+        // Reabrir a folha mostra o que está aplicado.
+        await List.OpenFiltersAsync();
+        List.OverdueChoice.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task TheHistorySheet_HasNoOverdue()
+    {
+        var history = _app.Get<HistoryViewModel>();
+
+        await history.OpenFiltersAsync();
+        history.OverdueChoice = true;
+        await history.ApplyFiltersAsync();
+
+        history.Filter.OverdueOnly.Should().BeFalse("concluída e cancelada não vencem");
+        history.HasSheetFilters.Should().BeFalse();
     }
 
     [Fact]
@@ -247,10 +270,42 @@ public sealed class TaskListViewModelTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task TheSearch_HidesBehindTheIcon_AndClosingClearsIt()
+    {
+        await _app.CreateTaskAsync("Relatório mensal");
+        await _app.CreateTaskAsync("Dentista");
+        await List.LoadAsync();
+
+        List.ShowsSearch.Should().BeFalse("a busca fica atrás da lupa");
+
+        await List.ToggleSearchAsync();
+        List.ShowsSearch.Should().BeTrue();
+
+        List.SearchText = "dent";
+        _app.Clock.Advance(TaskListViewModel.SearchDelay);
+        await WaitUntilAsync(() => List.Tasks.Count == 1);
+        List.IsSearchOpen = false;
+        List.ShowsSearch.Should().BeTrue("com texto digitado, a busca continua à vista");
+
+        await List.ToggleSearchAsync();
+
+        List.ShowsSearch.Should().BeFalse();
+        List.SearchText.Should().BeNull();
+        List.Filter.Text.Should().BeNull();
+        List.Tasks.Should().HaveCount(2, "fechar a busca a desfaz");
+
+        await List.ToggleSearchAsync();
+        await List.ClearFiltersAsync();
+        List.ShowsSearch.Should().BeFalse("\"Limpar filtros\" fecha a busca também");
+    }
+
+    [Fact]
     public async Task NothingMatching_IsNoResults_AndClearingBringsEverythingBack()
     {
         await _app.CreateTaskAsync("Dentista");
-        await List.SelectPresetAsync(TaskListPreset.Overdue);
+        await List.OpenFiltersAsync();
+        List.OverdueChoice = true;
+        await List.ApplyFiltersAsync();
 
         List.State.Should().Be(ListState.NoResults);
         List.IsNoResults.Should().BeTrue();
@@ -259,7 +314,7 @@ public sealed class TaskListViewModelTests : IAsyncLifetime
 
         List.State.Should().Be(ListState.Ready);
         List.Filter.Should().Be(TaskFilter.For(TaskListPreset.Pending));
-        List.Presets.Single(choice => choice.IsSelected).Value.Should().Be(TaskListPreset.Pending);
+        List.HasSheetFilters.Should().BeFalse();
     }
 
     [Fact]
@@ -287,27 +342,85 @@ public sealed class TaskListViewModelTests : IAsyncLifetime
     [Fact]
     public async Task TheDevice_IsExact_AndOnlyOffersWhatTheAccountHas()
     {
-        List.Devices.Select(chip => chip.Label).Should().Equal("Todas");
+        List.Devices.Select(chip => chip.Label).Should().Equal("Todos os dispositivos");
         List.ShowsDevices.Should().BeFalse();
+        List.DeviceTitle.Should().Be("Tarefas", "sem conta, o título é o da aba");
 
         var (_, notebook) = _app.Link();
         await _app.CreateTaskAsync("Do notebook", placement: DevicePlacement.On(notebook));
         await _app.CreateTaskAsync("De todos", placement: DevicePlacement.Everywhere);
 
-        List.ShowsDevices.Should().BeTrue("ligar a conta refaz os chips");
-        List.Devices.Select(chip => chip.Label).Should().Equal("Todas", "Compartilhadas", "Este celular", "Notebook");
-        List.Devices.Single(chip => chip.IsSelected).Label.Should().Be("Todas");
+        List.ShowsDevices.Should().BeTrue("ligar a conta refaz as opções");
+        List.Devices.Select(chip => chip.Label).Should().Equal("Todos os dispositivos", "Compartilhadas", "Este celular", "Notebook");
+        List.Devices.Single(chip => chip.IsSelected).Label.Should().Be("Todos os dispositivos");
+        List.DeviceTitle.Should().Be("Todos os dispositivos");
 
         await List.SelectDeviceAsync(notebook.ToString("D"));
 
         List.Tasks.Select(row => row.Title).Should().Equal("Do notebook");
         List.Tasks.Single().Origin.Should().Be("Notebook");
         List.Devices.Single(chip => chip.IsSelected).Label.Should().Be("Notebook");
-        List.FiltersLabel.Should().Be("Filtros", "o dispositivo fica nos chips, não na folha");
+        List.DeviceTitle.Should().Be("Notebook");
+        List.FiltersLabel.Should().Be("Filtros", "o dispositivo fica no título, não na folha");
 
         await List.SelectDeviceAsync(OriginCatalog.SharedKey);
 
         List.Tasks.Select(row => row.Title).Should().Equal("De todos");
+    }
+
+    [Fact]
+    public async Task TheTitle_OpensTheDeviceSheet_WithTheCurrentOneMarked()
+    {
+        var (_, notebook) = _app.Link();
+        await _app.CreateTaskAsync("Do notebook", placement: DevicePlacement.On(notebook));
+        await _app.CreateTaskAsync("De todos", placement: DevicePlacement.Everywhere);
+        await List.LoadAsync();
+
+        _app.Dialogs.ChoiceAnswer = 3;
+        await List.ChooseDeviceAsync();
+
+        _app.Dialogs.Questions.Should().Equal(TaskListViewModel.DeviceSheetTitle);
+        _app.Dialogs.LastChoices.Should().Equal("✓ Todos os dispositivos", "    Compartilhadas", "    Este celular", "    Notebook");
+        List.DeviceTitle.Should().Be("Notebook");
+        List.Tasks.Select(row => row.Title).Should().Equal("Do notebook");
+        _app.Preferences.Get(DeviceFocus.PreferenceKey).Should().Be(notebook.ToString("D"));
+
+        // Cancelar a folha não muda nada.
+        _app.Dialogs.ChoiceAnswer = null;
+        await List.ChooseDeviceAsync();
+
+        _app.Dialogs.LastChoices[3].Should().Be("✓ Notebook");
+        List.DeviceTitle.Should().Be("Notebook");
+        List.Tasks.Select(row => row.Title).Should().Equal("Do notebook");
+    }
+
+    [Fact]
+    public async Task TwoComputersWithTheSameName_AreTellApartInTheSheet()
+    {
+        var (phone, notebook) = _app.Link();
+        var other = Guid.CreateVersion7();
+        _app.Get<SyncDeviceDirectory>().Update(
+        [
+            new DeviceInfo(phone, "Pixel de teste", "Android", "1.15.0", MobileHarness.Now, MobileHarness.Now, null, IsCurrent: true),
+            new DeviceInfo(notebook, "Notebook", "Windows", "1.15.0", MobileHarness.Now, MobileHarness.Now, null, IsCurrent: false),
+            new DeviceInfo(other, "Notebook", "Windows", "1.15.0", MobileHarness.Now, MobileHarness.Now, null, IsCurrent: false),
+        ]);
+        await _app.CreateTaskAsync("Do segundo", placement: DevicePlacement.On(other));
+
+        _app.Dialogs.ChoiceAnswer = 4;
+        await List.ChooseDeviceAsync();
+
+        _app.Dialogs.LastChoices.Skip(3).Should().Equal("    Notebook", "    Notebook (2)");
+        _app.Preferences.Get(DeviceFocus.PreferenceKey).Should().Be(List.Devices[4].Value);
+        List.Tasks.Select(row => row.Title).Should().Equal("Do segundo");
+    }
+
+    [Fact]
+    public async Task WithoutAnAccount_TheTitleOpensNothing()
+    {
+        await List.ChooseDeviceAsync();
+
+        _app.Dialogs.Questions.Should().BeEmpty("sem conta não há dispositivo para escolher");
     }
 
     [Fact]
@@ -330,7 +443,7 @@ public sealed class TaskListViewModelTests : IAsyncLifetime
 
         await reopened.SelectDeviceAsync(OriginCatalog.AnyKey);
 
-        _app.Preferences.Get(DeviceFocus.PreferenceKey).Should().BeNull("\"Todas\" é o padrão, não precisa ficar gravado");
+        _app.Preferences.Get(DeviceFocus.PreferenceKey).Should().BeNull("\"Todos os dispositivos\" é o padrão, não precisa ficar gravado");
     }
 
     [Fact]
@@ -365,7 +478,7 @@ public sealed class TaskListViewModelTests : IAsyncLifetime
         await linked.LoadAsync();
 
         linked.Tasks.Should().ContainSingle("o dispositivo gravado não está mais na conta");
-        linked.Devices.Single(chip => chip.IsSelected).Label.Should().Be("Todas");
+        linked.Devices.Single(chip => chip.IsSelected).Label.Should().Be("Todos os dispositivos");
     }
 
     [Fact]
@@ -389,7 +502,7 @@ public sealed class TaskListViewModelTests : IAsyncLifetime
 
         history.Tasks.Should().ContainSingle();
         await WaitUntilAsync(() => List.Tasks.Count == 2);
-        List.Devices.Single(chip => chip.IsSelected).Label.Should().Be("Todas");
+        List.Devices.Single(chip => chip.IsSelected).Label.Should().Be("Todos os dispositivos");
     }
 
     [Fact]

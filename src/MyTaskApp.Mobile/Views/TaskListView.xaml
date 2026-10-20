@@ -11,13 +11,96 @@
              x:Class="MyTaskApp.Mobile.Views.TaskListView"
              x:DataType="vm:TaskListViewModelBase">
 
-    <Grid RowDefinitions="Auto,Auto,Auto,Auto,*">
+    <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto">
+
+        <!--
+            O topo da lista (ADR-079): o dispositivo em foco é o título, e um
+            toque nele abre a folha para trocar. Busca e filtros ficam em ícones,
+            desenhados em vetor na cor do tema (sem gatilho de cor).
+        -->
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" Padding="16,8,8,0">
+            <VerticalStackLayout VerticalOptions="Center"
+                                 MinimumHeightRequest="44"
+                                 SemanticProperties.Description="{Binding DeviceTitle, StringFormat='Mostrando as tarefas de {0}. Toque para trocar o dispositivo.'}">
+                <VerticalStackLayout.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding ChooseDeviceCommand}" />
+                </VerticalStackLayout.GestureRecognizers>
+                <Label Text="{Binding HeaderCaption}"
+                       Style="{StaticResource Section}"
+                       Margin="0"
+                       TextTransform="Uppercase"
+                       IsVisible="{Binding ShowsDevices}" />
+                <!-- Grid, e não pilha horizontal: um nome comprido corta com "…" e o "⌄" fica junto, sem empurrar os ícones. -->
+                <Grid ColumnDefinitions="Auto,28" ColumnSpacing="4" HorizontalOptions="Start">
+                    <Label Text="{Binding DeviceTitle}"
+                           Style="{StaticResource Title}"
+                           FontSize="26"
+                           MaxLines="1"
+                           LineBreakMode="TailTruncation"
+                           VerticalOptions="Center" />
+                    <Path Grid.Column="1"
+                          Data="M 6,9 L 12,15 L 18,9"
+                          WidthRequest="24"
+                          HeightRequest="24"
+                          VerticalOptions="Center"
+                          Stroke="{DynamicResource AccentText}"
+                          StrokeThickness="2.5"
+                          StrokeLineCap="Round"
+                          StrokeLineJoin="Round"
+                          IsVisible="{Binding ShowsDevices}" />
+                </Grid>
+            </VerticalStackLayout>
+
+            <Grid Grid.Column="1"
+                  WidthRequest="44"
+                  HeightRequest="44"
+                  VerticalOptions="End"
+                  SemanticProperties.Description="Buscar tarefas">
+                <Grid.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding ToggleSearchCommand}" />
+                </Grid.GestureRecognizers>
+                <Path Data="M 4,11 A 7,7 0 1 0 18,11 A 7,7 0 1 0 4,11 M 16,16 L 21,21"
+                      WidthRequest="24"
+                      HeightRequest="24"
+                      HorizontalOptions="Center"
+                      VerticalOptions="Center"
+                      Stroke="{DynamicResource TextMid}"
+                      StrokeThickness="2"
+                      StrokeLineCap="Round" />
+            </Grid>
+
+            <!-- O ponto no funil diz que a folha tem algo ligado; o leitor de tela ouve "Filtros (2)". -->
+            <Grid Grid.Column="2"
+                  WidthRequest="44"
+                  HeightRequest="44"
+                  VerticalOptions="End"
+                  SemanticProperties.Description="{Binding FiltersLabel}">
+                <Grid.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding OpenFiltersCommand}" />
+                </Grid.GestureRecognizers>
+                <Path Data="M 3,5 L 21,5 L 14,13 L 14,19 L 10,21 L 10,13 Z"
+                      WidthRequest="24"
+                      HeightRequest="24"
+                      HorizontalOptions="Center"
+                      VerticalOptions="Center"
+                      Stroke="{DynamicResource TextMid}"
+                      StrokeThickness="2"
+                      StrokeLineJoin="Round" />
+                <Ellipse WidthRequest="9"
+                         HeightRequest="9"
+                         HorizontalOptions="End"
+                         VerticalOptions="Start"
+                         Margin="0,8,8,0"
+                         Fill="{DynamicResource Accent}"
+                         IsVisible="{Binding HasSheetFilters}" />
+            </Grid>
+        </Grid>
 
         <!--
             O estado da sincronização, sempre à vista: a bolinha com as cores do
             desktop (ADR-063) e a frase curta. Tocar leva à aba Conta, com o detalhe.
         -->
-        <Border Grid.Row="0"
+        <Border Grid.Row="1"
                 Style="{StaticResource Pill}"
                 HorizontalOptions="Start"
                 Margin="16,4,16,0"
@@ -42,47 +125,21 @@
             </HorizontalStackLayout>
         </Border>
 
-        <SearchBar Grid.Row="1"
+        <!-- A busca fica atrás da lupa; com texto digitado, continua aberta. -->
+        <SearchBar x:Name="Search"
+                   Grid.Row="2"
                    Margin="8,4,8,0"
                    Placeholder="Buscar tarefas"
                    Text="{Binding SearchText}"
+                   IsVisible="{Binding ShowsSearch}"
                    SearchButtonPressed="OnSearchPressed"
                    SemanticProperties.Description="Buscar no título e na descrição das tarefas" />
 
-        <!-- O dispositivo em foco: vale para as duas abas e volta na próxima abertura do app. -->
-        <ScrollView x:Name="DeviceScroll"
-                    Grid.Row="2"
+        <!-- Os atalhos de status só quando há escolha: no Histórico. A aba Tarefas é só de pendentes. -->
+        <ScrollView Grid.Row="3"
                     Orientation="Horizontal"
                     HorizontalScrollBarVisibility="Never"
-                    IsVisible="{Binding ShowsDevices}">
-            <HorizontalStackLayout x:Name="DeviceChips"
-                                   Spacing="8"
-                                   Padding="16,8,16,0"
-                                   SizeChanged="OnDeviceChipsSized"
-                                   BindableLayout.ItemsSource="{Binding Devices}">
-                <BindableLayout.ItemTemplate>
-                    <DataTemplate x:DataType="vm:DeviceChip">
-                        <!-- Dois botões, e não um com gatilho, como nos atalhos abaixo. -->
-                        <Grid>
-                            <Button Style="{StaticResource Chip}"
-                                    Text="{Binding Label}"
-                                    IsVisible="{Binding IsSelected, Converter={StaticResource Not}}"
-                                    SemanticProperties.Description="{Binding Label, StringFormat='Mostrar as tarefas de {0}'}"
-                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:TaskListViewModelBase}}, x:DataType=vm:TaskListViewModelBase, Path=SelectDeviceCommand}"
-                                    CommandParameter="{Binding Value}" />
-                            <Button Style="{StaticResource SelectedDeviceChip}"
-                                    Text="{Binding Label}"
-                                    IsVisible="{Binding IsSelected}"
-                                    SemanticProperties.Description="{Binding Label, StringFormat='Mostrando as tarefas de {0}'}"
-                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:TaskListViewModelBase}}, x:DataType=vm:TaskListViewModelBase, Path=SelectDeviceCommand}"
-                                    CommandParameter="{Binding Value}" />
-                        </Grid>
-                    </DataTemplate>
-                </BindableLayout.ItemTemplate>
-            </HorizontalStackLayout>
-        </ScrollView>
-
-        <ScrollView Grid.Row="3" Orientation="Horizontal" HorizontalScrollBarVisibility="Never">
+                    IsVisible="{Binding ShowsPresets}">
             <HorizontalStackLayout Spacing="8" Padding="16,8" BindableLayout.ItemsSource="{Binding Presets}">
                 <BindableLayout.ItemTemplate>
                     <DataTemplate x:DataType="vm:PresetChip">
@@ -250,8 +307,8 @@
                 </CollectionView.ItemTemplate>
 
                 <CollectionView.Footer>
-                    <!-- Espaço para o botão + e a barra Desfazer não cobrirem a última tarefa. -->
-                    <VerticalStackLayout Padding="16,8,16,112">
+                    <!-- Espaço para a barra Desfazer não cobrir a última tarefa. -->
+                    <VerticalStackLayout Padding="16,8,16,72">
                         <ActivityIndicator IsRunning="{Binding IsLoadingMore}" IsVisible="{Binding IsLoadingMore}" HeightRequest="24" />
                         <Label Text="Há muitas tarefas com estes filtros. Refine a busca para ver as mais antigas."
                                Style="{StaticResource Muted}"
@@ -294,7 +351,7 @@
                 Grid.Row="4"
                 Style="{StaticResource Snackbar}"
                 VerticalOptions="End"
-                Margin="16,0,96,30"
+                Margin="16,0,16,12"
                 IsVisible="False"
                 Opacity="0">
             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
@@ -309,24 +366,18 @@
             </Grid>
         </Border>
 
-        <!-- O Histórico não cria tarefa: o que nasce é pendente, e mora na aba Tarefas. -->
-        <Button Grid.Row="4"
-                Text="+"
-                FontSize="30"
-                FontAttributes="None"
-                Padding="0"
-                WidthRequest="60"
-                HeightRequest="60"
-                CornerRadius="30"
-                HorizontalOptions="End"
-                VerticalOptions="End"
-                Margin="0,0,20,24"
+        <!--
+            "Nova tarefa" discreta, como nos Lembretes do iOS (ADR-079): só texto
+            no destaque, numa faixa própria que não cobre a lista. O Histórico
+            não cria tarefa: o que nasce é pendente, e mora na aba Tarefas.
+        -->
+        <Button Grid.Row="5"
+                Style="{StaticResource TextAction}"
+                Text="＋  Nova tarefa"
+                HorizontalOptions="Start"
+                Margin="8,0,0,4"
                 IsVisible="{Binding IsHistory, Converter={StaticResource Not}}"
                 Command="{Binding NewTaskCommand}"
-                SemanticProperties.Description="Nova tarefa">
-            <Button.Shadow>
-                <Shadow Brush="Black" Opacity="0.3" Radius="10" Offset="0,4" />
-            </Button.Shadow>
-        </Button>
+                SemanticProperties.Description="Nova tarefa" />
     </Grid>
 </ContentView>

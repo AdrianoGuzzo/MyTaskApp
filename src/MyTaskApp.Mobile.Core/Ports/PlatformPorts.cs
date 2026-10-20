@@ -42,6 +42,9 @@ public interface IDialogService
 
     /// <summary>Pede um texto curto; <c>null</c> = cancelou.</summary>
     Task<string?> PromptAsync(string title, string message, string initialValue, int maxLength);
+
+    /// <summary>A folha de opções do sistema: o índice da escolhida; <c>null</c> = cancelou.</summary>
+    Task<int?> ChooseAsync(string title, IReadOnlyList<string> options);
 }
 
 /// <summary>
