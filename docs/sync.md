@@ -94,6 +94,11 @@ aparece **só no computador onde foi criada** ou **em todos os computadores**.
 - **Etiquetas:** o seletor de etiquetas mostra as daqui e as compartilhadas,
   mais as que já marcam a tarefa aberta. Criar uma etiqueta com o nome de uma
   que está escondida aqui reaproveita aquela etiqueta e a compartilha.
+  "Importar de outro computador…", no formulário de etiqueta nova da janela
+  Etiquetas, faz o mesmo pela lista: escolhida a etiqueta, ela passa a aparecer
+  em todos com o nome, a cor e os diretórios. Os diretórios chegam "Não
+  mapeado neste computador", e você clona o repositório ou escolhe a pasta
+  daqui ([ADR-077](ARCHITECTURE.md)).
 - **Post-its** continuam aparecendo em todos. **Comandos globais** não têm
   seletor: os compartilhados estão em todos, e os outros só no computador onde
   foram criados (ver "Comandos só deste computador").

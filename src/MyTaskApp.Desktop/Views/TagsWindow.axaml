@@ -121,7 +121,21 @@
     <Border DockPanel.Dock="Top" Classes="card" Margin="0,0,0,12">
       <StackPanel Spacing="10">
 
-        <TextBlock Classes="sectionTitle" Text="{Binding FormTitle}" />
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBlock Grid.Column="0"
+                     Classes="sectionTitle"
+                     VerticalAlignment="Center"
+                     Text="{Binding FormTitle}" />
+
+          <!-- A mesma etiqueta de outro computador, sem o caminho das pastas (ADR-077). -->
+          <Button Grid.Column="1"
+                  FontSize="11"
+                  Padding="8,3"
+                  Content="Importar de outro computador…"
+                  ToolTip.Tip="Traz uma etiqueta de outro computador com o nome, a cor e os repositórios; a pasta de cada um você escolhe aqui."
+                  IsVisible="{Binding CanImport}"
+                  Click="OnImportClick" />
+        </Grid>
 
         <TextBox x:Name="NameBox"
                  FontSize="12"

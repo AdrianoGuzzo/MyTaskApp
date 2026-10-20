@@ -13,6 +13,7 @@ using MyTaskApp.Application.Development;
 using MyTaskApp.Application.Tags;
 using MyTaskApp.Desktop.Composition;
 using MyTaskApp.Domain;
+using MyTaskApp.Domain.Devices;
 using MyTaskApp.Domain.Tags;
 
 namespace MyTaskApp.Desktop.ViewModels;
@@ -206,6 +207,15 @@ public sealed partial class TagListItemViewModel(TagRow row) : ObservableObject
 /// <summary>Um lugar escolhido no "Onde aparece…" de uma etiqueta (ADR-062).</summary>
 public sealed record TagPlacementChoice(TagListItemViewModel Item, PlacementOption Option);
 
+/// <summary>
+/// Uma etiqueta que está só em outro computador, oferecida no "Importar de
+/// outro computador…" do formulário (ADR-077).
+/// </summary>
+public sealed record TagImportChoice(Guid Id, string Name, string ColorHex, string Origin, int DirectoryCount)
+{
+    public string Label => $"{Name} — {Origin}";
+}
+
 /// <summary>Uma cor da paleta de um clique.</summary>
 public sealed partial class SwatchViewModel(string colorHex) : ObservableObject
 {
@@ -270,6 +280,40 @@ public sealed partial class TagsViewModel(
             : $"A etiqueta aparece em {result.Destination}.";
     }
 
+    /// <summary>
+    /// Traz para cá uma etiqueta de outro computador (ADR-077). É a mesma
+    /// etiqueta, que passa a aparecer em todos: nome, cor e diretórios vêm
+    /// juntos, menos o caminho da pasta, que cada computador escolhe o seu.
+    /// </summary>
+    [RelayCommand]
+    public async Task ImportTagAsync(TagImportChoice choice, CancellationToken cancellationToken)
+    {
+        var imported = await TryAsync(
+            () => runner.RunAsync<PlaceTagHandler, PlaceResult>(
+                (handler, token) => handler.HandleAsync(new PlaceTag(choice.Id, DevicePlacement.Everywhere), token),
+                cancellationToken),
+            "Não foi possível importar a etiqueta.");
+
+        if (!imported)
+        {
+            return;
+        }
+
+        Changed?.Invoke();
+        await LoadAsync(cancellationToken);
+
+        // Os diretórios chegam sem pasta: o cartão já abre para clonar ou escolher.
+        if (choice.DirectoryCount > 0
+            && Tags.FirstOrDefault(item => item.Row.Id == choice.Id) is { IsExpanded: false } item)
+        {
+            item.IsExpanded = true;
+            await LoadDirectoriesAsync(item, cancellationToken);
+        }
+
+        StatusMessage = $"Etiqueta “{choice.Name}” importada de {choice.Origin}: agora aparece em todos os computadores."
+            + (choice.DirectoryCount > 0 ? " Escolha a pasta ou clone os repositórios dela." : string.Empty);
+    }
+
     [ObservableProperty]
     private bool _isBusy;
 
@@ -290,7 +334,7 @@ public sealed partial class TagsViewModel(
 
     /// <summary>A etiqueta em edição; <c>null</c> = o formulário cria uma nova.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsEditing), nameof(FormTitle), nameof(SaveLabel))]
+    [NotifyPropertyChangedFor(nameof(IsEditing), nameof(FormTitle), nameof(SaveLabel), nameof(CanImport))]
     private Guid? _editingId;
 
     [ObservableProperty]
@@ -312,6 +356,12 @@ public sealed partial class TagsViewModel(
     private bool _isCustomizing;
 
     public ObservableCollection<TagListItemViewModel> Tags { get; } = [];
+
+    /// <summary>As etiquetas que estão só em outro computador (ADR-077).</summary>
+    public ObservableCollection<TagImportChoice> ImportableTags { get; } = [];
+
+    /// <summary>O "Importar de outro computador…" é coisa de etiqueta nova.</summary>
+    public bool CanImport => !IsEditing && ImportableTags.Count > 0;
 
     public IReadOnlyList<SwatchViewModel> Palette { get; } =
         [.. TagColor.Palette.Select(hex => new SwatchViewModel(hex) { IsSelected = hex == TagColor.Palette[0] })];
@@ -373,11 +423,51 @@ public sealed partial class TagsViewModel(
 
         IsEmpty = Tags.Count == 0;
 
+        await LoadImportableAsync(cancellationToken);
+
         foreach (var item in Tags.Where(item => expanded.Contains(item.Row.Id)).ToList())
         {
             item.IsExpanded = true;
             await LoadDirectoriesAsync(item, cancellationToken);
         }
+    }
+
+    /// <summary>
+    /// As etiquetas escondidas aqui por estarem em outro computador (ADR-062)
+    /// são as que dá para importar. Falhar só esconde o botão: a lista daqui
+    /// já carregou.
+    /// </summary>
+    private async Task LoadImportableAsync(CancellationToken cancellationToken)
+    {
+        ImportableTags.Clear();
+
+        if (placements is { HasOtherComputers: true } state)
+        {
+            try
+            {
+                var rows = await runner.RunAsync<GetTagsHandler, IReadOnlyList<TagRow>>(
+                    (handler, token) => handler.HandleAsync(new GetTags(DeviceView.All), token),
+                    cancellationToken);
+
+                var choices = rows
+                    .Where(row => !state.IsVisibleHere(row.Placement))
+                    .Select(row => new TagImportChoice(
+                        row.Id, row.Name, row.ColorHex, state.Describe(row.Placement), row.DirectoryCount))
+                    .OrderBy(choice => choice.Origin, StringComparer.CurrentCultureIgnoreCase)
+                    .ThenBy(choice => choice.Name, StringComparer.CurrentCultureIgnoreCase);
+
+                foreach (var choice in choices)
+                {
+                    ImportableTags.Add(choice);
+                }
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                logger.LogWarning(exception, "TagsImportableLoadFailed");
+            }
+        }
+
+        OnPropertyChanged(nameof(CanImport));
     }
 
     [RelayCommand]
