@@ -15,7 +15,7 @@ namespace MyTaskApp.Mobile;
 /// </summary>
 public static class MauiProgram
 {
-    public const string ServerMetadata = "SyncApiBaseUrl";
+    public const string ServerSuggestionMetadata = "SyncServerSuggestion";
 
     public static MauiApp CreateMauiApp()
     {
@@ -52,7 +52,10 @@ public static class MauiProgram
         {
             DataDirectory = data,
             DeviceName = DeviceName(),
-            ServerUrl = BuildServer(),
+            SuggestedServerUrl = ServerSuggestion(),
+#if DEBUG
+            AllowHttpLoopback = true,
+#endif
         });
 
         builder.Services.AddSingleton<AppShell>();
@@ -63,6 +66,7 @@ public static class MauiProgram
         builder.Services.AddTransient<TaskFormPage>();
         builder.Services.AddTransient<FiltersPage>();
         builder.Services.AddTransient<ConnectPage>();
+        builder.Services.AddTransient<SyncServerPage>();
 
         return builder.Build();
     }
@@ -77,11 +81,14 @@ public static class MauiProgram
             : name.Trim();
     }
 
-    /// <summary>O servidor gravado na build (<c>-p:SyncApiBaseUrl=…</c>); no Debug, o local pelo adb reverse.</summary>
-    private static string? BuildServer() =>
+    /// <summary>
+    /// Só o texto inicial do campo da tela de servidor: no Debug, o local pelo
+    /// adb reverse. Nenhum servidor vem da build (ADR-078).
+    /// </summary>
+    private static string? ServerSuggestion() =>
         typeof(MauiProgram).Assembly
             .GetCustomAttributes<AssemblyMetadataAttribute>()
-            .FirstOrDefault(attribute => attribute.Key == ServerMetadata)?.Value is { Length: > 0 } url
+            .FirstOrDefault(attribute => attribute.Key == ServerSuggestionMetadata)?.Value is { Length: > 0 } url
             ? url
             : null;
 }

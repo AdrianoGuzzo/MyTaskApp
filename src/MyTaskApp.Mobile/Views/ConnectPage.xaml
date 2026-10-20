@@ -13,7 +13,14 @@
                    Style="{StaticResource Muted}"
                    HorizontalTextAlignment="Center" />
 
-            <Label Text="{Binding Server, StringFormat='Servidor: {0}'}" Style="{StaticResource Muted}" HorizontalTextAlignment="Center" />
+            <Label Text="{Binding Server, StringFormat='Ao entrar, as tarefas deste celular vão para o servidor {0}.'}"
+                   Style="{StaticResource Muted}"
+                   HorizontalTextAlignment="Center"
+                   IsVisible="{Binding IsAvailable}" />
+
+            <Button Text="Configurar servidor"
+                    Command="{Binding OpenServerCommand}"
+                    IsVisible="{Binding IsAvailable, Converter={StaticResource Not}}" />
 
             <Button Text="Entrar com Google"
                     Command="{Binding SignInCommand}"

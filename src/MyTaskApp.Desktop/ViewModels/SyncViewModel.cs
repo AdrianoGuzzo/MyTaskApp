@@ -174,8 +174,9 @@ public sealed partial class SyncViewModel : ObservableObject
     public string StateLabel => Status switch
     {
         null => "Carregando…",
-        { IsAvailable: false } => "Indisponível nesta versão",
+        { IsAvailable: false } => "Sem servidor configurado",
         { Local.State: SyncLinkState.Unlinked } => "Não conectado — tudo fica só neste computador",
+        { Local: { State: SyncLinkState.NeedsReconnect, LastErrorCode: SyncEngine.ServerChangedCode } } => "O servidor mudou: entre de novo",
         { Local.State: SyncLinkState.NeedsReconnect } => "O login expirou: entre de novo",
         { Local.State: SyncLinkState.DeviceRevoked } => "Este computador foi revogado na conta",
         { Local.IsEnabled: false } => "Pausada",

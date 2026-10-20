@@ -273,6 +273,56 @@ public class InfrastructureRegistrationTests : IDisposable
         File.Exists(Path.Combine(_directory, "app.db")).Should().BeTrue();
     }
 
+    /// <summary>
+    /// O servidor configurado vale em tempo de execução, sem recriar o cliente
+    /// HTTP, e o cliente não segue redirecionamento (ADR-078).
+    /// </summary>
+    [Fact]
+    public void TheSyncServer_ChangesAtRunTime_AndTheClientDoesNotFollowRedirects()
+    {
+        using var provider = new ServiceCollection()
+            .AddSingleton(typeof(ILogger<>), typeof(NullLogger<>))
+            .AddSingleton(TimeProvider.System)
+            .AddLocalData(
+                new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Database:Directory"] = _directory }).Build(),
+                new LocalDataOptions { DeviceIdentityFolder = _directory, DeviceNickname = "Pixel 8" })
+            .AddSingleton<MyTaskApp.Infrastructure.Secrets.ISecretStore, Jira.InMemorySecretStore>()
+            .BuildServiceProvider(validateScopes: true);
+
+        var address = provider.GetRequiredService<MyTaskApp.Application.Sync.ISyncServerAddress>();
+        var authenticator = provider.GetRequiredService<MyTaskApp.Application.Sync.ISyncAuthenticator>();
+        var http = provider.GetRequiredService<MyTaskApp.Infrastructure.Sync.Http.SyncHttp>();
+
+        address.Current.Should().BeNull("nenhum servidor vem da build");
+        authenticator.IsAvailable.Should().BeFalse();
+
+        var changes = 0;
+        address.Changed += () => changes++;
+        address.Set(new Uri("https://sync.exemplo.com"));
+
+        authenticator.ServerBaseUrl.Should().Be(new Uri("https://sync.exemplo.com/"));
+        provider.GetRequiredService<MyTaskApp.Infrastructure.Sync.Http.SyncHttp>().Should().BeSameAs(http);
+        changes.Should().Be(1);
+        provider.GetRequiredService<MyTaskApp.Application.Sync.ISyncServerProbe>().Should().NotBeNull();
+
+        var handler = typeof(HttpMessageInvoker)
+            .GetField("_handler", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
+            .GetValue(http.Client);
+        handler.Should().BeOfType<SocketsHttpHandler>().Which.AllowAutoRedirect.Should().BeFalse();
+    }
+
+    [Fact]
+    public void AnHttpServer_IsRefused_OutsideDevelopment()
+    {
+        using var provider = BuildLocalDataProvider();
+        var address = provider.GetRequiredService<MyTaskApp.Application.Sync.ISyncServerAddress>();
+
+        var setting = () => address.Set(new Uri("http://localhost:5280/"));
+
+        setting.Should().Throw<ArgumentException>();
+        address.Current.Should().Be(new Uri("https://sync.exemplo.com/"));
+    }
+
     /// <summary>Nunca chamado: o teste só monta o contêiner.</summary>
     private sealed class UnusedRunner : IUseCaseRunner
     {

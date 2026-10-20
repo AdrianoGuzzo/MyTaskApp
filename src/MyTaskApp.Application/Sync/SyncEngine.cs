@@ -85,6 +85,9 @@ public sealed class SyncEngine(
 
     public const int PullPageSize = SyncSchema.DefaultPullLimit;
 
+    /// <summary>A conta ligada é de outro servidor que não o configurado (ADR-078).</summary>
+    public const string ServerChangedCode = "server_changed";
+
     /// <summary>Quantas vezes a mesma página falha inteira antes de ser aplicada linha a linha.</summary>
     public const int PageFailuresBeforeIsolation = 3;
 
@@ -110,6 +113,15 @@ public sealed class SyncEngine(
             await StoreAsync(store => store.SetStateAsync(SyncLinkState.NeedsReconnect, cancellationToken), cancellationToken);
             await StoreAsync(store => store.RecordErrorAsync("device_changed", "Este banco veio de outro computador. Conecte a conta de novo.", cancellationToken), cancellationToken);
             return new SyncCycleResult(SyncCycleStatus.Blocked, Message: "device_changed");
+        }
+
+        if (state.Server is not null && !SyncServerUrl.SameServer(state.Server, authenticator.ServerBaseUrl))
+        {
+            // A conta é de outro servidor (o endereço mudou fora da troca da tela): nada sai daqui
+            // para o novo antes de alguém conectar lá de propósito (ADR-078).
+            await StoreAsync(store => store.SetStateAsync(SyncLinkState.NeedsReconnect, cancellationToken), cancellationToken);
+            await StoreAsync(store => store.RecordErrorAsync(ServerChangedCode, "O servidor configurado mudou. Conecte a conta de novo.", cancellationToken), cancellationToken);
+            return new SyncCycleResult(SyncCycleStatus.Blocked, Message: ServerChangedCode);
         }
 
         try

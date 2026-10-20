@@ -68,10 +68,10 @@
                    Text="Usa as mesmas tarefas, etiquetas, horas e post-its em vários computadores. Caminhos de pasta, conexões de banco, senhas e o estado das janelas nunca saem deste computador." />
       </StackPanel>
 
-      <!-- ===================== SEM SERVIDOR NA BUILD ===================== -->
+      <!-- ========================= SEM SERVIDOR ========================= -->
       <Border Classes="card" IsVisible="{Binding IsUnavailable}">
         <TextBlock Classes="meta"
-                   Text="Esta versão do MyTaskApp não tem um servidor de sincronização configurado. Tudo funciona normalmente, só neste computador." />
+                   Text="Nenhum servidor de sincronização configurado. Tudo funciona normalmente, só neste computador. Para sincronizar com um servidor seu, ponha o endereço (https://) em Sync:ApiBaseUrl no appsettings.user.json e reabra o app." />
       </Border>
 
       <!-- ============================== CONTA ============================== -->

@@ -155,7 +155,6 @@ jobs:
         run: >
           dotnet build src/MyTaskApp.Mobile/MyTaskApp.Mobile.csproj
           -f net10.0-android -c Release
-          -p:SyncApiBaseUrl=https://sync.example.invalid/
           -p:AcceptAndroidSDKLicenses=True
 
       # A mesma conferência do APK da release (release.yml, job android), aqui

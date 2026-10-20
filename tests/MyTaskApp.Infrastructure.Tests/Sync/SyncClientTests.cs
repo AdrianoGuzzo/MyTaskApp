@@ -52,11 +52,20 @@ public sealed class SyncClientTests : IDisposable
     [InlineData("", false)]
     [InlineData("http://sync.exemplo.com", false)]
     [InlineData("https://sync.exemplo.com", true)]
-    [InlineData("http://localhost:5280", true)]
-    [InlineData("http://127.0.0.1:5280/", true)]
-    public void OnlyHttpsOrLoopback_IsAServer(string? url, bool available)
+    [InlineData("http://localhost:5280", false)]
+    [InlineData("http://127.0.0.1:5280/", false)]
+    public void OnlyHttps_IsAServer_OutsideDevelopment(string? url, bool available)
     {
         new SyncOptions { ApiBaseUrl = url }.IsAvailable.Should().Be(available);
+    }
+
+    [Theory]
+    [InlineData("http://sync.exemplo.com", false)]
+    [InlineData("http://localhost:5280", true)]
+    [InlineData("http://127.0.0.1:5280/", true)]
+    public void HttpOnLoopback_OnlyWhenDevelopmentAllows(string url, bool available)
+    {
+        new SyncOptions { ApiBaseUrl = url, AllowHttpLoopback = true }.IsAvailable.Should().Be(available);
     }
 
     [Fact]
@@ -78,7 +87,7 @@ public sealed class SyncClientTests : IDisposable
 
         first.Should().Be("access-1");
         again.Should().Be(first);
-        _secrets.Secrets[SyncOptions.SecretName].Should().Be("refresh-1", "o novo refresh é gravado antes de usar o access");
+        _secrets.Secrets[SyncOptions.SecretName].Should().Be(Bound("refresh-1"), "o novo refresh é gravado antes de usar o access");
         _server.Requests.Should().ContainSingle(request => request.Uri.AbsolutePath == ApiRoutes.Token)
             .Which.Body.Should().Contain("grant_type=refresh_token").And.Contain("refresh_token=refresh-0");
 
@@ -221,7 +230,7 @@ public sealed class SyncClientTests : IDisposable
         await browser.GetAsync($"{redirect}?state={query["state"]}&code=codigo-do-navegador", Ct);
         await authorization.Completion.WaitAsync(TimeSpan.FromSeconds(10), Ct);
 
-        _secrets.Secrets[SyncOptions.SecretName].Should().Be("refresh-login");
+        _secrets.Secrets[SyncOptions.SecretName].Should().Be(Bound("refresh-login"));
         (await _auth.GetAccessTokenAsync(Ct)).Should().Be("access-login");
     }
 
@@ -300,6 +309,75 @@ public sealed class SyncClientTests : IDisposable
         }
     }
 
+    /// <summary>O refresh de outro servidor fica no cofre, mas nunca sai deste aparelho para o novo (ADR-078).</summary>
+    [Fact]
+    public async Task ARefreshTokenFromAnotherServer_IsNeverSentToThisOne()
+    {
+        _secrets.Secrets[SyncOptions.SecretName] = "https://outro.exemplo.com/ refresh-de-la";
+        IssueTokensOnRefresh();
+
+        var token = () => _auth.GetAccessTokenAsync(Ct);
+
+        (await token.Should().ThrowAsync<SyncApiException>()).Which.Kind.Should().Be(SyncFailureKind.NeedsReconnect);
+        _server.Requests.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ARefreshTokenFromBeforeTheBinding_IsUsedOnce_AndStoredBound()
+    {
+        _secrets.Secrets[SyncOptions.SecretName] = "refresh-0";
+        IssueTokensOnRefresh();
+
+        (await _auth.GetAccessTokenAsync(Ct)).Should().Be("access-1");
+
+        _secrets.Secrets[SyncOptions.SecretName].Should().Be(Bound("refresh-1"));
+    }
+
+    [Fact]
+    public async Task AfterTheAddressChanges_TheOldTokensStayBehind()
+    {
+        await ConnectedAsync();
+        var before = _server.Requests.Count;
+
+        _options.ApiBaseUrl = "https://outro.exemplo.com/";
+        var token = () => _auth.GetAccessTokenAsync(Ct);
+
+        (await token.Should().ThrowAsync<SyncApiException>()).Which.Kind.Should().Be(SyncFailureKind.NeedsReconnect, "o access em memória e o refresh são do servidor anterior");
+        _server.Requests.Should().HaveCount(before, "nenhum token vai para o servidor novo");
+    }
+
+    [Fact]
+    public async Task SigningOutAfterTheAddressChanged_RevokesNothingAtTheNewServer()
+    {
+        await ConnectedAsync();
+        var before = _server.Requests.Count;
+        _options.ApiBaseUrl = "https://outro.exemplo.com/";
+
+        await _auth.SignOutAsync(Ct);
+
+        _server.Requests.Should().HaveCount(before, "os tokens do servidor anterior não vão para o novo, nem para revogar");
+        _secrets.Secrets.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ARedirect_IsNotFollowed_AndTheTokenStaysHere()
+    {
+        await ConnectedAsync();
+        _server.On(ApiRoutes.Me, _ =>
+        {
+            var response = new HttpResponseMessage(HttpStatusCode.Found);
+            response.Headers.Location = new Uri("https://outro.exemplo.com/api/v1/me");
+            return response;
+        });
+
+        var me = () => _api.MeAsync(Ct);
+
+        var failure = (await me.Should().ThrowAsync<SyncApiException>()).Which;
+        failure.Kind.Should().Be(SyncFailureKind.Rejected);
+        failure.Message.Should().Be(SyncHttp.RedirectMessage);
+        _server.Requests.Should().OnlyContain(request => request.Uri.Host == "sync.exemplo.com");
+    }
+
     private async Task ConnectedAsync()
     {
         _secrets.Secrets[SyncOptions.SecretName] = "refresh-0";
@@ -307,6 +385,9 @@ public sealed class SyncClientTests : IDisposable
         IssueTokensOnRefresh();
         await _auth.GetAccessTokenAsync(Ct);
     }
+
+    /// <summary>O que o cofre guarda: o servidor que emitiu e o refresh (ADR-078).</summary>
+    private static string Bound(string refresh) => "https://sync.exemplo.com/ " + refresh;
 
     /// <summary>Cada renovação devolve um par novo: access-N e refresh-N.</summary>
     private void IssueTokensOnRefresh() => _server.On(ApiRoutes.Token, _ =>

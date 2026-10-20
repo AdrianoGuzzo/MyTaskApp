@@ -45,6 +45,9 @@ internal sealed class SyncAuthenticationService(
         Failed: "O servidor de sincronização não concluiu o login. Tente de novo.",
         ReceivedLogEvent: "SyncAuthorizationCallbackReceived");
 
+    /// <summary>Entre o servidor e o refresh no cofre. Espaço: nem a URL normalizada (vira <c>%20</c>) nem o token o têm.</summary>
+    private const string BoundSeparator = " ";
+
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     private AccessToken? _access;
@@ -64,7 +67,7 @@ internal sealed class SyncAuthenticationService(
     {
         if (!options.IsAvailable)
         {
-            throw new DomainException("Esta versão do MyTaskApp não tem um servidor de sincronização configurado.");
+            throw new DomainException("Nenhum servidor de sincronização configurado.");
         }
 
         // Um clique novo desiste do anterior: a porta (ou a volta do app) é uma só, e é solta aqui, na hora.
@@ -100,12 +103,12 @@ internal sealed class SyncAuthenticationService(
 
         try
         {
-            if (_access is { } current && current.ExpiresAt > timeProvider.GetUtcNow())
+            if (_access is { } current && current.ExpiresAt > timeProvider.GetUtcNow() && SyncServerUrl.SameServer(current.Server, options.BaseUri))
             {
                 return current.Value;
             }
 
-            var refresh = await secrets.ReadAsync(SyncOptions.SecretName, cancellationToken)
+            var refresh = await ReadRefreshAsync(cancellationToken)
                 ?? throw new SyncApiException(SyncFailureKind.NeedsReconnect, "Conecte a conta de novo.");
 
             try
@@ -151,12 +154,12 @@ internal sealed class SyncAuthenticationService(
             if (options.IsAvailable)
             {
                 // O servidor revoga só o token pedido: o refresh sozinho deixaria o access valendo até vencer (SEC-010).
-                if (_access is { } access && access.ExpiresAt > timeProvider.GetUtcNow())
+                if (_access is { } access && access.ExpiresAt > timeProvider.GetUtcNow() && SyncServerUrl.SameServer(access.Server, options.BaseUri))
                 {
                     await RevokeAsync(access.Value, "access_token", cancellationToken);
                 }
 
-                if (await secrets.ReadAsync(SyncOptions.SecretName, cancellationToken) is { } refresh)
+                if (await ReadRefreshAsync(cancellationToken) is { } refresh)
                 {
                     await RevokeAsync(refresh, "refresh_token", cancellationToken);
                 }
@@ -297,18 +300,49 @@ internal sealed class SyncAuthenticationService(
     /// <summary>O refresh vai para o cofre antes; o access, só na memória, com folga para não vencer no meio da chamada.</summary>
     private async Task StoreAsync(TokenResponse tokens, CancellationToken cancellationToken)
     {
+        var server = options.BaseUri ?? throw new SyncApiException(SyncFailureKind.NeedsReconnect, "Sincronização sem servidor configurado.");
+
         if (tokens.RefreshToken is { } refresh)
         {
-            await secrets.WriteAsync(SyncOptions.SecretName, refresh, cancellationToken);
+            await secrets.WriteAsync(SyncOptions.SecretName, server.AbsoluteUri + BoundSeparator + refresh, cancellationToken);
         }
 
         var lifetime = TimeSpan.FromSeconds(tokens.ExpiresIn);
         var safety = TimeSpan.FromSeconds(Math.Min(60, tokens.ExpiresIn / 4.0));
 
-        _access = new AccessToken(tokens.AccessToken, timeProvider.GetUtcNow() + lifetime - safety);
+        _access = new AccessToken(tokens.AccessToken, timeProvider.GetUtcNow() + lifetime - safety, server);
+    }
+
+    /// <summary>
+    /// O refresh token, só se for do servidor configurado agora (ADR-078): o
+    /// cofre guarda junto o endereço que o emitiu, e um token de outro
+    /// servidor nunca sai deste aparelho para o novo. O valor antigo, sem
+    /// endereço, vale até a próxima renovação, que já o grava amarrado.
+    /// </summary>
+    private async Task<string?> ReadRefreshAsync(CancellationToken cancellationToken)
+    {
+        if (await secrets.ReadAsync(SyncOptions.SecretName, cancellationToken) is not { } stored)
+        {
+            return null;
+        }
+
+        var separator = stored.IndexOf(BoundSeparator, StringComparison.Ordinal);
+
+        if (separator < 0)
+        {
+            return stored;
+        }
+
+        if (Uri.TryCreate(stored[..separator], UriKind.Absolute, out var issuedBy) && SyncServerUrl.SameServer(issuedBy, options.BaseUri))
+        {
+            return stored[(separator + BoundSeparator.Length)..];
+        }
+
+        logger.LogWarning("SyncRefreshFromAnotherServer");
+        return null;
     }
 
     private sealed record TokenResponse(string AccessToken, string? RefreshToken, int ExpiresIn);
 
-    private sealed record AccessToken(string Value, DateTimeOffset ExpiresAt);
+    private sealed record AccessToken(string Value, DateTimeOffset ExpiresAt, Uri Server);
 }

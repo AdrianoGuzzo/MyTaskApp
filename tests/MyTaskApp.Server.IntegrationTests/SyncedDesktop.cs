@@ -70,6 +70,7 @@ internal sealed class SyncedDesktop : IAsyncDisposable
                 ["Database:Directory"] = folder,
                 ["Application:TimeZoneId"] = "UTC",
                 ["Sync:ApiBaseUrl"] = "http://localhost/",
+                ["Sync:AllowHttpLoopback"] = "true",
             })
             .Build();
 

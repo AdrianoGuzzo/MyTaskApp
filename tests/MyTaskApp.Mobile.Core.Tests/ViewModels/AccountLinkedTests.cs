@@ -200,6 +200,7 @@ public sealed class AccountLinkedTests
         new InlineDispatcher(),
         new RecordingNavigator(),
         new RecordingThemes(),
+        Substitute.For<ISyncServerAddress>(),
         _dialogs,
         new FakeTimeProvider(Now),
         NullLogger<AccountViewModel>.Instance);

@@ -175,6 +175,71 @@ reconectar, revogado, versão antiga.
   processo de qualquer jeito). O que estiver no meio é reenviado na volta com os
   mesmos ids.
 
+## Servidor de sincronização
+
+O app não traz servidor nenhum ([ADR-078](ARCHITECTURE.md)). Cada pessoa usa a
+própria instância do servidor ([sync-server.md](sync-server.md)), e o endereço
+é escolhido no app.
+
+**Só offline.** Ao abrir pela primeira vez, o app cria o banco local e mostra a
+lista. Não pede login nem servidor. Criar, editar, concluir, arquivar e mandar
+para a lixeira funcionam sem internet. A aba Conta mostra "Sincronização
+desativada" e o botão **Configurar servidor**. Sem servidor, nada é guardado
+para enviar.
+
+**Configurar.** *Conta → Configurar servidor* (ou *Configurar servidor* na tela
+Entrar):
+
+1. Informe o endereço da sua instância, com `https://` (por exemplo
+   `https://sync.seudominio.com/`). Endereço inválido, sem HTTPS, com usuário e
+   senha, com `?` ou `#` é recusado na hora, com o motivo.
+2. **Testar conexão** lê o `/health` e o discovery do OAuth
+   (`/.well-known/openid-configuration`). Não faz login e não envia dados. O
+   resultado diz o que deu errado: endereço não encontrado (DNS), servidor
+   desligado ou recusando, certificado inválido, tempo esgotado,
+   redirecionamento, "não parece um servidor do MyTaskApp" ou erro do servidor.
+   Se o servidor anunciar o login em outro endereço, o teste só avisa: o app
+   continua no endereço que você digitou.
+3. **Salvar.** O endereço fica nas preferências do aparelho
+   (`SharedPreferences` no Android, `NSUserDefaults` no iOS, chave
+   `sync-server-url`) e volta na próxima abertura. Não é segredo: o token fica
+   no `SecureStorage`.
+4. **Entrar com sua conta.** Só a partir daqui algo sai do celular. A tela
+   Entrar diz para qual servidor as tarefas vão.
+
+**Trocar ou tirar o servidor.** Com uma conta ligada a outro servidor, o app
+pergunta antes e diz o que vai acontecer: quantas alterações ainda não chegaram
+ao servidor antigo e que nenhuma tarefa é apagada. Ao confirmar:
+
+- sai da conta **no servidor antigo** (revoga o token lá; sem rede, só apaga
+  daqui);
+- esquece o que era do servidor antigo: outbox, versões, conflitos, cursor, a
+  conta e o workspace. Nada disso é reaproveitado no novo;
+- as tarefas ficam. As alterações que não chegaram ao antigo não vão mais para
+  ele; o estado atual delas continua aqui;
+- **nada vai para o servidor novo até você entrar nele.** Ao entrar, o celular
+  traz o que o servidor já tem e manda o que só existe aqui, como na primeira
+  conexão.
+
+"Cancelar" não muda nada. Tirar o servidor faz o mesmo e deixa a sincronização
+desligada.
+
+**Quem atualiza de uma versão antiga.** As versões até a 1.20 traziam o
+servidor na build. Se o celular já tinha entrado nele, o endereço da conta
+ligada passa a ser o salvo, e a sincronização continua. Se nunca entrou, fica
+sem servidor.
+
+**Proteções.**
+
+- HTTPS sempre. HTTP só em `localhost`/`127.0.0.1` e só no build Debug.
+- O certificado é validado pelo sistema; não há como desligar.
+- O cliente não segue redirecionamento: um `3xx` vira erro, e o token não vai
+  para outro endereço.
+- O refresh token fica amarrado ao servidor que o emitiu. Um token de outro
+  servidor nunca é enviado.
+- Se o servidor mudar por fora da tela (um backup restaurado, por exemplo), a
+  sincronização para com "O servidor mudou" antes de qualquer pedido.
+
 ## Ambiente de desenvolvimento
 
 **Requisitos:**
@@ -198,9 +263,10 @@ reconectar, revogado, versão antiga.
 
 ### O servidor de sincronização no desenvolvimento
 
-O build Debug aponta para `http://localhost:5280/`. No celular, `localhost` é o
-próprio celular, não o computador. O `adb reverse` leva a porta do celular até
-o computador:
+No build Debug, a tela do servidor já vem preenchida com `http://localhost:5280/`
+(`SyncServerSuggestion` no `.csproj`). É só sugestão: toque em **Salvar** uma
+vez. No celular, `localhost` é o próprio celular, não o computador. O
+`adb reverse` leva a porta do celular até o computador:
 
 ```bash
 adb reverse tcp:5280 tcp:5280
@@ -210,7 +276,8 @@ Notas:
 
 - **Cleartext:** HTTP em claro só é aceito para `localhost` e `127.0.0.1`
   (`network_security_config.xml` no Android, `NSAllowsLocalNetworking` no iOS).
-  O app recusa HTTP fora do loopback (`SyncOptions`), em qualquer build.
+  O app recusa HTTP fora do loopback em qualquer build, e no loopback só aceita
+  no Debug (`SyncServerUrl`, ADR-078).
 - **O servidor precisa conhecer o cliente do celular.** A versão do servidor que
   semeia o `mytaskapp-mobile` é a desta mudança. Um servidor antigo responde
   `invalid_client` no login do celular; atualize-o antes (ver
@@ -251,15 +318,15 @@ dotnet build src/MyTaskApp.Mobile/MyTaskApp.Mobile.csproj -t:Run -f net10.0-andr
 - Os dados ficam em `FileSystem.AppDataDirectory`: `mytaskapp.db` e
   `device.json`, o id deste dispositivo. Desinstalar apaga tudo.
 
-### Release e servidor de produção
+### Release
 
 ```bash
-dotnet build src/MyTaskApp.Mobile/MyTaskApp.Mobile.csproj -f net10.0-android -c Release \
-  -p:SyncApiBaseUrl=https://sync.seudominio.com/
+dotnet build src/MyTaskApp.Mobile/MyTaskApp.Mobile.csproj -f net10.0-android -c Release
 ```
 
-- O endereço do servidor é gravado no app na hora da build (como no desktop) e
-  precisa ser HTTPS.
+- **Nenhum servidor vai na build** (ADR-078). O APK é o mesmo para qualquer
+  pessoa: cada uma configura o próprio servidor no app. Distribuir o app não
+  depende da infraestrutura de ninguém.
 - **Assinatura:** sem configuração, o Release sai assinado com a chave de debug.
   O APK da release é assinado pelo `release.yml` (job `android`) com a keystore
   guardada nos secrets do repositório: `AndroidKeyStore`,
@@ -354,7 +421,10 @@ O `keytool` pede a senha da keystore, a da chave e o nome no certificado.
 | `ANDROID_KEY_ALIAS` | secret | `mytaskapp` (o `-alias` usado acima) |
 | `ANDROID_KEYSTORE_PASSWORD` | secret | a senha da keystore |
 | `ANDROID_KEY_PASSWORD` | secret | a senha da chave |
-| `SYNC_API_BASE_URL` | variável (aba *Variables*) | o servidor de sincronização, `https://…/` |
+
+O servidor de sincronização **não** é cadastrado aqui: o app não leva servidor
+(ADR-078). Uma variável `SYNC_API_BASE_URL` de versões antigas pode ser apagada
+(`gh variable delete SYNC_API_BASE_URL`).
 
 A keystore em base64 vai direto para a área de transferência:
 
@@ -370,11 +440,10 @@ valor sem ecoá-lo):
 gh secret set ANDROID_KEY_ALIAS --body mytaskapp
 gh secret set ANDROID_KEYSTORE_PASSWORD
 gh secret set ANDROID_KEY_PASSWORD
-gh variable set SYNC_API_BASE_URL --body "https://sync.seudominio.com/"
 ```
 
-Sem esses secrets, ou com `SYNC_API_BASE_URL` vazio ou sem `https://`, o
-`release.yml` **para** antes do build, com a mensagem do que falta. É de
+Sem esses secrets, o `release.yml` **para** antes do build, com a mensagem do
+que falta. É de
 propósito: um APK com a chave de debug não atualizaria o que já está no
 celular.
 
@@ -401,8 +470,8 @@ Windows com o seu Apple ID e o instala no iPhone pelo cabo.
   anexado ao rascunho daquela release.
 
 Baixe `ios-ipa` em *Artifacts*, no fim da execução (ou o `.ipa` da release) e
-extraia o `MyTaskApp-<versão>-ios-unsigned.ipa`. A variável
-`SYNC_API_BASE_URL` (acima) precisa estar cadastrada.
+extraia o `MyTaskApp-<versão>-ios-unsigned.ipa`. O servidor de sincronização
+é configurado depois, no app.
 
 **2. Preparar o Windows (uma vez):**
 
@@ -483,7 +552,13 @@ dotnet test tests/MyTaskApp.Server.IntegrationTests --filter "PhoneSyncTests"   
   - o celular entra pela tela Entrar contra a API de verdade (Google falso);
   - sincroniza com um desktop nos dois sentidos;
   - fica sem rede e volta;
-  - filtra pelos chips de dispositivo.
+  - filtra pelos chips de dispositivo;
+  - troca de servidor com alteração pendente: só a revogação vai ao antigo,
+    nada vai ao novo antes do login, e a tarefa sobe depois de entrar.
+- **Servidor configurável** (`SyncServerViewModelTests`, ADR-078): primeira
+  abertura sem servidor, uso local completo, salvar e reabrir, endereço
+  inválido e HTTP, trocar e tirar com e sem conta, cancelar, adotar o servidor
+  de quem atualiza, teste de conexão.
 - **CI:** não há emulador. A conferência do APK é uma só,
   `scripts/check-android-apk.sh`:
   - nos PRs, o job `mobile-android` do `ci.yml` compila o APK em Release e
@@ -504,7 +579,8 @@ dotnet test tests/MyTaskApp.Server.IntegrationTests --filter "PhoneSyncTests"   
   aparecem.
 - **Etiquetas:** não se criam nem se editam no celular.
 - **Projeto** não existe no domínio.
-- **Servidor fixo por build.** Não há campo para trocar o servidor no app.
+- **Um servidor por vez.** Não há perfis de vários servidores; trocar esquece
+  o estado de sincronização do anterior (ADR-078).
 - **"Computador" no desktop:** o desktop ainda chama o celular de "computador"
   em "Enviar para…".
 - **Histórico local:** o do detalhe é só deste celular; a auditoria não

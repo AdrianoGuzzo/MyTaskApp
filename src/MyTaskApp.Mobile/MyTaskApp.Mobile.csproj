@@ -50,8 +50,12 @@
     <ILLinkTreatWarningsAsErrors>false</ILLinkTreatWarningsAsErrors>
     <TrimMode>partial</TrimMode>
 
-    <!-- O endereço do servidor de sincronização vem da build, como no desktop. -->
-    <SyncApiBaseUrl Condition="'$(SyncApiBaseUrl)' == '' and '$(Configuration)' == 'Debug'">http://localhost:5280/</SyncApiBaseUrl>
+    <!--
+      Nenhum servidor vem da build (ADR-078): o usuário configura na tela. No
+      Debug, o campo só vem preenchido com o servidor local (adb reverse), e
+      nada é usado antes de o desenvolvedor salvar.
+    -->
+    <SyncServerSuggestion Condition="'$(SyncServerSuggestion)' == '' and '$(Configuration)' == 'Debug'">http://localhost:5280/</SyncServerSuggestion>
   </PropertyGroup>
 
   <!-- iOS: o EF Core compila expressões em tempo de execução; sem JIT, o interpretador faz isso. -->
@@ -60,8 +64,8 @@
     <CodesignEntitlements>Platforms\iOS\Entitlements.plist</CodesignEntitlements>
   </PropertyGroup>
 
-  <ItemGroup>
-    <AssemblyMetadata Include="SyncApiBaseUrl" Value="$(SyncApiBaseUrl)" />
+  <ItemGroup Condition="'$(SyncServerSuggestion)' != ''">
+    <AssemblyMetadata Include="SyncServerSuggestion" Value="$(SyncServerSuggestion)" />
   </ItemGroup>
 
   <ItemGroup>

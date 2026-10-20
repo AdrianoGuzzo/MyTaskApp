@@ -97,7 +97,7 @@ public sealed class MobileCompositionTests : IAsyncLifetime
     {
         await using var local = await MobileHarness.CreateAsync(serverUrl: null);
 
-        local.Get<ISyncAccount>().IsAvailable.Should().BeFalse("o teste não grava servidor na build");
+        local.Get<ISyncAccount>().IsAvailable.Should().BeFalse("celular novo: nenhum servidor salvo, e nenhum vem da build (ADR-078)");
     }
 
     [Fact]

@@ -28,6 +28,8 @@ internal sealed class RecordingNavigator : INavigator
 
     public Task OpenConnectAsync() => Record("connect");
 
+    public Task OpenServerAsync() => Record("server");
+
     public Task OpenTasksAsync() => Record("tasks");
 
     public Task OpenAccountAsync() => Record("account");

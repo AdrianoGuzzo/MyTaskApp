@@ -26,12 +26,25 @@ namespace MyTaskApp.Desktop.Composition;
 internal static class AppServices
 {
     /// <summary>
+    /// O que só o desenvolvimento liga, por baixo dos dois arquivos: a build
+    /// Debug aceita o servidor de sincronização local em <c>http://localhost</c>
+    /// (ADR-078). Na Release, só com <c>Sync:AllowHttpLoopback</c> explícito.
+    /// </summary>
+    private static readonly Dictionary<string, string?> DevelopmentDefaults =
+#if DEBUG
+        new() { ["Sync:AllowHttpLoopback"] = "true" };
+#else
+        [];
+#endif
+
+    /// <summary>
     /// Duas camadas, e a ordem é a decisão: o arquivo da instalação é
     /// sobrescrito a cada atualização, então o que o usuário ajustou à mão tem
     /// de morar fora do diretório de instalação para sobreviver (ADR-018).
     /// </summary>
     public static IConfiguration BuildConfiguration() =>
         new ConfigurationBuilder()
+            .AddInMemoryCollection(DevelopmentDefaults)
             .SetBasePath(AppContext.BaseDirectory)
             .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
             .AddJsonFile(

@@ -319,12 +319,13 @@ public static class DependencyInjection
     /// </summary>
     private static void AddSyncClient(IServiceCollection services, IConfiguration configuration)
     {
-        var options = SyncOptions.FromBuild();
+        // Nenhum endereço embutido na build (ADR-078): só a configuração, e o celular por cima, pela tela.
+        var options = new SyncOptions();
         configuration.GetSection(SyncOptions.SectionName).Bind(options);
         services.AddSingleton(options);
 
         services.AddSingleton(provider => new SyncHttp(
-            CreateJiraHttpClient(),
+            CreateJiraHttpClient(allowRedirects: false),
             options,
             provider.GetRequiredService<TimeProvider>(),
             provider.GetRequiredService<ILogger<SyncHttp>>()));
@@ -332,11 +333,13 @@ public static class DependencyInjection
         services.AddSingleton<SyncAuthenticationService>();
         services.AddSingleton<ISyncAuthenticator>(provider => provider.GetRequiredService<SyncAuthenticationService>());
         services.AddSingleton<ISyncApi, SyncApiClient>();
+        services.AddSingleton<ISyncServerAddress, SyncServerAddress>();
+        services.AddSingleton<ISyncServerProbe, SyncServerProbe>();
     }
 
-    private static HttpClient CreateJiraHttpClient()
+    private static HttpClient CreateJiraHttpClient(bool allowRedirects = true)
     {
-        var client = new HttpClient(new SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.FromMinutes(5) })
+        var client = new HttpClient(new SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.FromMinutes(5), AllowAutoRedirect = allowRedirects })
         {
             // O limite é por chamada, em JiraHttp, e distingue timeout de cancelamento.
             Timeout = Timeout.InfiniteTimeSpan,

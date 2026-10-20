@@ -373,6 +373,13 @@ app continua inteiro, só local. O guia está em [`docs/sync.md`](docs/sync.md),
 o servidor em [`docs/sync-server.md`](docs/sync-server.md), e as decisões no
 [ADR-061 e no ADR-062](docs/ARCHITECTURE.md).
 
+- **O servidor é seu.** Nenhuma build traz servidor embutido nem aponta para a
+  infraestrutura de alguém ([ADR-078](docs/ARCHITECTURE.md)). Você sobe a sua
+  instância ([`docs/sync-server.md`](docs/sync-server.md)) e informa o endereço:
+  no desktop, em `Sync:ApiBaseUrl` do `appsettings.user.json`
+  ([Configuração](#configuração)); no celular, em *Conta → Configurar servidor*.
+  Sem servidor, o app funciona inteiro, offline.
+
 - **Cada computador com a sua lista.** A tarefa aparece só onde foi criada.
   "Onde aparece…" compartilha com todos ou manda para outro computador, e a
   caixa de captura escolhe o destino na hora ("estou no trabalho e anoto para
@@ -410,6 +417,10 @@ O app do celular é mais um dispositivo da mesma sincronização
 - criar, editar, concluir, reabrir, arquivar e mandar para a lixeira, pelas
   mesmas regras do desktop;
 - funciona sem rede, mostra o que está pendente e sobe quando a conexão volta;
+- abre sem pedir servidor nem login: sem servidor, as tarefas ficam só no
+  celular. Em *Conta → Configurar servidor*, você informa o endereço da sua
+  instância, testa a conexão, salva, troca ou tira — trocar avisa antes, sai da
+  conta no servidor antigo e não apaga tarefa ([ADR-078](docs/ARCHITECTURE.md));
 - entra com a mesma conta Google; o refresh token fica no Keystore/Keychain.
 
 ---
@@ -541,7 +552,8 @@ mudar algum deles sem editar o diretório de instalação, crie um
 | `Jira:CallbackPort` | 47832 | porta da volta do login do Jira; precisa ser a registrada no app OAuth |
 | `Jira:RequestTimeoutSeconds` | 8 | quanto uma chamada ao Jira espera antes de desistir |
 | `Jira:ClientId` / `ClientSecret` | do build | o app OAuth da Atlassian ([como registrar](docs/jira-oauth-app.md)) |
-| `Sync:ApiBaseUrl` | do build | o servidor de sincronização; HTTPS, ou HTTP só no loopback. Vazio = sem sincronização ([servidor](docs/sync-server.md)) |
+| `Sync:ApiBaseUrl` | vazio | o seu servidor de sincronização, com `https://`. Vazio = sem sincronização, tudo local. Nenhuma build traz um ([servidor](docs/sync-server.md), ADR-078) |
+| `Sync:AllowHttpLoopback` | `false` (`true` na build Debug) | aceita `http://localhost` / `http://127.0.0.1` em `Sync:ApiBaseUrl`, para o servidor de desenvolvimento; HTTP pela rede nunca é aceito |
 | `Sync:CallbackPort` | 0 | porta da volta do login da sincronização; 0 = uma porta efêmera por login, aceita pelo servidor em qualquer número no `127.0.0.1` (ADR-074) |
 | `DatabaseOperations:*` | ver o guia | tempos limite e pasta das cópias de banco ([detalhes](docs/database-operations.md#configuração)) |
 
@@ -830,7 +842,7 @@ fica em [`CHANGELOG.md`](CHANGELOG.md).
 
 | Documento | Conteúdo |
 |---|---|
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | decisões de arquitetura (ADR-001 a ADR-072), com o motivo de cada uma |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | decisões de arquitetura (ADR-001 a ADR-078), com o motivo de cada uma |
 | [`docs/sync.md`](docs/sync.md) | sincronização entre computadores: a tela, o que sincroniza, onde cada tarefa aparece, conflitos e limitações |
 | [`docs/sync-server.md`](docs/sync-server.md) | o servidor de sincronização: cliente OAuth do Google, configuração, migrations, implantação e testes |
 | [`docs/mobile.md`](docs/mobile.md) | o app do celular: arquitetura, login, sincronização, ambiente, rodar no Android, o que falta no iOS, testes e limitações |

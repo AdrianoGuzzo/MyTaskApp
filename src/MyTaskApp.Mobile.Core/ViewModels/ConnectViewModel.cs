@@ -34,7 +34,7 @@ public sealed partial class ConnectViewModel(
     IDialogService dialogs,
     ILogger<ConnectViewModel> logger) : MobileViewModel(dialogs, logger)
 {
-    public const string NoServer = "Esta versão do app não tem servidor de sincronização configurado. As tarefas ficam só neste celular.";
+    public const string NoServer = "Nenhum servidor de sincronização configurado. As tarefas ficam só neste celular; configure um servidor para sincronizar.";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsWorking), nameof(CanSignIn))]
@@ -113,6 +113,9 @@ public sealed partial class ConnectViewModel(
 
     [RelayCommand]
     public Task SkipAsync() => navigator.OpenTasksAsync();
+
+    [RelayCommand]
+    public Task OpenServerAsync() => navigator.OpenServerAsync();
 
     private void Fail(string message)
     {

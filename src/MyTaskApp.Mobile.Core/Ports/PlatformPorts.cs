@@ -20,6 +20,9 @@ public interface INavigator
 
     Task OpenConnectAsync();
 
+    /// <summary>A tela do servidor de sincronização (ADR-078).</summary>
+    Task OpenServerAsync();
+
     Task OpenTasksAsync();
 
     Task OpenAccountAsync();

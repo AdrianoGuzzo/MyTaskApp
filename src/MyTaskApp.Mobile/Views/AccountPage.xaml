@@ -23,7 +23,6 @@
                     <Label Text="Conta" Style="{StaticResource Section}" />
                     <Label Text="{Binding UserName}" FontAttributes="Bold" />
                     <Label Text="{Binding UserEmail}" Style="{StaticResource Muted}" />
-                    <Label Text="{Binding Server, StringFormat='Servidor: {0}'}" Style="{StaticResource Muted}" />
 
                     <Button Text="Sincronizar agora" Command="{Binding SyncNowCommand}" Margin="0,8,0,0" />
                     <Button Text="Pausar a sincronização" Style="{StaticResource Secondary}" Command="{Binding TogglePauseCommand}" IsVisible="{Binding IsPaused, Converter={StaticResource Not}}" />
@@ -35,9 +34,21 @@
                     <Button Text="Entrar com sua conta" Command="{Binding ConnectCommand}" />
                 </VerticalStackLayout>
 
-                <Label Text="Não há servidor de sincronização nesta versão: as tarefas ficam só neste celular."
-                       Style="{StaticResource Muted}"
-                       IsVisible="{Binding IsAvailable, Converter={StaticResource Not}}" />
+                <!-- Sem servidor (ADR-078): o app é inteiro, só neste celular; configurar é opcional. -->
+                <Border Style="{StaticResource Card}" IsVisible="{Binding IsAvailable, Converter={StaticResource Not}}">
+                    <VerticalStackLayout Spacing="8">
+                        <Label Text="Sincronização desativada" FontAttributes="Bold" />
+                        <Label Text="As tarefas ficam só neste celular, e tudo funciona sem internet. Para usar as mesmas tarefas em outros dispositivos, configure o seu servidor de sincronização."
+                               Style="{StaticResource Muted}" />
+                        <Button Text="Configurar servidor" Command="{Binding OpenServerCommand}" />
+                    </VerticalStackLayout>
+                </Border>
+
+                <Label Text="Servidor de sincronização" Style="{StaticResource Section}" IsVisible="{Binding IsAvailable}" />
+                <Button Text="{Binding Server, StringFormat='{0}  ›'}"
+                        Style="{StaticResource Secondary}"
+                        Command="{Binding OpenServerCommand}"
+                        IsVisible="{Binding IsAvailable}" />
 
                 <!-- Conflitos: o valor deste celular perdeu para o servidor. -->
                 <Label Text="Conflitos" Style="{StaticResource Section}" IsVisible="{Binding HasConflicts}" />

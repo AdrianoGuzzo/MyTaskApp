@@ -61,7 +61,7 @@ public sealed class AppLinkSyncLoginTests : IDisposable
         exchange["client_id"].Should().Be(SyncSchema.MobileClientId);
         exchange["redirect_uri"].Should().Be(SyncSchema.MobileRedirectUri);
         exchange["code"].Should().Be("codigo-do-app");
-        _secrets.Secrets[SyncOptions.SecretName].Should().Be("refresh-login");
+        _secrets.Secrets[SyncOptions.SecretName].Should().Be("https://sync.exemplo.com/ refresh-login", "o refresh fica amarrado ao servidor que o emitiu (ADR-078)");
 
         // Vencido o access, a renovação também é do cliente do celular.
         _clock.Advance(TimeSpan.FromSeconds(5));
@@ -153,7 +153,7 @@ public sealed class AppLinkSyncLoginTests : IDisposable
             ["code"] = "codigo",
         });
         await second.Completion.WaitAsync(TimeSpan.FromSeconds(10), Ct);
-        _secrets.Secrets[SyncOptions.SecretName].Should().Be("r");
+        _secrets.Secrets[SyncOptions.SecretName].Should().Be("https://sync.exemplo.com/ r");
     }
 
     [Fact]

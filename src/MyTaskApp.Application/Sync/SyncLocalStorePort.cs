@@ -35,7 +35,8 @@ public sealed record SyncLocalState(
     string? LastErrorCode,
     string? LastError,
     DateTimeOffset? LastErrorAt,
-    bool HasKnownEntities = false)
+    bool HasKnownEntities = false,
+    Uri? Server = null)
 {
     public static SyncLocalState Unlinked { get; } =
         new(SyncLinkState.Unlinked, false, null, null, null, null, null, string.Empty, 0, null, null, null, null, null, null);
@@ -100,13 +101,21 @@ public interface ISyncLocalStore
     Task<SyncLocalState> ReadAsync(CancellationToken cancellationToken);
 
     /// <summary>
-    /// Liga a instalação à conta. Outra conta ou outro workspace que não o de
-    /// antes: o que a sincronização sabia é esquecido — os dados locais ficam.
+    /// Liga a instalação à conta. Outra conta, outro workspace ou outro
+    /// servidor que não o de antes: o que a sincronização sabia é esquecido —
+    /// os dados locais ficam.
     /// </summary>
     Task LinkAsync(SyncAccountLink link, CancellationToken cancellationToken);
 
     /// <summary>Desliga a captura. Os dados, o outbox e os estados ficam para reconectar à mesma conta.</summary>
     Task UnlinkAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Troca de servidor (ADR-078): desliga e esquece tudo o que era do
+    /// servidor anterior — outbox, versões, conflitos, cursor e o endereço.
+    /// As tarefas ficam; ao entrar no próximo, sobem como novas.
+    /// </summary>
+    Task ForgetServerAsync(CancellationToken cancellationToken);
 
     Task SetStateAsync(SyncLinkState state, CancellationToken cancellationToken);
 

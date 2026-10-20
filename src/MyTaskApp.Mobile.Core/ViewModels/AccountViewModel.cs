@@ -37,8 +37,10 @@ public sealed partial class AccountViewModel : MobileViewModel, IDisposable
 
     private readonly TimeProvider _time;
 
+    private readonly ISyncServerAddress _address;
+
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsLinked), nameof(CanConnect), nameof(IsPaused), nameof(UserName), nameof(UserEmail), nameof(LastSync), nameof(Counts))]
+    [NotifyPropertyChangedFor(nameof(IsLinked), nameof(CanConnect), nameof(IsPaused), nameof(UserName), nameof(UserEmail), nameof(LastSync), nameof(Counts), nameof(IsAvailable), nameof(Server))]
     private SyncStatusView? _status;
 
     [ObservableProperty]
@@ -54,11 +56,13 @@ public sealed partial class AccountViewModel : MobileViewModel, IDisposable
         IUiDispatcher dispatcher,
         INavigator navigator,
         IThemeService themes,
+        ISyncServerAddress address,
         IDialogService dialogs,
         TimeProvider time,
         ILogger<AccountViewModel> logger)
         : base(dialogs, logger)
     {
+        _address = address;
         _runner = runner;
         _account = account;
         _scheduler = scheduler;
@@ -83,6 +87,9 @@ public sealed partial class AccountViewModel : MobileViewModel, IDisposable
         _scheduler.CycleStarted += OnCycleChanged;
         _scheduler.ChangeQueued += OnCycleChanged;
         _scheduler.CycleCompleted += OnCycleCompleted;
+
+        // Salvo, trocado ou tirado na tela do servidor, ou adotado na abertura (ADR-078).
+        _address.Changed += OnServerChanged;
     }
 
     /// <summary>"Automático" primeiro, depois os temas na ordem do desktop.</summary>
@@ -156,6 +163,9 @@ public sealed partial class AccountViewModel : MobileViewModel, IDisposable
 
     [RelayCommand]
     public Task ConnectAsync() => _navigator.OpenConnectAsync();
+
+    [RelayCommand]
+    public Task OpenServerAsync() => _navigator.OpenServerAsync();
 
     /// <summary>O tema vale ao tocar, sem botão de salvar: a tela já mostra como ficou.</summary>
     [RelayCommand]
@@ -261,6 +271,7 @@ public sealed partial class AccountViewModel : MobileViewModel, IDisposable
         _scheduler.CycleStarted -= OnCycleChanged;
         _scheduler.ChangeQueued -= OnCycleChanged;
         _scheduler.CycleCompleted -= OnCycleCompleted;
+        _address.Changed -= OnServerChanged;
     }
 
     private void MarkTheme()
@@ -370,4 +381,12 @@ public sealed partial class AccountViewModel : MobileViewModel, IDisposable
     private void OnCycleChanged() => _dispatcher.Post(() => _ = LoadLocalAsync());
 
     private void OnCycleCompleted(SyncCycleResult result) => _dispatcher.Post(() => _ = LoadLocalAsync());
+
+    private void OnServerChanged() => _dispatcher.Post(() =>
+    {
+        OnPropertyChanged(nameof(IsAvailable));
+        OnPropertyChanged(nameof(Server));
+        OnPropertyChanged(nameof(CanConnect));
+        _ = LoadLocalAsync();
+    });
 }

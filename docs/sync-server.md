@@ -5,8 +5,60 @@ contas pelo Google, OAuth do desktop pelo OpenIddict, e a API `/api/v1`. A
 decisão está no [ADR-061](ARCHITECTURE.md), e a publicação em Production
 atrás de TLS, no ADR-070.
 
-Quem usa o app não precisa disto. Este guia é para quem publica o servidor, ou
-para quem desenvolve a sincronização.
+Quem usa o app só local não precisa disto. Este guia é para quem publica o
+servidor (o seu, para você e quem você autorizar), ou para quem desenvolve a
+sincronização.
+
+**Não existe servidor padrão** ([ADR-078](ARCHITECTURE.md)). Nenhuma build do
+desktop ou do celular traz endereço embutido, e o projeto não mantém uma
+instância compartilhada. Cada pessoa sobe a sua e aponta os apps para ela.
+
+## Sua instância
+
+**Requisitos mínimos:**
+
+- um host com Docker (ou qualquer lugar que rode a imagem da API) e um
+  PostgreSQL 17 (o compose de produção já traz os dois, §5);
+- um nome de domínio e um certificado TLS válido, emitido por uma autoridade
+  que o sistema do celular e do computador aceitem. Os apps validam o
+  certificado e não aceitam autoassinado nem HTTP pela rede. O Caddy do
+  compose obtém o certificado sozinho;
+- um cliente OAuth no Google Cloud (§1) e a lista de quem pode entrar
+  (§2, ADR-068);
+- `Sync__Issuer` igual ao endereço público (§2). É esse endereço que vai nos
+  apps;
+- para o celular, o redirect `io.github.adrianoguzzo.mytaskapp://oauth/callback`
+  em `Sync__MobileRedirectUris` (é o padrão; só mude se distribuir o app com
+  outro esquema).
+
+**Conectar os apps:**
+
+| App | Onde vai o endereço |
+|---|---|
+| Desktop | `Sync:ApiBaseUrl` no `appsettings.user.json` (pasta de dados do usuário, veja o README). Reabra o app e conecte em *☰ → Sincronização…* |
+| Celular | *Conta → Configurar servidor*: informe, teste, salve e entre ([mobile.md](mobile.md#servidor-de-sincronização)) |
+
+**Testar a conectividade.** O que o "Testar conexão" do celular faz, à mão:
+
+```bash
+curl -fsS https://sync.seudominio.com/health                            # {"status":"ok"}
+curl -fsS https://sync.seudominio.com/.well-known/openid-configuration  # o issuer e o authorization_endpoint
+```
+
+O `authorization_endpoint` do discovery deve estar no mesmo host que você vai
+pôr nos apps. Se estiver em outro, o `Sync__Issuer` não é o endereço público.
+Um `3xx` também é problema: os apps não seguem redirecionamento, para o token
+não ir para outro endereço; use o endereço final.
+
+**Trocar de servidor com segurança.** No celular, a tela do servidor pergunta
+antes, sai da conta no servidor antigo, esquece o estado da sincronização dele
+e não envia nada ao novo até você entrar nele. As tarefas ficam
+([mobile.md](mobile.md#servidor-de-sincronização)). No desktop, troque o
+`Sync:ApiBaseUrl` e reabra: o app percebe que a conta é de outro servidor, para
+a sincronização com "O servidor mudou: entre de novo" e só volta depois de
+conectar no novo, que é tratado como outra conta (ADR-078). Para sair da conta
+no servidor antigo antes, desconecte em *☰ → Sincronização…* ainda apontado
+para ele.
 
 ## Projetos
 
@@ -390,9 +442,10 @@ para `0.0.0.0`.
 
 ### Apontar o desktop para o servidor local
 
-O endereço do servidor vem do build (`-p:SyncApiBaseUrl=…`) e pode ser
-sobreposto pela seção `Sync` do `appsettings.user.json`. HTTP só é aceito no
-loopback, e em qualquer outro endereço o app exige HTTPS.
+O endereço do servidor vem da seção `Sync` do `appsettings.user.json`; nenhuma
+build traz um (ADR-078). Em qualquer endereço de rede o app exige HTTPS. HTTP
+só vale no loopback e só no desenvolvimento: a build Debug aceita sozinha; uma
+build Release só com `"AllowHttpLoopback": true` explícito.
 
 Para simular dois "computadores" na mesma máquina, use duas pastas de dados.
 Cada uma tem seu banco, seu cofre e seu `device.json`, e portanto um DeviceId
@@ -402,7 +455,7 @@ próprio:
 $a = "$env:TEMP\mytaskapp-a"; $b = "$env:TEMP\mytaskapp-b"
 foreach ($dir in $a, $b) {
   New-Item -ItemType Directory -Force $dir | Out-Null
-  '{ "Sync": { "ApiBaseUrl": "http://localhost:5280/" } }' | Set-Content -Encoding utf8 "$dir\appsettings.user.json"
+  '{ "Sync": { "ApiBaseUrl": "http://localhost:5280/", "AllowHttpLoopback": true } }' | Set-Content -Encoding utf8 "$dir\appsettings.user.json"
 }
 
 $env:MYTASKAPP_DATA_DIR = $a; dotnet run --project src/MyTaskApp.Desktop
@@ -722,16 +775,13 @@ SELECT count(*) FILTER (WHERE NOT "IsDeleted") AS vivas, sum("DataBytes") AS byt
 FROM "SyncEntities" WHERE "WorkspaceId" = '…';
 ```
 
-### O desktop de release
+### Distribuir os apps
 
-O build do desktop recebe o endereço público:
-
-```powershell
-dotnet publish src/MyTaskApp.Desktop -c Release -p:SyncApiBaseUrl=https://sync.exemplo.com/
-```
-
-Sem a propriedade, o app de release não oferece sincronização. A janela diz
-"indisponível nesta versão", e o resto funciona igual.
+Os instaladores e o APK não levam endereço de servidor (ADR-078): o mesmo
+build serve para qualquer pessoa, e distribuir o app não depende da
+infraestrutura de ninguém. Quem instala aponta para o próprio servidor
+([Sua instância](#sua-instância)). Sem servidor, a janela da sincronização diz
+"Sem servidor configurado", e o resto funciona igual.
 
 ### Backup e restauração
 

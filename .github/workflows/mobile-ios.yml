@@ -112,29 +112,17 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "Versão $version, commit $(git rev-parse HEAD)"
 
-      # O servidor fica gravado no app, e o build Release recusa HTTP.
-      - name: Conferir o endereço do servidor
-        env:
-          SYNC_API_BASE_URL: ${{ vars.SYNC_API_BASE_URL }}
-        run: |
-          if [[ "$SYNC_API_BASE_URL" != https://* ]]; then
-            echo "::error::A variável SYNC_API_BASE_URL está vazia ou não é https://. Cadastre-a em Settings → Secrets and variables → Actions → Variables (docs/mobile.md)."
-            exit 1
-          fi
-
+      # Nenhum servidor vai na build (ADR-078): o usuário configura o seu no app.
       - name: Instalar o workload do iOS
         run: dotnet workload install maui-ios --version "$IOS_WORKLOAD_SET"
 
       - name: Compilar para o aparelho, sem assinatura
-        env:
-          SYNC_API_BASE_URL: ${{ vars.SYNC_API_BASE_URL }}
         run: >
           dotnet publish src/MyTaskApp.Mobile/MyTaskApp.Mobile.csproj
           -f net10.0-ios -c Release
           -p:IncludeAndroid=false
           -p:RuntimeIdentifier=ios-arm64
           -p:EnableCodeSigning=false
-          -p:SyncApiBaseUrl="$SYNC_API_BASE_URL"
 
       # Um .ipa é só um zip com Payload/<app>.app. Se o publish já o gerou, ele
       # vai como está; senão, o .app é empacotado aqui. O ditto preserva os

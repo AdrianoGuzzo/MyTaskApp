@@ -59,7 +59,8 @@ internal sealed class SyncLocalStore(
             row.LastErrorCode,
             row.LastError,
             row.LastErrorAt,
-            await context.SyncEntityStates.AnyAsync(cancellationToken));
+            await context.SyncEntityStates.AnyAsync(cancellationToken),
+            Uri.TryCreate(row.ServerBaseUrl, UriKind.Absolute, out var server) ? server : null);
     }
 
     public async Task LinkAsync(SyncAccountLink link, CancellationToken cancellationToken)
@@ -72,18 +73,19 @@ internal sealed class SyncLocalStore(
         var row = await RowAsync(cancellationToken);
         var otherAccount = row.UserId is { } previousUser && (previousUser != link.UserId || row.WorkspaceId != link.WorkspaceId);
 
-        if (otherAccount)
+        // Os ids de conta são do servidor que os emitiu: o mesmo id em outro servidor não é a mesma conta (ADR-078).
+        var otherServer = row.ServerBaseUrl is { } previousServer
+            && !SyncServerUrl.SameServer(Uri.TryCreate(previousServer, UriKind.Absolute, out var previous) ? previous : null, link.Server);
+
+        if (otherAccount || otherServer)
         {
             // Outra conta: o que a sincronização sabia é da conta anterior. Os dados locais ficam e sobem como novos.
-            await context.SyncOutbox.ExecuteDeleteAsync(cancellationToken);
-            await context.SyncEntityStates.ExecuteDeleteAsync(cancellationToken);
-            await context.SyncConflicts.ExecuteDeleteAsync(cancellationToken);
-            row.Cursor = string.Empty;
-            logger.LogInformation("SyncLinkedToAnotherAccount");
+            await ForgetSyncedStateAsync(row, cancellationToken);
+            logger.LogInformation(otherServer ? "SyncLinkedToAnotherServer" : "SyncLinkedToAnotherAccount");
         }
 
         // Desconectado, nada foi capturado: a volta refaz a varredura e o pull completo.
-        if (otherAccount || row.Status == SyncLinkStatus.Unlinked)
+        if (otherAccount || otherServer || row.Status == SyncLinkStatus.Unlinked)
         {
             row.ClientSchemaVersion = 0;
         }
@@ -131,6 +133,43 @@ internal sealed class SyncLocalStore(
 
         await SaveAsync(cancellationToken);
         captureSwitch.Set(false);
+    }
+
+    public async Task ForgetServerAsync(CancellationToken cancellationToken)
+    {
+        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+
+        var row = await RowAsync(cancellationToken);
+        var pending = await context.SyncOutbox.CountAsync(cancellationToken);
+
+        await ForgetSyncedStateAsync(row, cancellationToken);
+
+        // A conta e o workspace são ids daquele servidor. O id deste aparelho e os apelidos ficam: o "onde aparece" das tarefas usa (ADR-062).
+        row.ServerBaseUrl = null;
+        row.UserId = null;
+        row.UserDisplayName = null;
+        row.UserEmail = null;
+        row.WorkspaceId = null;
+        row.ClientSchemaVersion = 0;
+        row.Status = SyncLinkStatus.Unlinked;
+        row.IsEnabled = false;
+        ClearError(row);
+
+        await SaveAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        captureSwitch.Set(false);
+
+        // As tarefas ficam: ao entrar no próximo servidor, a varredura as manda como novas.
+        logger.LogInformation("SyncServerStateForgotten {PendingOperations}", pending);
+    }
+
+    /// <summary>O que a sincronização sabia de uma conta num servidor. Nenhum dado do usuário.</summary>
+    private async Task ForgetSyncedStateAsync(SyncStateRow row, CancellationToken cancellationToken)
+    {
+        await context.SyncOutbox.ExecuteDeleteAsync(cancellationToken);
+        await context.SyncEntityStates.ExecuteDeleteAsync(cancellationToken);
+        await context.SyncConflicts.ExecuteDeleteAsync(cancellationToken);
+        row.Cursor = string.Empty;
     }
 
     public async Task SetStateAsync(SyncLinkState state, CancellationToken cancellationToken)

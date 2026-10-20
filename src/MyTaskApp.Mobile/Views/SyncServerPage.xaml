@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:MyTaskApp.Mobile.Core.ViewModels;assembly=MyTaskApp.Mobile.Core"
+             x:Class="MyTaskApp.Mobile.Views.SyncServerPage"
+             x:DataType="vm:SyncServerViewModel"
+             Title="Servidor de sincronização">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="16" Spacing="10">
+
+            <Border Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="4">
+                    <Label Text="{Binding StateText}" FontAttributes="Bold" />
+                    <Label Text="{Binding CurrentText, StringFormat='Servidor atual: {0}'}" Style="{StaticResource Muted}" />
+                    <Label Text="{Binding LastSync}" Style="{StaticResource Muted}" IsVisible="{Binding HasServer}" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Label Text="Endereço" Style="{StaticResource Section}" />
+            <Label Text="O endereço da sua instância do servidor do MyTaskApp, com https://. Sem servidor, tudo funciona só neste celular."
+                   Style="{StaticResource Muted}" />
+            <Entry Text="{Binding Url}"
+                   Placeholder="https://sync.seudominio.com/"
+                   Keyboard="Url"
+                   IsSpellCheckEnabled="False"
+                   IsTextPredictionEnabled="False"
+                   AutomationId="ServerUrl" />
+            <Label Text="{Binding UrlError}"
+                   Style="{StaticResource Error}"
+                   IsVisible="{Binding UrlError, Converter={StaticResource HasValue}}" />
+
+            <Button Text="Testar conexão"
+                    Style="{StaticResource Secondary}"
+                    Command="{Binding TestCommand}"
+                    IsEnabled="{Binding IsTesting, Converter={StaticResource Not}}" />
+            <ActivityIndicator IsRunning="{Binding IsTesting}" IsVisible="{Binding IsTesting}" />
+            <Label Text="{Binding ProbeText}" IsVisible="{Binding ProbeSucceeded}" />
+            <Label Text="{Binding ProbeText}" Style="{StaticResource Error}" IsVisible="{Binding ProbeFailed}" />
+
+            <Button Text="Salvar"
+                    Command="{Binding SaveCommand}"
+                    IsEnabled="{Binding IsChanged}"
+                    Margin="0,8,0,0" />
+
+            <Button Text="Entrar com sua conta" Command="{Binding ConnectCommand}" IsVisible="{Binding CanConnect}" />
+
+            <Button Text="Tirar o servidor"
+                    Style="{StaticResource Destructive}"
+                    Command="{Binding RemoveCommand}"
+                    IsVisible="{Binding HasServer}"
+                    Margin="0,16,0,0" />
+
+            <Label Text="Trocar ou tirar o servidor não apaga tarefas. Nada é enviado a um servidor novo antes de você entrar nele com sua conta."
+                   Style="{StaticResource Muted}" />
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>
