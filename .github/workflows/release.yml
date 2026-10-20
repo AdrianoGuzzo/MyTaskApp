@@ -182,17 +182,12 @@ jobs:
       # vazio; nenhum valor vai para o log.
       - name: Conferir a configuração do Android
         env:
-          SYNC_API_BASE_URL: ${{ vars.SYNC_API_BASE_URL }}
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          # O servidor fica gravado no app, e o build Release recusa HTTP.
-          if [[ "$SYNC_API_BASE_URL" != https://* ]]; then
-            echo "::error::A variável SYNC_API_BASE_URL está vazia ou não é https://. Cadastre-a em Settings → Secrets and variables → Actions → Variables (docs/mobile.md)."
-            exit 1
-          fi
+          # Nenhum servidor vai na build (ADR-078): o usuário configura o seu no app.
           missing=()
           for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEY_ALIAS ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_PASSWORD; do
             [ -n "${!name}" ] || missing+=("$name")
@@ -218,7 +213,6 @@ jobs:
       # ambiente, e elas não aparecem na linha de comando nem no log.
       - name: Gerar o APK
         env:
-          SYNC_API_BASE_URL: ${{ vars.SYNC_API_BASE_URL }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
@@ -226,7 +220,6 @@ jobs:
           dotnet publish src/MyTaskApp.Mobile/MyTaskApp.Mobile.csproj
           -f net10.0-android -c Release
           -p:AndroidPackageFormats=apk
-          -p:SyncApiBaseUrl="$SYNC_API_BASE_URL"
           -p:AndroidKeyStore=true
           -p:AndroidSigningKeyStore="$RUNNER_TEMP/mytaskapp.jks"
           -p:AndroidSigningKeyAlias="$ANDROID_KEY_ALIAS"

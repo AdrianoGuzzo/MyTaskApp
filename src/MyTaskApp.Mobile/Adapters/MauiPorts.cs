@@ -89,6 +89,8 @@ internal sealed class ShellNavigator : INavigator
 
     public const string Connect = "connect";
 
+    public const string Server = "server";
+
     public Task OpenTaskAsync(Guid taskId) => GoAsync($"{Task}?id={taskId:D}");
 
     public Task NewTaskAsync() => GoAsync(TaskForm);
@@ -98,6 +100,8 @@ internal sealed class ShellNavigator : INavigator
     public Task OpenFiltersAsync(bool history = false) => GoAsync(history ? $"{Filters}?for=history" : Filters);
 
     public Task OpenConnectAsync() => GoAsync(Connect);
+
+    public Task OpenServerAsync() => GoAsync(Server);
 
     /// <summary>
     /// Para a lista, deixando a aba de onde se veio na raiz: depois de entrar

@@ -12,7 +12,8 @@ namespace MyTaskApp.Infrastructure.Sync.Http;
 /// <summary>
 /// O único lugar que fala HTTP com o servidor de sincronização (ADR-061).
 /// Uma linha de log por chamada: método, caminho (sem a query), status e
-/// tempo. Nunca cabeçalho, corpo, código de autorização nem token.
+/// tempo. Nunca cabeçalho, corpo, código de autorização nem token. Não segue
+/// redirecionamento (ADR-078): um 3xx é erro, e o Bearer fica onde estava.
 /// </summary>
 /// <remarks>
 /// O <c>HttpClient</c> é cru, sem o <c>IHttpClientFactory</c>, pelo mesmo
@@ -21,6 +22,9 @@ namespace MyTaskApp.Infrastructure.Sync.Http;
 /// </remarks>
 internal sealed class SyncHttp(HttpClient client, SyncOptions options, TimeProvider timeProvider, ILogger<SyncHttp> logger)
 {
+    /// <summary>O mesmo cliente, sem redirecionamento, para o "Testar conexão" (<see cref="SyncServerProbe"/>).</summary>
+    public HttpClient Client => client;
+
     public async Task<T> SendAsync<T>(
         HttpMethod method,
         string path,
@@ -73,8 +77,12 @@ internal sealed class SyncHttp(HttpClient client, SyncOptions options, TimeProvi
         };
     }
 
+    public const string RedirectMessage = "O servidor redirecionou para outro endereço. Configure o endereço final do servidor.";
+
+    public static bool IsRedirect(HttpStatusCode status) => (int)status is >= 300 and < 400;
+
     private Uri Resolve(string path) =>
-        new(options.BaseUri ?? throw new SyncApiException(SyncFailureKind.Rejected, "Sincronização não configurada nesta build."), path.TrimStart('/'));
+        new(options.BaseUri ?? throw new SyncApiException(SyncFailureKind.Rejected, "Nenhum servidor de sincronização configurado."), path.TrimStart('/'));
 
     private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
@@ -93,6 +101,13 @@ internal sealed class SyncHttp(HttpClient client, SyncOptions options, TimeProvi
                 request.RequestUri!.AbsolutePath,
                 (int)response.StatusCode,
                 Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+
+            if (IsRedirect(response.StatusCode))
+            {
+                // O cliente não segue redirecionamento (ADR-078): o token e o formulário não vão para outro endereço.
+                response.Dispose();
+                throw new SyncApiException(SyncFailureKind.Rejected, RedirectMessage);
+            }
 
             return response;
         }

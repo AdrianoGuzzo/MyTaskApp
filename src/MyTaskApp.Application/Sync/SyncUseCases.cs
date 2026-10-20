@@ -19,6 +19,13 @@ public interface ISyncAccount
 
     Task DisconnectAsync(CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Troca o servidor, ou tira (<paramref name="server"/> nulo) (ADR-078).
+    /// Com uma conta de outro servidor, sai dela lá e esquece o que era de
+    /// lá; nada vai para o novo antes de entrar nele. As tarefas ficam.
+    /// </summary>
+    Task SwitchServerAsync(Uri? server, CancellationToken cancellationToken);
+
     Task SetEnabledAsync(bool enabled, CancellationToken cancellationToken);
 
     void SyncNow();
@@ -42,6 +49,7 @@ public sealed class SyncAccountService(
     IDeviceIdentity device,
     SyncScheduler scheduler,
     SyncDeviceDirectory directory,
+    ISyncServerAddress address,
     ILogger<SyncAccountService> logger) : ISyncAccount
 {
     public bool IsAvailable => authenticator.IsAvailable;
@@ -113,6 +121,34 @@ public sealed class SyncAccountService(
         logger.LogInformation("SyncDisconnected");
 
         // Um ciclo ocioso, sem rede: só para o indicador do cabeçalho reler o estado (ADR-063).
+        scheduler.RequestNow();
+    }
+
+    public async Task SwitchServerAsync(Uri? server, CancellationToken cancellationToken)
+    {
+        if (server is not null && !SyncServerUrl.Check(server.AbsoluteUri, address.AllowHttpLoopback).IsValid)
+        {
+            throw new DomainException("Endereço de servidor inválido.");
+        }
+
+        // Nenhum ciclo no meio: um pull terminando depois gravaria o cursor do servidor antigo.
+        await scheduler.RunPausedAsync(async () =>
+        {
+            var state = await ReadAsync(cancellationToken);
+            var hadServer = state.Server is not null || await authenticator.HasCredentialsAsync(cancellationToken);
+
+            if (hadServer && !SyncServerUrl.SameServer(state.Server, server))
+            {
+                // Sai no servidor antigo enquanto o endereço ainda é dele: a revogação nunca vai para o novo.
+                await authenticator.SignOutAsync(cancellationToken);
+                await runner.RunAsync<ISyncLocalStore>((store, token) => store.ForgetServerAsync(token), cancellationToken);
+                logger.LogInformation("SyncServerForgotten");
+            }
+
+            address.Set(server);
+            logger.LogInformation("SyncServerChanged {Configured}", server is not null);
+        });
+
         scheduler.RequestNow();
     }
 

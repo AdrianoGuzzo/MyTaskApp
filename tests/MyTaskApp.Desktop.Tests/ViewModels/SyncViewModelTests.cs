@@ -88,7 +88,7 @@ public class SyncViewModelTests
 
         viewModel.IsUnavailable.Should().BeTrue();
         viewModel.CanConnect.Should().BeFalse();
-        viewModel.StateLabel.Should().Be("Indisponível nesta versão");
+        viewModel.StateLabel.Should().Be("Sem servidor configurado");
     }
 
     [AvaloniaFact]
@@ -389,6 +389,8 @@ public class SyncViewModelTests
 
         public Task<SyncAuthorization> BeginConnectAsync(CancellationToken cancellationToken) =>
             Task.FromResult(NextAuthorization ?? throw new InvalidOperationException("Sem autorização preparada."));
+
+        public Task SwitchServerAsync(Uri? server, CancellationToken cancellationToken) => Task.CompletedTask;
 
         public Task DisconnectAsync(CancellationToken cancellationToken)
         {

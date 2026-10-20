@@ -9,7 +9,9 @@ compartilhá-la com todos (veja [Onde cada tarefa aparece](#onde-cada-tarefa-apa
 
 A decisão e as alternativas estão no [ADR-061](ARCHITECTURE.md). O servidor,
 com o cliente do Google, as variáveis e a implantação, está em
-[`sync-server.md`](sync-server.md).
+[`sync-server.md`](sync-server.md). **O servidor é seu:** nenhuma build traz
+endereço embutido (ADR-078). No desktop, ele vai em `Sync:ApiBaseUrl` do
+`appsettings.user.json`; no celular, na tela *Configurar servidor*.
 
 ## Na tela
 
@@ -126,8 +128,8 @@ suas tarefas. A próxima sincronização as leva para o id novo. Tarefas que
 ficaram num computador revogado e que não volta aparecem em "Mostrando:
 Todos", e "Onde aparece…" as traz para cá.
 
-Sem servidor configurado na build, a janela só explica que a versão não tem
-sincronização.
+Sem servidor configurado, a janela diz "Sem servidor configurado" e explica
+onde pôr o endereço.
 
 ## O que sincroniza
 
@@ -280,7 +282,17 @@ um app atualizado sobe a versão do contrato, ele refaz a primeira conexão.
   revogado mantém os dados. Para voltar, ele entra como um dispositivo novo e
   manda o que mudou.
 - Entrar com outra conta limpa o estado de sincronização antes, mas não os
-  dados locais.
+  dados locais. **Outro servidor conta como outra conta** (ADR-078): os ids de
+  conta, as versões, o cursor e o outbox são do servidor que os deu, e nada
+  disso vai para o novo.
+- **O servidor mudou.** Se o endereço configurado não é o da conta ligada (o
+  `appsettings.user.json` trocado, um backup restaurado), o ciclo para antes
+  de qualquer pedido, com `server_changed` e "O servidor mudou: entre de
+  novo". Conectar no novo refaz a primeira conexão: traz o que ele tem e manda
+  o que só existe aqui.
+- O refresh token no cofre vai junto com o endereço do servidor que o emitiu,
+  e só é usado (ou revogado) nele. O cliente não segue redirecionamento: um
+  `3xx` é erro, e o token fica onde estava.
 - O refresh token fica no cofre do sistema (DPAPI). O access token fica só na
   memória.
 

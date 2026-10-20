@@ -8,6 +8,7 @@ using MyTaskApp.Infrastructure.Secrets;
 using MyTaskApp.Infrastructure.Sync.Http;
 using MyTaskApp.Mobile.Core.Composition;
 using MyTaskApp.Mobile.Core.Ports;
+using MyTaskApp.Mobile.Core.Presentation;
 using MyTaskApp.Mobile.Core.ViewModels;
 
 namespace MyTaskApp.Server.IntegrationTests;
@@ -44,16 +45,20 @@ internal sealed class SyncedPhone : IAsyncDisposable
         var folder = Path.Combine(Path.GetTempPath(), $"mytaskapp-phone-{Guid.NewGuid():N}");
         var network = new Network();
 
+        // O servidor que a pessoa salvou na tela do servidor (ADR-078).
+        var preferences = new MemoryPreferences();
+        preferences.Set(SyncServerSettings.PreferenceKey, "http://localhost/");
+
         var services = new ServiceCollection()
             .AddLogging(logging => logging.SetMinimumLevel(LogLevel.Warning))
             .AddSingleton<TimeProvider>(new FakeTimeProvider(DateTimeOffset.UtcNow))
             .AddSingleton<ISecretStore, MemorySecretStore>()
             .AddSingleton<IUiDispatcher, Inline>()
             .AddSingleton<INavigator, NoNavigation>()
-            .AddSingleton<IPreferenceStore, MemoryPreferences>()
+            .AddSingleton<IPreferenceStore>(preferences)
             .AddSingleton<IDialogService, SilentDialogs>()
             .AddSingleton<IWebAuthenticatorPort>(new ServerBrowser(api, googleSubject))
-            .AddMobileCore(new MobileHostOptions { DataDirectory = folder, DeviceName = nickname, ServerUrl = "http://localhost/" })
+            .AddMobileCore(new MobileHostOptions { DataDirectory = folder, DeviceName = nickname, AllowHttpLoopback = true })
             .AddSingleton(provider => new SyncHttp(
                 new HttpClient(network.Over(api.Server.CreateHandler())),
                 provider.GetRequiredService<SyncOptions>(),
@@ -65,6 +70,8 @@ internal sealed class SyncedPhone : IAsyncDisposable
         {
             await scope.ServiceProvider.GetRequiredService<IDatabaseInitializer>().InitializeAsync(cancellationToken);
         }
+
+        await services.GetRequiredService<SyncServerSettings>().InitializeAsync(cancellationToken);
 
         return new SyncedPhone(folder, services, network);
     }
@@ -158,6 +165,8 @@ internal sealed class SyncedPhone : IAsyncDisposable
         public Task OpenFiltersAsync(bool history = false) => Task.CompletedTask;
 
         public Task OpenConnectAsync() => Task.CompletedTask;
+
+        public Task OpenServerAsync() => Task.CompletedTask;
 
         public Task OpenTasksAsync() => Task.CompletedTask;
 

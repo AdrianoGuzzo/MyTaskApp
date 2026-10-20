@@ -14,5 +14,6 @@ public partial class AppShell
         Routing.RegisterRoute(ShellNavigator.TaskForm, typeof(TaskFormPage));
         Routing.RegisterRoute(ShellNavigator.Filters, typeof(FiltersPage));
         Routing.RegisterRoute(ShellNavigator.Connect, typeof(ConnectPage));
+        Routing.RegisterRoute(ShellNavigator.Server, typeof(SyncServerPage));
     }
 }

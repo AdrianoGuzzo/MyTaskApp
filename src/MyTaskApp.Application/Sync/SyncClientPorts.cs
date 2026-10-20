@@ -66,6 +66,56 @@ public interface ISyncApi
     Task<FetchResponse> FetchAsync(Guid workspaceId, FetchRequest request, CancellationToken cancellationToken);
 }
 
+/// <summary>
+/// O servidor para onde a sincronização fala agora (ADR-078). Muda em tempo
+/// de execução: o cliente HTTP lê o endereço a cada pedido, e o access token
+/// em memória é esquecido na troca.
+/// </summary>
+public interface ISyncServerAddress
+{
+    Uri? Current { get; }
+
+    /// <summary>HTTP no loopback vale aqui: build de desenvolvimento ou <c>Sync:AllowHttpLoopback</c>.</summary>
+    bool AllowHttpLoopback { get; }
+
+    /// <summary>Aponta para outro servidor, ou para nenhum. Não mexe na conta: isso é <see cref="ISyncAccount.SwitchServerAsync"/>.</summary>
+    void Set(Uri? server);
+
+    event Action? Changed;
+}
+
+public enum SyncServerProbeKind
+{
+    Ok,
+    InvalidUrl,
+    Dns,
+    Refused,
+    Tls,
+    Timeout,
+    Redirect,
+    NotMyTaskApp,
+    ServerError,
+    IssuerMismatch,
+    Unexpected,
+}
+
+/// <summary>O resultado do "Testar conexão", com o texto para a tela.</summary>
+public sealed record SyncServerProbeResult(SyncServerProbeKind Kind, string Message)
+{
+    /// <summary>Respondeu como um servidor do MyTaskApp; o aviso de issuer diferente também conta.</summary>
+    public bool Reachable => Kind is SyncServerProbeKind.Ok or SyncServerProbeKind.IssuerMismatch;
+}
+
+/// <summary>
+/// "Testar conexão" (ADR-078): sem login e sem token, só o <c>/health</c> e o
+/// discovery do OAuth. O endereço que o servidor anuncia nunca substitui o
+/// configurado.
+/// </summary>
+public interface ISyncServerProbe
+{
+    Task<SyncServerProbeResult> TestAsync(Uri server, CancellationToken cancellationToken);
+}
+
 /// <summary>Um login pelo navegador em andamento: abrir o endereço e esperar a volta.</summary>
 public sealed record SyncAuthorization(Uri AuthorizeUrl, Task Completion);
 
@@ -75,7 +125,7 @@ public sealed record SyncAuthorization(Uri AuthorizeUrl, Task Completion);
 /// </summary>
 public interface ISyncAuthenticator
 {
-    /// <summary>A build tem um servidor configurado. Sem ele, a sincronização nem aparece como opção.</summary>
+    /// <summary>Há um servidor configurado. Sem ele, a sincronização nem aparece como opção.</summary>
     bool IsAvailable { get; }
 
     Uri? ServerBaseUrl { get; }

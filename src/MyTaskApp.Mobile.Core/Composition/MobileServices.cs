@@ -21,8 +21,14 @@ public sealed class MobileHostOptions
     /// <summary>O nome do aparelho, para a lista de dispositivos e a auditoria.</summary>
     public string? DeviceName { get; init; }
 
-    /// <summary>O servidor de sincronização; vazio = o que a build gravou, ou nenhum.</summary>
-    public string? ServerUrl { get; init; }
+    /// <summary>
+    /// Só preenche o campo da tela de servidor (no Debug, o local pelo adb
+    /// reverse). Nunca é usado sozinho: o servidor é o que o usuário salvou (ADR-078).
+    /// </summary>
+    public string? SuggestedServerUrl { get; init; }
+
+    /// <summary>Aceita <c>http://localhost</c>: só a build Debug liga.</summary>
+    public bool AllowHttpLoopback { get; init; }
 
     public string DatabaseFileName { get; init; } = "mytaskapp.db";
 }
@@ -46,12 +52,14 @@ public static class MobileServices
             ["Database:FileName"] = host.DatabaseFileName,
         };
 
-        if (!string.IsNullOrWhiteSpace(host.ServerUrl))
+        // Sem Sync:ApiBaseUrl: o servidor vem das preferências, na abertura (SyncServerSettings, ADR-078).
+        if (host.AllowHttpLoopback)
         {
-            settings["Sync:ApiBaseUrl"] = host.ServerUrl.Trim();
+            settings["Sync:AllowHttpLoopback"] = "true";
         }
 
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
+        services.AddSingleton(host);
 
         // Antes da Application: ela registra com TryAdd, e quem sabe o nome ganha.
         services.TryAddSingleton<ICurrentUser>(new DeviceUser(host.DeviceName));
@@ -71,12 +79,14 @@ public static class MobileServices
         services.AddSingleton<MobileLifecycle>();
         services.AddSingleton<OriginCatalog>();
         services.AddSingleton<DeviceFocus>();
+        services.AddSingleton<SyncServerSettings>();
 
         // As listas ficam vivas entre as telas: voltar do detalhe não recarrega do zero.
         services.AddSingleton<TaskListViewModel>();
         services.AddSingleton<HistoryViewModel>();
         services.AddSingleton<AccountViewModel>();
         services.AddTransient<ConnectViewModel>();
+        services.AddTransient<SyncServerViewModel>();
         services.AddTransient<TaskDetailViewModel>();
         services.AddTransient<TaskFormViewModel>();
 

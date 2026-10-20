@@ -329,6 +329,8 @@ public class SyncIndicatorViewModelTests
 
         public Task DisconnectAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
+        public Task SwitchServerAsync(Uri? server, CancellationToken cancellationToken) => Task.CompletedTask;
+
         public Task SetEnabledAsync(bool enabled, CancellationToken cancellationToken) => Task.CompletedTask;
 
         public Task<IReadOnlyList<DeviceInfo>> ListDevicesAsync(CancellationToken cancellationToken) =>

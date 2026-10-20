@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Sync;
 using MyTaskApp.Infrastructure.Persistence;
+using MyTaskApp.Mobile.Core.Presentation;
 
 namespace MyTaskApp.Mobile.Core.Composition;
 
@@ -78,6 +79,9 @@ public sealed class MobileLifecycle(IServiceProvider services, SyncScheduler sch
         }
 
         logger.LogInformation("MobileDatabaseReady");
+
+        // O servidor salvo, antes do primeiro ciclo: sem ele, o laço só fica ocioso (ADR-078).
+        await services.GetRequiredService<SyncServerSettings>().InitializeAsync(CancellationToken.None);
 
         scheduler.Start();
         scheduler.RequestNow();

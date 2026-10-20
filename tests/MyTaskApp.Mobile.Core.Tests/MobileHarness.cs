@@ -12,6 +12,7 @@ using MyTaskApp.Infrastructure.Persistence;
 using MyTaskApp.Infrastructure.Secrets;
 using MyTaskApp.Mobile.Core.Composition;
 using MyTaskApp.Mobile.Core.Ports;
+using MyTaskApp.Mobile.Core.Presentation;
 using MyTaskApp.Mobile.Core.Tests.Fakes;
 using MyTaskApp.Sync.Contracts;
 
@@ -49,12 +50,32 @@ internal sealed class MobileHarness : IAsyncDisposable
 
     public MemoryPreferences Preferences => (MemoryPreferences)Services.GetRequiredService<IPreferenceStore>();
 
+    public MemorySecretStore Secrets => (MemorySecretStore)Services.GetRequiredService<ISecretStore>();
+
     public IUseCaseRunner Runner => Services.GetRequiredService<IUseCaseRunner>();
 
-    public static async Task<MobileHarness> CreateAsync(string? serverUrl = "https://sync.exemplo.com")
+    /// <param name="serverUrl">O servidor salvo na tela (ADR-078); <c>null</c> = celular sem servidor.</param>
+    /// <param name="folder">A pasta de outro harness já descartado: "abrir o app de novo" sobre o mesmo banco.</param>
+    /// <param name="preferences">As preferências de antes, com o mesmo propósito.</param>
+    public static async Task<MobileHarness> CreateAsync(
+        string? serverUrl = "https://sync.exemplo.com",
+        string? folder = null,
+        MemoryPreferences? preferences = null,
+        ISecretStore? secrets = null,
+        string? suggestedServerUrl = null)
     {
-        var folder = Path.Combine(Path.GetTempPath(), $"mytaskapp-mobile-{Guid.NewGuid():N}");
+        folder ??= Path.Combine(Path.GetTempPath(), $"mytaskapp-mobile-{Guid.NewGuid():N}");
         var clock = new FakeTimeProvider(Now);
+
+        if (preferences is null)
+        {
+            preferences = new MemoryPreferences();
+
+            if (serverUrl is not null)
+            {
+                preferences.Set(SyncServerSettings.PreferenceKey, serverUrl);
+            }
+        }
 
         var services = new ServiceCollection()
             .AddLogging()
@@ -64,9 +85,9 @@ internal sealed class MobileHarness : IAsyncDisposable
             .AddSingleton<IDialogService, ScriptedDialogs>()
             .AddSingleton<IThemeService, RecordingThemes>()
             .AddSingleton<IWebAuthenticatorPort, FakeBrowser>()
-            .AddSingleton<ISecretStore, MemorySecretStore>()
-            .AddSingleton<IPreferenceStore, MemoryPreferences>()
-            .AddMobileCore(new MobileHostOptions { DataDirectory = folder, DeviceName = "Pixel de teste", ServerUrl = serverUrl })
+            .AddSingleton(secrets ?? new MemorySecretStore())
+            .AddSingleton<IPreferenceStore>(preferences)
+            .AddMobileCore(new MobileHostOptions { DataDirectory = folder, DeviceName = "Pixel de teste", SuggestedServerUrl = suggestedServerUrl })
             .BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
 
         await using (var scope = services.CreateAsyncScope())
@@ -74,11 +95,29 @@ internal sealed class MobileHarness : IAsyncDisposable
             await scope.ServiceProvider.GetRequiredService<IDatabaseInitializer>().InitializeAsync(TestContext.Current.CancellationToken);
         }
 
+        // O que o MobileLifecycle faz na abertura, antes do primeiro ciclo.
+        await services.GetRequiredService<SyncServerSettings>().InitializeAsync(TestContext.Current.CancellationToken);
+
         return new MobileHarness(folder, services, clock);
     }
 
     public T Get<T>()
         where T : notnull => Services.GetRequiredService<T>();
+
+    /// <summary>
+    /// Fecha e abre o app de novo: o mesmo banco, as mesmas preferências e o
+    /// mesmo cofre. Quem chama descarta só o novo — este já foi fechado.
+    /// </summary>
+    public async Task<MobileHarness> ReopenAsync()
+    {
+        var preferences = Preferences;
+        var secrets = Secrets;
+
+        await Services.DisposeAsync();
+        SqliteConnection.ClearAllPools();
+
+        return await CreateAsync(serverUrl: null, Folder, preferences, secrets);
+    }
 
     public async Task<CreateTaskResult> CreateTaskAsync(
         string title,

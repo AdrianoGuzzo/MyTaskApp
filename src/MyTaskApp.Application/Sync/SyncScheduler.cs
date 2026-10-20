@@ -144,6 +144,45 @@ public sealed class SyncScheduler(
         stopping.Dispose();
     }
 
+    /// <summary>
+    /// Para o laço, espera o ciclo em andamento terminar de vez, roda a ação e
+    /// volta, se estava rodando (troca de servidor, ADR-078). Diferente do
+    /// <see cref="StopAsync"/>, não desiste de esperar: a ação mexe no que o
+    /// ciclo grava.
+    /// </summary>
+    public async Task RunPausedAsync(Func<Task> action)
+    {
+        bool wasRunning;
+
+        lock (_gate)
+        {
+            wasRunning = _loop is not null;
+        }
+
+        await StopAsync();
+
+        Task? draining;
+
+        lock (_gate)
+        {
+            draining = _draining;
+        }
+
+        await DrainAsync(draining);
+
+        try
+        {
+            await action();
+        }
+        finally
+        {
+            if (wasRunning)
+            {
+                Start();
+            }
+        }
+    }
+
     private static async Task DrainAsync(Task? previous)
     {
         if (previous is null)

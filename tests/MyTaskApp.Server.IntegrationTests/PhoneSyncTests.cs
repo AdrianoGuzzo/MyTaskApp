@@ -123,6 +123,55 @@ public sealed class PhoneSyncTests(PostgresFixture postgres) : IAsyncLifetime
         board.Items.Should().ContainSingle().Which.Task.Title.Should().Be("Escrita no metrô");
     }
 
+    /// <summary>
+    /// Trocar de servidor na tela (ADR-078): sai da conta no antigo, nada vai
+    /// para o novo até entrar nele, e o que só estava no celular continua
+    /// aqui. O login só fecha no endereço do servidor de teste (o código sai
+    /// com o issuer dele), então a volta é para ele, como um servidor "novo"
+    /// para o celular, que esqueceu tudo: entrar manda o que estava pendente.
+    /// </summary>
+    [Fact]
+    public async Task SwitchingServers_SendsNothingUntilSigningIn_AndKeepsWhatWasPending()
+    {
+        var desktop = await DesktopAsync("Notebook");
+        var phone = await PhoneAsync();
+
+        phone.Net.Offline = true;
+        var form = phone.Get<TaskFormViewModel>();
+        await form.InitializeNewAsync();
+        form.Title = "Escrita antes da troca";
+        await form.SaveAsync();
+        phone.Net.Offline = false;
+
+        var screen = phone.Get<SyncServerViewModel>();
+        await screen.LoadAsync();
+        screen.Url = "https://novo.example.invalid/";
+        var before = phone.Net.Calls.Count;
+        await screen.SaveAsync();
+
+        phone.Net.Calls.Skip(before).Should().OnlyContain(call => call.EndsWith("/connect/revoke", StringComparison.Ordinal), "só a revogação, no servidor que emitiu o token");
+        var status = await phone.UseCaseAsync<GetSyncStatusHandler, SyncStatusView>((handler, token) => handler.HandleAsync(new GetSyncStatus(), token));
+        status.Local.State.Should().Be(SyncLinkState.Unlinked);
+        status.Counts.Pending.Should().Be(0);
+
+        var idle = phone.Net.Calls.Count;
+        (await phone.Engine.RunCycleAsync(Ct)).Status.Should().Be(SyncCycleStatus.Idle);
+        phone.Net.Calls.Should().HaveCount(idle, "sem entrar no servidor novo, nada sai do celular");
+        await phone.List.LoadAsync();
+        phone.List.Tasks.Should().ContainSingle(row => row.Title == "Escrita antes da troca");
+
+        screen.Url = "http://localhost/";
+        await screen.SaveAsync();
+        phone.Net.Calls.Should().HaveCount(idle, "salvar o endereço não fala com o servidor");
+
+        await phone.ConnectAsync();
+        await phone.SyncedAsync(Ct);
+        await desktop.SyncedAsync(Ct);
+
+        var board = await desktop.UseCaseAsync<SearchTasksHandler, TaskSearchResult>((handler, token) => handler.HandleAsync(new SearchTasks(), token));
+        board.Items.Should().ContainSingle(item => item.Task.Title == "Escrita antes da troca");
+    }
+
     [Fact]
     public async Task TheOriginFilter_SeparatesTheNotebooksTasks_FromTheShared()
     {
