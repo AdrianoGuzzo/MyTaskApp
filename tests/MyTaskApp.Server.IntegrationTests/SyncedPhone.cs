@@ -185,5 +185,7 @@ internal sealed class SyncedPhone : IAsyncDisposable
         public Task ToastAsync(string message) => Task.CompletedTask;
 
         public Task<string?> PromptAsync(string title, string message, string initialValue, int maxLength) => Task.FromResult<string?>(null);
+
+        public Task<int?> ChooseAsync(string title, IReadOnlyList<string> options) => Task.FromResult<int?>(null);
     }
 }

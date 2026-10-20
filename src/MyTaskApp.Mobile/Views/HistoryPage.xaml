@@ -6,13 +6,9 @@
              x:Class="MyTaskApp.Mobile.Views.HistoryPage"
              x:DataType="vm:HistoryViewModel"
              HideSoftInputOnTapped="True"
+             Shell.NavBarIsVisible="False"
              Title="Histórico">
 
-    <ContentPage.ToolbarItems>
-        <ToolbarItem Text="{Binding FiltersLabel}"
-                     Command="{Binding OpenFiltersCommand}"
-                     SemanticProperties.Description="Abrir os filtros" />
-    </ContentPage.ToolbarItems>
-
+    <!-- O topo é da própria lista (ADR-079), como na aba Tarefas. -->
     <views:TaskListView />
 </ContentPage>

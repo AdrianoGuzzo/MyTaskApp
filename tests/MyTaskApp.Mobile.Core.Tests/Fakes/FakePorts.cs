@@ -80,6 +80,19 @@ internal sealed class ScriptedDialogs : IDialogService
         Questions.Add(title);
         return Task.FromResult(PromptAnswer);
     }
+
+    /// <summary>O índice que a folha de opções devolve; <c>null</c> = cancelou.</summary>
+    public int? ChoiceAnswer { get; set; }
+
+    /// <summary>As opções da última folha, como a tela as escreveu.</summary>
+    public IReadOnlyList<string> LastChoices { get; private set; } = [];
+
+    public Task<int?> ChooseAsync(string title, IReadOnlyList<string> options)
+    {
+        Questions.Add(title);
+        LastChoices = options;
+        return Task.FromResult(ChoiceAnswer);
+    }
 }
 
 /// <summary>Guarda o tema escolhido, como o celular guardaria nas preferências.</summary>

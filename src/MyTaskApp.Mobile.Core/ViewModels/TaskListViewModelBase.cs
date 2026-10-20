@@ -52,8 +52,8 @@ public sealed record SortChoice(TaskSort Sort, string Label)
 /// é descartada: digitar rápido não mostra o resultado de letras antigas.
 /// </para>
 /// <para>
-/// <b>O dispositivo é do app, não da aba.</b> Os chips de dispositivo leem e
-/// gravam o <see cref="DeviceFocus"/>: escolher numa aba muda a outra, e a
+/// <b>O dispositivo é do app, não da aba.</b> O título da lista (ADR-079) lê
+/// e grava o <see cref="DeviceFocus"/>: escolher numa aba muda a outra, e a
 /// escolha volta na próxima abertura.
 /// </para>
 /// </remarks>
@@ -71,6 +71,9 @@ public abstract partial class TaskListViewModelBase : MobileViewModel, IDisposab
 
     /// <summary>De quanto em quanto o "há N min" do topo é refeito; o estado em si muda por evento.</summary>
     public static readonly TimeSpan TickEvery = TimeSpan.FromSeconds(30);
+
+    /// <summary>O título da folha de dispositivos.</summary>
+    public const string DeviceSheetTitle = "Mostrar as tarefas de";
 
     private readonly IUseCaseRunner _runner;
 
@@ -117,7 +120,17 @@ public abstract partial class TaskListViewModelBase : MobileViewModel, IDisposab
     private TaskFilter _filter;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowsSearch))]
     private string? _searchText;
+
+    /// <summary>A busca fica atrás da lupa; com texto, continua aberta.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowsSearch))]
+    private bool _isSearchOpen;
+
+    /// <summary>"Só as vencidas" na folha, antes de aplicar.</summary>
+    [ObservableProperty]
+    private bool _overdueChoice;
 
     [ObservableProperty]
     private ListState _state = ListState.Loading;
@@ -199,7 +212,7 @@ public abstract partial class TaskListViewModelBase : MobileViewModel, IDisposab
     /// <summary>Os atalhos de status desta aba; o primeiro é o de partida.</summary>
     public IReadOnlyList<PresetChip> Presets { get; }
 
-    /// <summary>Os dispositivos da conta, como chips; só "Todas" sem conta ligada.</summary>
+    /// <summary>Os dispositivos da conta, as opções da folha do título; só "Todos os dispositivos" sem conta ligada.</summary>
     public ObservableCollection<DeviceChip> Devices { get; } = [];
 
     public IReadOnlyList<SortChoice> Sorts { get; } =
@@ -215,11 +228,30 @@ public abstract partial class TaskListViewModelBase : MobileViewModel, IDisposab
 
     public ObservableCollection<TagOption> TagChoices { get; } = [];
 
-    /// <summary>Sem conta ligada não há outros dispositivos: os chips nem aparecem.</summary>
+    /// <summary>Sem conta ligada não há outros dispositivos: o título é o da aba, e não abre folha.</summary>
     public bool ShowsDevices => _origins.IsActive;
+
+    /// <summary>"Notebook": o dispositivo em foco, grande no topo; sem conta, o nome da aba.</summary>
+    public string DeviceTitle => ShowsDevices
+        ? Devices.FirstOrDefault(chip => chip.IsSelected)?.Label ?? OriginCatalog.AnyOrigin.Label
+        : TabTitle;
+
+    /// <summary>Uma fileira de atalhos só quando há o que escolher: no Histórico.</summary>
+    public bool ShowsPresets => Presets.Count > 1;
+
+    public bool ShowsSearch => IsSearchOpen || !string.IsNullOrWhiteSpace(SearchText);
+
+    /// <summary>O ponto no funil: a folha tem algo ligado.</summary>
+    public bool HasSheetFilters => Filter.SheetCount > 0;
 
     /// <summary>A folha de filtros desta aba é a do Histórico.</summary>
     public abstract bool IsHistory { get; }
+
+    /// <summary>O nome da aba, no título quando não há dispositivo para escolher.</summary>
+    public abstract string TabTitle { get; }
+
+    /// <summary>A legenda acima do dispositivo: "Pendentes", "Histórico".</summary>
+    public abstract string HeaderCaption { get; }
 
     /// <summary>A frase de "não há nada aqui".</summary>
     public abstract string EmptyTitle { get; }
@@ -311,7 +343,7 @@ public abstract partial class TaskListViewModelBase : MobileViewModel, IDisposab
         return LoadPageAsync(reset: true, keepLoaded: false);
     }
 
-    /// <summary>Um toque no chip do dispositivo: filtra as duas abas e fica gravado para a próxima abertura.</summary>
+    /// <summary>Um dispositivo escolhido: filtra as duas abas e fica gravado para a próxima abertura.</summary>
     [RelayCommand]
     public Task SelectDeviceAsync(string? key)
     {
@@ -321,6 +353,56 @@ public abstract partial class TaskListViewModelBase : MobileViewModel, IDisposab
         }
 
         ChooseDevice(key);
+        return LoadPageAsync(reset: true, keepLoaded: false);
+    }
+
+    /// <summary>
+    /// O toque no título: a folha do sistema com os dispositivos e o atual
+    /// marcado. Cancelar não muda nada; sem conta, não há o que escolher.
+    /// </summary>
+    [RelayCommand]
+    public async Task ChooseDeviceAsync()
+    {
+        if (!ShowsDevices || Devices.Count == 0)
+        {
+            return;
+        }
+
+        // A folha do sistema devolve o texto tocado: dois computadores com o mesmo nome ganham "(2)" para não se confundirem.
+        var seen = new Dictionary<string, int>(StringComparer.Ordinal);
+        var options = Devices.Select(chip =>
+        {
+            var count = seen[chip.Label] = seen.GetValueOrDefault(chip.Label) + 1;
+            var label = count > 1 ? $"{chip.Label} ({count})" : chip.Label;
+            return (chip.IsSelected ? "✓ " : "    ") + label;
+        }).ToList();
+        var chosen = await Dialogs.ChooseAsync(DeviceSheetTitle, options);
+
+        if (chosen is { } index && index >= 0 && index < Devices.Count)
+        {
+            await SelectDeviceAsync(Devices[index].Value);
+        }
+    }
+
+    /// <summary>A lupa: abre a busca; aberta, fecha e apaga o que foi digitado.</summary>
+    [RelayCommand]
+    public Task ToggleSearchAsync()
+    {
+        if (!ShowsSearch)
+        {
+            IsSearchOpen = true;
+            return Task.CompletedTask;
+        }
+
+        var hadText = !string.IsNullOrWhiteSpace(Filter.Text) || !string.IsNullOrWhiteSpace(SearchText);
+        CloseSearch();
+
+        if (!hadText)
+        {
+            return Task.CompletedTask;
+        }
+
+        Filter = Filter with { Text = null };
         return LoadPageAsync(reset: true, keepLoaded: false);
     }
 
@@ -385,6 +467,7 @@ public abstract partial class TaskListViewModelBase : MobileViewModel, IDisposab
         }
 
         SelectedSort = Sorts.FirstOrDefault(sort => sort.Sort == Filter.Sort) ?? Sorts[0];
+        OverdueChoice = Filter.OverdueOnly;
 
         await LoadTagChoicesAsync();
         await _navigator.OpenFiltersAsync(IsHistory);
@@ -397,6 +480,7 @@ public abstract partial class TaskListViewModelBase : MobileViewModel, IDisposab
         {
             Priorities = [.. PriorityChoices.Where(choice => choice.IsSelected).Select(choice => choice.Value)],
             TagIds = [.. TagChoices.Where(choice => choice.IsSelected).Select(choice => choice.Value)],
+            OverdueOnly = OverdueChoice && !IsHistory,
             Sort = SelectedSort?.Sort ?? TaskSort.Created,
         };
 
@@ -408,9 +492,7 @@ public abstract partial class TaskListViewModelBase : MobileViewModel, IDisposab
     [RelayCommand]
     public Task ClearFiltersAsync()
     {
-        _clearingSearch = true;
-        SearchText = null;
-        _clearingSearch = false;
+        CloseSearch();
 
         foreach (var choice in Presets)
         {
@@ -484,7 +566,21 @@ public abstract partial class TaskListViewModelBase : MobileViewModel, IDisposab
         OnPropertyChanged(nameof(IsReady));
     }
 
-    partial void OnFilterChanged(TaskFilter value) => OnPropertyChanged(nameof(FiltersLabel));
+    partial void OnFilterChanged(TaskFilter value)
+    {
+        OnPropertyChanged(nameof(FiltersLabel));
+        OnPropertyChanged(nameof(HasSheetFilters));
+    }
+
+    /// <summary>Apaga o texto sem a busca com espera, e fecha a barra; quem chama relê.</summary>
+    private void CloseSearch()
+    {
+        CancelPendingSearch();
+        _clearingSearch = true;
+        SearchText = null;
+        _clearingSearch = false;
+        IsSearchOpen = false;
+    }
 
     private void ChooseDevice(string key)
     {
@@ -503,7 +599,7 @@ public abstract partial class TaskListViewModelBase : MobileViewModel, IDisposab
     }
 
     /// <summary>
-    /// Os chips a partir do catálogo, marcando a escolha. Só refaz a lista
+    /// As opções a partir do catálogo, marcando a escolha. Só refaz a lista
     /// quando os dispositivos mudaram; senão, só troca a marca.
     /// </summary>
     private void RefreshDevices()
@@ -527,6 +623,7 @@ public abstract partial class TaskListViewModelBase : MobileViewModel, IDisposab
         }
 
         OnPropertyChanged(nameof(ShowsDevices));
+        OnPropertyChanged(nameof(DeviceTitle));
     }
 
     private async Task SearchLaterAsync(string? text, CancellationToken token)
@@ -747,7 +844,7 @@ public abstract partial class TaskListViewModelBase : MobileViewModel, IDisposab
         _ = LoadSyncAsync();
     });
 
-    /// <summary>O ciclo renova o diretório: um computador novo ou renomeado ganha o seu chip.</summary>
+    /// <summary>O ciclo renova o diretório: um computador novo ou renomeado entra na folha, e o título acompanha.</summary>
     private void OnCycleCompleted(SyncCycleResult result) => _dispatcher.Post(() =>
     {
         IsSyncing = false;

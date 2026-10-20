@@ -25,7 +25,7 @@ public sealed record OriginChoice(string Label, DevicePlacement? Placement)
 /// Contextos como Trabalho ou Estudos continuam sendo etiquetas.
 /// </summary>
 /// <remarks>
-/// Sem conta ligada não há dispositivos: o filtro só tem "Todas" e o
+/// Sem conta ligada não há dispositivos: o filtro só tem "Todos os dispositivos" e o
 /// formulário não mostra a escolha — tudo é deste celular, como no desktop
 /// antes de conectar.
 /// </remarks>
@@ -43,7 +43,7 @@ public sealed class OriginCatalog(DevicePlacementState placements, SyncDeviceDir
 
     public const string HereKey = "here";
 
-    public static readonly OriginFilterOption AnyOrigin = new(AnyKey, "Todas", null);
+    public static readonly OriginFilterOption AnyOrigin = new(AnyKey, "Todos os dispositivos", null);
 
     /// <summary>A escolha só faz sentido com a conta ligada.</summary>
     public bool IsActive => placements.IsActive;
@@ -77,7 +77,7 @@ public sealed class OriginCatalog(DevicePlacementState placements, SyncDeviceDir
     /// O filtro de uma escolha gravada, sem depender da lista de opções: o
     /// diretório de dispositivos pode ainda não ter chegado na abertura, e a
     /// escolha já vale. Um dispositivo que o diretório (já lido) não conhece
-    /// mais, ou a conta desligada, voltam a "Todas".
+    /// mais, ou a conta desligada, voltam a "Todos os dispositivos".
     /// </summary>
     public PlacementMatch? MatchFor(string? key)
     {

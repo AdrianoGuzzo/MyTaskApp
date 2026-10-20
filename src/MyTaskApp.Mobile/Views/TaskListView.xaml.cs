@@ -6,7 +6,8 @@ namespace MyTaskApp.Mobile.Views;
 
 /// <summary>
 /// A lista de uma aba; herda o ViewModel da página que a hospeda. Aqui ficam
-/// só as animações da tela: a barra "Desfazer" e a bolinha da sincronização.
+/// só as animações da tela — a barra "Desfazer" e a bolinha da sincronização —
+/// e o foco da busca.
 /// </summary>
 public partial class TaskListView
 {
@@ -45,33 +46,6 @@ public partial class TaskListView
         }
     }
 
-    /// <summary>
-    /// O dispositivo lembrado pode ser o último chip, fora da tela ao abrir o
-    /// app: a fileira rola até ele quando os chips ganham tamanho.
-    /// </summary>
-    /// <remarks>
-    /// Depois do layout, pelo despachante, e por posição: no Android, rolar
-    /// até o elemento durante o SizeChanged não faz nada.
-    /// </remarks>
-    private void OnDeviceChipsSized(object? sender, EventArgs e) => Dispatcher.Dispatch(async () =>
-    {
-        var selected = DeviceChips.Children
-            .OfType<VisualElement>()
-            .FirstOrDefault(chip => chip.BindingContext is DeviceChip { IsSelected: true });
-
-        if (selected is null || DeviceScroll.Width <= 0)
-        {
-            return;
-        }
-
-        var right = selected.X + selected.Width + DeviceChips.Padding.Right;
-
-        if (right > DeviceScroll.ScrollX + DeviceScroll.Width)
-        {
-            await DeviceScroll.ScrollToAsync(right - DeviceScroll.Width, 0, animated: false);
-        }
-    });
-
     private void OnViewModelChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (_viewModel is null)
@@ -87,6 +61,11 @@ public partial class TaskListView
 
             case nameof(TaskListViewModelBase.Sync):
                 Pulse(_viewModel.Sync?.Kind == SyncIndicatorKind.Syncing);
+                break;
+
+            // A lupa abre a busca já com o teclado; depois do layout, quando a barra já está visível.
+            case nameof(TaskListViewModelBase.IsSearchOpen) when _viewModel.IsSearchOpen:
+                Dispatcher.Dispatch(() => Search.Focus());
                 break;
         }
     }

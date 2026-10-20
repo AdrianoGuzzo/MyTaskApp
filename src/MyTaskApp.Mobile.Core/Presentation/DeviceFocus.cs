@@ -45,7 +45,7 @@ public sealed class DeviceFocus(IPreferenceStore preferences, OriginCatalog orig
     /// <summary>O filtro que a busca usa agora; <c>null</c> = todas.</summary>
     public PlacementMatch? Match => origins.MatchFor(Key);
 
-    /// <summary>O chip que aparece marcado: a escolha, ou "Todas" quando ela não vale agora.</summary>
+    /// <summary>O dispositivo que aparece marcado: a escolha, ou "Todos os dispositivos" quando ela não vale agora.</summary>
     public string SelectedKey => Match is null ? OriginCatalog.AnyKey : Key;
 
     public void Select(string key)
