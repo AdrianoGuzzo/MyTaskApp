@@ -241,8 +241,16 @@ public partial class PostgresQueriesTests
         foreach (var sql in PostgresQueries.All())
         {
             sql.TrimStart().Should().MatchRegex("^(?i)(SELECT|WITH)\\b");
-            Forbidden().IsMatch(sql).Should().BeFalse(sql);
+            // Um literal não executa nada: 'INSERT, UPDATE' é o nome de um privilégio conferido, não um comando.
+            Forbidden().IsMatch(StringLiteral().Replace(sql, "''")).Should().BeFalse(sql);
         }
+    }
+
+    [Fact]
+    public void ACommandOutsideALiteral_IsStillCaught()
+    {
+        Forbidden().IsMatch(StringLiteral().Replace("SELECT 'it''s'; DELETE FROM x", "''")).Should().BeTrue();
+        Forbidden().IsMatch(StringLiteral().Replace("SELECT has_database_privilege(current_database(), 'CREATE')", "''")).Should().BeFalse();
     }
 
     [Fact]
@@ -262,6 +270,10 @@ public partial class PostgresQueriesTests
 
     [GeneratedRegex(@"\b(INSERT|UPDATE|DELETE|MERGE|ALTER|DROP|CREATE|GRANT|REVOKE|TRUNCATE|COPY|VACUUM|SECURITY\s+LABEL|CALL|DO)\b", RegexOptions.IgnoreCase)]
     private static partial Regex Forbidden();
+
+    /// <summary>Um literal de texto do SQL, com o apóstrofo dobrado por dentro.</summary>
+    [GeneratedRegex("'(?:[^']|'')*'")]
+    private static partial Regex StringLiteral();
 }
 
 /// <summary>Os inspetores com um servidor de mentira: o que perguntam e como leem a resposta.</summary>
