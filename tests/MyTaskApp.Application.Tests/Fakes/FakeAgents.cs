@@ -48,6 +48,24 @@ internal sealed class FakeAgentSessionRepository : IAgentSessionRepository
 
     public Task<IReadOnlyList<AgentSession>> ListActiveAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<AgentSession>>([.. _sessions.Where(session => session.IsActive)]);
+
+    public Task<IReadOnlyList<AgentSession>> ListConsultationsForTaskAsync(
+        Guid taskId,
+        int limit,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<AgentSession>>(
+        [
+            .. _sessions
+                .Where(session => session.TaskItemId == taskId && session.IsConsultation)
+                .OrderByDescending(session => session.StartedAt)
+                .Take(limit),
+        ]);
+
+    public Task<AgentSession?> FindActiveConsultationByTokenHashAsync(
+        string tokenHash,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult(_sessions.SingleOrDefault(session =>
+            session.IsActive && string.Equals(session.ConsultationTokenHash, tokenHash, StringComparison.OrdinalIgnoreCase)));
 }
 
 /// <summary>Processos de mentira: vivo é o que o teste disse que está vivo.</summary>

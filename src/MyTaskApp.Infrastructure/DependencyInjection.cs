@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
+using MyTaskApp.Application.Consultations;
 using MyTaskApp.Application.Deadlines;
 using MyTaskApp.Application.DatabaseOperations;
 using MyTaskApp.Application.Development;
@@ -118,6 +119,7 @@ public static class DependencyInjection
         services.AddScoped<ITagQuery, TagQuery>();
         services.AddScoped<IDevelopmentCommandRepository, DevelopmentCommandRepository>();
         services.AddScoped<IAgentSessionRepository, AgentSessionRepository>();
+        services.AddScoped<ITaskConsultationRepository, TaskConsultationRepository>();
         services.AddScoped<ICommandExecutionRepository, CommandExecutionRepository>();
         services.AddScoped<IAgentSettingsStore, AgentSettingsStore>();
         services.AddScoped<IAgentAlertSoundStore, AgentAlertSoundStore>();
@@ -308,6 +310,10 @@ public static class DependencyInjection
         services.AddSingleton<IPostgresServerInspector, PostgresServerInspector>();
         services.AddSingleton<IPostgresMaskedCopier, NpgsqlMaskedCopier>();
         services.AddSingleton<IPostgresScriptRunner, NpgsqlScriptRunner>();
+
+        // A Consulta Inteligente (ADR-081): leitura com usuário só de leitura, e o preparo dele.
+        services.AddSingleton<IConsultationDatabase, NpgsqlConsultationDatabase>();
+        services.AddSingleton<IConsultationReadAccessProvisioner, NpgsqlReadAccessProvisioner>();
 
         services.AddSingleton<IDatabaseOperationWorkspaceFactory>(provider => new DatabaseOperationWorkspaceFactory(
             string.IsNullOrWhiteSpace(options.WorkspaceDirectory) ? UserDataLocation.Current.DatabaseOperations : options.WorkspaceDirectory,

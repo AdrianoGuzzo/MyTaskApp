@@ -37,6 +37,10 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .HasMaxLength(1024)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ConsultationTokenHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
                     b.Property<long?>("EndedAt")
                         .HasColumnType("INTEGER");
 
@@ -51,6 +55,9 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                     b.Property<string>("HookTokenHash")
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("INTEGER");
 
                     b.Property<int?>("ProcessId")
                         .HasColumnType("INTEGER");
@@ -82,6 +89,8 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ConsultationTokenHash");
+
                     b.HasIndex("Status");
 
                     b.HasIndex("TaskDevelopmentId", "StartedAt");
@@ -92,7 +101,14 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasFilter("\"Status\" IN (1, 2)");
 
-                    b.ToTable("AgentSessions", (string)null);
+                    b.HasIndex(new[] { "TaskItemId" }, "IX_AgentSessions_TaskItemId_ConsultationActive")
+                        .IsUnique()
+                        .HasFilter("\"Kind\" = 1 AND \"Status\" IN (1, 2)");
+
+                    b.ToTable("AgentSessions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_AgentSessions_ConsultationWithoutDevelopment", "\"Kind\" <> 1 OR \"TaskDevelopmentId\" IS NULL");
+                        });
                 });
 
             modelBuilder.Entity("MyTaskApp.Domain.Auditing.TaskAuditEntry", b =>
@@ -315,6 +331,73 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                     b.HasIndex("DevelopmentCommandId", "Order");
 
                     b.ToTable("DevelopmentCommandParameters", (string)null);
+                });
+
+            modelBuilder.Entity("MyTaskApp.Domain.Consultations.TaskConsultation", b =>
+                {
+                    b.Property<Guid>("TaskItemId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("DatabaseConnectionId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DatabaseName")
+                        .HasMaxLength(63)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Effort")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Instructions")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LastQuestion")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Model")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("TagId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("TaskItemId");
+
+                    b.ToTable("TaskConsultations", (string)null);
+                });
+
+            modelBuilder.Entity("MyTaskApp.Domain.Consultations.TaskConsultationSource", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("ReferenceId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("TaskItemId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TaskItemId", "Kind", "ReferenceId")
+                        .IsUnique();
+
+                    b.ToTable("TaskConsultationSources", (string)null);
                 });
 
             modelBuilder.Entity("MyTaskApp.Domain.DatabaseOperations.AnonymizationProfile", b =>
@@ -1650,6 +1733,24 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("MyTaskApp.Domain.Consultations.TaskConsultation", b =>
+                {
+                    b.HasOne("MyTaskApp.Domain.Tasks.TaskItem", null)
+                        .WithOne()
+                        .HasForeignKey("MyTaskApp.Domain.Consultations.TaskConsultation", "TaskItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MyTaskApp.Domain.Consultations.TaskConsultationSource", b =>
+                {
+                    b.HasOne("MyTaskApp.Domain.Consultations.TaskConsultation", null)
+                        .WithMany("Sources")
+                        .HasForeignKey("TaskItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("MyTaskApp.Domain.DatabaseOperations.AnonymizationProfile", b =>
                 {
                     b.HasOne("MyTaskApp.Domain.DatabaseOperations.DatabaseConnection", null)
@@ -2033,6 +2134,11 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("MyTaskApp.Domain.Commands.DevelopmentCommand", b =>
                 {
                     b.Navigation("Parameters");
+                });
+
+            modelBuilder.Entity("MyTaskApp.Domain.Consultations.TaskConsultation", b =>
+                {
+                    b.Navigation("Sources");
                 });
 
             modelBuilder.Entity("MyTaskApp.Domain.DatabaseOperations.AnonymizationProfile", b =>

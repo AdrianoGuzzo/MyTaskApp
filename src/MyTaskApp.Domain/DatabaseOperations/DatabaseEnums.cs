@@ -70,6 +70,18 @@ public enum DatabaseOperationType
 
     /// <summary>Os dados de uma tabela, mascarados no SELECT da origem e gravados no destino por COPY (ADR-058).</summary>
     MaskedDataCopy = 15,
+
+    /// <summary>
+    /// A consulta de leitura da Consulta Inteligente (ADR-081): um SELECT com
+    /// usuário só de leitura, em transação só leitura. Nunca em produção.
+    /// </summary>
+    QueryData = 16,
+
+    /// <summary>
+    /// Cria (ou reaproveita) o usuário só de leitura da Consulta Inteligente e
+    /// dá a ele SELECT num banco (ADR-081). Só num servidor fora de produção.
+    /// </summary>
+    PrepareReadAccess = 17,
 }
 
 /// <summary>Como terminou uma operação de banco. Os valores vão para o banco: não reordene.</summary>

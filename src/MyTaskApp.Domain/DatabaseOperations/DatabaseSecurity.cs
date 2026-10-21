@@ -38,6 +38,12 @@ public enum SecurityViolationCode
 
     /// <summary>A conexão é só o servidor (ADR-057) e nenhum banco foi escolhido.</summary>
     DatabaseNotChosen,
+
+    /// <summary>Consulta Inteligente num banco de produção, ou que aponta para um (ADR-081).</summary>
+    DataQueryForbidden,
+
+    /// <summary>Preparar o usuário de leitura fora de Desenvolvimento/Teste, ou em produção (ADR-081).</summary>
+    ReadAccessForbidden,
 }
 
 public sealed record SecurityViolation(SecurityViolationCode Code, string Message);
@@ -232,6 +238,14 @@ public sealed class DatabaseSecurityPolicy : IDatabaseSecurityPolicy
                     SecurityViolationCode.SqlExecutionForbidden,
                     "SQL livre é proibido em conexões de produção.",
                     violations);
+                break;
+
+            case DatabaseOperationType.QueryData:
+                CheckDataQuery(request, violations);
+                break;
+
+            case DatabaseOperationType.PrepareReadAccess:
+                CheckReadAccess(request, violations);
                 break;
 
             default:
@@ -480,6 +494,70 @@ public sealed class DatabaseSecurityPolicy : IDatabaseSecurityPolicy
         RequireEnabled(target, isSource: false, violations);
         RequirePermission(target, ConnectionPermission.Modify, "ser alterada", violations);
         RequirePermission(target, ConnectionPermission.ExecuteSql, "executar SQL", violations);
+    }
+
+    /// <summary>
+    /// A leitura de linhas pela Consulta Inteligente (ADR-081). Produção fica
+    /// de fora mesmo com <see cref="ConnectionPermission.Read"/>: lá, ler é só
+    /// catálogo, e dado só sai anonimizado.
+    /// </summary>
+    private static void CheckDataQuery(DatabaseOperationRequest request, Violations violations)
+    {
+        if (RequireTarget(request, violations) is not { } target)
+        {
+            return;
+        }
+
+        if (target.IsProtected || IsProtectedEndpoint(request, target))
+        {
+            violations.Add(
+                SecurityViolationCode.DataQueryForbidden,
+                $"{target.Name} é produção (ou aponta para um servidor de produção): a Consulta Inteligente só lê cópias locais.");
+            return;
+        }
+
+        RequireEnabled(target, isSource: true, violations);
+        RequirePermission(target, ConnectionPermission.Read, "ler", violations);
+        RequireDatabase(target, "consulta", violations);
+    }
+
+    /// <summary>
+    /// Criar o usuário de leitura e dar SELECT a ele (ADR-081) altera o
+    /// servidor: só num de Desenvolvimento ou Teste que já aceita receber cópias.
+    /// </summary>
+    private static void CheckReadAccess(DatabaseOperationRequest request, Violations violations)
+    {
+        if (RequireTarget(request, violations) is not { } target)
+        {
+            return;
+        }
+
+        if (target.IsProtected || IsProtectedEndpoint(request, target)
+            || target.Environment is not (DatabaseEnvironment.Development or DatabaseEnvironment.Test))
+        {
+            violations.Add(
+                SecurityViolationCode.ReadAccessForbidden,
+                $"O acesso de leitura só é preparado em servidores de Desenvolvimento ou Teste, e {target.Name} não é um deles.");
+            return;
+        }
+
+        RequireEnabled(target, isSource: false, violations);
+
+        if (!target.Permissions.AllowAsDestination)
+        {
+            violations.Add(SecurityViolationCode.DestinationNotAllowed, $"{target.Name} não pode ser usada como destino.");
+        }
+
+        if (target.Database is not { } database)
+        {
+            RequireDatabase(target, "consulta", violations);
+        }
+        else if (SystemDatabases.Contains(database))
+        {
+            violations.Add(
+                SecurityViolationCode.ProtectedSystemDatabase,
+                $"{database} é um banco do próprio servidor e não é consultado.");
+        }
     }
 
     private static void CheckProtectedEndpoint(
