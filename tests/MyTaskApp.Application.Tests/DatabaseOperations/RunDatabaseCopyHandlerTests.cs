@@ -93,6 +93,40 @@ public class RunDatabaseCopyHandlerTests
     }
 
     [Fact]
+    public async Task ARowFilter_IsCountedBeforeTheCopy_GoesInTheSelect_AndItsRowsAreLeftOutOfTheVerification()
+    {
+        _scenario.Profile.ReplaceRowFilters([new RowFilterSpec("public", "clientes", "id = 1")], DatabaseCopyScenario.Now);
+        _scenario.Inspector.KeptRows.Add("pk1");
+        _scenario.Inspector.Matching["public.clientes"] = 1;
+
+        var result = await RunAsync();
+
+        result.Succeeded.Should().BeTrue(result.Error);
+        _scenario.Copier.Copied.Single(table => table.Table == "clientes").RowFilter.Should().Be("id = 1");
+        _scenario.Copier.Copied.Single(table => table.Table == "pedidos").RowFilter.Should().BeNull();
+        _scenario.Inspector.Calls.Should().Contain("matching:ECO Produção:public.clientes:id = 1");
+        _scenario.Inspector.Calls.Should().Contain("fingerprint:ECO Produção:public.clientes.email:sem id = 1");
+        _scenario.Inspector.Calls.Should().Contain("fingerprint:ECO Desenvolvimento:public.clientes.email", "no destino a condição pode não valer mais");
+        result.Verification!.Checks.Where(check => check.Category == VerificationEvaluator.SensitiveData)
+            .Should().OnlyContain(check => check.Outcome == CheckOutcome.Pass);
+    }
+
+    [Fact]
+    public async Task ARowFilterTheServerRefuses_StopsBeforeAnything()
+    {
+        _scenario.Profile.ReplaceRowFilters([new RowFilterSpec("public", "clientes", "x = 1")], DatabaseCopyScenario.Now);
+        _scenario.Inspector.RefusedCondition = "x = 1";
+
+        var result = await RunAsync();
+
+        result.Status.Should().Be(DatabaseOperationStatus.Failed);
+        result.Steps[DatabaseCopyStep.ValidateMasking].Should().Be(CommandStepState.Failed);
+        result.Error.Should().Contain("public.clientes").And.Contain("não roda na origem").And.Contain("42703");
+        _scenario.Tools.Calls.Should().Equal("catalog:ECO Produção:eco_core");
+        _scenario.Workspaces.Created.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task ASkippedTable_WithRowsInTheDestination_FailsTheVerification()
     {
         _scenario.Profile.ReplaceSkippedTables([new SkippedTableSpec("public", "pedidos")], DatabaseCopyScenario.Now);

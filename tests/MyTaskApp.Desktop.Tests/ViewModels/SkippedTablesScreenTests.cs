@@ -108,7 +108,7 @@ public class SkippedTablesScreenTests
             ForeignKeys = [new ForeignKeyLink("public.pedidos", "public.clientes")],
         };
         _runner.Handlers[typeof(PreviewMaskingHandler)] = new PreviewMaskingHandler(
-            new ServerOnlyScreenTests.CapturingConnections(DatabaseScreen.Production), new CatalogOnlyCopier(catalog),
+            new ServerOnlyScreenTests.CapturingConnections(DatabaseScreen.Production), new CatalogOnlyCopier(catalog), new ServerOnlyScreenTests.CapturingInspector(_ => { }),
             new DatabaseSecurityPolicy(), TimeProvider.System);
         var viewModel = ViewModel();
         viewModel.EditAnonymizationProfile(DatabaseScreen.Profile);

@@ -331,18 +331,47 @@ internal sealed class FakeServerInspector : IPostgresServerInspector
         ColumnReference column,
         string salt,
         int limit,
+        string? excluding = null,
         CancellationToken cancellationToken = default)
     {
-        Calls.Add($"fingerprint:{connection.Name}:{column.ColumnKey}");
+        Calls.Add(excluding is null
+            ? $"fingerprint:{connection.Name}:{column.ColumnKey}"
+            : $"fingerprint:{connection.Name}:{column.ColumnKey}:sem {excluding}");
 
         // A origem (e quem não mascara) devolve o "real"; os outros, valores trocados.
+        // As chaves de KeptRows chegam reais ao destino (linhas sem máscara) e somem da origem com a condição.
         var real = connection.Environment is DatabaseEnvironment.Production or DatabaseEnvironment.CriticalProduction
             && connection.Username != "dump_anon";
-        var values = Enumerable.Range(1, 5).ToDictionary(
-            index => $"pk{index}",
-            index => (string?)(real || Unmasked.Contains(connection.Id) ? $"v{index}" : $"m{index}"));
+        var values = Enumerable.Range(1, 5)
+            .Select(index => $"pk{index}")
+            .Where(key => excluding is null || !KeptRows.Contains(key))
+            .ToDictionary(
+                key => key,
+                key => (string?)(real || Unmasked.Contains(connection.Id) || KeptRows.Contains(key) ? $"v{key[2..]}" : $"m{key[2..]}"));
 
         return Task.FromResult(new ColumnFingerprint(column, values));
+    }
+
+    /// <summary>As chaves (pk1…pk5) das linhas sem máscara: chegam ao destino com o valor real.</summary>
+    public HashSet<string> KeptRows { get; } = [];
+
+    /// <summary>Quantas linhas batem na condição, por tabela; o padrão é 1.</summary>
+    public Dictionary<string, long> Matching { get; } = [];
+
+    /// <summary>A condição que o "servidor" recusa, com a mensagem dele.</summary>
+    public string? RefusedCondition { get; set; }
+
+    public Task<long> CountMatchingAsync(
+        DatabaseConnectionSnapshot connection,
+        string table,
+        string condition,
+        CancellationToken cancellationToken = default)
+    {
+        Calls.Add($"matching:{connection.Name}:{table}:{condition}");
+
+        return condition == RefusedCondition
+            ? throw new DomainException("column \"x\" does not exist (42703)")
+            : Task.FromResult(Matching.GetValueOrDefault(table, 1));
     }
 
     /// <summary>Linhas sem a máscara fixa, por coluna; o padrão é zero — a cópia que deu certo.</summary>

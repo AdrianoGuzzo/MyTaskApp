@@ -388,7 +388,7 @@ public class PostgresInspectorsTests
                 ["h2", null],
             ]);
 
-        var fingerprint = await Inspector().FingerprintAsync(Connection(DatabaseEnvironment.Development), new ColumnReference("public", "clientes", "email"), "sal", 100, Ct);
+        var fingerprint = await Inspector().FingerprintAsync(Connection(DatabaseEnvironment.Development), new ColumnReference("public", "clientes", "email"), "sal", 100, cancellationToken: Ct);
 
         fingerprint.Values.Should().HaveCount(2);
         fingerprint.Values["h2"].Should().BeNull();
@@ -399,7 +399,7 @@ public class PostgresInspectorsTests
     [Fact]
     public async Task WithoutAPrimaryKey_ThereIsNothingToPair()
     {
-        var fingerprint = await Inspector().FingerprintAsync(Connection(DatabaseEnvironment.Development), new ColumnReference("public", "log", "texto"), "sal", 100, Ct);
+        var fingerprint = await Inspector().FingerprintAsync(Connection(DatabaseEnvironment.Development), new ColumnReference("public", "log", "texto"), "sal", 100, cancellationToken: Ct);
 
         fingerprint.Values.Should().BeEmpty();
     }

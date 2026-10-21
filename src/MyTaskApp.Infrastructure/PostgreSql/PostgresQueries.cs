@@ -150,14 +150,16 @@ internal static class PostgresQueries
     /// <summary>
     /// Os pares salgados de uma coluna: $1 = o sal. O valor fica no servidor;
     /// só o hash, com sal novo a cada execução, chega ao app.
+    /// <paramref name="excluding"/>: as linhas sem máscara (ADR-080) ficam de fora.
     /// </summary>
-    public static string Fingerprint(ColumnReference column, IReadOnlyList<string> primaryKey, int limit)
+    public static string Fingerprint(ColumnReference column, IReadOnlyList<string> primaryKey, int limit, string? excluding = null)
     {
         var key = string.Join(", ", primaryKey.Select(SqlQuoting.QuoteIdentifier));
         var table = $"{SqlQuoting.QuoteIdentifier(column.Schema)}.{SqlQuoting.QuoteIdentifier(column.Table)}";
         var value = SqlQuoting.QuoteIdentifier(column.Column);
+        var where = excluding is null ? string.Empty : $"WHERE {MaskedSelectBuilder.NotMatching(excluding)} ";
 
-        return $"SELECT md5($1 || ROW({key})::text), md5($1 || ({value})::text) FROM {table} " +
+        return $"SELECT md5($1 || ROW({key})::text), md5($1 || ({value})::text) FROM {table} {where}" +
                $"ORDER BY {key} LIMIT {limit.ToString(CultureInfo.InvariantCulture)}";
     }
 }

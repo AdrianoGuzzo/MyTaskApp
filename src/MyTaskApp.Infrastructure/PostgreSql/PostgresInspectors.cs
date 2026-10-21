@@ -131,6 +131,7 @@ internal sealed class PostgresServerInspector(
         ColumnReference column,
         string salt,
         int limit,
+        string? excluding = null,
         CancellationToken cancellationToken = default)
     {
         await using var session = await sessions.OpenAsync(connection, null, cancellationToken);
@@ -145,7 +146,7 @@ internal sealed class PostgresServerInspector(
 
         var values = new Dictionary<string, string?>(StringComparer.Ordinal);
 
-        foreach (var row in await session.QueryAsync(PostgresQueries.Fingerprint(column, key, limit), [salt], cancellationToken))
+        foreach (var row in await session.QueryAsync(PostgresQueries.Fingerprint(column, key, limit, excluding), [salt], cancellationToken))
         {
             values[Text(row[0])] = row[1] as string;
         }
@@ -161,6 +162,16 @@ internal sealed class PostgresServerInspector(
     {
         await using var session = await sessions.OpenAsync(connection, null, cancellationToken);
         return Number((await session.QueryAsync(MaskedSelectBuilder.CountNotMasked(column, mask), [], cancellationToken)).Single()[0]);
+    }
+
+    public async Task<long> CountMatchingAsync(
+        DatabaseConnectionSnapshot connection,
+        string table,
+        string condition,
+        CancellationToken cancellationToken = default)
+    {
+        await using var session = await sessions.OpenAsync(connection, null, cancellationToken);
+        return Number((await session.QueryAsync(MaskedSelectBuilder.CountMatching(table, condition), [], cancellationToken)).Single()[0]);
     }
 
     private static DatabaseConnectionSnapshot Maintenance(DatabaseConnectionSnapshot connection) =>

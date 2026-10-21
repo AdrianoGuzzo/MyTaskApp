@@ -93,6 +93,8 @@ public sealed record AnonymizationRuleChange(
 
 public sealed record SkippedTableChange(string Table, ChangeKind Kind);
 
+public sealed record RowFilterChange(string Table, ChangeKind Kind, string? Before, string? After);
+
 public sealed record FieldChange(string Field, string? Before, string? After);
 
 /// <param name="Applied">Gravado. <c>false</c> numa pré-visualização ou quando havia problema.</param>
@@ -224,6 +226,9 @@ public sealed class ChangeAnonymizationProfileHandler(
             draft = AnonymizationProfile.Create(name, description, connectionId, now);
             draft.ReplaceRules(proposedRules.Select(rule => rule.ToSpec()), now);
             draft.ReplaceSkippedTables(proposedSkipped.Select(table => table.ToSpec()), now);
+
+            // As linhas sem máscara não mudam por aqui (ADR-080): seguem como estão, para o rascunho validar igual à cópia.
+            draft.ReplaceRowFilters(before.RowFilters.Select(filter => filter.ToSpec()), now);
         }
         catch (DomainException exception)
         {
@@ -294,7 +299,7 @@ public sealed class ChangeAnonymizationProfileHandler(
     }
 }
 
-/// <summary>Criar uma variante: as mesmas regras e tabelas sem dados, com outro nome.</summary>
+/// <summary>Criar uma variante: as mesmas regras, tabelas sem dados e linhas sem máscara, com outro nome.</summary>
 public sealed record DuplicateAnonymizationProfile(Guid Id, string Name, Guid? ConnectionId = null);
 
 public sealed class DuplicateAnonymizationProfileHandler(
@@ -315,6 +320,7 @@ public sealed class DuplicateAnonymizationProfileHandler(
                 source.Rules)
             {
                 SkippedTables = source.SkippedTables,
+                RowFilters = source.RowFilters,
             },
             cancellationToken);
     }
@@ -330,7 +336,10 @@ public sealed record AnonymizationProfileComparison(
     IReadOnlyList<FieldChange> Fields,
     IReadOnlyList<AnonymizationRuleChange> Rules,
     IReadOnlyList<SkippedTableChange> SkippedTables,
-    int IdenticalRules);
+    int IdenticalRules)
+{
+    public IReadOnlyList<RowFilterChange> RowFilters { get; init; } = [];
+}
 
 public sealed class CompareAnonymizationProfilesHandler(IAnonymizationProfileRepository profiles)
 {
@@ -350,7 +359,10 @@ public sealed class CompareAnonymizationProfilesHandler(IAnonymizationProfileRep
             rules,
             Diff.SkippedTables(first.SkippedTables, second.SkippedTables),
             first.Rules.Count(rule => secondKeys.Contains(rule.ColumnKey))
-                - rules.Count(change => change.Kind is ChangeKind.Changed));
+                - rules.Count(change => change.Kind is ChangeKind.Changed))
+        {
+            RowFilters = Diff.RowFilters(first.RowFilters, second.RowFilters),
+        };
     }
 }
 
@@ -619,6 +631,11 @@ public sealed class AnalyzeAnonymizationProfileHandler(
             yield return "O perfil não tem regra: uma cópia com ele levaria todos os dados como estão.";
         }
 
+        foreach (var filter in profile.RowFilters)
+        {
+            yield return $"{filter.TableKey}: as linhas em que \"{filter.Condition}\" vão sem máscara, com os valores reais.";
+        }
+
         foreach (var rule in profile.Rules)
         {
             var info = MaskingCatalog.Of(rule.Method);
@@ -729,5 +746,32 @@ internal static class Diff
             .Concat(right.Except(left).Select(table => new SkippedTableChange(table, ChangeKind.Added)))
             .OrderBy(change => change.Table, StringComparer.Ordinal)
             .ToList();
+    }
+
+    public static IReadOnlyList<RowFilterChange> RowFilters(
+        IReadOnlyList<RowFilterRow> before,
+        IReadOnlyList<RowFilterRow> after)
+    {
+        var left = before.ToDictionary(filter => filter.TableKey, filter => filter.Condition, StringComparer.Ordinal);
+        var right = after.ToDictionary(filter => filter.TableKey, filter => filter.Condition, StringComparer.Ordinal);
+        var changes = new List<RowFilterChange>();
+
+        foreach (var (table, condition) in left)
+        {
+            if (!right.TryGetValue(table, out var other))
+            {
+                changes.Add(new RowFilterChange(table, ChangeKind.Removed, condition, null));
+            }
+            else if (!string.Equals(condition, other, StringComparison.Ordinal))
+            {
+                changes.Add(new RowFilterChange(table, ChangeKind.Changed, condition, other));
+            }
+        }
+
+        changes.AddRange(right
+            .Where(entry => !left.ContainsKey(entry.Key))
+            .Select(entry => new RowFilterChange(entry.Key, ChangeKind.Added, null, entry.Value)));
+
+        return changes.OrderBy(change => change.Table, StringComparer.Ordinal).ToList();
     }
 }

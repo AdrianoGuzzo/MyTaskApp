@@ -126,7 +126,7 @@ operação, ambiente, permissões e anonimização. Exemplos:
 | Critical Production → Development | proibido |
 | restore, `createdb`, `dropdb` em Production | proibido |
 | dump com dados de Production (só a estrutura sai: `--schema-only`) | proibido |
-| SQL livre ou mascaramento estático em Production | proibido |
+| SQL livre ou mascaramento estático em Production | proibido (a única exceção é a condição das [linhas sem máscara](#linhas-sem-máscara), só lida, na sessão só-leitura da origem) |
 | destino "Development" apontando para o mesmo host/porta/banco de uma conexão de produção | proibido |
 | `dropdb`/`createdb` em `postgres`, `template0`, `template1` | proibido |
 
@@ -368,6 +368,46 @@ vazia mesmo apontando para `clientes`.
 
 A verificação confere as duas coisas: as outras tabelas com as mesmas linhas
 da origem, e as sem dados **vazias** no destino.
+
+### Linhas sem máscara
+
+Logo abaixo, **Linhas sem máscara** escolhe, por tabela, registros que não
+precisam de anonimização: o usuário de teste, os registros de sistema. Escolha
+a tabela (da lista lida por **Sugerir colunas**, ou digite `schema.tabela`;
+sem schema, vale `public`), escreva a condição — o `WHERE`, sem a palavra — e
+clique em **Adicionar**:
+
+```sql
+id in (1, 2, 3)
+email like '%@empresa.com.br'
+login = 'qa' or perfil = 'sistema'
+```
+
+As linhas que batem na condição vão para o destino **com os valores reais**;
+as outras da mesma tabela continuam mascaradas. Nenhuma linha some, então as
+FKs e a contagem de linhas não mudam. Em tabela particionada, a condição vale
+para todas as partições. Cada tabela tem uma condição; para corrigir, edite a
+da lista.
+
+A condição é SQL do PostgreSQL e roda **só na origem, só para ler**
+(ADR-080):
+
+- ao adicionar e ao salvar, o app recusa o que poderia sair da expressão:
+  `;`, comentário (`--`, `/* */`), `$`, barra invertida dentro de texto,
+  aspas ou parênteses sem fechar;
+- **Pré-visualizar**, o [Validar] e a cópia rodam
+  `SELECT count(*) … WHERE (condição)` na origem e dizem quantas linhas vão sem
+  máscara. Uma condição que o servidor recusa (coluna que não existe, sintaxe)
+  aparece com a mensagem dele, e a cópia não começa;
+- a sessão é somente leitura: uma função que escreve, como `nextval`, é
+  recusada pelo servidor. Uma condição cara (subconsulta sem índice) deixa a
+  cópia lenta: a contagem antes dela já mostra isso;
+- a pré-visualização mostra só as linhas mascaradas, e a verificação deixa as
+  linhas da condição fora da comparação.
+
+Cuidado com o alcance: `true` deixa a tabela inteira sem máscara. Confira a
+contagem antes de copiar. Uma condição numa tabela marcada em **Tabelas sem
+dados** é recusada: escolha um dos dois.
 
 ## Copiar Produção → Desenvolvimento
 

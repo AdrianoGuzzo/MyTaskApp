@@ -516,7 +516,9 @@ public sealed class AnonymizationProfileTools(McpGateway gateway)
         && persisted.Rules.Select(rule => (rule.ColumnKey, rule.Method, rule.Argument, rule.Sensitivity)).Order()
             .SequenceEqual(expected.Rules.Select(rule => (rule.ColumnKey, rule.Method, rule.Argument, rule.Sensitivity)).Order())
         && persisted.SkippedTables.Select(table => table.TableKey).Order(StringComparer.Ordinal)
-            .SequenceEqual(expected.SkippedTables.Select(table => table.TableKey).Order(StringComparer.Ordinal));
+            .SequenceEqual(expected.SkippedTables.Select(table => table.TableKey).Order(StringComparer.Ordinal))
+        && persisted.RowFilters.Select(filter => (filter.TableKey, filter.Condition)).Order()
+            .SequenceEqual(expected.RowFilters.Select(filter => (filter.TableKey, filter.Condition)).Order());
 
     private static Task<IReadOnlyList<AnonymizationProfileRow>> Profiles(IUseCaseRunner runner, CancellationToken cancellationToken) =>
         runner.RunAsync<GetAnonymizationProfilesHandler, IReadOnlyList<AnonymizationProfileRow>>(
@@ -545,6 +547,7 @@ public sealed class AnonymizationProfileTools(McpGateway gateway)
             connection is null ? null : ConnectionInfo.Of(connection),
             profile.Rules.Select(RuleInfo.Of).ToList(),
             profile.SkippedTables.Select(table => table.TableKey).ToList(),
+            profile.RowFilters.Select(filter => new RowFilterInfo(filter.TableKey, filter.Condition)).ToList(),
             usage,
             "Configurado no MyTaskApp. As máscaras não são instaladas no banco: entram no SELECT de cada cópia (ADR-058). " +
             "Para saber se o perfil serve ao banco de hoje, use anonymization_profile_validate.");
@@ -618,6 +621,7 @@ public sealed record ProfileSummary(
     bool IsEnabled,
     int Rules,
     int SkippedTables,
+    int RowFilters,
     DateTimeOffset UpdatedAt)
 {
     public static ProfileSummary Of(AnonymizationProfileRow profile, IReadOnlyList<DatabaseConnectionRow> connections) => new(
@@ -629,14 +633,19 @@ public sealed record ProfileSummary(
         profile.IsEnabled,
         profile.Rules.Count,
         profile.SkippedTables.Count,
+        profile.RowFilters.Count,
         profile.UpdatedAt);
 }
+
+/// <summary>As linhas de uma tabela que vão sem máscara (ADR-080): só se lê por aqui; edita-se na tela.</summary>
+public sealed record RowFilterInfo(string Table, string Condition);
 
 public sealed record ProfileDetail(
     ProfileSummary Profile,
     ConnectionInfo? Connection,
     IReadOnlyList<RuleInfo> Rules,
     IReadOnlyList<string> SkippedTables,
+    IReadOnlyList<RowFilterInfo> RowFilters,
     ProfileUsage UsedBy,
     string State);
 
@@ -682,6 +691,8 @@ public sealed record ProfileSchema(
             "Uma regra identifica a coluna por schema, tabela e coluna, sensíveis a maiúsculas como no PostgreSQL.",
             "Coluna PK ou FK não se mascara: quebraria as ligações. Índice único só aceita máscara que mantém valores únicos (Hash, FakeEmail).",
             "Tabela sem dados vai só com a estrutura; uma FK de tabela com dados para ela impede a cópia.",
+            "Linhas sem máscara (rowFilters): por tabela, uma condição SQL escrita pelo usuário na tela; as linhas que batem nela " +
+            "vão com os valores reais (ADR-080). O MCP só as mostra: não grava nem executa a condição, e as alterações por aqui as mantêm.",
             "O perfil não tem campos além destes: nada fica oculto ou sem interpretação.",
             "As máscaras não são instaladas no banco (sem PostgreSQL Anonymizer): entram no SELECT de cada cópia (ADR-058).",
         ]);

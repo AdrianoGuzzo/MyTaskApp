@@ -94,6 +94,35 @@ internal sealed class AnonymizationProfileConfiguration : IEntityTypeConfigurati
         builder.Navigation(profile => profile.SkippedTables)
             .HasField("_skippedTables")
             .UsePropertyAccessMode(PropertyAccessMode.Field);
+
+        builder.HasMany(profile => profile.RowFilters)
+            .WithOne()
+            .HasForeignKey(filter => filter.ProfileId)
+            .IsRequired()
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Navigation(profile => profile.RowFilters)
+            .HasField("_rowFilters")
+            .UsePropertyAccessMode(PropertyAccessMode.Field);
+    }
+}
+
+internal sealed class AnonymizationRowFilterConfiguration : IEntityTypeConfiguration<AnonymizationRowFilter>
+{
+    public void Configure(EntityTypeBuilder<AnonymizationRowFilter> builder)
+    {
+        builder.ToTable("AnonymizationRowFilters");
+
+        builder.HasKey(filter => filter.Id);
+        builder.Property(filter => filter.Id).ValueGeneratedNever();
+
+        builder.Property(filter => filter.Schema).IsRequired().HasMaxLength(AnonymizationRule.MaxIdentifierLength);
+        builder.Property(filter => filter.Table).IsRequired().HasMaxLength(AnonymizationRule.MaxIdentifierLength);
+        builder.Property(filter => filter.Condition).IsRequired().HasMaxLength(RowFilterCondition.MaxLength);
+        builder.Property(filter => filter.ConfirmedAt).HasConversion(UtcInstantConverter.Instance).IsRequired();
+
+        // Uma condição por tabela; identificadores citados diferenciam maiúsculas.
+        builder.HasIndex(filter => new { filter.ProfileId, filter.Schema, filter.Table }).IsUnique();
     }
 }
 

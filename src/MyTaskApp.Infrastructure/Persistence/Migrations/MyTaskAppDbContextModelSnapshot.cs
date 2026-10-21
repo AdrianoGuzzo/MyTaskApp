@@ -15,7 +15,7 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.13");
 
             modelBuilder.Entity("MyTaskApp.Domain.Agents.AgentSession", b =>
                 {
@@ -352,6 +352,40 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("AnonymizationProfiles", (string)null);
+                });
+
+            modelBuilder.Entity("MyTaskApp.Domain.DatabaseOperations.AnonymizationRowFilter", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Condition")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ConfirmedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("ProfileId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Schema")
+                        .IsRequired()
+                        .HasMaxLength(63)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Table")
+                        .IsRequired()
+                        .HasMaxLength(63)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProfileId", "Schema", "Table")
+                        .IsUnique();
+
+                    b.ToTable("AnonymizationRowFilters", (string)null);
                 });
 
             modelBuilder.Entity("MyTaskApp.Domain.DatabaseOperations.AnonymizationRule", b =>
@@ -1621,6 +1655,15 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("MyTaskApp.Domain.DatabaseOperations.AnonymizationRowFilter", b =>
+                {
+                    b.HasOne("MyTaskApp.Domain.DatabaseOperations.AnonymizationProfile", null)
+                        .WithMany("RowFilters")
+                        .HasForeignKey("ProfileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("MyTaskApp.Domain.DatabaseOperations.AnonymizationRule", b =>
                 {
                     b.HasOne("MyTaskApp.Domain.DatabaseOperations.AnonymizationProfile", null)
@@ -1990,6 +2033,8 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("MyTaskApp.Domain.DatabaseOperations.AnonymizationProfile", b =>
                 {
+                    b.Navigation("RowFilters");
+
                     b.Navigation("Rules");
 
                     b.Navigation("SkippedTables");

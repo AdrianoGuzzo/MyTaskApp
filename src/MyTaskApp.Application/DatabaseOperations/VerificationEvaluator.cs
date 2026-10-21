@@ -164,12 +164,23 @@ public static class VerificationEvaluator
             : new CheckResult(SensitiveData, name, CheckOutcome.Pass, $"{compared - equal} de {compared} valores diferentes da origem.");
     }
 
-    /// <summary>Uma máscara fixa (texto, número, nulo) tem de estar em todas as linhas do destino.</summary>
-    public static CheckResult CompareFixed(ColumnReference column, long notMasked) =>
-        notMasked == 0
-            ? new CheckResult(SensitiveData, column.ColumnKey, CheckOutcome.Pass, "Todas as linhas com o valor da máscara.")
+    /// <summary>
+    /// Uma máscara fixa (texto, número, nulo) tem de estar em todas as linhas do
+    /// destino — menos nas <paramref name="unmasked"/> linhas sem máscara (ADR-080).
+    /// </summary>
+    public static CheckResult CompareFixed(ColumnReference column, long notMasked, long unmasked = 0)
+    {
+        if (notMasked == 0)
+        {
+            return new CheckResult(SensitiveData, column.ColumnKey, CheckOutcome.Pass, "Todas as linhas com o valor da máscara.");
+        }
+
+        return notMasked <= unmasked
+            ? new CheckResult(SensitiveData, column.ColumnKey, CheckOutcome.Pass,
+                $"Todas as linhas com o valor da máscara, menos {notMasked.ToString(CultureInfo.InvariantCulture)} das linhas sem máscara.")
             : new CheckResult(SensitiveData, column.ColumnKey, CheckOutcome.Fail,
                 $"{notMasked.ToString(CultureInfo.InvariantCulture)} linha(s) sem a máscara.");
+    }
 
     private static CheckResult CompareSets(string category, string name, IReadOnlyList<string> source, IReadOnlyList<string> destination)
     {

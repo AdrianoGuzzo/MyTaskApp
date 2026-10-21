@@ -81,6 +81,65 @@ public class ProfileTests
     }
 
     [Fact]
+    public void RowFilters_AreReplacedAsAWhole_OnePerTable()
+    {
+        var profile = AnonymizationProfile.Create("x", null, Columns, Now);
+
+        profile.ReplaceRowFilters(
+            [new RowFilterSpec("public", "usuarios", "  WHERE id = 1 "), new RowFilterSpec("public", "Config", "chave in ('a', 'b')")],
+            Now.AddMinutes(1));
+        profile.RowFilters.Select(filter => (filter.TableKey, filter.Condition))
+            .Should().Equal(("public.usuarios", "id = 1"), ("public.Config", "chave in ('a', 'b')"));
+        profile.RowFilters.Should().OnlyContain(filter => filter.ProfileId == profile.Id && filter.ConfirmedAt == Now.AddMinutes(1));
+        profile.UpdatedAt.Should().Be(Now.AddMinutes(1));
+
+        FluentActions.Invoking(() => profile.ReplaceRowFilters(
+                [new RowFilterSpec("public", "usuarios", "id = 1"), new RowFilterSpec("public", "usuarios", "id = 2")], Now))
+            .Should().Throw<DomainException>().WithMessage("*duas vezes*");
+        FluentActions.Invoking(() => profile.ReplaceRowFilters([new RowFilterSpec("public", "usuarios", "id = 1; drop table x")], Now))
+            .Should().Throw<DomainException>().WithMessage("*public.usuarios*;*");
+        profile.RowFilters.Should().HaveCount(2, "uma lista inválida não muda nada");
+
+        profile.ReplaceRowFilters([], Now.AddMinutes(2));
+        profile.RowFilters.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("id = 1", "id = 1")]
+    [InlineData("where id = 1", "id = 1")]
+    [InlineData("WHERE\n  email like '%@empresa.com.br'", "email like '%@empresa.com.br'")]
+    [InlineData("nome = 'D''Ávila; -- não é comentário'", "nome = 'D''Ávila; -- não é comentário'")]
+    [InlineData("\"Tipo\" = 'sistema' and (id < 10 or id in (select id from public.testes))",
+        "\"Tipo\" = 'sistema' and (id < 10 or id in (select id from public.testes))")]
+    [InlineData("whereabouts = 1", "whereabouts = 1")]
+    public void ARowFilterCondition_KeepsWhatTheUserWrote(string condition, string expected) =>
+        RowFilterCondition.Normalize(condition, "public.t").Should().Be(expected);
+
+    [Theory]
+    [InlineData("", "*Informe a condição*")]
+    [InlineData("   ", "*Informe a condição*")]
+    [InlineData("id = 1; delete from usuarios", "*;*")]
+    [InlineData("id = 1 -- e o resto", "*comentário*")]
+    [InlineData("id = 1 /* e o resto */", "*comentário*")]
+    [InlineData("nome = $$x$$", "*$*")]
+    [InlineData("nome = $1", "*$*")]
+    [InlineData("nome = E'a\\'b'", "*barra invertida*")]
+    [InlineData("nome = E'a\\b'", "*barra invertida*")]
+    [InlineData("nome = 'aberto", "*aspas simples*")]
+    [InlineData("\"aberto = 1", "*aspas duplas*")]
+    [InlineData("id = 1) or (true", "*)*")]
+    [InlineData("(id = 1", "*(*")]
+    [InlineData("id = 1\u0000", "*controle*")]
+    public void ARowFilterCondition_ThatCouldLeaveItsParentheses_IsRefused(string condition, string message) =>
+        FluentActions.Invoking(() => RowFilterCondition.Normalize(condition, "public.t"))
+            .Should().Throw<DomainException>().WithMessage(message);
+
+    [Fact]
+    public void ARowFilterCondition_HasALimit() =>
+        FluentActions.Invoking(() => RowFilterCondition.Normalize("id = " + new string('1', RowFilterCondition.MaxLength), "public.t"))
+            .Should().Throw<DomainException>().WithMessage("*2000*");
+
+    [Fact]
     public void TheSameColumnTwice_IsRefused_AndNothingChanges()
     {
         var profile = AnonymizationProfile.Create("x", null, Columns, Now);

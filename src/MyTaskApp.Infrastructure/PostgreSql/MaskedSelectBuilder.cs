@@ -18,6 +18,11 @@ namespace MyTaskApp.Infrastructure.PostgreSql;
 /// do <c>CAST</c> vem do <c>format_type</c> do próprio servidor, já citado por ele.
 /// </para>
 /// <para>
+/// A exceção é a condição das linhas sem máscara (ADR-080): ela entra como
+/// está, já conferida por <see cref="RowFilterCondition"/>, sempre entre
+/// parênteses e só na leitura da origem, que é somente leitura.
+/// </para>
+/// <para>
 /// As máscaras variáveis são <b>determinísticas</b>: o mesmo valor vira sempre
 /// o mesmo mascarado (pelo md5 dele). Um e-mail que aparece em duas tabelas
 /// continua batendo, e um índice único continua único no hash e no e-mail falso.
@@ -37,23 +42,41 @@ internal static class MaskedSelectBuilder
         "Nogueira", "Oliveira", "Pereira", "Queiroz", "Ribeiro", "Santos", "Teixeira", "Vieira",
     ];
 
-    /// <summary>A tabela inteira, mascarada no servidor: <c>COPY (SELECT … FROM ONLY t) TO STDOUT</c>.</summary>
+    /// <summary>
+    /// A tabela inteira, mascarada no servidor: <c>COPY (SELECT … FROM ONLY t) TO STDOUT</c>.
+    /// Com linhas sem máscara, cada coluna mascarada vira <c>CASE WHEN (condição) THEN coluna ELSE máscara END</c>.
+    /// </summary>
     public static string CopyOut(MaskedTablePlan table) =>
-        $"COPY (SELECT {string.Join(", ", table.Columns.Select(Selected))} FROM ONLY {Table(table)}) TO STDOUT";
+        $"COPY (SELECT {string.Join(", ", table.Columns.Select(column => Selected(column, table.RowFilter)))} FROM ONLY {Table(table)}) TO STDOUT";
 
     /// <summary>A gravação no destino, nas mesmas colunas e na mesma ordem.</summary>
     public static string CopyIn(MaskedTablePlan table) =>
         $"COPY {Table(table)} ({string.Join(", ", table.Columns.Select(column => SqlQuoting.QuoteIdentifier(column.Name)))}) FROM STDIN";
 
-    /// <summary>Só as colunas mascaradas, como texto, para a pré-visualização: nunca o valor real.</summary>
+    /// <summary>
+    /// Só as colunas mascaradas, como texto, para a pré-visualização: nunca o
+    /// valor real — nem o das linhas sem máscara, que ficam de fora.
+    /// </summary>
     public static string Preview(MaskedTablePlan table, int rows)
     {
         var masked = table.Columns.Where(column => column.IsMasked).Select(column => $"({Masked(column)})::text").ToList();
+        var where = table.RowFilter is { } condition ? $" WHERE {NotMatching(condition)}" : string.Empty;
 
         return masked.Count == 0
             ? throw new DomainException($"{table.QualifiedName} não tem coluna mascarada para pré-visualizar.")
-            : $"SELECT {string.Join(", ", masked)} FROM ONLY {Table(table)} LIMIT {rows.ToString(CultureInfo.InvariantCulture)}";
+            : $"SELECT {string.Join(", ", masked)} FROM ONLY {Table(table)}{where} LIMIT {rows.ToString(CultureInfo.InvariantCulture)}";
     }
+
+    /// <summary>Quantas linhas batem na condição das linhas sem máscara (ver <see cref="IPostgresServerInspector.CountMatchingAsync"/>).</summary>
+    public static string CountMatching(string qualifiedTable, string condition) =>
+        $"SELECT count(*) FROM ONLY {PostgresQueries.QuoteTable(qualifiedTable)} WHERE {Matching(condition)}";
+
+    /// <summary>A condição do usuário, revalidada e entre parênteses: nada dela escapa para fora da expressão.</summary>
+    public static string Matching(string condition) =>
+        $"({RowFilterCondition.Normalize(condition, "uma tabela")})";
+
+    /// <summary>As linhas que <b>não</b> batem — o nulo da condição conta como não bater, e a linha sai mascarada.</summary>
+    public static string NotMatching(string condition) => $"NOT coalesce({Matching(condition)}, false)";
 
     /// <summary>Quantas linhas de uma coluna com máscara fixa não têm o valor dela (ver <see cref="IPostgresServerInspector.CountNotMaskedAsync"/>).</summary>
     public static string CountNotMasked(ColumnReference column, MaskedColumnPlan mask) =>
@@ -86,8 +109,18 @@ internal static class MaskedSelectBuilder
             : $"CAST(CASE WHEN {name} IS NULL THEN NULL ELSE {expression} END AS {column.DataType})";
     }
 
-    private static string Selected(MaskedColumnPlan column) =>
-        column.IsMasked ? Masked(column) : SqlQuoting.QuoteIdentifier(column.Name);
+    private static string Selected(MaskedColumnPlan column, string? rowFilter)
+    {
+        if (!column.IsMasked)
+        {
+            return SqlQuoting.QuoteIdentifier(column.Name);
+        }
+
+        // Condição nula cai no ELSE: na dúvida, a linha sai mascarada.
+        return rowFilter is null
+            ? Masked(column)
+            : $"CASE WHEN {Matching(rowFilter)} THEN {SqlQuoting.QuoteIdentifier(column.Name)} ELSE {Masked(column)} END";
+    }
 
     private static string Table(MaskedTablePlan table) =>
         $"{SqlQuoting.QuoteIdentifier(table.Schema)}.{SqlQuoting.QuoteIdentifier(table.Table)}";
