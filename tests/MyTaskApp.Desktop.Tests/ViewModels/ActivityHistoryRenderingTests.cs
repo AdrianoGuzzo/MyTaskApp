@@ -184,6 +184,32 @@ public class ActivityHistoryRenderingTests
     }
 
     [AvaloniaFact]
+    public async Task ALongTitle_IsCutInTheLine_ButWholeInTheToolTip()
+    {
+        const string title =
+            "Revisar o relatório de fechamento do trimestre com o financeiro antes da reunião de sexta";
+        var item = Done with { Title = title };
+
+        var (window, _, _) = await ShowAsync(History(item));
+        var (flyout, view) = await OpenAsync(window);
+
+        var line = view.GetVisualDescendants().OfType<Button>()
+            .Single(button => button.Classes.Contains("historyItem"));
+        line.GetVisualDescendants().OfType<TextBlock>()
+            .Single(block => block.Classes.Contains("historyTitle"))
+            .TextLayout.TextLines.Should().ContainSingle(textLine => textLine.HasCollapsed);
+
+        ToolTip.SetIsOpen(line, true);
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+
+        var tip = ToolTip.GetTip(line).Should().BeOfType<ToolTip>().Subject;
+        Texts(tip).Should().Equal(title, "Concluída 14:31 · 48min");
+
+        ToolTip.SetIsOpen(line, false);
+        flyout.Hide();
+    }
+
+    [AvaloniaFact]
     public async Task NothingDone_ShowsTheEmptyState_WithoutLosingTheDays()
     {
         var (window, _, _) = await ShowAsync(History());

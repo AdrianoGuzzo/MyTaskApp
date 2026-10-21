@@ -38,6 +38,11 @@
       <Setter Property="Padding" Value="6,4" />
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="Cursor" Value="Hand" />
+
+      <!-- Como o título do checklist: correr o mouse pela lista não abre um balão por linha. -->
+      <Setter Property="ToolTip.Placement" Value="Bottom" />
+      <Setter Property="ToolTip.ShowDelay" Value="500" />
+      <Setter Property="ToolTip.BetweenShowDelay" Value="-1" />
     </Style>
 
     <Style Selector="Button.historyItem /template/ ContentPresenter#PART_ContentPresenter">
@@ -156,10 +161,21 @@
               <ItemsControl ItemsSource="{Binding Items}">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate x:DataType="history:ActivityItemView">
-                    <Button Classes="historyItem"
-                            ToolTip.Tip="Abrir a tarefa"
+                    <Button x:Name="HistoryLine"
+                            Classes="historyItem"
                             Command="{Binding #Root.((vm:ActivityHistoryViewModel)DataContext).OpenCommand}"
                             CommandParameter="{Binding}">
+                      <!-- O "…" da linha poupa largura; o balão devolve o texto inteiro. -->
+                      <ToolTip.Tip>
+                        <ToolTip>
+                          <StackPanel Spacing="2">
+                            <TextBlock Text="{Binding #HistoryLine.((history:ActivityItemView)DataContext).Title}" />
+                            <TextBlock FontSize="11"
+                                       Opacity="0.8"
+                                       Text="{Binding #HistoryLine.((history:ActivityItemView)DataContext).Detail}" />
+                          </StackPanel>
+                        </ToolTip>
+                      </ToolTip.Tip>
                       <Grid ColumnDefinitions="16,*">
                         <TextBlock Grid.Column="0"
                                    Classes="historyDone"
