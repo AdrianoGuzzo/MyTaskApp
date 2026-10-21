@@ -9,7 +9,11 @@ internal sealed class AgentSessionConfiguration : IEntityTypeConfiguration<Agent
 {
     public void Configure(EntityTypeBuilder<AgentSession> builder)
     {
-        builder.ToTable("AgentSessions");
+        builder.ToTable(
+            "AgentSessions",
+            table => table.HasCheckConstraint(
+                "CK_AgentSessions_ConsultationWithoutDevelopment",
+                $"\"Kind\" <> {(int)AgentSessionKind.Consultation} OR \"TaskDevelopmentId\" IS NULL"));
 
         builder.HasKey(session => session.Id);
 
@@ -45,6 +49,23 @@ internal sealed class AgentSessionConfiguration : IEntityTypeConfiguration<Agent
             .HasFilter($"\"Status\" IN ({(int)AgentSessionStatus.Starting}, {(int)AgentSessionStatus.Running})");
 
         builder.HasIndex(session => session.Status);
+
+        // Consulta Inteligente (ADR-081): da tarefa, sem ambiente — e uma
+        // ativa por tarefa, pelo mesmo motivo do índice acima. Desenvolvimento
+        // sempre nasce com ambiente (ele só some depois, no SetNull).
+        builder.Property(session => session.Kind).HasConversion<int>();
+
+        builder.HasIndex(session => session.TaskItemId, "IX_AgentSessions_TaskItemId_ConsultationActive")
+            .IsUnique()
+            .HasFilter(
+                $"\"Kind\" = {(int)AgentSessionKind.Consultation} "
+                + $"AND \"Status\" IN ({(int)AgentSessionStatus.Starting}, {(int)AgentSessionStatus.Running})");
+
+        // Só o hash: o segredo vive no ambiente do processo, como o dos hooks.
+        builder.Property(session => session.ConsultationTokenHash)
+            .HasMaxLength(AgentSession.HookTokenHashLength);
+
+        builder.HasIndex(session => session.ConsultationTokenHash);
 
         builder.Property(session => session.ProviderId)
             .IsRequired()

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using MyTaskApp.Domain.Agents;
 using MyTaskApp.Domain.Auditing;
 using MyTaskApp.Domain.Commands;
+using MyTaskApp.Domain.Consultations;
 using MyTaskApp.Domain.DatabaseOperations;
 using MyTaskApp.Domain.StickyNotes;
 using MyTaskApp.Domain.Tags;
@@ -45,6 +46,9 @@ public sealed class MyTaskAppDbContext(DbContextOptions<MyTaskAppDbContext> opti
 
     /// <summary>As sessões de agente de IA abertas para as tarefas (ADR-030).</summary>
     public DbSet<AgentSession> AgentSessions => Set<AgentSession>();
+
+    /// <summary>A Consulta Inteligente de cada tarefa (ADR-081). Só deste computador.</summary>
+    public DbSet<TaskConsultation> TaskConsultations => Set<TaskConsultation>();
 
     /// <summary>Os períodos de trabalho de cada ocorrência (ADR-052).</summary>
     public DbSet<TimeEntry> TimeEntries => Set<TimeEntry>();

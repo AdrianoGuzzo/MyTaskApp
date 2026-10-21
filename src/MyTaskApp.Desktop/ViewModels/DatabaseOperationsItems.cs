@@ -55,6 +55,8 @@ public static class DatabaseLabels
         DatabaseOperationType.Diagnose => "Diagnóstico",
         DatabaseOperationType.TestConnection => "Testar conexão",
         DatabaseOperationType.InspectDatabase => "Inspecionar",
+        DatabaseOperationType.PrepareReadAccess => "Preparar acesso de leitura",
+        DatabaseOperationType.QueryData => "Consulta Inteligente",
         _ => operation.ToString(),
     };
 
