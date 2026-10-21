@@ -47,6 +47,19 @@ public enum AgentActivity
     Failed = 4,
 }
 
+/// <summary>Para que o agente foi aberto. Os números são gravados no banco; não reordenar.</summary>
+public enum AgentSessionKind
+{
+    /// <summary>No worktree de um ambiente da tarefa, para desenvolver (ADR-030, ADR-031).</summary>
+    Development = 0,
+
+    /// <summary>
+    /// A Consulta Inteligente da tarefa (ADR-081): só leitura, nas pastas
+    /// escolhidas, sem ambiente.
+    /// </summary>
+    Consultation = 1,
+}
+
 /// <summary>
 /// Uma execução de um agente de IA de linha de comando (hoje, o Claude Code)
 /// num terminal do sistema, aberta pelo app para uma tarefa (ADR-030).
@@ -102,6 +115,18 @@ public sealed class AgentSession
     public Guid Id { get; }
 
     public Guid TaskItemId { get; }
+
+    /// <summary>Desenvolvimento (com ambiente) ou Consulta Inteligente (sem ambiente).</summary>
+    public AgentSessionKind Kind { get; private set; }
+
+    public bool IsConsultation => Kind == AgentSessionKind.Consultation;
+
+    /// <summary>
+    /// O hash do segredo com que o Claude da consulta fala com o servidor MCP
+    /// (ADR-081). Só vale enquanto a sessão está ativa: o processo saiu, o
+    /// segredo morre junto.
+    /// </summary>
+    public string? ConsultationTokenHash { get; private set; }
 
     /// <summary>
     /// O ambiente da tarefa em que o agente foi aberto (ADR-031): uma tarefa
@@ -186,6 +211,58 @@ public sealed class AgentSession
             startedAt);
     }
 
+    /// <summary>
+    /// Uma Consulta Inteligente (ADR-081): da tarefa, sem ambiente. O id da
+    /// conversa nasce aqui (<c>--session-id</c>), e é ele que "Reabrir" retoma.
+    /// </summary>
+    public static AgentSession CreateConsultation(
+        Guid taskItemId,
+        string providerId,
+        string command,
+        string workingDirectory,
+        string externalSessionId,
+        DateTimeOffset startedAt)
+    {
+        if (taskItemId == Guid.Empty)
+        {
+            throw new DomainException("A sessão precisa de uma tarefa.");
+        }
+
+        var session = new AgentSession(
+            Guid.CreateVersion7(startedAt),
+            taskItemId,
+            null,
+            Required(providerId, MaxProviderIdLength, "Informe o agente da sessão."),
+            Required(command, MaxPathLength, "Informe o comando da sessão."),
+            Required(workingDirectory, MaxPathLength, "Informe a pasta da sessão."),
+            startedAt)
+        {
+            Kind = AgentSessionKind.Consultation,
+            ExternalSessionId = Required(externalSessionId, MaxExternalSessionIdLength, "Informe a conversa da sessão."),
+        };
+
+        return session;
+    }
+
+    /// <summary>
+    /// Dá à consulta o segredo do servidor MCP. Antes de o terminal abrir,
+    /// porque o segredo vai no ambiente do processo.
+    /// </summary>
+    public void GrantConsultationAccess(string tokenHash)
+    {
+        if (!IsConsultation)
+        {
+            throw new DomainException("Só uma Consulta Inteligente acessa as ferramentas de consulta.");
+        }
+
+        if (Status != AgentSessionStatus.Starting)
+        {
+            throw new DomainException("O acesso da consulta só é dado antes de o agente abrir.");
+        }
+
+        ConsultationTokenHash = ValidHash(tokenHash, "O segredo da consulta é inválido.");
+    }
+
     /// <summary>O terminal abriu: a partir daqui a sessão é o processo <paramref name="processId"/>.</summary>
     public void MarkRunning(int processId, DateTimeOffset processStartedAt)
     {
@@ -231,13 +308,13 @@ public sealed class AgentSession
             throw new DomainException("O acompanhamento só é ligado antes de o agente abrir.");
         }
 
-        if (tokenHash is not { Length: HookTokenHashLength } || !tokenHash.All(char.IsAsciiHexDigit))
-        {
-            throw new DomainException("O segredo do acompanhamento é inválido.");
-        }
-
-        HookTokenHash = tokenHash.ToUpperInvariant();
+        HookTokenHash = ValidHash(tokenHash, "O segredo do acompanhamento é inválido.");
     }
+
+    private static string ValidHash(string tokenHash, string message) =>
+        tokenHash is { Length: HookTokenHashLength } && tokenHash.All(char.IsAsciiHexDigit)
+            ? tokenHash.ToUpperInvariant()
+            : throw new DomainException(message);
 
     /// <summary>
     /// Um aviso do agente mudou (ou não) o que ele está fazendo. Devolve

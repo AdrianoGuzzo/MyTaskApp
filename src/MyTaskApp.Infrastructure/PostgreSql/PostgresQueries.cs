@@ -128,10 +128,66 @@ internal static class PostgresQueries
     public const string EstimatedRows =
         "SELECT greatest(reltuples, 0)::bigint FROM pg_class WHERE oid = to_regclass($1)";
 
+    /// <summary>
+    /// O usuário da Consulta Inteligente só lê? (ADR-081) Os papéis de
+    /// sistema que escrevem, leem arquivo ou derrubam sessão, tabela com
+    /// qualquer privilégio de escrita, CREATE no banco e dblink/postgres_fdw
+    /// executáveis. Os papéis que não existem na versão do servidor não contam.
+    /// </summary>
+    public const string ConsultationReadAccess =
+        "SELECT r.rolsuper, r.rolcreaterole, r.rolcreatedb, r.rolreplication, r.rolbypassrls, " +
+        "(SELECT string_agg(g.rolname::text, ', ' ORDER BY g.rolname) FROM pg_roles g " +
+        "WHERE g.rolname IN ('pg_write_all_data', 'pg_write_server_files', 'pg_read_server_files', 'pg_execute_server_program', 'pg_signal_backend') " +
+        "AND pg_has_role(current_user, g.oid, 'MEMBER')), " +
+        "(SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace " +
+        "WHERE c.relkind IN ('r', 'p', 'v', 'm', 'f') AND " + UserSchemas + " " +
+        "AND has_table_privilege(c.oid, 'INSERT, UPDATE, DELETE, TRUNCATE')), " +
+        "has_database_privilege(current_database(), 'CREATE'), " +
+        "(SELECT count(*) FROM pg_proc p WHERE p.proname IN ('dblink', 'dblink_exec', 'dblink_connect', 'postgres_fdw_handler') " +
+        "AND has_function_privilege(p.oid, 'EXECUTE')), " +
+        "current_user::text, current_setting('server_version') " +
+        "FROM pg_roles r WHERE r.rolname = current_user";
+
+    /// <summary>Os schemas em que o usuário da consulta pode ler.</summary>
+    public const string ConsultationSchemas =
+        "SELECT n.nspname::text FROM pg_namespace n WHERE " + UserSchemas + " AND has_schema_privilege(n.oid, 'USAGE') ORDER BY 1";
+
+    /// <summary>Tabelas e views legíveis, sem as partições (a tabela de cima já as cobre). $1 = schema ou NULL.</summary>
+    public const string ConsultationTables =
+        "SELECT n.nspname::text, c.relname::text, " +
+        "CASE c.relkind WHEN 'v' THEN 'view' WHEN 'm' THEN 'materialized view' WHEN 'p' THEN 'partitioned table' " +
+        "WHEN 'f' THEN 'foreign table' ELSE 'table' END, " +
+        "greatest(c.reltuples, 0)::bigint, obj_description(c.oid, 'pg_class') " +
+        "FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace " +
+        "WHERE c.relkind IN ('r', 'p', 'v', 'm', 'f') AND NOT c.relispartition AND " + UserSchemas + " " +
+        "AND has_table_privilege(c.oid, 'SELECT') AND ($1::text IS NULL OR n.nspname = $1::text) " +
+        "ORDER BY 1, 2 LIMIT 2000";
+
+    /// <summary>$1 = "schema"."tabela" citado. O comentário, se o usuário puder ler a tabela.</summary>
+    public const string ConsultationTable =
+        "SELECT obj_description(to_regclass($1), 'pg_class') " +
+        "WHERE to_regclass($1) IS NOT NULL AND has_table_privilege(to_regclass($1), 'SELECT')";
+
+    /// <summary>$1 = "schema"."tabela" citado.</summary>
+    public const string ConsultationColumns =
+        "SELECT a.attname::text, format_type(a.atttypid, a.atttypmod), NOT a.attnotnull, " +
+        "pg_get_expr(d.adbin, d.adrelid), col_description(a.attrelid, a.attnum) " +
+        "FROM pg_attribute a LEFT JOIN pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum " +
+        "WHERE a.attrelid = to_regclass($1) AND a.attnum > 0 AND NOT a.attisdropped ORDER BY a.attnum";
+
+    /// <summary>$1 = "schema"."tabela" citado. As restrições dela e as FKs de outras tabelas que apontam para ela.</summary>
+    public const string ConsultationConstraints =
+        "SELECT con.conname::text, con.contype::text, pg_get_constraintdef(con.oid), " +
+        "CASE WHEN con.conrelid = to_regclass($1) THEN 'out' ELSE 'in' END, " +
+        "con.conrelid::regclass::text, CASE WHEN con.confrelid = 0 THEN NULL ELSE con.confrelid::regclass::text END " +
+        "FROM pg_constraint con WHERE con.conrelid = to_regclass($1) OR con.confrelid = to_regclass($1) " +
+        "ORDER BY 4 DESC, 2, 1";
+
     public static IEnumerable<string> All() =>
     [
         ServerInfo, Databases, Schemas, Tables, Privileges, Columns, ConstraintsByType, IndexCount, SequenceCount,
         PrimaryKey, CopyTables, CopyColumns, KeyColumns, ForeignKeyTables, LargeObjects, SequenceValues, ExportSnapshot, EstimatedRows,
+        ConsultationReadAccess, ConsultationSchemas, ConsultationTables, ConsultationTable, ConsultationColumns, ConsultationConstraints,
         CountRows("public.x"),
         Fingerprint(new ColumnReference("public", "x", "y"), ["id"], 10),
     ];
