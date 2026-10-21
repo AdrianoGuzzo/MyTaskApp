@@ -307,6 +307,7 @@ public static class DependencyInjection
         services.AddSingleton<IPostgresSessionFactory, NpgsqlPostgresSessionFactory>();
         services.AddSingleton<IPostgresServerInspector, PostgresServerInspector>();
         services.AddSingleton<IPostgresMaskedCopier, NpgsqlMaskedCopier>();
+        services.AddSingleton<IPostgresScriptRunner, NpgsqlScriptRunner>();
 
         services.AddSingleton<IDatabaseOperationWorkspaceFactory>(provider => new DatabaseOperationWorkspaceFactory(
             string.IsNullOrWhiteSpace(options.WorkspaceDirectory) ? UserDataLocation.Current.DatabaseOperations : options.WorkspaceDirectory,

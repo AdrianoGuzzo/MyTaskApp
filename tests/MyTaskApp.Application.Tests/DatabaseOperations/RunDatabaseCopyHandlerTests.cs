@@ -36,7 +36,9 @@ public class RunDatabaseCopyHandlerTests
         var result = await RunAsync(progress: progress);
 
         result.Succeeded.Should().BeTrue(result.Error);
-        result.Steps.Values.Should().OnlyContain(state => state == CommandStepState.Succeeded);
+        result.Steps.Where(pair => pair.Key != DatabaseCopyStep.PostCopyScript).Select(pair => pair.Value)
+            .Should().OnlyContain(state => state == CommandStepState.Succeeded);
+        result.Steps[DatabaseCopyStep.PostCopyScript].Should().Be(CommandStepState.NotRun, "o perfil não tem script");
         _scenario.Tools.Calls.Should().Equal(
             "catalog:ECO Produção:eco_core",
             "open:ECO Produção:eco_core",

@@ -120,6 +120,7 @@ public class DatabaseOperationsPersistenceTests
         ], Now);
         profile.ReplaceSkippedTables([new SkippedTableSpec("public", "auditoria"), new SkippedTableSpec("public", "Auditoria")], Now);
         profile.ReplaceRowFilters([new RowFilterSpec("public", "clientes", "email like '%@empresa.com.br'")], Now);
+        profile.SetPostCopyScript("update config set valor = 'https://dev.local' where chave = 'url';\r\nselect 1;", Now);
         await SeedAsync(db, masked, profile);
 
         await using (var read = db.CreateContext())
@@ -144,6 +145,9 @@ public class DatabaseOperationsPersistenceTests
                 filter => filter.TableKey == "public.clientes" && filter.Condition == "email like '%@empresa.com.br'");
             (await profiles.ListAsync(Ct)).Single().RowFilters.Should().HaveCount(1);
 
+            reloaded.PostCopyScript.Should().Be("update config set valor = 'https://dev.local' where chave = 'url';\r\nselect 1;");
+            reloaded.SetPostCopyScript(null, Now);
+
             reloaded.ReplaceRules([new AnonymizationRuleSpec("public", "clientes", "cpf", MaskingMethod.Partial, "0,2", ColumnSensitivity.High)], Now);
             reloaded.ReplaceSkippedTables([new SkippedTableSpec("logs", "eventos")], Now);
             reloaded.ReplaceRowFilters([new RowFilterSpec("public", "usuarios", "id = 1"), new RowFilterSpec("public", "Usuarios", "id = 2")], Now);
@@ -158,6 +162,7 @@ public class DatabaseOperationsPersistenceTests
             (await read.Set<AnonymizationRowFilter>().OrderBy(filter => filter.Condition).Select(filter => filter.Table + ": " + filter.Condition).ToListAsync(Ct))
                 .Should().Equal("usuarios: id = 1", "Usuarios: id = 2");
             var profiles = new AnonymizationProfileRepository(read);
+            (await profiles.FindByIdAsync(profile.Id, Ct))!.PostCopyScript.Should().BeNull("apagar o script grava a ausência dele");
             profiles.Remove((await profiles.FindByIdAsync(profile.Id, Ct))!);
             await read.SaveChangesAsync(Ct);
         }

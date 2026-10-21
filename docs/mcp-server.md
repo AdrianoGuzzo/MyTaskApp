@@ -302,12 +302,12 @@ Se o perfil mudou desde então, nada é gravado.
 |---|---|---|---|
 | `anonymization_profile_list` | L | — | nome, conexão, habilitado, contagens, `updatedAt` |
 | `anonymization_profile_get` | L | `profileId` | o resumo |
-| `anonymization_profile_get_details` | L | `profileId` | todas as regras (coluna, máscara e o que ela faz, argumento, sensibilidade, se mantém únicos), as tabelas sem dados, as linhas sem máscara (tabela e condição, só leitura), a conexão, quem usa e o estado |
+| `anonymization_profile_get_details` | L | `profileId` | todas as regras (coluna, máscara e o que ela faz, argumento, sensibilidade, se mantém únicos), as tabelas sem dados, as linhas sem máscara (tabela e condição, só leitura), o script depois da cópia (só leitura), a conexão, quem usa e o estado |
 | `anonymization_profile_get_rules` | L | `profileId`, `schema?`, `table?` | as regras |
 | `anonymization_profile_get_schema` | L | — | o catálogo de máscaras (tipos aceitos, argumento, unicidade), as sensibilidades e os limites |
 | `anonymization_profile_validate` | L | `profileId`, `database?` | contra o catálogo real: problemas, avisos, colunas sensíveis sem regra, contagens |
 | `anonymization_profile_analyze` | L | `profileId`, `database?` | `proven` (problemas comprovados), `staticRisks` (riscos da configuração), `needsInformation` (o que não dá para afirmar), uso, regras por máscara, estado |
-| `anonymization_profile_compare` | L | `firstProfileId`, `secondProfileId` | regras só de um, regras diferentes, tabelas sem dados, linhas sem máscara e campos |
+| `anonymization_profile_compare` | L | `firstProfileId`, `secondProfileId` | regras só de um, regras diferentes, tabelas sem dados, linhas sem máscara e campos (o script depois da cópia entra como o campo `postCopyScript`) |
 | `anonymization_profile_get_usage` | L | `profileId` | apelidos e perfis de cópia que usam o perfil |
 | `anonymization_profile_suggest_columns` | L | `connectionId`, `database?` | colunas que parecem dado pessoal, com a máscara sugerida |
 | `anonymization_profile_list_tables` | L | `connectionId`, `database?` | tabelas com linhas estimadas e tamanho |
@@ -430,7 +430,7 @@ A resposta é o período como ficou gravado:
 | Senha que não muda de endereço | Numa conexão com senha guardada, servidor, porta, usuário e SSL só mudam pela tela. Senão, editar o host e testar mandaria a senha para onde o cliente quisesse. Pelo MCP, o ambiente só fica igual ou mais restrito |
 | Porta exclusiva | O socket do Kestrel é aberto com `SO_EXCLUSIVEADDRUSE` no Windows: outro processo não escuta na mesma porta, nem com `SO_REUSEADDR` |
 | Contra enxurrada | Até 64 conexões ao mesmo tempo. Pedidos barrados entram no log e na tela no máximo uma vez por segundo, com a contagem do resto |
-| Sem SQL livre, sem comandos | Não há ferramenta que execute SQL, cópia, restore ou comandos do sistema. Os comandos cadastrados só se listam. A condição das linhas sem máscara de um perfil (ADR-080) só se escreve na tela: o MCP a mostra e a mantém, mas não grava nem executa |
+| Sem SQL livre, sem comandos | Não há ferramenta que execute SQL, cópia, restore ou comandos do sistema. Os comandos cadastrados só se listam. A condição das linhas sem máscara de um perfil (ADR-080) e o script depois da cópia (ADR-082) só se escrevem na tela: o MCP os mostra e os mantém, mas não grava nem executa |
 | Exclusão recuperável | `task_delete` manda para a lixeira; a exclusão definitiva não existe pelo MCP |
 | Erros sem detalhe interno | `DomainException` vira a frase da regra; qualquer outra exceção vira um código, e a pilha fica só no log |
 | Logs | Só o nome da ferramenta, o resultado e a duração. Os argumentos não vão para o log nem para a tela. O SDK loga a partir de `Warning` |

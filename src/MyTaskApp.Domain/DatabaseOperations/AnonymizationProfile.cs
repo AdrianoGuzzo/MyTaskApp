@@ -40,6 +40,11 @@ public sealed record RowFilterSpec(string Schema, string Table, string Condition
 /// usuário) que escolhe as linhas copiadas com os valores reais — usuário de
 /// teste, registro de sistema. As outras linhas continuam mascaradas (ADR-080).
 /// </para>
+/// <para>
+/// <see cref="PostCopyScript"/>: SQL do usuário que roda no destino no fim da
+/// cópia, depois da verificação, para ajustar o banco copiado (ADR-082). Na
+/// origem ele não roda nunca.
+/// </para>
 /// </remarks>
 public sealed class AnonymizationProfile
 {
@@ -89,6 +94,9 @@ public sealed class AnonymizationProfile
 
     /// <summary>As linhas que vão sem máscara, uma condição por tabela; vale também para as partições.</summary>
     public IReadOnlyList<AnonymizationRowFilter> RowFilters => _rowFilters;
+
+    /// <summary>O SQL que roda no destino no fim da cópia; <c>null</c> quando o perfil não tem (ADR-082).</summary>
+    public string? PostCopyScript { get; private set; }
 
     public static AnonymizationProfile Create(
         string name,
@@ -209,6 +217,20 @@ public sealed class AnonymizationProfile
         _rowFilters.Clear();
         _rowFilters.AddRange(filters);
         UpdatedAt = confirmedAt;
+    }
+
+    /// <summary>O script depois da cópia, como escrito agora; vazio remove (ADR-082).</summary>
+    public void SetPostCopyScript(string? script, DateTimeOffset at)
+    {
+        var normalized = PostCopyScriptText.Normalize(script);
+
+        if (string.Equals(PostCopyScript, normalized, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        PostCopyScript = normalized;
+        UpdatedAt = at;
     }
 
     private void Apply(string name, string? description, Guid connectionId)

@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using MyTaskApp.Application.DatabaseOperations;
+using MyTaskApp.Domain;
 using MyTaskApp.Domain.DatabaseOperations;
 using MyTaskApp.Infrastructure.PostgreSql;
 using MyTaskApp.Infrastructure.Processes;
@@ -274,6 +275,49 @@ public sealed class PostgresIntegrationTests : IAsyncLifetime
         }
     }
 
+    [Fact]
+    public async Task ThePostCopyScript_RunsInOneTransaction_AndAFailureUndoesAllOfIt()
+    {
+        Assert.SkipWhen(_admin is null, $"Sem {Variable}: nenhum PostgreSQL de teste configurado.");
+
+        await ExecuteAsync(_admin!.Database ?? "postgres", $"CREATE DATABASE {_destination}");
+        await ExecuteAsync(_destination,
+            "CREATE TABLE config (chave text PRIMARY KEY, valor text NOT NULL);" +
+            "INSERT INTO config VALUES ('url', 'https://producao.invalid'), ('email', 'equipe@producao.invalid');");
+
+        var runner = new NpgsqlScriptRunner(
+            new StaticPasswordReader(_admin.Password), new DatabaseOperationsOptions(), NullLogger<NpgsqlScriptRunner>.Instance);
+        var target = Snapshot(_destination, ConnectionPermission.All & ~ConnectionPermission.RequireAnonymization);
+        var notices = new List<string>();
+
+        // Texto com @ e $1 dentro de aspas, e um bloco DO com dollar-quoting: o Npgsql não pode confundir com parâmetro.
+        var run = await runner.RunAsync(target,
+            "update config set valor = 'https://dev.local/$1' where chave = 'url';\n" +
+            "update config set valor = 'dev@empresa.invalid' where chave = 'email';\n" +
+            "do $$ begin raise notice 'ajustado: %', (select count(*) from config); end $$;",
+            [], new SynchronousProgress<string>(notices.Add), Ct);
+
+        run.RowsAffected.Should().Be(2);
+        notices.Should().ContainSingle().Which.Should().Be("NOTICE: ajustado: 2");
+        (await QueryRowAsync(_destination, "SELECT string_agg(valor, ',' ORDER BY chave) FROM config"))[0]
+            .Should().Be("dev@empresa.invalid,https://dev.local/$1");
+
+        var failure = await FluentActions.Awaiting(() => runner.RunAsync(target,
+                "update config set valor = 'apagado';\nselect * from nao_existe;", [], null, Ct))
+            .Should().ThrowAsync<DomainException>();
+        failure.Which.Message.Should().Contain("42P01").And.Contain("desfeito");
+        (await QueryRowAsync(_destination, "SELECT count(*) FROM config WHERE valor = 'apagado'"))[0]
+            .Should().Be(0L, "o update de antes do erro foi desfeito junto");
+
+        // O domínio recusa COMMIT ao salvar; um que chegasse aqui vira mensagem, e não "erro inesperado".
+        await FluentActions.Awaiting(() => runner.RunAsync(target, "update config set valor = 'x' where chave = 'url'; commit;", [], null, Ct))
+            .Should().ThrowAsync<DomainException>().WithMessage("*encerrou a transação*");
+
+        // Sem "Executar SQL", recusa antes de conectar.
+        await FluentActions.Awaiting(() => runner.RunAsync(Snapshot(_destination), "select 1", [], null, Ct))
+            .Should().ThrowAsync<DatabaseSecurityException>();
+    }
+
     private async Task<object?[]> QueryRowAsync(string database, string sql)
     {
         var builder = new NpgsqlConnectionStringBuilder(_admin!.ConnectionString) { Database = database };
@@ -307,12 +351,18 @@ public sealed class PostgresIntegrationTests : IAsyncLifetime
             new PostgresInstallGuide("teste", [], [])));
     }
 
-    private DatabaseConnectionSnapshot Snapshot(string database) =>
+    private DatabaseConnectionSnapshot Snapshot(string database, ConnectionPermission? permissions = null) =>
         DatabaseConnection.Create(
                 database, _admin!.Host!, _admin.Port, database, _admin.Username!, DatabaseEnvironment.Development,
-                DatabaseSslMode.Prefer, null, ConnectionPermissions.FromFlags(EnvironmentPolicy.For(DatabaseEnvironment.Development).Defaults),
+                DatabaseSslMode.Prefer, null,
+                ConnectionPermissions.FromFlags(permissions ?? EnvironmentPolicy.For(DatabaseEnvironment.Development).Defaults),
                 PostgresTestSupport.Now)
             .Snapshot();
+
+    private sealed class SynchronousProgress<T>(Action<T> report) : IProgress<T>
+    {
+        public void Report(T value) => report(value);
+    }
 
     private async Task ExecuteAsync(string database, string sql)
     {

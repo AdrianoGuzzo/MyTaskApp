@@ -95,6 +95,10 @@ public sealed partial class DatabaseProfilesViewModel(
     [ObservableProperty]
     private string _anonymizationDescription = string.Empty;
 
+    /// <summary>O SQL que roda no destino no fim da cópia (ADR-082); vazio = sem script.</summary>
+    [ObservableProperty]
+    private string _postCopyScript = string.Empty;
+
     /// <summary>A conexão de onde ler as colunas para sugerir e pré-visualizar — em geral, a própria origem (ADR-058).</summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SaveAnonymizationProfileCommand), nameof(SuggestColumnsCommand), nameof(PreviewCommand))]
@@ -386,6 +390,7 @@ public sealed partial class DatabaseProfilesViewModel(
         _editingAnonymizationVersion = null;
         AnonymizationName = string.Empty;
         AnonymizationDescription = string.Empty;
+        PostCopyScript = string.Empty;
         ColumnsConnection = null;
         RuleFilter = string.Empty;
         TableFilter = string.Empty;
@@ -403,6 +408,7 @@ public sealed partial class DatabaseProfilesViewModel(
         _editingAnonymizationVersion = profile.UpdatedAt;
         AnonymizationName = profile.Name;
         AnonymizationDescription = profile.Description ?? string.Empty;
+        PostCopyScript = profile.PostCopyScript ?? string.Empty;
         ColumnsConnection = Connections.FirstOrDefault(connection => connection.Id == profile.ConnectionId);
         RuleFilter = string.Empty;
         TableFilter = string.Empty;
@@ -701,6 +707,7 @@ public sealed partial class DatabaseProfilesViewModel(
         {
             SkippedTables = SkippedTableRows(),
             RowFilters = RowFilterRows(),
+            PostCopyScript = PostCopyScript,
             ExpectedUpdatedAt = _editingAnonymizationVersion,
         };
 

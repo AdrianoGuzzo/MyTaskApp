@@ -87,6 +87,7 @@ public class ApplicationRegistrationTests
             .AddSingleton<IPostgresMaskedCopier>(database.Copier)
             .AddSingleton<IPostgresDumpService>(database.Tools)
             .AddSingleton<IPostgresRestoreService>(database.Tools)
+            .AddSingleton<IPostgresScriptRunner>(database.Scripts)
             .AddSingleton<IDatabaseOperationWorkspaceFactory>(database.Workspaces)
             // O servidor MCP (ADR-059): configuração, token e as consultas novas.
             .AddSingleton<IMcpServerSettingsStore>(new FakeMcpServerSettingsStore())

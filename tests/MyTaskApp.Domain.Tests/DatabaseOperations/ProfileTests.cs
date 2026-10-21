@@ -241,6 +241,66 @@ public class ProfileTests
     }
 
     [Fact]
+    public void ThePostCopyScript_IsTrimmed_AndBlankRemovesIt()
+    {
+        var profile = AnonymizationProfile.Create("ECO LGPD", null, Columns, Now);
+        profile.PostCopyScript.Should().BeNull();
+
+        profile.SetPostCopyScript("\n  update config set valor = 'x';\r\n\tselect 1;\n  ", Now.AddMinutes(1));
+        profile.PostCopyScript.Should().Be("update config set valor = 'x';\r\n\tselect 1;");
+        profile.UpdatedAt.Should().Be(Now.AddMinutes(1));
+
+        profile.SetPostCopyScript("update config set valor = 'x';\r\n\tselect 1;", Now.AddMinutes(2));
+        profile.UpdatedAt.Should().Be(Now.AddMinutes(1), "o mesmo script não é mudança");
+
+        profile.SetPostCopyScript("   ", Now.AddMinutes(3));
+        profile.PostCopyScript.Should().BeNull();
+        profile.UpdatedAt.Should().Be(Now.AddMinutes(3));
+    }
+
+    [Fact]
+    public void AnInvalidPostCopyScript_IsRefused_AndTheOldOneStays()
+    {
+        var profile = AnonymizationProfile.Create("ECO LGPD", null, Columns, Now);
+        profile.SetPostCopyScript("select 1;", Now);
+
+        FluentActions.Invoking(() => profile.SetPostCopyScript(new string('x', PostCopyScriptText.MaxLength + 1), Now))
+            .Should().Throw<DomainException>().WithMessage("*caracteres*");
+        FluentActions.Invoking(() => profile.SetPostCopyScript("select 1;\0", Now))
+            .Should().Throw<DomainException>().WithMessage("*controle*");
+
+        profile.PostCopyScript.Should().Be("select 1;");
+        PostCopyScriptText.Normalize(new string('x', PostCopyScriptText.MaxLength)).Should().HaveLength(PostCopyScriptText.MaxLength);
+    }
+
+    [Theory]
+    [InlineData("begin; update t set x = 1; commit;", "BEGIN")]
+    [InlineData("update t set x = 1;\nCOMMIT", "COMMIT")]
+    [InlineData("update t set x = 1; -- fim\n  end;", "END")]
+    [InlineData("/* aninhado /* ok */ */ start transaction; select 1", "START")]
+    [InlineData("select 1; Rollback;", "ROLLBACK")]
+    [InlineData("delete from t;abort", "ABORT")]
+    public void AScriptThatControlsTheTransaction_IsRefused(string script, string command)
+    {
+        FluentActions.Invoking(() => PostCopyScriptText.Normalize(script))
+            .Should().Throw<DomainException>().WithMessage($"*{command}*transação*");
+    }
+
+    [Theory]
+    [InlineData("update config set valor = 'commit; begin' where chave = 'x';")]
+    [InlineData("update config set valor = E'it\\'s; commit' where chave = 'x';")]
+    [InlineData("update \"commit\" set x = 1; select 'a''; commit';")]
+    [InlineData("-- commit;\nselect 1; /* ; begin */ select 2;")]
+    [InlineData("do $$ begin update t set x = 1; end $$;\ndo $corpo$ begin perform 1; end; $corpo$;")]
+    [InlineData("create function f() returns int language plpgsql as $f$ begin return 1; end $f$;")]
+    [InlineData("savepoint a; update t set x = 1; rollback to savepoint a; release a;")]
+    [InlineData("select $1, a$b from t; update t set beginning = 1, commit_at = now();")]
+    public void TheseWords_InsideTextCommentsOrBodies_AreNotCommands(string script)
+    {
+        PostCopyScriptText.Normalize(script).Should().Be(script);
+    }
+
+    [Fact]
     public void AnInvalidCopyProfile_IsRefused()
     {
         var a = Guid.CreateVersion7();

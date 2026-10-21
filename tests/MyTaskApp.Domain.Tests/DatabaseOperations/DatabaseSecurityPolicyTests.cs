@@ -325,6 +325,39 @@ public class DatabaseSecurityPolicyTests
         decision.IsAllowed.Should().BeTrue();
     }
 
+    [Fact]
+    public void AProfileWithAPostCopyScript_NeedsADestinationThatMayRunSql()
+    {
+        var facts = VerifiedAnonymization() with { HasPostCopyScript = true };
+        var source = Snapshot(DatabaseEnvironment.Production, database: "p");
+
+        // Desenvolvimento nasce sem "Executar SQL": o script do perfil pede que alguém ligue.
+        var decision = _policy.Evaluate(CopyAndAnonymize(source, Snapshot(DatabaseEnvironment.Development, database: "d"), facts));
+
+        decision.Has(SecurityViolationCode.MissingPermission).Should().BeTrue();
+        decision.Describe().Should().Contain("executar o script depois da cópia");
+
+        _policy.Evaluate(CopyAndAnonymize(source, Snapshot(DatabaseEnvironment.Development, database: "d", permissions: Everything), facts))
+            .IsAllowed.Should().BeTrue();
+        _policy.Evaluate(CopyAndAnonymize(source, Snapshot(DatabaseEnvironment.Development, database: "d"), VerifiedAnonymization()))
+            .IsAllowed.Should().BeTrue("sem script, a permissão não é pedida");
+    }
+
+    [Fact]
+    public void TheScriptStep_IsSqlExecution_AndNeverReachesProduction()
+    {
+        var production = Snapshot(DatabaseEnvironment.Production, database: "p", permissions: Everything);
+        var decision = _policy.Evaluate(new DatabaseOperationRequest(DatabaseOperationType.ExecuteSql, Destination: production));
+
+        decision.Has(SecurityViolationCode.SqlExecutionForbidden).Should().BeTrue();
+
+        var development = Snapshot(DatabaseEnvironment.Development, database: "d", permissions: Everything);
+        _policy.Evaluate(new DatabaseOperationRequest(DatabaseOperationType.ExecuteSql, Destination: development)).IsAllowed.Should().BeTrue();
+        _policy.Evaluate(new DatabaseOperationRequest(
+                DatabaseOperationType.ExecuteSql, Destination: development, ProtectedEndpoints: [development.EndpointKey]))
+            .Has(SecurityViolationCode.ProtectedTargetModification).Should().BeTrue("um destino que aponta para produção é produção");
+    }
+
     // --- Destino e conexões ---------------------------------------------------
 
     [Fact]

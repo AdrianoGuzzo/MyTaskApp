@@ -518,7 +518,8 @@ public sealed class AnonymizationProfileTools(McpGateway gateway)
         && persisted.SkippedTables.Select(table => table.TableKey).Order(StringComparer.Ordinal)
             .SequenceEqual(expected.SkippedTables.Select(table => table.TableKey).Order(StringComparer.Ordinal))
         && persisted.RowFilters.Select(filter => (filter.TableKey, filter.Condition)).Order()
-            .SequenceEqual(expected.RowFilters.Select(filter => (filter.TableKey, filter.Condition)).Order());
+            .SequenceEqual(expected.RowFilters.Select(filter => (filter.TableKey, filter.Condition)).Order())
+        && persisted.PostCopyScript == expected.PostCopyScript;
 
     private static Task<IReadOnlyList<AnonymizationProfileRow>> Profiles(IUseCaseRunner runner, CancellationToken cancellationToken) =>
         runner.RunAsync<GetAnonymizationProfilesHandler, IReadOnlyList<AnonymizationProfileRow>>(
@@ -548,6 +549,7 @@ public sealed class AnonymizationProfileTools(McpGateway gateway)
             profile.Rules.Select(RuleInfo.Of).ToList(),
             profile.SkippedTables.Select(table => table.TableKey).ToList(),
             profile.RowFilters.Select(filter => new RowFilterInfo(filter.TableKey, filter.Condition)).ToList(),
+            profile.PostCopyScript,
             usage,
             "Configurado no MyTaskApp. As máscaras não são instaladas no banco: entram no SELECT de cada cópia (ADR-058). " +
             "Para saber se o perfil serve ao banco de hoje, use anonymization_profile_validate.");
@@ -640,12 +642,14 @@ public sealed record ProfileSummary(
 /// <summary>As linhas de uma tabela que vão sem máscara (ADR-080): só se lê por aqui; edita-se na tela.</summary>
 public sealed record RowFilterInfo(string Table, string Condition);
 
+/// <param name="PostCopyScript">O SQL que roda no destino no fim da cópia (ADR-082): só se lê por aqui; edita-se na tela.</param>
 public sealed record ProfileDetail(
     ProfileSummary Profile,
     ConnectionInfo? Connection,
     IReadOnlyList<RuleInfo> Rules,
     IReadOnlyList<string> SkippedTables,
     IReadOnlyList<RowFilterInfo> RowFilters,
+    string? PostCopyScript,
     ProfileUsage UsedBy,
     string State);
 
@@ -693,6 +697,8 @@ public sealed record ProfileSchema(
             "Tabela sem dados vai só com a estrutura; uma FK de tabela com dados para ela impede a cópia.",
             "Linhas sem máscara (rowFilters): por tabela, uma condição SQL escrita pelo usuário na tela; as linhas que batem nela " +
             "vão com os valores reais (ADR-080). O MCP só as mostra: não grava nem executa a condição, e as alterações por aqui as mantêm.",
+            "Script depois da cópia (postCopyScript): SQL escrito pelo usuário na tela, que roda no destino no fim da cópia, depois da " +
+            "verificação, numa transação (ADR-082). O MCP só o mostra: não grava nem executa o script, e as alterações por aqui o mantêm.",
             "O perfil não tem campos além destes: nada fica oculto ou sem interpretação.",
             "As máscaras não são instaladas no banco (sem PostgreSQL Anonymizer): entram no SELECT de cada cópia (ADR-058).",
         ]);
