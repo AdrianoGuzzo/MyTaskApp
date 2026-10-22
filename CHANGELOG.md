@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.24.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.23.0...v1.24.0) (2026-10-22)
+
+
+### Added
+
+* **consulta:** aba Consulta Inteligente na tarefa, com o Claude Code só lendo (ADR-081) ([#153](https://github.com/AdrianoGuzzo/MyTaskApp/issues/153)) ([7f01515](https://github.com/AdrianoGuzzo/MyTaskApp/commit/7f01515b0502cb9bfa434b93410dc878d212fafa))
+
 ## [1.23.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.22.0...v1.23.0) (2026-10-22)
 
 
