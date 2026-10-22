@@ -24,7 +24,7 @@ public class TagsViewModelTests
         _runner.ResultsByHandler[typeof(GetTagsHandler)] = (IReadOnlyList<TagRow>)tags;
         _runner.ResultsByHandler[typeof(CreateTagHandler)] = Guid.NewGuid();
 
-        return new TagsViewModel(_runner, _confirmation, _probe, new FakeDirectoryCommandEditor(), NullLogger<TagsViewModel>.Instance);
+        return new TagsViewModel(_runner, _confirmation, _probe, new FakeDirectoryCommandEditor(), new FakeClipboardWriter(), new FakeShellLauncher(), NullLogger<TagsViewModel>.Instance);
     }
 
     [Fact]

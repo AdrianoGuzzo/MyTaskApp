@@ -265,7 +265,7 @@ public class TagRenderingTests
             (IReadOnlyList<TagRow>)[new TagRow(Guid.NewGuid(), "Urgente", "#EF4444", 2)];
 
         var viewModel = new TagsViewModel(
-            runner, new FakeConfirmationDialog(), new FakeDirectoryProbe(), new FakeDirectoryCommandEditor(), NullLogger<TagsViewModel>.Instance);
+            runner, new FakeConfirmationDialog(), new FakeDirectoryProbe(), new FakeDirectoryCommandEditor(), new FakeClipboardWriter(), new FakeShellLauncher(), NullLogger<TagsViewModel>.Instance);
 
         var window = new TagsWindow(viewModel);
         window.Show();
@@ -303,7 +303,7 @@ public class TagRenderingTests
         runner.ResultsByHandler[typeof(SuggestCloneFolderHandler)] = @"C:\Projetos";
 
         var viewModel = new TagsViewModel(
-            runner, new FakeConfirmationDialog(), new FakeDirectoryProbe(), new FakeDirectoryCommandEditor(), NullLogger<TagsViewModel>.Instance);
+            runner, new FakeConfirmationDialog(), new FakeDirectoryProbe(), new FakeDirectoryCommandEditor(), new FakeClipboardWriter(), new FakeShellLauncher(), NullLogger<TagsViewModel>.Instance);
         await viewModel.LoadAsync(CancellationToken.None);
         var item = viewModel.Tags.Single();
         await viewModel.ToggleDirectoriesAsync(item, CancellationToken.None);
@@ -315,6 +315,9 @@ public class TagRenderingTests
         var urlBox = window.GetVisualDescendants().OfType<TextBox>()
             .Single(box => box.PlaceholderText?.StartsWith("Repositório Git", StringComparison.Ordinal) == true);
         urlBox.IsEffectivelyVisible.Should().BeTrue();
+        window.GetVisualDescendants().OfType<Border>()
+            .Single(border => border.Name == "GitMissingPanel")
+            .IsEffectivelyVisible.Should().BeFalse();
 
         item.RepositoryUrl = "https://github.com/eco/ecossistema-web.git";
         window.UpdateLayout();
@@ -326,5 +329,49 @@ public class TagRenderingTests
         clone.CommandParameter.Should().BeSameAs(item);
         window.GetVisualDescendants().OfType<TextBox>()
             .Should().Contain(box => box.Text == @"C:\Projetos\ecossistema-web");
+    }
+
+    /// <summary>
+    /// Sem o Git, a URL não some calada: no lugar dela, o aviso diz o que falta e
+    /// traz o comando de instalação para copiar e o "Verificar novamente".
+    /// </summary>
+    [AvaloniaFact]
+    public async Task TheDirectoryForm_WithoutGit_ExplainsHowToInstallIt()
+    {
+        var tag = new TagRow(Guid.NewGuid(), "ECO CORE", "#22C55E", 0);
+        var runner = new FakeUseCaseRunner();
+        runner.ResultsByHandler[typeof(GetTagsHandler)] = (IReadOnlyList<TagRow>)[tag];
+        runner.ResultsByHandler[typeof(GetTagDirectoriesHandler)] = (IReadOnlyList<TagDirectoryRow>)[];
+        runner.ResultsByHandler[typeof(MyTaskApp.Application.Development.DetectGitHandler)] =
+            MyTaskApp.Application.Development.GitInstallation.Missing;
+
+        var viewModel = new TagsViewModel(
+            runner, new FakeConfirmationDialog(), new FakeDirectoryProbe(), new FakeDirectoryCommandEditor(), new FakeClipboardWriter(), new FakeShellLauncher(), NullLogger<TagsViewModel>.Instance);
+        await viewModel.LoadAsync(CancellationToken.None);
+        await viewModel.ToggleDirectoriesAsync(viewModel.Tags.Single(), CancellationToken.None);
+
+        var window = new TagsWindow(viewModel);
+        window.Show();
+        window.UpdateLayout();
+
+        window.GetVisualDescendants().OfType<TextBox>()
+            .Single(box => box.PlaceholderText?.StartsWith("Repositório Git", StringComparison.Ordinal) == true)
+            .IsEffectivelyVisible.Should().BeFalse();
+
+        var panel = window.GetVisualDescendants().OfType<Border>().Single(border => border.Name == "GitMissingPanel");
+        panel.IsEffectivelyVisible.Should().BeTrue();
+
+        var texts = panel.GetVisualDescendants().OfType<TextBlock>().Select(text => text.Text).ToList();
+        texts.Should().Contain("O Git não está instalado neste computador");
+        texts.Should().Contain(viewModel.GitInstructions.Commands[0].Command);
+
+        var buttons = panel.GetVisualDescendants().OfType<Button>().ToList();
+        var copy = buttons.First(button => Equals(button.Content, "Copiar comando"));
+        copy.Command.Should().BeSameAs(viewModel.CopyInstallCommandCommand);
+        copy.CommandParameter.Should().Be(viewModel.GitInstructions.Commands[0].Command);
+        buttons.Single(button => Equals(button.Content, "Verificar novamente"))
+            .Command.Should().BeSameAs(viewModel.RecheckGitCommand);
+        buttons.Single(button => Equals(button.Content, "Página oficial do Git"))
+            .Command.Should().BeSameAs(viewModel.OpenGitInstallPageCommand);
     }
 }

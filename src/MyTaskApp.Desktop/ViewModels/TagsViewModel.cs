@@ -12,6 +12,7 @@ using MyTaskApp.Application.Commands;
 using MyTaskApp.Application.Development;
 using MyTaskApp.Application.Tags;
 using MyTaskApp.Desktop.Composition;
+using MyTaskApp.Desktop.Development;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.Devices;
 using MyTaskApp.Domain.Tags;
@@ -237,6 +238,8 @@ public sealed partial class TagsViewModel(
     IConfirmationDialog confirmation,
     IDirectoryProbe directoryProbe,
     IDirectoryCommandEditor commandEditor,
+    IClipboardWriter clipboard,
+    IShellLauncher shell,
     ILogger<TagsViewModel> logger,
     DevicePlacementState? placements = null) : ObservableObject
 {
@@ -329,6 +332,11 @@ public sealed partial class TagsViewModel(
     /// <summary>O Git foi encontrado na última abertura: a URL do repositório e o clone aparecem (ADR-064).</summary>
     [ObservableProperty]
     private bool _isGitAvailable;
+
+    /// <summary>Sem o Git, o formulário de diretório explica como instalar (ADR-027) no lugar da URL.</summary>
+    public GitInstallInstructions GitInstructions { get; } = GitInstallGuide.ForCurrentSystem();
+
+    private GitInstallation _git = GitInstallation.Missing;
 
     private string? _cloneFolder;
 
@@ -1022,11 +1030,11 @@ public sealed partial class TagsViewModel(
     {
         try
         {
-            var installation = await runner.RunAsync<DetectGitHandler, GitInstallation>(
+            _git = await runner.RunAsync<DetectGitHandler, GitInstallation>(
                 (handler, token) => handler.HandleAsync(new DetectGit(), token),
                 cancellationToken);
 
-            IsGitAvailable = installation.IsInstalled;
+            IsGitAvailable = _git.IsInstalled;
 
             if (IsGitAvailable)
             {
@@ -1038,7 +1046,72 @@ public sealed partial class TagsViewModel(
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             logger.LogWarning(exception, "TagsGitDetectionFailed");
+            _git = GitInstallation.Missing;
             IsGitAvailable = false;
+        }
+    }
+
+    /// <summary>
+    /// Depois de instalar o Git, sem reiniciar o app: o PATH é relido a cada
+    /// procura. Os cartões não são recriados, para o formulário que o usuário
+    /// está preenchendo continuar como está.
+    /// </summary>
+    [RelayCommand]
+    public async Task RecheckGitAsync(CancellationToken cancellationToken)
+    {
+        await DetectGitAsync(cancellationToken);
+
+        foreach (var item in Tags)
+        {
+            item.CloneFolder = _cloneFolder;
+            item.IsGitAvailable = IsGitAvailable;
+        }
+
+        ErrorMessage = null;
+
+        if (!IsGitAvailable)
+        {
+            StatusMessage = "O Git ainda não foi encontrado. Se a instalação terminou, abra um terminal novo e confira com git --version.";
+            return;
+        }
+
+        StatusMessage = _git.Version is { } version
+            ? $"Git {version} encontrado. Já dá para informar o repositório e clonar."
+            : "Git encontrado. Já dá para informar o repositório e clonar.";
+
+        foreach (var item in Tags.Where(item => item.IsExpanded && item.Directories.Any(directory => directory.IsFound)).ToList())
+        {
+            await RefreshRepositoriesAsync(item, cancellationToken);
+        }
+    }
+
+    [RelayCommand]
+    public async Task CopyInstallCommandAsync(string? command)
+    {
+        if (string.IsNullOrEmpty(command))
+        {
+            return;
+        }
+
+        try
+        {
+            await clipboard.WriteAsync(command);
+            ErrorMessage = null;
+            StatusMessage = "Comando copiado. Cole no PowerShell ou no Prompt de Comando e aperte Enter.";
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "TagsCopyInstallCommandFailed");
+            ErrorMessage = "Não foi possível copiar. Tente de novo.";
+        }
+    }
+
+    [RelayCommand]
+    public async Task OpenGitInstallPageAsync()
+    {
+        if (!await shell.OpenUriAsync(GitInstructions.OfficialSite))
+        {
+            ErrorMessage = $"Não foi possível abrir o navegador. O endereço é {GitInstructions.OfficialSite}";
         }
     }
 

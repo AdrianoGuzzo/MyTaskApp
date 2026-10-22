@@ -92,7 +92,7 @@ public class ScreenErrorPathTests
         ["Etiquetas"] = runner =>
         {
             var logger = new CapturingLogger<TagsViewModel>();
-            var viewModel = new TagsViewModel(runner, new FakeConfirmationDialog(), new FakeDirectoryProbe(), new FakeDirectoryCommandEditor(), logger);
+            var viewModel = new TagsViewModel(runner, new FakeConfirmationDialog(), new FakeDirectoryProbe(), new FakeDirectoryCommandEditor(), new FakeClipboardWriter(), new FakeShellLauncher(), logger);
             return new Screen(
                 () => viewModel.LoadAsync(Ct), () => viewModel.ErrorMessage, () => viewModel.IsBusy,
                 () => viewModel.StatusMessage, value => viewModel.StatusMessage = value, () => logger.Entries,

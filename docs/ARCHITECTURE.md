@@ -6258,7 +6258,15 @@ do caminho:
   sugere a pasta e oferece o clone, e a linha diz "edite para clonar ou
   escolher a pasta".
 
-Sem o Git, o campo e o clone não aparecem, e a URL gravada fica como está.
+Sem o Git, o campo e o clone não aparecem, e a URL gravada fica como está. No
+lugar do campo, um aviso diz que o Git não está instalado e o que se perde
+sem ele, com as instruções do ADR-027 (`GitInstallGuide`: o comando do
+sistema para copiar, a página oficial) e um "Verificar novamente". Escondida
+calada, a URL parecia não existir: quem não tem o Git não tinha como saber
+que a função estava ali. O "Verificar novamente" não recarrega a lista: só
+atualiza o Git e a pasta de clone dos cartões, e o formulário que o usuário
+está preenchendo fica. Como a procura relê o PATH do registro (ADR-027),
+basta instalar e clicar, sem reiniciar o app.
 
 ### A pasta manda
 
@@ -6347,7 +6355,7 @@ a sugestão sai do que o usuário já fez, e "Outra pasta…" resolve a exceçã
   encontrada, depois de a lista aparecer. Sem o Git, nenhum.
 - A detecção do Git roda a cada abertura de *Etiquetas…*, como na aba
   Desenvolvimento: instalar o Git com a janela escondida passa a valer na
-  próxima abertura.
+  próxima abertura, e com ela aberta, no "Verificar novamente".
 
 **Testes:**
 
@@ -6362,9 +6370,11 @@ a sugestão sai do que o usuário já fez, e "Outra pasta…" resolve a exceçã
   de volta e a recusa de clonar de novo na mesma pasta.
 - **Desktop:** a sugestão de pasta e de alias, o caminho do usuário
   respeitado, "Outra pasta…", o clone oferecido só para pasta inexistente,
-  nada sem Git, clonar e salvar, falha e cancelamento, a URL pelo `origin` ao
+  nada sem Git além do aviso com o comando de instalação, o "Verificar
+  novamente" que libera a URL sem perder o formulário, clonar e salvar, falha e cancelamento, a URL pelo `origin` ao
   procurar e ao salvar, o diretório de outro computador, a lista recarregada
-  quando o `origin` mudou e o formulário desenhado com o "Clonar" ligado.
+  quando o `origin` mudou e o formulário desenhado com o "Clonar" ligado ou,
+  sem Git, com o aviso e os botões ligados.
 
 ## ADR-065 — Limpeza de worktrees: os sem tarefa e os de tarefa encerrada, com força
 

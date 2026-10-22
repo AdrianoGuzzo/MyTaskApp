@@ -233,7 +233,7 @@ public class QuickCommandsRenderingTests
             [new(Guid.NewGuid(), core.Id, run.Id, run.Alias, run.Name, run.Command, 0, true, null, null)];
 
         var viewModel = new TagsViewModel(
-            runner, new FakeConfirmationDialog(), new FakeDirectoryProbe(), new FakeDirectoryCommandEditor(), NullLogger<TagsViewModel>.Instance);
+            runner, new FakeConfirmationDialog(), new FakeDirectoryProbe(), new FakeDirectoryCommandEditor(), new FakeClipboardWriter(), new FakeShellLauncher(), NullLogger<TagsViewModel>.Instance);
         var window = new TagsWindow(viewModel);
         window.Show();
         await viewModel.LoadAsync(CancellationToken.None);
@@ -265,7 +265,7 @@ public class QuickCommandsRenderingTests
             [new(Guid.NewGuid(), core.Id, Guid.NewGuid(), null, "Front-end", "npm run dev", 0, true, null, null, IsDirectoryOnly: true)];
 
         var viewModel = new TagsViewModel(
-            runner, new FakeConfirmationDialog(), new FakeDirectoryProbe(), new FakeDirectoryCommandEditor(), NullLogger<TagsViewModel>.Instance);
+            runner, new FakeConfirmationDialog(), new FakeDirectoryProbe(), new FakeDirectoryCommandEditor(), new FakeClipboardWriter(), new FakeShellLauncher(), NullLogger<TagsViewModel>.Instance);
         var window = new TagsWindow(viewModel);
         window.Show();
         await viewModel.LoadAsync(CancellationToken.None);
