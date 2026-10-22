@@ -26,20 +26,23 @@ public class TagDirectoryRepositoryViewModelTests
 
     private readonly FakeUseCaseRunner _runner = new();
     private readonly FakeDirectoryProbe _probe = new();
+    private readonly FakeClipboardWriter _clipboard = new();
+    private readonly FakeShellLauncher _shell = new();
+
+    private static readonly GitInstallation Installed = new(true, "2.51.0", @"C:\Program Files\Git\cmd\git.exe");
 
     private async Task<(TagsViewModel ViewModel, TagListItemViewModel Item)> LoadedAsync(bool gitInstalled = true)
     {
         _runner.ResultsByHandler[typeof(GetTagsHandler)] = (IReadOnlyList<TagRow>)[Eco];
         _runner.ResultsByHandler[typeof(GetTagDirectoriesHandler)] = (IReadOnlyList<TagDirectoryRow>)[Core];
         _runner.ResultsByHandler[typeof(AddTagDirectoryHandler)] = Guid.NewGuid();
-        _runner.ResultsByHandler[typeof(DetectGitHandler)] = gitInstalled
-            ? new GitInstallation(true, "2.51.0", @"C:\Program Files\Git\cmd\git.exe")
-            : GitInstallation.Missing;
+        _runner.ResultsByHandler[typeof(DetectGitHandler)] = gitInstalled ? Installed : GitInstallation.Missing;
         _runner.ResultsByHandler[typeof(SuggestCloneFolderHandler)] = @"C:\Projetos";
         _runner.ResultsByHandler[typeof(RefreshTagDirectoryRepositoriesHandler)] = (IReadOnlyList<Guid>)[];
 
         var viewModel = new TagsViewModel(
-            _runner, new FakeConfirmationDialog(), _probe, new FakeDirectoryCommandEditor(), NullLogger<TagsViewModel>.Instance);
+            _runner, new FakeConfirmationDialog(), _probe, new FakeDirectoryCommandEditor(), _clipboard, _shell,
+            NullLogger<TagsViewModel>.Instance);
         await viewModel.LoadAsync(Ct);
 
         var item = viewModel.Tags.Single();
@@ -118,6 +121,65 @@ public class TagDirectoryRepositoryViewModelTests
         item.IsCloneOffered.Should().BeFalse();
         _runner.Invoked.Should().NotContain(typeof(SuggestCloneFolderHandler));
         _runner.Invoked.Should().NotContain(typeof(RefreshTagDirectoryRepositoriesHandler));
+        viewModel.GitInstructions.Commands.Should().NotBeEmpty("no lugar da URL, a tela ensina a instalar");
+    }
+
+    [Fact]
+    public async Task InstallingGit_ThenCheckingAgain_OffersTheUrl_WithoutLosingTheForm()
+    {
+        _probe.Existing.Add(@"C:\Projetos\ecossistema-core");
+        var (viewModel, item) = await LoadedAsync(gitInstalled: false);
+        item.Alias = "@web";
+        _runner.ResultsByHandler[typeof(DetectGitHandler)] = Installed;
+
+        await viewModel.RecheckGitAsync(Ct);
+
+        viewModel.IsGitAvailable.Should().BeTrue();
+        item.IsGitAvailable.Should().BeTrue();
+        viewModel.Tags.Should().ContainSingle().Which.Should().BeSameAs(item, "a lista não é recarregada");
+        item.Alias.Should().Be("@web");
+        viewModel.StatusMessage.Should().Contain("Git 2.51.0 encontrado");
+        _runner.Invoked.Should().Contain(typeof(RefreshTagDirectoryRepositoriesHandler));
+
+        // A pasta de clone veio junto: a URL já sugere onde clonar.
+        item.RepositoryUrl = Url;
+        item.Path.Should().Be(@"C:\Projetos\ecossistema-web");
+    }
+
+    [Fact]
+    public async Task CheckingAgain_StillWithoutGit_SaysSo()
+    {
+        var (viewModel, item) = await LoadedAsync(gitInstalled: false);
+
+        await viewModel.RecheckGitAsync(Ct);
+
+        item.IsGitAvailable.Should().BeFalse();
+        viewModel.StatusMessage.Should().Contain("ainda não foi encontrado").And.Contain("git --version");
+    }
+
+    [Fact]
+    public async Task TheInstallCommand_CanBeCopied_AndTheOfficialPageOpened()
+    {
+        var (viewModel, _) = await LoadedAsync(gitInstalled: false);
+        var command = viewModel.GitInstructions.Commands[0].Command;
+
+        await viewModel.CopyInstallCommandAsync(command);
+        await viewModel.OpenGitInstallPageAsync();
+
+        _clipboard.LastWritten.Should().Be(command);
+        viewModel.StatusMessage.Should().Contain("Comando copiado");
+        _shell.OpenedUris.Should().Equal(viewModel.GitInstructions.OfficialSite);
+    }
+
+    [Fact]
+    public async Task CopyingFails_SaysSo()
+    {
+        var (viewModel, _) = await LoadedAsync(gitInstalled: false);
+        _clipboard.Refuses = true;
+
+        await viewModel.CopyInstallCommandAsync("winget install --id Git.Git -e --source winget");
+
+        viewModel.ErrorMessage.Should().Be("Não foi possível copiar. Tente de novo.");
     }
 
     [Fact]

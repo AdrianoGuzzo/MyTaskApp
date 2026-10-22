@@ -48,6 +48,8 @@ public sealed class TagImportViewModelTests
             new FakeConfirmationDialog(),
             new FakeDirectoryProbe(),
             new FakeDirectoryCommandEditor(),
+            new FakeClipboardWriter(),
+            new FakeShellLauncher(),
             NullLogger<TagsViewModel>.Instance,
             placements);
 

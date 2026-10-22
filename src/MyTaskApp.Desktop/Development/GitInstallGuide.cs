@@ -40,8 +40,10 @@ internal static class GitInstallGuide
     public static GitInstallInstructions ForWindows() =>
         new(
             "Windows",
-            "Abra o PowerShell ou o Prompt de Comando como usuário e execute o comando abaixo. "
-            + "Depois da instalação, feche e abra novamente o terminal e confira com git --version.",
+            "1. Aperte a tecla Windows, digite PowerShell (ou cmd) e abra — não precisa ser administrador.\n"
+            + "2. Cole o comando abaixo, aperte Enter e aceite se o winget pedir confirmação.\n"
+            + "3. Quando terminar, volte aqui e clique em \"Verificar novamente\" — não precisa reiniciar o MyTaskApp.\n"
+            + "Sem o winget (Windows antigo), baixe o instalador na página oficial do Git.",
             [new InstallCommand("Instalar com o winget (recomendado)", "winget install --id Git.Git -e --source winget")],
             new Uri("https://git-scm.com/downloads/win"));
 

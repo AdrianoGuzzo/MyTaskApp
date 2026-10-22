@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
         xmlns:cmd="using:MyTaskApp.Application.Commands"
+        xmlns:dev="using:MyTaskApp.Desktop.Development"
         xmlns:spell="using:MyTaskApp.Desktop.SpellChecking"
         x:Class="MyTaskApp.Desktop.Views.TagsWindow"
         x:DataType="vm:TagsViewModel"
@@ -87,6 +88,34 @@
       <Setter Property="FontSize" Value="11" />
       <Setter Property="Padding" Value="8,3" />
       <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- Sem o Git: o aviso fica no lugar da URL do repositório, com o como instalar. -->
+    <Style Selector="Border.gitMissing">
+      <Setter Property="Background" Value="{DynamicResource WidgetCautionSoftBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetCautionBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetCardRadius}" />
+      <Setter Property="Padding" Value="10,8" />
+    </Style>
+
+    <Style Selector="TextBlock.body">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style Selector="Border.codeBox">
+      <Setter Property="Background" Value="{DynamicResource WidgetCanvasBrush}" />
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetPillRadius}" />
+      <Setter Property="Padding" Value="10,6" />
+    </Style>
+
+    <Style Selector="SelectableTextBlock.code">
+      <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
   </Window.Styles>
@@ -565,6 +594,58 @@
                              ToolTip.Tip="Com a URL e uma pasta que ainda não existe, dá para clonar o repositório nela. Numa pasta que já é repositório, a URL acompanha o origin."
                              Text="{Binding RepositoryUrl}"
                              IsVisible="{Binding IsGitAvailable}" />
+
+                    <!-- Sem o Git, no mesmo lugar: o que falta e como instalar (ADR-027). O app não instala nada. -->
+                    <Border Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
+                            Classes="gitMissing"
+                            x:Name="GitMissingPanel"
+                            IsVisible="{Binding !IsGitAvailable}">
+                      <StackPanel Spacing="8">
+                        <TextBlock Classes="sectionTitle" Text="O Git não está instalado neste computador" />
+                        <TextBlock Classes="body"
+                                   Text="Sem ele, dá para escolher a pasta do projeto, mas não para ligá-la a um repositório (GitHub, por exemplo) nem clonar. Para instalar:" />
+                        <TextBlock Classes="meta"
+                                   TextWrapping="Wrap"
+                                   Text="{Binding #Root.((vm:TagsViewModel)DataContext).GitInstructions.Explanation}" />
+
+                        <ItemsControl ItemsSource="{Binding #Root.((vm:TagsViewModel)DataContext).GitInstructions.Commands}">
+                          <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                              <StackPanel Spacing="6" />
+                            </ItemsPanelTemplate>
+                          </ItemsControl.ItemsPanel>
+                          <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="dev:InstallCommand">
+                              <StackPanel Spacing="3">
+                                <TextBlock Classes="meta" Text="{Binding Label}" />
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                  <Border Grid.Column="0" Classes="codeBox">
+                                    <SelectableTextBlock Classes="code installCommand" Text="{Binding Command}" />
+                                  </Border>
+                                  <Button Grid.Column="1"
+                                          Classes="rowAction"
+                                          Content="Copiar comando"
+                                          Command="{Binding #Root.((vm:TagsViewModel)DataContext).CopyInstallCommandCommand}"
+                                          CommandParameter="{Binding Command}" />
+                                </Grid>
+                              </StackPanel>
+                            </DataTemplate>
+                          </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Right">
+                          <Button Classes="rowAction"
+                                  Content="Página oficial do Git"
+                                  ToolTip.Tip="{Binding #Root.((vm:TagsViewModel)DataContext).GitInstructions.OfficialSite}"
+                                  Command="{Binding #Root.((vm:TagsViewModel)DataContext).OpenGitInstallPageCommand}" />
+                          <Button Classes="rowAction accent"
+                                  x:Name="RecheckGitButton"
+                                  Content="Verificar novamente"
+                                  ToolTip.Tip="Procura o Git de novo, sem reiniciar o MyTaskApp"
+                                  Command="{Binding #Root.((vm:TagsViewModel)DataContext).RecheckGitCommand}" />
+                        </StackPanel>
+                      </StackPanel>
+                    </Border>
 
                     <TextBox Grid.Row="2" Grid.Column="0"
                              FontSize="12"

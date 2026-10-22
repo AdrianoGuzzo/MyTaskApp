@@ -159,7 +159,7 @@ public class QuickCommandSettingsViewModelTests
         _runner.ResultsByHandler[typeof(GetDevelopmentCommandsHandler)] = (IReadOnlyList<DevelopmentCommandRow>)[Run, Test];
         _runner.ResultsByHandler[typeof(AddTagDirectoryCommandHandler)] = Guid.NewGuid();
 
-        var viewModel = new TagsViewModel(_runner, _confirmation, new FakeDirectoryProbe(), _editor, NullLogger<TagsViewModel>.Instance);
+        var viewModel = new TagsViewModel(_runner, _confirmation, new FakeDirectoryProbe(), _editor, new FakeClipboardWriter(), new FakeShellLauncher(), NullLogger<TagsViewModel>.Instance);
         await viewModel.LoadAsync(Ct);
         var tag = viewModel.Tags.Single();
         await viewModel.ToggleDirectoriesAsync(tag, Ct);
