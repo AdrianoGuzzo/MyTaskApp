@@ -2769,6 +2769,17 @@
         </ScrollViewer>
       </TabItem>
 
+      <!--
+        A Consulta Inteligente (ADR-081): perguntar sobre o sistema, e o Claude
+        Code investiga o código e uma cópia local do banco, só lendo. A aba é
+        um UserControl à parte, para não inchar esta janela.
+      -->
+      <TabItem x:Name="ConsultationTabItem"
+               Header="Consulta Inteligente"
+               IsVisible="{Binding Consultation, Converter={x:Static ObjectConverters.IsNotNull}}">
+        <views:TaskConsultationPanel x:Name="ConsultationPanel" DataContext="{Binding Consultation}" />
+      </TabItem>
+
     </TabControl>
 
   </DockPanel>

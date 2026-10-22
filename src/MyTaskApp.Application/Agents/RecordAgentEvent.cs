@@ -209,7 +209,7 @@ public sealed class RecordAgentEventHandler(
                 session.TaskDevelopmentId,
                 task?.Title ?? "Tarefa",
                 providers.Find(session.ProviderId)?.Name ?? session.ProviderId,
-                GetTodayBoardHandler.RepositoryName(development?.RepositoryPath),
+                session.IsConsultation ? "Consulta Inteligente" : GetTodayBoardHandler.RepositoryName(development?.RepositoryPath),
                 development?.Branch,
                 session.Activity,
                 session.ActivityMessage,

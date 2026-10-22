@@ -204,8 +204,10 @@ compartilhado.
 
 ## Ferramentas
 
-São 82 ferramentas. Nesta seção, **L** marca leitura, **E** escrita e **D**
-escrita destrutiva. Parâmetros com `?` são opcionais. Os detalhes de cada um,
+São 86 ferramentas. Nesta seção, **L** marca leitura, **E** escrita e **D**
+escrita destrutiva. As 4 da [Consulta Inteligente](#consulta-inteligente) só
+aparecem para o Claude aberto por ela; o cliente com o token do servidor vê as
+outras 82. Parâmetros com `?` são opcionais. Os detalhes de cada um,
 com tipos e descrições, vêm no `inputSchema` que o cliente recebe em
 `tools/list`.
 
@@ -350,6 +352,25 @@ As máscaras disponíveis são `Hash`, `FakeEmail`, `Partial` (argumento
 | `task_refresh_jira` | D | `taskId` | o retrato relido. Não altera o Jira |
 | `sticky_note_list` | L | `scope?` (`Active`, `Archived`, `Trashed`) | os post-its |
 
+### Consulta Inteligente
+
+Estas quatro só existem numa sessão da [Consulta Inteligente](consulta-inteligente.md)
+(ADR-081), aberta pela aba da tarefa. Quem chama é o Claude Code que o app
+abriu, com o segredo daquela sessão. O token do servidor não as vê nem as
+chama, e o segredo da sessão não vê mais nada: nem as outras ferramentas, nem
+resources, nem prompts.
+
+Nenhuma recebe conexão, servidor ou banco. O banco é o escolhido na aba, e a
+cada chamada o app confere de novo que a sessão está aberta, que o banco não é
+de produção e que o usuário do banco só lê.
+
+| Ferramenta | | Parâmetros | Resposta |
+|---|---|---|---|
+| `consultation_database_describe` | L | — | o banco da consulta: nome, PostgreSQL e versão, ambiente, schemas legíveis e os limites |
+| `consultation_table_list` | L | `schema?` | tabelas e views, linhas estimadas e comentários |
+| `consultation_table_describe` | L | `table`, `schema?` | colunas (tipo, nulo, padrão, comentário), chave primária, únicas e as chaves estrangeiras que saem e que chegam |
+| `consultation_query` | L | `query`, `limit?` (1–500, padrão 100) | colunas, linhas e `truncated`. Um `SELECT` (ou `WITH … SELECT`) só leitura, 15 s no máximo |
+
 ## Resources e prompts
 
 **Resources**, só leitura, em JSON:
@@ -430,11 +451,13 @@ A resposta é o período como ficou gravado:
 | Senha que não muda de endereço | Numa conexão com senha guardada, servidor, porta, usuário e SSL só mudam pela tela. Senão, editar o host e testar mandaria a senha para onde o cliente quisesse. Pelo MCP, o ambiente só fica igual ou mais restrito |
 | Porta exclusiva | O socket do Kestrel é aberto com `SO_EXCLUSIVEADDRUSE` no Windows: outro processo não escuta na mesma porta, nem com `SO_REUSEADDR` |
 | Contra enxurrada | Até 64 conexões ao mesmo tempo. Pedidos barrados entram no log e na tela no máximo uma vez por segundo, com a contagem do resto |
-| Sem SQL livre, sem comandos | Não há ferramenta que execute SQL, cópia, restore ou comandos do sistema. Os comandos cadastrados só se listam. A condição das linhas sem máscara de um perfil (ADR-080) e o script depois da cópia (ADR-082) só se escrevem na tela: o MCP os mostra e os mantém, mas não grava nem executa |
+| Sem SQL livre, sem comandos | Fora de uma Consulta Inteligente, não há ferramenta que execute SQL, cópia, restore ou comandos do sistema. Dentro dela, só `consultation_query` aceita SQL, e só leitura (próxima linha). Os comandos cadastrados só se listam. A condição das linhas sem máscara de um perfil (ADR-080) e o script depois da cópia (ADR-082) só se escrevem na tela: o MCP os mostra e os mantém, mas não grava nem executa |
+| SQL da Consulta Inteligente | O texto vai como subconsulta de `SELECT * FROM (…) LIMIT $1`, pelo protocolo estendido, numa sessão e numa transação só leitura que termina em rollback, com tempo limite e cortes de linhas, células e tamanho. O usuário do banco é conferido no catálogo antes: não é superusuário, não tem privilégio de escrita, não cria objetos. Quem recusa escrita é o PostgreSQL, não uma lista de palavras. Produção nunca entra (ADR-081) |
+| Segredo por sessão | Cada Consulta Inteligente com banco recebe um segredo de 256 bits, no ambiente do processo do Claude; o banco do app guarda só o hash. Vale enquanto a sessão está aberta: o terminal fechou, o segredo morre. Os filtros do SDK e o gateway restringem esse segredo às 4 ferramentas |
 | Exclusão recuperável | `task_delete` manda para a lixeira; a exclusão definitiva não existe pelo MCP |
 | Erros sem detalhe interno | `DomainException` vira a frase da regra; qualquer outra exceção vira um código, e a pilha fica só no log |
 | Logs | Só o nome da ferramenta, o resultado e a duração. Os argumentos não vão para o log nem para a tela. O SDK loga a partir de `Warning` |
-| Concorrência | Uma operação MCP por vez, cada uma no seu escopo, como um clique na tela |
+| Concorrência | Uma operação MCP por vez, cada uma no seu escopo, como um clique na tela. As da Consulta Inteligente ficam fora da fila: do app elas só leem, e uma consulta de 15 s não segura o resto |
 
 O que **não** está protegido: um processo do seu usuário que leia o cofre do
 sistema, ou que tenha o token copiado, entra como você. É o mesmo nível de

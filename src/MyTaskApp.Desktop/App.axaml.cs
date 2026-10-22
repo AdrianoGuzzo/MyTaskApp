@@ -383,6 +383,12 @@ public sealed partial class App : Avalonia.Application
             if (_notes.TryGetValue(taskId, out var notes) && notes.DataContext is TaskNotesViewModel viewModel)
             {
                 _ = viewModel.Developments.RefreshAgentsAsync();
+
+                // A consulta aberta ou encerrada redesenha a linha de estado da aba (ADR-081).
+                if (viewModel.Consultation is { } consultation)
+                {
+                    _ = consultation.RefreshSessionsAsync();
+                }
             }
         });
 
@@ -646,6 +652,15 @@ public sealed partial class App : Avalonia.Application
 
         viewModel.Developments.CommandsRequested += () => ShowDevelopmentCommands(services, notes);
         viewModel.Developments.DatabaseOperationsRequested += () => ShowDatabaseOperations(services, notes);
+
+        // A Consulta Inteligente (ADR-081) leva às mesmas janelas: etiquetas,
+        // bancos e o servidor MCP que as ferramentas de banco usam.
+        if (viewModel.Consultation is { } consultation)
+        {
+            consultation.TagsRequested += () => ShowTags(services, notes);
+            consultation.DatabaseOperationsRequested += () => ShowDatabaseOperations(services, notes);
+            consultation.McpServerRequested += () => ShowMcpServer(services, notes);
+        }
 
         // Vincular, atualizar ou desvincular muda a chave que a linha desenha.
         if (viewModel.Issue is { } issue)

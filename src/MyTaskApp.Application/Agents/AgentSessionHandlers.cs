@@ -448,8 +448,10 @@ public sealed class StartAgentSessionHandler(
 /// <summary>
 /// Traz para a frente o terminal da sessão de um ambiente. Sem ambiente, o da
 /// sessão ativa mais recente da tarefa — o selo da lista com um agente só.
+/// Com <paramref name="SessionId"/>, o daquela sessão: a Consulta Inteligente
+/// (ADR-081) não tem ambiente, e o aviso sabe de qual sessão veio.
 /// </summary>
-public sealed record FocusAgentSession(Guid TaskId, Guid? DevelopmentId = null);
+public sealed record FocusAgentSession(Guid TaskId, Guid? DevelopmentId = null, Guid? SessionId = null);
 
 /// <summary>
 /// Confere o processo antes: se ele acabou, a sessão é encerrada e nada abre —
@@ -495,6 +497,13 @@ public sealed class FocusAgentSessionHandler(
 
     private async Task<AgentSession?> FindAsync(FocusAgentSession command, CancellationToken cancellationToken)
     {
+        if (command.SessionId is { } sessionId)
+        {
+            return await sessions.FindByIdAsync(sessionId, cancellationToken) is { } session && session.TaskItemId == command.TaskId
+                ? session
+                : null;
+        }
+
         if (command.DevelopmentId is { } developmentId)
         {
             return await sessions.FindLatestForDevelopmentAsync(developmentId, cancellationToken);

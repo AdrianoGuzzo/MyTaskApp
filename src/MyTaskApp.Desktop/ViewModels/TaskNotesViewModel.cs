@@ -70,13 +70,17 @@ public sealed partial class TaskNotesViewModel(
     TaskDeadlineViewModel? deadline = null,
     TaskTimeLogViewModel? time = null,
     TaskTagEditorViewModel? tags = null,
-    TaskPlacementViewModel? placement = null) : ObservableObject
+    TaskPlacementViewModel? placement = null,
+    TaskConsultationViewModel? consultation = null) : ObservableObject
 {
     public const int NotesTab = 0;
 
     public const int DevelopmentTab = 1;
 
     public const int TimeTab = 2;
+
+    /// <summary>A Consulta Inteligente (ADR-081).</summary>
+    public const int ConsultationTab = 3;
 
     /// <summary>O texto como está no banco — a régua do "alterações não salvas".</summary>
     private string _persisted = string.Empty;
@@ -174,6 +178,12 @@ public sealed partial class TaskNotesViewModel(
     /// mesmo motivo do <see cref="Issue"/>.
     /// </summary>
     public TaskTimeLogViewModel? Time { get; } = time;
+
+    /// <summary>
+    /// A aba Consulta Inteligente (ADR-081). Opcional pelo mesmo motivo do
+    /// <see cref="Issue"/>.
+    /// </summary>
+    public TaskConsultationViewModel? Consultation { get; } = consultation;
 
     /// <summary>
     /// As etiquetas, abaixo do título. Gravam a cada marca, fora do "Salvar".
@@ -278,6 +288,14 @@ public sealed partial class TaskNotesViewModel(
             return TaskNotesCloseDecision.Stay;
         }
 
+        // A cópia de banco da consulta leva minutos, como a do ambiente (ADR-060, ADR-081).
+        if (Consultation is { Copy.IsRunning: true } copying)
+        {
+            SelectedTabIndex = ConsultationTab;
+            copying.Message = "Cópia do banco em andamento. Aguarde terminar, ou clique em Cancelar cópia, para fechar.";
+            return TaskNotesCloseDecision.Stay;
+        }
+
         return HasUnsavedChanges ? TaskNotesCloseDecision.AskToDiscard : TaskNotesCloseDecision.Close;
     }
 
@@ -333,6 +351,7 @@ public sealed partial class TaskNotesViewModel(
         SelectedTabIndex = NotesTab;
 
         Developments.Load(row.TaskId, row.Title, row.IsCompleted);
+        Consultation?.Load(row.TaskId);
 
         Deadline?.Load(row);
         Time?.Load(row);
@@ -413,7 +432,7 @@ public sealed partial class TaskNotesViewModel(
     private static string On(string device) =>
         device == GetTaskOriginHandler.ThisComputer ? "neste computador" : $"em {device}";
 
-    /// <summary>As abas Desenvolvimento e Tempo se atualizam a cada vez que aparecem.</summary>
+    /// <summary>As abas Desenvolvimento, Tempo e Consulta Inteligente se atualizam a cada vez que aparecem.</summary>
     partial void OnSelectedTabIndexChanged(int value)
     {
         if (value == DevelopmentTab)
@@ -423,6 +442,10 @@ public sealed partial class TaskNotesViewModel(
         else if (value == TimeTab && Time is { } time)
         {
             _ = time.ActivateAsync(CancellationToken.None);
+        }
+        else if (value == ConsultationTab && Consultation is { } consultation)
+        {
+            _ = consultation.ActivateAsync(CancellationToken.None);
         }
     }
 

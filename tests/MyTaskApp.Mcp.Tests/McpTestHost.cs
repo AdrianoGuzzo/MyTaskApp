@@ -56,7 +56,8 @@ internal sealed class McpTestHost : IAsyncDisposable
         bool start = true,
         bool readOnly = false,
         TimeProvider? clock = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Action<IServiceCollection>? configure = null)
     {
         var directory = Path.Combine(Path.GetTempPath(), $"mytaskapp-mcp-{Guid.NewGuid():N}");
         var logs = new CapturingLoggerProvider();
@@ -70,7 +71,7 @@ internal sealed class McpTestHost : IAsyncDisposable
             })
             .Build();
 
-        var services = new ServiceCollection()
+        var collection = new ServiceCollection()
 
             // Antes da Application e da Infrastructure, que só registram o relógio do sistema se faltar um.
             .AddSingleton(clock ?? TimeProvider.System)
@@ -82,8 +83,12 @@ internal sealed class McpTestHost : IAsyncDisposable
 
             // Depois da Infrastructure: o último registro é o que o contêiner entrega.
             .AddSingleton<IMcpAccessTokenStore, InMemoryTokenStore>()
-            .AddSingleton<IDatabaseCredentialStore, InMemoryCredentialStore>()
-            .BuildServiceProvider(validateScopes: true);
+            .AddSingleton<IDatabaseCredentialStore, InMemoryCredentialStore>();
+
+        // O teste troca o que precisar (o banco da Consulta Inteligente, por exemplo) depois de tudo.
+        configure?.Invoke(collection);
+
+        var services = collection.BuildServiceProvider(validateScopes: true);
 
         var host = new McpTestHost(services, logs, directory) { Port = FreePort() };
 

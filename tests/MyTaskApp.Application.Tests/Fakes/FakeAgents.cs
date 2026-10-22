@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
+using MyTaskApp.Application.Consultations;
 using MyTaskApp.Domain.Agents;
 
 namespace MyTaskApp.Application.Tests.Fakes;
@@ -55,7 +56,8 @@ internal sealed class FakeAgentSessionRepository : IAgentSessionRepository
         CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<AgentSession>>(
         [
-            .. _sessions
+            // De trás para frente antes de ordenar: no mesmo instante, a gravada por último vem primeiro.
+            .. Enumerable.Reverse(_sessions)
                 .Where(session => session.TaskItemId == taskId && session.IsConsultation)
                 .OrderByDescending(session => session.StartedAt)
                 .Take(limit),
@@ -226,7 +228,7 @@ internal sealed class RecordingAgentAttentionPresenter : IAgentAttentionPresente
     }
 }
 
-internal sealed class FakeAgentCliProvider : IAgentCliProvider
+internal sealed class FakeAgentCliProvider : IAgentCliProvider, IConsultationLaunchBuilder
 {
     public const string Executable = @"C:\Users\dev\.local\bin\claude.exe";
 
@@ -284,6 +286,29 @@ internal sealed class FakeAgentCliProvider : IAgentCliProvider
     public string? MonitoringBlockedBy { get; set; }
 
     public string? MonitoringUnavailableReason(string workingDirectory, Uri endpoint) => MonitoringBlockedBy;
+
+    /// <summary>Os pedidos de Consulta Inteligente (ADR-081), na ordem.</summary>
+    public List<ConsultationLaunchRequest> Consultations { get; } = [];
+
+    /// <summary>Como o Claude de verdade: as pastas extras e a pergunta viram argumentos; o ambiente leva os segredos.</summary>
+    public TerminalLaunchOptions CreateConsultationLaunch(ConsultationLaunchRequest request, CliDetectionResult detection)
+    {
+        Consultations.Add(request);
+
+        var environment = new Dictionary<string, string>(request.Environment, StringComparer.Ordinal);
+
+        foreach (var (name, value) in request.Monitoring?.Environment ?? new Dictionary<string, string>())
+        {
+            environment[name] = value;
+        }
+
+        return new(
+            detection.ExecutablePath!,
+            [request.Resume ? "--resume" : "--session-id", request.ConversationId, "--restricted", .. request.ExtraArguments,
+                .. request.Question is null ? Array.Empty<string>() : [request.Question]],
+            request.Directories[0],
+            environment);
+    }
 }
 
 /// <summary>Anota quem pediu para vigiar e quem avisou mudança.</summary>

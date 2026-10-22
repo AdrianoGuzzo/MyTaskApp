@@ -238,6 +238,10 @@ internal static class AppServices
             // em andamento, um dono só, para o app parar todas ao fechar.
             .AddTransient<DevelopmentDatabaseViewModel>()
             .AddSingleton<DatabaseCopyRuns>()
+
+            // A aba Consulta Inteligente (ADR-081): uma por janela, com a sua
+            // própria seção de cópia de banco.
+            .AddTransient<TaskConsultationViewModel>()
             .AddApplication(configuration)
             .AddInfrastructure(configuration)
             .BuildServiceProvider(validateScopes: true);

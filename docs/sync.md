@@ -146,7 +146,8 @@ onde pôr o endereço.
 
 **Nunca sai do computador:** conexões e perfis de banco, perfis de
 anonimização e de cópia, histórico de operações de banco, execuções de comando,
-sessões do agente, auditoria, configurações, estado das janelas e qualquer
+sessões do agente, a configuração da Consulta Inteligente (pastas e banco
+escolhidos, ADR-081), auditoria, configurações, estado das janelas e qualquer
 segredo (senhas, tokens do Jira e do MCP, connection strings).
 
 Um teste percorre todas as colunas mapeadas no EF dos tipos sincronizados e

@@ -112,7 +112,7 @@ public sealed partial class AgentAlertViewModel(
         try
         {
             var result = await runner.RunAsync<FocusAgentSessionHandler, AgentFocusResult>(
-                (handler, token) => handler.HandleAsync(new FocusAgentSession(TaskId, DevelopmentId), token),
+                (handler, token) => handler.HandleAsync(new FocusAgentSession(TaskId, DevelopmentId, SessionId), token),
                 CancellationToken.None);
 
             if (!result.Focused)

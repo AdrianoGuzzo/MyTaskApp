@@ -131,6 +131,9 @@ public sealed record TaskConsultationView(
 
     public IReadOnlyList<AgentCliOption> Efforts { get; init; } = [];
 
+    /// <summary>O servidor MCP do app está no ar: sem ele, a consulta só abre com o código.</summary>
+    public bool ToolsAvailable { get; init; }
+
     public bool CanStart => Problems.Count == 0 && !IsReadOnly && ActiveSession is not { IsActive: true };
 }
 
