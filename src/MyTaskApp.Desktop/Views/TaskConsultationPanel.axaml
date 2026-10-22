@@ -1,0 +1,362 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
+             xmlns:views="using:MyTaskApp.Desktop.Views"
+             xmlns:agents="using:MyTaskApp.Application.Agents"
+             xmlns:consult="using:MyTaskApp.Application.Consultations"
+             x:Class="MyTaskApp.Desktop.Views.TaskConsultationPanel"
+             x:DataType="vm:TaskConsultationViewModel">
+
+  <!--
+    A aba Consulta Inteligente (ADR-081): cinco cartões em sequência — assunto,
+    projeto, dados, preparo e pergunta. Cada escolha grava na hora; a pergunta
+    abre o Claude Code num terminal, só lendo. Os estilos (card, hint, accent…)
+    vêm da janela da tarefa.
+  -->
+
+  <ScrollViewer x:Name="ConsultationScroll" HorizontalScrollBarVisibility="Disabled" Margin="0,10,0,10">
+    <StackPanel x:Name="ConsultationSection" Spacing="10" MaxWidth="980" HorizontalAlignment="Stretch">
+
+      <TextBlock Classes="hint"
+                 TextWrapping="Wrap"
+                 Text="Pergunte sobre como o sistema funciona. O Claude Code investiga o código e, se você escolher, uma cópia local do banco — só lendo: nada é alterado." />
+
+      <TextBlock x:Name="ConsultationLoading" Classes="hint" Text="Carregando…" IsVisible="{Binding IsLoading}" />
+
+      <TextBlock x:Name="ConsultationReadOnly"
+                 Classes="body warn"
+                 TextWrapping="Wrap"
+                 IsVisible="{Binding IsReadOnly}"
+                 Text="A tarefa está arquivada ou na lixeira: a consulta só pode ser vista." />
+
+      <!-- 1. Assunto -->
+      <Border Classes="card" IsEnabled="{Binding !IsReadOnly}">
+        <StackPanel Spacing="8">
+          <TextBlock Classes="sectionTitle" Text="1. Assunto" />
+          <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+            <TextBlock Classes="fieldLabel" Text="Etiqueta" VerticalAlignment="Center" />
+            <ComboBox Grid.Column="1"
+                      x:Name="ConsultationTagBox"
+                      HorizontalAlignment="Stretch"
+                      PlaceholderText="O assunto da pergunta (as etiquetas da tarefa vêm primeiro)"
+                      ItemsSource="{Binding Tags}"
+                      SelectedItem="{Binding SelectedTag}">
+              <ComboBox.ItemTemplate>
+                <!-- TextBlocks separados, e não Run: Run com binding em template de ComboBox estoura a pilha no Avalonia. -->
+                <DataTemplate x:DataType="consult:ConsultationTagOption">
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                    <TextBlock Classes="hint" Text="da tarefa" IsVisible="{Binding IsOnTask}" VerticalAlignment="Center" />
+                  </StackPanel>
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+          </Grid>
+
+          <StackPanel Spacing="6" IsVisible="{Binding HasNoProjects}">
+            <TextBlock x:Name="NoProjectsText" Classes="body warn" TextWrapping="Wrap"
+                       Text="Nenhum projeto está associado a esta etiqueta." />
+          </StackPanel>
+
+          <Button x:Name="ManageTagsButton" HorizontalAlignment="Left" Content="Configurar em Etiquetas…" Command="{Binding ManageTagsCommand}" />
+        </StackPanel>
+      </Border>
+
+      <!-- 2. Projeto -->
+      <Border Classes="card" IsEnabled="{Binding !IsReadOnly}">
+        <StackPanel Spacing="8">
+          <TextBlock Classes="sectionTitle" Text="2. Projeto" />
+          <TextBlock Classes="hint" TextWrapping="Wrap"
+                     Text="As pastas que o Claude pode ler. A primeira marcada é onde ele abre; as outras entram como pastas adicionais." />
+          <TextBlock Classes="hint" Text="Escolha a etiqueta para ver os projetos dela." IsVisible="{Binding !HasSources}" />
+
+          <ItemsControl x:Name="ConsultationSources" ItemsSource="{Binding Sources}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:ConsultationSourceItemViewModel">
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10" Margin="0,3">
+                  <CheckBox IsChecked="{Binding IsSelected}" VerticalAlignment="Top" />
+                  <StackPanel Grid.Column="1" Spacing="1">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                      <TextBlock Classes="hint" Text="{Binding KindText}" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <TextBlock Classes="hint" TextWrapping="Wrap" Text="{Binding Detail}" />
+                    <TextBlock Classes="body"
+                               Classes.ok="{Binding IsReady}"
+                               Classes.warn="{Binding !IsReady}"
+                               Text="{Binding StateText}" />
+                  </StackPanel>
+                  <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Top">
+                    <Button Content="Clonar…"
+                            IsVisible="{Binding CanClone}"
+                            IsEnabled="{Binding !IsCloning}"
+                            Command="{Binding $parent[UserControl].((vm:TaskConsultationViewModel)DataContext).CloneCommand}"
+                            CommandParameter="{Binding}" />
+                    <TextBlock Classes="hint" Text="Clonando…" IsVisible="{Binding IsCloning}" VerticalAlignment="Center" />
+                    <Button Content="Escolher pasta…"
+                            IsVisible="{Binding CanPickFolder}"
+                            Command="{Binding $parent[UserControl].((vm:TaskConsultationViewModel)DataContext).PickFolderCommand}"
+                            CommandParameter="{Binding}" />
+                  </StackPanel>
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+
+      <!-- 3. Dados -->
+      <Border Classes="card" IsEnabled="{Binding !IsReadOnly}">
+        <StackPanel Spacing="8">
+          <TextBlock Classes="sectionTitle" Text="3. Dados" />
+
+          <StackPanel Orientation="Horizontal" Spacing="16" IsEnabled="{Binding CanEditDatabase}">
+            <RadioButton x:Name="CodeOnlyOption" GroupName="ConsultationData" Content="Somente código-fonte" IsChecked="{Binding !UsesDatabase}" />
+            <RadioButton x:Name="DatabaseOption" GroupName="ConsultationData" Content="Código e banco de dados" IsChecked="{Binding UsesDatabase}" />
+          </StackPanel>
+
+          <TextBlock Classes="hint" TextWrapping="Wrap" IsVisible="{Binding IsSessionActive}"
+                     Text="O banco não muda enquanto a consulta está aberta: feche o terminal dela para trocar." />
+
+          <StackPanel Spacing="8" IsVisible="{Binding ShowsDatabase}">
+            <ComboBox x:Name="ConsultationDatabaseBox"
+                      HorizontalAlignment="Stretch"
+                      IsEnabled="{Binding CanEditDatabase}"
+                      PlaceholderText="Uma cópia local (produção nunca aparece aqui)"
+                      ItemsSource="{Binding Databases}"
+                      SelectedItem="{Binding SelectedDatabase}">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="consult:ConsultationDatabaseOption">
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="{Binding Label}" FontWeight="SemiBold" />
+                    <TextBlock Classes="hint" Text="{Binding Server}" VerticalAlignment="Center" />
+                  </StackPanel>
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+
+            <TextBlock Classes="hint" TextWrapping="Wrap" IsVisible="{Binding !HasDatabases}"
+                       Text="Nenhuma cópia local disponível. Crie uma abaixo, ou cadastre uma conexão em Bancos de Dados." />
+
+            <StackPanel Spacing="2" IsVisible="{Binding HasSelectedDatabase}">
+              <TextBlock x:Name="DatabaseServer" Classes="hint" TextWrapping="Wrap" Text="{Binding DatabaseServerText}" />
+              <TextBlock Classes="hint" Text="{Binding DatabaseEnvironmentText}" />
+            </StackPanel>
+
+            <TextBlock x:Name="DatabaseCheckText"
+                       Classes="body"
+                       Classes.ok="{Binding DatabaseReadOnly}"
+                       Classes.warn="{Binding !DatabaseReadOnly}"
+                       TextWrapping="Wrap"
+                       Text="{Binding DatabaseCheckText}"
+                       IsVisible="{Binding HasDatabaseCheck}" />
+            <ItemsControl ItemsSource="{Binding DatabaseCheck.Problems, FallbackValue={x:Null}}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="x:String">
+                  <TextBlock Classes="hint" TextWrapping="Wrap" Text="{Binding StringFormat='• {0}'}" />
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <TextBlock x:Name="McpHint" Classes="body warn" TextWrapping="Wrap" IsVisible="{Binding ShowsMcpHint}"
+                       Text="Para consultar o banco, o servidor MCP do MyTaskApp precisa estar ligado. Ligue-o, ou escolha Somente código-fonte." />
+
+            <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="8">
+              <Button x:Name="CheckDatabaseButton" Content="Verificar" Command="{Binding CheckDatabaseCommand}" />
+              <Button x:Name="PrepareAccessButton"
+                      Classes="accent"
+                      Content="Preparar acesso de leitura…"
+                      IsVisible="{Binding CanPrepareReadAccess}"
+                      Command="{Binding PrepareReadAccessCommand}" />
+              <Button x:Name="NewCopyButton"
+                      Content="Criar nova cópia local…"
+                      IsVisible="{Binding !IsCopying}"
+                      IsEnabled="{Binding CanEditDatabase}"
+                      Command="{Binding BeginCopyCommand}" />
+              <Button x:Name="OpenMcpButton" Content="Abrir servidor MCP…" IsVisible="{Binding ShowsMcpHint}" Command="{Binding OpenMcpServerCommand}" />
+            </WrapPanel>
+            <TextBlock Classes="hint" Text="Conferindo o banco…" IsVisible="{Binding IsCheckingDatabase}" />
+            <TextBlock Classes="hint" Text="Preparando o acesso de leitura…" IsVisible="{Binding IsPreparingAccess}" />
+
+            <!-- A cópia da aba Desenvolvimento (ADR-060), com as mesmas confirmações. -->
+            <StackPanel x:Name="ConsultationCopy"
+                        Spacing="8"
+                        x:DataType="vm:DevelopmentDatabaseViewModel"
+                        DataContext="{Binding Copy}">
+              <Border Classes="codeBox" IsVisible="{Binding IsSelecting}">
+                <StackPanel Spacing="8">
+                  <views:DevelopmentDatabaseSelector />
+                  <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" IsVisible="{Binding !IsRunning}">
+                    <Button Content="Cancelar" Command="{Binding CancelSelectingCommand}" />
+                    <Button Classes="accent"
+                            x:Name="ConsultationCopyNowButton"
+                            Content="Copiar"
+                            Command="{Binding $parent[UserControl].((vm:TaskConsultationViewModel)DataContext).CopyNowCommand}" />
+                  </StackPanel>
+                </StackPanel>
+              </Border>
+
+              <StackPanel Spacing="6" IsVisible="{Binding IsRunning}">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                  <ProgressBar Minimum="0" Maximum="100" Value="{Binding Percent}" Height="10" />
+                  <TextBlock Grid.Column="1" Text="{Binding PercentText}" FontWeight="SemiBold" />
+                </Grid>
+                <TextBlock Classes="hint" TextWrapping="Wrap" Text="{Binding CurrentStep}" />
+                <Button HorizontalAlignment="Left" Content="Cancelar cópia" Command="{Binding CancelCommand}" />
+              </StackPanel>
+
+              <TextBlock Classes="body"
+                         Classes.ok="{Binding ResultSucceeded}"
+                         Classes.bad="{Binding !ResultSucceeded}"
+                         TextWrapping="Wrap"
+                         Text="{Binding ResultMessage}"
+                         IsVisible="{Binding HasResult}" />
+            </StackPanel>
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <!-- 4. Preparar -->
+      <Border Classes="card" IsEnabled="{Binding !IsReadOnly}">
+        <StackPanel Spacing="8">
+          <TextBlock Classes="sectionTitle" Text="4. Preparar" />
+
+          <TextBlock Classes="fieldLabel" Text="Instruções adicionais (opcional)" />
+          <TextBox x:Name="ConsultationInstructionsBox"
+                   AcceptsReturn="True"
+                   TextWrapping="Wrap"
+                   MinHeight="60"
+                   MaxHeight="160"
+                   PlaceholderText="Ex.: responda em tópicos curtos; o cliente chama o pedido de &quot;ordem&quot;."
+                   Text="{Binding Instructions}" />
+
+          <Grid ColumnDefinitions="Auto,*,Auto,*" ColumnSpacing="12">
+            <TextBlock Classes="fieldLabel" Text="Modelo" VerticalAlignment="Center" />
+            <ComboBox Grid.Column="1" x:Name="ConsultationModelBox" HorizontalAlignment="Stretch"
+                      ItemsSource="{Binding ModelOptions}" SelectedItem="{Binding SelectedModel}">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="agents:AgentCliOption">
+                  <TextBlock Text="{Binding Label}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+            <TextBlock Grid.Column="2" Classes="fieldLabel" Text="Esforço" VerticalAlignment="Center" />
+            <ComboBox Grid.Column="3" x:Name="ConsultationEffortBox" HorizontalAlignment="Stretch"
+                      ItemsSource="{Binding EffortOptions}" SelectedItem="{Binding SelectedEffort}">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="agents:AgentCliOption">
+                  <TextBlock Text="{Binding Label}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+          </Grid>
+
+          <Expander x:Name="PreviewExpander" Header="Ver instruções geradas" IsExpanded="{Binding IsPreviewOpen}" HorizontalAlignment="Stretch">
+            <StackPanel Spacing="8">
+              <SelectableTextBlock Classes="code" TextWrapping="Wrap" Text="{Binding Preview}" IsVisible="{Binding !IsEditingInstructions}" />
+              <TextBox x:Name="SessionInstructionsBox"
+                       AcceptsReturn="True"
+                       TextWrapping="Wrap"
+                       MinHeight="160"
+                       MaxHeight="420"
+                       Text="{Binding SessionInstructions}"
+                       IsVisible="{Binding IsEditingInstructions}" />
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="Editar só para esta sessão" IsVisible="{Binding !IsEditingInstructions}" Command="{Binding EditForSessionCommand}" />
+                <Button Content="Voltar às instruções geradas" IsVisible="{Binding IsEditingInstructions}" Command="{Binding DiscardSessionEditCommand}" />
+              </StackPanel>
+              <TextBlock Classes="hint" TextWrapping="Wrap" IsVisible="{Binding IsEditingInstructions}"
+                         Text="O texto editado vale só para a próxima consulta aberta; não é gravado." />
+            </StackPanel>
+          </Expander>
+        </StackPanel>
+      </Border>
+
+      <!-- 5. Perguntar -->
+      <Border Classes="card">
+        <StackPanel Spacing="8">
+          <TextBlock Classes="sectionTitle" Text="5. Perguntar" />
+
+          <ItemsControl ItemsSource="{Binding Problems}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="x:String">
+                <TextBlock Classes="body warn" TextWrapping="Wrap" Text="{Binding StringFormat='! {0}'}" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <ItemsControl ItemsSource="{Binding Notes}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="x:String">
+                <TextBlock Classes="hint" TextWrapping="Wrap" Text="{Binding StringFormat='• {0}'}" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <TextBox x:Name="QuestionBox"
+                   AcceptsReturn="True"
+                   TextWrapping="Wrap"
+                   MinHeight="70"
+                   MaxHeight="200"
+                   IsEnabled="{Binding !IsReadOnly}"
+                   PlaceholderText="Ex.: Por que o pedido 1234 continua pendente se o pagamento foi aprovado?"
+                   Text="{Binding Question}" />
+
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+            <TextBlock x:Name="StartBlockedText" Classes="hint" TextWrapping="Wrap" VerticalAlignment="Center"
+                       Text="{Binding StartBlockedReason}" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+              <Button x:Name="GoToTerminalButton" Content="Ir para o terminal" IsVisible="{Binding IsSessionActive}" Command="{Binding GoToTerminalCommand}" />
+              <Button x:Name="StartConsultationButton" Classes="accent" Content="Iniciar consulta" Command="{Binding StartCommand}" />
+            </StackPanel>
+          </Grid>
+
+          <TextBlock x:Name="ConsultationStatus"
+                     Classes="body"
+                     Classes.warn="{Binding IsWaitingForYou}"
+                     TextWrapping="Wrap"
+                     Text="{Binding StatusText}"
+                     IsVisible="{Binding HasStatus}" />
+          <TextBlock x:Name="ConsultationMessage" Classes="body ok" TextWrapping="Wrap" Text="{Binding Message}" IsVisible="{Binding HasMessage}" />
+          <TextBlock x:Name="ConsultationError" Classes="body bad" TextWrapping="Wrap" Text="{Binding ErrorMessage}" IsVisible="{Binding HasError}" />
+
+          <StackPanel Spacing="4" IsVisible="{Binding IsAgentMissing}">
+            <TextBlock Classes="body warn" TextWrapping="Wrap" Text="O Claude Code não foi encontrado neste computador. Para instalar:" />
+            <ItemsControl ItemsSource="{Binding InstallGuide.Steps, FallbackValue={x:Null}}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="agents:AgentCliInstallStep">
+                  <StackPanel Spacing="2">
+                    <TextBlock Classes="hint" TextWrapping="Wrap" Text="{Binding Text}" />
+                    <SelectableTextBlock Classes="code" Text="{Binding Command}" IsVisible="{Binding Command, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+
+          <TextBlock Classes="hint" TextWrapping="Wrap"
+                     Text="Na primeira vez numa pasta, o Claude pode pedir no terminal para confiar nela: responda lá." />
+
+          <StackPanel Spacing="4" IsVisible="{Binding HasSessions}">
+            <TextBlock Classes="fieldLabel" Text="Consultas anteriores" />
+            <ItemsControl x:Name="ConsultationSessions" ItemsSource="{Binding Sessions}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:ConsultationSessionItem">
+                  <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,2">
+                    <TextBlock Classes="body" Text="{Binding Text}" VerticalAlignment="Center" />
+                    <Button Grid.Column="1"
+                            Content="Reabrir"
+                            IsVisible="{Binding CanResume}"
+                            Command="{Binding $parent[UserControl].((vm:TaskConsultationViewModel)DataContext).ResumeCommand}"
+                            CommandParameter="{Binding}" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+
+          <Button x:Name="ClearConsultationButton" HorizontalAlignment="Left" Content="Limpar configuração…" Command="{Binding ClearCommand}" />
+        </StackPanel>
+      </Border>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

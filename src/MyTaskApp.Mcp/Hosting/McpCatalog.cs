@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol.Server;
+using MyTaskApp.Application.Consultations;
 using MyTaskApp.Mcp.Tools;
 
 namespace MyTaskApp.Mcp.Hosting;
@@ -20,6 +21,7 @@ public static class McpCatalog
         typeof(DatabaseConnectionTools),
         typeof(AnonymizationProfileTools),
         typeof(ContextTools),
+        typeof(ConsultationTools),
     ];
 
     public static IReadOnlyList<string> Conventions { get; } =
@@ -29,7 +31,8 @@ public static class McpCatalog
         "Durações voltam em segundos, em horas decimais e escritas (\"1h 30min\").",
         "Erros de regra de negócio voltam como erro da ferramenta com a mensagem que o usuário leria na tela; nada foi gravado.",
         "Alterações de perfil de anonimização são pré-visualizadas por padrão (apply=false); com apply=true, o perfil é relido do banco.",
-        "Senhas e tokens nunca entram nem saem pelo MCP. Nenhuma ferramenta executa SQL livre nem comandos do sistema.",
+        "Senhas e tokens nunca entram nem saem pelo MCP. Nenhuma ferramenta executa comandos do sistema. Fora de uma sessão de " +
+        "Consulta Inteligente, nenhuma executa SQL; dentro dela, só consultation_query, e só leitura.",
         "Toda alteração aparece na tela do MyTaskApp na hora e fica na auditoria com a origem \"(MCP)\".",
     ];
 
@@ -51,6 +54,7 @@ public static class McpCatalog
         // IEnumerable<Type> explícito: um Type[] casaria com WithTools<T>(target),
         // que procura ferramentas nos métodos do próprio array — e não acha nenhuma.
         return builder
+            .WithRequestFilters(McpConsultationFilters.Apply)
             .WithTools((IEnumerable<Type>)ToolTypes, McpJson.Options)
             .WithResources([typeof(McpResources)])
             .WithPrompts([typeof(McpPrompts)], McpJson.Options);
@@ -79,6 +83,7 @@ public static class McpCatalog
         nameof(DatabaseConnectionTools) => "Conexões de banco",
         nameof(AnonymizationProfileTools) => "Anonimização",
         nameof(ContextTools) => "Contexto",
+        nameof(ConsultationTools) => "Consulta Inteligente",
         _ => "Servidor",
     };
 }
@@ -93,6 +98,10 @@ public static class McpServiceCollectionExtensions
     public static IServiceCollection AddMcpServerHost(this IServiceCollection services)
     {
         services.AddSingleton<McpAccessGuard>();
+        services.AddSingleton<McpConsultationAccess>();
+
+        // Ganha do "sem MCP" da Application em qualquer ordem: lá é TryAdd (ADR-081).
+        services.AddSingleton<IConsultationToolsEndpoint, McpConsultationEndpoint>();
         services.AddSingleton<McpServerRuntime>();
         services.AddSingleton<McpActivityLog>();
         services.AddSingleton<McpGateway>();

@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Commands;
+using MyTaskApp.Application.Consultations;
 using MyTaskApp.Application.DatabaseOperations;
 using MyTaskApp.Application.Development;
 using MyTaskApp.Desktop.Composition;
@@ -541,27 +542,72 @@ public sealed partial class DevelopmentDatabaseViewModel(
     /// </summary>
     public async Task<TaskDevelopmentView?> RunAsync(Guid taskId, Guid developmentId, PlannedDatabaseCopy plan)
     {
+        var result = await RunTrackedAsync(
+            taskId,
+            plan,
+            (progress, cancellationToken) => runner.RunAsync<CopyDevelopmentDatabaseHandler, DevelopmentDatabaseCopyResult>(
+                (handler, token) => handler.HandleAsync(
+                    new CopyDevelopmentDatabase(taskId, developmentId, plan.Request, plan.ProductionConfirmed, plan.TypedConfirmation),
+                    progress,
+                    token),
+                cancellationToken),
+            copied => copied.Copy);
+
+        if (result is { Copy.Succeeded: true })
+        {
+            Current = result.Development.Database;
+            IsSelecting = false;
+            return result.Development;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// A mesma cópia, para a Consulta Inteligente (ADR-081): sem ambiente, e o
+    /// banco criado vira o da consulta. Devolve a aba depois da cópia, ou
+    /// <c>null</c> se ela não terminou bem.
+    /// </summary>
+    public async Task<TaskConsultationView?> RunForConsultationAsync(Guid taskId, PlannedDatabaseCopy plan)
+    {
+        var result = await RunTrackedAsync(
+            taskId,
+            plan,
+            (progress, cancellationToken) => runner.RunAsync<CopyConsultationDatabaseHandler, ConsultationDatabaseCopyResult>(
+                (handler, token) => handler.HandleAsync(
+                    new CopyConsultationDatabase(taskId, plan.Request, plan.ProductionConfirmed, plan.TypedConfirmation),
+                    progress,
+                    token),
+                cancellationToken),
+            copied => copied.Copy);
+
+        if (result is { Copy.Succeeded: true })
+        {
+            IsSelecting = false;
+            return result.View;
+        }
+
+        return null;
+    }
+
+    /// <summary>Uma cópia acompanhada na tela: progresso, logs, cancelar e o resultado.</summary>
+    private async Task<T?> RunTrackedAsync<T>(
+        Guid taskId,
+        PlannedDatabaseCopy plan,
+        Func<IProgress<DatabaseCopyProgress>, CancellationToken, Task<T>> run,
+        Func<T, DatabaseCopyResult> copyOf)
+        where T : class
+    {
         BeginRun(plan.Request);
         using var tracked = runs.Track(_run!);
         var progress = new UiProgress<DatabaseCopyProgress>(Apply);
 
         try
         {
-            var result = await runner.RunAsync<CopyDevelopmentDatabaseHandler, DevelopmentDatabaseCopyResult>(
-                (handler, token) => handler.HandleAsync(
-                    new CopyDevelopmentDatabase(taskId, developmentId, plan.Request, plan.ProductionConfirmed, plan.TypedConfirmation),
-                    progress,
-                    token),
-                _run!.Token);
+            var result = await run(progress, _run!.Token);
 
-            Complete(result.Copy);
-
-            if (result.Copy.Succeeded)
-            {
-                Current = result.Development.Database;
-                IsSelecting = false;
-                return result.Development;
-            }
+            Complete(copyOf(result));
+            return result;
         }
         catch (OperationCanceledException)
         {

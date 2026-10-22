@@ -43,7 +43,8 @@ public class ServerLifecycleTests
             "task_list", "task_get", "task_create", "task_update", "time_tracking_start", "time_entry_create",
             "time_entry_get_summary", "database_profile_get", "anonymization_profile_update", "tag_list",
         ]);
-        tools.Should().HaveCount(host.Manager.Tools.Count);
+        // As da Consulta Inteligente só aparecem para o segredo de uma consulta (ADR-081).
+        tools.Should().HaveCount(host.Manager.Tools.Count - MyTaskApp.Application.Consultations.ConsultationToolNames.All.Count);
         tools.Should().OnlyContain(tool => tool.ProtocolTool.InputSchema.ValueKind == System.Text.Json.JsonValueKind.Object);
     }
 

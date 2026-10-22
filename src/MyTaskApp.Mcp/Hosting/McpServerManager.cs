@@ -45,6 +45,7 @@ public sealed class McpServerManager : IMcpServerManager, IDisposable, IAsyncDis
     private readonly IUseCaseRunner _runner;
     private readonly McpGateway _gateway;
     private readonly McpAccessGuard _guard;
+    private readonly McpConsultationAccess _consultations;
     private readonly McpServerRuntime _runtime;
     private readonly IUserClock _clock;
     private readonly TimeProvider _timeProvider;
@@ -63,6 +64,7 @@ public sealed class McpServerManager : IMcpServerManager, IDisposable, IAsyncDis
         IUseCaseRunner runner,
         McpGateway gateway,
         McpAccessGuard guard,
+        McpConsultationAccess consultations,
         McpServerRuntime runtime,
         McpActivityLog activity,
         IUserClock clock,
@@ -72,6 +74,7 @@ public sealed class McpServerManager : IMcpServerManager, IDisposable, IAsyncDis
         _runner = runner;
         _gateway = gateway;
         _guard = guard;
+        _consultations = consultations;
         _runtime = runtime;
         _clock = clock;
         _timeProvider = timeProvider;
@@ -345,6 +348,7 @@ public sealed class McpServerManager : IMcpServerManager, IDisposable, IAsyncDis
 
         builder.Services.AddSingleton(_gateway);
         builder.Services.AddSingleton(_guard);
+        builder.Services.AddSingleton(_consultations);
         builder.Services.AddSingleton(_runtime);
         builder.Services.AddSingleton(Activity);
         builder.Services.AddSingleton(_clock);

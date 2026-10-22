@@ -26,6 +26,7 @@ dados saírem de produção sem anonimização.
 - [Banco escolhido na cópia e apelidos](#banco-escolhido-na-cópia-e-apelidos)
 - [Copiar um banco para o ambiente da tarefa](#copiar-um-banco-para-o-ambiente-da-tarefa)
 - [Verificação depois do restore](#verificação-depois-do-restore)
+- [Acesso de leitura da Consulta Inteligente](#acesso-de-leitura-da-consulta-inteligente)
 - [Segurança](#segurança)
 - [Diretório temporário e auditoria](#diretório-temporário-e-auditoria)
 - [Configuração](#configuração)
@@ -631,6 +632,29 @@ configura-ambiente {lock_eco_core_1010}            o nome do apelido também ser
 
 **Remover o worktree não apaga o banco.** A confirmação diz qual banco fica.
 Apague os que não servem mais por fora do app, como as outras cópias.
+
+## Acesso de leitura da Consulta Inteligente
+
+A [Consulta Inteligente](consulta-inteligente.md) (ADR-081) lê uma cópia local
+com um usuário que só lê. **Preparar acesso de leitura…**, na aba da tarefa, é a
+única escrita do app num servidor fora das cópias:
+
+- só em conexões de **Desenvolvimento** ou **Teste**, habilitadas, que aceitam
+  ser destino e não apontam para um servidor de produção; nunca no banco
+  `postgres`, `template0` ou `template1`;
+- pela conexão escolhida, numa transação: cria (ou acerta) o papel
+  `mytaskapp_leitura` (`LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT
+  NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 10`) com uma senha nova, fixa
+  `default_transaction_read_only` e tempos limite no papel, e dá `CONNECT` no
+  banco e `USAGE` + `SELECT` nos schemas dele;
+- a senha vai para o cofre numa conexão nova "‹servidor› (leitura)", sem banco
+  fixo e só com **Ler** — ela aparece na lista de conexões;
+- a operação fica no histórico (**Preparar acesso de leitura**), com o motivo
+  quando a política recusa.
+
+A conexão administrativa precisa poder criar papéis e dar permissões
+(`CREATEROLE` e dona dos objetos, ou superusuário). Sem isso, a mensagem diz
+qual usuário não pode. Cada cópia nova no mesmo servidor pede um preparo a mais.
 
 ## Verificação depois do restore
 

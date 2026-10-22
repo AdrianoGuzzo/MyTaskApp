@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Consultations;
 using MyTaskApp.Domain;
 
 namespace MyTaskApp.Mcp.Hosting;
@@ -17,6 +18,8 @@ namespace MyTaskApp.Mcp.Hosting;
 /// <item><see cref="DomainException"/> vira a mensagem da regra; o resto vira um código, e o detalhe fica no log;</item>
 /// <item>avisa a tela do que mudou.</item>
 /// </list>
+/// Uma Consulta Inteligente (ADR-081) só passa por <see cref="ConsultAsync"/>:
+/// as outras portas recusam o segredo dela, mesmo que um filtro falhe.
 /// </summary>
 public sealed class McpGateway(
     IUseCaseRunner runner,
@@ -34,8 +37,34 @@ public sealed class McpGateway(
     public Task<T> ReadAsync<T>(
         string operation,
         Func<IUseCaseRunner, CancellationToken, Task<T>> read,
-        CancellationToken cancellationToken) =>
-        RunAsync(operation, DataArea.None, read, cancellationToken);
+        CancellationToken cancellationToken)
+    {
+        RefuseConsultation(operation);
+        return RunAsync(operation, DataArea.None, read, cancellationToken, exclusive: true);
+    }
+
+    /// <summary>
+    /// Uma ferramenta da Consulta Inteligente, para a sessão que chamou. Fora
+    /// da fila de uma operação por vez: do SQLite do app ela só lê, e a parte
+    /// demorada é no PostgreSQL — uma consulta de 15 s não segura o resto do
+    /// MCP.
+    /// </summary>
+    public Task<T> ConsultAsync<T>(
+        string operation,
+        Func<IUseCaseRunner, ConsultationAccess, CancellationToken, Task<T>> read,
+        CancellationToken cancellationToken)
+    {
+        if (McpCaller.Current is not { } access)
+        {
+            activity.Add(new McpActivityEntry(
+                timeProvider.GetUtcNow(), operation, McpActivityOutcome.Denied, TimeSpan.Zero, "Fora de uma Consulta Inteligente."));
+
+            throw new McpException(
+                "Esta ferramenta só existe numa sessão de Consulta Inteligente, aberta pela aba da tarefa no MyTaskApp.");
+        }
+
+        return RunAsync(operation, DataArea.None, (runner, token) => read(runner, access, token), cancellationToken, exclusive: false);
+    }
 
     public Task<T> WriteAsync<T>(
         string operation,
@@ -43,6 +72,8 @@ public sealed class McpGateway(
         Func<IUseCaseRunner, CancellationToken, Task<T>> write,
         CancellationToken cancellationToken)
     {
+        RefuseConsultation(operation);
+
         if (runtime.ReadOnly)
         {
             activity.Add(new McpActivityEntry(
@@ -53,18 +84,36 @@ public sealed class McpGateway(
                 "Para permitir alterações, desligue \"Somente leitura\" na tela do servidor MCP.");
         }
 
-        return RunAsync(operation, changes == DataArea.None ? DataArea.Tasks : changes, write, cancellationToken);
+        return RunAsync(operation, changes == DataArea.None ? DataArea.Tasks : changes, write, cancellationToken, exclusive: true);
+    }
+
+    /// <summary>O segredo de uma consulta abre só as ferramentas de consulta.</summary>
+    private void RefuseConsultation(string operation)
+    {
+        if (McpCaller.Current is null)
+        {
+            return;
+        }
+
+        activity.Add(new McpActivityEntry(
+            timeProvider.GetUtcNow(), operation, McpActivityOutcome.Denied, TimeSpan.Zero, "Consulta Inteligente."));
+
+        throw new McpException("Numa Consulta Inteligente, só as ferramentas de consulta do banco estão disponíveis.");
     }
 
     private async Task<T> RunAsync<T>(
         string operation,
         DataArea changes,
         Func<IUseCaseRunner, CancellationToken, Task<T>> run,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool exclusive)
     {
         var watch = Stopwatch.StartNew();
 
-        await _oneAtATime.WaitAsync(cancellationToken);
+        if (exclusive)
+        {
+            await _oneAtATime.WaitAsync(cancellationToken);
+        }
 
         try
         {
@@ -113,7 +162,10 @@ public sealed class McpGateway(
         }
         finally
         {
-            _oneAtATime.Release();
+            if (exclusive)
+            {
+                _oneAtATime.Release();
+            }
         }
     }
 

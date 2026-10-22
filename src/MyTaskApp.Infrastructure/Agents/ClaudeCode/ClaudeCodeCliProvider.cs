@@ -1,7 +1,11 @@
 using System.Runtime.InteropServices;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Agents;
+using MyTaskApp.Application.Consultations;
 using MyTaskApp.Domain;
 using MyTaskApp.Infrastructure.Processes;
 
@@ -29,9 +33,18 @@ internal sealed partial class ClaudeCodeCliProvider(
     ExecutableLocator locator,
     IProcessRunner runner,
     ClaudeCodeHooks hooks,
-    ILogger<ClaudeCodeCliProvider> logger) : IAgentCliProvider
+    ILogger<ClaudeCodeCliProvider> logger) : IAgentCliProvider, IConsultationLaunchBuilder
 {
     public const string ProviderId = "claude-code";
+
+    /// <summary>O nome do servidor MCP do app na configuração da consulta: as ferramentas viram <c>mcp__mytaskapp__…</c>.</summary>
+    public const string ConsultationServerName = "mytaskapp";
+
+    /// <summary>As únicas ferramentas próprias do Claude numa consulta: ler e procurar arquivos.</summary>
+    public const string ConsultationBuiltInTools = "Read,Grep,Glob";
+
+    /// <summary>Os arquivos de consulta mais velhos que isso são apagados ao gravar um novo.</summary>
+    private static readonly TimeSpan ConsultationFilesLifetime = TimeSpan.FromDays(30);
 
     private static readonly TimeSpan VersionTimeout = TimeSpan.FromSeconds(10);
 
@@ -142,6 +155,171 @@ internal sealed partial class ClaudeCodeCliProvider(
 
     public string? MonitoringUnavailableReason(string workingDirectory, Uri endpoint) =>
         hooks.UnavailableReason(workingDirectory, endpoint);
+
+    /// <summary>
+    /// A Consulta Inteligente (ADR-081): o Claude aberto só para ler.
+    /// <list type="bullet">
+    /// <item><c>--restricted</c> tira tudo que executa comando ou código (Bash, PowerShell…) e o WebFetch, prende as ferramentas de arquivo às pastas da consulta e recusa <c>bypassPermissions</c>;</item>
+    /// <item><c>--tools Read,Grep,Glob</c> deixa, das ferramentas do Claude, só ler e procurar — sem Edit nem Write;</item>
+    /// <item><c>--strict-mcp-config</c> ignora os servidores MCP do usuário; com banco, entra só o do app, e só as ferramentas de consulta são pré-aprovadas;</item>
+    /// <item>as instruções vão num arquivo (<c>--append-system-prompt-file</c>), e o segredo do MCP vai no ambiente — o arquivo do MCP só cita a variável.</item>
+    /// </list>
+    /// Os "Parâmetros" do card de Desenvolvimento não entram: o
+    /// <c>--dangerously-skip-permissions</c> de lá nunca chega aqui.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// As opções que aceitam vários valores (<c>--mcp-config</c>,
+    /// <c>--allowedTools</c>, <c>--add-dir</c>) vêm antes do
+    /// <c>--append-system-prompt-file</c>, que aceita um só: a pergunta, no
+    /// fim, nunca é lida como mais um valor delas.
+    /// </para>
+    /// <para>
+    /// Pelo <c>claude.cmd</c> do npm, a pergunta com aspas ou <c>%</c> vai para
+    /// o fim das instruções, e a primeira mensagem só aponta para ela: o
+    /// <c>cmd.exe</c> estragaria o texto.
+    /// </para>
+    /// </remarks>
+    public TerminalLaunchOptions CreateConsultationLaunch(ConsultationLaunchRequest request, CliDetectionResult detection)
+    {
+        var executable = detection.ExecutablePath
+            ?? throw new InvalidOperationException("O Claude Code não foi encontrado.");
+
+        if (request.Directories.Count == 0)
+        {
+            throw new InvalidOperationException("A consulta precisa de pelo menos uma pasta.");
+        }
+
+        var instructions = request.Instructions;
+        var question = request.Question;
+
+        if (question is not null && RunsThroughCmd(executable))
+        {
+            if (question.Contains('"', StringComparison.Ordinal) || question.Contains('%', StringComparison.Ordinal))
+            {
+                instructions = $"{instructions.TrimEnd()}\n\n## Pergunta inicial\n\n{question.Trim()}\n";
+                question = "Responda à pergunta inicial que está nas suas instruções, na seção Pergunta inicial.";
+            }
+            else
+            {
+                question = ForCmd(question);
+            }
+        }
+
+        var directory = Path.Combine(hooks.StateDirectory, "consultations");
+        Directory.CreateDirectory(directory);
+        PruneConsultationFiles(directory);
+
+        var instructionsPath = Path.Combine(directory, $"{request.SessionId:N}.md");
+        Write(instructionsPath, instructions);
+
+        var arguments = new List<string>();
+
+        if (request.Monitoring is { } monitoring)
+        {
+            arguments.AddRange(["--settings", hooks.EnsureSettingsFile(monitoring.Endpoint)]);
+        }
+
+        arguments.AddRange(request.Resume
+            ? ["--resume", request.ConversationId]
+            : ["--session-id", request.ConversationId]);
+
+        arguments.AddRange(["--name", Title(request.Title), "--restricted", "--tools", ConsultationBuiltInTools, "--strict-mcp-config"]);
+
+        if (request.Tools is { } tools)
+        {
+            var mcpPath = Path.Combine(directory, $"{request.SessionId:N}.mcp.json");
+            Write(mcpPath, McpConfigJson(tools));
+
+            arguments.AddRange([
+                "--mcp-config", mcpPath,
+                "--allowedTools", string.Join(',', tools.Tools.Select(tool => $"mcp__{ConsultationServerName}__{tool}")),
+            ]);
+        }
+
+        foreach (var extra in request.Directories.Skip(1))
+        {
+            arguments.AddRange(["--add-dir", extra]);
+        }
+
+        arguments.AddRange(request.ExtraArguments);
+        arguments.AddRange(["--append-system-prompt-file", instructionsPath]);
+
+        if (!string.IsNullOrWhiteSpace(question))
+        {
+            arguments.Add(question);
+        }
+
+        var environment = new Dictionary<string, string>(request.Environment, StringComparer.Ordinal);
+
+        if (request.Monitoring is { } watched)
+        {
+            foreach (var (name, value) in watched.Environment)
+            {
+                environment[name] = value;
+            }
+        }
+
+        return new TerminalLaunchOptions(executable, arguments, request.Directories[0], environment);
+    }
+
+    /// <summary>
+    /// O servidor MCP do app para a consulta. O cabeçalho cita a variável de
+    /// ambiente, e o Claude a expande ao conectar: o arquivo não guarda segredo.
+    /// </summary>
+    public static string McpConfigJson(ConsultationToolsAccess tools)
+    {
+        var config = new JsonObject
+        {
+            ["mcpServers"] = new JsonObject
+            {
+                [ConsultationServerName] = new JsonObject
+                {
+                    ["type"] = "http",
+                    ["url"] = tools.Endpoint.ToString(),
+                    ["headers"] = new JsonObject
+                    {
+                        ["Authorization"] = "Bearer ${" + tools.TokenVariable + "}",
+                    },
+                },
+            },
+        };
+
+        return config.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+    }
+
+    /// <summary>O nome da sessão no Claude: uma linha, sem o que o <c>cmd.exe</c> interpretaria.</summary>
+    private static string Title(string title)
+    {
+        var clean = new string(title.Where(c => !char.IsControl(c) && c is not ('"' or '%')).ToArray()).Trim();
+        return clean.Length <= 80 ? clean : clean[..80].TrimEnd();
+    }
+
+    private static void Write(string path, string content)
+    {
+        var temporary = path + ".tmp";
+        File.WriteAllText(temporary, content, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        File.Move(temporary, path, overwrite: true);
+    }
+
+    /// <summary>As consultas antigas já não precisam dos arquivos — o <c>--resume</c> grava os seus de novo.</summary>
+    private void PruneConsultationFiles(string directory)
+    {
+        try
+        {
+            foreach (var file in new DirectoryInfo(directory).EnumerateFiles())
+            {
+                if (DateTime.UtcNow - file.LastWriteTimeUtc > ConsultationFilesLifetime)
+                {
+                    file.Delete();
+                }
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(exception, "ConsultationFilesPruneFailed");
+        }
+    }
 
     private static AgentCliOption Model(string alias, string label) => new(alias, label, ["--model", alias]);
 

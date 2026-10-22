@@ -152,16 +152,22 @@ internal sealed class FakeTagQuery : ITagQuery
 
     public List<string> MappedPaths { get; } = [];
 
+    /// <summary>As etiquetas da lista (Consulta Inteligente, ADR-081); vazia nos outros testes.</summary>
+    public List<TagRow> Tags { get; } = [];
+
+    /// <summary>As pastas de cada etiqueta, pela <see cref="TagDirectoryRow.TagId"/>.</summary>
+    public List<TagDirectoryRow> Directories { get; } = [];
+
     public Task<IReadOnlyList<TagRow>> ListAsync(
         MyTaskApp.Application.Devices.PlacementFilter placement,
         IReadOnlyCollection<Guid> include,
         CancellationToken cancellationToken = default) =>
-        Task.FromResult<IReadOnlyList<TagRow>>([]);
+        Task.FromResult<IReadOnlyList<TagRow>>([.. Tags]);
 
     public Task<IReadOnlyList<TagDirectoryRow>> ListDirectoriesAsync(
         Guid tagId,
         CancellationToken cancellationToken = default) =>
-        Task.FromResult<IReadOnlyList<TagDirectoryRow>>([]);
+        Task.FromResult<IReadOnlyList<TagDirectoryRow>>([.. Directories.Where(directory => directory.TagId == tagId)]);
 
     public Task<IReadOnlyList<TagDirectoryRow>> ListDirectoriesForTaskAsync(
         Guid taskId,

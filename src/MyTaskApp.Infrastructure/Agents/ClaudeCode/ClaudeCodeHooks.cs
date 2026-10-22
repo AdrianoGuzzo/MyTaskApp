@@ -84,6 +84,9 @@ internal sealed class ClaudeCodeHooks(
 
     public string SettingsPath => Path.Combine(settingsDirectory, SettingsFileName);
 
+    /// <summary>A pasta do app para os agentes: o arquivo de hooks e os arquivos de cada consulta (ADR-081).</summary>
+    public string StateDirectory => settingsDirectory;
+
     /// <summary>
     /// O conteúdo do arquivo para a porta <paramref name="endpoint"/>. Só os
     /// hooks: <c>--settings</c> sobrepõe chave por chave, então qualquer outra

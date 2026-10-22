@@ -6,6 +6,7 @@ using MyTaskApp.Application;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Commands;
+using MyTaskApp.Application.Consultations;
 using MyTaskApp.Application.Deadlines;
 using MyTaskApp.Application.DatabaseOperations;
 using MyTaskApp.Application.Development;
@@ -89,6 +90,10 @@ public class ApplicationRegistrationTests
             .AddSingleton<IPostgresRestoreService>(database.Tools)
             .AddSingleton<IPostgresScriptRunner>(database.Scripts)
             .AddSingleton<IDatabaseOperationWorkspaceFactory>(database.Workspaces)
+            // A Consulta Inteligente (ADR-081): a configuração, o banco só leitura e o preparo do usuário.
+            .AddSingleton<ITaskConsultationRepository>(new FakeTaskConsultationRepository())
+            .AddSingleton<IConsultationDatabase>(new FakeConsultationDatabase())
+            .AddSingleton<IConsultationReadAccessProvisioner>(new FakeReadAccessProvisioner(new MyTaskApp.Domain.DatabaseOperations.DatabaseSecurityPolicy()))
             // O servidor MCP (ADR-059): configuração, token e as consultas novas.
             .AddSingleton<IMcpServerSettingsStore>(new FakeMcpServerSettingsStore())
             .AddSingleton<IMcpAccessTokenStore>(new FakeMcpAccessTokenStore())
@@ -171,6 +176,23 @@ public class ApplicationRegistrationTests
     [InlineData(typeof(FocusAgentSessionHandler))]
     [InlineData(typeof(EndAgentSessionHandler))]
     [InlineData(typeof(ReconcileAgentSessionsHandler))]
+    [InlineData(typeof(GetTaskConsultationHandler))]
+    [InlineData(typeof(SaveTaskConsultationHandler))]
+    [InlineData(typeof(ClearTaskConsultationHandler))]
+    [InlineData(typeof(PreviewConsultationContextHandler))]
+    [InlineData(typeof(CheckConsultationDatabaseHandler))]
+    [InlineData(typeof(PrepareConsultationReadAccessHandler))]
+    [InlineData(typeof(StartTaskConsultationHandler))]
+    [InlineData(typeof(ResumeTaskConsultationHandler))]
+    [InlineData(typeof(SetConsultationFolderHandler))]
+    [InlineData(typeof(CloneConsultationRepositoryHandler))]
+    [InlineData(typeof(CopyConsultationDatabaseHandler))]
+    [InlineData(typeof(ResolveConsultationAccessHandler))]
+    [InlineData(typeof(DescribeConsultationDatabaseHandler))]
+    [InlineData(typeof(ListConsultationTablesHandler))]
+    [InlineData(typeof(DescribeConsultationTableHandler))]
+    [InlineData(typeof(QueryConsultationDataHandler))]
+    [InlineData(typeof(IConsultationToolsEndpoint))]
     [InlineData(typeof(GetAgentAlertSoundsHandler))]
     [InlineData(typeof(UpdateAgentAlertSoundHandler))]
     [InlineData(typeof(ImportSoundHandler))]

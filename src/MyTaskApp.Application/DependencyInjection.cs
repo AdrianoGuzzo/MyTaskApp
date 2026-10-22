@@ -6,6 +6,7 @@ using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Commands;
 using MyTaskApp.Application.Configuration;
+using MyTaskApp.Application.Consultations;
 using MyTaskApp.Application.DatabaseOperations;
 using MyTaskApp.Application.Deadlines;
 using MyTaskApp.Application.Development;
@@ -195,6 +196,35 @@ public static class DependencyInjection
         // chamada, ele ganha do objeto nulo.
         services.AddScoped<RecordAgentEventHandler>();
         services.TryAddSingleton<IAgentAttentionPresenter, NoAgentAttentionPresenter>();
+
+        // A Consulta Inteligente (ADR-081): o agente só lendo as pastas e o
+        // banco escolhidos. O banco e o preparo do usuário de leitura vêm da
+        // Infrastructure; o endereço do MCP, do projeto do MCP — sem ele, a
+        // consulta só abre com o código.
+        services.AddScoped<ConsultationResolver>();
+        services.AddScoped<ConsultationViewFactory>();
+        services.AddScoped<ConsultationReadAccess>();
+        services.TryAddSingleton<ConsultationReadAccessCache>();
+        services.AddScoped<ConsultationLauncher>();
+        services.AddScoped<ConsultationTargetResolver>();
+        services.AddScoped<ConsultationFolders>();
+        services.AddScoped<SetConsultationFolderHandler>();
+        services.AddScoped<CloneConsultationRepositoryHandler>();
+        services.AddScoped<CopyConsultationDatabaseHandler>();
+        services.AddScoped<GetTaskConsultationHandler>();
+        services.AddScoped<SaveTaskConsultationHandler>();
+        services.AddScoped<ClearTaskConsultationHandler>();
+        services.AddScoped<PreviewConsultationContextHandler>();
+        services.AddScoped<CheckConsultationDatabaseHandler>();
+        services.AddScoped<PrepareConsultationReadAccessHandler>();
+        services.AddScoped<StartTaskConsultationHandler>();
+        services.AddScoped<ResumeTaskConsultationHandler>();
+        services.AddScoped<ResolveConsultationAccessHandler>();
+        services.AddScoped<DescribeConsultationDatabaseHandler>();
+        services.AddScoped<ListConsultationTablesHandler>();
+        services.AddScoped<DescribeConsultationTableHandler>();
+        services.AddScoped<QueryConsultationDataHandler>();
+        services.TryAddSingleton<IConsultationToolsEndpoint, NoConsultationToolsEndpoint>();
 
         // O som de cada estado do agente (ADR-042). A biblioteca de sons vem da
         // Infrastructure; quem toca, do Desktop — sem ele, silêncio.

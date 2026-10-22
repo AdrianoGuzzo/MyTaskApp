@@ -21,8 +21,6 @@ public interface IConsultationLaunchBuilder
     /// </summary>
     TerminalLaunchOptions CreateConsultationLaunch(ConsultationLaunchRequest request, CliDetectionResult detection);
 
-    /// <summary>As ferramentas de consulta, como o agente as nomeia — para a pré-aprovação.</summary>
-    IReadOnlyList<string> ToolNames(IReadOnlyList<string> mcpTools);
 }
 
 /// <summary>Uma Consulta Inteligente a abrir (ou a retomar).</summary>
@@ -62,15 +60,32 @@ public interface IConsultationToolsEndpoint
 {
     /// <summary><c>null</c> quando o servidor MCP está desligado.</summary>
     Uri? Address { get; }
-
-    /// <summary>Os nomes das ferramentas que uma sessão de consulta enxerga.</summary>
-    IReadOnlyList<string> Tools { get; }
 }
 
 /// <summary>Sem servidor MCP (testes, host sem MCP): a consulta só abre com o código.</summary>
 public sealed class NoConsultationToolsEndpoint : IConsultationToolsEndpoint
 {
     public Uri? Address => null;
+}
 
-    public IReadOnlyList<string> Tools => [];
+/// <summary>
+/// As ferramentas do MCP que só uma Consulta Inteligente enxerga (ADR-081), e
+/// a variável de ambiente que leva o segredo dela. Os nomes evitam
+/// <c>sql</c>, <c>run</c> e <c>exec</c>: nenhuma ferramenta do app roda
+/// comando, e esta só lê.
+/// </summary>
+public static class ConsultationToolNames
+{
+    public const string DescribeDatabase = "consultation_database_describe";
+
+    public const string ListTables = "consultation_table_list";
+
+    public const string DescribeTable = "consultation_table_describe";
+
+    public const string Query = "consultation_query";
+
+    /// <summary>O segredo da sessão no ambiente do processo; o arquivo de configuração só cita o nome.</summary>
+    public const string TokenVariable = "MYTASKAPP_CONSULTATION_TOKEN";
+
+    public static IReadOnlyList<string> All { get; } = [DescribeDatabase, ListTables, DescribeTable, Query];
 }

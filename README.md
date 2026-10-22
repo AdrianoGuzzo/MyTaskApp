@@ -262,6 +262,34 @@ A janela da tarefa tem a aba **Desenvolvimento**:
 - **Abrir Claude Code** também fica no menu `⋯` da linha, sem precisar abrir a
   tarefa.
 
+### Consulta Inteligente: perguntar sobre o sistema
+
+A aba **Consulta Inteligente** da janela da tarefa deixa quem não programa
+perguntar "por que este pedido está pendente?" e receber a resposta do Claude
+Code, que investiga o código e, se você quiser, uma cópia local do banco —
+**só lendo**. O guia está em
+[`docs/consulta-inteligente.md`](docs/consulta-inteligente.md), e a decisão no
+[ADR-081](docs/ARCHITECTURE.md).
+
+- **Cinco passos na tela:** o assunto (uma etiqueta), as pastas do projeto,
+  os dados (só o código ou um banco), instruções opcionais e a pergunta.
+  Cada escolha fica salva na tarefa.
+- **Projeto que falta:** **Clonar…** um repositório que ainda não está neste
+  computador (sempre com confirmação) ou **Escolher pasta…**.
+- **Banco só de cópias:** produção nunca aparece. **Preparar acesso de
+  leitura** cria no servidor de desenvolvimento um usuário que só lê, com a
+  senha no cofre do sistema; **Criar nova cópia local…** usa a mesma cópia
+  anonimizável da aba Desenvolvimento.
+- **O Claude abre travado:** `--restricted`, só as ferramentas de ler e
+  procurar arquivos, nenhum servidor MCP do usuário e, com banco, só as quatro
+  ferramentas de consulta do app. Os "Parâmetros" do Desenvolvimento
+  (`--dangerously-skip-permissions`) nunca chegam aqui.
+- **Quem recusa escrita é o banco:** cada consulta vai como subconsulta de um
+  `SELECT … LIMIT`, numa transação só leitura, com tempo limite e corte de
+  linhas, e com um usuário conferido no catálogo como só leitura.
+- **Ir para o terminal** e **Reabrir** a conversa depois, como no
+  Desenvolvimento, com os avisos de "aguardando você".
+
 ### Jira: a issue vira o contexto da tarefa
 
 O Jira continua sendo onde a issue mora. O MyTaskApp busca a issue enquanto
@@ -340,7 +368,7 @@ Em *☰ → Servidor MCP…*, o MyTaskApp liga um servidor
 [MCP](https://modelcontextprotocol.io) local. Um cliente de IA, como o Claude
 Code, passa a consultar e alterar suas tarefas, o cronômetro e os lançamentos
 de horas, as conexões de banco e os perfis de anonimização, pelas mesmas regras
-da tela. O guia completo, com as 81 ferramentas, está em
+da tela. O guia completo, com as 86 ferramentas, está em
 [`docs/mcp-server.md`](docs/mcp-server.md), e a decisão no
 [ADR-059](docs/ARCHITECTURE.md).
 
@@ -359,7 +387,9 @@ da tela. O guia completo, com as 81 ferramentas, está em
   pré-visualização e diff antes de gravar, validação contra o banco real (só
   leitura) e uma análise que separa o comprovado do risco.
 - **Sem segredos e sem execução:** senha nunca entra nem sai, e não há SQL
-  livre, cópia nem comando do sistema pelo MCP.
+  livre, cópia nem comando do sistema pelo MCP. A exceção é a
+  [Consulta Inteligente](docs/consulta-inteligente.md): só o Claude aberto por
+  ela, com o segredo daquela sessão, lê o banco escolhido — só leitura.
 
 ```bash
 claude mcp add --transport http mytaskapp http://127.0.0.1:5180/mcp   --header "Authorization: Bearer <token copiado da tela>"
@@ -842,11 +872,12 @@ fica em [`CHANGELOG.md`](CHANGELOG.md).
 
 | Documento | Conteúdo |
 |---|---|
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | decisões de arquitetura (ADR-001 a ADR-078), com o motivo de cada uma |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | decisões de arquitetura (ADR-001 a ADR-082), com o motivo de cada uma |
 | [`docs/sync.md`](docs/sync.md) | sincronização entre computadores: a tela, o que sincroniza, onde cada tarefa aparece, conflitos e limitações |
 | [`docs/sync-server.md`](docs/sync-server.md) | o servidor de sincronização: cliente OAuth do Google, configuração, migrations, implantação e testes |
 | [`docs/mobile.md`](docs/mobile.md) | o app do celular: arquitetura, login, sincronização, ambiente, rodar no Android, o que falta no iOS, testes e limitações |
 | [`docs/mcp-server.md`](docs/mcp-server.md) | servidor MCP local: ativar, porta, token, Claude Code, as ferramentas, segurança e limitações |
+| [`docs/consulta-inteligente.md`](docs/consulta-inteligente.md) | Consulta Inteligente: o passo a passo da aba, pré-requisitos, segurança do código e do banco, e limitações |
 | [`docs/database-operations.md`](docs/database-operations.md) | conexões PostgreSQL, ambientes, ferramentas, máscaras, cópia anonimizada de produção e solução de problemas |
 | [`docs/jira-oauth-app.md`](docs/jira-oauth-app.md) | registrar o app OAuth do Jira e pôr as credenciais no build |
 | [`docs/release-process.md`](docs/release-process.md) | Conventional Commits, SemVer, pipeline de release, hotfix, verificação de versão |
