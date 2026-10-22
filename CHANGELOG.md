@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.22.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.21.0...v1.22.0) (2026-10-22)
+
+
+### Added
+
+* **consulta:** base da Consulta Inteligente e leitura segura do banco (ADR-081, parcial) ([#148](https://github.com/AdrianoGuzzo/MyTaskApp/issues/148)) ([dd289bc](https://github.com/AdrianoGuzzo/MyTaskApp/commit/dd289bc0e4856a0d98f3b0c07b3ae5f23ce5aa51))
+* **desktop:** linhas sem máscara na anonimização, por condição SQL (ADR-080) ([#145](https://github.com/AdrianoGuzzo/MyTaskApp/issues/145)) ([35acfcd](https://github.com/AdrianoGuzzo/MyTaskApp/commit/35acfcd4d0f12c95d095b0c472e7524921d70676))
+* **desktop:** script SQL depois da cópia no perfil de anonimização (ADR-082) ([#150](https://github.com/AdrianoGuzzo/MyTaskApp/issues/150)) ([92160df](https://github.com/AdrianoGuzzo/MyTaskApp/commit/92160df09df5d6c68499d9366ff8e3598ad6aade))
+* **desktop:** título inteiro no balão do histórico de 7 dias ([#149](https://github.com/AdrianoGuzzo/MyTaskApp/issues/149)) ([0631112](https://github.com/AdrianoGuzzo/MyTaskApp/commit/0631112725ea083d5d85295e45759a0046da0c85))
+* **mobile:** aba Tarefas enxuta, dispositivo no título e Nova tarefa discreta (ADR-079) ([#146](https://github.com/AdrianoGuzzo/MyTaskApp/issues/146)) ([1db0168](https://github.com/AdrianoGuzzo/MyTaskApp/commit/1db0168d3bdbf607d49221998bd05e3b95b87cba))
+
 ## [1.21.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.20.0...v1.21.0) (2026-10-20)
 
 
