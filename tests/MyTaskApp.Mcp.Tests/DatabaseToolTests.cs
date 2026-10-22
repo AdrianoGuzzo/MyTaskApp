@@ -210,6 +210,7 @@ public class DatabaseToolTests
         filter.GetProperty("table").GetString().Should().Be("public.clientes");
         filter.GetProperty("condition").GetString().Should().Be("id = 1");
         details.GetProperty("profile").GetProperty("rowFilters").GetInt32().Should().Be(1);
+        details.GetProperty("postCopyScript").GetString().Should().Be(SeedScript);
         details.GetProperty("connection").GetProperty("name").GetString().Should().Be("ECO Dev");
 
         var schema = await client.CallJsonAsync("anonymization_profile_get_schema", null, Ct);
@@ -270,10 +271,12 @@ public class DatabaseToolTests
             ["public.clientes.nome"] = "FixedText",
         });
 
-        // Tabelas sem dados e linhas sem máscara não citadas continuam lá.
+        // Tabelas sem dados, linhas sem máscara e o script, não citados, continuam lá.
         var details = await client.CallJsonAsync("anonymization_profile_get_details", new() { ["profileId"] = profile.ToString() }, Ct);
         details.GetProperty("skippedTables").GetArrayLength().Should().Be(1);
         details.GetProperty("rowFilters")[0].GetProperty("condition").GetString().Should().Be("id = 1");
+        details.GetProperty("postCopyScript").GetString().Should().Be(SeedScript);
+        applied.GetProperty("change").GetProperty("fields").GetArrayLength().Should().Be(0, "o script não aparece como mudado");
     }
 
     [Fact]
@@ -394,9 +397,12 @@ public class DatabaseToolTests
                 {
                     SkippedTables = [new SkippedTableRow("public", "logs")],
                     RowFilters = [new RowFilterRow("public", "clientes", "id = 1")],
+                    PostCopyScript = SeedScript,
                 },
                 token),
             Ct);
+
+    private const string SeedScript = "update config set valor = 'https://dev.local' where chave = 'url';";
 
     private static AnonymizationRuleRow Rule(string table, string column, MaskingMethod method, ColumnSensitivity sensitivity, string? argument = null) =>
         new("public", table, column, method, argument, sensitivity);

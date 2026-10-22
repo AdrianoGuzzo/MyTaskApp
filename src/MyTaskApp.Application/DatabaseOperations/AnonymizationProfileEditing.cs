@@ -227,8 +227,10 @@ public sealed class ChangeAnonymizationProfileHandler(
             draft.ReplaceRules(proposedRules.Select(rule => rule.ToSpec()), now);
             draft.ReplaceSkippedTables(proposedSkipped.Select(table => table.ToSpec()), now);
 
-            // As linhas sem máscara não mudam por aqui (ADR-080): seguem como estão, para o rascunho validar igual à cópia.
+            // As linhas sem máscara (ADR-080) e o script (ADR-082) não mudam por aqui:
+            // seguem como estão, para o rascunho validar igual à cópia e o diff não os dar como removidos.
             draft.ReplaceRowFilters(before.RowFilters.Select(filter => filter.ToSpec()), now);
+            draft.SetPostCopyScript(before.PostCopyScript, now);
         }
         catch (DomainException exception)
         {
@@ -299,7 +301,7 @@ public sealed class ChangeAnonymizationProfileHandler(
     }
 }
 
-/// <summary>Criar uma variante: as mesmas regras, tabelas sem dados e linhas sem máscara, com outro nome.</summary>
+/// <summary>Criar uma variante: as mesmas regras, tabelas sem dados, linhas sem máscara e script, com outro nome.</summary>
 public sealed record DuplicateAnonymizationProfile(Guid Id, string Name, Guid? ConnectionId = null);
 
 public sealed class DuplicateAnonymizationProfileHandler(
@@ -321,6 +323,7 @@ public sealed class DuplicateAnonymizationProfileHandler(
             {
                 SkippedTables = source.SkippedTables,
                 RowFilters = source.RowFilters,
+                PostCopyScript = source.PostCopyScript,
             },
             cancellationToken);
     }
@@ -636,6 +639,12 @@ public sealed class AnalyzeAnonymizationProfileHandler(
             yield return $"{filter.TableKey}: as linhas em que \"{filter.Condition}\" vão sem máscara, com os valores reais.";
         }
 
+        if (profile.PostCopyScript is not null)
+        {
+            yield return "O perfil roda um script no destino no fim da cópia: ele pode alterar os dados já mascarados, " +
+                "e a verificação, que roda antes dele, não confere o que ele mudou.";
+        }
+
         foreach (var rule in profile.Rules)
         {
             var info = MaskingCatalog.Of(rule.Method);
@@ -702,6 +711,7 @@ internal static class Diff
         Compare("description", before.Description, after.Description);
         Compare("connectionId", before.ConnectionId.ToString(), after.ConnectionId.ToString());
         Compare("enabled", before.IsEnabled.ToString(CultureInfo.InvariantCulture), after.IsEnabled.ToString(CultureInfo.InvariantCulture));
+        Compare("postCopyScript", before.PostCopyScript, after.PostCopyScript);
 
         return changes;
     }

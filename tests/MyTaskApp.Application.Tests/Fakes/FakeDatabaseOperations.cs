@@ -606,6 +606,42 @@ internal sealed class FakePgTools : IPostgresDumpService, IPostgresRestoreServic
     }
 }
 
+/// <summary>O script depois da cópia (ADR-082): anota onde e o quê, e falha quando pedido.</summary>
+internal sealed class FakeScriptRunner(List<string> calls) : IPostgresScriptRunner
+{
+    public List<(DatabaseConnectionSnapshot Target, string Script, IReadOnlyCollection<string> ProtectedEndpoints)> Runs { get; } = [];
+
+    public Exception? Failure { get; set; }
+
+    public IReadOnlyList<string> Notices { get; set; } = [];
+
+    public long RowsAffected { get; set; } = 3;
+
+    public Task<PostCopyScriptRun> RunAsync(
+        DatabaseConnectionSnapshot target,
+        string script,
+        IReadOnlyCollection<string> protectedEndpoints,
+        IProgress<string>? notices,
+        CancellationToken cancellationToken = default)
+    {
+        calls.Add($"script:{target.Database}");
+        Runs.Add((target, script, protectedEndpoints));
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (Failure is not null)
+        {
+            throw Failure;
+        }
+
+        foreach (var notice in Notices)
+        {
+            notices?.Report(notice);
+        }
+
+        return Task.FromResult(new PostCopyScriptRun(RowsAffected, TimeSpan.FromSeconds(1)));
+    }
+}
+
 internal sealed class FakeWorkspaceFactory : IDatabaseOperationWorkspaceFactory
 {
     public List<FakeWorkspace> Created { get; } = [];
@@ -678,6 +714,8 @@ internal sealed class DatabaseCopyScenario
 
     public FakeMaskedCopier Copier { get; }
 
+    public FakeScriptRunner Scripts { get; }
+
     public FakeWorkspaceFactory Workspaces { get; } = new();
 
     public DatabaseOperationGate Gate { get; } = new();
@@ -696,6 +734,7 @@ internal sealed class DatabaseCopyScenario
     {
         var everything = ConnectionPermissions.FromFlags(ConnectionPermission.All);
         Copier = new FakeMaskedCopier(Tools.Calls);
+        Scripts = new FakeScriptRunner(Tools.Calls);
         Production = DatabaseConnection.Create("ECO Produção", "198.51.100.112", 5432, "eco_core", "backup_user",
             sourceEnvironment, DatabaseSslMode.Prefer, null, everything, Now);
         Development = DatabaseConnection.Create("ECO Desenvolvimento", "localhost", 5432, "eco_dev", "postgres",
@@ -730,6 +769,7 @@ internal sealed class DatabaseCopyScenario
         Verifier(),
         Tools,
         Tools,
+        Scripts,
         Workspaces,
         Catalog.Audit,
         Catalog,

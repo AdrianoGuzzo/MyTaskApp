@@ -834,6 +834,22 @@
                     </ItemsControl.ItemTemplate>
                   </ItemsControl>
 
+                  <!-- Script depois da cópia (ADR-082): SQL do usuário, no destino, no fim. -->
+                  <StackPanel Spacing="4" Margin="0,6,0,0">
+                    <TextBlock Text="Script depois da cópia" FontWeight="SemiBold" />
+                    <TextBlock Classes="meta" TextWrapping="Wrap"
+                               Text="SQL que roda no banco de destino no fim da cópia, depois da verificação: trocar URLs e e-mails de configuração, desligar integrações, criar um usuário de teste. Roda numa transação: se um comando falhar, o script inteiro é desfeito e a cópia fica como estava. Na origem, nunca roda." />
+                    <TextBlock Classes="meta" TextWrapping="Wrap"
+                               Text="A conexão de destino precisa das permissões Alterar dados e Executar SQL. Não use BEGIN nem COMMIT: o app já abre a transação." />
+                    <TextBox x:Name="PostCopyScriptBox" AcceptsReturn="True" AcceptsTab="True" TextWrapping="NoWrap"
+                             MinHeight="90" MaxHeight="320"
+                             FontFamily="Cascadia Mono, Consolas, Menlo, monospace" FontSize="12"
+                             ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Auto"
+                             PlaceholderText="update configuracao set valor = 'https://dev.local' where chave = 'url_base';"
+                             Text="{Binding PostCopyScript}"
+                             ToolTip.Tip="SQL do PostgreSQL. Roda só no destino, depois da verificação, numa transação. Vazio: sem script." />
+                  </StackPanel>
+
                   <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
                     <Button x:Name="PreviewButton" Content="Pré-visualizar" Command="{Binding PreviewCommand}"
                             ToolTip.Tip="Lê algumas linhas das colunas marcadas já mascaradas pelo servidor, com o mesmo SELECT da cópia. O valor real não chega à tela." />

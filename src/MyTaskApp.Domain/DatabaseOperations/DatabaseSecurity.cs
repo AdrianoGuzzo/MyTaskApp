@@ -64,6 +64,7 @@ public sealed record SecurityDecision(IReadOnlyList<SecurityViolation> Violation
 /// O que se sabe da anonimização de uma cópia. O julgamento das regras contra
 /// as colunas da origem (<see cref="SourceChecked"/>) chega depois de ler o
 /// catálogo; antes disso, a política julga só o cadastro, e julga de novo com os fatos.
+/// <see cref="HasPostCopyScript"/>: o perfil roda SQL no destino no fim da cópia (ADR-082).
 /// </summary>
 public sealed record AnonymizationFacts(
     bool ProfileExists,
@@ -71,7 +72,8 @@ public sealed record AnonymizationFacts(
     int RuleCount,
     bool SourceChecked = false,
     IReadOnlyList<string>? RuleProblems = null,
-    int UncoveredHighCandidates = 0)
+    int UncoveredHighCandidates = 0,
+    bool HasPostCopyScript = false)
 {
     public static AnonymizationFacts None { get; } = new(false, false, 0);
 
@@ -316,6 +318,13 @@ public sealed class DatabaseSecurityPolicy : IDatabaseSecurityPolicy
         if (anonymizes)
         {
             CheckAnonymization(request, source, violations);
+
+            // O script do perfil é SQL livre no destino: a mesma permissão de quem executa SQL (ADR-082).
+            if (request.Anonymization is { HasPostCopyScript: true })
+            {
+                RequirePermission(destination, ConnectionPermission.Modify, "ser alterada pelo script depois da cópia", violations);
+                RequirePermission(destination, ConnectionPermission.ExecuteSql, "executar o script depois da cópia", violations);
+            }
         }
 
         if (sourceRules.RequiresVerification && !options.VerifyAfterRestore)

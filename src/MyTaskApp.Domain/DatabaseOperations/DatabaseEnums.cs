@@ -59,7 +59,10 @@ public enum DatabaseOperationType
     /// </summary>
     StaticMasking = 12,
 
-    /// <summary>SQL livre. O app não tem console; existe para a política recusar com nome.</summary>
+    /// <summary>
+    /// SQL livre. O app não tem console: o único SQL livre é o script do perfil
+    /// de anonimização, no destino, no fim da cópia (ADR-082).
+    /// </summary>
     ExecuteSql = 13,
 
     /// <summary><c>pg_dump --schema-only</c>: só a estrutura, nenhuma linha. Permitido mesmo de quem exige anonimização.</summary>

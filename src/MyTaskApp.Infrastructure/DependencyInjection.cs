@@ -309,6 +309,7 @@ public static class DependencyInjection
         services.AddSingleton<IPostgresSessionFactory, NpgsqlPostgresSessionFactory>();
         services.AddSingleton<IPostgresServerInspector, PostgresServerInspector>();
         services.AddSingleton<IPostgresMaskedCopier, NpgsqlMaskedCopier>();
+        services.AddSingleton<IPostgresScriptRunner, NpgsqlScriptRunner>();
 
         // A Consulta Inteligente (ADR-081): leitura com usuário só de leitura, e o preparo dele.
         services.AddSingleton<IConsultationDatabase, NpgsqlConsultationDatabase>();

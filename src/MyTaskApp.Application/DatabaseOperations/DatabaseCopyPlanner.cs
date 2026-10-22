@@ -45,7 +45,7 @@ public sealed record DatabaseCopyPlan(
 
     /// <summary>O que se sabe da anonimização só pelo cadastro.</summary>
     public AnonymizationFacts RegisteredFacts => AnonymizationProfile is { } profile
-        ? new AnonymizationFacts(true, profile.IsEnabled, profile.Rules.Count)
+        ? new AnonymizationFacts(true, profile.IsEnabled, profile.Rules.Count, HasPostCopyScript: profile.PostCopyScript is not null)
         : AnonymizationFacts.None;
 
     public DatabaseOperationRequest ToPolicyRequest(AnonymizationFacts? facts = null) => new(

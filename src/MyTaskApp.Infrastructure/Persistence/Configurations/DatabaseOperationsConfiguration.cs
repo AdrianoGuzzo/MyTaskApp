@@ -64,6 +64,8 @@ internal sealed class AnonymizationProfileConfiguration : IEntityTypeConfigurati
 
         builder.Property(profile => profile.Description).HasMaxLength(AnonymizationProfile.MaxDescriptionLength);
 
+        builder.Property(profile => profile.PostCopyScript).HasMaxLength(PostCopyScriptText.MaxLength);
+
         // A conexão mascarada não sai enquanto um perfil depender dela: excluir
         // a conexão não pode deixar um perfil apontando para nada.
         builder.HasOne<DatabaseConnection>()

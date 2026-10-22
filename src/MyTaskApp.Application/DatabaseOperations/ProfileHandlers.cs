@@ -48,6 +48,9 @@ public sealed record AnonymizationProfileRow(
     public IReadOnlyList<SkippedTableRow> SkippedTables { get; init; } = [];
 
     public IReadOnlyList<RowFilterRow> RowFilters { get; init; } = [];
+
+    /// <summary>O SQL que roda no destino no fim da cópia (ADR-082); <c>null</c> sem script.</summary>
+    public string? PostCopyScript { get; init; }
 }
 
 public sealed record GetAnonymizationProfiles;
@@ -83,10 +86,14 @@ public sealed class GetAnonymizationProfilesHandler(IAnonymizationProfileReposit
             .ThenBy(filter => filter.Table, StringComparer.Ordinal)
             .Select(filter => new RowFilterRow(filter.Schema, filter.Table, filter.Condition))
             .ToList(),
+        PostCopyScript = profile.PostCopyScript,
     };
 }
 
-/// <summary>Criar ou editar um perfil, com o conjunto inteiro de regras confirmadas, de tabelas sem dados e de linhas sem máscara.</summary>
+/// <summary>
+/// Criar ou editar um perfil, com o conjunto inteiro de regras confirmadas, de
+/// tabelas sem dados e de linhas sem máscara, e o script depois da cópia.
+/// </summary>
 public sealed record SaveAnonymizationProfile(
     Guid? Id,
     string Name,
@@ -97,6 +104,9 @@ public sealed record SaveAnonymizationProfile(
     public IReadOnlyList<SkippedTableRow> SkippedTables { get; init; } = [];
 
     public IReadOnlyList<RowFilterRow> RowFilters { get; init; } = [];
+
+    /// <summary>O script depois da cópia (ADR-082); vazio ou <c>null</c> = sem script.</summary>
+    public string? PostCopyScript { get; init; }
 
     /// <summary>
     /// O <c>UpdatedAt</c> do perfil quando a tela o abriu. Com ele, salvar
@@ -158,12 +168,13 @@ public sealed class SaveAnonymizationProfileHandler(
         profile.ReplaceRules(command.Rules.Select(rule => rule.ToSpec()), now);
         profile.ReplaceSkippedTables(command.SkippedTables.Select(table => table.ToSpec()), now);
         profile.ReplaceRowFilters(command.RowFilters.Select(filter => filter.ToSpec()), now);
+        profile.SetPostCopyScript(command.PostCopyScript, now);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        // A condição não vai para o log: pode citar um valor real ("email = 'fulano@…'").
+        // Nem a condição nem o script vão para o log: podem citar um valor real ("email = 'fulano@…'").
         logger.LogInformation(
-            "AnonymizationProfileSaved {ProfileId} {Rules} {SkippedTables} {RowFilters}",
-            profile.Id, profile.Rules.Count, profile.SkippedTables.Count, profile.RowFilters.Count);
+            "AnonymizationProfileSaved {ProfileId} {Rules} {SkippedTables} {RowFilters} {HasPostCopyScript}",
+            profile.Id, profile.Rules.Count, profile.SkippedTables.Count, profile.RowFilters.Count, profile.PostCopyScript is not null);
         return new SavedAnonymizationProfile(profile.Id, profile.UpdatedAt);
     }
 }

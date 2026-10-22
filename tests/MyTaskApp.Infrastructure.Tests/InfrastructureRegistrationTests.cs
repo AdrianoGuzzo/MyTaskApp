@@ -118,6 +118,7 @@ public class InfrastructureRegistrationTests : IDisposable
     [InlineData(typeof(IPostgresMaskedCopier))]
     [InlineData(typeof(IPostgresDumpService))]
     [InlineData(typeof(IPostgresRestoreService))]
+    [InlineData(typeof(IPostgresScriptRunner))]
     [InlineData(typeof(IDatabaseOperationWorkspaceFactory))]
     public void EveryPort_IsWiredToAnImplementation(Type serviceType)
     {

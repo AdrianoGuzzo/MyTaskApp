@@ -67,9 +67,9 @@ As permissões:
 | Ler | diagnóstico, inspeção e verificação |
 | Fazer dump | pode ser lida por `pg_dump` |
 | Receber restore | pode receber `pg_restore` |
-| Alterar dados | (reservado; o app não altera dados) |
+| Alterar dados | junto com "Executar SQL", deixa o destino receber o script do perfil depois da cópia |
 | Criar / Apagar o banco | `createdb` / `dropdb` antes do restore |
-| Executar SQL | (reservado; o app não tem console SQL) |
+| Executar SQL | o destino pode rodar o script do perfil de anonimização no fim da cópia; o app não tem console SQL |
 | Pode ser origem / destino | papel na cópia |
 | Exige anonimização | dados daqui só saem anonimizados |
 
@@ -409,6 +409,40 @@ Cuidado com o alcance: `true` deixa a tabela inteira sem máscara. Confira a
 contagem antes de copiar. Uma condição numa tabela marcada em **Tabelas sem
 dados** é recusada: escolha um dos dois.
 
+### Script depois da cópia
+
+No fim do formulário do perfil, **Script depois da cópia** guarda um SQL que
+roda **no banco de destino**, no fim da cópia, para deixar o banco copiado
+pronto para usar (ADR-082):
+
+```sql
+update configuracao set valor = 'https://dev.local' where chave = 'url_base';
+update usuarios set senha_hash = '<hash da senha de teste>' where login = 'qa';
+delete from fila_emails;
+do $$ begin raise notice 'ajustado em %', now(); end $$;
+```
+
+- **Quando:** depois da verificação, que compara a cópia com a origem. Um
+  script que muda dados faria essa comparação falhar, e ela não confere o que o
+  script mudou. Se a verificação falha, o script não roda.
+- **Onde:** só no destino; na origem, nunca. É preciso marcar **Alterar dados**
+  e **Executar SQL** na conexão de destino (Desenvolvimento, Teste e
+  Homologação nascem sem "Executar SQL"). Sem as duas, o [Validar] já acusa, e
+  a cópia não começa. Produção nunca recebe o script.
+- **Tudo ou nada:** o script inteiro roda numa transação. Se um comando falhar,
+  tudo o que o script fez é desfeito, e o banco fica como a cópia o deixou. A
+  cópia termina com falha, e a mensagem traz o erro do PostgreSQL. Por isso o
+  script não pode ter `BEGIN`, `COMMIT`, `ROLLBACK`, `END`, `ABORT` nem
+  `START TRANSACTION`: o perfil recusa ao salvar. `SAVEPOINT` e
+  `ROLLBACK TO SAVEPOINT` podem. Comandos que não rodam numa transação
+  (`VACUUM`, `CREATE INDEX CONCURRENTLY`, `CREATE DATABASE`) falham com a
+  mensagem do servidor.
+- O `RAISE NOTICE` aparece nos logs da cópia. O texto do script não vai para o
+  log do app.
+- Só a cópia com anonimização usa o perfil. A cópia comum não roda o script.
+- O script fica no perfil: duplicar o perfil leva junto, e comparar mostra a
+  diferença. Até 100.000 caracteres.
+
 ## Copiar Produção → Desenvolvimento
 
 O caminho mais curto é cadastrar um **perfil de cópia** em *Perfis → Database
@@ -474,6 +508,7 @@ mão), depois:
    | Preparando destino | `dropdb --if-exists [--force]` e `createdb --template=template0`; num banco novo (destino sem banco), só o `createdb` |
    | Copiando dados mascarados | `pg_restore --section=pre-data`; `COPY (SELECT … mascarado) TO STDOUT` → `COPY … FROM STDIN` por tabela; `pg_restore --section=post-data`; `setval` das sequences |
    | Validando resultado | a verificação (abaixo) |
+   | Executando o script do perfil | o script depois da cópia, no destino, numa transação; sem script, "não executada" |
    | Limpando arquivos temporários | sempre, com sucesso, falha ou cancelamento |
 
    Numa cópia sem anonimização (Desenvolvimento → Teste, por exemplo), as

@@ -15,7 +15,10 @@ public enum DatabaseCopyStep
     PrepareDestination = 6,
     Restore = 7,
     Verify = 8,
-    Cleanup = 9,
+
+    /// <summary>O script do perfil no destino (ADR-082). Sem script, "não executada".</summary>
+    PostCopyScript = 9,
+    Cleanup = 10,
 }
 
 /// <summary>Um aviso de andamento: a etapa, o estado dela, o percentual total e, às vezes, uma linha de log.</summary>
@@ -45,6 +48,7 @@ public static class DatabaseCopySteps
         DatabaseCopyStep.PrepareDestination => "Preparando destino",
         DatabaseCopyStep.Restore => anonymizes ? "Copiando dados mascarados" : "Restaurando",
         DatabaseCopyStep.Verify => "Validando resultado",
+        DatabaseCopyStep.PostCopyScript => "Executando o script do perfil",
         DatabaseCopyStep.Cleanup => "Limpando arquivos temporários",
         _ => step.ToString(),
     };
@@ -63,7 +67,8 @@ public static class DatabaseCopySteps
         DatabaseCopyStep.CheckArtifact => 2,
         DatabaseCopyStep.PrepareDestination => 3,
         DatabaseCopyStep.Restore => anonymizes ? 65 : 30,
-        DatabaseCopyStep.Verify => 7,
+        DatabaseCopyStep.Verify => 5,
+        DatabaseCopyStep.PostCopyScript => 2,
         DatabaseCopyStep.Cleanup => 2,
         _ => 0,
     };

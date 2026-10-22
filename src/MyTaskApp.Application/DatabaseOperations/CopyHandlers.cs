@@ -37,6 +37,8 @@ public sealed class ValidateDatabaseCopyHandler(
 {
     public const string MaskingCategory = "Máscaras";
 
+    public const string ScriptCategory = "Script";
+
     public async Task<DatabaseCopyValidation> HandleAsync(ValidateDatabaseCopy query, CancellationToken cancellationToken = default)
     {
         var plan = await planner.PlanAsync(query.Request, cancellationToken);
@@ -60,6 +62,11 @@ public sealed class ValidateDatabaseCopyHandler(
                 checks.AddRange(MaskingChecks(validation));
                 decision = policy.Evaluate(plan.ToPolicyRequest(DatabaseCopyRun.SourceFacts(plan, validation)));
             }
+
+            if (plan is { Anonymizes: true, AnonymizationProfile.PostCopyScript: { } script })
+            {
+                checks.Add(ScriptCheck(plan, script));
+            }
         }
 
         return new DatabaseCopyValidation(
@@ -81,6 +88,18 @@ public sealed class ValidateDatabaseCopyHandler(
         result.Connected
             ? new CheckResult("Conexão", side, CheckOutcome.Pass, $"{connection.Name}: PostgreSQL {result.ServerVersion}")
             : new CheckResult("Conexão", side, CheckOutcome.Fail, $"{connection.Name}: {result.Error}");
+
+    /// <summary>
+    /// O script do perfil não roda no [Validar]: ele escreve. O item avisa onde e
+    /// quando ele vai rodar; a permissão do destino, a política já julgou.
+    /// </summary>
+    private static CheckResult ScriptCheck(DatabaseCopyPlan plan, string script)
+    {
+        var lines = script.Split('\n').Length;
+        return new CheckResult(ScriptCategory, "Depois da cópia", CheckOutcome.Pass,
+            $"O perfil tem um script de {lines} linha(s): roda em {plan.Destination.Name} ({plan.Destination.Database}) " +
+            "no fim, depois da verificação, numa transação. Se ele falhar, é desfeito e a cópia fica como estava.");
+    }
 
     /// <summary>O que a validação das máscaras disse, como itens do [Validar].</summary>
     internal static IEnumerable<CheckResult> MaskingChecks(MaskingValidation validation)
@@ -152,6 +171,7 @@ public sealed class RunDatabaseCopyHandler(
     IMaskingVerifier verifier,
     IPostgresDumpService dumps,
     IPostgresRestoreService restores,
+    IPostgresScriptRunner scripts,
     IDatabaseOperationWorkspaceFactory workspaces,
     IDatabaseOperationAuditLog audit,
     IUnitOfWork unitOfWork,
@@ -196,7 +216,7 @@ public sealed class RunDatabaseCopyHandler(
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         var run = new DatabaseCopyRun(
-            plan, entry, policy, locator, inspector, copier, verifier, dumps, restores, workspaces, timeProvider, logger, progress);
+            plan, entry, policy, locator, inspector, copier, verifier, dumps, restores, scripts, workspaces, timeProvider, logger, progress);
 
         var result = await run.ExecuteAsync(cancellationToken);
 
@@ -244,6 +264,7 @@ internal sealed class DatabaseCopyRun(
     IMaskingVerifier verifier,
     IPostgresDumpService dumps,
     IPostgresRestoreService restores,
+    IPostgresScriptRunner scripts,
     IDatabaseOperationWorkspaceFactory workspaces,
     TimeProvider timeProvider,
     ILogger logger,
@@ -321,9 +342,11 @@ internal sealed class DatabaseCopyRun(
             {
                 status = DatabaseOperationStatus.Failed;
                 error = "A verificação depois do restore falhou.";
+                Skip(DatabaseCopyStep.PostCopyScript, "A verificação falhou: o script do perfil não rodou.");
             }
             else
             {
+                await RunPostCopyScriptAsync(cancellationToken);
                 status = DatabaseOperationStatus.Succeeded;
             }
         }
@@ -807,6 +830,43 @@ internal sealed class DatabaseCopyRun(
         }
     }
 
+    /// <summary>
+    /// O script do perfil (ADR-082), no fim: depois da verificação, que compara
+    /// a cópia com a origem — um script que muda dados faria a comparação mentir.
+    /// Só no destino, numa transação; o texto do script não vai para o log.
+    /// </summary>
+    private async Task RunPostCopyScriptAsync(CancellationToken cancellationToken)
+    {
+        if (plan is not { Anonymizes: true, AnonymizationProfile.PostCopyScript: { } script })
+        {
+            Skip(DatabaseCopyStep.PostCopyScript, "O perfil não tem script depois da cópia.");
+            return;
+        }
+
+        Begin(DatabaseCopyStep.PostCopyScript, $"Executando o script do perfil em {plan.Destination.Name}…");
+
+        policy.Demand(new DatabaseOperationRequest(
+            DatabaseOperationType.ExecuteSql, Destination: plan.Destination, ProtectedEndpoints: plan.ProtectedEndpoints));
+
+        var notices = new Notices(notice => Report(
+            DatabaseCopyStep.PostCopyScript, CommandStepState.Running, _estimator.At(DatabaseCopyStep.PostCopyScript, 0.5), null,
+            new CommandOutputLine(notice, false)));
+        PostCopyScriptRun run;
+
+        try
+        {
+            run = await scripts.RunAsync(plan.Destination, script, plan.ProtectedEndpoints, notices, cancellationToken);
+        }
+        catch (DomainException exception) when (exception is not DatabaseSecurityException)
+        {
+            throw new DomainException($"O script do perfil falhou em {plan.Destination.Database}: {exception.Message}");
+        }
+
+        logger.LogInformation("PostCopyScriptFinished {AuditId} {Rows} {Duration}", entry.Id, run.RowsAffected, run.Duration);
+        Done(DatabaseCopyStep.PostCopyScript, string.Create(CultureInfo.GetCultureInfo("pt-BR"),
+            $"Concluído em {Seconds(run.Duration)}: {run.RowsAffected:N0} linha(s) alterada(s)."));
+    }
+
     /// <summary>Sempre: com sucesso, falha ou cancelamento. Sem token, para o cancelamento não impedir a limpeza.</summary>
     private async Task<string?> CleanupAsync(Guid operationId)
     {
@@ -937,5 +997,11 @@ internal sealed class DatabaseCopyRun(
     private sealed class ToolEvents(Action<PgToolEvent> report) : IProgress<PgToolEvent>
     {
         public void Report(PgToolEvent value) => report(value);
+    }
+
+    /// <summary>Os avisos do script (<c>RAISE NOTICE</c>), também na mesma thread.</summary>
+    private sealed class Notices(Action<string> report) : IProgress<string>
+    {
+        public void Report(string value) => report(value);
     }
 }

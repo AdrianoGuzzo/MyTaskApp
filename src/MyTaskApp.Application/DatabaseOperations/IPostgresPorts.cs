@@ -222,6 +222,30 @@ public interface IPostgresRestoreService
         CancellationToken cancellationToken = default);
 }
 
+/// <summary>Como terminou o script depois da cópia: as linhas que os comandos mexeram e o tempo.</summary>
+public sealed record PostCopyScriptRun(long RowsAffected, TimeSpan Duration);
+
+/// <summary>
+/// O script do perfil de anonimização no destino, no fim da cópia (ADR-082) —
+/// o único SQL livre que o app roda. Uma transação só: um comando que falha
+/// desfaz o script inteiro, e o banco fica como a cópia o deixou.
+/// </summary>
+public interface IPostgresScriptRunner
+{
+    /// <summary>
+    /// Recusa antes de conectar quando o alvo é produção, aponta para um banco
+    /// de produção, ou não tem a permissão de executar SQL. Um erro do servidor
+    /// lança <see cref="MyTaskApp.Domain.DomainException"/> com a mensagem dele.
+    /// <paramref name="notices"/> recebe os <c>RAISE NOTICE</c> do script.
+    /// </summary>
+    Task<PostCopyScriptRun> RunAsync(
+        DatabaseConnectionSnapshot target,
+        string script,
+        IReadOnlyCollection<string> protectedEndpoints,
+        IProgress<string>? notices,
+        CancellationToken cancellationToken = default);
+}
+
 /// <summary>O que fica de uma operação depois da limpeza: só metadados.</summary>
 public sealed record DatabaseOperationMetadata(
     Guid OperationId,
