@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.23.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.22.0...v1.23.0) (2026-10-22)
+
+
+### Added
+
+* **desktop:** ensina a instalar o Git no diretório da etiqueta (ADR-064) ([#151](https://github.com/AdrianoGuzzo/MyTaskApp/issues/151)) ([0465d32](https://github.com/AdrianoGuzzo/MyTaskApp/commit/0465d328d2ac45ab20bcb65f177e5e254cdc8d97))
+
 ## [1.22.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.21.0...v1.22.0) (2026-10-22)
 
 
