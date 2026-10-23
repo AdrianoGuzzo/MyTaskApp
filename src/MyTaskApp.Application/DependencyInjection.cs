@@ -48,6 +48,10 @@ public static class DependencyInjection
         // Relógio real como padrão; testes substituem por FakeTimeProvider.
         services.TryAddSingleton(TimeProvider.System);
 
+        // Um escopo por operação (ADR-012), o mesmo em todo host. Testes de
+        // ViewModel registram antes um executor falso e ganham.
+        services.TryAddSingleton<IUseCaseRunner, ScopedUseCaseRunner>();
+
         // Sem identificação por padrão. O Desktop registra a conta do sistema
         // antes desta chamada e ganha — TryAdd mantém quem chegou primeiro.
         services.TryAddSingleton<ICurrentUser, UnknownUser>();

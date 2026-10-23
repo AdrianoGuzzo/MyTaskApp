@@ -76,7 +76,6 @@ internal sealed class McpTestHost : IAsyncDisposable
             // Antes da Application e da Infrastructure, que só registram o relógio do sistema se faltar um.
             .AddSingleton(clock ?? TimeProvider.System)
             .AddLogging(builder => builder.SetMinimumLevel(LogLevel.Debug).AddProvider(logs))
-            .AddSingleton<IUseCaseRunner, ScopedRunner>()
             .AddApplication(configuration)
             .AddInfrastructure(configuration)
             .AddMcpServerHost()
@@ -157,28 +156,6 @@ internal sealed class McpTestHost : IAsyncDisposable
         {
             // Pasta temporária: sobra para o sistema limpar.
         }
-    }
-}
-
-/// <summary>O <c>ScopedUseCaseRunner</c> do Desktop: um escopo por operação (ADR-012).</summary>
-internal sealed class ScopedRunner(IServiceScopeFactory scopes) : IUseCaseRunner
-{
-    public async Task<TResult> RunAsync<THandler, TResult>(
-        Func<THandler, CancellationToken, Task<TResult>> operation,
-        CancellationToken cancellationToken = default)
-        where THandler : notnull
-    {
-        await using var scope = scopes.CreateAsyncScope();
-        return await operation(scope.ServiceProvider.GetRequiredService<THandler>(), cancellationToken);
-    }
-
-    public async Task RunAsync<THandler>(
-        Func<THandler, CancellationToken, Task> operation,
-        CancellationToken cancellationToken = default)
-        where THandler : notnull
-    {
-        await using var scope = scopes.CreateAsyncScope();
-        await operation(scope.ServiceProvider.GetRequiredService<THandler>(), cancellationToken);
     }
 }
 

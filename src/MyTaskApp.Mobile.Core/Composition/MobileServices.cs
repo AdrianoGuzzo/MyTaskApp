@@ -63,7 +63,6 @@ public static class MobileServices
 
         // Antes da Application: ela registra com TryAdd, e quem sabe o nome ganha.
         services.TryAddSingleton<ICurrentUser>(new DeviceUser(host.DeviceName));
-        services.TryAddSingleton<IUseCaseRunner, ScopedUseCaseRunner>();
 
         services.AddApplication(configuration);
         services.AddLocalData(

@@ -1,9 +1,13 @@
 using Microsoft.Extensions.DependencyInjection;
-using MyTaskApp.Application.Abstractions;
 
-namespace MyTaskApp.Desktop.Composition;
+namespace MyTaskApp.Application.Abstractions;
 
-internal sealed class ScopedUseCaseRunner(IServiceScopeFactory scopeFactory) : IUseCaseRunner
+/// <summary>
+/// Um escopo por operação (ADR-012): abre, resolve o handler, executa e
+/// descarta. É o executor de todo host — desktop, celular e, na fase 2, o
+/// agente sem tela —, e por isso mora aqui, e não na composição de cada um.
+/// </summary>
+public sealed class ScopedUseCaseRunner(IServiceScopeFactory scopeFactory) : IUseCaseRunner
 {
     public async Task<TResult> RunAsync<THandler, TResult>(
         Func<THandler, CancellationToken, Task<TResult>> operation,
