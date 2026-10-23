@@ -1,3 +1,6 @@
+using System.Buffers.Text;
+using System.Security.Cryptography;
+
 namespace MyTaskApp.Remote.Contracts;
 
 /// <summary>O que um dispositivo faz na orquestração. Uma instalação pode ser os dois.</summary>
@@ -29,6 +32,17 @@ public sealed record DevicePublicKey(string Algorithm, string SubjectPublicKeyIn
 {
     /// <summary>ECDSA P-256 com SHA-256: há no .NET do Windows, do Linux e do Android.</summary>
     public const string Es256 = "ES256";
+
+    /// <summary>A chave ES256 de um SPKI, com a impressão digital calculada dele.</summary>
+    public static DevicePublicKey Es256Of(ReadOnlySpan<byte> subjectPublicKeyInfo) =>
+        new(Es256, Base64Url.EncodeToString(subjectPublicKeyInfo), FingerprintOf(subjectPublicKeyInfo));
+
+    /// <summary>
+    /// SHA-256 do SPKI, em hexadecimal minúsculo. O agente, o servidor e o
+    /// celular calculam por aqui, para o código de pareamento bater nos três.
+    /// </summary>
+    public static string FingerprintOf(ReadOnlySpan<byte> subjectPublicKeyInfo) =>
+        Convert.ToHexStringLower(SHA256.HashData(subjectPublicKeyInfo));
 }
 
 /// <summary>O que o agente sabe fazer, e com quais ferramentas desta máquina.</summary>

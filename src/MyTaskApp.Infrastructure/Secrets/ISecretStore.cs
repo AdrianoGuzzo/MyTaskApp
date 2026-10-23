@@ -5,9 +5,10 @@ namespace MyTaskApp.Infrastructure.Secrets;
 /// <summary>
 /// Onde ficam os segredos do app: o token do Jira (<c>jira</c>, ADR-045), o
 /// refresh token da sincronização (<c>sync</c>, ADR-061), o token do servidor
-/// MCP (<c>mcp-access-token</c>, ADR-059) e a senha de cada conexão PostgreSQL
-/// (<c>postgres-…</c>, ADR-056). Nunca no banco, nunca em JSON legível, nunca
-/// no log: só aqui, protegido pelo sistema.
+/// MCP (<c>mcp-access-token</c>, ADR-059), a senha de cada conexão PostgreSQL
+/// (<c>postgres-…</c>, ADR-056) e a chave privada do dispositivo na
+/// orquestração remota (<c>device-key</c>, ADR-087). Nunca no banco, nunca em
+/// JSON legível, nunca no log: só aqui, protegido pelo sistema.
 /// </summary>
 /// <remarks>
 /// Porta da Infrastructure, e não da Application: quem guarda e lê segredo são
