@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.25.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.24.0...v1.25.0) (2026-10-23)
+
+
+### Added
+
+* **database:** diagnóstico ensina a instalar tudo e cria banco local no Docker (ADR-083) ([#155](https://github.com/AdrianoGuzzo/MyTaskApp/issues/155)) ([f283eb0](https://github.com/AdrianoGuzzo/MyTaskApp/commit/f283eb0e5e0abcfdd3b66898c207fc06ef10803b))
+
 ## [1.24.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.23.0...v1.24.0) (2026-10-22)
 
 
