@@ -6,6 +6,7 @@ using MyTaskApp.Desktop.ViewModels;
 using MyTaskApp.Domain.Tasks;
 using MyTaskApp.Infrastructure;
 using MyTaskApp.Mcp.Hosting;
+using MyTaskApp.Remote.Contracts;
 using MyTaskApp.Sync.Contracts;
 
 namespace MyTaskApp.Desktop.Tests.Architecture;
@@ -42,6 +43,17 @@ public class LayerDependencyTests
     public void TheSyncContracts_DependOnNothingFromTheApp()
     {
         References(typeof(SyncJson).Assembly).Should().NotContain(name =>
+            name.StartsWith("MyTaskApp", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// O contrato da orquestração remota (ADR-084) é lido pelo servidor, pelo
+    /// agente, pelo desktop e pelo celular: como o do sync, não conhece nenhum.
+    /// </summary>
+    [Fact]
+    public void TheRemoteContracts_DependOnNothingFromTheApp()
+    {
+        References(typeof(RemoteJson).Assembly).Should().NotContain(name =>
             name.StartsWith("MyTaskApp", StringComparison.Ordinal));
     }
 

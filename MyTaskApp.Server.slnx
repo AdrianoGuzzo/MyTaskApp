@@ -5,6 +5,7 @@
     <Project Path="src/MyTaskApp.Server.Infrastructure/MyTaskApp.Server.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/shared/">
+    <Project Path="src/MyTaskApp.Remote.Contracts/MyTaskApp.Remote.Contracts.csproj" />
     <Project Path="src/MyTaskApp.Sync.Contracts/MyTaskApp.Sync.Contracts.csproj" />
   </Folder>
   <!-- Os testes ponta a ponta sobem dois desktops inteiros contra o servidor. -->

@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    O contrato da orquestracao remota (fase 2, ADR-084 a ADR-090): o que viaja
+    entre o controlador, o servidor e o agente. Separado do Sync.Contracts
+    porque a sincronizacao e um protocolo de dados, e isto e um protocolo de
+    pedidos. Sem dependencia nenhuma, como o contrato do sync.
+  -->
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="MyTaskApp.Remote.Contracts.Tests" />
+  </ItemGroup>
+
+</Project>

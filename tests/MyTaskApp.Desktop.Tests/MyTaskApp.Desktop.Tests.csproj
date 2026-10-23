@@ -5,6 +5,9 @@
 
     <!-- Só para comparar os temas do celular com os do desktop (ThemeParityTests). -->
     <ProjectReference Include="..\..\src\MyTaskApp.Mobile.Core\MyTaskApp.Mobile.Core.csproj" />
+
+    <!-- Só para a regra de camadas do contrato da orquestração remota (LayerDependencyTests). -->
+    <ProjectReference Include="..\..\src\MyTaskApp.Remote.Contracts\MyTaskApp.Remote.Contracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>

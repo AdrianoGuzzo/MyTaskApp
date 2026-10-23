@@ -776,6 +776,7 @@ Management).
 │   ├── MyTaskApp.Infrastructure/    EF Core/SQLite, Git, processos, Claude Code
 │   ├── MyTaskApp.Mcp/               servidor MCP local (Kestrel no loopback)
 │   ├── MyTaskApp.Sync.Contracts/    contrato da sincronização (desktop e servidor)
+│   ├── MyTaskApp.Remote.Contracts/  contrato da orquestração remota (fase 2, ainda sem uso)
 │   ├── MyTaskApp.Server.*/          servidor de sincronização (ASP.NET Core + PostgreSQL)
 │   ├── MyTaskApp.Mobile.Core/       o app do celular sem MAUI: ViewModels, composição
 │   ├── MyTaskApp.Mobile/            o app do celular: .NET MAUI, Android e iOS
