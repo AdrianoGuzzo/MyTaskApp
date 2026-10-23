@@ -384,7 +384,7 @@ public class DatabaseOperationsServicesTests
     // --- Diagnóstico ----------------------------------------------------------
 
     private static PostgresEnvironmentDiagnostics Diagnostics(DatabaseCopyScenario scenario) =>
-        new(scenario.Locator, scenario.Inspector, scenario.Policy, NullLogger<PostgresEnvironmentDiagnostics>.Instance);
+        new(scenario.Locator, scenario.Inspector, scenario.Docker, scenario.Policy, NullLogger<PostgresEnvironmentDiagnostics>.Instance);
 
     [Fact]
     public async Task TheToolsDiagnosis_ListsEveryTool_AndTheGuide()
@@ -433,6 +433,88 @@ public class DatabaseOperationsServicesTests
 
         await FluentActions.Awaiting(() => Diagnostics(scenario).DiagnoseAsync(scenario.Production.Snapshot(), false, Ct))
             .Should().ThrowAsync<DatabaseSecurityException>();
+    }
+
+    [Fact]
+    public async Task BothDiagnoses_BringTheDocker_WhichNeverCountsAsAFailure()
+    {
+        var scenario = new DatabaseCopyScenario();
+
+        var tools = await Diagnostics(scenario).DiagnoseToolsAsync(refresh: true, Ct);
+
+        tools.Docker.Should().BeSameAs(scenario.Docker.Environment);
+        tools.Docker!.Checks.Should().ContainSingle().Which.Outcome.Should().Be(CheckOutcome.Warning, "o Docker é opcional");
+        tools.HasFailures.Should().BeFalse();
+        scenario.Docker.LastRefresh.Should().BeTrue();
+
+        scenario.Docker.Environment = FakeDockerInspector.Running(LocalContainerState.Running, "Up 2 hours");
+        var full = await Diagnostics(scenario).DiagnoseAsync(scenario.Production.Snapshot(), false, Ct);
+
+        full.Docker!.Checks.Select(check => check.Name).Should().Equal("Docker", "Docker Engine", "Banco local");
+        full.Docker.Checks.Should().OnlyContain(check => check.Outcome == CheckOutcome.Pass);
+        full.Docker.Checks[2].Detail.Should().Be("mytaskapp-postgres em 127.0.0.1:5433 — Up 2 hours");
+    }
+
+    [Fact]
+    public void TheLocalPort_IsTheContainersOnce_ItExists()
+    {
+        var missing = FakeDockerInspector.Running(LocalContainerState.Missing) with { FreePort = 5434 };
+        missing.LocalPort.Should().Be(5434, "um container novo vai na primeira porta livre");
+
+        (missing with { Container = LocalContainerState.Running, ContainerPort = 5432 }).LocalPort
+            .Should().Be(5432, "a 5432 \"ocupada\" é o próprio container");
+    }
+
+    [Fact]
+    public void DockerChecks_WarnWhenStopped_AndWhenTheDatabaseIsMissing()
+    {
+        var stopped = FakeDockerInspector.Running(LocalContainerState.Unknown) with { EngineRunning = false, EngineProblem = "Parado: abra o Docker Desktop." };
+
+        stopped.Checks.Select(check => (check.Name, check.Outcome)).Should().Equal(
+            ("Docker", CheckOutcome.Pass), ("Docker Engine", CheckOutcome.Warning));
+        stopped.Checks[1].Detail.Should().Be("Parado: abra o Docker Desktop.");
+
+        FakeDockerInspector.Running(LocalContainerState.Missing).Checks[2].Outcome.Should().Be(CheckOutcome.Warning);
+        var parked = FakeDockerInspector.Running(LocalContainerState.Stopped, "parado").Checks[2];
+        parked.Outcome.Should().Be(CheckOutcome.Warning);
+        parked.Detail.Should().Be("mytaskapp-postgres em 127.0.0.1:5433 — parado");
+    }
+
+    [Fact]
+    public void TheLocalDatabaseCommand_StaysUp_OnlyHere_WithItsOwnVolume()
+    {
+        var command = LocalPostgresContainer.RunCommand("abc123XYZ", 5433);
+
+        command.Should().Be(
+            "docker run -d --name mytaskapp-postgres --restart unless-stopped -e POSTGRES_PASSWORD=abc123XYZ "
+            + "-p 127.0.0.1:5433:5432 -v mytaskapp-postgres-data:/var/lib/postgresql/data postgres:17");
+
+        FluentActions.Invoking(() => LocalPostgresContainer.RunCommand("a b", 5432)).Should().Throw<ArgumentException>();
+        FluentActions.Invoking(() => LocalPostgresContainer.RunCommand("a;rm", 5432)).Should().Throw<ArgumentException>();
+        FluentActions.Invoking(() => LocalPostgresContainer.RunCommand("abc", 0)).Should().Throw<ArgumentOutOfRangeException>();
+        LocalPostgresContainer.CandidatePorts.Should().StartWith([5432, 5433]);
+    }
+
+    [Fact]
+    public void TheLocalPassword_IsLong_AndNeedsNoQuoting()
+    {
+        var passwords = Enumerable.Range(0, 20).Select(_ => LocalPostgresContainer.NewPassword()).ToList();
+
+        passwords.Should().OnlyContain(password => password.Length == 20 && password.All(char.IsAsciiLetterOrDigit));
+        passwords.Distinct().Should().HaveCount(20);
+    }
+
+    [Fact]
+    public void TheLocalDatabaseSteps_FollowTheContainer()
+    {
+        LocalPostgresContainer.Steps(LocalContainerState.Missing, "abc123", 5433).Should().Contain(step => step.Command == LocalPostgresContainer.RunCommand("abc123", 5433));
+        LocalPostgresContainer.Steps(LocalContainerState.Unknown, "abc123", 5432).Should().Contain(step => step.Command!.StartsWith("docker run"));
+        LocalPostgresContainer.Steps(LocalContainerState.Stopped, "abc123", 5432).First().Command.Should().Be("docker start mytaskapp-postgres");
+
+        var running = LocalPostgresContainer.Steps(LocalContainerState.Running, "abc123", 5433);
+        running[0].Text.Should().Contain("127.0.0.1:5433");
+        running.Select(step => step.Command).Should().Contain(["docker stop mytaskapp-postgres", "docker start mytaskapp-postgres"]);
+        running.Should().NotContain(step => step.HasCommand && step.Command!.Contains("abc123"), "com o banco criado, a senha não aparece mais");
     }
 
     [Fact]

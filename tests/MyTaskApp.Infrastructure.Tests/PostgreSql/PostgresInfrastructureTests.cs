@@ -174,7 +174,222 @@ public class PostgresToolLocatorTests
 
         guide.CheckCommands.Should().Contain(["which psql", "which pg_dump", "which pg_restore", "which pg_isready", "pg_isready --version"]);
         guide.Steps.Should().NotBeEmpty();
-        PostgresInstallGuides.For(false, (_, _) => "rhel fedora").Steps.Should().Contain(step => step.Contains("dnf"));
+        PostgresInstallGuides.For(false, (_, _) => "rhel fedora").Steps.Should().Contain(step => step.Command == PostgresInstallGuides.RedHatCommand);
+    }
+
+    [Fact]
+    public void EveryGuide_HasOneCommandThatInstallsEverything()
+    {
+        var windows = PostgresInstallGuides.For(isWindows: true, (_, _) => null);
+        windows.Steps.Where(step => step.HasCommand).Should().ContainSingle().Which.Command.Should()
+            .Be("winget install -e --id PostgreSQL.PostgreSQL.17 --override \"--mode unattended --unattendedmodeui minimal --disable-components server,pgAdmin,stackbuilder\"");
+        windows.OfficialSite.Should().Be(new Uri("https://www.postgresql.org/download/windows/"));
+
+        // O repositório PGDG e o cliente numa linha só, sem pergunta no meio.
+        var debian = PostgresInstallGuides.For(isWindows: false, (_, _) => null);
+        debian.Steps.Where(step => step.HasCommand).Should().ContainSingle().Which.Command.Should()
+            .Contain("apt.postgresql.org.sh -y").And.EndWith("postgresql-client-17");
+
+        var mac = PostgresInstallGuides.For(isWindows: false, (_, _) => null, isMacOs: true);
+        mac.Platform.Should().Be("macOS");
+        mac.Steps.Should().Contain(step => step.Command == "brew install libpq");
+    }
+}
+
+/// <summary>O Docker do banco local (ADR-083): só perguntas, com um docker de mentira.</summary>
+public class DockerInspectorTests
+{
+    private const string Docker = @"C:\Program Files\Docker\Docker\resources\bin\docker.exe";
+
+    private static CancellationToken Ct => TestContext.Current.CancellationToken;
+
+    private readonly ScriptedProcessRunner _processes = new();
+
+    private readonly HashSet<string> _files = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>As portas em que alguém já escuta nesta "máquina".</summary>
+    private readonly HashSet<int> _busyPorts = [];
+
+    private DockerInspector Inspector(bool isWindows = true) => new(
+        (name, _) => name == "ProgramFiles" ? @"C:\Program Files" : null,
+        _files.Contains,
+        _busyPorts.Contains,
+        isWindows,
+        isMacOs: false,
+        _processes,
+        new DatabaseOperationsOptions(),
+        NullLogger<DockerInspector>.Instance);
+
+    private static bool Asks(ProcessRequest request, string first) => request.Arguments.Count > 0 && request.Arguments[0] == first;
+
+    private static ProcessResult NoContainer() => ScriptedProcessRunner.Fail(1, "Error response from daemon: No such container: mytaskapp-postgres");
+
+    private void Install(ProcessResult info, ProcessResult? inspect = null)
+    {
+        _files.Add(Docker);
+        _processes.When(request => Asks(request, "--version"), ScriptedProcessRunner.Ok("Docker version 29.3.1, build c2be9cc\n"));
+        _processes.When(request => Asks(request, "info"), info);
+        _processes.When(request => Asks(request, "container"), inspect ?? NoContainer());
+    }
+
+    [Fact]
+    public async Task WithoutDocker_TheGuideInstallsIt_AndNothingRuns()
+    {
+        var docker = await Inspector().InspectAsync(refresh: true, Ct);
+
+        docker.Installed.Should().BeFalse();
+        docker.Container.Should().Be(LocalContainerState.Unknown);
+        docker.Guide.Steps.Select(step => step.Command).Should().Contain(["wsl --install --no-distribution", "winget install -e --id Docker.DockerDesktop"]);
+        _processes.Requests.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task DockerDesktopClosed_IsInstalledButStopped_AndTheGuideOpensIt()
+    {
+        Install(ScriptedProcessRunner.Fail(1, "failed to connect to the docker API at npipe:////./pipe/dockerDesktopLinuxEngine"));
+
+        var docker = await Inspector().InspectAsync(refresh: true, Ct);
+
+        docker.Installed.Should().BeTrue();
+        docker.Path.Should().Be(Docker);
+        docker.Version.Should().Be("Docker version 29.3.1, build c2be9cc");
+        docker.EngineRunning.Should().BeFalse();
+        docker.EngineProblem.Should().Be("Parado: abra o Docker Desktop.");
+        docker.Guide.Steps.Should().Contain(step => step.Text.Contains("Start Docker Desktop when you sign in"));
+        docker.Guide.Steps.Should().NotContain(step => step.Command == "winget install -e --id Docker.DockerDesktop");
+        _processes.Requests.Should().NotContain(request => Asks(request, "container"), "sem engine não há o que perguntar");
+    }
+
+    [Fact]
+    public async Task AnEngineThatDoesNotAnswer_IsStillStarting()
+    {
+        Install(ScriptedProcessRunner.TimedOut());
+
+        (await Inspector().InspectAsync(true, Ct)).EngineProblem.Should().Contain("ainda esteja iniciando");
+    }
+
+    [Fact]
+    public void WithoutPermission_OnLinux_TheGroupIsTheAnswer()
+    {
+        DockerInspector.EngineProblem(ScriptedProcessRunner.Fail(1, "permission denied while trying to connect to the Docker daemon socket"), DockerHost.Linux)
+            .Should().Contain("grupo docker");
+        DockerInspector.EngineProblem(ScriptedProcessRunner.Fail(1), DockerHost.Linux).Should().Contain("serviço");
+        DockerInstallGuides.For(DockerHost.Linux, installed: true).Steps.Select(step => step.Command)
+            .Should().Contain(["sudo systemctl enable --now docker", "sudo usermod -aG docker $USER"]);
+    }
+
+    /// <summary>As saídas reais do <c>docker container inspect</c> com o <see cref="DockerInspector.InspectFormat"/>.</summary>
+    [Theory]
+    [InlineData("running|5433 \n", LocalContainerState.Running, "rodando", 5433)]
+    [InlineData("exited|5432 \n", LocalContainerState.Stopped, "parado", 5432)]
+    [InlineData("created| \n", LocalContainerState.Stopped, "criado, mas nunca ligado", null)]
+    [InlineData("restarting|5432 \n", LocalContainerState.Stopped, "reiniciando sem parar: veja o log", 5432)]
+    public async Task TheContainer_IsReadFromItsStateAndPort(string output, LocalContainerState state, string status, int? port)
+    {
+        Install(ScriptedProcessRunner.Ok("29.3.1\n"), ScriptedProcessRunner.Ok(output));
+
+        var docker = await Inspector().InspectAsync(refresh: true, Ct);
+
+        docker.EngineRunning.Should().BeTrue();
+        docker.EngineVersion.Should().Be("29.3.1");
+        docker.Container.Should().Be(state);
+        docker.ContainerStatus.Should().Be(status);
+        docker.ContainerPort.Should().Be(port);
+        docker.Guide.Steps.Should().BeEmpty("com o Docker rodando, os passos são os do banco");
+    }
+
+    [Fact]
+    public async Task NoSuchContainer_IsMissing_AndAnyOtherFailure_IsUnknown()
+    {
+        Install(ScriptedProcessRunner.Ok("29.3.1\n"));
+        (await Inspector().InspectAsync(true, Ct)).Container.Should().Be(LocalContainerState.Missing);
+
+        DockerInspector.ContainerOf(ScriptedProcessRunner.Fail(1, "error during connect")).State.Should().Be(LocalContainerState.Unknown);
+        DockerInspector.ContainerOf(ScriptedProcessRunner.TimedOut()).State.Should().Be(LocalContainerState.Unknown);
+        DockerInspector.ContainerOf(null).State.Should().Be(LocalContainerState.Unknown);
+    }
+
+    [Fact]
+    public async Task ANewContainer_GoesToTheFirstFreePort()
+    {
+        Install(ScriptedProcessRunner.Ok("29.3.1\n"));
+
+        (await Inspector().InspectAsync(true, Ct)).FreePort.Should().Be(5432);
+
+        // Um PostgreSQL instalado na 5432 e um container de outro projeto na 5433: o caso real.
+        _busyPorts.UnionWith([5432, 5433]);
+        var docker = await Inspector().InspectAsync(true, Ct);
+        docker.FreePort.Should().Be(5434);
+        docker.LocalPort.Should().Be(5434);
+
+        // Sem o docker também: o tutorial já mostra o comando com a porta certa.
+        _files.Clear();
+        (await Inspector().InspectAsync(true, Ct)).FreePort.Should().Be(5434);
+
+        _busyPorts.UnionWith(LocalPostgresContainer.CandidatePorts);
+        (await Inspector().InspectAsync(true, Ct)).FreePort.Should().Be(5432, "sem nenhuma livre, fica a de sempre, e o erro do docker diz o porquê");
+    }
+
+    [Fact]
+    public void ThePortCheck_SeesARealListener()
+    {
+        var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        listener.Start();
+
+        try
+        {
+            DockerInspector.PortInUse(((System.Net.IPEndPoint)listener.LocalEndpoint).Port).Should().BeTrue();
+        }
+        finally
+        {
+            listener.Stop();
+        }
+    }
+
+    [Fact]
+    public async Task TheQuestions_AreReadOnly_AndTheNameIsExact()
+    {
+        Install(ScriptedProcessRunner.Ok("29.3.1\n"));
+
+        await Inspector().InspectAsync(refresh: true, Ct);
+
+        _processes.Requests.Select(request => request.Arguments[0]).Should().Equal("--version", "info", "container");
+        _processes.Requests[2].Arguments.Should().Equal("container", "inspect", "--format", DockerInspector.InspectFormat, "mytaskapp-postgres");
+        _processes.Requests.Should().OnlyContain(request => request.FileName == Docker);
+    }
+
+    [Fact]
+    public async Task TheAnswerIsCached_UntilRefreshIsAsked()
+    {
+        Install(ScriptedProcessRunner.Ok("29.3.1\n"));
+        var inspector = Inspector();
+
+        await inspector.InspectAsync(refresh: false, Ct);
+        var calls = _processes.Requests.Count;
+        await inspector.InspectAsync(refresh: false, Ct);
+        _processes.Requests.Should().HaveCount(calls);
+
+        await inspector.InspectAsync(refresh: true, Ct);
+        _processes.Requests.Count.Should().Be(calls * 2);
+    }
+
+    [Fact]
+    public async Task ADockerThatCannotStart_IsLikeAStoppedOne()
+    {
+        _files.Add(Docker);
+        _processes.StartFailure = new ProcessStartException("docker", new InvalidOperationException());
+
+        var docker = await Inspector().InspectAsync(refresh: true, Ct);
+
+        docker.Installed.Should().BeTrue();
+        docker.EngineRunning.Should().BeFalse();
+    }
+
+    [Fact]
+    public void TheMacGuide_UsesTheDockerDesktopCask()
+    {
+        DockerInstallGuides.For(DockerHost.MacOs, installed: false).Steps
+            .Should().Contain(step => step.Command == "brew install --cask docker-desktop");
     }
 }
 

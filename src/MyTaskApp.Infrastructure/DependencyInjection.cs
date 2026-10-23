@@ -302,6 +302,10 @@ public static class DependencyInjection
             provider.GetRequiredService<IProcessRunner>(),
             options,
             provider.GetRequiredService<ILogger<PostgresToolLocator>>()));
+        services.AddSingleton<IDockerInspector>(provider => DockerInspector.ForCurrentSystem(
+            provider.GetRequiredService<IProcessRunner>(),
+            options,
+            provider.GetRequiredService<ILogger<DockerInspector>>()));
 
         services.AddSingleton<PgToolRunner>();
         services.AddSingleton<IPostgresDumpService, PostgresDumpService>();

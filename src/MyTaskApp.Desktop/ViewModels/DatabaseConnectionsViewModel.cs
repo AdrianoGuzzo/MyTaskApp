@@ -205,6 +205,27 @@ public sealed partial class DatabaseConnectionsViewModel(
         ErrorMessage = null;
     }
 
+    /// <summary>
+    /// O banco local do Docker (ADR-083), vindo do Diagnóstico: uma conexão nova
+    /// de Desenvolvimento, só de servidor — o banco é escolhido na cópia. Não
+    /// salva: o usuário confere e clica em criar.
+    /// </summary>
+    public void UseDraft(LocalDatabaseDraft draft)
+    {
+        ResetForm();
+        Name = "Banco local (Docker)";
+        Host = draft.Host;
+        Port = draft.Port.ToString(CultureInfo.InvariantCulture);
+        Username = draft.Username;
+        Password = draft.Password ?? string.Empty;
+        Description = "PostgreSQL no Docker deste computador.";
+        SelectedEnvironment = Environments.First(choice => choice.Value == DatabaseEnvironment.Development);
+        ErrorMessage = null;
+        StatusMessage = draft.Password is null
+            ? "Confira os dados, digite a senha com que você criou o banco local e clique em \"Criar conexão\"."
+            : "Confira os dados e clique em \"Criar conexão\". A senha é a do comando do Docker.";
+    }
+
     [RelayCommand]
     public void CancelEdit() => ResetForm();
 

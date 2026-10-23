@@ -193,7 +193,7 @@ internal sealed class FakeCredentialStore : IDatabaseCredentialStore
 
 internal sealed class FakeToolLocator : IPostgresToolLocator
 {
-    public static PostgresInstallGuide Guide { get; } = new("Windows", ["winget install PostgreSQL.PostgreSQL.17"], ["where.exe pg_dump"]);
+    public static ToolInstallGuide Guide { get; } = new("Windows", [new("Instale:", "winget install PostgreSQL.PostgreSQL.17")], ["where.exe pg_dump"]);
 
     public PostgresClientTools Tools { get; set; } = WithVersion(17, 2);
 
@@ -215,6 +215,34 @@ internal sealed class FakeToolLocator : IPostgresToolLocator
         Detections++;
         LastRefresh = refresh;
         return Task.FromResult(Tools);
+    }
+}
+
+/// <summary>O Docker: por padrão, não instalado — o caso de quem só tem as ferramentas.</summary>
+internal sealed class FakeDockerInspector : IDockerInspector
+{
+    public static ToolInstallGuide Guide { get; } = new("Windows", [new("Instale:", "winget install -e --id Docker.DockerDesktop")], ["docker version"]);
+
+    public DockerEnvironment Environment { get; set; } = NotInstalled();
+
+    public bool LastRefresh { get; private set; }
+
+    public static DockerEnvironment NotInstalled() =>
+        new(false, null, null, false, null, null, LocalContainerState.Unknown, null, Guide);
+
+    /// <summary>A 5432 ocupada (um PostgreSQL instalado): a livre é a 5433, e um container que existe está nela.</summary>
+    public static DockerEnvironment Running(LocalContainerState container, string? status = null) =>
+        new DockerEnvironment(true, @"C:\Program Files\Docker\Docker\resources\bin\docker.exe", "Docker version 29.3.1, build c2be9cc", true, "29.3.1", null,
+            container, status, Guide with { Steps = [] })
+        {
+            FreePort = 5433,
+            ContainerPort = container is LocalContainerState.Running or LocalContainerState.Stopped ? 5433 : null,
+        };
+
+    public Task<DockerEnvironment> InspectAsync(bool refresh, CancellationToken cancellationToken = default)
+    {
+        LastRefresh = refresh;
+        return Task.FromResult(Environment);
     }
 }
 
@@ -707,6 +735,8 @@ internal sealed class DatabaseCopyScenario
     public FakeCredentialStore Credentials { get; } = new();
 
     public FakeToolLocator Locator { get; } = new();
+
+    public FakeDockerInspector Docker { get; } = new();
 
     public FakeServerInspector Inspector { get; } = new();
 

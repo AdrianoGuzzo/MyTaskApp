@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.LogicalTree;
+using Avalonia.VisualTree;
 using Microsoft.Extensions.Logging.Abstractions;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Commands;
@@ -70,13 +71,49 @@ internal static class DatabaseScreen
         return runner;
     }
 
-    public static EnvironmentDiagnosticsReport Report(bool missing = false, bool withServer = false) => new(
+    public static readonly Uri PostgresSite = new("https://www.postgresql.org/download/windows/");
+
+    public static readonly Uri DockerSite = new("https://docs.docker.com/get-started/get-docker/");
+
+    public static EnvironmentDiagnosticsReport Report(bool missing = false, bool withServer = false, DockerEnvironment? docker = null) => new(
         [
             new CheckResult(EnvironmentDiagnosticsReport.ClientToolsCategory, "psql", CheckOutcome.Pass, "17.2"),
             new CheckResult(EnvironmentDiagnosticsReport.ClientToolsCategory, "pg_dump", missing ? CheckOutcome.Fail : CheckOutcome.Pass, missing ? "Não encontrado." : "17.2"),
         ],
         withServer ? [new CheckResult(EnvironmentDiagnosticsReport.ServerCategory, "Connection", CheckOutcome.Pass, "backup_user@eco_core")] : [],
-        new PostgresInstallGuide("Windows", ["winget install PostgreSQL.PostgreSQL.17"], ["where.exe pg_dump", "pg_dump --version"]));
+        new ToolInstallGuide(
+            "Windows",
+            [new("Abra o PowerShell."), new("Cole o comando:", "winget install -e --id PostgreSQL.PostgreSQL.17")],
+            ["where.exe pg_dump", "pg_dump --version"],
+            PostgresSite),
+        docker ?? Docker(installed: false));
+
+    /// <summary>O Docker como o inspector diria: sem ele, parado ou rodando com o container no estado pedido.</summary>
+    public static DockerEnvironment Docker(bool installed = true, bool running = true, LocalContainerState container = LocalContainerState.Missing)
+    {
+        var guide = new ToolInstallGuide(
+            "Windows",
+            !installed ? [new("Instale:", "winget install -e --id Docker.DockerDesktop")]
+            : !running ? [new("Abra o Docker Desktop pelo menu Iniciar.")]
+            : [],
+            ["docker version"],
+            DockerSite);
+
+        // A 5432 ocupada por um PostgreSQL instalado: a livre é a 5433, e o container que existe está nela.
+        var exists = running && container is LocalContainerState.Running or LocalContainerState.Stopped;
+
+        return !installed
+            ? new DockerEnvironment(false, null, null, false, null, null, LocalContainerState.Unknown, null, guide) { FreePort = 5433 }
+            : new DockerEnvironment(true, @"C:\Program Files\Docker\Docker\resources\bin\docker.exe", "Docker version 29.3.1", running,
+                running ? "29.3.1" : null, running ? null : "Parado: abra o Docker Desktop.",
+                running ? container : LocalContainerState.Unknown,
+                container == LocalContainerState.Running ? "rodando" : container == LocalContainerState.Stopped ? "parado" : null,
+                guide)
+            {
+                FreePort = 5433,
+                ContainerPort = exists ? 5433 : null,
+            };
+    }
 
     public static DatabaseOperationsViewModel Screen(
         FakeUseCaseRunner runner,
@@ -89,7 +126,7 @@ internal static class DatabaseScreen
         return new DatabaseOperationsViewModel(
             runner,
             new DatabaseConnectionsViewModel(runner, confirmation, NullLogger<DatabaseConnectionsViewModel>.Instance),
-            new DatabaseDiagnosticsViewModel(runner, clipboard, NullLogger<DatabaseDiagnosticsViewModel>.Instance),
+            new DatabaseDiagnosticsViewModel(runner, clipboard, new FakeShellLauncher(), NullLogger<DatabaseDiagnosticsViewModel>.Instance),
             new DatabaseCopyViewModel(runner, confirmation, NullLogger<DatabaseCopyViewModel>.Instance),
             new DatabaseProfilesViewModel(runner, confirmation, NullLogger<DatabaseProfilesViewModel>.Instance),
             new DatabaseHistoryViewModel(runner, NullLogger<DatabaseHistoryViewModel>.Instance),
@@ -667,10 +704,20 @@ public class DatabaseDiagnosticsViewModelTests
 
     private readonly FakeClipboardWriter _clipboard = new();
 
+    private readonly FakeShellLauncher _shell = new();
+
     private DatabaseDiagnosticsViewModel ViewModel()
     {
-        var viewModel = new DatabaseDiagnosticsViewModel(_runner, _clipboard, NullLogger<DatabaseDiagnosticsViewModel>.Instance);
+        var viewModel = new DatabaseDiagnosticsViewModel(_runner, _clipboard, _shell, NullLogger<DatabaseDiagnosticsViewModel>.Instance);
         viewModel.SetConnections([new DatabaseConnectionItemViewModel(DatabaseScreen.Production)]);
+        return viewModel;
+    }
+
+    private async Task<DatabaseDiagnosticsViewModel> WithDocker(DockerEnvironment docker, DatabaseDiagnosticsViewModel? viewModel = null)
+    {
+        viewModel ??= ViewModel();
+        _runner.ResultsByHandler[typeof(DetectPostgresToolsHandler)] = DatabaseScreen.Report(missing: true, docker: docker);
+        await viewModel.CheckToolsAsync(refresh: true, Ct);
         return viewModel;
     }
 
@@ -683,12 +730,132 @@ public class DatabaseDiagnosticsViewModelTests
 
         viewModel.ClientTools.Select(item => item.Glyph).Should().Equal("✓", "✗");
         viewModel.HasMissingTools.Should().BeTrue();
-        viewModel.InstallSteps.Should().ContainSingle().Which.Should().Contain("winget");
+        viewModel.InstallSteps.Select(step => step.Label).Should().Equal("1. Abra o PowerShell.", "2. Cole o comando:");
+        viewModel.InstallSteps.Select(step => step.HasCommand).Should().Equal(false, true);
+        viewModel.InstallSteps[1].Command.Should().Be("winget install -e --id PostgreSQL.PostgreSQL.17");
         viewModel.CheckCommands.Should().Contain("where.exe pg_dump");
+        viewModel.OfficialSite.Should().Be(DatabaseScreen.PostgresSite);
 
         await viewModel.CopyCheckCommandsAsync();
         _clipboard.LastWritten.Should().Contain("pg_dump --version");
         viewModel.StatusMessage.Should().Be("Comandos copiados.");
+
+        await viewModel.CopyInstallCommandAsync(viewModel.InstallSteps[1].Command);
+        _clipboard.LastWritten.Should().Be("winget install -e --id PostgreSQL.PostgreSQL.17");
+        viewModel.StatusMessage.Should().StartWith("Comando copiado.");
+
+        await viewModel.OpenPageAsync(viewModel.OfficialSite);
+        _shell.OpenedUris.Should().Equal(DatabaseScreen.PostgresSite);
+    }
+
+    [Fact]
+    public async Task WithoutDocker_TheWholeTutorialShows_InstallThenCreate()
+    {
+        var viewModel = await WithDocker(DatabaseScreen.Docker(installed: false));
+
+        viewModel.HasDocker.Should().BeTrue();
+        viewModel.DockerChecks.Should().ContainSingle().Which.IsWarning.Should().BeTrue();
+        viewModel.HasDockerSteps.Should().BeTrue();
+        viewModel.DockerStepsTitle.Should().Be("Primeiro, instale o Docker");
+        viewModel.DockerSteps.Should().ContainSingle().Which.Command.Should().Be("winget install -e --id Docker.DockerDesktop");
+        viewModel.LocalDatabaseTitle.Should().Be("Depois, crie o banco");
+        viewModel.LocalDatabaseSteps.Should().Contain(step => step.HasCommand && step.Command!.StartsWith("docker run -d --name mytaskapp-postgres"));
+        viewModel.DockerOfficialSite.Should().Be(DatabaseScreen.DockerSite);
+    }
+
+    [Fact]
+    public async Task DockerStopped_SaysToOpenIt()
+    {
+        var viewModel = await WithDocker(DatabaseScreen.Docker(running: false));
+
+        viewModel.DockerStepsTitle.Should().Be("Primeiro, ligue o Docker");
+        viewModel.DockerSteps.Should().ContainSingle().Which.Text.Should().Contain("Abra o Docker Desktop");
+        viewModel.DockerChecks.Select(item => item.Name).Should().Equal("Docker", "Docker Engine");
+        viewModel.LocalDatabaseSteps.Should().Contain(step => step.HasCommand && step.Command!.StartsWith("docker run"));
+    }
+
+    [Fact]
+    public async Task DockerRunning_WithTheDatabase_ShowsHowToLookAfterIt()
+    {
+        var viewModel = await WithDocker(DatabaseScreen.Docker(container: LocalContainerState.Running));
+
+        viewModel.HasDockerSteps.Should().BeFalse();
+        viewModel.LocalDatabaseTitle.Should().Be("O banco local está pronto");
+        viewModel.DockerChecks.Should().OnlyContain(item => item.IsPass);
+        viewModel.LocalDatabaseSteps.Select(step => step.Command).Should().Contain("docker stop mytaskapp-postgres");
+        viewModel.LocalDatabaseSteps.Should().NotContain(step => step.HasCommand && step.Command!.StartsWith("docker run"));
+
+        (await WithDocker(DatabaseScreen.Docker(container: LocalContainerState.Stopped))).LocalDatabaseSteps[0].Command
+            .Should().Be("docker start mytaskapp-postgres");
+    }
+
+    [Fact]
+    public async Task RegisteringTheDatabaseCreatedHere_CarriesThePasswordOfTheCommand()
+    {
+        var viewModel = await WithDocker(DatabaseScreen.Docker(container: LocalContainerState.Missing));
+        var run = viewModel.LocalDatabaseSteps.Single(step => step.HasCommand && step.Command!.StartsWith("docker run")).Command!;
+
+        // O usuário roda o comando e clica em "Verificar novamente": agora o container existe.
+        await WithDocker(DatabaseScreen.Docker(container: LocalContainerState.Running), viewModel);
+
+        LocalDatabaseDraft? draft = null;
+        viewModel.RegisterLocalDatabaseRequested += requested => draft = requested;
+        viewModel.RegisterLocalDatabase();
+
+        draft.Should().NotBeNull();
+        draft!.Host.Should().Be("127.0.0.1");
+        draft.Port.Should().Be(5433);
+        draft.Username.Should().Be("postgres");
+        draft.Password.Should().NotBeNullOrEmpty();
+        run.Should().Contain($"POSTGRES_PASSWORD={draft.Password} ").And.Contain("-p 127.0.0.1:5433:5432", "a 5432 estava ocupada");
+    }
+
+    [Fact]
+    public async Task AContainerFromBeforeThisWindow_IsRegisteredWithoutAPassword()
+    {
+        var viewModel = await WithDocker(DatabaseScreen.Docker(container: LocalContainerState.Running));
+
+        LocalDatabaseDraft? draft = null;
+        viewModel.RegisterLocalDatabaseRequested += requested => draft = requested;
+        viewModel.RegisterLocalDatabase();
+
+        draft!.Password.Should().BeNull("foi criado com outra senha, que o app não sabe");
+    }
+
+    [Fact]
+    public async Task TheScreen_OpensTheConnectionsTab_FilledForTheLocalDatabase()
+    {
+        var runner = DatabaseScreen.Runner();
+        runner.ResultsByHandler[typeof(DetectPostgresToolsHandler)] = DatabaseScreen.Report(missing: true, docker: DatabaseScreen.Docker(installed: false));
+        var screen = DatabaseScreen.Screen(runner);
+        await screen.LoadAsync(Ct);
+        screen.SelectedTabIndex = DatabaseOperationsViewModel.DiagnosticsTab;
+
+        screen.Diagnostics.RegisterLocalDatabase();
+
+        screen.SelectedTabIndex.Should().Be(DatabaseOperationsViewModel.ConnectionsTab);
+        var form = screen.Connections;
+        form.IsEditing.Should().BeFalse("é uma conexão nova, ainda não salva");
+        form.Name.Should().Be("Banco local (Docker)");
+        form.Host.Should().Be("127.0.0.1");
+        form.Port.Should().Be("5433", "a porta livre que o Diagnóstico escolheu");
+        form.Database.Should().BeEmpty("só o servidor: o banco é escolhido na cópia");
+        form.Username.Should().Be("postgres");
+        form.Password.Should().HaveLength(20);
+        form.SelectedEnvironment.Value.Should().Be(DatabaseEnvironment.Development);
+        form.StatusMessage.Should().Contain("Criar conexão");
+        runner.Invoked.Should().NotContain(typeof(SaveDatabaseConnectionHandler));
+    }
+
+    [Fact]
+    public async Task AFailedPageOpen_ShowsTheAddress()
+    {
+        var viewModel = ViewModel();
+        _shell.Succeeds = false;
+
+        await viewModel.OpenPageAsync(DatabaseScreen.DockerSite);
+
+        viewModel.ErrorMessage.Should().Contain("docs.docker.com");
     }
 
     [Fact]
@@ -710,7 +877,7 @@ public class DatabaseDiagnosticsViewModelTests
     [Fact]
     public async Task WithoutAConnection_RefreshChecksOnlyTheTools()
     {
-        var viewModel = new DatabaseDiagnosticsViewModel(_runner, _clipboard, NullLogger<DatabaseDiagnosticsViewModel>.Instance);
+        var viewModel = new DatabaseDiagnosticsViewModel(_runner, _clipboard, _shell, NullLogger<DatabaseDiagnosticsViewModel>.Instance);
 
         viewModel.DiagnoseCommand.CanExecute(null).Should().BeFalse();
         await viewModel.RefreshAsync(Ct);
@@ -1026,6 +1193,42 @@ public class DatabaseOperationsWindowTests
         window.IsVisible.Should().BeFalse();
         FluentActions.Invoking(window.Show).Should().NotThrow();
         window.Reveal();
+    }
+
+    [AvaloniaFact]
+    public async Task TheDiagnosticsTab_DrawsTheStepsWithCopyButtons_AndTheLocalDatabaseCard()
+    {
+        var runner = DatabaseScreen.Runner();
+        runner.ResultsByHandler[typeof(DetectPostgresToolsHandler)] = DatabaseScreen.Report(missing: true, docker: DatabaseScreen.Docker(installed: false));
+        var clipboard = new FakeClipboardWriter();
+        var screen = DatabaseScreen.Screen(runner, clipboard: clipboard);
+        await screen.LoadAsync(CancellationToken.None);
+        var window = new DatabaseOperationsWindow(screen);
+        window.Show();
+        screen.SelectedTabIndex = DatabaseOperationsViewModel.DiagnosticsTab;
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+
+        var buttons = window.GetVisualDescendants().OfType<Button>().Where(button => button.IsEffectivelyVisible).ToList();
+        var copies = buttons.Where(button => Equals(button.Content, "Copiar comando")).ToList();
+
+        // O winget das ferramentas, o winget do Docker e os dois comandos do banco (criar e conferir).
+        copies.Select(button => button.CommandParameter).Should().Contain("winget install -e --id PostgreSQL.PostgreSQL.17")
+            .And.Contain("winget install -e --id Docker.DockerDesktop")
+            .And.Contain(parameter => ((string)parameter!).StartsWith("docker run", StringComparison.Ordinal));
+
+        var docker = copies.Single(button => Equals(button.CommandParameter, "winget install -e --id Docker.DockerDesktop"));
+        docker.Command!.Execute(docker.CommandParameter);
+        clipboard.LastWritten.Should().Be("winget install -e --id Docker.DockerDesktop");
+
+        window.FindControl<Border>("LocalDatabaseCard")!.IsEffectivelyVisible.Should().BeTrue();
+        var register = window.FindControl<Button>("RegisterLocalDatabaseButton")!;
+        register.Command!.Execute(null);
+        screen.SelectedTabIndex.Should().Be(DatabaseOperationsViewModel.ConnectionsTab);
+        screen.Connections.Host.Should().Be("127.0.0.1");
+
+        buttons.Should().Contain(button => Equals(button.Content, "Página oficial do Docker"));
+        window.Close();
     }
 
     [AvaloniaFact]

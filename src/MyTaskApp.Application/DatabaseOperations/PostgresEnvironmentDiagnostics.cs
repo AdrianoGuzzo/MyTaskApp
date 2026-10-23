@@ -4,11 +4,16 @@ using MyTaskApp.Domain.DatabaseOperations;
 
 namespace MyTaskApp.Application.DatabaseOperations;
 
-/// <summary>A tela "PostgreSQL Environment": as ferramentas locais e o servidor, item por item.</summary>
+/// <summary>
+/// A tela "PostgreSQL Environment": as ferramentas locais e o servidor, item por
+/// item, e o Docker do banco local (ADR-083) — que, opcional, não entra em
+/// <see cref="HasFailures"/>.
+/// </summary>
 public sealed record EnvironmentDiagnosticsReport(
     IReadOnlyList<CheckResult> ClientTools,
     IReadOnlyList<CheckResult> Server,
-    PostgresInstallGuide Guide)
+    ToolInstallGuide Guide,
+    DockerEnvironment? Docker = null)
 {
     public const string ClientToolsCategory = "Client Tools";
     public const string ServerCategory = "Server";
@@ -35,13 +40,16 @@ public interface IPostgresEnvironmentDiagnostics
 public sealed class PostgresEnvironmentDiagnostics(
     IPostgresToolLocator locator,
     IPostgresServerInspector inspector,
+    IDockerInspector docker,
     IDatabaseSecurityPolicy policy,
     ILogger<PostgresEnvironmentDiagnostics> logger) : IPostgresEnvironmentDiagnostics
 {
     public async Task<EnvironmentDiagnosticsReport> DiagnoseToolsAsync(bool refresh, CancellationToken cancellationToken = default)
     {
-        var tools = await locator.DetectAsync(refresh, cancellationToken);
-        return new EnvironmentDiagnosticsReport(ToolChecks(tools), [], tools.Guide);
+        var detecting = locator.DetectAsync(refresh, cancellationToken);
+        var inspecting = docker.InspectAsync(refresh, cancellationToken);
+        var tools = await detecting;
+        return new EnvironmentDiagnosticsReport(ToolChecks(tools), [], tools.Guide, await inspecting);
     }
 
     public async Task<EnvironmentDiagnosticsReport> DiagnoseAsync(
@@ -51,6 +59,7 @@ public sealed class PostgresEnvironmentDiagnostics(
     {
         policy.Demand(new DatabaseOperationRequest(DatabaseOperationType.Diagnose, connection));
 
+        var inspecting = docker.InspectAsync(refresh, cancellationToken);
         var server = await inspector.TestAsync(connection, cancellationToken: cancellationToken);
 
         // As ferramentas que uma cópia deste servidor usaria: o menor conjunto que o lê.
@@ -65,7 +74,7 @@ public sealed class PostgresEnvironmentDiagnostics(
         }
 
         logger.LogInformation("DatabaseDiagnosed {ConnectionId} {Connected}", connection.Id, server.Connected);
-        return new EnvironmentDiagnosticsReport(ToolChecks(tools), serverChecks, tools.Guide);
+        return new EnvironmentDiagnosticsReport(ToolChecks(tools), serverChecks, tools.Guide, await inspecting);
     }
 
     internal static IReadOnlyList<CheckResult> ToolChecks(PostgresClientTools tools) =>

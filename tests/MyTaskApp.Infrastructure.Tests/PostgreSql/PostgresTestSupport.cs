@@ -25,7 +25,7 @@ internal static class PostgresTestSupport
             .Select(tool => new PostgresToolStatus(tool, PostgresToolNames.Of(tool), Path.Combine(directory, PostgresToolNames.Of(tool) + ".exe"),
                 new PostgresVersion(17, 2), "17.2"))
             .ToList(),
-        new PostgresInstallGuide("Windows", [], []));
+        new ToolInstallGuide("Windows", [], []));
 }
 
 internal sealed class StaticToolLocator(PostgresClientTools tools) : IPostgresToolLocator
