@@ -138,6 +138,23 @@ public class QuickCommandsViewModelTests
         _runner.Invoked.Should().Contain(typeof(RunQuickCommandHandler));
     }
 
+    /// <summary>
+    /// O caso de uso recusa o comando com confirmação que chega sem ela: a tela
+    /// marca o pedido depois do diálogo, e só quando o plano pedia confirmação.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void TheRunRequest_IsConfirmed_ExactlyWhenThePlanAskedForIt(bool asks)
+    {
+        var entry = Entry("Limpar Docker", "docker system prune -af", confirm: asks);
+        var values = new Dictionary<string, string>();
+
+        var request = QuickCommandsViewModel.RunRequest(_taskId, _developmentId, entry.CommandId, entry.BindingId, Plan(entry), values);
+
+        request.Should().Be(new RunQuickCommand(_taskId, _developmentId, entry.CommandId, entry.BindingId, values, asks));
+    }
+
     [Fact]
     public async Task Run_Terminal_ShowsRunning_AndOffersShowTerminal()
     {

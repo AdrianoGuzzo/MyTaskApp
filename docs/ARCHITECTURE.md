@@ -3982,6 +3982,15 @@ Tudo isso mora na Application, atrás do `IUseCaseRunner`: a tela só pede. É o
 que deixa a mesma execução ao alcance de um controle remoto no futuro, sem
 reescrever nada.
 
+**"Pedir confirmação" também é do caso de uso.** No começo só a tela cobrava:
+o `RunQuickCommandHandler` rodava quem o chamasse sem perguntar. Agora
+`RunQuickCommand` leva `Confirmed`, e o handler recusa o comando que pede
+confirmação e chega sem ela, conferindo o comando lido na hora: se ele passou
+a pedir confirmação depois da prévia (por sync, por exemplo), não roda sem
+perguntar de novo. A tela marca o pedido depois do diálogo. É a preparação da
+orquestração remota: um pedido de longe vai confirmar por uma aprovação, e não
+por esta tela.
+
 **Um `dotnet run` por vez em cada ambiente.** O segundo brigaria pela porta;
 com o terminal aberto, o botão fica "🟢 Executando desde 14:02" e oferece
 "Mostrar terminal" (`ITerminalWindowManager.FocusAsync`). Um escondido por vez,
