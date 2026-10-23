@@ -4,11 +4,13 @@ using System.Text.Json;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using MyTaskApp.Remote.Contracts;
 using MyTaskApp.Server.Application;
 using MyTaskApp.Server.Infrastructure;
 using MyTaskApp.Server.Infrastructure.Persistence;
@@ -25,6 +27,8 @@ public static class ServerSetup
     public const string TestingEnvironment = "Testing";
 
     public const string SyncPolicy = "sync";
+
+    public const string RemotePolicy = "remote";
 
     public const string AuthLimiter = "auth";
 
@@ -267,7 +271,7 @@ public static class ServerSetup
 
                 // Só S256: o "plain" mandaria o verificador em claro no redirect.
                 server.Configure(configuration => configuration.CodeChallengeMethods.Remove(CodeChallengeMethods.Plain));
-                server.RegisterScopes(Scopes.OpenId, Scopes.Profile, Scopes.Email, Scopes.OfflineAccess, SyncSchema.Scope);
+                server.RegisterScopes(Scopes.OpenId, Scopes.Profile, Scopes.Email, Scopes.OfflineAccess, SyncSchema.Scope, RemoteSchema.Scope);
 
                 server.SetAccessTokenLifetime(options.AccessTokenLifetime)
                     .SetRefreshTokenLifetime(options.RefreshTokenLifetime)
@@ -310,13 +314,22 @@ public static class ServerSetup
                 validation.EnableTokenEntryValidation();
             });
 
-        services.AddAuthorization(authorization => authorization.AddPolicy(SyncPolicy, policy => policy
-            .AddAuthenticationSchemes(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme)
-            .RequireAuthenticatedUser()
-            .RequireClaim(Claims.Subject)
-            .RequireClaim(SyncSchema.DeviceIdClaim)
-            .RequireAssertion(context => context.User.HasScope(SyncSchema.Scope))));
+        services.AddAuthorization(authorization =>
+        {
+            authorization.AddPolicy(SyncPolicy, policy => RequireSyncToken(policy));
+
+            // A orquestração remota (RS-07): tudo o que o sync pede e, além disso, o escopo remote.
+            authorization.AddPolicy(RemotePolicy, policy => RequireSyncToken(policy)
+                .RequireAssertion(context => context.User.HasScope(RemoteSchema.Scope)));
+        });
     }
+
+    private static AuthorizationPolicyBuilder RequireSyncToken(AuthorizationPolicyBuilder policy) => policy
+        .AddAuthenticationSchemes(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme)
+        .RequireAuthenticatedUser()
+        .RequireClaim(Claims.Subject)
+        .RequireClaim(SyncSchema.DeviceIdClaim)
+        .RequireAssertion(context => context.User.HasScope(SyncSchema.Scope));
 
     private static void AddRateLimits(IServiceCollection services, SyncServerOptions options) =>
         services.AddRateLimiter(limiter => ApiRateLimits(limiter, options.RateLimits));

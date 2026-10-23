@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Primitives;
+using MyTaskApp.Remote.Contracts;
 using MyTaskApp.Server.Application;
 using MyTaskApp.Server.Infrastructure.Persistence;
 using MyTaskApp.Sync.Contracts;
@@ -200,7 +201,7 @@ internal static class ConnectEndpoints
 
         identity.SetScopes(request.GetScopes().Intersect(
         [
-            Scopes.OpenId, Scopes.Profile, Scopes.Email, Scopes.OfflineAccess, SyncSchema.Scope,
+            Scopes.OpenId, Scopes.Profile, Scopes.Email, Scopes.OfflineAccess, SyncSchema.Scope, RemoteSchema.Scope,
         ]));
 
         // Uma autorização por dispositivo: entrar de novo revoga a anterior, e revogar o dispositivo revoga o refresh desta.

@@ -30,9 +30,13 @@ internal sealed partial class ApiFactory(
     string connectionString,
     IReadOnlyDictionary<string, string?>? settings = null,
     string environment = ServerSetup.TestingEnvironment,
-    bool fakeGoogle = true)
+    bool fakeGoogle = true,
+    Action<IServiceCollection>? testServices = null)
     : WebApplicationFactory<Program>
 {
+    /// <summary>Os escopos que o app pede hoje (<c>SyncAuthenticationService.Scopes</c>).</summary>
+    public const string SyncScopes = "openid profile email offline_access sync";
+
     /// <summary>Quem entra quando o teste não mexe em <c>Sync:Registration</c> (ADR-068).</summary>
     public static readonly string[] AllowedSubjects = ["ana", "bia", "google-1"];
 
@@ -75,24 +79,25 @@ internal sealed partial class ApiFactory(
             }
 
             services.AddSingleton<ILoggerProvider>(Logs);
+            testServices?.Invoke(services);
         });
     }
 
     /// <summary>Um desktop: login pelo navegador, troca do código, e um cliente da API com o token.</summary>
-    public async Task<DesktopSession> LoginAsync(string googleSubject, Guid? deviceId = null, string deviceName = "PC-TESTE")
+    public async Task<DesktopSession> LoginAsync(string googleSubject, Guid? deviceId = null, string deviceName = "PC-TESTE", string scope = SyncScopes)
     {
         var device = deviceId ?? Guid.CreateVersion7();
-        var code = await AuthorizeAsync(googleSubject, device, deviceName);
+        var code = await AuthorizeAsync(googleSubject, device, deviceName, scope: scope);
         var tokens = await ExchangeAsync(code.Code, code.Verifier);
 
         return new DesktopSession(this, device, tokens);
     }
 
     /// <summary>Um celular (ADR-067): o mesmo login, pelo cliente e pelo esquema de volta do app.</summary>
-    public async Task<DesktopSession> LoginMobileAsync(string googleSubject, Guid? deviceId = null, string deviceName = "Pixel 8")
+    public async Task<DesktopSession> LoginMobileAsync(string googleSubject, Guid? deviceId = null, string deviceName = "Pixel 8", string scope = SyncScopes)
     {
         var device = deviceId ?? Guid.CreateVersion7();
-        var code = await AuthorizeAsync(googleSubject, device, deviceName, SyncSchema.MobileRedirectUri, clientId: SyncSchema.MobileClientId);
+        var code = await AuthorizeAsync(googleSubject, device, deviceName, SyncSchema.MobileRedirectUri, clientId: SyncSchema.MobileClientId, scope: scope);
         var tokens = await ExchangeAsync(code.Code, code.Verifier, SyncSchema.MobileRedirectUri, SyncSchema.MobileClientId);
 
         return new DesktopSession(this, device, tokens);
@@ -106,12 +111,13 @@ internal sealed partial class ApiFactory(
         bool withPkce = true,
         string clientId = SyncSchema.DesktopClientId,
         bool emailVerified = true,
-        HttpClient? browser = null)
+        HttpClient? browser = null,
+        string scope = SyncScopes)
     {
         var verifier = NewVerifier();
         var state = Guid.NewGuid().ToString("N");
 
-        var start = AuthorizePath(deviceId, deviceName, state, withPkce ? verifier : null, redirectUri, clientId);
+        var start = AuthorizePath(deviceId, deviceName, state, withPkce ? verifier : null, redirectUri, clientId, scope: scope);
         var callback = await FollowToCallbackAsync(googleSubject, start, emailVerified, browser);
         var parameters = Parse(callback.Query);
 
@@ -135,14 +141,15 @@ internal sealed partial class ApiFactory(
         string? verifier,
         string redirectUri = DesktopSession.RedirectUri,
         string clientId = SyncSchema.DesktopClientId,
-        string? prompt = null)
+        string? prompt = null,
+        string scope = SyncScopes)
     {
         var query = new Dictionary<string, string>
         {
             ["client_id"] = clientId,
             ["response_type"] = "code",
             ["redirect_uri"] = redirectUri,
-            ["scope"] = "openid profile email offline_access sync",
+            ["scope"] = scope,
             ["state"] = state,
             [SyncSchema.DeviceIdClaim] = deviceId.ToString(),
             [SyncSchema.DeviceNameParameter] = deviceName,
