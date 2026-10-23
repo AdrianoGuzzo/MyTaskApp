@@ -88,6 +88,32 @@
       <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
+    <!-- O comando de um passo de instalação: selecionável, com o botão de copiar ao lado. -->
+    <Style Selector="Border.codeBox">
+      <Setter Property="Background" Value="{DynamicResource WidgetCanvasBrush}" />
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetPillRadius}" />
+      <Setter Property="Padding" Value="10,6" />
+    </Style>
+
+    <Style Selector="SelectableTextBlock.code">
+      <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style Selector="TextBlock.step">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style Selector="TextBlock.subTitle">
+      <Setter Property="FontSize" Value="12.5" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+    </Style>
+
     <!-- O ambiente de cada conexão: produção salta aos olhos. -->
     <Style Selector="Border.badge">
       <Setter Property="CornerRadius" Value="{StaticResource WidgetPillRadius}" />
@@ -160,6 +186,24 @@
         <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="12" />
         <TextBlock Grid.Column="2" Classes="meta" Text="{Binding Detail}" />
       </Grid>
+    </DataTemplate>
+
+    <!-- Um passo de instalação (ADR-083): o texto numerado e, se houver, o comando com "Copiar comando". O app nunca roda. -->
+    <DataTemplate x:Key="InstallStepLine" x:DataType="vm:InstallStepItem">
+      <StackPanel Spacing="4" Margin="0,2">
+        <TextBlock Classes="step" Text="{Binding Label}" />
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6" IsVisible="{Binding HasCommand}">
+          <Border Grid.Column="0" Classes="codeBox">
+            <SelectableTextBlock Classes="code installCommand" Text="{Binding Command}" />
+          </Border>
+          <Button Grid.Column="1"
+                  Classes="rowAction"
+                  VerticalAlignment="Center"
+                  Content="Copiar comando"
+                  Command="{Binding #Root.((vm:DatabaseOperationsViewModel)DataContext).Diagnostics.CopyInstallCommandCommand}"
+                  CommandParameter="{Binding Command}" />
+        </Grid>
+      </StackPanel>
     </DataTemplate>
 
   </Window.Resources>
@@ -351,16 +395,11 @@
                   <TextBlock Classes="sectionTitle" Text="Client Tools" />
                   <ItemsControl x:Name="ClientToolsList" ItemsSource="{Binding ClientTools}" ItemTemplate="{StaticResource CheckLine}" />
 
-                  <StackPanel Spacing="4" Margin="0,6,0,0" IsVisible="{Binding HasMissingTools}">
-                    <TextBlock Text="Como instalar o que falta" FontWeight="SemiBold" />
-                    <ItemsControl ItemsSource="{Binding InstallSteps}">
-                      <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="x:String">
-                          <TextBlock Classes="meta" Text="{Binding}" />
-                        </DataTemplate>
-                      </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                    <TextBlock Text="Para conferir no terminal" FontWeight="SemiBold" Margin="0,4,0,0" />
+                  <StackPanel x:Name="InstallToolsPanel" Spacing="6" Margin="0,6,0,0" IsVisible="{Binding HasMissingTools}">
+                    <TextBlock Classes="subTitle" Text="Como instalar o que falta" />
+                    <ItemsControl x:Name="InstallStepsList" ItemsSource="{Binding InstallSteps}" ItemTemplate="{StaticResource InstallStepLine}" />
+
+                    <TextBlock Classes="subTitle" Text="Para conferir no terminal" Margin="0,4,0,0" />
                     <ItemsControl ItemsSource="{Binding CheckCommands}">
                       <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="x:String">
@@ -368,7 +407,20 @@
                         </DataTemplate>
                       </ItemsControl.ItemTemplate>
                     </ItemsControl>
-                    <Button HorizontalAlignment="Left" Content="Copiar comandos" Command="{Binding CopyCheckCommandsCommand}" />
+
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <Button Classes="rowAction" Content="Copiar comandos" Command="{Binding CopyCheckCommandsCommand}" />
+                      <Button Classes="rowAction"
+                              Content="Página oficial"
+                              IsVisible="{Binding OfficialSite, Converter={x:Static ObjectConverters.IsNotNull}}"
+                              ToolTip.Tip="{Binding OfficialSite}"
+                              Command="{Binding OpenPageCommand}"
+                              CommandParameter="{Binding OfficialSite}" />
+                      <Button Classes="rowAction accent"
+                              Content="Verificar novamente"
+                              ToolTip.Tip="Procura as ferramentas de novo, sem reiniciar o MyTaskApp"
+                              Command="{Binding RefreshCommand}" />
+                    </StackPanel>
                   </StackPanel>
                 </StackPanel>
               </Border>
@@ -377,6 +429,44 @@
                 <StackPanel Spacing="4">
                   <TextBlock Classes="sectionTitle" Text="Server" />
                   <ItemsControl ItemsSource="{Binding Server}" ItemTemplate="{StaticResource CheckLine}" />
+                </StackPanel>
+              </Border>
+
+              <!-- O banco local no Docker (ADR-083): opcional, para quem não tem um PostgreSQL de destino. O app só ensina. -->
+              <Border Classes="card" x:Name="LocalDatabaseCard" IsVisible="{Binding HasDocker}">
+                <StackPanel Spacing="6">
+                  <TextBlock Classes="sectionTitle" Text="Docker e banco local (opcional)" />
+                  <TextBlock Classes="meta"
+                             Text="Não tem um PostgreSQL para receber a cópia? Dá para criar um neste computador com o Docker, que fica sempre ligado. Não é obrigatório: qualquer servidor PostgreSQL serve." />
+                  <ItemsControl x:Name="DockerChecksList" ItemsSource="{Binding DockerChecks}" ItemTemplate="{StaticResource CheckLine}" />
+
+                  <StackPanel Spacing="6" Margin="0,4,0,0" IsVisible="{Binding HasDockerSteps}">
+                    <TextBlock Classes="subTitle" Text="{Binding DockerStepsTitle}" />
+                    <ItemsControl x:Name="DockerStepsList" ItemsSource="{Binding DockerSteps}" ItemTemplate="{StaticResource InstallStepLine}" />
+                  </StackPanel>
+
+                  <StackPanel Spacing="6" Margin="0,4,0,0">
+                    <TextBlock Classes="subTitle" Text="{Binding LocalDatabaseTitle}" />
+                    <ItemsControl x:Name="LocalDatabaseStepsList" ItemsSource="{Binding LocalDatabaseSteps}" ItemTemplate="{StaticResource InstallStepLine}" />
+                  </StackPanel>
+
+                  <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Right">
+                    <Button Classes="rowAction"
+                            Content="Página oficial do Docker"
+                            IsVisible="{Binding DockerOfficialSite, Converter={x:Static ObjectConverters.IsNotNull}}"
+                            ToolTip.Tip="{Binding DockerOfficialSite}"
+                            Command="{Binding OpenPageCommand}"
+                            CommandParameter="{Binding DockerOfficialSite}" />
+                    <Button Classes="rowAction"
+                            Content="Verificar novamente"
+                            ToolTip.Tip="Pergunta ao Docker de novo, sem reiniciar o MyTaskApp"
+                            Command="{Binding RefreshCommand}" />
+                    <Button Classes="rowAction accent"
+                            x:Name="RegisterLocalDatabaseButton"
+                            Content="Cadastrar este banco"
+                            ToolTip.Tip="Abre a aba Conexões preenchida para o banco local; você confere e salva"
+                            Command="{Binding RegisterLocalDatabaseCommand}" />
+                  </StackPanel>
                 </StackPanel>
               </Border>
             </StackPanel>

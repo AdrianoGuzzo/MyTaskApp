@@ -348,7 +348,7 @@ public sealed class PostgresIntegrationTests : IAsyncLifetime
             Enum.GetValues<PostgresTool>()
                 .Select(tool => new PostgresToolStatus(tool, PostgresToolNames.Of(tool), Path.Combine(bin, PostgresToolNames.Of(tool) + extension), null, null))
                 .ToList(),
-            new PostgresInstallGuide("teste", [], [])));
+            new ToolInstallGuide("teste", [], [])));
     }
 
     private DatabaseConnectionSnapshot Snapshot(string database, ConnectionPermission? permissions = null) =>

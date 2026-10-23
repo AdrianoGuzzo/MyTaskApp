@@ -25,6 +25,17 @@ public interface IPostgresToolLocator
 }
 
 /// <summary>
+/// Pergunta ao Docker desta máquina se ele existe, se está rodando e se o
+/// container do banco local existe (ADR-083). Só leitura: nunca cria, liga ou
+/// para nada.
+/// </summary>
+public interface IDockerInspector
+{
+    /// <summary><paramref name="refresh"/> = perguntar de novo ("Verificar novamente"); sem ele, a última resposta.</summary>
+    Task<DockerEnvironment> InspectAsync(bool refresh, CancellationToken cancellationToken = default);
+}
+
+/// <summary>
 /// Consultas de leitura ao servidor (ADR-056): só SELECT/SHOW, em sessão
 /// somente leitura. Nada aqui escreve em banco nenhum, e nenhum método devolve
 /// dado de linha — só metadados, contagens e hashes salgados.

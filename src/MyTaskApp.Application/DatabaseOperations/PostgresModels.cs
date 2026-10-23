@@ -57,11 +57,24 @@ public sealed record PostgresToolStatus(PostgresTool Tool, string Name, string? 
     public bool Found => Path is not null;
 }
 
-/// <summary>Como instalar o que falta, no sistema atual. Só instruções: o app nunca instala nada.</summary>
-public sealed record PostgresInstallGuide(string Platform, IReadOnlyList<string> Steps, IReadOnlyList<string> CheckCommands);
+/// <summary>Um passo de instalação: o texto e, se houver, o comando para o usuário copiar. O app nunca roda o comando.</summary>
+public sealed record InstallStep(string Text, string? Command = null)
+{
+    public bool HasCommand => !string.IsNullOrEmpty(Command);
+}
+
+/// <summary>
+/// Como instalar (ou ligar) o que falta, no sistema atual: as ferramentas do
+/// PostgreSQL ou o Docker. Só instruções: o app nunca instala nada (ADR-027).
+/// </summary>
+public sealed record ToolInstallGuide(
+    string Platform,
+    IReadOnlyList<InstallStep> Steps,
+    IReadOnlyList<string> CheckCommands,
+    Uri? OfficialSite = null);
 
 /// <summary>As ferramentas locais, todas — achadas ou não.</summary>
-public sealed record PostgresClientTools(IReadOnlyList<PostgresToolStatus> Tools, PostgresInstallGuide Guide)
+public sealed record PostgresClientTools(IReadOnlyList<PostgresToolStatus> Tools, ToolInstallGuide Guide)
 {
     public PostgresToolStatus Find(PostgresTool tool) =>
         Tools.FirstOrDefault(status => status.Tool == tool)
