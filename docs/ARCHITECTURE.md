@@ -5332,7 +5332,12 @@ Toda ferramenta passa pelo `McpGateway`, que não tem regra de negócio. Ele:
 
 - recusa escrita no modo **somente leitura**;
 - serializa as chamadas MCP (`SemaphoreSlim(1)`), porque o SQLite do app não
-  tem WAL e a tela também grava;
+  tem WAL e a tela também grava. Correção posterior: o banco sempre esteve em
+  WAL, porque o EF Core cria o arquivo assim (o `-wal` existe ao lado do
+  `mytaskapp.db` de quem usa o app). A abertura agora também o garante
+  (`DatabaseInitializer`), para um arquivo que tenha chegado em outro modo. A
+  serialização fica: o WAL deixa ler durante uma gravação, mas continua
+  aceitando um escritor por vez;
 - liga `OperationOrigin.Enter("MCP")`, um `AsyncLocal` que o `ICurrentUser`
   lê. Assim a auditoria grava "adria (MCP)" sem mudar a assinatura de nenhum
   caso de uso;

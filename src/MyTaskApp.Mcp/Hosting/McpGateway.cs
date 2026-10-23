@@ -13,7 +13,7 @@ namespace MyTaskApp.Mcp.Hosting;
 /// operação, como a tela — e cuida só do que é da porta:
 /// <list type="bullet">
 /// <item>recusa escrita no modo somente leitura;</item>
-/// <item>uma operação MCP por vez, porque o SQLite do app não tem WAL e a tela também grava;</item>
+/// <item>uma operação MCP por vez: a tela também grava, e o SQLite, mesmo em WAL, aceita um escritor por vez;</item>
 /// <item>a origem "MCP" na auditoria;</item>
 /// <item><see cref="DomainException"/> vira a mensagem da regra; o resto vira um código, e o detalhe fica no log;</item>
 /// <item>avisa a tela do que mudou.</item>
