@@ -115,9 +115,11 @@ public sealed class DatabaseSecurityException(SecurityDecision decision) : Domai
 /// origem, destino, tipo da operação, ambiente, permissões e anonimização.
 /// </summary>
 /// <remarks>
-/// Fica no Domain porque é regra pura, e é chamada em três lugares: pelo
-/// handler antes de tudo, pelo orquestrador antes de cada passo destrutivo e
-/// pela Infrastructure logo antes de iniciar um processo. Esconder um botão
+/// Fica no Domain porque é regra pura. Os casos de uso a chamam antes de tudo,
+/// e o orquestrador da cópia de novo antes de cada passo destrutivo. Ela não é
+/// a última barreira: logo antes de um processo do PostgreSQL nascer, o
+/// <c>PostgresProcessGuard</c> da Infrastructure julga o alvo outra vez, sem
+/// depender dela, e o servidor de origem só aceita leitura. Esconder um botão
 /// não protege nada; isto protege.
 /// </remarks>
 public interface IDatabaseSecurityPolicy

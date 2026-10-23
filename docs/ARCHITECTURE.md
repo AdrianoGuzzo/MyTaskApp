@@ -4861,9 +4861,11 @@ pelo tamanho de cada tabela, nunca volta e não passa de 99% antes do fim.
   - o dump bruto e os logs saem sempre;
   - o anônimo sai, a não ser que o perfil peça para mantê-lo;
   - fica o `metadata.json`.
-- **Varredura:** o `.operation` diz de quem é a pasta. A varredura da abertura
-  apaga o que uma queda deixou, sem tocar numa cópia viva (o
-  `DatabaseOperationGate` sabe quais estão vivas).
+- **Varredura:** o `.operation` diz de quem é a pasta. A varredura roda na
+  primeira abertura da janela Bancos de Dados (e não ao abrir o app), marca
+  como interrompida a operação que uma queda deixou "em andamento" e apaga as
+  pastas que sobraram, sem tocar numa cópia viva (o `DatabaseOperationGate`
+  sabe quais estão vivas).
 
 ### Verificação sem trazer dado
 

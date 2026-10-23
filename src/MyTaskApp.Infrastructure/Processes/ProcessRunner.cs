@@ -74,10 +74,17 @@ internal interface IProcessRunner
 }
 
 /// <summary>
-/// A única porta do app para processos externos. Sem shell, sem janela, com as
-/// duas saídas lidas ao mesmo tempo — ler uma depois da outra trava quando o
+/// A porta do app para as ferramentas que ele mesmo chama (Git, gh, Claude,
+/// ferramentas do PostgreSQL, <c>secret-tool</c>). Sem shell, sem janela, com
+/// as duas saídas lidas ao mesmo tempo — ler uma depois da outra trava quando o
 /// processo enche o buffer da que ninguém está lendo.
 /// </summary>
+/// <remarks>
+/// Não é a única: o comando do usuário roda pelo shell no
+/// <see cref="ShellCommandExecutor"/>, e o terminal e a pasta abrem pelos
+/// lançadores de terminal (<c>WindowsTerminalLauncher</c>, <c>ShellLauncher</c>
+/// do desktop).
+/// </remarks>
 internal sealed class ProcessRunner : IProcessRunner
 {
     /// <summary>Teto do que fica guardado de cada saída na execução ao vivo; o resto só passa pela tela.</summary>

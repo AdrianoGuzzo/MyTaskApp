@@ -147,8 +147,11 @@ volta:
 ## API usada pelo celular
 
 Nenhuma rota nova: as do servidor de sincronização (`/api/v1`, versionada no
-caminho e por `SyncSchema.Current`), descritas em
-[sync-server.md](sync-server.md). O celular usa:
+caminho e por `SyncSchema.Current`), cuja lista completa é a classe `ApiRoutes`
+de `src/MyTaskApp.Sync.Contracts/SyncSchema.cs`; o servidor está em
+[sync-server.md](sync-server.md). O celular usa só estas (revogar um
+dispositivo, `POST /api/v1/devices/{id}/revoke`, é só do desktop, e
+`GET …/sync/status` nenhum cliente chama):
 
 | Rota | Para quê |
 |---|---|
