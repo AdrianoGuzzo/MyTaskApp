@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.26.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.25.0...v1.26.0) (2026-10-24)
+
+
+### Added
+
+* **remoto:** fase 2 da orquestração remota, com o plano, o pareamento entre computadores e a janela Máquinas ([#157](https://github.com/AdrianoGuzzo/MyTaskApp/issues/157)) ([36eb99c](https://github.com/AdrianoGuzzo/MyTaskApp/commit/36eb99cc9a336424bdbb80db6c6a17d15ac7d724))
+
 ## [1.25.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.24.0...v1.25.0) (2026-10-23)
 
 
