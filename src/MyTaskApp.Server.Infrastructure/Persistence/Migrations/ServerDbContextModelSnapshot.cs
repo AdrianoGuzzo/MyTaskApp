@@ -171,6 +171,31 @@ namespace MyTaskApp.Server.Infrastructure.Persistence.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("MyTaskApp.Server.Infrastructure.Persistence.AgentCatalogRow", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("DeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Catalog")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("Hash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("UserId", "DeviceId");
+
+                    b.ToTable("AgentCatalogs", (string)null);
+                });
+
             modelBuilder.Entity("MyTaskApp.Server.Infrastructure.Persistence.ApplicationUser", b =>
                 {
                     b.Property<Guid>("Id")
@@ -418,6 +443,64 @@ namespace MyTaskApp.Server.Infrastructure.Persistence.Migrations
                     b.HasIndex("ProcessedAt");
 
                     b.ToTable("ProcessedOperations", (string)null);
+                });
+
+            modelBuilder.Entity("MyTaskApp.Server.Infrastructure.Persistence.RemoteApprovalRow", b =>
+                {
+                    b.Property<Guid>("ApprovalId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("OperationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Request")
+                        .IsRequired()
+                        .HasMaxLength(65536)
+                        .HasColumnType("character varying(65536)");
+
+                    b.Property<string>("RequestHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset?>("RespondedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("RespondedByDeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Response")
+                        .HasMaxLength(65536)
+                        .HasColumnType("character varying(65536)");
+
+                    b.Property<int>("State")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TargetDeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("ApprovalId");
+
+                    b.HasIndex("OperationId");
+
+                    b.HasIndex("State", "ExpiresAt");
+
+                    b.HasIndex("UserId", "State", "ExpiresAt");
+
+                    b.ToTable("RemoteApprovals", (string)null);
                 });
 
             modelBuilder.Entity("MyTaskApp.Server.Infrastructure.Persistence.RemoteOperationEventRow", b =>
@@ -1005,6 +1088,15 @@ namespace MyTaskApp.Server.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("MyTaskApp.Server.Infrastructure.Persistence.AgentCatalogRow", b =>
+                {
+                    b.HasOne("MyTaskApp.Server.Infrastructure.Persistence.DeviceRow", null)
+                        .WithMany()
+                        .HasForeignKey("UserId", "DeviceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("MyTaskApp.Server.Infrastructure.Persistence.DeviceCapabilitiesRow", b =>
                 {
                     b.HasOne("MyTaskApp.Server.Infrastructure.Persistence.DeviceRow", null)
@@ -1028,6 +1120,15 @@ namespace MyTaskApp.Server.Infrastructure.Persistence.Migrations
                     b.HasOne("MyTaskApp.Server.Infrastructure.Persistence.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MyTaskApp.Server.Infrastructure.Persistence.RemoteApprovalRow", b =>
+                {
+                    b.HasOne("MyTaskApp.Server.Infrastructure.Persistence.RemoteOperationRow", null)
+                        .WithMany()
+                        .HasForeignKey("OperationId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

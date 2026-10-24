@@ -30,6 +30,10 @@ public sealed class ServerDbContext(DbContextOptions<ServerDbContext> options)
 
     internal DbSet<RemoteOperationEventRow> RemoteOperationEvents => Set<RemoteOperationEventRow>();
 
+    internal DbSet<RemoteApprovalRow> RemoteApprovals => Set<RemoteApprovalRow>();
+
+    internal DbSet<AgentCatalogRow> AgentCatalogs => Set<AgentCatalogRow>();
+
     internal DbSet<SyncEntityRow> SyncEntities => Set<SyncEntityRow>();
 
     internal DbSet<SyncReferenceRow> SyncReferences => Set<SyncReferenceRow>();
@@ -141,6 +145,29 @@ public sealed class ServerDbContext(DbContextOptions<ServerDbContext> options)
             // A retenção apaga pela hora em que chegou.
             item.HasIndex(row => row.ReceivedAt);
             item.HasOne<RemoteOperationRow>().WithMany().HasForeignKey(row => row.OperationId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<RemoteApprovalRow>(approval =>
+        {
+            approval.ToTable("RemoteApprovals");
+            approval.HasKey(row => row.ApprovalId);
+            approval.Property(row => row.Request).HasMaxLength(64 * 1024);
+            approval.Property(row => row.RequestHash).HasMaxLength(64);
+            approval.Property(row => row.Response).HasMaxLength(64 * 1024);
+
+            // As pendentes da conta, e a varredura das vencidas.
+            approval.HasIndex(row => new { row.UserId, row.State, row.ExpiresAt });
+            approval.HasIndex(row => new { row.State, row.ExpiresAt });
+            approval.HasOne<RemoteOperationRow>().WithMany().HasForeignKey(row => row.OperationId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<AgentCatalogRow>(catalog =>
+        {
+            catalog.ToTable("AgentCatalogs");
+            catalog.HasKey(row => new { row.UserId, row.DeviceId });
+            catalog.Property(row => row.Hash).HasMaxLength(128);
+            catalog.Property(row => row.Catalog).HasColumnType("jsonb");
+            catalog.HasOne<DeviceRow>().WithMany().HasForeignKey(row => new { row.UserId, row.DeviceId }).OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<SyncEntityRow>(entity =>

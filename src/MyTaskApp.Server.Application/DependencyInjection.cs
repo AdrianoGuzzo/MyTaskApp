@@ -18,6 +18,8 @@ public static class DependencyInjection
         services.AddScoped<RemoteDeviceUseCases>();
         services.AddScoped<RemotePairingUseCases>();
         services.AddScoped<RemoteOperationUseCases>();
+        services.AddScoped<RemoteApprovalUseCases>();
+        services.AddScoped<RemoteCatalogUseCases>();
 
         return services;
     }

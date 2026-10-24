@@ -286,7 +286,8 @@ internal sealed class ProcessedOperationsPruner(IServiceProvider services, SyncS
 
 /// <summary>
 /// A varredura da orquestração (ADR-086): a entregue sem aceite volta para a
-/// fila, a vencida sem aceite expira, e os eventos velhos saem.
+/// fila, a vencida sem aceite expira, a aprovação sem resposta no prazo
+/// expira, e os eventos velhos saem.
 /// </summary>
 internal sealed class RemoteOperationSweeper(IServiceProvider services, SyncServerOptions options, TimeProvider timeProvider, ILogger<RemoteOperationSweeper> logger)
     : BackgroundService
@@ -301,6 +302,7 @@ internal sealed class RemoteOperationSweeper(IServiceProvider services, SyncServ
             {
                 await using var scope = services.CreateAsyncScope();
                 await scope.ServiceProvider.GetRequiredService<RemoteOperationUseCases>().SweepAsync(options.RemoteEventRetention, stoppingToken);
+                await scope.ServiceProvider.GetRequiredService<RemoteApprovalUseCases>().SweepAsync(stoppingToken);
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {

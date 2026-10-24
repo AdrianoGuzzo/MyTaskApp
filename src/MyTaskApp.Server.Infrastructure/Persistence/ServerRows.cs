@@ -201,6 +201,57 @@ internal sealed class RemoteOperationEventRow
     public string? Data { get; set; }
 }
 
+/// <summary>
+/// Uma aprovação (ADR-086): o pedido como o agente selou, em texto e não em
+/// <c>jsonb</c> (que reordena as chaves e mudaria o hash), e a resposta
+/// assinada pelo controlador.
+/// </summary>
+internal sealed class RemoteApprovalRow
+{
+    public Guid ApprovalId { get; set; }
+
+    public Guid UserId { get; set; }
+
+    public Guid OperationId { get; set; }
+
+    public Guid TargetDeviceId { get; set; }
+
+    public int Kind { get; set; }
+
+    /// <summary>O <c>ApprovalRequest</c> do contrato, serializado.</summary>
+    public required string Request { get; set; }
+
+    public required string RequestHash { get; set; }
+
+    public DateTimeOffset ExpiresAt { get; set; }
+
+    public DateTimeOffset CreatedAt { get; set; }
+
+    public int State { get; set; }
+
+    /// <summary>O JWS da resposta, byte a byte.</summary>
+    public string? Response { get; set; }
+
+    public Guid? RespondedByDeviceId { get; set; }
+
+    public DateTimeOffset? RespondedAt { get; set; }
+}
+
+/// <summary>O catálogo publicado por uma máquina executora (ADR-088): o último vale.</summary>
+internal sealed class AgentCatalogRow
+{
+    public Guid UserId { get; set; }
+
+    public Guid DeviceId { get; set; }
+
+    public required string Hash { get; set; }
+
+    /// <summary>O <c>AgentCatalog</c> do contrato, em <c>jsonb</c>.</summary>
+    public string Catalog { get; set; } = "{}";
+
+    public DateTimeOffset UpdatedAt { get; set; }
+}
+
 /// <summary>Uma entidade sincronizada, com o JSON do contrato em <c>jsonb</c>.</summary>
 internal sealed class SyncEntityRow
 {
