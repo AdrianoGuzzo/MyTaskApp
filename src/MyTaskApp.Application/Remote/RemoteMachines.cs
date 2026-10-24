@@ -44,6 +44,7 @@ public sealed record UpdateRemoteSettings(bool Enabled, bool AcceptControl);
 public sealed class UpdateRemoteSettingsHandler(
     IRemoteSettingsStore settings,
     IUnitOfWork unitOfWork,
+    IAgentAutostart autostart,
     ILogger<UpdateRemoteSettingsHandler> logger)
 {
     public async Task<RemoteSettings> HandleAsync(UpdateRemoteSettings command, CancellationToken cancellationToken = default)
@@ -54,6 +55,9 @@ public sealed class UpdateRemoteSettingsHandler(
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation("RemoteSettingsUpdated {Enabled} {AcceptControl}", updated.Enabled, updated.AcceptControl);
+
+        // Aceitar pedidos com o desktop fechado é o agente no logon (ADR-085).
+        await autostart.ApplyAsync(updated.AcceptControl, cancellationToken);
 
         return updated;
     }

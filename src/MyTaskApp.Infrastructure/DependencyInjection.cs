@@ -430,6 +430,38 @@ public static class DependencyInjection
         return services;
     }
 
+    /// <summary>
+    /// O agente no logon desta conta (ADR-085), a partir da pasta do app: só o
+    /// desktop registra, porque é ele quem tem a tela que liga e desliga.
+    /// </summary>
+    public static IServiceCollection AddAgentAutostart(this IServiceCollection services)
+    {
+        var executable = AgentProcess.ExecutablePath(AppContext.BaseDirectory);
+
+        if (OperatingSystem.IsWindows())
+        {
+            AddWindowsAgentAutostart(services, executable);
+        }
+        else if (OperatingSystem.IsLinux())
+        {
+            services.TryAddSingleton<IAgentAutostart>(provider => new AgentAutostart(
+                executable,
+                SystemdUserLogonEntry.ForCurrentUser(provider.GetRequiredService<IProcessRunner>()),
+                AgentProcess.IsRunning,
+                provider.GetRequiredService<ILogger<AgentAutostart>>()));
+        }
+
+        return services;
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static void AddWindowsAgentAutostart(IServiceCollection services, string executable) =>
+        services.TryAddSingleton<IAgentAutostart>(provider => new AgentAutostart(
+            executable,
+            RunKeyLogonEntry.ForCurrentUser(),
+            AgentProcess.IsRunning,
+            provider.GetRequiredService<ILogger<AgentAutostart>>()));
+
     [SupportedOSPlatform("windows")]
     private static void AddWindowsSecrets(IServiceCollection services) =>
         services.AddSingleton<ISecretStore>(provider => new DpapiSecretStore(

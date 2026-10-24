@@ -224,6 +224,8 @@ public static class DependencyInjection
         // A janela "Máquinas" e o sinal de vida (T-06).
         services.AddScoped<GetRemoteSettingsHandler>();
         services.AddScoped<UpdateRemoteSettingsHandler>();
+        services.TryAddSingleton<IAgentAutostart, NoAgentAutostart>();
+        services.AddScoped<ApplyAgentAutostartHandler>();
         services.AddScoped<GetMachinesHandler>();
         services.AddScoped<RegisterThisMachineHandler>();
         services.AddScoped<RequestPairingHandler>();

@@ -36,6 +36,14 @@
 ; build quebra antes de alguem descobrir em producao.
 #define AppMutexName   "MyTaskApp.SingleInstance"
 
+; O agente sem tela (ADR-085), publicado na mesma pasta. O mutex e o valor em
+; Run sao os de src/MyTaskApp.Infrastructure/Processes/AgentAutostart.cs
+; (AgentProcess), com teste de packaging cobrando os dois lados. Quem grava o
+; Run e o app, ao "Aceitar ser controlada"; o instalador so o respeita e o apaga.
+#define AgentExeName      "MyTaskApp.Agent.exe"
+#define AgentMutexName    "MyTaskApp.Agent"
+#define AgentRunValueName "MyTaskApp.Agent"
+
 ; Onde o Windows procura o que abrir no login. Relativo a HKCU -- ver [Registry].
 #define AppRunKey      "Software\Microsoft\Windows\CurrentVersion\Run"
 
@@ -172,6 +180,10 @@ Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchApp}"; Flags: nowait po
 ; mais nada ate alguem notar (ADR-016). Com assistente, quem decide e a caixa
 ; acima. runasoriginaluser: com /ALLUSERS o Setup esta elevado, e o app nao.
 Filename: "{app}\{#AppExeName}"; Parameters: "{#StartupFlag}"; Flags: nowait runasoriginaluser; Check: ShouldReopenClosedApp
+
+; O agente volta com os binarios novos, se a pessoa aceita ser controlada: e
+; ele quem atende pedidos com o app fechado. Com ou sem assistente.
+Filename: "{app}\{#AgentExeName}"; Flags: nowait runasoriginaluser; Check: AgentStartupIsEnabled
 
 ; -----------------------------------------------------------------------------
 ; [UninstallDelete] esta VAZIO de proposito, e precisa continuar assim.
@@ -384,7 +396,7 @@ begin
   if FindProcessesIn(Dir, Pids, Names) then
     Result := GetArrayLength(Pids) > 0
   else
-    Result := CheckForMutexes('{#AppMutexName}');
+    Result := CheckForMutexes('{#AppMutexName},{#AgentMutexName}');
 end;
 
 {
@@ -399,10 +411,10 @@ var
 begin
   if not Listed then
   begin
-    { Sem WMI, o que resta e o nome. So chega aqui com o mutex tomado. }
-    Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM {#AppExeName}', '',
+    { Sem WMI, o que resta e o nome. So chega aqui com um dos mutexes tomado. }
+    Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM {#AppExeName} /IM {#AgentExeName}', '',
       SW_HIDE, ewWaitUntilTerminated, ResultCode);
-    Log(Format('taskkill /F /IM {#AppExeName}: codigo %d', [ResultCode]));
+    Log(Format('taskkill /F /IM {#AppExeName} /IM {#AgentExeName}: codigo %d', [ResultCode]));
     Exit;
   end;
 
@@ -445,7 +457,7 @@ begin
     Exit;
   end;
 
-  if (not Listed) and (not CheckForMutexes('{#AppMutexName}')) then
+  if (not Listed) and (not CheckForMutexes('{#AppMutexName},{#AgentMutexName}')) then
     Exit;
 
   Log('MyTaskApp aberto em ' + Dir + ':' + Names);
@@ -487,6 +499,15 @@ end;
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   Result := CloseRunningApp(ExpandConstant('{app}'), 'AppWillCloseSetup');
+end;
+
+{ O app ligou o agente no logon? E o mesmo valor que ele grava em Run. }
+function AgentStartupIsEnabled(): Boolean;
+var
+  Command: String;
+begin
+  Result := RegQueryStringValue(HKEY_CURRENT_USER, '{#AppRunKey}', '{#AgentRunValueName}', Command)
+            and (Command <> '');
 end;
 
 { Com assistente, quem decide e a caixa "Iniciar o MyTaskApp". }
@@ -595,6 +616,9 @@ begin
     desinstalacao para o uninsdeletevalue apagar -- sobraria no Run um caminho
     para um exe que nao existe mais, falhando calado a cada login. }
   RegDeleteValue(HKEY_CURRENT_USER, '{#AppRunKey}', '{#AppName}');
+
+  { O agente tambem: sem isto, o login tentaria abrir um exe que nao existe. }
+  RegDeleteValue(HKEY_CURRENT_USER, '{#AppRunKey}', '{#AgentRunValueName}');
 
   if ShouldRemoveUserData() then
     RemoveUserData()

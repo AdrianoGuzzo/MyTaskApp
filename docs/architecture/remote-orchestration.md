@@ -384,6 +384,16 @@ usuário. O preço:
    sem privilégio) e `systemd --user` no Linux (com `loginctl enable-linger`
    documentado como opcional). O instalador fecha e reabre o agente como faz
    com o app (ADR-049), com um segundo mutex (`MyTaskApp.Agent`).
+   Feito na T-16, com uma troca: no Windows, a chave `Run` do usuário em vez
+   da tarefa agendada — criar tarefa com gatilho de logon pede administrador a
+   quem não é, e a `Run` é o que o próprio app já usa (ADR-023). Quem escreve
+   é o app, ao "Aceitar ser controlada" (e de novo a cada abertura, o que
+   reergue um agente que caiu); o instalador só reabre o agente se o valor
+   existe e o apaga ao desinstalar. No Linux, o app escreve a unit com
+   `Restart=on-failure` e a liga; o `uninstall.sh` desliga e remove. O agente
+   é publicado antes do desktop na mesma pasta, e lê só os sinks dele (sem
+   varrer a pasta, onde estão DLLs do desktop que o deps.json do agente não
+   carrega).
 
 > **Requisito "sem o desktop aberto"**: atendido com o usuário logado (tela
 > bloqueada vale). Rodar sem sessão de usuário exige cofre de máquina e fica

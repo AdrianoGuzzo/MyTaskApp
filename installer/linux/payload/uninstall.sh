@@ -44,6 +44,18 @@ done
 
 echo "Removendo a aplicacao..."
 
+# O agente (ADR-085) para antes de os binarios sumirem, e sai do login.
+agent_unit="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/mytaskapp-agent.service"
+if [ -f "$agent_unit" ]; then
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl --user disable --now mytaskapp-agent.service >/dev/null 2>&1 || true
+  fi
+  rm -f "$agent_unit"
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl --user daemon-reload >/dev/null 2>&1 || true
+  fi
+fi
+
 rm -rf "$install_dir"
 rm -f "$bin_link" "$desktop_file" "$icon_file"
 

@@ -248,6 +248,7 @@ internal static class AppServices
             // O agente deste computador (ADR-085) escuta; o desktop conecta
             // quando ele está rodando, e segue sozinho quando não está.
             .AddLocalPeer(configuration, LocalPeerRole.Connect)
+            .AddAgentAutostart()
             .AddApplication(configuration)
             .AddInfrastructure(configuration)
             .BuildServiceProvider(validateScopes: true);

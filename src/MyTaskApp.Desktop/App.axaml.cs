@@ -457,6 +457,11 @@ public sealed partial class App : Avalonia.Application
 
         // Com o agente rodando (ADR-085), o que um grava o outro mostra, e quem tem o lease sincroniza.
         services.GetRequiredService<LocalPeerBridge>().Start();
+
+        // Aceitando controle, o agente fica no logon e, se tiver caído, sobe de novo agora.
+        _ = services.GetRequiredService<IUseCaseRunner>().RunAsync<ApplyAgentAutostartHandler>(
+            (handler, token) => handler.HandleAsync(new ApplyAgentAutostart(), token),
+            CancellationToken.None);
     }
 
     private void SetUpMcpServer(IServiceProvider services, TodayViewModel todayViewModel)

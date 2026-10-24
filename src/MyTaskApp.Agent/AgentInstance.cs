@@ -1,3 +1,5 @@
+using MyTaskApp.Infrastructure.Processes;
+
 namespace MyTaskApp.Agent;
 
 /// <summary>
@@ -13,7 +15,7 @@ namespace MyTaskApp.Agent;
 internal sealed class AgentInstance : IDisposable
 {
     /// <summary>Sem <c>Global\</c>: o escopo é a sessão, como a tarefa agendada por usuário.</summary>
-    public const string MutexName = "MyTaskApp.Agent";
+    public const string MutexName = AgentProcess.MutexName;
 
     private readonly Mutex _mutex;
 

@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using MyTaskApp.Infrastructure.Persistence;
 using MyTaskApp.Infrastructure.Storage;
 using Serilog;
+using Serilog.Settings.Configuration;
 
 namespace MyTaskApp.Agent;
 
@@ -14,6 +15,14 @@ internal static class Program
     private const string LogTemplate = "mytaskapp-agent-.log";
 
     private const int RetainedLogs = 7;
+
+    /// <summary>
+    /// Só os sinks do agente, sem varrer a pasta: instalado ao lado do desktop,
+    /// ele veria o <c>Serilog.Sinks.Console.dll</c> de lá, que o deps.json
+    /// daqui não deixa carregar — e o agente morreria antes do primeiro log.
+    /// </summary>
+    private static readonly ConfigurationReaderOptions SinkAssemblies =
+        new(typeof(FileLoggerConfigurationExtensions).Assembly);
 
     public static async Task<int> Main(string[] args)
     {
@@ -38,8 +47,12 @@ internal static class Program
         {
             var configuration = AgentComposition.BuildConfiguration();
 
-            Log.CloseAndFlush();
-            Log.Logger = FileLogger(new LoggerConfiguration().ReadFrom.Configuration(configuration).Enrich.FromLogContext());
+            // Troca só depois de o configurado existir: uma falha aqui ainda cai no log de partida.
+            var configured = FileLogger(new LoggerConfiguration()
+                .ReadFrom.Configuration(configuration, SinkAssemblies)
+                .Enrich.FromLogContext());
+            await Log.CloseAndFlushAsync();
+            Log.Logger = configured;
 
             await using var services = new ServiceCollection()
                 .AddLogging(builder => builder.AddSerilog(Log.Logger))
@@ -50,7 +63,9 @@ internal static class Program
         }
         catch (Exception exception)
         {
+            // Também no stderr: sem console no Windows ninguém vê, mas no Linux o journal do systemd guarda.
             Log.Fatal(exception, "AgentUnhandledException");
+            await Console.Error.WriteLineAsync($"AgentUnhandledException: {exception}");
             return 1;
         }
         finally

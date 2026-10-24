@@ -177,9 +177,11 @@ jobs:
           - os: windows-latest
             rid: win-x64
             binary: artifacts/publish/win-x64/MyTaskApp.exe
+            agent: artifacts/publish/win-x64/MyTaskApp.Agent.exe
           - os: ubuntu-latest
             rid: linux-x64
             binary: artifacts/publish/linux-x64/MyTaskApp
+            agent: artifacts/publish/linux-x64/MyTaskApp.Agent
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -187,6 +189,15 @@ jobs:
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
+
+      # O agente (ADR-085) antes, na mesma pasta, como o instalador faz.
+      - name: Publicar o agente ${{ matrix.rid }}
+        run: >
+          dotnet publish src/MyTaskApp.Agent/MyTaskApp.Agent.csproj
+          -c Release -r ${{ matrix.rid }}
+          --self-contained true
+          -p:PublishTrimmed=false
+          -o artifacts/publish/${{ matrix.rid }}
 
       - name: Publicar ${{ matrix.rid }}
         run: >
@@ -202,5 +213,26 @@ jobs:
         shell: bash
         run: |
           test -f "${{ matrix.binary }}" || { echo "binário ausente"; exit 1; }
+          test -f "${{ matrix.agent }}" || { echo "agente ausente — o controle remoto com o app fechado não funcionaria"; exit 1; }
           test -f "artifacts/publish/${{ matrix.rid }}/appsettings.json" \
             || { echo "appsettings.json ausente — o app não iniciaria"; exit 1; }
+
+      # Na pasta do desktop o agente enxerga DLLs que o deps.json dele não
+      # lista; foi assim que ele já morreu antes do primeiro log. Sobe de
+      # verdade, numa pasta de dados descartável, e espera o "AgentStarted".
+      - name: O agente sobe ao lado do desktop
+        shell: bash
+        run: |
+          data="$RUNNER_TEMP/mytaskapp-agent"
+          MYTASKAPP_DATA_DIR="$data" "${{ matrix.agent }}" &
+          pid=$!
+          for _ in $(seq 1 60); do
+            grep -qs AgentStarted "$data"/logs/mytaskapp-agent-*.log && break
+            sleep 1
+          done
+          kill "$pid" 2>/dev/null || true
+          if ! grep -qs AgentStarted "$data"/logs/mytaskapp-agent-*.log; then
+            echo "o agente não subiu"
+            cat "$data"/logs/* 2>/dev/null || true
+            exit 1
+          fi

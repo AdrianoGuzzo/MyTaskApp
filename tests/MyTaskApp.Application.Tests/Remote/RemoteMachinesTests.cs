@@ -204,11 +204,38 @@ public sealed class RemoteMachinesTests : IDisposable
     [Fact]
     public async Task UpdatingTheSettings_NeverAcceptsControlWithTheRemoteOff()
     {
-        var handler = new UpdateRemoteSettingsHandler(_settings, _trusted, NullLogger<UpdateRemoteSettingsHandler>.Instance);
+        var autostart = new RecordingAutostart();
+        var handler = new UpdateRemoteSettingsHandler(_settings, _trusted, autostart, NullLogger<UpdateRemoteSettingsHandler>.Instance);
 
         (await handler.HandleAsync(new UpdateRemoteSettings(Enabled: false, AcceptControl: true), Ct)).Should().Be(RemoteSettings.Off);
         (await handler.HandleAsync(new UpdateRemoteSettings(Enabled: true, AcceptControl: true), Ct)).Should().Be(new RemoteSettings(true, true));
         _trusted.SaveCount.Should().Be(2);
+        autostart.Applied.Should().Equal(false, true);
+    }
+
+    /// <summary>T-16: aceitar controle põe o agente no logon; o desktop reaplica o gravado ao abrir.</summary>
+    [Fact]
+    public async Task TheAgentAutostart_FollowsAcceptingControl()
+    {
+        var autostart = new RecordingAutostart();
+        await _settings.SaveAsync(new RemoteSettings(true, true), Ct);
+
+        await new ApplyAgentAutostartHandler(_settings, autostart).HandleAsync(new ApplyAgentAutostart(), Ct);
+        await _settings.SaveAsync(new RemoteSettings(true, false), Ct);
+        await new ApplyAgentAutostartHandler(_settings, autostart).HandleAsync(new ApplyAgentAutostart(), Ct);
+
+        autostart.Applied.Should().Equal(true, false);
+    }
+
+    private sealed class RecordingAutostart : IAgentAutostart
+    {
+        public List<bool> Applied { get; } = [];
+
+        public Task ApplyAsync(bool wanted, CancellationToken cancellationToken = default)
+        {
+            Applied.Add(wanted);
+            return Task.CompletedTask;
+        }
     }
 
     [Fact]

@@ -48,6 +48,7 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $desktopProject = Join-Path $repoRoot 'src\MyTaskApp.Desktop\MyTaskApp.Desktop.csproj'
+$agentProject = Join-Path $repoRoot 'src\MyTaskApp.Agent\MyTaskApp.Agent.csproj'
 $solution = Join-Path $repoRoot 'MyTaskApp.slnx'
 $publishDir = Join-Path $repoRoot "artifacts\publish\$Runtime"
 $installerDir = Join-Path $repoRoot 'artifacts\installer'
@@ -164,6 +165,21 @@ Write-Step "Publicando $Runtime (self-contained)"
 
 if (Test-Path $publishDir) { Remove-Item $publishDir -Recurse -Force }
 
+# O agente sem tela (ADR-085) mora na mesma pasta e le o mesmo appsettings.json.
+# Antes do desktop de proposito: o que os dois trazem em comum fica na versao
+# do desktop, e o .NET aceita no agente uma dependencia igual ou mais nova.
+Invoke-Checked 'dotnet publish (agente)' {
+    dotnet publish $agentProject `
+        -c Release `
+        -r $Runtime `
+        --self-contained true `
+        -p:PublishTrimmed=false `
+        -p:PublishSingleFile=false `
+        -p:DebugType=none `
+        -o $publishDir `
+        --nologo
+}
+
 Invoke-Checked 'dotnet publish' {
     dotnet publish $desktopProject `
         -c Release `
@@ -178,6 +194,9 @@ Invoke-Checked 'dotnet publish' {
 
 $exe = Join-Path $publishDir 'MyTaskApp.exe'
 if (-not (Test-Path $exe)) { throw "Publish nao produziu $exe." }
+
+$agentExe = Join-Path $publishDir 'MyTaskApp.Agent.exe'
+if (-not (Test-Path $agentExe)) { throw "Publish nao produziu $agentExe (o controle remoto com o app fechado depende dele)." }
 
 # appsettings.json e carregado com optional:false -- sem ele o app morre na
 # primeira linha do Main. Melhor falhar aqui do que na maquina do usuario.

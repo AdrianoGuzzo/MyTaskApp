@@ -38,7 +38,7 @@ public class MachinesViewModelTests
     public MachinesViewModelTests()
     {
         _runner.Handlers[typeof(UpdateRemoteSettingsHandler)] =
-            new UpdateRemoteSettingsHandler(_settings, _settings, NullLogger<UpdateRemoteSettingsHandler>.Instance);
+            new UpdateRemoteSettingsHandler(_settings, _settings, new NoAgentAutostart(), NullLogger<UpdateRemoteSettingsHandler>.Instance);
         _runner.ResultsByHandler[typeof(RegisterThisMachineHandler)] = RemoteAvailability.Ready;
         Show(View(new RemoteSettings(true, false)));
     }
