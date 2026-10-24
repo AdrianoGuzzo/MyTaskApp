@@ -43,6 +43,41 @@ public sealed record DevicePublicKey(string Algorithm, string SubjectPublicKeyIn
     /// </summary>
     public static string FingerprintOf(ReadOnlySpan<byte> subjectPublicKeyInfo) =>
         Convert.ToHexStringLower(SHA256.HashData(subjectPublicKeyInfo));
+
+    /// <summary>
+    /// ES256 de verdade: o SPKI em base64url abre como uma chave pública P-256,
+    /// e a impressão digital é a dele. O servidor confere ao registrar, e o
+    /// agente ao aceitar a chave de um controlador.
+    /// </summary>
+    public bool IsWellFormedEs256()
+    {
+        if (Algorithm != Es256
+            || SubjectPublicKeyInfo.Length > RemoteLimits.MaxSubjectPublicKeyInfoLength
+            || !Base64Url.IsValid(SubjectPublicKeyInfo, out _))
+        {
+            return false;
+        }
+
+        var spki = Base64Url.DecodeFromChars(SubjectPublicKeyInfo);
+
+        if (Base64Url.EncodeToString(spki) != SubjectPublicKeyInfo || Fingerprint != FingerprintOf(spki))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var key = ECDsa.Create();
+            key.ImportSubjectPublicKeyInfo(spki, out var read);
+
+            return read == spki.Length
+                && key.ExportParameters(includePrivateParameters: false).Curve.Oid.Value == ECCurve.NamedCurves.nistP256.Oid.Value;
+        }
+        catch (CryptographicException)
+        {
+            return false;
+        }
+    }
 }
 
 /// <summary>O que o agente sabe fazer, e com quais ferramentas desta máquina.</summary>
@@ -62,4 +97,27 @@ public sealed record DeviceCapabilities(
 public sealed record ToolStatus(bool Available, string? Version)
 {
     public static readonly ToolStatus Missing = new(false, null);
+}
+
+/// <summary>
+/// Um dispositivo da conta, como a lista "Máquinas" mostra
+/// (<c>GET /api/v1/remote/devices</c>). Quem nunca se registrou no remoto
+/// aparece sem papéis, sem chave e sem capacidades.
+/// </summary>
+/// <param name="IsCurrent">É o dispositivo de quem pergunta.</param>
+/// <param name="LastHeartbeatAt">O último sinal de vida na orquestração; <c>null</c> se nunca houve.</param>
+public sealed record RemoteDeviceInfo(
+    Guid DeviceId,
+    string Nickname,
+    string Platform,
+    string AppVersion,
+    bool IsCurrent,
+    DeviceRoles Roles,
+    string? KeyFingerprint,
+    DeviceCapabilities? Capabilities,
+    DateTimeOffset? LastHeartbeatAt)
+{
+    /// <summary>Deu sinal de vida há no máximo <see cref="RemoteLimits.OfflineAfter"/>.</summary>
+    public bool IsOnlineAt(DateTimeOffset now) =>
+        LastHeartbeatAt is { } at && now - at <= RemoteLimits.OfflineAfter;
 }

@@ -17,7 +17,7 @@ namespace MyTaskApp.Server.Infrastructure.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.12")
+                .HasAnnotation("ProductVersion", "10.0.13")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -287,6 +287,61 @@ namespace MyTaskApp.Server.Infrastructure.Persistence.Migrations
                     b.HasKey("WorkspaceId", "Seq");
 
                     b.ToTable("ChangeLog", (string)null);
+                });
+
+            modelBuilder.Entity("MyTaskApp.Server.Infrastructure.Persistence.DeviceCapabilitiesRow", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("DeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Capabilities")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTimeOffset>("LastHeartbeatAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Roles")
+                        .HasColumnType("integer");
+
+                    b.HasKey("UserId", "DeviceId");
+
+                    b.ToTable("DeviceCapabilities", (string)null);
+                });
+
+            modelBuilder.Entity("MyTaskApp.Server.Infrastructure.Persistence.DeviceKeyRow", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("DeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Fingerprint")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SubjectPublicKeyInfo")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("UserId", "DeviceId", "Fingerprint");
+
+                    b.HasIndex("UserId", "DeviceId")
+                        .IsUnique()
+                        .HasFilter("\"RevokedAt\" IS NULL");
+
+                    b.ToTable("DeviceKeys", (string)null);
                 });
 
             modelBuilder.Entity("MyTaskApp.Server.Infrastructure.Persistence.DeviceRow", b =>
@@ -775,6 +830,24 @@ namespace MyTaskApp.Server.Infrastructure.Persistence.Migrations
                     b.HasOne("MyTaskApp.Server.Infrastructure.Persistence.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MyTaskApp.Server.Infrastructure.Persistence.DeviceCapabilitiesRow", b =>
+                {
+                    b.HasOne("MyTaskApp.Server.Infrastructure.Persistence.DeviceRow", null)
+                        .WithMany()
+                        .HasForeignKey("UserId", "DeviceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MyTaskApp.Server.Infrastructure.Persistence.DeviceKeyRow", b =>
+                {
+                    b.HasOne("MyTaskApp.Server.Infrastructure.Persistence.DeviceRow", null)
+                        .WithMany()
+                        .HasForeignKey("UserId", "DeviceId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

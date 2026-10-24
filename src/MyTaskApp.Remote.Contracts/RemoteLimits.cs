@@ -31,4 +31,10 @@ public static class RemoteLimits
     public const int MaxEventTextLength = 8 * 1024;
 
     public const int MaxEventsPerBatch = 200;
+
+    /// <summary>O SPKI de uma chave P-256 tem 91 bytes, 122 caracteres em base64url; folga para nada além disso.</summary>
+    public const int MaxSubjectPublicKeyInfoLength = 200;
+
+    /// <summary>Sem sinal de vida por mais que isto, a máquina aparece desligada.</summary>
+    public static readonly TimeSpan OfflineAfter = TimeSpan.FromSeconds(90);
 }

@@ -36,6 +36,8 @@ public static class ServerSetup
 
     public const string ApiLimiter = "api";
 
+    public const string RemoteLimiter = "remote";
+
     public static IServiceCollection AddSyncServer(this IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
     {
         var options = configuration.GetSection(SyncServerOptions.SectionName).Get<SyncServerOptions>() ?? new SyncServerOptions();
@@ -118,6 +120,7 @@ public static class ServerSetup
         app.MapAccountEndpoints();
         app.MapConnectEndpoints();
         app.MapSyncApi();
+        app.MapRemoteApi();
 
         return app;
     }
@@ -356,6 +359,7 @@ public static class ServerSetup
 
         limiter.AddPolicy(SyncLimiter, Unlimited);
         limiter.AddPolicy(ApiLimiter, Unlimited);
+        limiter.AddPolicy(RemoteLimiter, Unlimited);
 
         return limiter;
     }
@@ -387,6 +391,13 @@ public static class ServerSetup
                 $"u:{subject}",
                 _ => new FixedWindowRateLimiterOptions { PermitLimit = limits.ApiPerMinute, Window = TimeSpan.FromMinutes(1) })
             : AnonymousPartition(context, limits));
+
+        // A orquestração (RS-30) com balde próprio: um controlador insistente não come a cota do sync.
+        limiter.AddPolicy(RemoteLimiter, context => ApiSubject(context) is { } subject
+            ? RateLimitPartition.GetFixedWindowLimiter(
+                $"r:{subject}",
+                _ => new FixedWindowRateLimiterOptions { PermitLimit = limits.RemotePerMinute, Window = TimeSpan.FromMinutes(1) })
+            : AnonymousPartition(context, limits));
     }
 
     private static void Reject(RateLimiterOptions limiter)
@@ -416,7 +427,7 @@ public static class ServerSetup
     /// </summary>
     private static async Task IdentifyApiCallerAsync(HttpContext context, RequestDelegate next)
     {
-        if (context.GetEndpoint()?.Metadata.GetMetadata<EnableRateLimitingAttribute>()?.PolicyName is SyncLimiter or ApiLimiter)
+        if (context.GetEndpoint()?.Metadata.GetMetadata<EnableRateLimitingAttribute>()?.PolicyName is SyncLimiter or ApiLimiter or RemoteLimiter)
         {
             var result = await context.AuthenticateAsync(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme);
             context.Features.Set(new ApiCaller(result.Succeeded ? result.Principal.FindFirst(Claims.Subject)?.Value : null));

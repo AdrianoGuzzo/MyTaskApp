@@ -10,3 +10,15 @@ public static class RemoteSchema
     /// </summary>
     public const string Scope = "remote";
 }
+
+/// <summary>As rotas da orquestração no servidor, ao lado das do sync (<c>/api/v1</c>).</summary>
+public static class RemoteRoutes
+{
+    public const string Prefix = "/api/v1/remote";
+
+    /// <summary><c>GET</c>: os dispositivos da conta.</summary>
+    public const string Devices = Prefix + "/devices";
+
+    /// <summary><c>PUT</c>: o dispositivo do token registra a chave, os papéis e as capacidades.</summary>
+    public const string CurrentDevice = Devices + "/current";
+}

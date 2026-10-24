@@ -20,6 +20,10 @@ public sealed class ServerDbContext(DbContextOptions<ServerDbContext> options)
 
     internal DbSet<DeviceRow> Devices => Set<DeviceRow>();
 
+    internal DbSet<DeviceKeyRow> DeviceKeys => Set<DeviceKeyRow>();
+
+    internal DbSet<DeviceCapabilitiesRow> DeviceCapabilities => Set<DeviceCapabilitiesRow>();
+
     internal DbSet<SyncEntityRow> SyncEntities => Set<SyncEntityRow>();
 
     internal DbSet<SyncReferenceRow> SyncReferences => Set<SyncReferenceRow>();
@@ -67,6 +71,26 @@ public sealed class ServerDbContext(DbContextOptions<ServerDbContext> options)
             device.Property(row => row.AppVersion).HasMaxLength(40);
             device.Property(row => row.CurrentAuthorizationId).HasMaxLength(100);
             device.HasOne<ApplicationUser>().WithMany().HasForeignKey(row => row.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<DeviceKeyRow>(key =>
+        {
+            key.ToTable("DeviceKeys");
+            key.HasKey(row => new { row.UserId, row.DeviceId, row.Fingerprint });
+            key.Property(row => row.Fingerprint).HasMaxLength(64);
+            key.Property(row => row.SubjectPublicKeyInfo).HasMaxLength(200);
+
+            // Uma chave valendo por dispositivo; as revogadas ficam.
+            key.HasIndex(row => new { row.UserId, row.DeviceId }).IsUnique().HasFilter("\"RevokedAt\" IS NULL");
+            key.HasOne<DeviceRow>().WithMany().HasForeignKey(row => new { row.UserId, row.DeviceId }).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<DeviceCapabilitiesRow>(capabilities =>
+        {
+            capabilities.ToTable("DeviceCapabilities");
+            capabilities.HasKey(row => new { row.UserId, row.DeviceId });
+            capabilities.Property(row => row.Capabilities).HasColumnType("jsonb");
+            capabilities.HasOne<DeviceRow>().WithMany().HasForeignKey(row => new { row.UserId, row.DeviceId }).OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<SyncEntityRow>(entity =>

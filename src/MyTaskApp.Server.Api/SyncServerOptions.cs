@@ -96,6 +96,9 @@ public sealed class RateLimitOptions
     /// <summary>O resto da API, pelo <c>sub</c> do token.</summary>
     public int ApiPerMinute { get; set; } = 120;
 
+    /// <summary>A orquestração remota, pelo <c>sub</c> do token, num balde separado do sync.</summary>
+    public int RemotePerMinute { get; set; } = 120;
+
     /// <summary>Rotas da API sem token válido, por IP: não gastam a cota de ninguém.</summary>
     public int AnonymousPerMinute { get; set; } = 30;
 

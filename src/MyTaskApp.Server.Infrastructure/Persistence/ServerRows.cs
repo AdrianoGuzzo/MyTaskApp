@@ -62,6 +62,42 @@ internal sealed class DeviceRow
     public string? CurrentAuthorizationId { get; set; }
 }
 
+/// <summary>
+/// Uma chave pública de dispositivo na orquestração remota (ADR-087). Trocar de
+/// chave revoga a anterior, que fica para a auditoria; só uma vale por vez.
+/// </summary>
+internal sealed class DeviceKeyRow
+{
+    public Guid UserId { get; set; }
+
+    public Guid DeviceId { get; set; }
+
+    /// <summary>SHA-256 do SPKI, em hexadecimal.</summary>
+    public required string Fingerprint { get; set; }
+
+    /// <summary>O SPKI em base64url, como o dispositivo mandou.</summary>
+    public required string SubjectPublicKeyInfo { get; set; }
+
+    public DateTimeOffset CreatedAt { get; set; }
+
+    public DateTimeOffset? RevokedAt { get; set; }
+}
+
+/// <summary>Papéis, capacidades e sinal de vida de um dispositivo na orquestração: o último registro.</summary>
+internal sealed class DeviceCapabilitiesRow
+{
+    public Guid UserId { get; set; }
+
+    public Guid DeviceId { get; set; }
+
+    public int Roles { get; set; }
+
+    /// <summary>O <c>DeviceCapabilities</c> do contrato, em <c>jsonb</c>.</summary>
+    public string Capabilities { get; set; } = "{}";
+
+    public DateTimeOffset LastHeartbeatAt { get; set; }
+}
+
 /// <summary>Uma entidade sincronizada, com o JSON do contrato em <c>jsonb</c>.</summary>
 internal sealed class SyncEntityRow
 {

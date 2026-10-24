@@ -14,6 +14,7 @@ public static class DependencyInjection
         services.AddScoped<PushProcessor>();
         services.AddScoped<SyncQueries>();
         services.AddScoped<DeviceUseCases>();
+        services.AddScoped<RemoteDeviceUseCases>();
 
         return services;
     }
