@@ -7,7 +7,7 @@ computadores da pessoa. **Cada computador tem a sua lista:** uma tarefa
 aparece só onde foi criada, até alguém mandá-la para outro computador ou
 compartilhá-la com todos (veja [Onde cada tarefa aparece](#onde-cada-tarefa-aparece)).
 
-A decisão e as alternativas estão no [ADR-061](ARCHITECTURE.md). O servidor,
+A decisão e as alternativas estão no [ADR-061](architecture/decisions/061-sincronizacao-outbox-mescla-por-campo.md). O servidor,
 com o cliente do Google, as variáveis e a implantação, está em
 [`sync-server.md`](sync-server.md). **O servidor é seu:** nenhuma build traz
 endereço embutido (ADR-078). No desktop, ele vai em `Sync:ApiBaseUrl` do
@@ -15,7 +15,7 @@ endereço embutido (ADR-078). No desktop, ele vai em `Sync:ApiBaseUrl` do
 
 ## Na tela
 
-**A bolinha no cabeçalho** ([ADR-063](ARCHITECTURE.md)), ao lado do
+**A bolinha no cabeçalho** ([ADR-063](architecture/decisions/063-indicador-sincronizacao-no-cabecalho.md)), ao lado do
 histórico, diz de relance como está a sincronização. Passe o mouse para ler o
 estado por extenso, ou clique para ver o painel com "Sincronizar agora":
 
@@ -59,7 +59,7 @@ que passaram pela sincronização. Embaixo dela vem onde a tarefa aparece, com
 
 ## Onde cada tarefa aparece
 
-A decisão está no [ADR-062](ARCHITECTURE.md). Cada tarefa e cada etiqueta
+A decisão está no [ADR-062](architecture/decisions/062-lista-por-computador-onde-aparece.md). Cada tarefa e cada etiqueta
 aparece **só no computador onde foi criada** ou **em todos os computadores**.
 
 - **Criar:** a tarefa nasce neste computador. Na caixa de captura, "Para"
@@ -100,7 +100,7 @@ aparece **só no computador onde foi criada** ou **em todos os computadores**.
   Etiquetas, faz o mesmo pela lista: escolhida a etiqueta, ela passa a aparecer
   em todos com o nome, a cor e os diretórios. Os diretórios chegam "Não
   mapeado neste computador", e você clona o repositório ou escolhe a pasta
-  daqui ([ADR-077](ARCHITECTURE.md)).
+  daqui ([ADR-077](architecture/decisions/077-importar-etiqueta-de-outro-computador.md)).
 - **Post-its** continuam aparecendo em todos. **Comandos globais** não têm
   seletor: os compartilhados estão em todos, e os outros só no computador onde
   foram criados (ver "Comandos só deste computador").

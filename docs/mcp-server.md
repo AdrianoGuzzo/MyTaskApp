@@ -8,7 +8,7 @@ de banco e os perfis de anonimização. Valem as mesmas regras da tela.
 O servidor é só mais uma porta de entrada para os casos de uso que a interface
 já usa. Ele não tem regra de negócio própria e não lê o banco diretamente. O
 que a IA grava aparece na tela na hora e fica na auditoria com a origem
-"(MCP)". As decisões estão no [ADR-059](ARCHITECTURE.md#adr-059--servidor-mcp-local-kestrel-só-no-loopback-e-os-casos-de-uso-da-tela).
+"(MCP)". As decisões estão no [ADR-059](architecture/decisions/059-servidor-mcp-local-loopback.md).
 
 ## Sumário
 
@@ -190,7 +190,7 @@ compartilhado.
   excluem ou sobrescrevem dados levam `destructiveHint`, para o cliente pedir
   confirmação. As que falam com servidores de fora (PostgreSQL, Jira) levam
   `openWorldHint`.
-- **De qual computador** ([ADR-062](ARCHITECTURE.md), com a sincronização
+- **De qual computador** ([ADR-062](architecture/decisions/062-lista-por-computador-onde-aparece.md), com a sincronização
   conectada): as consultas de tarefas, horas, histórico, estatísticas,
   etiquetas e prazos aceitam `device?`. Os valores são:
   - `here`, o padrão: este computador e o que é compartilhado;

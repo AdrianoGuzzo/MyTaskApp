@@ -1,7 +1,7 @@
 # Orquestração remota — modelo de ameaças
 
 > **Estado: proposta.** Acompanha [`remote-orchestration.md`](remote-orchestration.md)
-> e os ADR-084 a ADR-090 de [`ARCHITECTURE.md`](../ARCHITECTURE.md). Os
+> e os ADR-084 a ADR-090 de [índice de ADRs](README.md). Os
 > requisitos (RS-xx) são critérios de aceitação das entregas em
 > [`../roadmap/phase-2-remote-orchestration.md`](../roadmap/phase-2-remote-orchestration.md).
 

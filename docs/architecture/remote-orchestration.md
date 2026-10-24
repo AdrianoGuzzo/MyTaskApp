@@ -3,7 +3,7 @@
 > **Estado: proposta, em implementação** (o roteiro marca as tarefas feitas e o
 > commit de cada uma). Este documento é o
 > desenho técnico da fase 2; as decisões estão nos ADR-084 a ADR-090 de
-> [`ARCHITECTURE.md`](../ARCHITECTURE.md), a análise de ameaças em
+> [índice de ADRs](README.md), a análise de ameaças em
 > [`remote-security-threat-model.md`](remote-security-threat-model.md) e as
 > entregas em [`../roadmap/phase-2-remote-orchestration.md`](../roadmap/phase-2-remote-orchestration.md).
 

@@ -3,7 +3,7 @@
 O app do celular é feito em .NET MAUI. Ele é **mais um dispositivo da
 sincronização**: roda a mesma Application do desktop sobre um SQLite próprio
 e conversa só com o servidor de sincronização. A decisão e as alternativas
-estão no [ADR-067](ARCHITECTURE.md#adr-067--o-celular-como-mais-um-dispositivo-da-sincronização-net-maui).
+estão no [ADR-067](architecture/decisions/067-celular-dispositivo-da-sincronizacao.md).
 
 | Plataforma | Estado |
 |---|---|
@@ -186,7 +186,7 @@ reconectar, revogado, versão antiga.
 
 ## Servidor de sincronização
 
-O app não traz servidor nenhum ([ADR-078](ARCHITECTURE.md)). Cada pessoa usa a
+O app não traz servidor nenhum ([ADR-078](architecture/decisions/078-servidor-de-sync-do-usuario.md)). Cada pessoa usa a
 própria instância do servidor ([sync-server.md](sync-server.md)), e o endereço
 é escolhido no app.
 
