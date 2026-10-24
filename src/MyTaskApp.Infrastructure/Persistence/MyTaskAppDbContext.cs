@@ -60,6 +60,12 @@ public sealed class MyTaskAppDbContext(DbContextOptions<MyTaskAppDbContext> opti
     /// <summary>Qual processo deste computador roda cada laço de dono só (ADR-085). Só deste computador.</summary>
     internal DbSet<ProcessLeaseRow> ProcessLeases => Set<ProcessLeaseRow>();
 
+    /// <summary>O diário das operações remotas que o agente recebeu (ADR-086). Só deste computador.</summary>
+    internal DbSet<RemoteOperationJournalRow> RemoteOperationJournal => Set<RemoteOperationJournalRow>();
+
+    /// <summary>Os eventos que o servidor ainda não confirmou.</summary>
+    internal DbSet<RemoteOperationJournalEventRow> RemoteOperationJournalEvents => Set<RemoteOperationJournalEventRow>();
+
     /// <summary>Os períodos de trabalho de cada ocorrência (ADR-052).</summary>
     public DbSet<TimeEntry> TimeEntries => Set<TimeEntry>();
 

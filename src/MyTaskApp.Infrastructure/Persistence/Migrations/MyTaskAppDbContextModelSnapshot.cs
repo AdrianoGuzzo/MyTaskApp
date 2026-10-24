@@ -1499,6 +1499,102 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("MyTaskApp.Infrastructure.Persistence.RemoteOperationJournalEventRow", b =>
+                {
+                    b.Property<Guid>("OperationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Seq")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("At")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Data")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Step")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Text")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("OperationId", "Seq");
+
+                    b.ToTable("RemoteOperationJournalEvents", (string)null);
+                });
+
+            modelBuilder.Entity("MyTaskApp.Infrastructure.Persistence.RemoteOperationJournalRow", b =>
+                {
+                    b.Property<Guid>("OperationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("AckedSeq")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("ControllerDeviceId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ControllerNickname")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Envelope")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("NextSeq")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ReceivedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("ReportedStatus")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ResultCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ResultSummary")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Step")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("TaskId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("OperationId");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("ControllerDeviceId", "ReceivedAt");
+
+                    b.ToTable("RemoteOperationJournal", (string)null);
+                });
+
             modelBuilder.Entity("MyTaskApp.Infrastructure.Persistence.RemoteSettingsRow", b =>
                 {
                     b.Property<int>("Id")
@@ -2213,6 +2309,15 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                     b.HasOne("MyTaskApp.Domain.Tasks.TaskOccurrence", null)
                         .WithMany()
                         .HasForeignKey("TaskOccurrenceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MyTaskApp.Infrastructure.Persistence.RemoteOperationJournalEventRow", b =>
+                {
+                    b.HasOne("MyTaskApp.Infrastructure.Persistence.RemoteOperationJournalRow", null)
+                        .WithMany()
+                        .HasForeignKey("OperationId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

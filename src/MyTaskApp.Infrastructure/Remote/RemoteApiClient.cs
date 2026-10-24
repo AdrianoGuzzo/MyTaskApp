@@ -10,7 +10,7 @@ namespace MyTaskApp.Infrastructure.Remote;
 /// sync: o token que vale é o do dispositivo, com o escopo <c>remote</c>. O JSON
 /// é o do <see cref="RemoteJson"/>, o estrito do contrato remoto.
 /// </summary>
-internal sealed class RemoteApiClient(SyncHttp http, ISyncAuthenticator authenticator) : IRemoteApi
+internal sealed class RemoteApiClient(SyncHttp http, ISyncAuthenticator authenticator) : IRemoteApi, IRemoteOperationsApi
 {
     public Task<RemoteDeviceInfo> RegisterAsync(DeviceRegistration registration, CancellationToken cancellationToken) =>
         CallAsync<RemoteDeviceInfo>(HttpMethod.Put, RemoteRoutes.CurrentDevice, registration, cancellationToken);
@@ -29,6 +29,31 @@ internal sealed class RemoteApiClient(SyncHttp http, ISyncAuthenticator authenti
 
     public Task<PairingInfo> ApprovePairingAsync(Guid pairingId, PairingApproval approval, CancellationToken cancellationToken) =>
         CallAsync<PairingInfo>(HttpMethod.Post, RemoteRoutes.ApprovePairing(pairingId), approval, cancellationToken);
+
+    public async Task<IReadOnlyList<AgentOperation>> ListAgentOperationsAsync(CancellationToken cancellationToken) =>
+        await CallAsync<List<AgentOperation>>(HttpMethod.Get, RemoteRoutes.AgentOperations, null, cancellationToken);
+
+    public Task<RemoteOperationView> UpdateStatusAsync(Guid operationId, OperationStatusUpdate update, CancellationToken cancellationToken) =>
+        CallAsync<RemoteOperationView>(HttpMethod.Post, RemoteRoutes.OperationStatus(operationId), update, cancellationToken);
+
+    public Task<EventBatchAck> AppendEventsAsync(EventBatch batch, CancellationToken cancellationToken) =>
+        CallAsync<EventBatchAck>(HttpMethod.Post, RemoteRoutes.OperationEvents(batch.OperationId), batch, cancellationToken);
+
+    public Task<RemoteOperationView> CreateAsync(SignedEnvelope request, CancellationToken cancellationToken) =>
+        CallAsync<RemoteOperationView>(HttpMethod.Post, RemoteRoutes.Operations, request, cancellationToken);
+
+    public Task<RemoteOperationView> GetAsync(Guid operationId, CancellationToken cancellationToken) =>
+        CallAsync<RemoteOperationView>(HttpMethod.Get, RemoteRoutes.Operation(operationId), null, cancellationToken);
+
+    public Task<RemoteEventPage> ListEventsAsync(Guid operationId, long after, int? limit, CancellationToken cancellationToken) =>
+        CallAsync<RemoteEventPage>(
+            HttpMethod.Get,
+            $"{RemoteRoutes.OperationEvents(operationId)}?after={after}" + (limit is { } size ? $"&limit={size}" : string.Empty),
+            null,
+            cancellationToken);
+
+    public Task<RemoteOperationView> CancelAsync(Guid operationId, CancellationToken cancellationToken) =>
+        CallAsync<RemoteOperationView>(HttpMethod.Post, RemoteRoutes.CancelOperation(operationId), null, cancellationToken);
 
     private async Task<T> CallAsync<T>(HttpMethod method, string path, object? body, CancellationToken cancellationToken)
     {

@@ -233,6 +233,11 @@ public static class DependencyInjection
         services.AddScoped<RevokeTrustedControllerHandler>();
         services.TryAddSingleton<MachineCapabilities>();
         services.TryAddSingleton<RemotePresenceScheduler>();
+
+        // A fila de operações, do lado do agente (T-14): a validação local e o despachante.
+        services.AddScoped<AdmitRemoteOperationHandler>();
+        services.TryAddSingleton(RemoteDispatchLimits.Default);
+        services.TryAddSingleton<RemoteOperationDispatcher>();
         services.AddScoped<ConsultationLauncher>();
         services.AddScoped<ConsultationTargetResolver>();
         services.AddScoped<ConsultationFolders>();

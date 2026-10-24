@@ -13,9 +13,17 @@ public sealed partial class NoBulkWritesTests
     /// <summary>
     /// Os arquivos que podem: a própria sincronização do desktop — que grava
     /// o que veio do servidor sem gerar operação, e as tabelas dela, que não
-    /// são capturadas — e o servidor, que não tem captura.
+    /// são capturadas —, o servidor, que não tem captura, e o diário do
+    /// agente (ADR-086): só deste computador, sem mapper de sync, e é a
+    /// escrita por campo que impede o estado, o que o servidor sabe e a
+    /// numeração dos eventos de se sobrescreverem.
     /// </summary>
-    private static readonly string[] Allowed = [Path.Combine("MyTaskApp.Infrastructure", "Sync"), "MyTaskApp.Server."];
+    private static readonly string[] Allowed =
+    [
+        Path.Combine("MyTaskApp.Infrastructure", "Sync"),
+        "MyTaskApp.Server.",
+        Path.Combine("MyTaskApp.Infrastructure", "Persistence", "Repositories", "RemoteOperationJournal.cs"),
+    ];
 
     [Fact]
     public void TheProductCode_DoesNotWriteAroundTheChangeTracker()
