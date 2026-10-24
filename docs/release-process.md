@@ -1,7 +1,7 @@
 # Processo de release
 
 Do commit ao instalador, sem ninguém editar número de versão. A decisão e os
-motivos estão no ADR-044 (`docs/ARCHITECTURE.md`). Os detalhes de cada
+motivos estão no [ADR-044](architecture/decisions/044-versionamento-com-release-please.md). Os detalhes de cada
 instalador estão em [`installer/README.md`](../installer/README.md).
 
 ```
