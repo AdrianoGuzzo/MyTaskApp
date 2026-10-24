@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    O agente da orquestração remota (ADR-085): um processo sem tela, do
+    usuário, sobre o mesmo SQLite do desktop. Compõe a Application e a
+    Infrastructure como o desktop compõe, sem nenhum ViewModel, e roda com o
+    desktop fechado. WinExe: no Windows, a tarefa agendada no logon não abre
+    janela de console; no Linux, é um executável comum.
+  -->
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!-- Nome do arquivo publicado: a tarefa agendada e a unit do systemd apontam para ele. -->
+    <AssemblyName>MyTaskApp.Agent</AssemblyName>
+    <RootNamespace>MyTaskApp.Agent</RootNamespace>
+    <ApplicationIcon>..\MyTaskApp.Desktop\Assets\app.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MyTaskApp.Application\MyTaskApp.Application.csproj" />
+    <ProjectReference Include="..\MyTaskApp.Infrastructure\MyTaskApp.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" />
+    <PackageReference Include="Serilog" />
+    <PackageReference Include="Serilog.Extensions.Logging" />
+    <PackageReference Include="Serilog.Settings.Configuration" />
+    <PackageReference Include="Serilog.Sinks.File" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- A mesma configuração do desktop: instalados na mesma pasta, leem o mesmo arquivo. -->
+    <Content Include="..\MyTaskApp.Desktop\appsettings.json" Link="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="MyTaskApp.Agent.Tests" />
+    <!-- AgentInstance.MutexName é contrato com o instalador, como o do desktop (ADR-049). -->
+    <InternalsVisibleTo Include="MyTaskApp.Packaging.Tests" />
+  </ItemGroup>
+
+</Project>

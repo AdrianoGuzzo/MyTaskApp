@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/MyTaskApp.Agent/MyTaskApp.Agent.csproj" />
     <Project Path="src/MyTaskApp.Application/MyTaskApp.Application.csproj" />
     <Project Path="src/MyTaskApp.Desktop/MyTaskApp.Desktop.csproj" />
     <Project Path="src/MyTaskApp.Domain/MyTaskApp.Domain.csproj" />
@@ -14,6 +15,7 @@
     <Project Path="src/MyTaskApp.Sync.Contracts/MyTaskApp.Sync.Contracts.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/MyTaskApp.Agent.Tests/MyTaskApp.Agent.Tests.csproj" />
     <Project Path="tests/MyTaskApp.Application.Tests/MyTaskApp.Application.Tests.csproj" />
     <Project Path="tests/MyTaskApp.Desktop.Tests/MyTaskApp.Desktop.Tests.csproj" />
     <Project Path="tests/MyTaskApp.Domain.Tests/MyTaskApp.Domain.Tests.csproj" />
