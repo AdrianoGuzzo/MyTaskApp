@@ -154,5 +154,8 @@ public sealed class RemoteDeviceUseCasesTests
 
         public Task<IReadOnlyList<RemoteDeviceState>> ListAsync(Guid userId, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<RemoteDeviceState>>([.. States.Values]);
+
+        public Task<DevicePublicKey?> FindActiveKeyAsync(Guid userId, Guid deviceId, CancellationToken cancellationToken) =>
+            throw new NotSupportedException("O registro e a lista não leem a chave sozinha.");
     }
 }

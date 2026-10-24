@@ -78,6 +78,23 @@ public sealed record DevicePublicKey(string Algorithm, string SubjectPublicKeyIn
             return false;
         }
     }
+
+    /// <summary>
+    /// A assinatura ES256 (r e s, 64 bytes, em base64url) de
+    /// <paramref name="data"/> é desta chave. Chave malformada não confere nada.
+    /// </summary>
+    public bool Verifies(ReadOnlySpan<byte> data, string signature)
+    {
+        if (!IsWellFormedEs256() || signature.Length > 128 || !Base64Url.IsValid(signature, out var length) || length != 64)
+        {
+            return false;
+        }
+
+        using var key = ECDsa.Create();
+        key.ImportSubjectPublicKeyInfo(Base64Url.DecodeFromChars(SubjectPublicKeyInfo), out _);
+
+        return key.VerifyData(data, Base64Url.DecodeFromChars(signature), HashAlgorithmName.SHA256, DSASignatureFormat.IeeeP1363FixedFieldConcatenation);
+    }
 }
 
 /// <summary>O que o agente sabe fazer, e com quais ferramentas desta máquina.</summary>

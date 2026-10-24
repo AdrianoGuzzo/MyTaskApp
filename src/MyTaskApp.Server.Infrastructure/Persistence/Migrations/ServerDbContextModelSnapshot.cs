@@ -420,6 +420,57 @@ namespace MyTaskApp.Server.Infrastructure.Persistence.Migrations
                     b.ToTable("ProcessedOperations", (string)null);
                 });
 
+            modelBuilder.Entity("MyTaskApp.Server.Infrastructure.Persistence.RemotePairingRow", b =>
+                {
+                    b.Property<Guid>("PairingId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("ApprovedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ControllerDeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ControllerFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ControllerSubjectPublicKeyInfo")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ExecutorDeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ExecutorFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Nonce")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("PairingId");
+
+                    b.HasIndex("UserId", "ExecutorDeviceId", "ExpiresAt");
+
+                    b.ToTable("RemotePairings", (string)null);
+                });
+
             modelBuilder.Entity("MyTaskApp.Server.Infrastructure.Persistence.SyncEntityRow", b =>
                 {
                     b.Property<Guid>("WorkspaceId")
@@ -853,6 +904,15 @@ namespace MyTaskApp.Server.Infrastructure.Persistence.Migrations
                 });
 
             modelBuilder.Entity("MyTaskApp.Server.Infrastructure.Persistence.DeviceRow", b =>
+                {
+                    b.HasOne("MyTaskApp.Server.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MyTaskApp.Server.Infrastructure.Persistence.RemotePairingRow", b =>
                 {
                     b.HasOne("MyTaskApp.Server.Infrastructure.Persistence.ApplicationUser", null)
                         .WithMany()

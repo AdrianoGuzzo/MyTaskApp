@@ -21,4 +21,12 @@ public static class RemoteRoutes
 
     /// <summary><c>PUT</c>: o dispositivo do token registra a chave, os papéis e as capacidades.</summary>
     public const string CurrentDevice = Devices + "/current";
+
+    /// <summary><c>POST</c>: o controlador pede um pareamento. <c>GET</c>: os pedidos em aberto para este executor.</summary>
+    public const string Pairings = Prefix + "/pairings";
+
+    public static string Pairing(Guid pairingId) => $"{Pairings}/{pairingId:D}";
+
+    /// <summary><c>POST</c>: o executor aprova, assinando com a chave dele.</summary>
+    public static string ApprovePairing(Guid pairingId) => $"{Pairing(pairingId)}/approve";
 }

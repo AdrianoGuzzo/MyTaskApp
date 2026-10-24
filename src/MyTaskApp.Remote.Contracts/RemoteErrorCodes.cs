@@ -16,4 +16,17 @@ public static class RemoteErrorCodes
     public const string UntrustedSignature = "untrusted_signature";
     public const string AlreadySeen = "already_seen";
     public const string InvalidTransition = "invalid_transition";
+
+    /// <summary>O dispositivo ainda não registrou chave na orquestração.</summary>
+    public const string NotRegistered = "not_registered";
+
+    /// <summary>A máquina pedida não aceita controle remoto (não tem o papel de executor).</summary>
+    public const string NotAnExecutor = "not_an_executor";
+
+    public const string TooManyPairings = "too_many_pairings";
+
+    public const string PairingExpired = "pairing_expired";
+
+    /// <summary>Uma das chaves mudou depois do pedido: o código já não seria o mesmo.</summary>
+    public const string KeyChanged = "key_changed";
 }

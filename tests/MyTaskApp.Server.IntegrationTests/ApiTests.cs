@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.Routing;
@@ -300,9 +301,8 @@ public sealed class ApiTests(PostgresFixture postgres) : IAsyncLifetime
 
         foreach (var route in routes)
         {
-            var path = route
-                .Replace("{workspaceId:guid}", Guid.CreateVersion7().ToString(), StringComparison.Ordinal)
-                .Replace("{deviceId:guid}", Guid.CreateVersion7().ToString(), StringComparison.Ordinal);
+            // Todo parâmetro de rota é um id ({workspaceId:guid}, {pairingId:guid}…): qualquer um serve.
+            var path = Regex.Replace(route, @"\{\w+:guid\}", _ => Guid.CreateVersion7().ToString());
 
             foreach (var method in new[] { HttpMethod.Get, HttpMethod.Post, HttpMethod.Put, HttpMethod.Patch })
             {

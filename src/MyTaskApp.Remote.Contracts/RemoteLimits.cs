@@ -35,6 +35,12 @@ public static class RemoteLimits
     /// <summary>O SPKI de uma chave P-256 tem 91 bytes, 122 caracteres em base64url; folga para nada além disso.</summary>
     public const int MaxSubjectPublicKeyInfoLength = 200;
 
+    /// <summary>Quanto um pedido de pareamento espera a confirmação na máquina executora (RS-08).</summary>
+    public static readonly TimeSpan PairingLifetime = TimeSpan.FromMinutes(10);
+
+    /// <summary>Pedidos de pareamento em aberto por conta: ninguém enche a tela do executor de pedidos.</summary>
+    public const int MaxOpenPairings = 10;
+
     /// <summary>Sem sinal de vida por mais que isto, a máquina aparece desligada.</summary>
     public static readonly TimeSpan OfflineAfter = TimeSpan.FromSeconds(90);
 }

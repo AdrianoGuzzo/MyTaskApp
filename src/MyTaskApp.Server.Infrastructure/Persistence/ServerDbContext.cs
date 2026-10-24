@@ -24,6 +24,8 @@ public sealed class ServerDbContext(DbContextOptions<ServerDbContext> options)
 
     internal DbSet<DeviceCapabilitiesRow> DeviceCapabilities => Set<DeviceCapabilitiesRow>();
 
+    internal DbSet<RemotePairingRow> RemotePairings => Set<RemotePairingRow>();
+
     internal DbSet<SyncEntityRow> SyncEntities => Set<SyncEntityRow>();
 
     internal DbSet<SyncReferenceRow> SyncReferences => Set<SyncReferenceRow>();
@@ -91,6 +93,20 @@ public sealed class ServerDbContext(DbContextOptions<ServerDbContext> options)
             capabilities.HasKey(row => new { row.UserId, row.DeviceId });
             capabilities.Property(row => row.Capabilities).HasColumnType("jsonb");
             capabilities.HasOne<DeviceRow>().WithMany().HasForeignKey(row => new { row.UserId, row.DeviceId }).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<RemotePairingRow>(pairing =>
+        {
+            pairing.ToTable("RemotePairings");
+            pairing.HasKey(row => row.PairingId);
+            pairing.Property(row => row.ControllerFingerprint).HasMaxLength(64);
+            pairing.Property(row => row.ControllerSubjectPublicKeyInfo).HasMaxLength(200);
+            pairing.Property(row => row.ExecutorFingerprint).HasMaxLength(64);
+            pairing.Property(row => row.Nonce).HasMaxLength(32);
+
+            // Os pedidos em aberto de um executor, e a contagem dos da conta.
+            pairing.HasIndex(row => new { row.UserId, row.ExecutorDeviceId, row.ExpiresAt });
+            pairing.HasOne<ApplicationUser>().WithMany().HasForeignKey(row => row.UserId).OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<SyncEntityRow>(entity =>

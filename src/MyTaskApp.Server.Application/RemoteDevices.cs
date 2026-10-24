@@ -164,4 +164,7 @@ public interface IRemoteDeviceStore
 
     /// <summary>Os dispositivos da conta que já se registraram, com a chave que vale.</summary>
     Task<IReadOnlyList<RemoteDeviceState>> ListAsync(Guid userId, CancellationToken cancellationToken);
+
+    /// <summary>A chave que vale agora para o dispositivo; <c>null</c> se ele nunca registrou.</summary>
+    Task<DevicePublicKey?> FindActiveKeyAsync(Guid userId, Guid deviceId, CancellationToken cancellationToken);
 }

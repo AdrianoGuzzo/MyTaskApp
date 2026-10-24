@@ -25,6 +25,19 @@ internal static class RemoteApiEndpoints
 
         remote.MapGet("/devices", async (ClaimsPrincipal user, RemoteDeviceUseCases useCases, CancellationToken cancellationToken) =>
             Json(await useCases.ListAsync(SyncApiEndpoints.Caller(user), cancellationToken)));
+
+        // O pareamento (ADR-087): o controlador pede, o executor vê os pedidos dele e aprova assinando.
+        remote.MapPost("/pairings", async (HttpRequest request, ClaimsPrincipal user, RemotePairingUseCases useCases, CancellationToken cancellationToken) =>
+            Json(await useCases.CreateAsync(SyncApiEndpoints.Caller(user), await ReadAsync<PairingRequest>(request, cancellationToken), cancellationToken)));
+
+        remote.MapGet("/pairings", async (ClaimsPrincipal user, RemotePairingUseCases useCases, CancellationToken cancellationToken) =>
+            Json(await useCases.ListOpenAsync(SyncApiEndpoints.Caller(user), cancellationToken)));
+
+        remote.MapGet("/pairings/{pairingId:guid}", async (Guid pairingId, ClaimsPrincipal user, RemotePairingUseCases useCases, CancellationToken cancellationToken) =>
+            Json(await useCases.GetAsync(SyncApiEndpoints.Caller(user), pairingId, cancellationToken)));
+
+        remote.MapPost("/pairings/{pairingId:guid}/approve", async (Guid pairingId, HttpRequest request, ClaimsPrincipal user, RemotePairingUseCases useCases, CancellationToken cancellationToken) =>
+            Json(await useCases.ApproveAsync(SyncApiEndpoints.Caller(user), pairingId, await ReadAsync<PairingApproval>(request, cancellationToken), cancellationToken)));
     }
 
     private static async Task<T> ReadAsync<T>(HttpRequest request, CancellationToken cancellationToken)

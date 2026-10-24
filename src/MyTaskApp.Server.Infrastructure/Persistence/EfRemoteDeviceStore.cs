@@ -96,6 +96,12 @@ internal sealed class EfRemoteDeviceStore(ServerDbContext context) : IRemoteDevi
         return outcome;
     }
 
+    public async Task<DevicePublicKey?> FindActiveKeyAsync(Guid userId, Guid deviceId, CancellationToken cancellationToken) =>
+        await context.DeviceKeys.AsNoTracking()
+            .Where(key => key.UserId == userId && key.DeviceId == deviceId && key.RevokedAt == null)
+            .Select(key => new DevicePublicKey(DevicePublicKey.Es256, key.SubjectPublicKeyInfo, key.Fingerprint))
+            .SingleOrDefaultAsync(cancellationToken);
+
     public async Task<IReadOnlyList<RemoteDeviceState>> ListAsync(Guid userId, CancellationToken cancellationToken)
     {
         var keys = await context.DeviceKeys.AsNoTracking()

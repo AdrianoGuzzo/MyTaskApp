@@ -98,6 +98,35 @@ internal sealed class DeviceCapabilitiesRow
     public DateTimeOffset LastHeartbeatAt { get; set; }
 }
 
+/// <summary>
+/// Um pedido de pareamento (ADR-087): as duas chaves do momento do pedido e o
+/// nonce do código. Fica depois de aprovado ou expirado, para a auditoria.
+/// </summary>
+internal sealed class RemotePairingRow
+{
+    public Guid PairingId { get; set; }
+
+    public Guid UserId { get; set; }
+
+    public Guid ControllerDeviceId { get; set; }
+
+    public required string ControllerFingerprint { get; set; }
+
+    public required string ControllerSubjectPublicKeyInfo { get; set; }
+
+    public Guid ExecutorDeviceId { get; set; }
+
+    public required string ExecutorFingerprint { get; set; }
+
+    public required string Nonce { get; set; }
+
+    public DateTimeOffset CreatedAt { get; set; }
+
+    public DateTimeOffset ExpiresAt { get; set; }
+
+    public DateTimeOffset? ApprovedAt { get; set; }
+}
+
 /// <summary>Uma entidade sincronizada, com o JSON do contrato em <c>jsonb</c>.</summary>
 internal sealed class SyncEntityRow
 {
