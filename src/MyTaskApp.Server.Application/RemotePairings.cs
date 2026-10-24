@@ -17,6 +17,7 @@ public sealed class RemotePairingUseCases(
     IDeviceRegistry devices,
     IRemoteDeviceStore remote,
     IRemotePairingStore pairings,
+    IRemoteNotifier notifier,
     TimeProvider timeProvider,
     ILogger<RemotePairingUseCases> logger)
 {
@@ -65,6 +66,7 @@ public sealed class RemotePairingUseCases(
         };
 
         await pairings.AddAsync(pairing, cancellationToken);
+        await notifier.ToDeviceAsync(caller.UserId, pairing.ExecutorDeviceId, RemoteHubMessages.PairingRequested, pairing.PairingId);
 
         return await InfoAsync(pairing, now, cancellationToken);
     }
@@ -146,6 +148,8 @@ public sealed class RemotePairingUseCases(
         logger.LogInformation(
             "RemotePairingApproved {UserId} {PairingId} {ControllerDeviceId} {ExecutorDeviceId}",
             caller.UserId, pairing.PairingId, pairing.ControllerDeviceId, pairing.ExecutorDeviceId);
+
+        await notifier.ToAccountAsync(caller.UserId, RemoteHubMessages.PairingApproved, pairing.PairingId);
 
         return await InfoAsync(pairing, now, cancellationToken);
     }

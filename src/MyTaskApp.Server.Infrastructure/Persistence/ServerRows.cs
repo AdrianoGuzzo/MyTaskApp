@@ -127,6 +127,131 @@ internal sealed class RemotePairingRow
     public DateTimeOffset? ApprovedAt { get; set; }
 }
 
+/// <summary>
+/// Uma operação remota (ADR-086): o JWS do controlador como chegou, e o estado
+/// que o servidor e o agente vão mudando.
+/// </summary>
+internal sealed class RemoteOperationRow
+{
+    public Guid OperationId { get; set; }
+
+    public Guid UserId { get; set; }
+
+    public Guid WorkspaceId { get; set; }
+
+    public Guid TargetDeviceId { get; set; }
+
+    public Guid RequestedByDeviceId { get; set; }
+
+    public required string Kind { get; set; }
+
+    public Guid? TaskId { get; set; }
+
+    public int Status { get; set; }
+
+    public DateTimeOffset CreatedAt { get; set; }
+
+    public DateTimeOffset NotAfter { get; set; }
+
+    public DateTimeOffset ReceivedAt { get; set; }
+
+    public DateTimeOffset UpdatedAt { get; set; }
+
+    public DateTimeOffset? DispatchedAt { get; set; }
+
+    public DateTimeOffset? CancelRequestedAt { get; set; }
+
+    public string? ResultCode { get; set; }
+
+    public string? ResultSummary { get; set; }
+
+    public long LastContiguousSeq { get; set; }
+
+    /// <summary>Os eventos guardados: acima do teto, a saída é descartada.</summary>
+    public int EventCount { get; set; }
+
+    /// <summary>O JWS compacto, byte a byte.</summary>
+    public required string Request { get; set; }
+
+    public required string RequestHash { get; set; }
+}
+
+/// <summary>Um evento de uma operação, por <c>(OperationId, Seq)</c>: o repetido não entra de novo.</summary>
+internal sealed class RemoteOperationEventRow
+{
+    public Guid OperationId { get; set; }
+
+    public long Seq { get; set; }
+
+    /// <summary>A hora do agente.</summary>
+    public DateTimeOffset At { get; set; }
+
+    /// <summary>A hora do servidor: a retenção conta daqui.</summary>
+    public DateTimeOffset ReceivedAt { get; set; }
+
+    public int Kind { get; set; }
+
+    public string? Step { get; set; }
+
+    public int? Status { get; set; }
+
+    public string? Text { get; set; }
+
+    /// <summary>O <c>Data</c> do contrato, em <c>jsonb</c>.</summary>
+    public string? Data { get; set; }
+}
+
+/// <summary>
+/// Uma aprovação (ADR-086): o pedido como o agente selou, em texto e não em
+/// <c>jsonb</c> (que reordena as chaves e mudaria o hash), e a resposta
+/// assinada pelo controlador.
+/// </summary>
+internal sealed class RemoteApprovalRow
+{
+    public Guid ApprovalId { get; set; }
+
+    public Guid UserId { get; set; }
+
+    public Guid OperationId { get; set; }
+
+    public Guid TargetDeviceId { get; set; }
+
+    public int Kind { get; set; }
+
+    /// <summary>O <c>ApprovalRequest</c> do contrato, serializado.</summary>
+    public required string Request { get; set; }
+
+    public required string RequestHash { get; set; }
+
+    public DateTimeOffset ExpiresAt { get; set; }
+
+    public DateTimeOffset CreatedAt { get; set; }
+
+    public int State { get; set; }
+
+    /// <summary>O JWS da resposta, byte a byte.</summary>
+    public string? Response { get; set; }
+
+    public Guid? RespondedByDeviceId { get; set; }
+
+    public DateTimeOffset? RespondedAt { get; set; }
+}
+
+/// <summary>O catálogo publicado por uma máquina executora (ADR-088): o último vale.</summary>
+internal sealed class AgentCatalogRow
+{
+    public Guid UserId { get; set; }
+
+    public Guid DeviceId { get; set; }
+
+    public required string Hash { get; set; }
+
+    /// <summary>O <c>AgentCatalog</c> do contrato, em <c>jsonb</c>.</summary>
+    public string Catalog { get; set; } = "{}";
+
+    public DateTimeOffset UpdatedAt { get; set; }
+}
+
 /// <summary>Uma entidade sincronizada, com o JSON do contrato em <c>jsonb</c>.</summary>
 internal sealed class SyncEntityRow
 {
