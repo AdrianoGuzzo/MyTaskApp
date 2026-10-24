@@ -69,6 +69,7 @@ public static class ServerSetup
         services.AddScoped<DeviceGate>();
         services.AddHostedService<PublicClientSeeder>();
         services.AddHostedService<ProcessedOperationsPruner>();
+        services.AddHostedService<RemoteOperationSweeper>();
         services.AddHostedService<DevelopmentLoopbackGuard>();
 
         AddKeyProtection(services, options, deployed);

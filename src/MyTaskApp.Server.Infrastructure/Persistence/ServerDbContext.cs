@@ -26,6 +26,10 @@ public sealed class ServerDbContext(DbContextOptions<ServerDbContext> options)
 
     internal DbSet<RemotePairingRow> RemotePairings => Set<RemotePairingRow>();
 
+    internal DbSet<RemoteOperationRow> RemoteOperations => Set<RemoteOperationRow>();
+
+    internal DbSet<RemoteOperationEventRow> RemoteOperationEvents => Set<RemoteOperationEventRow>();
+
     internal DbSet<SyncEntityRow> SyncEntities => Set<SyncEntityRow>();
 
     internal DbSet<SyncReferenceRow> SyncReferences => Set<SyncReferenceRow>();
@@ -107,6 +111,36 @@ public sealed class ServerDbContext(DbContextOptions<ServerDbContext> options)
             // Os pedidos em aberto de um executor, e a contagem dos da conta.
             pairing.HasIndex(row => new { row.UserId, row.ExecutorDeviceId, row.ExpiresAt });
             pairing.HasOne<ApplicationUser>().WithMany().HasForeignKey(row => row.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<RemoteOperationRow>(operation =>
+        {
+            operation.ToTable("RemoteOperations");
+            operation.HasKey(row => row.OperationId);
+            operation.Property(row => row.Kind).HasMaxLength(64);
+            operation.Property(row => row.ResultCode).HasMaxLength(64);
+            operation.Property(row => row.ResultSummary).HasMaxLength(500);
+            operation.Property(row => row.Request).HasMaxLength(64 * 1024);
+            operation.Property(row => row.RequestHash).HasMaxLength(64);
+
+            // A lista da conta, o que o agente de uma máquina tem a fazer, e a varredura.
+            operation.HasIndex(row => new { row.UserId, row.ReceivedAt });
+            operation.HasIndex(row => new { row.UserId, row.TargetDeviceId, row.Status });
+            operation.HasIndex(row => new { row.Status, row.NotAfter });
+            operation.HasOne<ApplicationUser>().WithMany().HasForeignKey(row => row.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<RemoteOperationEventRow>(item =>
+        {
+            item.ToTable("RemoteOperationEvents");
+            item.HasKey(row => new { row.OperationId, row.Seq });
+            item.Property(row => row.Step).HasMaxLength(100);
+            item.Property(row => row.Text).HasMaxLength(8 * 1024);
+            item.Property(row => row.Data).HasColumnType("jsonb");
+
+            // A retenção apaga pela hora em que chegou.
+            item.HasIndex(row => row.ReceivedAt);
+            item.HasOne<RemoteOperationRow>().WithMany().HasForeignKey(row => row.OperationId).OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<SyncEntityRow>(entity =>

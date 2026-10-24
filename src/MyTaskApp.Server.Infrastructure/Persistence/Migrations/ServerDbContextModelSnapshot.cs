@@ -420,6 +420,126 @@ namespace MyTaskApp.Server.Infrastructure.Persistence.Migrations
                     b.ToTable("ProcessedOperations", (string)null);
                 });
 
+            modelBuilder.Entity("MyTaskApp.Server.Infrastructure.Persistence.RemoteOperationEventRow", b =>
+                {
+                    b.Property<Guid>("OperationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("Seq")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset>("At")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Data")
+                        .HasColumnType("jsonb");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("ReceivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Step")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Text")
+                        .HasMaxLength(8192)
+                        .HasColumnType("character varying(8192)");
+
+                    b.HasKey("OperationId", "Seq");
+
+                    b.HasIndex("ReceivedAt");
+
+                    b.ToTable("RemoteOperationEvents", (string)null);
+                });
+
+            modelBuilder.Entity("MyTaskApp.Server.Infrastructure.Persistence.RemoteOperationRow", b =>
+                {
+                    b.Property<Guid>("OperationId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("CancelRequestedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("DispatchedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("EventCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<long>("LastContiguousSeq")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset>("NotAfter")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("ReceivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Request")
+                        .IsRequired()
+                        .HasMaxLength(65536)
+                        .HasColumnType("character varying(65536)");
+
+                    b.Property<string>("RequestHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("RequestedByDeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ResultCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ResultSummary")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TargetDeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("TaskId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("OperationId");
+
+                    b.HasIndex("Status", "NotAfter");
+
+                    b.HasIndex("UserId", "ReceivedAt");
+
+                    b.HasIndex("UserId", "TargetDeviceId", "Status");
+
+                    b.ToTable("RemoteOperations", (string)null);
+                });
+
             modelBuilder.Entity("MyTaskApp.Server.Infrastructure.Persistence.RemotePairingRow", b =>
                 {
                     b.Property<Guid>("PairingId")
@@ -904,6 +1024,24 @@ namespace MyTaskApp.Server.Infrastructure.Persistence.Migrations
                 });
 
             modelBuilder.Entity("MyTaskApp.Server.Infrastructure.Persistence.DeviceRow", b =>
+                {
+                    b.HasOne("MyTaskApp.Server.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MyTaskApp.Server.Infrastructure.Persistence.RemoteOperationEventRow", b =>
+                {
+                    b.HasOne("MyTaskApp.Server.Infrastructure.Persistence.RemoteOperationRow", null)
+                        .WithMany()
+                        .HasForeignKey("OperationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MyTaskApp.Server.Infrastructure.Persistence.RemoteOperationRow", b =>
                 {
                     b.HasOne("MyTaskApp.Server.Infrastructure.Persistence.ApplicationUser", null)
                         .WithMany()

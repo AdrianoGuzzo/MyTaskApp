@@ -20,6 +20,7 @@ public static class DependencyInjection
         services.AddScoped<IDeviceRegistry, EfDeviceRegistry>();
         services.AddScoped<IRemoteDeviceStore, EfRemoteDeviceStore>();
         services.AddScoped<IRemotePairingStore, EfRemotePairingStore>();
+        services.AddScoped<IRemoteOperationStore, EfRemoteOperationStore>();
         services.AddScoped<WorkspaceProvisioner>();
 
         return services;

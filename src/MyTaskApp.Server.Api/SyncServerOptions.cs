@@ -57,6 +57,15 @@ public sealed class SyncServerOptions
     /// <summary>Por quanto tempo o resultado de uma operação fica guardado para o reenvio.</summary>
     public TimeSpan ProcessedOperationRetention { get; set; } = TimeSpan.FromDays(90);
 
+    /// <summary>Por quanto tempo os eventos de uma operação remota ficam guardados.</summary>
+    public TimeSpan RemoteEventRetention { get; set; } = TimeSpan.FromDays(30);
+
+    /// <summary>
+    /// De quanto em quanto tempo a varredura da orquestração passa: bem abaixo
+    /// do <c>RemoteLimits.DispatchTimeout</c>, para a entregue sem aceite voltar logo.
+    /// </summary>
+    public TimeSpan RemoteSweepInterval { get; set; } = TimeSpan.FromSeconds(30);
+
     public RateLimitOptions RateLimits { get; set; } = new();
 
     public RegistrationOptions Registration { get; set; } = new();

@@ -285,6 +285,33 @@ internal sealed class ProcessedOperationsPruner(IServiceProvider services, SyncS
 }
 
 /// <summary>
+/// A varredura da orquestração (ADR-086): a entregue sem aceite volta para a
+/// fila, a vencida sem aceite expira, e os eventos velhos saem.
+/// </summary>
+internal sealed class RemoteOperationSweeper(IServiceProvider services, SyncServerOptions options, TimeProvider timeProvider, ILogger<RemoteOperationSweeper> logger)
+    : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        using var timer = new PeriodicTimer(options.RemoteSweepInterval, timeProvider);
+
+        do
+        {
+            try
+            {
+                await using var scope = services.CreateAsyncScope();
+                await scope.ServiceProvider.GetRequiredService<RemoteOperationUseCases>().SweepAsync(options.RemoteEventRetention, stoppingToken);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                logger.LogWarning(exception, "RemoteOperationSweepFailed");
+            }
+        }
+        while (await timer.WaitForNextTickAsync(stoppingToken));
+    }
+}
+
+/// <summary>
 /// Development não serve a rede (ADR-070): ali o OAuth anda em HTTP e os
 /// certificados são os de desenvolvimento. Depois que o Kestrel abre as portas,
 /// um endereço fora do loopback derruba a subida. A exceção é explícita

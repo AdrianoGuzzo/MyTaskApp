@@ -16,6 +16,7 @@ public static class DependencyInjection
         services.AddScoped<DeviceUseCases>();
         services.AddScoped<RemoteDeviceUseCases>();
         services.AddScoped<RemotePairingUseCases>();
+        services.AddScoped<RemoteOperationUseCases>();
 
         return services;
     }
