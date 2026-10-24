@@ -43,4 +43,27 @@ public static class RemoteLimits
 
     /// <summary>Sem sinal de vida por mais que isto, a máquina aparece desligada.</summary>
     public static readonly TimeSpan OfflineAfter = TimeSpan.FromSeconds(90);
+
+    /// <summary>Entregue e sem aceite por mais que isto, a operação volta para a fila.</summary>
+    public static readonly TimeSpan DispatchTimeout = TimeSpan.FromMinutes(2);
+
+    /// <summary>O máximo que uma aprovação espera; acima, o servidor recusa o pedido.</summary>
+    public static readonly TimeSpan MaxApprovalLifetime = TimeSpan.FromHours(1);
+
+    /// <summary>Sem o hub (proxy que barra WebSocket), de quanto em quanto tempo o agente pergunta.</summary>
+    public static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Eventos guardados por operação. Acima disto, a saída (<see cref="RemoteEventKind.Output"/>)
+    /// é confirmada e descartada; o resto continua: o fim da operação nunca se perde.
+    /// </summary>
+    public const int MaxEventsPerOperation = 10_000;
+
+    public const int MaxEventPageSize = 500;
+
+    /// <summary>A linha de resumo do resultado.</summary>
+    public const int MaxResultSummaryLength = 500;
+
+    /// <summary>O resumo de uma aprovação, como a tela mostra.</summary>
+    public const int MaxApprovalSummaryLength = 500;
 }
