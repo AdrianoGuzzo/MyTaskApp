@@ -211,6 +211,8 @@ public sealed class MachineCapabilities(
     IGitClient git,
     IAgentCliProviders agents,
     IPostgresToolLocator postgres,
+    SupportedRemoteOperations supported,
+    RemoteDispatchLimits limits,
     TimeProvider timeProvider)
 {
     internal static readonly TimeSpan Lifetime = TimeSpan.FromHours(1);
@@ -222,7 +224,8 @@ public sealed class MachineCapabilities(
 
     private (DeviceCapabilities Value, DateTimeOffset At)? _cached;
 
-    public async Task<DeviceCapabilities> GetAsync(CancellationToken cancellationToken)
+    /// <param name="refresh">Mede de novo: o <c>environment.inspect</c> responde com o que há agora.</param>
+    public async Task<DeviceCapabilities> GetAsync(CancellationToken cancellationToken, bool refresh = false)
     {
         await _gate.WaitAsync(cancellationToken);
 
@@ -230,7 +233,7 @@ public sealed class MachineCapabilities(
         {
             var now = timeProvider.GetUtcNow();
 
-            if (_cached is { } cached && now - cached.At < Lifetime)
+            if (!refresh && _cached is { } cached && now - cached.At < Lifetime)
             {
                 return cached.Value;
             }
@@ -254,8 +257,8 @@ public sealed class MachineCapabilities(
         return new DeviceCapabilities(
             RemoteLimits.ProtocolVersion,
 
-            // Nenhuma operação ainda: quem as atende é o agente (T-10 em diante).
-            [],
+            // As que esta versão roda. Quem atende é o agente; o desktop registra o mesmo, do mesmo código.
+            supported.Kinds,
             OperatingSystem.IsWindows() ? "windows" : OperatingSystem.IsLinux() ? "linux" : "outro",
             Tool(gitInstallation.IsInstalled, gitInstallation.Version),
             Tool(claude.IsInstalled, claude.Version),
@@ -263,7 +266,9 @@ public sealed class MachineCapabilities(
             // Sem porta que diga a versão do gh ainda.
             ToolStatus.Missing,
             Tool(pgDump.Found, pgDump.VersionText),
-            MaxConcurrentOperations: 1,
+            limits.MaxConcurrent,
+
+            // Quem registra põe o do catálogo de agora (RegisterThisMachineHandler): este fica em cache.
             CatalogHash: string.Empty);
     }
 
@@ -299,6 +304,7 @@ public sealed class RegisterThisMachineHandler(
     IDeviceSigner signer,
     IDeviceIdentity identity,
     MachineCapabilities capabilities,
+    RemoteCatalogPublisher catalogs,
     ILogger<RegisterThisMachineHandler> logger)
 {
     public async Task<RemoteAvailability> HandleAsync(RegisterThisMachine command, CancellationToken cancellationToken = default)
@@ -310,15 +316,24 @@ public sealed class RegisterThisMachineHandler(
             return RemoteAvailability.Off;
         }
 
+        // O registro grava as capacidades inteiras, inclusive o hash do catálogo: vai o de agora.
+        var catalog = current.AcceptControl ? await catalogs.CurrentAsync(cancellationToken) : null;
         var registration = new DeviceRegistration(
             identity.DeviceId,
             current.AcceptControl ? DeviceRoles.Controller | DeviceRoles.Executor : DeviceRoles.Controller,
             await signer.GetPublicKeyAsync(cancellationToken),
-            await capabilities.GetAsync(cancellationToken));
+            (await capabilities.GetAsync(cancellationToken)) with { CatalogHash = catalog?.Hash ?? string.Empty });
 
         try
         {
             await remote.RegisterAsync(registration, cancellationToken);
+
+            // Executora registrada: o catálogo pode subir, se mudou.
+            if (catalog is not null)
+            {
+                await catalogs.PublishAsync(cancellationToken);
+            }
+
             return RemoteAvailability.Ready;
         }
         catch (SyncApiException exception)

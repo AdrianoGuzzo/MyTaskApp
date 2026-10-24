@@ -98,6 +98,11 @@ public class ApplicationRegistrationTests
             .AddSingleton<MyTaskApp.Application.Remote.IDeviceSigner>(new FakeDeviceSigner())
             .AddSingleton<MyTaskApp.Application.Remote.ITrustedControllerRepository>(new FakeTrustedControllerRepository())
             .AddSingleton<MyTaskApp.Application.Remote.IRemoteSettingsStore>(new FakeRemoteSettingsStore())
+            .AddSingleton<MyTaskApp.Application.Remote.IRemoteOperationsApi>(new Remote.FakeOperationQueue())
+            .AddSingleton<MyTaskApp.Application.Remote.IRemoteCatalogQuery>(new Remote.FakeCatalogQuery())
+            .AddSingleton<MyTaskApp.Application.Remote.IRemoteOperationJournal>(new Remote.InMemoryRemoteJournal())
+            .AddSingleton<MyTaskApp.Application.Remote.IRemoteEntityProbe>(new Remote.FakeEntityProbe())
+            .AddSingleton(NSubstitute.Substitute.For<MyTaskApp.Application.Sync.ISyncLocalStore>())
             .AddSingleton<IConsultationDatabase>(new FakeConsultationDatabase())
             .AddSingleton<IConsultationReadAccessProvisioner>(new FakeReadAccessProvisioner(new MyTaskApp.Domain.DatabaseOperations.DatabaseSecurityPolicy()))
             // O servidor MCP (ADR-059): configuração, token e as consultas novas.
@@ -190,6 +195,11 @@ public class ApplicationRegistrationTests
     [InlineData(typeof(MyTaskApp.Application.Remote.UpdateRemoteSettingsHandler))]
     [InlineData(typeof(MyTaskApp.Application.Remote.GetMachinesHandler))]
     [InlineData(typeof(MyTaskApp.Application.Remote.RegisterThisMachineHandler))]
+    [InlineData(typeof(MyTaskApp.Application.Remote.AdmitRemoteOperationHandler))]
+    [InlineData(typeof(MyTaskApp.Application.Remote.RemoteOperationScheduler))]
+    [InlineData(typeof(MyTaskApp.Application.Remote.GetPendingApprovalsHandler))]
+    [InlineData(typeof(MyTaskApp.Application.Remote.AnswerApprovalHandler))]
+    [InlineData(typeof(MyTaskApp.Application.Remote.SendRemoteOperationHandler))]
     [InlineData(typeof(MyTaskApp.Application.Remote.RequestPairingHandler))]
     [InlineData(typeof(MyTaskApp.Application.Remote.GetPairingStatusHandler))]
     [InlineData(typeof(MyTaskApp.Application.Remote.RevokeTrustedControllerHandler))]

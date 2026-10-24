@@ -127,6 +127,7 @@ public static class DependencyInjection
         services.AddScoped<IRemoteSettingsStore, RemoteSettingsStore>();
         services.AddScoped<IRemoteOperationJournal, RemoteOperationJournal>();
         services.AddScoped<IRemoteEntityProbe, RemoteEntityProbe>();
+        services.AddScoped<IRemoteCatalogQuery, RemoteCatalogQuery>();
         services.AddScoped<ICommandExecutionRepository, CommandExecutionRepository>();
         services.AddScoped<IAgentSettingsStore, AgentSettingsStore>();
         services.AddScoped<IAgentAlertSoundStore, AgentAlertSoundStore>();
@@ -373,6 +374,9 @@ public static class DependencyInjection
         services.AddSingleton<RemoteApiClient>();
         services.AddSingleton<IRemoteApi>(provider => provider.GetRequiredService<RemoteApiClient>());
         services.AddSingleton<IRemoteOperationsApi>(provider => provider.GetRequiredService<RemoteApiClient>());
+
+        // A campainha do servidor (T-15): só o agente liga, pelo RemoteOperationScheduler.
+        services.AddSingleton<IRemoteHub, SignalRRemoteHub>();
         services.AddSingleton<ISyncServerAddress, SyncServerAddress>();
         services.AddSingleton<ISyncServerProbe, SyncServerProbe>();
     }

@@ -28,6 +28,7 @@ using MyTaskApp.Application.Tags;
 using MyTaskApp.Application.Tasks;
 using MyTaskApp.Application.TimeTracking;
 using MyTaskApp.Domain.DatabaseOperations;
+using MyTaskApp.Remote.Contracts;
 
 namespace MyTaskApp.Application;
 
@@ -234,10 +235,22 @@ public static class DependencyInjection
         services.TryAddSingleton<MachineCapabilities>();
         services.TryAddSingleton<RemotePresenceScheduler>();
 
-        // A fila de operações, do lado do agente (T-14): a validação local e o despachante.
+        // A fila de operações, do lado do agente (T-14, T-15): a validação local,
+        // o despachante, o laço e o que esta versão sabe rodar (ADR-088).
         services.AddScoped<AdmitRemoteOperationHandler>();
+        services.AddScoped<GetPendingApprovalsHandler>();
+        services.AddScoped<AnswerApprovalHandler>();
+        services.AddScoped<SendRemoteOperationHandler>();
         services.TryAddSingleton(RemoteDispatchLimits.Default);
         services.TryAddSingleton<RemoteOperationDispatcher>();
+        services.TryAddSingleton<IRemoteHub, NoRemoteHub>();
+        services.TryAddSingleton<RemoteOperationScheduler>();
+        services.TryAddSingleton<RemoteCatalogPublisher>();
+
+        // Os tipos vão escritos, e não lidos dos executores: o das ferramentas
+        // depende das capacidades, que listam os tipos. Um teste confere que batem.
+        services.AddSingleton<IRemoteOperationExecutor, EnvironmentInspectExecutor>();
+        services.TryAddSingleton(new SupportedRemoteOperations([RemoteOperationKinds.EnvironmentInspect]));
         services.AddScoped<ConsultationLauncher>();
         services.AddScoped<ConsultationTargetResolver>();
         services.AddScoped<ConsultationFolders>();

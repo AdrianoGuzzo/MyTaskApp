@@ -27,6 +27,23 @@ public interface IRemoteOperationsApi
     Task<RemoteEventPage> ListEventsAsync(Guid operationId, long after, int? limit, CancellationToken cancellationToken);
 
     Task<RemoteOperationView> CancelAsync(Guid operationId, CancellationToken cancellationToken);
+
+    /// <summary>O catálogo desta máquina (ADR-088). Só de quem é executor.</summary>
+    Task<AgentCatalog> PublishCatalogAsync(AgentCatalog catalog, CancellationToken cancellationToken);
+
+    /// <summary>O catálogo que outra máquina da conta publicou.</summary>
+    Task<AgentCatalog> GetCatalogAsync(Guid deviceId, CancellationToken cancellationToken);
+
+    /// <summary>O agente pede uma aprovação, selada (<see cref="ApprovalHash"/>). O mesmo pedido de novo devolve a mesma.</summary>
+    Task<ApprovalView> RequestApprovalAsync(ApprovalRequest request, CancellationToken cancellationToken);
+
+    Task<ApprovalView> GetApprovalAsync(Guid approvalId, CancellationToken cancellationToken);
+
+    /// <summary>As que esperam resposta nesta conta.</summary>
+    Task<IReadOnlyList<ApprovalView>> ListPendingApprovalsAsync(CancellationToken cancellationToken);
+
+    /// <summary>Um controlador responde, assinando (<see cref="RemoteJws.ApprovalType"/>).</summary>
+    Task<ApprovalView> RespondApprovalAsync(Guid approvalId, SignedEnvelope response, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -148,12 +165,13 @@ public sealed record RemoteOperationResult(bool Succeeded, string? Summary = nul
     public static RemoteOperationResult Failure(string code, string? summary = null) => new(false, summary, code);
 }
 
-/// <summary>O que o executor recebe: o pedido conferido, quem pediu, e por onde contar o andamento.</summary>
+/// <summary>O que o executor recebe: o pedido conferido, quem pediu, por onde contar o andamento e pedir aprovação.</summary>
 public sealed class RemoteExecution(
     RemoteOperationRequest request,
     string controllerNickname,
     Func<RemoteOperationEvent, CancellationToken, Task> emit,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider,
+    Func<RemoteApprovalAsk, CancellationToken, Task<RemoteApprovalResult>>? approve = null)
 {
     public RemoteOperationRequest Request { get; } = request;
 
@@ -168,4 +186,13 @@ public sealed class RemoteExecution(
         JsonElement? data = null,
         CancellationToken cancellationToken = default) =>
         emit(new RemoteOperationEvent(Request.OperationId, 0, timeProvider.GetUtcNow(), kind, step, null, text, data), cancellationToken);
+
+    /// <summary>
+    /// Para e espera um humano no controlador. Sem resposta a tempo, ou com
+    /// uma que não confere, é negar: só <see cref="RemoteApprovalResult.IsAllowed"/> segue.
+    /// </summary>
+    public Task<RemoteApprovalResult> RequestApprovalAsync(RemoteApprovalAsk ask, CancellationToken cancellationToken = default) =>
+        approve is null
+            ? Task.FromResult(new RemoteApprovalResult(RemoteApprovalOutcome.Denied))
+            : approve(ask, cancellationToken);
 }

@@ -14,6 +14,19 @@ public enum WorktreeConflictPolicy
 /// <summary><c>environment.inspect</c>: Git, Claude, gh, ferramentas do PostgreSQL e o catálogo. Não muda nada.</summary>
 public sealed record EnvironmentInspectionRequest;
 
+/// <summary>
+/// O <c>Data</c> do resultado de <c>environment.inspect</c>. O catálogo
+/// inteiro não vem aqui (o servidor descarta <c>Data</c> acima de 8 KiB): o
+/// agente o publica antes de responder, e quem pediu o lê em
+/// <see cref="RemoteRoutes.Catalog"/> pelo <paramref name="CatalogHash"/>.
+/// </summary>
+public sealed record EnvironmentInspection(
+    DeviceCapabilities Capabilities,
+    string CatalogHash,
+    int Directories,
+    int Commands,
+    string AgentVersion);
+
 /// <summary><c>worktree.provision</c>: o "Iniciar implementação" da tela, sem a tela.</summary>
 /// <param name="TagDirectoryId">O repositório, pelo diretório da etiqueta desta máquina.</param>
 /// <param name="SourceBranch">Nula: o padrão do diretório (ADR-035). Exclusiva com <paramref name="SourceTag"/>.</param>

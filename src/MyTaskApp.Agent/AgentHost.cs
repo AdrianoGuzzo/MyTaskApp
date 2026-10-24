@@ -7,13 +7,15 @@ namespace MyTaskApp.Agent;
 
 /// <summary>
 /// Os laços do agente (ADR-085): a sincronização, que só cicla no dono do
-/// lease, o sinal de vida da máquina e o canal local até o desktop. Lembretes, bandeja e post-its são só do
-/// desktop, e não sobem aqui.
+/// lease, o sinal de vida da máquina, o canal local até o desktop e a fila de
+/// operações remotas, que só o agente atende (T-15). Lembretes, bandeja e
+/// post-its são só do desktop, e não sobem aqui.
 /// </summary>
 internal sealed class AgentHost(
     SyncScheduler sync,
     RemotePresenceScheduler presence,
     LocalPeerBridge peer,
+    RemoteOperationScheduler operations,
     ILogger<AgentHost> logger)
 {
     /// <summary>A mesma folga do desktop para o que está em andamento terminar.</summary>
@@ -32,6 +34,7 @@ internal sealed class AgentHost(
         sync.Start();
         presence.Start();
         peer.Start();
+        operations.Start();
 
         logger.LogInformation("AgentStarted");
     }
@@ -46,6 +49,8 @@ internal sealed class AgentHost(
 
         IsRunning = false;
 
+        // A fila primeiro: o que roda ainda conta o fim ao servidor, pelo sync e pela rede que seguem de pé.
+        await operations.DisposeAsync();
         await peer.DisposeAsync();
         await presence.DisposeAsync();
         await sync.DisposeAsync();

@@ -35,9 +35,13 @@ public sealed class RemoteOperationDispatcher(
     IRemoteOperationsApi remote,
     IUseCaseRunner runner,
     ISyncTrigger sync,
+    IRemoteHub hub,
     TimeProvider timeProvider,
     ILogger<RemoteOperationDispatcher> logger)
 {
+    /// <summary>De quanto em quanto o agente pergunta por uma aprovação, quando o hub não toca.</summary>
+    public static readonly TimeSpan ApprovalPollInterval = TimeSpan.FromSeconds(5);
+
     /// <summary>A saída junta em lotes por este tempo antes de ir: uma linha não vira um POST.</summary>
     public static readonly TimeSpan EventFlushDelay = TimeSpan.FromMilliseconds(250);
 
@@ -254,7 +258,12 @@ public sealed class RemoteOperationDispatcher(
             await JournalAsync((journal, token) => journal.SetStatusAsync(id, RemoteOperationStatus.Running, cancellationToken: token), CancellationToken.None);
             await ReportAsync(id, CancellationToken.None);
 
-            var execution = new RemoteExecution(request, entry.ControllerNickname, EmitAsync, timeProvider);
+            var execution = new RemoteExecution(
+                request,
+                entry.ControllerNickname,
+                EmitAsync,
+                timeProvider,
+                (ask, token) => RequestApprovalAsync(id, ask, token));
 
             // A auditoria grava "adria (Remoto: Pixel 8)" (ADR-059): quem lê sabe que não foi a pessoa aqui.
             using (OperationOrigin.Enter($"Remoto: {entry.ControllerNickname}"))
@@ -325,6 +334,149 @@ public sealed class RemoteOperationDispatcher(
 
         Finished?.Invoke(id, status);
     }
+
+    /// <summary>
+    /// Para a operação esperando um humano (seção 4.3): Esperando aprovação no
+    /// servidor, o pedido selado na fila de aprovações, e a resposta conferida
+    /// aqui (<see cref="RemoteApprovalVerifier"/>). Sem resposta até o prazo,
+    /// ou com uma que não confere, é negar. Depois, a operação volta a Rodando
+    /// e quem a pediu decide o que fazer com a negativa.
+    /// </summary>
+    private async Task<RemoteApprovalResult> RequestApprovalAsync(Guid operationId, RemoteApprovalAsk ask, CancellationToken cancellationToken)
+    {
+        var now = timeProvider.GetUtcNow();
+        var lifetime = ask.Lifetime is { } wanted && wanted > TimeSpan.Zero && wanted <= RemoteLimits.MaxApprovalLifetime
+            ? wanted
+            : RemoteLimits.DefaultApprovalLifetime;
+        var request = ApprovalHash.Seal(new ApprovalRequest(
+            Guid.CreateVersion7(now),
+            operationId,
+            ask.Kind,
+            Clip(ask.Summary, RemoteLimits.MaxApprovalSummaryLength)!,
+            ask.Details,
+            ask.TypedConfirmationHint,
+            now + lifetime,
+            string.Empty));
+
+        using var resolved = new SemaphoreSlim(0);
+        hub.ApprovalResolved += OnResolved;
+
+        try
+        {
+            await JournalAsync((journal, token) => journal.SetStatusAsync(operationId, RemoteOperationStatus.WaitingApproval, cancellationToken: token), cancellationToken);
+            await EmitAsync(
+                new RemoteOperationEvent(operationId, 0, now, RemoteEventKind.ApprovalRequested, Text: request.Summary, Data: Describe(request.ApprovalId, request.Kind.ToString())),
+                cancellationToken);
+            await ReportAsync(operationId, cancellationToken);
+
+            logger.LogInformation("RemoteApprovalRequested {OperationId} {ApprovalId} {Kind}", operationId, request.ApprovalId, request.Kind);
+            var result = await WaitForAnswerAsync(request, resolved, cancellationToken);
+            logger.LogInformation("RemoteApprovalResolved {OperationId} {ApprovalId} {Outcome}", operationId, request.ApprovalId, result.Outcome);
+
+            await JournalAsync((journal, token) => journal.SetStatusAsync(operationId, RemoteOperationStatus.Running, cancellationToken: token), cancellationToken);
+            await EmitAsync(
+                new RemoteOperationEvent(
+                    operationId,
+                    0,
+                    timeProvider.GetUtcNow(),
+                    RemoteEventKind.ApprovalResolved,
+                    Text: Explain(result),
+                    Data: Describe(request.ApprovalId, result.Outcome.ToString())),
+                cancellationToken);
+            await ReportAsync(operationId, cancellationToken);
+
+            return result;
+        }
+        finally
+        {
+            hub.ApprovalResolved -= OnResolved;
+        }
+
+        void OnResolved(Guid approvalId)
+        {
+            if (approvalId == request.ApprovalId)
+            {
+                resolved.Release();
+            }
+        }
+    }
+
+    private async Task<RemoteApprovalResult> WaitForAnswerAsync(ApprovalRequest request, SemaphoreSlim resolved, CancellationToken cancellationToken)
+    {
+        var posted = false;
+
+        while (true)
+        {
+            try
+            {
+                // Pedir de novo o mesmo é seguro (o servidor devolve a mesma): uma falha de rede no primeiro não perde nada.
+                var view = posted
+                    ? await remote.GetApprovalAsync(request.ApprovalId, cancellationToken)
+                    : await remote.RequestApprovalAsync(request, cancellationToken);
+                posted = true;
+
+                var trusted = await runner.RunAsync<ITrustedControllerRepository, IReadOnlyList<Domain.Remote.TrustedController>>(
+                    (repository, token) => repository.ListAllActiveAsync(token),
+                    cancellationToken);
+
+                if (RemoteApprovalVerifier.Verify(request, view, trusted) is { } result)
+                {
+                    return result;
+                }
+            }
+            catch (SyncApiException exception) when (exception.Kind is SyncFailureKind.Rejected or SyncFailureKind.NotFound or SyncFailureKind.Forbidden)
+            {
+                // O servidor não aceita o pedido (a operação acabou lá, ou o pedido não fecha): ninguém vai poder permitir.
+                logger.LogWarning("RemoteApprovalRefused {ApprovalId} {Code}", request.ApprovalId, exception.Code);
+                return new RemoteApprovalResult(RemoteApprovalOutcome.Invalid);
+            }
+            catch (Exception exception) when (IsTransient(exception))
+            {
+                logger.LogDebug(exception, "RemoteApprovalDeferred {ApprovalId}", request.ApprovalId);
+            }
+
+            var left = request.ExpiresAt - timeProvider.GetUtcNow();
+
+            if (left <= TimeSpan.Zero)
+            {
+                return new RemoteApprovalResult(RemoteApprovalOutcome.Expired);
+            }
+
+            await WaitAsync(resolved, left < ApprovalPollInterval ? left : ApprovalPollInterval, cancellationToken);
+        }
+    }
+
+    /// <summary>O hub tocar ou o intervalo passar, no relógio injetado; o que sobrar é cancelado.</summary>
+    private async Task WaitAsync(SemaphoreSlim resolved, TimeSpan delay, CancellationToken cancellationToken)
+    {
+        using var either = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var signal = resolved.WaitAsync(either.Token);
+        var timeout = Task.Delay(delay, timeProvider, either.Token);
+
+        await Task.WhenAny(signal, timeout);
+        await either.CancelAsync();
+        cancellationToken.ThrowIfCancellationRequested();
+
+        try
+        {
+            await Task.WhenAll(signal, timeout);
+        }
+        catch (OperationCanceledException)
+        {
+            // O que perdeu a corrida.
+        }
+    }
+
+    private static JsonElement Describe(Guid approvalId, string value) =>
+        JsonSerializer.SerializeToElement(new Dictionary<string, string> { ["approvalId"] = approvalId.ToString("D"), ["value"] = value }, RemoteJson.Options);
+
+    private static string Explain(RemoteApprovalResult result) => result.Outcome switch
+    {
+        RemoteApprovalOutcome.Allowed => $"Permitido por {result.ControllerNickname}.",
+        RemoteApprovalOutcome.Denied => $"Negado por {result.ControllerNickname}.",
+        RemoteApprovalOutcome.Expired => "Ninguém respondeu a tempo: negado.",
+        _ => "A resposta não conferiu: negado.",
+    };
 
     /// <summary>O diário numera e guarda; o envio junta o que chegar em <see cref="EventFlushDelay"/>.</summary>
     private async Task EmitAsync(RemoteOperationEvent draft, CancellationToken cancellationToken)

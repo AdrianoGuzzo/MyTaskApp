@@ -55,6 +55,24 @@ internal sealed class RemoteApiClient(SyncHttp http, ISyncAuthenticator authenti
     public Task<RemoteOperationView> CancelAsync(Guid operationId, CancellationToken cancellationToken) =>
         CallAsync<RemoteOperationView>(HttpMethod.Post, RemoteRoutes.CancelOperation(operationId), null, cancellationToken);
 
+    public Task<AgentCatalog> PublishCatalogAsync(AgentCatalog catalog, CancellationToken cancellationToken) =>
+        CallAsync<AgentCatalog>(HttpMethod.Put, RemoteRoutes.CurrentCatalog, catalog, cancellationToken);
+
+    public Task<AgentCatalog> GetCatalogAsync(Guid deviceId, CancellationToken cancellationToken) =>
+        CallAsync<AgentCatalog>(HttpMethod.Get, RemoteRoutes.Catalog(deviceId), null, cancellationToken);
+
+    public Task<ApprovalView> RequestApprovalAsync(ApprovalRequest request, CancellationToken cancellationToken) =>
+        CallAsync<ApprovalView>(HttpMethod.Post, RemoteRoutes.OperationApprovals(request.OperationId), request, cancellationToken);
+
+    public Task<ApprovalView> GetApprovalAsync(Guid approvalId, CancellationToken cancellationToken) =>
+        CallAsync<ApprovalView>(HttpMethod.Get, RemoteRoutes.Approval(approvalId), null, cancellationToken);
+
+    public async Task<IReadOnlyList<ApprovalView>> ListPendingApprovalsAsync(CancellationToken cancellationToken) =>
+        await CallAsync<List<ApprovalView>>(HttpMethod.Get, RemoteRoutes.Approvals, null, cancellationToken);
+
+    public Task<ApprovalView> RespondApprovalAsync(Guid approvalId, SignedEnvelope response, CancellationToken cancellationToken) =>
+        CallAsync<ApprovalView>(HttpMethod.Post, RemoteRoutes.ApprovalResponse(approvalId), response, cancellationToken);
+
     private async Task<T> CallAsync<T>(HttpMethod method, string path, object? body, CancellationToken cancellationToken)
     {
         var token = await authenticator.GetAccessTokenAsync(cancellationToken);

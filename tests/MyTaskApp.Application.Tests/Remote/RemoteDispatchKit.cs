@@ -48,6 +48,9 @@ internal sealed class RemoteDispatchKit : IAsyncDisposable
             .AddSingleton<ILogger<RemoteOperationDispatcher>>(NullLogger<RemoteOperationDispatcher>.Instance)
             .AddScoped<AdmitRemoteOperationHandler>()
             .AddSingleton<RemoteOperationDispatcher>()
+            .AddSingleton<IRemoteHub>(Hub)
+            .AddSingleton<ILogger<RemoteOperationScheduler>>(NullLogger<RemoteOperationScheduler>.Instance)
+            .AddSingleton<RemoteOperationScheduler>()
             .BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
 
         Dispatcher.Finished += (id, status) => FinishedOf(id).TrySetResult(status);
@@ -78,6 +81,10 @@ internal sealed class RemoteDispatchKit : IAsyncDisposable
     public CountingSyncTrigger Trigger { get; } = new();
 
     public Controller Phone { get; } = new("Pixel 8");
+
+    public FakeRemoteHub Hub { get; } = new();
+
+    public RemoteOperationScheduler Scheduler => _services.GetRequiredService<RemoteOperationScheduler>();
 
     public RemoteOperationDispatcher Dispatcher => _services.GetRequiredService<RemoteOperationDispatcher>();
 
@@ -138,6 +145,7 @@ internal sealed class RemoteDispatchKit : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        await Scheduler.DisposeAsync();
         await Dispatcher.StopAsync(TimeSpan.FromSeconds(5));
         await _services.DisposeAsync();
         Phone.Dispose();
@@ -155,9 +163,23 @@ internal sealed class Controller(string nickname) : IDisposable
 
     public DevicePublicKey Key => DevicePublicKey.Es256Of(_key.ExportSubjectPublicKeyInfo());
 
-    public SignedEnvelope Sign(RemoteOperationRequest request)
+    public SignedEnvelope Sign(RemoteOperationRequest request) => Sign(request, RemoteJws.OperationType);
+
+    /// <summary>A resposta a uma aprovação, como o controlador assinaria; o <paramref name="change"/> estraga o que o teste quiser.</summary>
+    public SignedEnvelope Answer(
+        ApprovalRequest request,
+        ApprovalDecision decision,
+        DateTimeOffset at,
+        string? typed = null,
+        Func<ApprovalResponse, ApprovalResponse>? change = null)
     {
-        var input = RemoteJws.SigningInput(request, Key.Fingerprint, RemoteJws.OperationType);
+        var response = new ApprovalResponse(request.ApprovalId, request.OperationId, request.RequestHash, decision, typed, false, at);
+        return Sign(change is null ? response : change(response), RemoteJws.ApprovalType);
+    }
+
+    private SignedEnvelope Sign<T>(T payload, string type)
+    {
+        var input = RemoteJws.SigningInput(payload, Key.Fingerprint, type);
         var signature = _key.SignData(Encoding.ASCII.GetBytes(input), HashAlgorithmName.SHA256, DSASignatureFormat.IeeeP1363FixedFieldConcatenation);
         return RemoteJws.Compose(input, Base64Url.EncodeToString(signature));
     }
@@ -300,7 +322,18 @@ internal sealed class FakeOperationQueue : IRemoteOperationsApi
         }
     }
 
-    public Task<RemoteOperationView> CreateAsync(SignedEnvelope request, CancellationToken cancellationToken) => throw new NotSupportedException();
+    /// <summary>Põe na fila como veio; quem confere a assinatura é o agente.</summary>
+    public Task<RemoteOperationView> CreateAsync(SignedEnvelope request, CancellationToken cancellationToken)
+    {
+        RemoteJws.TryParse(request, out var parts).Should().BeTrue();
+        var id = JsonSerializer.Deserialize<RemoteOperationRequest>(parts.Payload, RemoteJson.Options)!.OperationId;
+        Enqueue(id, request);
+
+        lock (_gate)
+        {
+            return Task.FromResult(View(id));
+        }
+    }
 
     public Task<RemoteOperationView> GetAsync(Guid operationId, CancellationToken cancellationToken) => throw new NotSupportedException();
 
@@ -308,6 +341,102 @@ internal sealed class FakeOperationQueue : IRemoteOperationsApi
         throw new NotSupportedException();
 
     public Task<RemoteOperationView> CancelAsync(Guid operationId, CancellationToken cancellationToken) => throw new NotSupportedException();
+
+    public List<AgentCatalog> Catalogs { get; } = [];
+
+    public Task<AgentCatalog> PublishCatalogAsync(AgentCatalog catalog, CancellationToken cancellationToken)
+    {
+        lock (_gate)
+        {
+            ThrowIfOffline();
+            Catalogs.Add(catalog);
+            return Task.FromResult(catalog);
+        }
+    }
+
+    public Task<AgentCatalog> GetCatalogAsync(Guid deviceId, CancellationToken cancellationToken) => throw new NotSupportedException();
+
+    public Dictionary<Guid, ApprovalView> Approvals { get; } = [];
+
+    /// <summary>Quantas vezes o agente perguntou por uma aprovação.</summary>
+    public int ApprovalReads { get; private set; }
+
+    private readonly ConcurrentDictionary<Guid, TaskCompletionSource<ApprovalRequest>> _asked = new();
+
+    /// <summary>A aprovação que o agente pediu para a operação.</summary>
+    public Task<ApprovalRequest> AskedAsync(Guid operationId) =>
+        AskedOf(operationId).Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+
+    private TaskCompletionSource<ApprovalRequest> AskedOf(Guid operationId) =>
+        _asked.GetOrAdd(operationId, _ => new TaskCompletionSource<ApprovalRequest>(TaskCreationOptions.RunContinuationsAsynchronously));
+
+    public Task<ApprovalView> RequestApprovalAsync(ApprovalRequest request, CancellationToken cancellationToken)
+    {
+        lock (_gate)
+        {
+            ThrowIfOffline();
+
+            // Como o de verdade: só selado, só de operação viva, e o mesmo pedido de novo devolve o mesmo.
+            if (!ApprovalHash.IsSealed(request) || RemoteOperationLifecycle.IsFinal(Operations[request.OperationId].Status))
+            {
+                throw new SyncApiException(SyncFailureKind.Rejected, "Recusado.", RemoteErrorCodes.HashMismatch);
+            }
+
+            if (!Approvals.TryGetValue(request.ApprovalId, out var view))
+            {
+                view = Approvals[request.ApprovalId] = new ApprovalView(request, Guid.Empty, ApprovalState.Pending, null, null, null);
+            }
+
+            AskedOf(request.OperationId).TrySetResult(request);
+            return Task.FromResult(view);
+        }
+    }
+
+    public Task<ApprovalView> GetApprovalAsync(Guid approvalId, CancellationToken cancellationToken)
+    {
+        lock (_gate)
+        {
+            ThrowIfOffline();
+            ApprovalReads++;
+            return Task.FromResult(Approvals[approvalId]);
+        }
+    }
+
+    public Task<IReadOnlyList<ApprovalView>> ListPendingApprovalsAsync(CancellationToken cancellationToken)
+    {
+        lock (_gate)
+        {
+            IReadOnlyList<ApprovalView> pending = [.. Approvals.Values.Where(view => view.State == ApprovalState.Pending)];
+            return Task.FromResult(pending);
+        }
+    }
+
+    /// <summary>Guarda a resposta com o estado da decisão que vem nela (o servidor de verdade confere a assinatura; aqui, quem confere é o agente).</summary>
+    public Task<ApprovalView> RespondApprovalAsync(Guid approvalId, SignedEnvelope response, CancellationToken cancellationToken)
+    {
+        lock (_gate)
+        {
+            ThrowIfOffline();
+            RemoteJws.TryParse(response, out var parts);
+            var decision = JsonSerializer.Deserialize<ApprovalResponse>(parts.Payload, RemoteJson.Options)!.Decision;
+            var view = Approvals[approvalId] = Approvals[approvalId] with
+            {
+                State = decision == ApprovalDecision.Allow ? ApprovalState.Allowed : ApprovalState.Denied,
+                Response = response,
+                RespondedAt = DateTimeOffset.UtcNow,
+            };
+            return Task.FromResult(view);
+        }
+    }
+
+    /// <summary>O prazo passou no servidor, sem resposta.</summary>
+    public void ExpireApproval(Guid approvalId)
+    {
+        lock (_gate)
+        {
+            Approvals[approvalId] = Approvals[approvalId] with { State = ApprovalState.Expired };
+        }
+    }
 
     private RemoteOperationView View(Guid id) =>
         new(id, Guid.Empty, Guid.Empty, Guid.Empty, RemoteOperationKinds.EnvironmentInspect, null, Operations[id].Status,
@@ -346,6 +475,54 @@ internal sealed class FakeExecutor : IRemoteOperationExecutor
         SeenOrigin = OperationOrigin.Current;
         return Behavior(execution, cancellationToken);
     }
+}
+
+/// <summary>A campainha que o teste toca.</summary>
+internal sealed class FakeRemoteHub : IRemoteHub
+{
+    public event Action<Guid>? OperationAvailable;
+
+    public event Action<Guid>? CancelRequested;
+
+    public event Action<Guid>? ApprovalResolved;
+
+    public bool IsConnected { get; private set; }
+
+    public int Connects { get; private set; }
+
+    public void Ring(Guid id) => OperationAvailable?.Invoke(id);
+
+    public void RingCancel(Guid id) => CancelRequested?.Invoke(id);
+
+    public void RingApproval(Guid approvalId) => ApprovalResolved?.Invoke(approvalId);
+
+    public Task ConnectAsync(CancellationToken cancellationToken)
+    {
+        if (!IsConnected)
+        {
+            Connects++;
+        }
+
+        IsConnected = true;
+        return Task.CompletedTask;
+    }
+
+    public Task DisconnectAsync(CancellationToken cancellationToken)
+    {
+        IsConnected = false;
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>O catálogo que o teste monta, como o banco o leria.</summary>
+internal sealed class FakeCatalogQuery : IRemoteCatalogQuery
+{
+    public List<CatalogDirectory> Directories { get; } = [];
+
+    public List<CatalogCommand> Commands { get; } = [];
+
+    public Task<AgentCatalog> ReadAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult(new AgentCatalog(string.Empty, [.. Directories], [.. Commands], [], []));
 }
 
 internal sealed class FakeEntityProbe : IRemoteEntityProbe

@@ -1,6 +1,8 @@
 using System.Security.Cryptography;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
+using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Remote;
 using MyTaskApp.Application.Sync;
@@ -38,11 +40,29 @@ public sealed class RemoteMachinesTests : IDisposable
 
     public void Dispose() => _signer.Dispose();
 
+    private readonly FakeOperationQueue _queue = new();
+
+    private readonly FakeCatalogQuery _catalog = new();
+
+    private RemoteCatalogPublisher? _publisher;
+
     private MachineCapabilities Capabilities() =>
-        new(_git, new AgentCliProviders([new FakeAgentCliProvider()]), new FakeToolLocator(), _clock);
+        new(
+            _git,
+            new AgentCliProviders([new FakeAgentCliProvider()]),
+            new FakeToolLocator(),
+            new SupportedRemoteOperations([RemoteOperationKinds.EnvironmentInspect]),
+            RemoteDispatchLimits.Default,
+            _clock);
+
+    private RemoteCatalogPublisher Publisher() =>
+        _publisher ??= new RemoteCatalogPublisher(
+            new ScopedUseCaseRunner(new ServiceCollection().AddSingleton<IRemoteCatalogQuery>(_catalog).BuildServiceProvider().GetRequiredService<IServiceScopeFactory>()),
+            _queue,
+            NullLogger<RemoteCatalogPublisher>.Instance);
 
     private RegisterThisMachineHandler Register(MachineCapabilities? capabilities = null) =>
-        new(_settings, _server, _signer, _identity, capabilities ?? Capabilities(), NullLogger<RegisterThisMachineHandler>.Instance);
+        new(_settings, _server, _signer, _identity, capabilities ?? Capabilities(), Publisher(), NullLogger<RegisterThisMachineHandler>.Instance);
 
     private GetMachinesHandler Machines() => new(_settings, _server, _trusted, _clock);
 
@@ -60,7 +80,51 @@ public sealed class RemoteMachinesTests : IDisposable
         registration.Roles.Should().Be(roles);
         registration.Key.Should().Be(_signer.PublicKey);
         registration.Capabilities.ProtocolVersion.Should().Be(RemoteLimits.ProtocolVersion);
-        registration.Capabilities.Operations.Should().BeEmpty("nenhuma operação antes do agente");
+        registration.Capabilities.Operations.Should().Equal(RemoteOperationKinds.EnvironmentInspect);
+        registration.Capabilities.MaxConcurrentOperations.Should().Be(RemoteDispatchLimits.Default.MaxConcurrent);
+    }
+
+    /// <summary>O registro grava o hash do catálogo de agora; o catálogo sobe só quando muda, e só de quem é executora.</summary>
+    [Fact]
+    public async Task AnExecutor_SendsTheHashOfItsCatalog_AndPublishesItOnlyWhenItChanges()
+    {
+        _catalog.Commands.Add(new CatalogCommand(Guid.CreateVersion7(), "testes", CommandScope.Global, null, false, []));
+
+        await Register().HandleAsync(new RegisterThisMachine(), Ct);
+        await Register().HandleAsync(new RegisterThisMachine(), Ct);
+
+        var published = _queue.Catalogs.Should().ContainSingle().Subject;
+        published.Hash.Should().HaveLength(64);
+        _server.Registrations.Should().HaveCount(2).And.OnlyContain(registration => registration.Capabilities.CatalogHash == published.Hash);
+
+        _catalog.Commands.Add(new CatalogCommand(Guid.CreateVersion7(), "lint", CommandScope.Global, null, true, []));
+        await Register().HandleAsync(new RegisterThisMachine(), Ct);
+
+        _queue.Catalogs.Should().HaveCount(2);
+        _queue.Catalogs[1].Hash.Should().NotBe(published.Hash);
+    }
+
+    [Fact]
+    public async Task OnlyAController_PublishesNoCatalog()
+    {
+        _settings.Settings = new RemoteSettings(true, false);
+
+        await Register().HandleAsync(new RegisterThisMachine(), Ct);
+
+        _queue.Catalogs.Should().BeEmpty();
+        _server.Registrations.Should().ContainSingle().Which.Capabilities.CatalogHash.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void TheSameCatalogInAnotherOrder_HasTheSameHash()
+    {
+        var first = new CatalogCommand(Guid.CreateVersion7(), "a", CommandScope.Global, null, false, []);
+        var second = new CatalogCommand(Guid.CreateVersion7(), "b", CommandScope.Global, null, false, []);
+
+        var one = RemoteCatalogs.Seal(new AgentCatalog(string.Empty, [], [first, second], [], []));
+        var other = RemoteCatalogs.Seal(new AgentCatalog("qualquer", [], [second, first], [], []));
+
+        other.Hash.Should().Be(one.Hash);
     }
 
     [Fact]

@@ -55,6 +55,9 @@ public static class RemoteErrorCodes
 
     public const string ApprovalExpired = "approval_expired";
 
+    /// <summary>Um humano negou a aprovação, ou a resposta não conferiu: a operação para aí.</summary>
+    public const string ApprovalDenied = "approval_denied";
+
     /// <summary>A resposta não é para o pedido de aprovação que o agente fez.</summary>
     public const string HashMismatch = "hash_mismatch";
 
