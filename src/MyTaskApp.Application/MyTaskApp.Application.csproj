@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\MyTaskApp.Domain\MyTaskApp.Domain.csproj" />
     <!-- O contrato da sincronizacao (ADR-061): sem dependencia nenhuma. -->
+    <ProjectReference Include="..\MyTaskApp.Remote.Contracts\MyTaskApp.Remote.Contracts.csproj" />
     <ProjectReference Include="..\MyTaskApp.Sync.Contracts\MyTaskApp.Sync.Contracts.csproj" />
   </ItemGroup>
 

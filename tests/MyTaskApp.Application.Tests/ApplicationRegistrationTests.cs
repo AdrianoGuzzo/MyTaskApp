@@ -92,6 +92,10 @@ public class ApplicationRegistrationTests
             .AddSingleton<IDatabaseOperationWorkspaceFactory>(database.Workspaces)
             // A Consulta Inteligente (ADR-081): a configuração, o banco só leitura e o preparo do usuário.
             .AddSingleton<ITaskConsultationRepository>(new FakeTaskConsultationRepository())
+            // O pareamento da orquestração remota (ADR-087): o servidor, a chave e a confiança local.
+            .AddSingleton<MyTaskApp.Application.Remote.IRemoteApi>(new FakeRemoteApi())
+            .AddSingleton<MyTaskApp.Application.Remote.IDeviceSigner>(new FakeDeviceSigner())
+            .AddSingleton<MyTaskApp.Application.Remote.ITrustedControllerRepository>(new FakeTrustedControllerRepository())
             .AddSingleton<IConsultationDatabase>(new FakeConsultationDatabase())
             .AddSingleton<IConsultationReadAccessProvisioner>(new FakeReadAccessProvisioner(new MyTaskApp.Domain.DatabaseOperations.DatabaseSecurityPolicy()))
             // O servidor MCP (ADR-059): configuração, token e as consultas novas.
@@ -178,6 +182,8 @@ public class ApplicationRegistrationTests
     [InlineData(typeof(ReconcileAgentSessionsHandler))]
     [InlineData(typeof(GetTaskConsultationHandler))]
     [InlineData(typeof(SaveTaskConsultationHandler))]
+    [InlineData(typeof(MyTaskApp.Application.Remote.GetOpenPairingsHandler))]
+    [InlineData(typeof(MyTaskApp.Application.Remote.ConfirmPairingHandler))]
     [InlineData(typeof(ClearTaskConsultationHandler))]
     [InlineData(typeof(PreviewConsultationContextHandler))]
     [InlineData(typeof(CheckConsultationDatabaseHandler))]

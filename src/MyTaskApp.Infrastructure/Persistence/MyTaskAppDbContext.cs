@@ -4,6 +4,7 @@ using MyTaskApp.Domain.Auditing;
 using MyTaskApp.Domain.Commands;
 using MyTaskApp.Domain.Consultations;
 using MyTaskApp.Domain.DatabaseOperations;
+using MyTaskApp.Domain.Remote;
 using MyTaskApp.Domain.StickyNotes;
 using MyTaskApp.Domain.Tags;
 using MyTaskApp.Domain.Tasks;
@@ -49,6 +50,9 @@ public sealed class MyTaskAppDbContext(DbContextOptions<MyTaskAppDbContext> opti
 
     /// <summary>A Consulta Inteligente de cada tarefa (ADR-081). Só deste computador.</summary>
     public DbSet<TaskConsultation> TaskConsultations => Set<TaskConsultation>();
+
+    /// <summary>Os controladores remotos em que esta máquina confia (ADR-087). Só deste computador.</summary>
+    public DbSet<TrustedController> TrustedControllers => Set<TrustedController>();
 
     /// <summary>Os períodos de trabalho de cada ocorrência (ADR-052).</summary>
     public DbSet<TimeEntry> TimeEntries => Set<TimeEntry>();

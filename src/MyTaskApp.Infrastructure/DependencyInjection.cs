@@ -20,6 +20,7 @@ using MyTaskApp.Application.Mcp;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.QuickCommands;
 using MyTaskApp.Application.Reminders;
+using MyTaskApp.Application.Remote;
 using MyTaskApp.Application.Sounds;
 using MyTaskApp.Application.StickyNotes;
 using MyTaskApp.Application.Sync;
@@ -39,6 +40,7 @@ using MyTaskApp.Infrastructure.Persistence.Queries;
 using MyTaskApp.Infrastructure.Persistence.Repositories;
 using MyTaskApp.Infrastructure.PostgreSql;
 using MyTaskApp.Infrastructure.Processes;
+using MyTaskApp.Infrastructure.Remote;
 using MyTaskApp.Infrastructure.Secrets;
 using MyTaskApp.Infrastructure.Sounds;
 using MyTaskApp.Infrastructure.Sync;
@@ -120,6 +122,7 @@ public static class DependencyInjection
         services.AddScoped<IDevelopmentCommandRepository, DevelopmentCommandRepository>();
         services.AddScoped<IAgentSessionRepository, AgentSessionRepository>();
         services.AddScoped<ITaskConsultationRepository, TaskConsultationRepository>();
+        services.AddScoped<ITrustedControllerRepository, TrustedControllerRepository>();
         services.AddScoped<ICommandExecutionRepository, CommandExecutionRepository>();
         services.AddScoped<IAgentSettingsStore, AgentSettingsStore>();
         services.AddScoped<IAgentAlertSoundStore, AgentAlertSoundStore>();
@@ -221,6 +224,10 @@ public static class DependencyInjection
         services.AddSingleton<IMcpAccessTokenStore, McpAccessTokenStore>();
 
         AddSecrets(services);
+
+        // A chave do dispositivo na orquestração remota (ADR-087): no cofre, ao lado dos outros segredos.
+        services.AddSingleton<DeviceKeyStore>();
+        services.AddSingleton<IDeviceSigner, DeviceSigner>();
         AddJira(services, configuration);
         AddDatabaseOperations(services, configuration);
 
@@ -340,6 +347,7 @@ public static class DependencyInjection
         services.AddSingleton<SyncAuthenticationService>();
         services.AddSingleton<ISyncAuthenticator>(provider => provider.GetRequiredService<SyncAuthenticationService>());
         services.AddSingleton<ISyncApi, SyncApiClient>();
+        services.AddSingleton<IRemoteApi, RemoteApiClient>();
         services.AddSingleton<ISyncServerAddress, SyncServerAddress>();
         services.AddSingleton<ISyncServerProbe, SyncServerProbe>();
     }

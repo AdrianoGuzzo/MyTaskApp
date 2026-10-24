@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using MyTaskApp.Domain.Devices;
 using MyTaskApp.Domain.Reminders;
+using MyTaskApp.Domain.Remote;
 using MyTaskApp.Domain.StickyNotes;
 using MyTaskApp.Domain.Tags;
 using MyTaskApp.Domain.Tasks;
@@ -166,6 +167,27 @@ public sealed class SyncCaptureInterceptorTests : IAsyncLifetime
 
         (await _kit.OutboxAsync(Ct)).Should().BeEmpty();
         _kit.Trigger.Signals.Should().Be(1, "só a criação avisou");
+    }
+
+    /// <summary>
+    /// A confiança desta máquina num controlador remoto (ADR-087) é dela: nem a
+    /// aprovação nem a revogação viajam, e a tabela guarda o que foi aprovado.
+    /// </summary>
+    [Fact]
+    public async Task ATrustedController_NeverTravels()
+    {
+        var trusted = TrustedController.Approve(Guid.CreateVersion7(), "Celular", new string('a', 64), "MFkwEwYH", Guid.CreateVersion7(), Now);
+
+        await _kit.SaveAsync(context => context.Add(trusted), Ct);
+        await _kit.SaveAsync(context => context.TrustedControllers.Single().Revoke(Now.AddMinutes(1)), Ct);
+
+        (await _kit.OutboxAsync(Ct)).Should().BeEmpty();
+        (await _kit.StatesAsync(Ct)).Should().BeEmpty();
+        _kit.Trigger.Signals.Should().Be(0);
+
+        await using var context = _kit.CreateContext();
+        var stored = await context.TrustedControllers.AsNoTracking().SingleAsync(Ct);
+        stored.Should().BeEquivalentTo(new { trusted.Id, trusted.ControllerDeviceId, trusted.Fingerprint, trusted.SubjectPublicKeyInfo, trusted.PairingId, ApprovedAt = Now, RevokedAt = Now.AddMinutes(1) });
     }
 
     [Fact]

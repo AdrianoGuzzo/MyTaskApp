@@ -19,6 +19,7 @@ using MyTaskApp.Application.Mcp;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.QuickCommands;
 using MyTaskApp.Application.Reminders;
+using MyTaskApp.Application.Remote;
 using MyTaskApp.Application.Sounds;
 using MyTaskApp.Application.Sync;
 using MyTaskApp.Application.StickyNotes;
@@ -209,6 +210,10 @@ public static class DependencyInjection
         services.AddScoped<ConsultationViewFactory>();
         services.AddScoped<ConsultationReadAccess>();
         services.TryAddSingleton<ConsultationReadAccessCache>();
+
+        // O pareamento da orquestração remota, do lado da máquina executora (ADR-087).
+        services.AddScoped<GetOpenPairingsHandler>();
+        services.AddScoped<ConfirmPairingHandler>();
         services.AddScoped<ConsultationLauncher>();
         services.AddScoped<ConsultationTargetResolver>();
         services.AddScoped<ConsultationFolders>();
