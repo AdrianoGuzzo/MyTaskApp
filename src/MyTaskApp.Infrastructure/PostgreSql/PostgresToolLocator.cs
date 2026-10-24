@@ -106,7 +106,7 @@ internal sealed class PostgresToolLocator(
         }
 
         var newest = sets.Count > 0 ? sets[0] : await SetFromAsync(null, known, versions, cancellationToken);
-        return new PostgresClientTools(newest, PostgresInstallGuides.For(isWindows, environment)) { Sets = sets };
+        return new PostgresClientTools(newest, PostgresInstallGuides.For(isWindows, environment, !isWindows && OperatingSystem.IsMacOS())) { Sets = sets };
     }
 
     private async Task<IReadOnlyList<PostgresToolStatus>> SetFromAsync(
@@ -214,6 +214,7 @@ internal sealed class PostgresToolLocator(
         yield return "/usr/bin";
         yield return "/usr/local/bin";
         yield return "/opt/homebrew/opt/libpq/bin";
+        yield return "/usr/local/opt/libpq/bin";
         yield return "/opt/homebrew/bin";
         yield return "/Applications/Postgres.app/Contents/Versions/latest/bin";
     }
@@ -224,43 +225,79 @@ internal sealed class PostgresToolLocator(
 }
 
 /// <summary>
-/// Como instalar as ferramentas cliente, por sistema (ADR-056). Só
-/// instruções: o app nunca instala nada sozinho (ADR-027).
+/// Como instalar as ferramentas cliente, por sistema (ADR-056, ADR-083): passos
+/// numerados, cada um com o comando pronto para copiar, e um comando só que
+/// instala todas. Só instruções: o app nunca instala nada sozinho (ADR-027).
 /// </summary>
 internal static class PostgresInstallGuides
 {
-    public static PostgresInstallGuide For(bool isWindows, Func<string, EnvironmentVariableTarget, string?> environment)
+    /// <summary>
+    /// O instalador da EDB sem servidor, sem pgAdmin e sem Stack Builder: sobram
+    /// as "Command Line Tools". Ele mesmo pede a permissão de administrador.
+    /// </summary>
+    public const string WindowsCommand =
+        "winget install -e --id PostgreSQL.PostgreSQL.17 --override \"--mode unattended --unattendedmodeui minimal --disable-components server,pgAdmin,stackbuilder\"";
+
+    public const string DebianCommand =
+        "sudo apt install -y postgresql-common && sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y && sudo apt install -y postgresql-client-17";
+
+    public const string RedHatCommand =
+        "sudo dnf install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-x86_64/pgdg-redhat-repo-latest.noarch.rpm && sudo dnf install -y postgresql17";
+
+    public const string MacCommand = "brew install libpq";
+
+    private static readonly string[] UnixChecks =
+        ["which psql", "which pg_dump", "which pg_restore", "which pg_isready", "psql --version", "pg_dump --version", "pg_restore --version", "pg_isready --version"];
+
+    public static ToolInstallGuide For(bool isWindows, Func<string, EnvironmentVariableTarget, string?> environment, bool isMacOs = false)
     {
         if (isWindows)
         {
-            return new PostgresInstallGuide(
+            return new ToolInstallGuide(
                 "Windows",
                 [
-                    "Instale as ferramentas cliente do PostgreSQL 17 ou mais novo: winget install PostgreSQL.PostgreSQL.17",
-                    "Ou baixe o instalador da EDB (postgresql.org/download/windows) e marque só \"Command Line Tools\".",
-                    "Se instalou em outra pasta, acrescente a pasta bin ao PATH (ex.: C:\\Program Files\\PostgreSQL\\17\\bin).",
-                    "Depois clique em \"Verificar novamente\" — não precisa reiniciar o app.",
+                    new("Aperte a tecla Windows, digite PowerShell e abra. Não precisa ser como administrador: o instalador pede a permissão sozinho."),
+                    new("Cole o comando abaixo e aperte Enter. Ele instala só as ferramentas de linha de comando do PostgreSQL 17 "
+                        + "(psql, pg_dump, pg_restore e as outras), sem servidor e sem pgAdmin:", WindowsCommand),
+                    new("Quando terminar, volte aqui e clique em \"Verificar novamente\" — não precisa reiniciar o MyTaskApp. "
+                        + "O app acha as ferramentas em C:\\Program Files\\PostgreSQL\\17\\bin sozinho."),
+                    new("Sem o winget (Windows antigo), baixe o instalador na página oficial e, nos componentes, marque só \"Command Line Tools\"."),
                 ],
-                ["where.exe psql", "where.exe pg_dump", "where.exe pg_restore", "where.exe pg_isready", "psql --version", "pg_dump --version", "pg_restore --version", "pg_isready --version"]);
+                ["where.exe psql", "where.exe pg_dump", "where.exe pg_restore", "where.exe pg_isready", "psql --version", "pg_dump --version", "pg_restore --version", "pg_isready --version"],
+                new Uri("https://www.postgresql.org/download/windows/"));
+        }
+
+        if (isMacOs)
+        {
+            return new ToolInstallGuide(
+                "macOS",
+                [
+                    new("No Terminal, instale o cliente do PostgreSQL pelo Homebrew:", MacCommand),
+                    new("O Homebrew não põe o libpq no PATH, mas o app procura em /opt/homebrew/opt/libpq/bin sozinho. "
+                        + "Quando terminar, clique em \"Verificar novamente\"."),
+                ],
+                ["brew --prefix libpq", "$(brew --prefix libpq)/bin/pg_dump --version"],
+                new Uri("https://www.postgresql.org/download/macosx/"));
         }
 
         var redHat = File.Exists("/etc/redhat-release") || environment("ID_LIKE", EnvironmentVariableTarget.Process)?.Contains("rhel", StringComparison.Ordinal) == true;
 
-        return new PostgresInstallGuide(
+        return new ToolInstallGuide(
             "Linux",
             redHat
                 ?
                 [
-                    "Adicione o repositório PGDG: sudo dnf install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-x86_64/pgdg-redhat-repo-latest.noarch.rpm",
-                    "Instale o cliente: sudo dnf install -y postgresql17",
-                    "As ferramentas ficam em /usr/pgsql-17/bin; o app procura lá sozinho.",
+                    new("Num terminal, cole o comando abaixo: ele adiciona o repositório oficial do PostgreSQL (PGDG) "
+                        + "e instala o cliente 17 (RHEL, Rocky e Alma 9):", RedHatCommand),
+                    new("As ferramentas ficam em /usr/pgsql-17/bin; o app procura lá sozinho. Depois, clique em \"Verificar novamente\"."),
                 ]
                 :
                 [
-                    "Adicione o repositório PGDG: sudo apt install -y postgresql-common && sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh",
-                    "Instale o cliente: sudo apt install -y postgresql-client-17",
-                    "As ferramentas ficam em /usr/lib/postgresql/17/bin; o app procura lá sozinho.",
+                    new("Num terminal, cole o comando abaixo: ele adiciona o repositório oficial do PostgreSQL (PGDG) "
+                        + "e instala o cliente 17 (Debian e Ubuntu):", DebianCommand),
+                    new("As ferramentas ficam em /usr/lib/postgresql/17/bin; o app procura lá sozinho. Depois, clique em \"Verificar novamente\"."),
                 ],
-            ["which psql", "which pg_dump", "which pg_restore", "which pg_isready", "psql --version", "pg_dump --version", "pg_restore --version", "pg_isready --version"]);
+            UnixChecks,
+            new Uri("https://www.postgresql.org/download/linux/"));
     }
 }

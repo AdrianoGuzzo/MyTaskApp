@@ -84,6 +84,7 @@ public class ApplicationRegistrationTests
             .AddSingleton<IDatabaseOperationAuditLog>(database.Catalog.Audit)
             .AddSingleton<IDatabaseCredentialStore>(database.Credentials)
             .AddSingleton<IPostgresToolLocator>(database.Locator)
+            .AddSingleton<IDockerInspector>(database.Docker)
             .AddSingleton<IPostgresServerInspector>(database.Inspector)
             .AddSingleton<IPostgresMaskedCopier>(database.Copier)
             .AddSingleton<IPostgresDumpService>(database.Tools)

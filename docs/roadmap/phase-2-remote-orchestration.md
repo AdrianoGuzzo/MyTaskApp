@@ -1,6 +1,7 @@
 # Fase 2 — Orquestração remota: roteiro de implementação
 
-> **Estado: planejamento.** Nada implementado. A arquitetura está em
+> **Estado: em implementação.** As tarefas feitas estão marcadas com ✔ na lista
+> do fim, com o commit de cada uma. A arquitetura está em
 > [`../architecture/remote-orchestration.md`](../architecture/remote-orchestration.md),
 > as ameaças e os requisitos RS-xx em
 > [`../architecture/remote-security-threat-model.md`](../architecture/remote-security-threat-model.md)

@@ -61,6 +61,11 @@ public sealed partial class DatabaseOperationsViewModel : ObservableObject
             Copy.UseSavedDatabase(saved);
             SelectedTabIndex = CopyTab;
         };
+        Diagnostics.RegisterLocalDatabaseRequested += draft =>
+        {
+            Connections.UseDraft(draft);
+            SelectedTabIndex = ConnectionsTab;
+        };
     }
 
     public DatabaseConnectionsViewModel Connections { get; }

@@ -873,7 +873,7 @@ fica em [`CHANGELOG.md`](CHANGELOG.md).
 
 | Documento | Conteúdo |
 |---|---|
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | decisões de arquitetura (ADR-001 a ADR-090), com o motivo de cada uma; de ADR-084 em diante, propostas da fase 2 ainda não implementadas |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | decisões de arquitetura (ADR-001 a ADR-090), com o motivo de cada uma; de ADR-084 em diante, a fase 2 (orquestração remota), em implementação |
 | [`docs/architecture/remote-orchestration.md`](docs/architecture/remote-orchestration.md) | fase 2 (proposta): inventário do código, arquitetura da orquestração remota, contratos, ciclo de vida e reaproveitamento |
 | [`docs/architecture/remote-security-threat-model.md`](docs/architecture/remote-security-threat-model.md) | fase 2 (proposta): ameaças da execução remota e os requisitos de segurança |
 | [`docs/roadmap/phase-2-remote-orchestration.md`](docs/roadmap/phase-2-remote-orchestration.md) | fase 2 (proposta): entregas, critérios de aceitação e tarefas priorizadas |

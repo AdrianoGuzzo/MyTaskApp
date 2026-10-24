@@ -19,6 +19,7 @@ dados saírem de produção sem anonimização.
 - [Conexões](#conexões)
 - [Ambientes e política de segurança](#ambientes-e-política-de-segurança)
 - [Ferramentas do PostgreSQL](#ferramentas-do-postgresql)
+  - [Banco local com Docker](#banco-local-com-docker)
 - [Como a anonimização funciona](#como-a-anonimização-funciona)
 - [Regras de mascaramento](#regras-de-mascaramento)
   - [Tabelas sem dados](#tabelas-sem-dados)
@@ -189,16 +190,25 @@ não misturar versões:
 
 ### Instalação
 
-**Windows**
+Quando falta alguma ferramenta, a aba **Diagnóstico** mostra os passos
+numerados do sistema, cada comando com **Copiar comando**, e os botões
+**Página oficial** e **Verificar novamente**. Um comando só instala todas as
+ferramentas. O app não roda nada: quem cola e executa é o usuário (ADR-027).
+
+**Windows.** No PowerShell, sem precisar abrir como administrador (o instalador
+pede a permissão sozinho):
 
 ```powershell
-winget install PostgreSQL.PostgreSQL.17
+winget install -e --id PostgreSQL.PostgreSQL.17 --override "--mode unattended --unattendedmodeui minimal --disable-components server,pgAdmin,stackbuilder"
 ```
 
-Outra opção é o instalador da EDB
-([postgresql.org/download/windows](https://www.postgresql.org/download/windows/)),
-marcando só **Command Line Tools**. Depois clique em **Verificar novamente**; não
-precisa reiniciar o app.
+É o instalador da EDB sem servidor, sem pgAdmin e sem Stack Builder: sobram as
+**Command Line Tools** (`psql`, `pg_dump`, `pg_restore` e as outras), em
+`C:\Program Files\PostgreSQL\17\bin`, onde o app procura sozinho. Sem o winget,
+baixe o instalador em
+[postgresql.org/download/windows](https://www.postgresql.org/download/windows/)
+e marque só **Command Line Tools**. Depois clique em **Verificar novamente**;
+não precisa reiniciar o app.
 
 Para conferir no terminal:
 
@@ -213,20 +223,27 @@ pg_restore --version
 pg_isready --version
 ```
 
-**Linux (Debian/Ubuntu)**
+**Linux (Debian/Ubuntu).** O repositório oficial (PGDG) e o cliente numa linha,
+sem pergunta no meio (o `-y` do script):
 
 ```bash
-sudo apt install -y postgresql-common
-sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh
-sudo apt install -y postgresql-client-17
+sudo apt install -y postgresql-common && sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y && sudo apt install -y postgresql-client-17
 ```
 
-**Linux (RHEL/Fedora)**
+**Linux (RHEL, Rocky e Alma 9)**
 
 ```bash
-sudo dnf install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-x86_64/pgdg-redhat-repo-latest.noarch.rpm
-sudo dnf install -y postgresql17
+sudo dnf install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-9-x86_64/pgdg-redhat-repo-latest.noarch.rpm && sudo dnf install -y postgresql17
 ```
+
+**macOS**
+
+```bash
+brew install libpq
+```
+
+O Homebrew não põe o `libpq` no PATH, mas o app procura em
+`/opt/homebrew/opt/libpq/bin` (e em `/usr/local/opt/libpq/bin` nos Macs Intel).
 
 Para conferir:
 
@@ -240,6 +257,90 @@ pg_dump --version
 pg_restore --version
 pg_isready --version
 ```
+
+### Banco local com Docker
+
+A cópia precisa de um PostgreSQL de destino. Quem não tem um pode criar um
+neste computador com o Docker (ADR-083). **É opcional**: qualquer servidor
+PostgreSQL serve, e o Docker ausente nunca conta como problema no Diagnóstico.
+
+O card **Docker e banco local (opcional)** da aba Diagnóstico pergunta ao
+Docker, só lendo, três coisas: se ele está instalado (`docker --version`), se
+o engine responde (`docker info`) e o estado e a porta do container
+`mytaskapp-postgres` (`docker container inspect`). Também escolhe a porta de um
+container novo: a primeira livre a partir da 5432, olhando só a tabela de portas
+do sistema. Os passos mudam com a resposta:
+
+| Situação | O que o card mostra |
+|---|---|
+| Sem Docker | como instalar o Docker e, logo abaixo, como criar o banco: o tutorial inteiro |
+| Docker parado | como ligá-lo (abrir o Docker Desktop, ou `sudo systemctl enable --now docker`) e como criar o banco |
+| Rodando, sem o banco | o comando que cria o banco |
+| Banco rodando ou parado | como parar, ligar e ver o log |
+
+**Instalar o Docker no Windows:**
+
+1. No PowerShell **como administrador**, ligue o WSL 2, que o Docker usa:
+   `wsl --install --no-distribution`. Depois reinicie o computador.
+2. Num PowerShell comum: `winget install -e --id Docker.DockerDesktop`.
+3. Abra o Docker Desktop e aceite os termos. É grátis para uso pessoal e para
+   empresas pequenas, e o login na conta Docker é opcional.
+4. Em *Settings → General*, deixe marcado **Start Docker Desktop when you sign
+   in to your computer**. É isso que mantém o banco sempre ligado.
+5. Confira com `docker version`: devem aparecer o Client e o Server.
+
+No **macOS**: `brew install --cask docker-desktop` e o mesmo passo 4. No
+**Linux**:
+
+```bash
+curl -fsSL https://get.docker.com | sudo sh
+sudo systemctl enable --now docker
+sudo usermod -aG docker $USER   # depois saia e entre de novo na sessão
+```
+
+Sem o grupo `docker`, o app não consegue falar com o Docker, e o Diagnóstico
+avisa que falta permissão.
+
+**Criar o banco.** O card traz o comando pronto, com uma senha aleatória de 20
+letras e números, gerada a cada abertura da janela, e a porta livre (aqui, a
+5432):
+
+```bash
+docker run -d --name mytaskapp-postgres --restart unless-stopped -e POSTGRES_PASSWORD=<senha> -p 127.0.0.1:5432:5432 -v mytaskapp-postgres-data:/var/lib/postgresql/data postgres:17
+```
+
+O que cada parte garante:
+
+- `--restart unless-stopped`: o banco volta sozinho toda vez que o Docker
+  inicia. Só fica desligado se for parado com `docker stop`.
+- O volume `mytaskapp-postgres-data` guarda os dados, mesmo se o container for
+  apagado e criado de novo.
+- `127.0.0.1`: a porta só aceita conexões deste computador, nunca da rede.
+- A porta é a primeira livre entre 5432 e 5442. A 5432 costuma ser de um
+  PostgreSQL já instalado, e a 5433 de outro container. Com uma porta ocupada,
+  o `docker run` falharia com `port is already allocated`. Ninguém precisa
+  digitar a porta, porque o cadastro a preenche. Com o Docker desligado, os
+  containers dele ainda não seguram porta nenhuma: depois de ligá-lo, clique em
+  **Verificar novamente** antes de copiar o comando.
+- `postgres:17` casa com as ferramentas 17 do passo anterior: um `pg_restore`
+  17+ não restaura num servidor 16 ou mais antigo.
+
+**Cadastrar.** Depois de **Verificar novamente**, o botão **Cadastrar este
+banco** abre a aba **Conexões** preenchida, sem salvar: *Banco local (Docker)*,
+`127.0.0.1` na porta do container, usuário `postgres`, sem banco (só o servidor: a cópia cria o
+banco), ambiente Development e a senha do comando. Ela só vai para o cofre do
+sistema quando o usuário clica em **Criar conexão**. Se o container já existia
+quando a janela abriu, o app não sabe com que senha ele foi criado. Nesse caso
+o campo vem vazio, para o usuário digitar.
+
+**Trocar a porta.** Se o `docker run` ainda assim acusar porta ocupada, troque
+o número da esquerda em `127.0.0.1:5432:5432` por outro, como
+`127.0.0.1:5450:5432`, e use essa porta na conexão. O número da direita, 5432,
+é a porta dentro do container e não muda.
+
+**Apagar.** `docker rm -f mytaskapp-postgres` apaga o container, e os dados
+ficam no volume. `docker volume rm mytaskapp-postgres-data` apaga os dados de
+vez.
 
 ## Como a anonimização funciona
 
@@ -773,6 +874,10 @@ O número de processos paralelos (`--jobs`) é o número de núcleos, até 4.
 | Sintoma | Causa e o que fazer |
 |---|---|
 | ✗ `pg_dump` não encontrado | Instale as ferramentas cliente ([Instalação](#instalação)) e clique em **Verificar novamente**. |
+| ⚠ Docker Engine "Parado" | Abra o Docker Desktop (no Linux, `sudo systemctl enable --now docker`) e clique em **Verificar novamente**. "Não respondeu a tempo" é o Docker ainda iniciando. |
+| ⚠ Docker Engine "Sem permissão" (Linux) | `sudo usermod -aG docker $USER`, depois saia e entre de novo na sessão. |
+| O banco local não sobe: `port is already allocated` | Algo pegou a porta depois do Diagnóstico (em geral, um container que subiu com o Docker). Clique em **Verificar novamente** e copie o comando de novo, ou troque a porta ([Banco local com Docker](#banco-local-com-docker)). |
+| "password authentication failed" no banco local | O container foi criado com outra senha. Digite a senha certa na conexão ou recrie o banco com `docker rm -f mytaskapp-postgres` + `docker volume rm mytaskapp-postgres-data` (apaga os dados). |
 | "pg_dump … é mais antigo que o servidor de origem" | Instale as ferramentas da versão do servidor (ou mais nova). |
 | `unrecognized configuration parameter "transaction_timeout"` / "pg_restore 18 não restaura no PostgreSQL 14" | Só havia ferramentas 17+ para um destino 16 ou mais antigo. Instale as ferramentas cliente da versão da origem (ex.: `winget install PostgreSQL.PostgreSQL.14`, ou só "Command Line Tools" no instalador): a cópia passa a usá-las sozinha, mesmo com o pgAdmin mais novo instalado. |
 | "Guardar credenciais com segurança precisa do secret-tool" (Linux) | `sudo apt install libsecret-tools` (ou `libsecret` no Fedora), com uma sessão gráfica e o chaveiro destravado. |
