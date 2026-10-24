@@ -137,6 +137,7 @@ o da variável, e o conteúdo é o valor. É o que o compose de produção usa (
 | `Sync__RateLimits__AuthPerMinute` | não | login e token, por IP. Padrão 20 |
 | `Sync__RateLimits__SyncPerMinute` / `SyncBurst` | não | push, pull e fetch, por usuário (o `sub` do token). Padrão 60 por minuto, rajada de 20 |
 | `Sync__RateLimits__ApiPerMinute` | não | o resto da API, por usuário (o `sub` do token). Padrão 120 |
+| `Sync__RateLimits__RemotePerMinute` | não | a orquestração remota (`/api/v1/remote`), por usuário, separada da cota da API. Padrão 120 |
 | `Sync__RateLimits__AnonymousPerMinute` | não | rotas da API sem token válido (o que vai dar 401), por IP. Padrão 30 |
 | `Sync__RateLimits__GlobalPerMinute` | não | teto de proteção de qualquer rota, por IP, somado aos outros. Padrão 600; `0` desliga |
 | `Sync__Pull__MaxEntities` | não | entidades por página do pull, contando o que vem de carona (ADR-071). Padrão 1000 |

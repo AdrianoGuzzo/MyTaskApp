@@ -84,9 +84,10 @@ public class QuickCommandHandlersTests
         DevelopmentCommand command,
         Guid? bindingId = null,
         IReadOnlyDictionary<string, string>? values = null,
-        CancellationToken? cancellationToken = null) =>
+        CancellationToken? cancellationToken = null,
+        bool confirmed = false) =>
         Runner().HandleAsync(
-            new RunQuickCommand(_task.Id, Development.Id, command.Id, bindingId, values),
+            new RunQuickCommand(_task.Id, Development.Id, command.Id, bindingId, values, confirmed),
             new SynchronousProgress<CommandOutputLine>(_lines.Add),
             cancellationToken ?? Ct);
 
@@ -281,6 +282,40 @@ public class QuickCommandHandlersTests
         (await run.Should().ThrowAsync<DomainException>()).WithMessage("Informe banco.");
         _executions.Executions.Should().BeEmpty();
         _executor.Requests.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// "Pedir confirmação" é regra do caso de uso, e não só da tela: quem chama
+    /// sem ter confirmado (outra tela, ou um pedido de longe) não roda nada.
+    /// </summary>
+    [Fact]
+    public async Task ACommandThatAsksForConfirmation_IsRefusedWithoutIt_BeforeAnythingIsSaved()
+    {
+        var command = _globals.Seed(
+            "@deploy",
+            "eco-deploy",
+            settings: new DevelopmentCommandSettings("Publicar", RequiresConfirmation: true));
+
+        var run = () => RunAsync(command);
+
+        (await run.Should().ThrowAsync<DomainException>()).WithMessage("\"Publicar\" pede confirmação*");
+        _executions.Executions.Should().BeEmpty();
+        _executor.Requests.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ACommandThatAsksForConfirmation_RunsWhenConfirmed()
+    {
+        var command = _globals.Seed(
+            "@deploy",
+            "eco-deploy",
+            settings: new DevelopmentCommandSettings("Publicar", RequiresConfirmation: true));
+        _executor.Script("eco-deploy", 0);
+
+        var view = await RunAsync(command, confirmed: true);
+
+        view.Status.Should().Be(CommandExecutionStatus.Completed);
+        _executor.Commands.Should().Equal("eco-deploy");
     }
 
     [Fact]

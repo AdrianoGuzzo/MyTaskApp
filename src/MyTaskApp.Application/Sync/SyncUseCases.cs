@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Remote;
 using MyTaskApp.Domain;
 using MyTaskApp.Sync.Contracts;
 using MyTaskApp.Sync.Contracts.Definitions;
@@ -73,7 +74,9 @@ public sealed class SyncAccountService(
             device.Rotate();
         }
 
-        var authorization = await authenticator.BeginAuthorizationAsync(cancellationToken);
+        // Com o controle remoto ligado aqui, o login pede também o escopo dele (ADR-087).
+        var remote = await runner.RunAsync<IRemoteSettingsStore, RemoteSettings>((settings, token) => settings.GetAsync(token), cancellationToken);
+        var authorization = await authenticator.BeginAuthorizationAsync(remote.Enabled, cancellationToken);
 
         return authorization with { Completion = FinishAsync(authorization.Completion, cancellationToken) };
     }

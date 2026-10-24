@@ -3,12 +3,17 @@ using MyTaskApp.Domain;
 namespace MyTaskApp.Infrastructure.Secrets;
 
 /// <summary>
-/// Onde ficam os segredos do app — hoje, o token do Jira (ADR-045). Nunca no
-/// banco, nunca em JSON legível, nunca no log: só aqui, protegido pelo sistema.
+/// Onde ficam os segredos do app: o token do Jira (<c>jira</c>, ADR-045), o
+/// refresh token da sincronização (<c>sync</c>, ADR-061), o token do servidor
+/// MCP (<c>mcp-access-token</c>, ADR-059), a senha de cada conexão PostgreSQL
+/// (<c>postgres-…</c>, ADR-056) e a chave privada do dispositivo na
+/// orquestração remota (<c>device-key</c>, ADR-087). Nunca no banco, nunca em
+/// JSON legível, nunca no log: só aqui, protegido pelo sistema.
 /// </summary>
 /// <remarks>
-/// Porta da Infrastructure, e não da Application: quem guarda e lê segredo é
-/// só a autenticação, e nenhum caso de uso precisa saber que ele existe.
+/// Porta da Infrastructure, e não da Application: quem guarda e lê segredo são
+/// os adaptadores (as autenticações, as credenciais do PostgreSQL, o token do
+/// MCP), e nenhum caso de uso precisa saber que ele existe.
 /// Pública só para o app do celular entregar o cofre da plataforma (ADR-067);
 /// as implementações do desktop continuam internas.
 /// </remarks>
@@ -23,9 +28,11 @@ public interface ISecretStore
 }
 
 /// <summary>
-/// Fora do Windows ainda não há cofre. Recusar gravar é melhor do que gravar
-/// token em texto puro: o usuário fica sem integração, e não com o segredo
-/// exposto no disco.
+/// O sistema sem cofre suportado: nem o DPAPI do Windows
+/// (<see cref="DpapiSecretStore"/>) nem o chaveiro do Linux
+/// (<see cref="SecretToolSecretStore"/>, que sem o <c>secret-tool</c> se
+/// comporta como este). Recusar gravar é melhor do que gravar token em texto
+/// puro: o usuário fica sem integração, e não com o segredo exposto no disco.
 /// </summary>
 internal sealed class UnsupportedSecretStore : ISecretStore
 {

@@ -316,6 +316,8 @@
                               Command="{Binding OpenMcpServerCommand}" />
                     <MenuItem Header="Sincronização…"
                               Command="{Binding OpenSyncCommand}" />
+                    <MenuItem Header="Máquinas…"
+                              Command="{Binding OpenMachinesCommand}" />
                     <MenuItem Header="Gerenciamento de dados…"
                               Command="{Binding OpenDataManagementCommand}" />
 

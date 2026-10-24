@@ -30,14 +30,18 @@ internal sealed class SyncHttp(HttpClient client, SyncOptions options, TimeProvi
         string path,
         object? body,
         string accessToken,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        JsonSerializerOptions? json = null)
     {
+        // O sync usa o SyncJson; a orquestração remota passa o RemoteJson, mais estrito.
+        json ??= SyncJson.Options;
+
         using var request = new HttpRequestMessage(method, Resolve(path));
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
 
         if (body is not null)
         {
-            request.Content = JsonContent.Create(body, body.GetType(), options: SyncJson.Options);
+            request.Content = JsonContent.Create(body, body.GetType(), options: json);
         }
 
         using var response = await SendAsync(request, cancellationToken);
@@ -47,7 +51,7 @@ internal sealed class SyncHttp(HttpClient client, SyncOptions options, TimeProvi
             throw await FailureAsync(response, cancellationToken);
         }
 
-        return await response.Content.ReadFromJsonAsync<T>(SyncJson.Options, cancellationToken)
+        return await response.Content.ReadFromJsonAsync<T>(json, cancellationToken)
             ?? throw new SyncApiException(SyncFailureKind.Transient, "O servidor devolveu uma resposta vazia.");
     }
 

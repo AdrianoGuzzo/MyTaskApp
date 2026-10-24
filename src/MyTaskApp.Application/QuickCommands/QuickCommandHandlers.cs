@@ -242,12 +242,17 @@ public sealed class PrepareQuickCommandHandler(
 /// Roda um comando rápido no ambiente (ADR-051). Os valores são os dos
 /// parâmetros; o resto — pasta, worktree, variáveis — o app resolve.
 /// </summary>
+/// <param name="Confirmed">
+/// Alguém viu a linha e confirmou. Um comando com "pedir confirmação" não roda
+/// sem isto: a regra é do caso de uso, e não só da tela que pergunta.
+/// </param>
 public sealed record RunQuickCommand(
     Guid TaskId,
     Guid DevelopmentId,
     Guid CommandId,
     Guid? BindingId,
-    IReadOnlyDictionary<string, string>? Values = null);
+    IReadOnlyDictionary<string, string>? Values = null,
+    bool Confirmed = false);
 
 /// <remarks>
 /// <para>
@@ -309,6 +314,13 @@ public sealed class RunQuickCommandHandler(
                     ? [new CommandSource(SyncEntityTypes.Command, entry.CommandId), new CommandSource(SyncEntityTypes.DirectoryCommand, bindingId)]
                     : [new CommandSource(SyncEntityTypes.Command, entry.CommandId)],
                 cancellationToken);
+        }
+
+        // Lido agora, e não da prévia: se o comando passou a pedir confirmação
+        // depois que a tela perguntou, ele não roda sem perguntar de novo.
+        if (entry.RequiresConfirmation && !command.Confirmed)
+        {
+            throw new DomainException($"\"{entry.Name}\" pede confirmação antes de rodar. Rode de novo para ver a linha e confirmar.");
         }
 
         var folder = await QuickCommandTargets.WorkingDirectoryAsync(directories, development, entry, cancellationToken);

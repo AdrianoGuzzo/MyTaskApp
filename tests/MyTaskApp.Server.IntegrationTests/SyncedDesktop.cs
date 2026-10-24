@@ -82,7 +82,6 @@ internal sealed class SyncedDesktop : IAsyncDisposable
             .AddLogging(logging => logging.SetMinimumLevel(LogLevel.Warning))
             .AddSingleton<TimeProvider>(clock)
             .AddSingleton<IDeviceIdentity>(device)
-            .AddSingleton<IUseCaseRunner, ScopedRunner>()
             .AddApplication(configuration)
             .AddInfrastructure(configuration)
             .AddSingleton<ISecretStore>(secrets)
@@ -195,23 +194,6 @@ internal sealed class SyncedDesktop : IAsyncDisposable
         catch (IOException)
         {
             // Antivírus segurando o arquivo: fica na pasta temporária.
-        }
-    }
-
-    private sealed class ScopedRunner(IServiceScopeFactory scopes) : IUseCaseRunner
-    {
-        public async Task<TResult> RunAsync<THandler, TResult>(Func<THandler, CancellationToken, Task<TResult>> operation, CancellationToken cancellationToken = default)
-            where THandler : notnull
-        {
-            await using var scope = scopes.CreateAsyncScope();
-            return await operation(scope.ServiceProvider.GetRequiredService<THandler>(), cancellationToken);
-        }
-
-        public async Task RunAsync<THandler>(Func<THandler, CancellationToken, Task> operation, CancellationToken cancellationToken = default)
-            where THandler : notnull
-        {
-            await using var scope = scopes.CreateAsyncScope();
-            await operation(scope.ServiceProvider.GetRequiredService<THandler>(), cancellationToken);
         }
     }
 }

@@ -19,6 +19,7 @@ using MyTaskApp.Application.Mcp;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.QuickCommands;
 using MyTaskApp.Application.Reminders;
+using MyTaskApp.Application.Remote;
 using MyTaskApp.Application.Sounds;
 using MyTaskApp.Application.Sync;
 using MyTaskApp.Application.StickyNotes;
@@ -47,6 +48,10 @@ public static class DependencyInjection
 
         // Relógio real como padrão; testes substituem por FakeTimeProvider.
         services.TryAddSingleton(TimeProvider.System);
+
+        // Um escopo por operação (ADR-012), o mesmo em todo host. Testes de
+        // ViewModel registram antes um executor falso e ganham.
+        services.TryAddSingleton<IUseCaseRunner, ScopedUseCaseRunner>();
 
         // Sem identificação por padrão. O Desktop registra a conta do sistema
         // antes desta chamada e ganha — TryAdd mantém quem chegou primeiro.
@@ -205,6 +210,21 @@ public static class DependencyInjection
         services.AddScoped<ConsultationViewFactory>();
         services.AddScoped<ConsultationReadAccess>();
         services.TryAddSingleton<ConsultationReadAccessCache>();
+
+        // O pareamento da orquestração remota, do lado da máquina executora (ADR-087).
+        services.AddScoped<GetOpenPairingsHandler>();
+        services.AddScoped<ConfirmPairingHandler>();
+
+        // A janela "Máquinas" e o sinal de vida (T-06).
+        services.AddScoped<GetRemoteSettingsHandler>();
+        services.AddScoped<UpdateRemoteSettingsHandler>();
+        services.AddScoped<GetMachinesHandler>();
+        services.AddScoped<RegisterThisMachineHandler>();
+        services.AddScoped<RequestPairingHandler>();
+        services.AddScoped<GetPairingStatusHandler>();
+        services.AddScoped<RevokeTrustedControllerHandler>();
+        services.TryAddSingleton<MachineCapabilities>();
+        services.TryAddSingleton<RemotePresenceScheduler>();
         services.AddScoped<ConsultationLauncher>();
         services.AddScoped<ConsultationTargetResolver>();
         services.AddScoped<ConsultationFolders>();

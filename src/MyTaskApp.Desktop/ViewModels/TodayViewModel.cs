@@ -616,6 +616,12 @@ public sealed partial class TodayViewModel(
     [RelayCommand]
     public void OpenSync() => SyncRequested?.Invoke();
 
+    /// <summary>Pede a janela "Máquinas": os computadores da conta e o controle remoto (ADR-087).</summary>
+    public event Action? MachinesRequested;
+
+    [RelayCommand]
+    public void OpenMachines() => MachinesRequested?.Invoke();
+
     /// <summary>
     /// A bolinha da sincronização no cabeçalho (ADR-063). Atribuída pelo app
     /// depois de montar a janela; nula, ela não aparece.

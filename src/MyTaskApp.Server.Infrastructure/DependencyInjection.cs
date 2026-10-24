@@ -18,6 +18,8 @@ public static class DependencyInjection
         services.AddScoped<ISyncUnitOfWork>(provider => provider.GetRequiredService<EfSyncStore>());
         services.AddScoped<IWorkspaceAccess, EfWorkspaceAccess>();
         services.AddScoped<IDeviceRegistry, EfDeviceRegistry>();
+        services.AddScoped<IRemoteDeviceStore, EfRemoteDeviceStore>();
+        services.AddScoped<IRemotePairingStore, EfRemotePairingStore>();
         services.AddScoped<WorkspaceProvisioner>();
 
         return services;

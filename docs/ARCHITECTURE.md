@@ -3982,6 +3982,15 @@ Tudo isso mora na Application, atrás do `IUseCaseRunner`: a tela só pede. É o
 que deixa a mesma execução ao alcance de um controle remoto no futuro, sem
 reescrever nada.
 
+**"Pedir confirmação" também é do caso de uso.** No começo só a tela cobrava:
+o `RunQuickCommandHandler` rodava quem o chamasse sem perguntar. Agora
+`RunQuickCommand` leva `Confirmed`, e o handler recusa o comando que pede
+confirmação e chega sem ela, conferindo o comando lido na hora: se ele passou
+a pedir confirmação depois da prévia (por sync, por exemplo), não roda sem
+perguntar de novo. A tela marca o pedido depois do diálogo. É a preparação da
+orquestração remota: um pedido de longe vai confirmar por uma aprovação, e não
+por esta tela.
+
 **Um `dotnet run` por vez em cada ambiente.** O segundo brigaria pela porta;
 com o terminal aberto, o botão fica "🟢 Executando desde 14:02" e oferece
 "Mostrar terminal" (`ITerminalWindowManager.FocusAsync`). Um escondido por vez,
@@ -4861,9 +4870,11 @@ pelo tamanho de cada tabela, nunca volta e não passa de 99% antes do fim.
   - o dump bruto e os logs saem sempre;
   - o anônimo sai, a não ser que o perfil peça para mantê-lo;
   - fica o `metadata.json`.
-- **Varredura:** o `.operation` diz de quem é a pasta. A varredura da abertura
-  apaga o que uma queda deixou, sem tocar numa cópia viva (o
-  `DatabaseOperationGate` sabe quais estão vivas).
+- **Varredura:** o `.operation` diz de quem é a pasta. A varredura roda na
+  primeira abertura da janela Bancos de Dados (e não ao abrir o app), marca
+  como interrompida a operação que uma queda deixou "em andamento" e apaga as
+  pastas que sobraram, sem tocar numa cópia viva (o `DatabaseOperationGate`
+  sabe quais estão vivas).
 
 ### Verificação sem trazer dado
 
@@ -5321,7 +5332,12 @@ Toda ferramenta passa pelo `McpGateway`, que não tem regra de negócio. Ele:
 
 - recusa escrita no modo **somente leitura**;
 - serializa as chamadas MCP (`SemaphoreSlim(1)`), porque o SQLite do app não
-  tem WAL e a tela também grava;
+  tem WAL e a tela também grava. Correção posterior: o banco sempre esteve em
+  WAL, porque o EF Core cria o arquivo assim (o `-wal` existe ao lado do
+  `mytaskapp.db` de quem usa o app). A abertura agora também o garante
+  (`DatabaseInitializer`), para um arquivo que tenha chegado em outro modo. A
+  serialização fica: o WAL deixa ler durante uma gravação, mas continua
+  aceitando um escritor por vez;
 - liga `OperationOrigin.Enter("MCP")`, um `AsyncLocal` que o `ICurrentUser`
   lê. Assim a auditoria grava "adria (MCP)" sem mudar a assinatura de nenhum
   caso de uso;
@@ -8674,3 +8690,452 @@ sempre rodando. Não é obrigatório, porque qualquer outro servidor serve.
   
   `DatabaseOperationsWindowTests`: a aba desenhada com os botões ligados aos
   comandos.
+
+## ADR-084 — Orquestração remota: o servidor do usuário coordena, e cada máquina tem um agente que só disca para fora
+
+**Estado:** proposto (fase 2), em implementação: o contrato, o escopo `remote`, os dispositivos e o pareamento no servidor já existem (T-01 a T-06); o agente ainda não. O desenho completo está em
+[`architecture/remote-orchestration.md`](architecture/remote-orchestration.md),
+as ameaças em
+[`architecture/remote-security-threat-model.md`](architecture/remote-security-threat-model.md)
+e as entregas em
+[`roadmap/phase-2-remote-orchestration.md`](roadmap/phase-2-remote-orchestration.md).
+
+**Contexto:** o usuário quer, de um computador ou do celular, escolher uma
+máquina, criar ou escolher uma tarefa, preparar o worktree, rodar os comandos
+configurados, mandar um prompt ao Claude Code e acompanhar tudo, **sem o
+desktop aberto na máquina que executa**. O app já tem as peças, todas locais:
+worktrees (ADR-027), comandos (ADR-028/051/055), sessões do Claude (ADR-030/037),
+cópias de banco (ADR-056/060) e um servidor de sincronização do próprio usuário
+(ADR-061/078). Não há canal de comando: o ADR-061 deixou "executar comandos
+remotamente" fora de escopo, e o `SyncCommandReviewGate` recusa até rodar um
+comando cujo texto mudou em outro computador.
+
+Exigências: Windows e Linux; pouco consumo; **nenhuma porta de entrada** nas
+máquinas executoras; nada de Redis, RabbitMQ, Kubernetes ou outra
+infraestrutura sem necessidade demonstrada; o modo offline intacto.
+
+**Decisão:** três papéis.
+
+1. **Controlador** (desktop ou celular): monta e assina o pedido.
+2. **Coordenador**: o servidor de sincronização que já existe (ASP.NET Core,
+   PostgreSQL, OpenIddict), com tabelas e endpoints novos. Guarda a operação,
+   entrega ao agente e repassa eventos. Não executa nada e não decide sozinho
+   o que roda (ADR-087).
+3. **Agente** (`MyTaskApp.Agent`): processo sem tela em cada máquina
+   autorizada, que **só abre conexões de saída** (HTTPS e WSS) e executa pelos
+   mesmos casos de uso do desktop (ADR-085).
+
+Os contratos ficam num projeto novo, `MyTaskApp.Remote.Contracts`, separado do
+`Sync.Contracts`: a sincronização continua um protocolo de dados, e a
+orquestração é um protocolo de pedidos.
+
+### Alternativas
+
+- **Um servidor de orquestração à parte.** Isolaria o código, mas pediria outro
+  deploy, outra base de contas e outro OAuth para o usuário manter. O servidor
+  do ADR-078 já tem contas, dispositivos, revogação, rate limit e TLS.
+- **Conexão direta entre máquinas** (porta aberta, UPnP, VPN tipo Tailscale).
+  Fere a exigência de nenhuma porta de entrada, ou põe uma dependência de rede
+  fora do app. E não resolve o celular fora de casa.
+- **Um broker de mensagens** (RabbitMQ, MQTT, Redis Streams). A carga é de
+  poucas operações por hora, de um usuário. O PostgreSQL já é durável e
+  transacional; um broker seria mais um serviço para proteger e atualizar, sem
+  ganho mensurável.
+- **Um serviço de terceiros** (GitHub Actions self-hosted, um runner de CI).
+  Executaria de longe, mas fora do modelo de tarefa, worktree e sessão do app,
+  e com credenciais em outro lugar.
+
+### Consequências
+
+- Sem servidor configurado, nada muda: o remoto é opcional como o sync.
+- O servidor passa a ter tabelas de operação e um hub SignalR (ADR-086).
+- Toda regra que hoje só existe numa tela precisa descer para a Application
+  antes de ser usada de longe (o caso maior é o "Iniciar implementação" do
+  `TaskDevelopmentViewModel`).
+
+### Fora de escopo, de propósito
+
+- Terminal remoto interativo, envio de arquivos, área de trabalho remota.
+- Controlar máquinas de outra conta (o workspace continua pessoal).
+- Rodar sem a sessão do usuário aberta (ADR-085).
+
+## ADR-085 — O agente: um processo sem tela, do usuário, sobre o mesmo SQLite
+
+**Estado:** proposto (fase 2), em implementação: o SQLite garantido em WAL (T-07) e o `ScopedUseCaseRunner` único (T-09) já existem; o agente, o lease e o IPC ainda não.
+
+**Contexto:** a máquina executora precisa atender pedidos com o desktop
+fechado. O que o agente usa só existe nela: o caminho do repositório
+(`TagDirectory.Path`, só local desde o ADR-061), os comandos que não
+sincronizam (ADR-066), as conexões de banco e as senhas no `ISecretStore`.
+Hoje um único processo usa o banco: `SingleInstance` garante isso, e o
+`DatabaseOperationGate` e o `McpGateway` serializam dentro do processo. O
+arquivo já está em WAL, porque o EF Core o cria assim; o ADR-059 dizia o
+contrário. Não existe host sem tela; o `McpTestHost` dos testes é o mais perto
+disso.
+
+**Decisão:**
+
+1. **Outro executável, o mesmo código.** `MyTaskApp.Agent` compõe
+   `AddApplication` + `AddInfrastructure` como o `McpTestHost`, com
+   `ICurrentUser` e `IAlertPresenter` próprios, e nenhum ViewModel. O
+   executor de casos de uso é o `ScopedUseCaseRunner` da Application, o mesmo
+   do desktop e do celular.
+2. **Como o usuário, no logon.** Tarefa agendada por usuário no Windows e
+   `systemd --user` no Linux. DPAPI e libsecret continuam funcionando, porque
+   são do usuário. Mutex próprio (`MyTaskApp.Agent`); o instalador fecha e
+   reabre o agente como faz com o app (ADR-049).
+3. **SQLite para dois processos.** O `DatabaseInitializer` garante o WAL a cada
+   abertura. O escritor ocupado espera, porque o Microsoft.Data.Sqlite repete o
+   comando até o timeout. A migration concorrente o EF já trava
+   (`__EFMigrationsLock`). Feito na T-07. Falta: um processo mais velho que o
+   esquema recusar subir.
+4. **Um dono para cada laço**, por lease numa tabela (`ProcessLeases`: nome,
+   PID, início, validade): o `SyncScheduler` e a manutenção rodam em quem tem o
+   lease. Lembretes, bandeja e post-its são só do desktop. A renovação do token
+   do sync roda sob o mesmo lease, relendo o cofre antes, para dois processos
+   não girarem o mesmo refresh token.
+5. **Gate de banco entre processos.** A `DatabaseOperationAudit` ganha o dono
+   (PID + início); a recuperação só marca como interrompida a operação cujo dono
+   não existe mais.
+6. **IPC local.** Named pipe com `PipeOptions.CurrentUserOnly` (Unix socket no
+   Linux), só para "dados mudaram", "sincronizar agora" e o pareamento local.
+   Nada de execução por ali.
+
+### Alternativas
+
+- **Executor dentro do desktop.** É o mais simples, mas exige o desktop aberto:
+  fere o requisito.
+- **Agente como outro dispositivo de sync, com banco próprio.** Não teria os
+  dados só locais (caminhos, conexões, senhas) que justamente não sincronizam.
+- **Desktop como cliente fino do agente**, com todo o acesso a dados passando
+  por ele. É o destino mais limpo, mas reescreve o acesso a dados de todas as
+  telas. Fica como evolução possível.
+- **Serviço de sistema** (Windows Service, systemd de sistema). Rodaria sem
+  logon, mas DPAPI e libsecret são do usuário; pediria um cofre de máquina e
+  daria ao agente mais poder do que o usuário tem.
+- **Mutex e evento nomeados para coordenar.** O evento nomeado não existe no
+  .NET em Unix; a tabela de lease funciona igual nos dois sistemas e dá para
+  ver quem é o dono.
+
+### Consequências
+
+- Backup que copia só o `.db` perde o que ainda está no `-wal`. Não é novo, mas
+  dois processos abertos o tornam mais provável (documentar em "Onde ficam os
+  dados").
+- A bolinha do sync (ADR-063) passa a ler o estado do banco quando o dono do
+  lease é o agente.
+- "Desktop fechado" quer dizer usuário logado, com a tela bloqueada ou não.
+
+### Fora de escopo, de propósito
+
+- Rodar sem a sessão do usuário (cofre de máquina).
+- macOS (não há instalador hoje).
+
+## ADR-086 — Operação remota: registro no PostgreSQL, diário no agente, SignalR só como campainha
+
+**Estado:** proposto (fase 2). Só o contrato existe (T-01: estados, transições e eventos numerados); o registro no servidor, o diário e o hub ainda não.
+
+**Contexto:** uma operação pode durar horas (uma sessão do Claude, uma cópia de
+banco). A rede cai, o celular dorme, o agente reinicia, o servidor é
+atualizado. O estado não pode depender de uma conexão aberta. O sync (ADR-061)
+só faz polling a cada 60 s, e uma aprovação de ferramenta do Claude esperando
+um minuto é inviável.
+
+**Decisão:**
+
+1. **A verdade é durável dos dois lados.** No servidor, `RemoteOperations`
+   (pedido assinado, estado, `NotAfter`, `CancelRequestedAt`) e
+   `RemoteOperationEvents` (`(OperationId, Seq)` único). No agente,
+   `RemoteOperationJournal` e os eventos ainda sem confirmação, no SQLite e
+   fora do `SyncRegistry`.
+2. **Idempotência em toda escrita.** Criar: `OperationId` (UUIDv7 do
+   controlador) com o hash do pedido, como o `ProcessedOperations`. Aceitar: a
+   linha do diário existe antes da resposta. Eventos: `Seq` denso gerado pelo
+   agente; o servidor ignora repetidos e devolve o maior contíguo; o agente só
+   apaga o que teve confirmação.
+3. **Estados:** `Queued`, `Dispatched`, `Accepted`, `Running`,
+   `WaitingApproval`, `Succeeded`, `Failed`, `Canceled`, `Rejected`, `Expired`,
+   `Interrupted`. O servidor decide até o aceite; depois, o agente, com a
+   transição conferida por uma tabela e regressão recusada. Pedido de
+   cancelamento é carimbo, não estado.
+4. **Tempo de vida.** `NotAfter` (padrão 10 min, teto 24 h): máquina desligada
+   não roda amanhã o que foi pedido hoje. Despacho sem aceite volta à fila em
+   2 min. Nada se repete sozinho: "Repetir" cria outra operação, com `RetryOf`.
+5. **Checkpoints** nas operações compostas: cada etapa grava o fim no diário.
+   Depois de cair, o agente retoma o que é retomável (preparar; worktree, por
+   `AdoptExisting`) e marca `Interrupted` o que não é (cópia de banco, comando
+   do usuário).
+6. **SignalR (`/hubs/remote`) só avisa**: há operação, pediram cancelamento,
+   chegaram eventos, há aprovação. Sem o hub, o agente busca por REST a cada
+   30 s. Uma instância de servidor dispensa backplane.
+
+### Alternativas
+
+- **Só polling**, como o sync. Simples, mas aprovação e saída ao vivo ficariam
+  com até um minuto de atraso.
+- **Long polling ou SSE próprios.** Sem pacote novo, mas é protocolo para
+  manter à mão (reconexão, keep-alive), e o SSE não tem cliente pronto no MAUI.
+- **WebSocket cru.** Mesmo custo do anterior, sem fallback.
+- **Estado na conexão** (o hub como fonte da verdade). Uma queda perderia
+  eventos e aprovações; o servidor reiniciado esqueceria o que rodava.
+
+### Consequências
+
+- Pacote novo só nos clientes: `Microsoft.AspNetCore.SignalR.Client`. O
+  servidor já tem o SignalR no framework.
+- O proxy (Caddy/Traefik) precisa repassar WebSocket, e a query string do hub
+  (que leva o token) sai do log.
+- Os eventos ocupam o PostgreSQL: teto de 1 MiB por operação e retenção de
+  30 dias.
+
+### Fora de escopo, de propósito
+
+- Ordem global entre operações de máquinas diferentes.
+- Retomar o processo do SO depois de o agente cair: o processo morre junto
+  (Job Object no Windows, grupo de processos no Linux).
+
+## ADR-087 — Confiança: pareamento na máquina executora, chave por dispositivo e operação assinada
+
+**Estado:** proposto (fase 2), em implementação: a chave por dispositivo, o escopo `remote`, o pareamento com código digitado no executor, os `TrustedControllers` e a janela "Máquinas" já existem (T-02 a T-06); a operação assinada ainda não.
+
+**Contexto:** executar de longe é o maior poder que o app já teve. Hoje o
+token do sync prova "esta conta, este dispositivo", e o servidor é a
+autoridade. Para executar comandos isso não basta: um servidor invadido, um
+backup vazado com as chaves de assinatura ou uma conta Google comprometida
+poderiam mandar rodar qualquer coisa em todas as máquinas. É o mesmo cuidado
+que levou ao `SyncCommandReviewGate`.
+
+**Decisão:**
+
+1. **Uma chave por instalação.** ECDSA P-256 (ES256), gerada no dispositivo; a
+   privada vai para o `ISecretStore` (`"device-key"`) e nunca sai; a pública é
+   registrada no servidor.
+2. **Operação assinada.** Pedido, cancelamento e resposta de aprovação são JWS
+   compactos assinados pelo controlador. O agente lê os bytes assinados, e não
+   uma cópia do servidor. `TargetDeviceId`, `WorkspaceId`, `NotAfter` e
+   `OperationId` estão dentro da assinatura; o agente guarda os ids vistos por
+   30 dias.
+3. **Confiança ancorada no executor.** O agente aceita só chaves de
+   `TrustedControllers`, uma tabela local gravada por um pareamento confirmado
+   **na própria máquina** (desktop ou CLI do agente). O código de 6 dígitos é
+   derivado das duas impressões digitais e de um nonce: se o servidor trocar a
+   chave no meio, os códigos não batem. A pessoa **digita** no executor o
+   código que o controlador mostra (o executor não o exibe): comparar dois
+   números na tela é fácil de aprovar sem olhar. Feito na T-05:
+   `PairingCode`, `ConfirmPairingHandler` e as rotas `/remote/pairings`.
+4. **Ligar o executor é local.** "Aceitar controle remoto" vem desligado, não
+   sincroniza e só se liga na própria máquina.
+5. **OAuth.** Escopo novo `remote` nos dois clientes, pedido só quando o
+   usuário liga o remoto. Rate limiter `remote` separado do `sync` (ADR-069).
+   O servidor já o conhece (T-02): `RemoteSchema.Scope`, permitido aos dois
+   clientes e exigido, junto com o `sync`, pela política `ServerSetup.RemotePolicy`.
+   O cliente só pode pedi-lo depois de o servidor estar atualizado: o OpenIddict
+   recusa escopo desconhecido com `invalid_scope`, e o login do sync cairia junto.
+6. **Revogar.** Revogar o dispositivo (ADR-061) revoga a chave, e os agentes a
+   tiram de `TrustedControllers` quando recebem o aviso. Se o aviso não chegar,
+   o servidor recusa o token do revogado de qualquer jeito.
+
+### Alternativas
+
+- **Confiar no servidor e no token** (o modelo do sync). Mais simples, mas um
+  servidor comprometido vira execução remota em todas as máquinas.
+- **mTLS por dispositivo.** Prende o canal, mas não o pedido: o servidor ainda
+  repassaria qualquer coisa. E o proxy TLS (Caddy) teria de repassar o
+  certificado do cliente.
+- **Aprovar cada operação na máquina executora.** Seguro, mas inútil: não há
+  ninguém na frente dela.
+- **Pareamento por QR code na tela do executor.** Bom, e pode vir depois; o
+  código numérico funciona também pelo CLI, numa máquina Linux sem tela.
+
+### Consequências
+
+- Parear exige estar uma vez na máquina executora.
+- O celular precisa destravar (biometria/PIN do sistema) para assinar.
+- O servidor confere a assinatura também, para recusar lixo cedo, mas a
+  decisão é do agente.
+
+### Fora de escopo, de propósito
+
+- Cifra ponta a ponta dos eventos (o servidor ainda vê saídas e nomes): risco
+  residual R-04 do modelo de ameaças.
+
+## ADR-088 — Catálogo fechado de operações: nenhum texto de shell vem de fora
+
+**Estado:** proposto (fase 2), em implementação: o contrato do catálogo (T-01) e o "pedir confirmação" cobrado no caso de uso (T-18) já existem; o `RemoteAllowed` e as operações ainda não.
+
+**Contexto:** o app não tem allowlist de executáveis: o comando cadastrado
+roda no `cmd`/`sh` como foi escrito (ADR-028). A confiança vem de quem
+cadastrou, nesta máquina, ou de quem revisou (`ICommandReviewGate`).
+`RequiresConfirmation` só é cobrado pela tela. `CommandVariables.UnsafeCharacter`
+filtra só os valores de contexto.
+
+**Decisão:**
+
+1. **Tipos fechados:** `environment.inspect`, `worktree.provision`,
+   `worktree.remove`, `command.run`, `agent.start`, `agent.prompt`,
+   `agent.stop`, `database.copy`. Cada um tem um contrato tipado e um
+   tradutor para os casos de uso existentes. Nenhum campo é texto de shell,
+   SQL ou argumento de linha de comando.
+2. **Comando só por id**, e só com `RemoteAllowed`. É uma coluna **só local**
+   (fora do mapa do sync, então não muda de longe) que **cai quando o texto do
+   comando muda**, aqui ou por sync. O `ICommandReviewGate` continua valendo.
+3. **`RequiresConfirmation` é do caso de uso** (`RunQuickCommand.Confirmed`,
+   ADR-051): a tela marca o pedido depois do diálogo, e o agente só o marca
+   depois de uma aprovação remota.
+4. **Parâmetros vindos de fora** passam por `UnsafeCharacter` e por um teto de
+   tamanho, como os valores de contexto.
+5. **Diretórios** só como ids (diretório da etiqueta, ambiente); o caminho é
+   resolvido no agente, sem `..`, sem absoluto e sem link para fora do worktree.
+6. **Catálogo publicado pelo agente**: diretórios, comandos, conexões e perfis
+   do Claude liberados, com ids e nomes, **sem** caminho, host, usuário, texto
+   de comando ou senha. O controlador monta a tela a partir dele.
+
+### Alternativas
+
+- **Comando livre com allowlist de executáveis** (`git`, `dotnet`, `npm`). Uma
+  allowlist de executável não segura argumentos (`git -c core.sshCommand=…`,
+  `npm run` de qualquer script) e o shell não interpreta o que a lista entende.
+- **Comando livre com aprovação na máquina executora.** Não há ninguém nela.
+- **Liberar todos os comandos já cadastrados.** Um comando escrito para rodar
+  diante do usuário (um `deploy`) não deveria virar remoto sem uma escolha.
+
+### Consequências
+
+- Quem quer um comando novo de longe precisa cadastrá-lo e liberá-lo na máquina
+  executora. É o preço, e é de propósito.
+- A tela de comandos ganha "Disponível para controle remoto".
+
+### Fora de escopo, de propósito
+
+- Criar ou editar comandos, conexões e diretórios de longe.
+
+## ADR-089 — Claude Code remoto: headless, perfil escolhido no executor e aprovação humana
+
+**Estado:** proposto (fase 2). Nada implementado; os flags do Claude Code foram conferidos no 2.1.309 (T-26 é o teste com o Claude de verdade).
+
+**Contexto:** hoje o Claude abre num terminal real (`WindowsTerminalLauncher`;
+no Linux não abre), e o app o acompanha pelos hooks (ADR-037). O argumento
+padrão do card é `--dangerously-skip-permissions` (ADR-033): faz sentido com o
+usuário olhando, e não com ninguém na frente da máquina. A Consulta
+Inteligente (ADR-081) mostrou o caminho: travar pelos argumentos, não pelo
+texto.
+
+Decisão do usuário: na v1, **headless com aprovação remota**.
+
+**Decisão:**
+
+1. **Modo headless** (`IHeadlessAgentProvider`, implementado pelo
+   `ClaudeCodeCliProvider`): `claude -p` com `--output-format stream-json`,
+   prompt pelo stdin (sem a limitação de `"` e `%` do `claude.cmd`),
+   `--session-id` no primeiro prompt e `--resume` nos seguintes, `--model` e
+   `--effort` (ADR-040), e tetos locais de `--max-turns` e `--max-budget-usd`.
+   Sempre com `--restricted`, como a consulta. Cada prompt é um processo; a conversa
+   é a `AgentSession`, que ganha `Mode` (Interativo/Headless), o status
+   `Stopped` e o id da operação.
+2. **Perfil escolhido no executor.** Perfis locais: "ler", "editar no
+   worktree", "editar e rodar testes". Viram `--allowedTools`,
+   `--disallowedTools` e um `--settings` com `permissions.deny` para os
+   segredos do app, `~/.ssh` e afins. O controlador só escolhe um perfil do
+   catálogo.
+3. **Nunca pular permissões.** Os `DefaultArguments` do card não entram no modo
+   headless; o agente recusa `--dangerously-skip-permissions` e
+   `bypassPermissions` venham de onde vierem. O `--restricted` é a segunda
+   trava: no Claude Code 2.1.309 ele recusa os dois já na leitura dos
+   argumentos ("bypassPermissions not supported in restricted mode").
+4. **Sem configuração do projeto.** O worktree é dado não confiável. O
+   `--restricted` ignora os arquivos de configuração do usuário, do projeto e
+   locais, e com eles os hooks e as permissões do repositório. As regras do
+   agente entram por `--settings`, que continua valendo. O MCP é só o de
+   aprovação (`--strict-mcp-config`).
+5. **Aprovação humana.** Ferramenta fora do perfil vai para
+   `--permission-prompt-tool`, servido por um MCP do agente em loopback, com
+   segredo por sessão (o padrão do `McpSecurityMiddleware`). Vira um
+   `ApprovalRequest`; sem resposta em 10 min, nega. Um perfil sem canal de
+   aprovação usa `--permission-prompts none`: o que perguntaria é negado.
+6. **Ambiente limpo.** Fora `PG*`, `GH_TOKEN`, `GITHUB_TOKEN` e os
+   `MYTASKAPP_*` que não são da sessão.
+
+### O worktree não é sandbox
+
+O processo roda como o usuário e alcança tudo o que ele alcança. As travas
+são as do Claude (ferramentas e permissões) e a do humano que aprova. Isolar
+no sistema operacional (contêiner, AppContainer, bubblewrap) fica como perfil
+futuro.
+
+### Alternativas
+
+- **Terminal interativo remoto.** Reaproveitaria o fluxo atual, mas exige
+  sessão gráfica, só funciona no Windows e não dá para responder de longe.
+- **`--permission-mode acceptEdits` sem aprovação.** Deixa o Bash de fora ou
+  liberado demais; não há meio-termo sem o humano.
+- **SDK do Claude em outra linguagem** (TypeScript, Python). Daria
+  `canUseTool` em processo, mas poria um runtime novo nas máquinas. O CLI com
+  `stream-json` cobre o mesmo, e o app já o detecta.
+- **O Remote Control do próprio Claude Code** (`--remote-control`). Deixa
+  continuar uma sessão pelo app do Claude, sem código nosso. Mas é uma sessão
+  interativa (terminal), presa à conta do Claude e fora da tarefa, do worktree,
+  da auditoria e das aprovações do MyTaskApp. Continua disponível para quem
+  abre o Claude pelo card, e não substitui a operação remota.
+- **Sessões em segundo plano do Claude** (`--bg`, `claude attach`, `logs`,
+  `stop`). Resolveriam o processo, mas `logs` devolve a tela do terminal, e não
+  eventos estruturados para repassar e aprovar.
+
+### Consequências
+
+- Flags conferidos no Claude Code 2.1.309 sem chamar o modelo (detalhes na
+  seção 7 de [`architecture/remote-orchestration.md`](architecture/remote-orchestration.md)).
+  `--permission-prompt-tool` e `--max-turns` são aceitos mas não aparecem na
+  ajuda; o formato do `stream-json` e o contrato da ferramenta de permissão
+  ficam para um teste opt-in (`MYTASKAPP_TEST_CLAUDE=1`) com o modelo de
+  verdade, e o `DetectAsync` passa a exigir a versão mínima conferida.
+- O `-p` pula o diálogo de confiança do diretório e ignora em silêncio um
+  arquivo de configuração inválido: o agente só abre sessão em worktree de
+  repositório cadastrado, e um teste valida o `--settings` que ele gera.
+- O acompanhamento vem do `stream-json`; os hooks continuam só no modo
+  interativo.
+
+### Fora de escopo, de propósito
+
+- Outros provedores de agente de IA (a porta permite, nenhum na v1).
+- Sandbox do sistema operacional.
+
+## ADR-090 — Cópia de banco de longe: as mesmas barreiras, e produção com aprovação digitada
+
+**Estado:** proposto (fase 2). Nada implementado.
+
+**Contexto:** o ADR-056 pôs a cópia de produção atrás de quatro barreiras
+(política, fluxo, processo, PostgreSQL só leitura), e a confirmação de produção
+é um diálogo na tela (`ProductionConfirmed`, `TypedConfirmation`). De longe,
+não há tela na máquina executora. O `DatabaseOperationGate` e a recuperação de
+interrompidas são do processo (ADR-085 trata).
+
+**Decisão:**
+
+1. `database.copy` só com ids do catálogo: conexões com `RemoteAllowed` (coluna
+   local, desligada por padrão). Nenhuma operação remota cria, edita ou lê
+   conexão, senha ou perfil.
+2. O agente chama o **mesmo** `RunDatabaseCopyHandler`/
+   `CopyDevelopmentDatabaseHandler`: política, `Demand` em cada etapa,
+   `PostgresProcessGuard` e auditoria inalterados.
+3. **A confirmação vira aprovação.** Quando a política pede confirmação, o
+   agente abre um `ApprovalRequest` (`ProductionDatabase`) com origem, destino,
+   perfil de anonimização e tabelas sem regra. `CriticalProduction` exige o
+   nome do banco digitado na resposta assinada.
+4. A auditoria (`DatabaseOperationAudit`) registra o dispositivo que assinou.
+
+### Alternativas
+
+- **Recusar produção de longe.** Mais simples, mas o caso de uso principal da
+  cópia (ADR-060) é justamente produção anonimizada para o ambiente.
+- **Confirmação no pedido**, e não depois da política. O controlador não sabe
+  o que a política vai exigir; quem sabe é o executor, com as conexões dele.
+
+### Consequências
+
+- Uma cópia remota de produção sempre para em `WaitingApproval`, mesmo pedida
+  pelo próprio usuário. É de propósito.
+
+### Fora de escopo, de propósito
+
+- Dump simples, restauração arbitrária, SQL livre e o script pós-cópia
+  (ADR-082) disparados de longe sem passar pela cópia.

@@ -61,7 +61,6 @@ internal sealed class SyncDeviceHarness : IAsyncDisposable
             .AddLogging(logging => logging.SetMinimumLevel(LogLevel.Warning))
             .AddSingleton<TimeProvider>(clock)
             .AddSingleton<IDeviceIdentity>(device)
-            .AddSingleton<IUseCaseRunner, ScopedRunner>()
             .AddApplication(configuration)
             .AddInfrastructure(configuration)
             .AddSingleton(api)
@@ -141,30 +140,13 @@ internal sealed class SyncDeviceHarness : IAsyncDisposable
         }
     }
 
-    private sealed class ScopedRunner(IServiceScopeFactory scopes) : IUseCaseRunner
-    {
-        public async Task<TResult> RunAsync<THandler, TResult>(Func<THandler, CancellationToken, Task<TResult>> operation, CancellationToken cancellationToken = default)
-            where THandler : notnull
-        {
-            await using var scope = scopes.CreateAsyncScope();
-            return await operation(scope.ServiceProvider.GetRequiredService<THandler>(), cancellationToken);
-        }
-
-        public async Task RunAsync<THandler>(Func<THandler, CancellationToken, Task> operation, CancellationToken cancellationToken = default)
-            where THandler : notnull
-        {
-            await using var scope = scopes.CreateAsyncScope();
-            await operation(scope.ServiceProvider.GetRequiredService<THandler>(), cancellationToken);
-        }
-    }
-
     private sealed class AlwaysSignedIn : ISyncAuthenticator
     {
         public bool IsAvailable => true;
 
         public Uri? ServerBaseUrl { get; } = new("https://sync.exemplo.com/");
 
-        public Task<SyncAuthorization> BeginAuthorizationAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<SyncAuthorization> BeginAuthorizationAsync(bool includeRemote, CancellationToken cancellationToken) => throw new NotSupportedException();
 
         public Task<string> GetAccessTokenAsync(CancellationToken cancellationToken) => Task.FromResult("token");
 

@@ -4,11 +4,13 @@ using System.Text.Json;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using MyTaskApp.Remote.Contracts;
 using MyTaskApp.Server.Application;
 using MyTaskApp.Server.Infrastructure;
 using MyTaskApp.Server.Infrastructure.Persistence;
@@ -26,11 +28,15 @@ public static class ServerSetup
 
     public const string SyncPolicy = "sync";
 
+    public const string RemotePolicy = "remote";
+
     public const string AuthLimiter = "auth";
 
     public const string SyncLimiter = "sync";
 
     public const string ApiLimiter = "api";
+
+    public const string RemoteLimiter = "remote";
 
     public static IServiceCollection AddSyncServer(this IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
     {
@@ -114,6 +120,7 @@ public static class ServerSetup
         app.MapAccountEndpoints();
         app.MapConnectEndpoints();
         app.MapSyncApi();
+        app.MapRemoteApi();
 
         return app;
     }
@@ -267,7 +274,7 @@ public static class ServerSetup
 
                 // Só S256: o "plain" mandaria o verificador em claro no redirect.
                 server.Configure(configuration => configuration.CodeChallengeMethods.Remove(CodeChallengeMethods.Plain));
-                server.RegisterScopes(Scopes.OpenId, Scopes.Profile, Scopes.Email, Scopes.OfflineAccess, SyncSchema.Scope);
+                server.RegisterScopes(Scopes.OpenId, Scopes.Profile, Scopes.Email, Scopes.OfflineAccess, SyncSchema.Scope, RemoteSchema.Scope);
 
                 server.SetAccessTokenLifetime(options.AccessTokenLifetime)
                     .SetRefreshTokenLifetime(options.RefreshTokenLifetime)
@@ -310,13 +317,22 @@ public static class ServerSetup
                 validation.EnableTokenEntryValidation();
             });
 
-        services.AddAuthorization(authorization => authorization.AddPolicy(SyncPolicy, policy => policy
-            .AddAuthenticationSchemes(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme)
-            .RequireAuthenticatedUser()
-            .RequireClaim(Claims.Subject)
-            .RequireClaim(SyncSchema.DeviceIdClaim)
-            .RequireAssertion(context => context.User.HasScope(SyncSchema.Scope))));
+        services.AddAuthorization(authorization =>
+        {
+            authorization.AddPolicy(SyncPolicy, policy => RequireSyncToken(policy));
+
+            // A orquestração remota (RS-07): tudo o que o sync pede e, além disso, o escopo remote.
+            authorization.AddPolicy(RemotePolicy, policy => RequireSyncToken(policy)
+                .RequireAssertion(context => context.User.HasScope(RemoteSchema.Scope)));
+        });
     }
+
+    private static AuthorizationPolicyBuilder RequireSyncToken(AuthorizationPolicyBuilder policy) => policy
+        .AddAuthenticationSchemes(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme)
+        .RequireAuthenticatedUser()
+        .RequireClaim(Claims.Subject)
+        .RequireClaim(SyncSchema.DeviceIdClaim)
+        .RequireAssertion(context => context.User.HasScope(SyncSchema.Scope));
 
     private static void AddRateLimits(IServiceCollection services, SyncServerOptions options) =>
         services.AddRateLimiter(limiter => ApiRateLimits(limiter, options.RateLimits));
@@ -343,6 +359,7 @@ public static class ServerSetup
 
         limiter.AddPolicy(SyncLimiter, Unlimited);
         limiter.AddPolicy(ApiLimiter, Unlimited);
+        limiter.AddPolicy(RemoteLimiter, Unlimited);
 
         return limiter;
     }
@@ -374,6 +391,13 @@ public static class ServerSetup
                 $"u:{subject}",
                 _ => new FixedWindowRateLimiterOptions { PermitLimit = limits.ApiPerMinute, Window = TimeSpan.FromMinutes(1) })
             : AnonymousPartition(context, limits));
+
+        // A orquestração (RS-30) com balde próprio: um controlador insistente não come a cota do sync.
+        limiter.AddPolicy(RemoteLimiter, context => ApiSubject(context) is { } subject
+            ? RateLimitPartition.GetFixedWindowLimiter(
+                $"r:{subject}",
+                _ => new FixedWindowRateLimiterOptions { PermitLimit = limits.RemotePerMinute, Window = TimeSpan.FromMinutes(1) })
+            : AnonymousPartition(context, limits));
     }
 
     private static void Reject(RateLimiterOptions limiter)
@@ -403,7 +427,7 @@ public static class ServerSetup
     /// </summary>
     private static async Task IdentifyApiCallerAsync(HttpContext context, RequestDelegate next)
     {
-        if (context.GetEndpoint()?.Metadata.GetMetadata<EnableRateLimitingAttribute>()?.PolicyName is SyncLimiter or ApiLimiter)
+        if (context.GetEndpoint()?.Metadata.GetMetadata<EnableRateLimitingAttribute>()?.PolicyName is SyncLimiter or ApiLimiter or RemoteLimiter)
         {
             var result = await context.AuthenticateAsync(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme);
             context.Features.Set(new ApiCaller(result.Succeeded ? result.Principal.FindFirst(Claims.Subject)?.Value : null));

@@ -10,6 +10,7 @@
     <Project Path="src/MyTaskApp.Mobile.Core/MyTaskApp.Mobile.Core.csproj" />
   </Folder>
   <Folder Name="/shared/">
+    <Project Path="src/MyTaskApp.Remote.Contracts/MyTaskApp.Remote.Contracts.csproj" />
     <Project Path="src/MyTaskApp.Sync.Contracts/MyTaskApp.Sync.Contracts.csproj" />
   </Folder>
   <Folder Name="/tests/">
@@ -20,6 +21,7 @@
     <Project Path="tests/MyTaskApp.Mcp.Tests/MyTaskApp.Mcp.Tests.csproj" />
     <Project Path="tests/MyTaskApp.Mobile.Core.Tests/MyTaskApp.Mobile.Core.Tests.csproj" />
     <Project Path="tests/MyTaskApp.Packaging.Tests/MyTaskApp.Packaging.Tests.csproj" />
+    <Project Path="tests/MyTaskApp.Remote.Contracts.Tests/MyTaskApp.Remote.Contracts.Tests.csproj" />
     <Project Path="tests/MyTaskApp.Sync.Contracts.Tests/MyTaskApp.Sync.Contracts.Tests.csproj" />
   </Folder>
 </Solution>

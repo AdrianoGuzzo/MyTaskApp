@@ -304,7 +304,7 @@ public sealed partial class QuickCommandsViewModel(
             return;
         }
 
-        var command = new RunQuickCommand(_taskId, developmentId, commandId, bindingId, values);
+        var command = RunRequest(_taskId, developmentId, commandId, bindingId, plan, values);
 
         if (plan.Entry.Mode == CommandMode.Terminal)
         {
@@ -317,6 +317,20 @@ public sealed partial class QuickCommandsViewModel(
 
         await RefreshAsync(CancellationToken.None);
     }
+
+    /// <summary>
+    /// O pedido de execução depois do diálogo. Chega aqui só quem confirmou
+    /// (quem cancela sai antes), então o plano que pedia confirmação foi
+    /// confirmado. O caso de uso confere de novo com o comando lido na hora.
+    /// </summary>
+    internal static RunQuickCommand RunRequest(
+        Guid taskId,
+        Guid developmentId,
+        Guid commandId,
+        Guid? bindingId,
+        QuickCommandPlan plan,
+        IReadOnlyDictionary<string, string>? values) =>
+        new(taskId, developmentId, commandId, bindingId, values, Confirmed: plan.Entry.RequiresConfirmation);
 
     private async Task OpenTerminalAsync(RunQuickCommand command, string name, QuickCommandItemViewModel? item)
     {

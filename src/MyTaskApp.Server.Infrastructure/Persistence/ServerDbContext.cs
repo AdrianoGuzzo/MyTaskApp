@@ -20,6 +20,12 @@ public sealed class ServerDbContext(DbContextOptions<ServerDbContext> options)
 
     internal DbSet<DeviceRow> Devices => Set<DeviceRow>();
 
+    internal DbSet<DeviceKeyRow> DeviceKeys => Set<DeviceKeyRow>();
+
+    internal DbSet<DeviceCapabilitiesRow> DeviceCapabilities => Set<DeviceCapabilitiesRow>();
+
+    internal DbSet<RemotePairingRow> RemotePairings => Set<RemotePairingRow>();
+
     internal DbSet<SyncEntityRow> SyncEntities => Set<SyncEntityRow>();
 
     internal DbSet<SyncReferenceRow> SyncReferences => Set<SyncReferenceRow>();
@@ -67,6 +73,40 @@ public sealed class ServerDbContext(DbContextOptions<ServerDbContext> options)
             device.Property(row => row.AppVersion).HasMaxLength(40);
             device.Property(row => row.CurrentAuthorizationId).HasMaxLength(100);
             device.HasOne<ApplicationUser>().WithMany().HasForeignKey(row => row.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<DeviceKeyRow>(key =>
+        {
+            key.ToTable("DeviceKeys");
+            key.HasKey(row => new { row.UserId, row.DeviceId, row.Fingerprint });
+            key.Property(row => row.Fingerprint).HasMaxLength(64);
+            key.Property(row => row.SubjectPublicKeyInfo).HasMaxLength(200);
+
+            // Uma chave valendo por dispositivo; as revogadas ficam.
+            key.HasIndex(row => new { row.UserId, row.DeviceId }).IsUnique().HasFilter("\"RevokedAt\" IS NULL");
+            key.HasOne<DeviceRow>().WithMany().HasForeignKey(row => new { row.UserId, row.DeviceId }).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<DeviceCapabilitiesRow>(capabilities =>
+        {
+            capabilities.ToTable("DeviceCapabilities");
+            capabilities.HasKey(row => new { row.UserId, row.DeviceId });
+            capabilities.Property(row => row.Capabilities).HasColumnType("jsonb");
+            capabilities.HasOne<DeviceRow>().WithMany().HasForeignKey(row => new { row.UserId, row.DeviceId }).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<RemotePairingRow>(pairing =>
+        {
+            pairing.ToTable("RemotePairings");
+            pairing.HasKey(row => row.PairingId);
+            pairing.Property(row => row.ControllerFingerprint).HasMaxLength(64);
+            pairing.Property(row => row.ControllerSubjectPublicKeyInfo).HasMaxLength(200);
+            pairing.Property(row => row.ExecutorFingerprint).HasMaxLength(64);
+            pairing.Property(row => row.Nonce).HasMaxLength(32);
+
+            // Os pedidos em aberto de um executor, e a contagem dos da conta.
+            pairing.HasIndex(row => new { row.UserId, row.ExecutorDeviceId, row.ExpiresAt });
+            pairing.HasOne<ApplicationUser>().WithMany().HasForeignKey(row => row.UserId).OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<SyncEntityRow>(entity =>

@@ -9,6 +9,7 @@ using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Application.QuickCommands;
 using MyTaskApp.Application.Reminders;
+using MyTaskApp.Application.Remote;
 using MyTaskApp.Application.Sounds;
 using MyTaskApp.Application.StickyNotes;
 using MyTaskApp.Application.Sync;
@@ -297,6 +298,7 @@ public sealed partial class App : Avalonia.Application
         todayViewModel.DatabaseOperationsRequested += () => ShowDatabaseOperations(services, window);
         todayViewModel.McpServerRequested += () => ShowMcpServer(services, window);
         todayViewModel.SyncRequested += () => ShowSync(services, window);
+        todayViewModel.MachinesRequested += () => ShowMachines(services, window);
 
         // Renomear, recolorir ou excluir muda as bolinhas de todo o painel; sem
         // isto a mudança só apareceria no refresh de 60 s.
@@ -448,6 +450,9 @@ public sealed partial class App : Avalonia.Application
         _ = indicator.LoadAsync(CancellationToken.None);
 
         services.GetRequiredService<SyncScheduler>().Start();
+
+        // O sinal de vida do controle remoto (ADR-087): com ele desligado, o tique só lê a configuração.
+        services.GetRequiredService<RemotePresenceScheduler>().Start();
     }
 
     private void SetUpMcpServer(IServiceProvider services, TodayViewModel todayViewModel)
@@ -585,6 +590,16 @@ public sealed partial class App : Avalonia.Application
     private static void ShowSync(IServiceProvider services, Window owner)
     {
         var window = services.GetRequiredService<SyncWindow>();
+
+        window.Show(owner);
+        window.Activate();
+        window.Reveal();
+    }
+
+    /// <summary>A janela "Máquinas" (ADR-087), aberta pelo menu.</summary>
+    private static void ShowMachines(IServiceProvider services, Window owner)
+    {
+        var window = services.GetRequiredService<MachinesWindow>();
 
         window.Show(owner);
         window.Activate();
@@ -892,6 +907,7 @@ public sealed partial class App : Avalonia.Application
 
         // Um push no meio para; o outbox guarda, e o próximo início reenvia com os mesmos ids (ADR-061).
         services.GetRequiredService<SyncScheduler>().Dispose();
+        services.GetRequiredService<RemotePresenceScheduler>().Dispose();
         services.GetRequiredService<AgentSessionMonitor>().Dispose();
         services.GetRequiredService<CommandExecutionMonitor>().Dispose();
         (services.GetRequiredService<IAgentEventEndpoint>() as IDisposable)?.Dispose();

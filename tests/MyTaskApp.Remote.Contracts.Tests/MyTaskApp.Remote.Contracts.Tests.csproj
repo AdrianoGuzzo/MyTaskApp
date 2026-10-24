@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\MyTaskApp.Remote.Contracts\MyTaskApp.Remote.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

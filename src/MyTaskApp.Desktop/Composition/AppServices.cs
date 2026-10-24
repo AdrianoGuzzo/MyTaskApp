@@ -68,7 +68,6 @@ internal static class AppServices
             // decidir se a janela aparece ou se o app sobe direto na bandeja.
             .AddSingleton(launch)
             .AddLogging(builder => builder.AddSerilog(Log.Logger))
-            .AddSingleton<IUseCaseRunner, ScopedUseCaseRunner>()
 
             // O relógio do cronômetro (ADR-052): um para o app, que a lista, a
             // faixa do HUD e a aba "Tempo" de cada janela leem.
@@ -76,7 +75,7 @@ internal static class AppServices
             .AddSingleton<TodayViewModel>()
 
             // O Desktop tambem e camada adaptadora: implementa portas da
-            // Application, como o ScopedUseCaseRunner ja fazia.
+            // Application. O executor de casos de uso vem do AddApplication.
             .AddSingleton<AlertPresenter>()
             .AddSingleton<IAlertPresenter>(services => services.GetRequiredService<AlertPresenter>())
 
@@ -188,6 +187,8 @@ internal static class AppServices
             .AddSingleton<McpServerWindow>()
             .AddSingleton<SyncViewModel>()
             .AddSingleton<SyncWindow>()
+            .AddSingleton<MachinesViewModel>()
+            .AddSingleton<MachinesWindow>()
 
             // A bolinha do cabeçalho (ADR-063): uma só, como o agendador que ela escuta.
             .AddSingleton<SyncIndicatorViewModel>()

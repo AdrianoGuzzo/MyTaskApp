@@ -7,12 +7,14 @@ WORKDIR /src
 
 COPY global.json Directory.Build.props Directory.Packages.props ./
 COPY src/MyTaskApp.Sync.Contracts/MyTaskApp.Sync.Contracts.csproj src/MyTaskApp.Sync.Contracts/
+COPY src/MyTaskApp.Remote.Contracts/MyTaskApp.Remote.Contracts.csproj src/MyTaskApp.Remote.Contracts/
 COPY src/MyTaskApp.Server.Application/MyTaskApp.Server.Application.csproj src/MyTaskApp.Server.Application/
 COPY src/MyTaskApp.Server.Infrastructure/MyTaskApp.Server.Infrastructure.csproj src/MyTaskApp.Server.Infrastructure/
 COPY src/MyTaskApp.Server.Api/MyTaskApp.Server.Api.csproj src/MyTaskApp.Server.Api/
 RUN dotnet restore src/MyTaskApp.Server.Api/MyTaskApp.Server.Api.csproj
 
 COPY src/MyTaskApp.Sync.Contracts/ src/MyTaskApp.Sync.Contracts/
+COPY src/MyTaskApp.Remote.Contracts/ src/MyTaskApp.Remote.Contracts/
 COPY src/MyTaskApp.Server.Application/ src/MyTaskApp.Server.Application/
 COPY src/MyTaskApp.Server.Infrastructure/ src/MyTaskApp.Server.Infrastructure/
 COPY src/MyTaskApp.Server.Api/ src/MyTaskApp.Server.Api/

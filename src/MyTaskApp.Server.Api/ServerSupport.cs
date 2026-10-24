@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
+using MyTaskApp.Remote.Contracts;
 using MyTaskApp.Server.Application;
 using MyTaskApp.Server.Infrastructure.Persistence;
 using MyTaskApp.Sync.Contracts;
@@ -183,6 +184,7 @@ internal sealed class PublicClientSeeder(IServiceProvider services, SyncServerOp
                 Permissions.Scopes.Email,
                 Permissions.Scopes.Profile,
                 Permissions.Prefixes.Scope + SyncSchema.Scope,
+                Permissions.Prefixes.Scope + RemoteSchema.Scope,
             },
             Requirements = { Requirements.Features.ProofKeyForCodeExchange },
         };

@@ -10,6 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\MyTaskApp.Remote.Contracts\MyTaskApp.Remote.Contracts.csproj" />
     <ProjectReference Include="..\MyTaskApp.Server.Infrastructure\MyTaskApp.Server.Infrastructure.csproj" />
   </ItemGroup>
 

@@ -822,6 +822,47 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                     b.ToTable("SavedDatabases", (string)null);
                 });
 
+            modelBuilder.Entity("MyTaskApp.Domain.Remote.TrustedController", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ApprovedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("ControllerDeviceId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Fingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Nickname")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("PairingId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("RevokedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SubjectPublicKeyInfo")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ControllerDeviceId");
+
+                    b.HasIndex("Fingerprint");
+
+                    b.ToTable("TrustedControllers", (string)null);
+                });
+
             modelBuilder.Entity("MyTaskApp.Domain.StickyNotes.StickyNote", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1429,6 +1470,25 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                     b.ToTable("ReminderSettings", null, t =>
                         {
                             t.HasCheckConstraint("CK_ReminderSettings_SingleRow", "Id = 1");
+                        });
+                });
+
+            modelBuilder.Entity("MyTaskApp.Infrastructure.Persistence.RemoteSettingsRow", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("AcceptControl")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("RemoteSettings", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_RemoteSettings_SingleRow", "Id = 1");
                         });
                 });
 

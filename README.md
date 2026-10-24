@@ -776,6 +776,7 @@ Management).
 │   ├── MyTaskApp.Infrastructure/    EF Core/SQLite, Git, processos, Claude Code
 │   ├── MyTaskApp.Mcp/               servidor MCP local (Kestrel no loopback)
 │   ├── MyTaskApp.Sync.Contracts/    contrato da sincronização (desktop e servidor)
+│   ├── MyTaskApp.Remote.Contracts/  contrato da orquestração remota (fase 2, ainda sem uso)
 │   ├── MyTaskApp.Server.*/          servidor de sincronização (ASP.NET Core + PostgreSQL)
 │   ├── MyTaskApp.Mobile.Core/       o app do celular sem MAUI: ViewModels, composição
 │   ├── MyTaskApp.Mobile/            o app do celular: .NET MAUI, Android e iOS
@@ -872,7 +873,10 @@ fica em [`CHANGELOG.md`](CHANGELOG.md).
 
 | Documento | Conteúdo |
 |---|---|
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | decisões de arquitetura (ADR-001 a ADR-082), com o motivo de cada uma |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | decisões de arquitetura (ADR-001 a ADR-090), com o motivo de cada uma; de ADR-084 em diante, a fase 2 (orquestração remota), em implementação |
+| [`docs/architecture/remote-orchestration.md`](docs/architecture/remote-orchestration.md) | fase 2 (proposta): inventário do código, arquitetura da orquestração remota, contratos, ciclo de vida e reaproveitamento |
+| [`docs/architecture/remote-security-threat-model.md`](docs/architecture/remote-security-threat-model.md) | fase 2 (proposta): ameaças da execução remota e os requisitos de segurança |
+| [`docs/roadmap/phase-2-remote-orchestration.md`](docs/roadmap/phase-2-remote-orchestration.md) | fase 2 (proposta): entregas, critérios de aceitação e tarefas priorizadas |
 | [`docs/sync.md`](docs/sync.md) | sincronização entre computadores: a tela, o que sincroniza, onde cada tarefa aparece, conflitos e limitações |
 | [`docs/sync-server.md`](docs/sync-server.md) | o servidor de sincronização: cliente OAuth do Google, configuração, migrations, implantação e testes |
 | [`docs/mobile.md`](docs/mobile.md) | o app do celular: arquitetura, login, sincronização, ambiente, rodar no Android, o que falta no iOS, testes e limitações |
