@@ -117,8 +117,8 @@ pedir só ao ligar o remoto). O código curto precisa de entropia suficiente
   `MyTaskApp.Agent` e `ICurrentUser` e `IAlertPresenter` próprios (sem UI).
 - **SQLite para dois processos** (ADR-085): ~~WAL e migrate sob trava~~ feitos
   na T-07 (o WAL já existia pelo EF, a trava de migration é do próprio EF);
-  falta a tabela `ProcessLeases`, o `SyncScheduler` só no dono do lease e o
-  refresh do token sob trava entre processos.
+  ~~a tabela `ProcessLeases`, o ciclo do sync só no dono do lease e o refresh
+  do token sob trava entre processos~~ feitos na T-08.
 - ~~Mover `ScopedUseCaseRunner`~~ feito na T-09: está em
   `Application/Abstractions`, e o `AddApplication` o registra para todo host.
 - **IPC local**: named pipe `CurrentUserOnly` (Unix socket no Linux): "dados
@@ -481,7 +481,7 @@ Cada tarefa cabe num PR. "Pronto" é o critério objetivo de conclusão.
 | T-05 ✔ | Pareamento com código derivado e `TrustedControllers` local (servidor: commit `6184fe3`; app: commit `6eca19c`, `ConfirmPairingHandler`, o código é digitado no executor; ponta a ponta com o desktop de verdade: `be34351`) | E1 | T-04 | código errado não grava; certo grava dos dois lados; pareamento de uma chave revogada (T-04) deixa de valer |
 | T-06 ✔ | Janela "Máquinas" no desktop; ligar o remoto pede o login de novo com `remote`, registra o `DeviceKeyStore` na composição e chama `PUT /remote/devices/current` (núcleo: commit `dae7925`; janela: `29bd4fa`; sinal de vida a cada minuto pelo `RemotePresenceScheduler`, até o agente assumir na T-13) | E1 | T-04, T-05 | parear, revogar e ver online/offline sem reiniciar; quem não liga o remoto continua pedindo só `sync` |
 | T-07 ✔ | WAL garantido na abertura; escritor ocupado espera; migration concorrente roda uma vez (commit `4a48578`). Achado: o banco já estava em WAL pelo EF, e o ADR-059 dizia o contrário | E2 | — | `DatabaseInitializerTests` (um arquivo em outro modo volta a WAL, dois escritores, duas migrations ao mesmo tempo); `UpgradePreservationTests` verdes |
-| T-08 | `ProcessLeases` e `SyncScheduler` no dono do lease; refresh sob trava | E2 | T-07 | dois processos: um ciclo de sync por vez; nenhuma cadeia de refresh revogada |
+| T-08 ✔ | `ProcessLeases` (dono = PID + início) e o ciclo do sync só no dono do lease, que vai para o outro processo quando vence ou quando o dono morre; refresh sob o lease `sync-token`, relendo o cofre. O gate fica no `SyncEngine`, depois de conferir a conta: sem sync, nada é gravado. O celular usa `SingleProcessLeases` | E2 | T-07 | `SqliteProcessLeasesTests`, `ProcessLeaseHoldTests` e `TwoProcessSyncTests`: dois processos, um ciclo de sync por vez; nenhum refresh antigo apresentado (o teste falha sem o lease) |
 | T-09 ✔ | `ScopedUseCaseRunner` único, em `Application/Abstractions` (commit `450936c`) | E2 | — | Desktop, Mobile.Core e os harnesses de teste usam o mesmo; testes de composição verdes |
 | T-10 | `MyTaskApp.Agent` (host, mutex, composição) | E2 | T-07, T-08, T-09 | `AgentCompositionTests` resolve todos os handlers; sobe sem o desktop |
 | T-11 | Pipe local (dados mudaram, sincronizar agora) | E2 | T-10 | desktop atualiza a lista quando o agente grava |

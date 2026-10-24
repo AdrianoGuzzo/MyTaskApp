@@ -8761,7 +8761,7 @@ orquestração é um protocolo de pedidos.
 
 ## ADR-085 — O agente: um processo sem tela, do usuário, sobre o mesmo SQLite
 
-**Estado:** proposto (fase 2), em implementação: o SQLite garantido em WAL (T-07) e o `ScopedUseCaseRunner` único (T-09) já existem; o agente, o lease e o IPC ainda não.
+**Estado:** proposto (fase 2), em implementação: o SQLite garantido em WAL (T-07), os leases entre processos com o ciclo do sync e o refresh do token sob eles (T-08) e o `ScopedUseCaseRunner` único (T-09) já existem; o agente e o IPC ainda não.
 
 **Contexto:** a máquina executora precisa atender pedidos com o desktop
 fechado. O que o agente usa só existe nela: o caminho do repositório
@@ -8790,10 +8790,16 @@ disso.
    (`__EFMigrationsLock`). Feito na T-07. Falta: um processo mais velho que o
    esquema recusar subir.
 4. **Um dono para cada laço**, por lease numa tabela (`ProcessLeases`: nome,
-   PID, início, validade): o `SyncScheduler` e a manutenção rodam em quem tem o
-   lease. Lembretes, bandeja e post-its são só do desktop. A renovação do token
-   do sync roda sob o mesmo lease, relendo o cofre antes, para dois processos
-   não girarem o mesmo refresh token.
+   PID, início, validade): o ciclo do sync roda em quem tem o lease `sync`, e
+   o outro processo devolve `Elsewhere` até o lease vencer ou o dono morrer
+   (PID + início que não existem mais passam o lease na hora). O gate fica no
+   `SyncEngine`, depois de conferir a conta: sem sync ligado, nada é gravado.
+   Lembretes, bandeja e post-its são só do desktop; a manutenção ainda roda nos
+   dois, porque os lotes são idempotentes. A renovação do token do sync, o
+   login e o "desconectar" seguram o lease `sync-token`, relendo o cofre lá
+   dentro, para dois processos não girarem o mesmo refresh token. O celular é
+   um processo só e usa `SingleProcessLeases` (o iOS nem deixa perguntar por
+   outro PID).
 5. **Gate de banco entre processos.** A `DatabaseOperationAudit` ganha o dono
    (PID + início); a recuperação só marca como interrompida a operação cujo dono
    não existe mais.

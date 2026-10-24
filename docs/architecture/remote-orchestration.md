@@ -353,14 +353,21 @@ usuário. O preço:
    tempo prova que ela roda uma vez. Falta: um processo com versão de esquema
    menor que o banco recusar subir e dizer por quê (o instalador atualiza os
    dois juntos).
-3. **Um dono para cada laço**: uma tabela `ProcessLeases` (nome, PID, início
-   do processo, validade) no SQLite decide quem roda o `SyncScheduler` e a
-   manutenção. É portável (mutex nomeado funciona no Linux; evento nomeado não)
-   e observável. Lembretes, bandeja e post-its continuam **só no desktop**.
-4. **Renovação do token sob trava entre processos**: o refresh do sync
-   (rotação com reuso de 30 s no servidor) é feito sob o mesmo lease, relendo o
-   cofre antes: se outro processo já girou o token, usa o novo. Sem isso, dois
-   processos girando o mesmo refresh token revogariam a cadeia.
+3. **Um dono para cada laço** (feito, T-08): uma tabela `ProcessLeases` (nome,
+   PID, início do processo, quando foi tomado, validade) no SQLite decide quem
+   roda o ciclo do sync. Tomar é um upsert condicional, numa instrução só; um
+   lease vencido, ou de um PID que não existe mais com aquele início, passa
+   para quem pedir. O lease `sync` vale 2 min, é renovado durante o ciclo e
+   fica com o dono entre um ciclo e outro; o outro processo recebe
+   `SyncCycleStatus.Elsewhere` e pergunta de novo no minuto seguinte. É
+   portável (mutex nomeado funciona no Linux; evento nomeado não) e observável.
+   A manutenção ainda roda nos dois (os lotes são idempotentes); lembretes,
+   bandeja e post-its continuam **só no desktop**.
+4. **Renovação do token sob trava entre processos** (feito, T-08): o refresh do
+   sync (rotação com reuso de 30 s no servidor), o login e o "desconectar"
+   seguram o lease `sync-token` e releem o cofre lá dentro: se outro processo
+   já girou o token, usa o novo. Sem isso, dois processos girando o mesmo
+   refresh token revogariam a cadeia (o `TwoProcessSyncTests` falha sem o lease).
 5. **`DatabaseOperationGate` e a recuperação de interrompidas entre processos**:
    a auditoria ganha o dono (PID + início); só é "interrompida" a operação cujo
    dono não existe mais.
@@ -1015,8 +1022,8 @@ princípios:
 | Funcionalidade | Reaproveita direto | Refatorar | Abstração nova | Domínio / persistência | Testes de regressão |
 |---|---|---|---|---|---|
 | **Composição** | `AddApplication`, `AddInfrastructure` | ~~mover `ScopedUseCaseRunner`~~ feito (T-09): está em `Application/Abstractions` | `AgentServices.Build` (o host do agente) | — | `McpCompositionTests` e um `AgentCompositionTests` que resolve todos os handlers |
-| **SQLite** | `MyTaskAppDbContext`, migrations; WAL (o EF já criava assim), a espera do escritor ocupado do Microsoft.Data.Sqlite e a trava de migration do EF | feito (T-07): o `DatabaseInitializer` garante o WAL a cada abertura | `IProcessLease` | `ProcessLeases`, `RemoteOperationJournal*`, `TrustedControllers`, `RemoteExecutionSettings` (fora do `SyncRegistry`) | `UpgradePreservationTests`; teste novo com dois processos escrevendo ao mesmo tempo |
-| **Sync** | todo o protocolo | `SyncScheduler` só no dono do lease; refresh do token sob trava entre processos | pedido "sincronizar agora" por IPC | — | `SyncSchedulerTests`, `TwoDeviceSyncTests` com o agente ligado |
+| **SQLite** | `MyTaskAppDbContext`, migrations; WAL (o EF já criava assim), a espera do escritor ocupado do Microsoft.Data.Sqlite e a trava de migration do EF | feito (T-07): o `DatabaseInitializer` garante o WAL a cada abertura | `IProcessLeases` (feito, T-08) | `ProcessLeases`, `RemoteOperationJournal*`, `TrustedControllers`, `RemoteExecutionSettings` (fora do `SyncRegistry`) | `UpgradePreservationTests`; teste novo com dois processos escrevendo ao mesmo tempo |
+| **Sync** | todo o protocolo | feito (T-08): o ciclo só no dono do lease, dentro do `SyncEngine`; refresh do token sob o lease `sync-token` | pedido "sincronizar agora" por IPC | — | `SyncSchedulerTests`, `TwoDeviceSyncTests` com o agente ligado |
 | **Dispositivos** | `DeviceRow`, revogação, `DeviceGate` | `DeviceHello.Capabilities` passa a ser persistido | `DeviceKeys`, `DeviceCapabilities`, `RemotePairings` | migration no servidor | `ApiTests` (revogar derruba o hub e o remoto) |
 | **Worktrees** | `PrepareDevelopmentHandler`, `StartDevelopmentHandler`, `RemoveWorktreeHandler`, `WorktreeEraser`, `GitClient` | **extrair a sequência de `TaskDevelopmentViewModel.StartAsync/CreateAsync`** para um caso de uso `ProvisionEnvironmentHandler`, com as decisões (conflito, confirmação) como parâmetros; o ViewModel passa a chamá-lo | — | — | `TaskDevelopmentViewModelTests` inteiros devem continuar verdes; `ProvisionEnvironmentHandlerTests` novos |
 | **Clone** | `CloneTagRepositoryHandler` | no agente, `GCM_INTERACTIVE=Never` também no clone (sem janela de login) | — | — | `GitClientTests` |

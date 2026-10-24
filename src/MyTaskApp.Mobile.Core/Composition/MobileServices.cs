@@ -67,7 +67,7 @@ public static class MobileServices
         services.AddApplication(configuration);
         services.AddLocalData(
             configuration,
-            new LocalDataOptions { DeviceIdentityFolder = host.DataDirectory, DeviceNickname = host.DeviceName });
+            new LocalDataOptions { DeviceIdentityFolder = host.DataDirectory, DeviceNickname = host.DeviceName, SingleProcess = true });
 
         // O login volta pelo esquema do app; a casca entrega a volta aqui.
         var redirect = new AppLinkAuthorizationRedirect(SyncSchema.MobileClientId, new Uri(SyncSchema.MobileRedirectUri));

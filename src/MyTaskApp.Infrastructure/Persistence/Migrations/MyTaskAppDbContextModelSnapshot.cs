@@ -1439,6 +1439,29 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("MyTaskApp.Infrastructure.Persistence.ProcessLeaseRow", b =>
+                {
+                    b.Property<string>("Name")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("AcquiredAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ExpiresAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ProcessId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ProcessStartedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Name");
+
+                    b.ToTable("ProcessLeases", (string)null);
+                });
+
             modelBuilder.Entity("MyTaskApp.Infrastructure.Persistence.ReminderSettingsRow", b =>
                 {
                     b.Property<int>("Id")

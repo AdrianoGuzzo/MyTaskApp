@@ -20,6 +20,12 @@ public enum SyncCycleStatus
 
     /// <summary>Precisa de alguém: entrar de novo, atualizar o app. O agendador para de insistir.</summary>
     Blocked,
+
+    /// <summary>
+    /// Outro processo deste computador sincroniza (o agente, ADR-085): este não
+    /// faz nada e pergunta de novo no próximo intervalo, para assumir se ele sair.
+    /// </summary>
+    Elsewhere,
 }
 
 public sealed record SyncCycleResult(SyncCycleStatus Status, TimeSpan? RetryAfter = null, string? Message = null)
@@ -27,6 +33,8 @@ public sealed record SyncCycleResult(SyncCycleStatus Status, TimeSpan? RetryAfte
     public static SyncCycleResult Idle { get; } = new(SyncCycleStatus.Idle);
 
     public static SyncCycleResult Completed { get; } = new(SyncCycleStatus.Completed);
+
+    public static SyncCycleResult Elsewhere { get; } = new(SyncCycleStatus.Elsewhere);
 }
 
 /// <summary>Um ciclo de sincronização, do jeito que o agendador o vê.</summary>
@@ -79,7 +87,9 @@ public sealed class SyncEngine(
     IDeviceIdentity device,
     IDataChangeNotifier notifier,
     SyncDeviceDirectory directory,
-    ILogger<SyncEngine> logger) : ISyncCycleRunner
+    ILogger<SyncEngine> logger,
+    IProcessLeases? leases = null,
+    TimeProvider? timeProvider = null) : ISyncCycleRunner
 {
     public const int PushBatchSize = 100;
 
@@ -90,6 +100,12 @@ public sealed class SyncEngine(
 
     /// <summary>Quantas vezes a mesma página falha inteira antes de ser aplicada linha a linha.</summary>
     public const int PageFailuresBeforeIsolation = 3;
+
+    /// <summary>
+    /// Quanto o lease do ciclo (ADR-085) vale sem renovar: mais que o intervalo
+    /// parado, para o dono não o perder entre um ciclo e outro.
+    /// </summary>
+    public static readonly TimeSpan LeaseDuration = TimeSpan.FromMinutes(2);
 
     private readonly Dictionary<string, int> _pageFailures = [];
 
@@ -107,6 +123,37 @@ public sealed class SyncEngine(
             return SyncCycleResult.Idle;
         }
 
+        if (leases is null)
+        {
+            return await RunOwnedCycleAsync(state, workspaceId, cancellationToken);
+        }
+
+        // Um ciclo por computador, e não por processo: o desktop e o agente
+        // abrem o mesmo banco. O lease fica com quem o pegou enquanto ele sincronizar.
+        await using var hold = await ProcessLeaseHold.TryTakeAsync(
+            leases, ProcessLeaseNames.Sync, LeaseDuration, timeProvider ?? TimeProvider.System, releaseOnDispose: false, cancellationToken);
+
+        if (hold is null)
+        {
+            return SyncCycleResult.Elsewhere;
+        }
+
+        using var owned = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, hold.Lost);
+
+        try
+        {
+            return await RunOwnedCycleAsync(state, workspaceId, owned.Token);
+        }
+        catch (OperationCanceledException) when (hold.Lost.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            // Este processo ficou parado além da validade, e outro assumiu: o que faltou, ele faz.
+            logger.LogWarning("SyncLeaseLost");
+            return SyncCycleResult.Elsewhere;
+        }
+    }
+
+    private async Task<SyncCycleResult> RunOwnedCycleAsync(SyncLocalState state, Guid workspaceId, CancellationToken cancellationToken)
+    {
         if (state.LinkedDeviceId != device.DeviceId)
         {
             // O banco veio de outro computador (backup restaurado, pasta copiada).

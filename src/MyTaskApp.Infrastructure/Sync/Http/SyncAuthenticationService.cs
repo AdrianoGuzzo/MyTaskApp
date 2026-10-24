@@ -1,5 +1,6 @@
 using System.Text;
 using Microsoft.Extensions.Logging;
+using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Sync;
 using MyTaskApp.Domain;
 using MyTaskApp.Infrastructure.OAuth;
@@ -25,6 +26,12 @@ namespace MyTaskApp.Infrastructure.Sync.Http;
 /// antigo for reusado). Duas renovações em paralelo derrubariam a conexão; por
 /// isso o portão, e o novo é gravado no cofre antes de o access ser usado.
 /// </para>
+/// <para>
+/// <b>O portão vale entre processos também</b> (ADR-085): o desktop e o agente
+/// leem o mesmo cofre. Quem renova, grava ou apaga o refresh segura o lease
+/// <see cref="ProcessLeaseNames.SyncToken"/> e relê o cofre lá dentro, então
+/// usa o token que o outro processo acabou de girar, e nunca o antigo.
+/// </para>
 /// </remarks>
 internal sealed class SyncAuthenticationService(
     SyncOptions options,
@@ -33,7 +40,8 @@ internal sealed class SyncAuthenticationService(
     IDeviceIdentity device,
     TimeProvider timeProvider,
     ILogger<SyncAuthenticationService> logger,
-    ISyncAuthorizationRedirect? redirect = null) : ISyncAuthenticator, IDisposable
+    ISyncAuthorizationRedirect? redirect = null,
+    IProcessLeases? leases = null) : ISyncAuthenticator, IDisposable
 {
     public const string Scopes = "openid profile email offline_access sync";
 
@@ -48,6 +56,9 @@ internal sealed class SyncAuthenticationService(
 
     /// <summary>Entre o servidor e o refresh no cofre. Espaço: nem a URL normalizada (vira <c>%20</c>) nem o token o têm.</summary>
     private const string BoundSeparator = " ";
+
+    /// <summary>Renovado sozinho enquanto a renovação dura; morto o processo, passa adiante na hora.</summary>
+    private static readonly TimeSpan TokenLeaseDuration = TimeSpan.FromSeconds(30);
 
     private readonly SemaphoreSlim _gate = new(1, 1);
 
@@ -109,6 +120,8 @@ internal sealed class SyncAuthenticationService(
                 return current.Value;
             }
 
+            await using var held = await HoldTokenAsync(cancellationToken);
+
             var refresh = await ReadRefreshAsync(cancellationToken)
                 ?? throw new SyncApiException(SyncFailureKind.NeedsReconnect, "Conecte a conta de novo.");
 
@@ -152,6 +165,8 @@ internal sealed class SyncAuthenticationService(
 
         try
         {
+            await using var held = await HoldTokenAsync(cancellationToken);
+
             if (options.IsAvailable)
             {
                 // O servidor revoga só o token pedido: o refresh sozinho deixaria o access valendo até vencer (SEC-010).
@@ -229,6 +244,7 @@ internal sealed class SyncAuthenticationService(
 
             try
             {
+                await using var held = await HoldTokenAsync(linked.Token);
                 await StoreAsync(tokens, linked.Token);
             }
             finally
@@ -272,6 +288,27 @@ internal sealed class SyncAuthenticationService(
             {
                 _pending = null;
             }
+        }
+    }
+
+    /// <summary>O lado entre processos do portão; sem leases (testes de um processo só), só o portão.</summary>
+    private async Task<IAsyncDisposable?> HoldTokenAsync(CancellationToken cancellationToken)
+    {
+        if (leases is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            // O outro processo segura só o tempo de uma ou duas chamadas ao servidor.
+            return await ProcessLeaseHold.TakeAsync(
+                leases, ProcessLeaseNames.SyncToken, TokenLeaseDuration, options.RequestTimeout * 2, timeProvider, cancellationToken);
+        }
+        catch (TimeoutException)
+        {
+            logger.LogWarning("SyncTokenLeaseTimeout");
+            throw new SyncApiException(SyncFailureKind.Transient, "Outro processo deste computador está renovando o login da sincronização.");
         }
     }
 

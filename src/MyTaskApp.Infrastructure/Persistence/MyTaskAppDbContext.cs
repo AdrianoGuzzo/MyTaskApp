@@ -57,6 +57,9 @@ public sealed class MyTaskAppDbContext(DbContextOptions<MyTaskAppDbContext> opti
     /// <summary>O controle remoto nesta instalação (ADR-087): desligado de fábrica, só deste computador.</summary>
     internal DbSet<RemoteSettingsRow> RemoteSettings => Set<RemoteSettingsRow>();
 
+    /// <summary>Qual processo deste computador roda cada laço de dono só (ADR-085). Só deste computador.</summary>
+    internal DbSet<ProcessLeaseRow> ProcessLeases => Set<ProcessLeaseRow>();
+
     /// <summary>Os períodos de trabalho de cada ocorrência (ADR-052).</summary>
     public DbSet<TimeEntry> TimeEntries => Set<TimeEntry>();
 
