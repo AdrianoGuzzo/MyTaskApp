@@ -27,5 +27,9 @@ public class SyncCompositionTests
 
         services.GetRequiredService<ISyncAccount>().Should().BeSameAs(services.GetRequiredService<SyncAccountService>());
         services.GetRequiredService<SyncWindow>().DataContext.Should().BeSameAs(services.GetRequiredService<SyncViewModel>());
+
+        // A janela "Máquinas" (ADR-087) e o sinal de vida que ela chama saem do mesmo contêiner.
+        services.GetRequiredService<MachinesWindow>().DataContext.Should().BeSameAs(services.GetRequiredService<MachinesViewModel>());
+        services.GetRequiredService<MyTaskApp.Application.Remote.RemotePresenceScheduler>().Should().NotBeNull();
     }
 }

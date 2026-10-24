@@ -187,6 +187,8 @@ internal static class AppServices
             .AddSingleton<McpServerWindow>()
             .AddSingleton<SyncViewModel>()
             .AddSingleton<SyncWindow>()
+            .AddSingleton<MachinesViewModel>()
+            .AddSingleton<MachinesWindow>()
 
             // A bolinha do cabeçalho (ADR-063): uma só, como o agendador que ela escuta.
             .AddSingleton<SyncIndicatorViewModel>()

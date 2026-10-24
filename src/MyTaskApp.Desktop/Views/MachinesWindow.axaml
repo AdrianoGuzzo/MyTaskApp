@@ -1,0 +1,220 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
+        x:Class="MyTaskApp.Desktop.Views.MachinesWindow"
+        x:DataType="vm:MachinesViewModel"
+        x:Name="Root"
+        Title="Máquinas"
+        Width="620"
+        Height="720"
+        MinWidth="520"
+        MinHeight="460"
+        WindowStartupLocation="CenterOwner">
+
+  <!--
+    Máquinas (fase 2, T-06; ADR-087): os computadores da conta, quem está
+    ligado, e o pareamento para um controlar o outro. Ligar o remoto e aceitar
+    ser controlado são decisões deste computador, e só se tomam aqui.
+  -->
+
+  <Window.Styles>
+
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="{DynamicResource WidgetSurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetStrokeSoftBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetCardRadius}" />
+      <Setter Property="Padding" Value="14,12" />
+    </Style>
+
+    <Style Selector="TextBlock.sectionTitle">
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.meta">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style Selector="TextBlock.caution">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetCautionBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.online">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetSuccessBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.mono">
+      <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, monospace" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.code">
+      <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, monospace" />
+      <Setter Property="FontSize" Value="34" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+    </Style>
+
+  </Window.Styles>
+
+  <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+    <StackPanel Margin="16,14" Spacing="12">
+
+      <StackPanel Spacing="4">
+        <TextBlock Text="Máquinas" FontSize="18" FontWeight="SemiBold" />
+        <TextBlock Classes="meta"
+                   Text="Os computadores da sua conta, e quem pode controlar quem. Um computador só aceita pedidos de um controlador que você pareou nele, digitando o código que o controlador mostra." />
+      </StackPanel>
+
+      <!-- ========================= SEM SERVIDOR ========================= -->
+      <Border Classes="card" IsVisible="{Binding HasNoServer}">
+        <TextBlock Classes="meta"
+                   Text="O controle remoto usa o servidor de sincronização. Configure e conecte a sincronização primeiro (menu Sincronização…)." />
+      </Border>
+
+      <!-- ========================= CONTROLE REMOTO ========================= -->
+      <Border Classes="card" IsVisible="{Binding HasServer}">
+        <StackPanel Spacing="10">
+          <TextBlock Classes="sectionTitle" Text="Controle remoto" />
+
+          <ToggleSwitch x:Name="RemoteSwitch"
+                        OnContent="Usar o controle remoto"
+                        OffContent="Usar o controle remoto"
+                        IsChecked="{Binding RemoteEnabled}"
+                        IsEnabled="{Binding !IsBusy}" />
+
+          <ToggleSwitch x:Name="AcceptSwitch"
+                        OnContent="Aceitar ser controlado por controladores pareados"
+                        OffContent="Aceitar ser controlado por controladores pareados"
+                        IsChecked="{Binding AcceptControl}"
+                        IsEnabled="{Binding !IsBusy}" />
+
+          <TextBlock x:Name="StateText" TextWrapping="Wrap"
+                     Classes.caution="{Binding HasProblem}"
+                     Text="{Binding StateText}" />
+
+          <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding NeedsRemoteLogin}">
+            <Button x:Name="ReconnectButton"
+                    Classes="accent"
+                    Content="Conectar de novo"
+                    IsVisible="{Binding !IsConnecting}"
+                    Command="{Binding ReconnectCommand}" />
+            <Button Content="Cancelar"
+                    IsVisible="{Binding IsConnecting}"
+                    Command="{Binding CancelReconnectCommand}" />
+          </StackPanel>
+
+          <TextBlock Classes="meta"
+                     Text="Vem desligado e não sincroniza: cada computador decide por si. A chave que identifica este computador fica no cofre do sistema, nunca no banco." />
+        </StackPanel>
+      </Border>
+
+      <Border Padding="10,8"
+              CornerRadius="6"
+              Background="{DynamicResource SystemFillColorCriticalBackgroundBrush}"
+              IsVisible="{Binding ErrorMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
+        <TextBlock x:Name="ErrorText" Text="{Binding ErrorMessage}" TextWrapping="Wrap" />
+      </Border>
+
+      <TextBlock x:Name="StatusText"
+                 Classes="meta"
+                 Text="{Binding StatusMessage}"
+                 IsVisible="{Binding StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+      <!-- ===================== O CÓDIGO QUE ESTE MOSTRA ===================== -->
+      <Border x:Name="ActivePairingCard" Classes="card" IsVisible="{Binding HasActivePairing}">
+        <StackPanel Spacing="8">
+          <TextBlock Classes="sectionTitle" Text="Parear com outra máquina" />
+          <TextBlock TextWrapping="Wrap" Text="{Binding ActivePairingText}" />
+          <TextBlock x:Name="PairingCodeText" Classes="code" HorizontalAlignment="Center" Text="{Binding ActivePairingCode}" />
+          <TextBlock Classes="meta" Text="{Binding ActivePairingStatus}" />
+          <Button HorizontalAlignment="Right" Content="Fechar" Command="{Binding ClosePairingCommand}" />
+        </StackPanel>
+      </Border>
+
+      <!-- ================== PEDIDOS PARA CONTROLAR ESTE ================== -->
+      <Border Classes="card" IsVisible="{Binding HasOpenPairings}">
+        <StackPanel Spacing="8">
+          <TextBlock Classes="sectionTitle" Text="Pedidos para controlar este computador" />
+          <TextBlock Classes="meta"
+                     Text="Digite o código que aparece no controlador. Se você não pediu, não digite nada: o pedido expira sozinho." />
+          <ItemsControl x:Name="OpenPairingList" ItemsSource="{Binding OpenPairings}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:OpenPairingItem">
+                <StackPanel Spacing="6" Margin="0,4">
+                  <TextBlock TextWrapping="Wrap" Text="{Binding Details}" />
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBox Width="120" MaxLength="7" PlaceholderText="000 000" Text="{Binding TypedCode}" />
+                    <Button Content="Confirmar"
+                            Command="{Binding #Root.((vm:MachinesViewModel)DataContext).ConfirmPairingCommand}"
+                            CommandParameter="{Binding}" />
+                  </StackPanel>
+                </StackPanel>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+
+      <!-- ============================ MÁQUINAS ============================ -->
+      <Border Classes="card" IsVisible="{Binding HasMachines}">
+        <StackPanel Spacing="8">
+          <TextBlock Classes="sectionTitle" Text="Computadores da conta" />
+          <ItemsControl x:Name="MachineList" ItemsSource="{Binding Machines}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:MachineItem">
+                <Border Padding="0,6" BorderBrush="{DynamicResource WidgetStrokeSoftBrush}" BorderThickness="0,0,0,1">
+                  <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                    <StackPanel Spacing="2">
+                      <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock FontWeight="SemiBold" Text="{Binding View.Nickname}" />
+                        <TextBlock Classes="meta" Classes.online="{Binding IsOnline}" VerticalAlignment="Center" Text="{Binding Presence}" />
+                      </StackPanel>
+                      <TextBlock Classes="meta" Text="{Binding Details}" />
+                      <TextBlock Classes="meta" Text="{Binding Tools}" IsVisible="{Binding Tools, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                      <TextBlock Classes="mono" Text="{Binding Fingerprint}" IsVisible="{Binding Fingerprint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                    </StackPanel>
+                    <Button Grid.Column="1" VerticalAlignment="Top" Content="Parear"
+                            IsVisible="{Binding CanPair}"
+                            IsEnabled="{Binding !#Root.((vm:MachinesViewModel)DataContext).IsBusy}"
+                            Command="{Binding #Root.((vm:MachinesViewModel)DataContext).PairCommand}"
+                            CommandParameter="{Binding}" />
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+
+      <!-- ===================== CONTROLADORES CONFIÁVEIS ===================== -->
+      <Border Classes="card" IsVisible="{Binding HasTrustedControllers}">
+        <StackPanel Spacing="8">
+          <TextBlock Classes="sectionTitle" Text="Controladores em que este computador confia" />
+          <ItemsControl x:Name="TrustedList" ItemsSource="{Binding TrustedControllers}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:TrustedControllerItem">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,4">
+                  <StackPanel Spacing="2">
+                    <TextBlock FontWeight="SemiBold" Text="{Binding View.Nickname}" />
+                    <TextBlock Classes="meta" Text="{Binding Details}" />
+                  </StackPanel>
+                  <Button Grid.Column="1" VerticalAlignment="Top" Content="Deixar de confiar"
+                          Command="{Binding #Root.((vm:MachinesViewModel)DataContext).RevokeTrustedCommand}"
+                          CommandParameter="{Binding}" />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+
+    </StackPanel>
+  </ScrollViewer>
+
+</Window>
