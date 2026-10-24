@@ -32,6 +32,12 @@ internal sealed class CountingTrigger : ISyncTrigger
 {
     public int Signals { get; private set; }
 
+    public event Action? Signaled
+    {
+        add { }
+        remove { }
+    }
+
     public void Signal() => Signals++;
 
     public Task WaitAsync(CancellationToken cancellationToken) => Task.CompletedTask;

@@ -16,6 +16,7 @@ using MyTaskApp.Application.External;
 using MyTaskApp.Application.External.Jira;
 using MyTaskApp.Application.History;
 using MyTaskApp.Application.Lifecycle;
+using MyTaskApp.Application.LocalPeers;
 using MyTaskApp.Application.Mcp;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.QuickCommands;
@@ -408,6 +409,25 @@ public static class DependencyInjection
         {
             services.AddSingleton<ISecretStore, UnsupportedSecretStore>();
         }
+    }
+
+    /// <summary>
+    /// O canal entre o desktop e o agente deste computador (ADR-085): o agente
+    /// escuta, o desktop conecta. Antes da Application, que registra com
+    /// <c>TryAdd</c> o canal que não fala com ninguém.
+    /// </summary>
+    public static IServiceCollection AddLocalPeer(this IServiceCollection services, IConfiguration configuration, LocalPeerRole role)
+    {
+        var databaseOptions =
+            configuration.GetSection(DatabaseOptions.SectionName).Get<DatabaseOptions>()
+            ?? new DatabaseOptions();
+
+        services.TryAddSingleton<ILocalPeerChannel>(provider => new PipeLocalPeerChannel(
+            PipeLocalPeerChannel.NameFor(databaseOptions.ResolveFullPath()),
+            role,
+            provider.GetRequiredService<ILogger<PipeLocalPeerChannel>>()));
+
+        return services;
     }
 
     [SupportedOSPlatform("windows")]

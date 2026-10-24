@@ -15,6 +15,7 @@ using MyTaskApp.Application.External;
 using MyTaskApp.Application.External.Jira;
 using MyTaskApp.Application.History;
 using MyTaskApp.Application.Lifecycle;
+using MyTaskApp.Application.LocalPeers;
 using MyTaskApp.Application.Mcp;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.QuickCommands;
@@ -81,6 +82,11 @@ public static class DependencyInjection
             provider.GetRequiredService<TimeProvider>(),
             provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<SyncScheduler>>()));
         services.TryAddSingleton<SyncAccountService>();
+
+        // O desktop e o agente no mesmo computador (ADR-085): sem o canal da
+        // Infrastructure, ninguém do outro lado.
+        services.TryAddSingleton<ILocalPeerChannel, NoLocalPeerChannel>();
+        services.TryAddSingleton<LocalPeerBridge>();
         services.TryAddSingleton<ISyncAccount>(provider => provider.GetRequiredService<SyncAccountService>());
         services.AddScoped<ReconcileAfterRemoteChangeHandler>();
         services.AddScoped<RemoteRefetcher>();

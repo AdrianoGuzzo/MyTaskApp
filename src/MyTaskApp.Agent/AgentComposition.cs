@@ -5,6 +5,7 @@ using MyTaskApp.Application;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Infrastructure;
+using MyTaskApp.Infrastructure.Processes;
 using MyTaskApp.Infrastructure.Storage;
 
 namespace MyTaskApp.Agent;
@@ -44,6 +45,9 @@ internal static class AgentComposition
         services.TryAddSingleton<ICurrentUser, AgentUser>();
         services.TryAddSingleton<IAlertPresenter, NoAlertPresenter>();
         services.TryAddSingleton<ISoundPlayer, NoSoundPlayer>();
+
+        // O agente abre o canal local; o desktop, quando abre, conecta nele (T-11).
+        services.AddLocalPeer(configuration, LocalPeerRole.Listen);
 
         services.AddApplication(configuration);
         services.AddInfrastructure(configuration);

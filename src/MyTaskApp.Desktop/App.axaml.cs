@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Lifecycle;
+using MyTaskApp.Application.LocalPeers;
 using MyTaskApp.Application.QuickCommands;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Application.Remote;
@@ -453,6 +454,9 @@ public sealed partial class App : Avalonia.Application
 
         // O sinal de vida do controle remoto (ADR-087): com ele desligado, o tique só lê a configuração.
         services.GetRequiredService<RemotePresenceScheduler>().Start();
+
+        // Com o agente rodando (ADR-085), o que um grava o outro mostra, e quem tem o lease sincroniza.
+        services.GetRequiredService<LocalPeerBridge>().Start();
     }
 
     private void SetUpMcpServer(IServiceProvider services, TodayViewModel todayViewModel)
@@ -908,6 +912,7 @@ public sealed partial class App : Avalonia.Application
         // Um push no meio para; o outbox guarda, e o próximo início reenvia com os mesmos ids (ADR-061).
         services.GetRequiredService<SyncScheduler>().Dispose();
         services.GetRequiredService<RemotePresenceScheduler>().Dispose();
+        _ = services.GetRequiredService<LocalPeerBridge>().DisposeAsync().AsTask();
         services.GetRequiredService<AgentSessionMonitor>().Dispose();
         services.GetRequiredService<CommandExecutionMonitor>().Dispose();
         (services.GetRequiredService<IAgentEventEndpoint>() as IDisposable)?.Dispose();

@@ -375,6 +375,11 @@ usuário. O preço:
    no Linux o .NET usa Unix domain socket). O desktop, quando aberto, assina
    "dados mudaram" (o `IDataChangeNotifier` hoje é do processo), pede
    "sincronizar agora" ao dono do lease e mostra as operações remotas em curso.
+   Feito na T-11: uma linha de JSON por aviso (`dataChanged`, `syncWanted`,
+   `syncNow`), linha acima de 4 KiB derruba a conexão, tipo desconhecido é
+   ignorado, e o nome do pipe é um hash do usuário com o caminho do banco —
+   duas instalações isoladas nunca dividem o canal. Só avisos: nada que
+   execute passa por ali.
 7. **Instalação**: tarefa agendada "ao fazer logon" no Windows (por usuário,
    sem privilégio) e `systemd --user` no Linux (com `loginctl enable-linger`
    documentado como opcional). O instalador fecha e reabre o agente como faz

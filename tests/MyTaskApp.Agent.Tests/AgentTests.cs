@@ -1,7 +1,10 @@
 using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.LocalPeers;
 using MyTaskApp.Application.Sync;
+using MyTaskApp.Infrastructure.Processes;
 
 namespace MyTaskApp.Agent.Tests;
 
@@ -65,6 +68,42 @@ public sealed class AgentTests
         await running.WaitAsync(TimeSpan.FromSeconds(30), Ct);
 
         scheduler.LastResult!.Status.Should().Be(SyncCycleStatus.Idle);
+    }
+
+    /// <summary>T-11: o desktop conecta no canal que o agente abriu, e os avisos atravessam nos dois sentidos.</summary>
+    [Fact]
+    public async Task TheDesktop_ConnectsToTheAgent_AndNoticesCrossBothWays()
+    {
+        await using var host = AgentTestHost.Create();
+        using var stop = new CancellationTokenSource();
+        var agentNotifier = host.Services.GetRequiredService<IDataChangeNotifier>();
+        DataArea? heardByAgent = null;
+        agentNotifier.Changed += areas => heardByAgent = areas;
+
+        var running = Program.RunAsync(host.Services, stop.Token);
+        await WaitUntilAsync(() => host.Services.GetRequiredService<AgentHost>().IsRunning);
+
+        await using var desktop = new PipeLocalPeerChannel(
+            PipeLocalPeerChannel.NameFor(Path.Combine(host.Folder, "mytaskapp.db")),
+            LocalPeerRole.Connect,
+            NullLogger<PipeLocalPeerChannel>.Instance,
+            TimeSpan.FromMilliseconds(100));
+        LocalPeerMessage? heardByDesktop = null;
+        desktop.Received += message => heardByDesktop = message;
+        desktop.Start();
+        await WaitUntilAsync(() => desktop.IsConnected && host.Services.GetRequiredService<ILocalPeerChannel>().IsConnected);
+
+        await desktop.SendAsync(new LocalPeerMessage(LocalPeerMessageKinds.DataChanged, DataArea.Tasks), Ct);
+        await WaitUntilAsync(() => heardByAgent is not null);
+        heardByAgent.Should().Be(DataArea.Tasks);
+        heardByDesktop.Should().BeNull("o que veio do desktop não volta para ele");
+
+        agentNotifier.NotifyChanged(DataArea.Time);
+        await WaitUntilAsync(() => heardByDesktop is not null);
+        heardByDesktop.Should().Be(new LocalPeerMessage(LocalPeerMessageKinds.DataChanged, DataArea.Time));
+
+        await stop.CancelAsync();
+        await running.WaitAsync(TimeSpan.FromSeconds(30), Ct);
     }
 
     [Fact]
