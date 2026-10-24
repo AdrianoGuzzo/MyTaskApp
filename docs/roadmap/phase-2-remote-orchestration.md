@@ -490,7 +490,7 @@ Cada tarefa cabe num PR. "Pronto" é o critério objetivo de conclusão.
 | T-14 | Diário do agente, verificação de JWS e dispatcher | E2 | T-05, T-10, T-12 | recusas de 4.4 com motivo; reinício reenvia eventos sem ack |
 | T-15 | `environment.inspect` ponta a ponta | E2 | T-13, T-14 | critério de aceitação da E2 |
 | T-16 | Instalador: tarefa no logon / `systemd --user` | E2 | T-10 | `Packaging.Tests`; instalar e desinstalar limpam tudo |
-| T-17 | `RemoteAllowed` local em comandos (cai quando o texto muda) | E3 | T-07 | sync não altera a coluna; editar o texto a desliga |
+| T-17 ✔ | `RemoteAllowed` local em comandos (cai quando muda o que o comando roda: texto, modo, pasta ou parâmetros, aqui ou chegando pelo sync) | E3 | T-07 | `CommandRemoteAllowedTests` (domínio), `CommandRemoteAllowedSyncTests` (não viaja, chega desligado, cai quando o texto, o modo ou os parâmetros mudam de longe, fica quando só a descrição muda), handler e a caixa do editor de Comandos globais |
 | T-18 ✔ | Confirmação cobrada no caso de uso, por `RunQuickCommand.Confirmed` (commit `06da30f`) | E3 | — | `QuickCommandHandlersTests` novo; testes da tela verdes |
 | T-19 | Aprovações (servidor, contratos, agente) | E3 | T-14 | reuso, hash errado e expiração recusados |
 | T-20 | `command.run` com saída ao vivo, cancelamento e Job Object/grupo | E3 | T-17, T-18, T-19 | critérios da E3 |

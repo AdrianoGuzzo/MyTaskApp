@@ -270,6 +270,9 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .HasMaxLength(80)
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("RemoteAllowed")
+                        .HasColumnType("INTEGER");
+
                     b.Property<bool>("RequiresConfirmation")
                         .HasColumnType("INTEGER");
 

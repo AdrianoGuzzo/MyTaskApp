@@ -152,12 +152,14 @@ public sealed class RemoveTagDirectoryCommandHandler(
 /// globais, e já o oferece como botão: entra no fim da lista, ligado.
 /// </summary>
 /// <param name="Settings">O nome é obrigatório: é o rótulo do botão.</param>
+/// <param name="RemoteAllowed">Outro computador pareado pode pedir para rodá-lo aqui (ADR-087).</param>
 public sealed record CreateDirectoryOnlyCommand(
     Guid TagId,
     Guid DirectoryId,
     string Command,
     string? Description,
-    DevelopmentCommandSettings Settings);
+    DevelopmentCommandSettings Settings,
+    bool RemoteAllowed = false);
 
 public sealed class CreateDirectoryOnlyCommandHandler(
     ITagRepository tags,
@@ -178,6 +180,7 @@ public sealed class CreateDirectoryOnlyCommandHandler(
             command.Description,
             command.Settings,
             at);
+        created.AllowRemote(command.RemoteAllowed);
 
         // A associação antes do comando entrar no contexto: diretório que não
         // existe, ou já cheio, recusa sem deixar um comando sem botão.
@@ -197,11 +200,13 @@ public sealed class CreateDirectoryOnlyCommandHandler(
 }
 
 /// <summary>Edita um comando só do diretório (ADR-055). Atômico, como o global.</summary>
+/// <param name="RemoteAllowed">Como no global: <c>null</c> mantém, salvo se o que roda mudou.</param>
 public sealed record UpdateDirectoryOnlyCommand(
     Guid CommandId,
     string Command,
     string? Description,
-    DevelopmentCommandSettings Settings);
+    DevelopmentCommandSettings Settings,
+    bool? RemoteAllowed = null);
 
 public sealed class UpdateDirectoryOnlyCommandHandler(
     IDevelopmentCommandRepository commands,
@@ -216,6 +221,11 @@ public sealed class UpdateDirectoryOnlyCommandHandler(
         var existing = await commands.GetByIdAsync(command.CommandId, cancellationToken);
 
         existing.UpdateForDirectory(command.Command, command.Description, command.Settings, timeProvider.GetUtcNow());
+
+        if (command.RemoteAllowed is { } remoteAllowed)
+        {
+            existing.AllowRemote(remoteAllowed);
+        }
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 

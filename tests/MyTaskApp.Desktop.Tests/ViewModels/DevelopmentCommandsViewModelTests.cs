@@ -153,6 +153,31 @@ public class DevelopmentCommandsViewModelTests
         viewModel.IsShared.Should().BeFalse();
     }
 
+    /// <summary>ADR-087 (T-17): a liberação vale para o texto à vista; mudar o texto desmarca.</summary>
+    [Fact]
+    public async Task RemoteAllowed_ShowsTheChoice_AndChangingTheTextClearsIt()
+    {
+        var viewModel = await LoadedAsync();
+        _runner.ResultsByHandler[typeof(GetDevelopmentCommandsHandler)] = new[] { Rows[0] with { RemoteAllowed = true } }.Concat(Rows.Skip(1)).ToList();
+        await viewModel.LoadAsync(Ct);
+
+        viewModel.Edit(viewModel.Commands[0]);
+        viewModel.RemoteAllowed.Should().BeTrue();
+
+        viewModel.Description = "Outra descrição";
+        viewModel.RemoteAllowed.Should().BeTrue();
+
+        viewModel.Command += " -c Release";
+        viewModel.RemoteAllowed.Should().BeFalse();
+
+        viewModel.RemoteAllowed = true;
+        viewModel.Command += " --no-restore";
+        viewModel.RemoteAllowed.Should().BeFalse("marcar vale para o texto daquele momento");
+
+        viewModel.CancelEdit();
+        viewModel.RemoteAllowed.Should().BeFalse();
+    }
+
     [Fact]
     public async Task Unsharing_AsksFirst_AndKeepsTheFormWhenRefused()
     {

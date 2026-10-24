@@ -35,6 +35,9 @@ internal sealed record SyncChildList(
 /// <see cref="Columns"/> viajam — e o teste de completude exige que toda
 /// propriedade mapeada esteja aqui ou em <see cref="LocalProperties"/>.
 /// </summary>
+/// <summary>A coluna local <paramref name="Property"/> vira <paramref name="Value"/> quando chega algum de <paramref name="WhenFields"/>.</summary>
+internal sealed record SyncLocalReset(string Property, object? Value, IReadOnlyCollection<string> WhenFields);
+
 internal abstract class SyncEntityMapper
 {
     public abstract SyncEntityDefinition Definition { get; }
@@ -57,6 +60,13 @@ internal abstract class SyncEntityMapper
     /// vazio) — ou "agora", num instante obrigatório.
     /// </summary>
     public virtual IReadOnlyDictionary<string, object?> InsertDefaults { get; } = new Dictionary<string, object?>();
+
+    /// <summary>
+    /// Colunas locais que voltam a um valor quando um destes campos chega de
+    /// outro computador: a liberação do controle remoto (ADR-087) vale para o
+    /// texto que a pessoa viu aqui, e não para o que vier depois.
+    /// </summary>
+    public virtual IReadOnlyList<SyncLocalReset> UpdateResets { get; } = [];
 
     public virtual Guid IdOf(EntityEntry entry) => (Guid)entry.Property("Id").CurrentValue!;
 

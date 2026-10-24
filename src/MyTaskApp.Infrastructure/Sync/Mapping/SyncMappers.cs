@@ -38,6 +38,10 @@ internal sealed class TableMapper<TEntity>(
 
     public override IReadOnlyDictionary<string, object?> InsertDefaults => Defaults;
 
+    public IReadOnlyList<SyncLocalReset> Resets { get; init; } = [];
+
+    public override IReadOnlyList<SyncLocalReset> UpdateResets => Resets;
+
     public Func<EntityEntry, Guid>? Id { get; init; }
 
     public Func<EntityEntry, bool>? Syncable { get; init; }
@@ -215,9 +219,21 @@ internal static class SyncMappers
         [
             // Compartilhar é escolha deste computador (ADR-066).
             nameof(DevelopmentCommand.IsShared),
+
+            // Liberar para o controle remoto também (ADR-087): o sync não liga.
+            nameof(DevelopmentCommand.RemoteAllowed),
         ])
     {
         LocalOnly = IsLocalOnlyCommand,
+
+        // Mudou o que roda em outro computador: a liberação daqui cai, como na edição local.
+        Resets =
+        [
+            new SyncLocalReset(
+                nameof(DevelopmentCommand.RemoteAllowed),
+                false,
+                [SyncFields.Command.Text, SyncFields.Command.Mode, SyncFields.Command.WorkingDirectory, SyncFields.Command.Parameters]),
+        ],
 
         // O que chega de outro computador foi compartilhado lá.
         Defaults = { [nameof(DevelopmentCommand.IsShared)] = true },

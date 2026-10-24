@@ -146,6 +146,16 @@ public sealed partial class DevelopmentCommandsViewModel(
     /// <summary>Como o comando em edição estava: desmarcar o compartilhado pede confirmação.</summary>
     private bool _editingWasShared;
 
+    /// <summary>
+    /// Outro computador pareado pode pedir para rodá-lo aqui (ADR-087). Vale
+    /// para o texto à vista: mudar o texto desmarca, e a pessoa marca de novo.
+    /// </summary>
+    [ObservableProperty]
+    private bool _remoteAllowed;
+
+    /// <summary>O texto que estava à vista quando a liberação foi marcada.</summary>
+    private string? _remoteAllowedFor;
+
     /// <summary>Onde "Testar" roda. Fica entre um teste e outro.</summary>
     [ObservableProperty]
     private string _testDirectory = string.Empty;
@@ -236,7 +246,17 @@ public sealed partial class DevelopmentCommandsViewModel(
     }
 
     /// <summary>Acompanha os <c>{nome}</c> do texto, sem perder o que já foi preenchido de cada um.</summary>
-    partial void OnCommandChanged(string value) => SyncParameterEditors(null);
+    partial void OnCommandChanged(string value)
+    {
+        SyncParameterEditors(null);
+
+        if (RemoteAllowed && !string.Equals(value, _remoteAllowedFor, StringComparison.Ordinal))
+        {
+            RemoteAllowed = false;
+        }
+    }
+
+    partial void OnRemoteAllowedChanged(bool value) => _remoteAllowedFor = value ? Command : null;
 
     private void SyncParameterEditors(IReadOnlyList<CommandParameterSpec>? saved)
     {
@@ -296,6 +316,7 @@ public sealed partial class DevelopmentCommandsViewModel(
         var description = Description;
         var settings = FormSettings();
         var isShared = IsShared;
+        var remoteAllowed = RemoteAllowed;
 
         if (editingId is not null && _editingWasShared && !isShared && !await confirmation.AskAsync(new ConfirmationRequest(
                 $"Deixar de compartilhar {alias}?",
@@ -310,11 +331,11 @@ public sealed partial class DevelopmentCommandsViewModel(
             () => editingId is { } id
                 ? runner.RunAsync<UpdateDevelopmentCommandHandler, DevelopmentCommandRow>(
                     (handler, token) => handler.HandleAsync(
-                        new UpdateDevelopmentCommand(id, alias, command, description, settings, isShared), token),
+                        new UpdateDevelopmentCommand(id, alias, command, description, settings, isShared, remoteAllowed), token),
                     cancellationToken)
                 : runner.RunAsync<CreateDevelopmentCommandHandler, DevelopmentCommandRow>(
                     (handler, token) => handler.HandleAsync(
-                        new CreateDevelopmentCommand(alias, command, description, settings, isShared), token),
+                        new CreateDevelopmentCommand(alias, command, description, settings, isShared, remoteAllowed), token),
                     cancellationToken),
             "Não foi possível salvar o comando.");
 
@@ -343,6 +364,7 @@ public sealed partial class DevelopmentCommandsViewModel(
         KeepTerminalOpen = item.Row.KeepTerminalOpen;
         RequiresConfirmation = item.Row.RequiresConfirmation;
         IsShared = _editingWasShared = item.Row.IsShared;
+        RemoteAllowed = item.Row.RemoteAllowed;
         SyncParameterEditors(item.Row.Parameters ?? []);
         ErrorMessage = null;
         StatusMessage = null;
@@ -551,6 +573,7 @@ public sealed partial class DevelopmentCommandsViewModel(
         KeepTerminalOpen = true;
         RequiresConfirmation = false;
         IsShared = _editingWasShared = false;
+        RemoteAllowed = false;
         SyncParameterEditors([]);
     }
 
