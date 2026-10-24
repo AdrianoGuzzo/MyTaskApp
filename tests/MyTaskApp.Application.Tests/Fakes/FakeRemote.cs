@@ -40,6 +40,43 @@ internal sealed class FakeRemoteApi : IRemoteApi
 
     public List<Guid> Approved { get; } = [];
 
+    /// <summary>Os registros que esta máquina mandou, em ordem.</summary>
+    public List<DeviceRegistration> Registrations { get; } = [];
+
+    /// <summary>As máquinas da conta, como o servidor as devolve.</summary>
+    public List<RemoteDeviceInfo> Devices { get; } = [];
+
+    /// <summary>A recusa que a próxima chamada leva, como a do servidor (sem escopo, revogado, fora do ar).</summary>
+    public Exception? Failure { get; set; }
+
+    public Task<RemoteDeviceInfo> RegisterAsync(DeviceRegistration registration, CancellationToken cancellationToken)
+    {
+        ThrowIfFailing();
+        Registrations.Add(registration);
+
+        var current = new RemoteDeviceInfo(
+            registration.DeviceId, "Este", "windows", "1.0.0", true, registration.Roles, registration.Key.Fingerprint, registration.Capabilities, DateTimeOffset.UnixEpoch);
+        Devices.RemoveAll(device => device.DeviceId == registration.DeviceId);
+        Devices.Insert(0, current);
+        return Task.FromResult(current);
+    }
+
+    public Task<IReadOnlyList<RemoteDeviceInfo>> ListDevicesAsync(CancellationToken cancellationToken)
+    {
+        ThrowIfFailing();
+        return Task.FromResult<IReadOnlyList<RemoteDeviceInfo>>([.. Devices]);
+    }
+
+    public Task<PairingInfo> RequestPairingAsync(Guid executorDeviceId, CancellationToken cancellationToken)
+    {
+        ThrowIfFailing();
+        var pairing = new PairingInfo(
+            Guid.CreateVersion7(), Guid.CreateVersion7(), "Este", DevicePublicKey.Es256Of([1]), executorDeviceId,
+            Devices.Single(device => device.DeviceId == executorDeviceId).KeyFingerprint!, "bm9uY2U", PairingStatus.Pending, DateTimeOffset.UnixEpoch.AddMinutes(10));
+        Pairings[pairing.PairingId] = pairing;
+        return Task.FromResult(pairing);
+    }
+
     public Task<PairingInfo> GetPairingAsync(Guid pairingId, CancellationToken cancellationToken) =>
         Task.FromResult(Pairings[pairingId]);
 
@@ -60,6 +97,14 @@ internal sealed class FakeRemoteApi : IRemoteApi
         Pairings[pairingId] = pairing with { Status = PairingStatus.Approved };
         return Task.FromResult(Pairings[pairingId]);
     }
+
+    private void ThrowIfFailing()
+    {
+        if (Failure is { } failure)
+        {
+            throw failure;
+        }
+    }
 }
 
 internal sealed class FakeTrustedControllerRepository : ITrustedControllerRepository, IUnitOfWork
@@ -71,6 +116,12 @@ internal sealed class FakeTrustedControllerRepository : ITrustedControllerReposi
     public Task<IReadOnlyList<TrustedController>> ListActiveAsync(Guid controllerDeviceId, CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<TrustedController>>([.. All.Where(controller => controller.ControllerDeviceId == controllerDeviceId && controller.IsActive)]);
 
+    public Task<IReadOnlyList<TrustedController>> ListAllActiveAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<TrustedController>>([.. All.Where(controller => controller.IsActive)]);
+
+    public Task<TrustedController?> FindAsync(Guid id, CancellationToken cancellationToken = default) =>
+        Task.FromResult(All.SingleOrDefault(controller => controller.Id == id));
+
     public Task AddAsync(TrustedController controller, CancellationToken cancellationToken = default)
     {
         All.Add(controller);
@@ -80,6 +131,20 @@ internal sealed class FakeTrustedControllerRepository : ITrustedControllerReposi
     public Task SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         SaveCount++;
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>O remoto desta instalação, na memória. Padrão: ligado e aceitando controle.</summary>
+internal sealed class FakeRemoteSettingsStore(RemoteSettings? settings = null) : IRemoteSettingsStore
+{
+    public RemoteSettings Settings { get; set; } = settings ?? new RemoteSettings(true, true);
+
+    public Task<RemoteSettings> GetAsync(CancellationToken cancellationToken = default) => Task.FromResult(Settings);
+
+    public Task SaveAsync(RemoteSettings settings, CancellationToken cancellationToken = default)
+    {
+        Settings = settings;
         return Task.CompletedTask;
     }
 }

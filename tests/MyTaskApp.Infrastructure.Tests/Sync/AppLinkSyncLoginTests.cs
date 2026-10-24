@@ -46,7 +46,7 @@ public sealed class AppLinkSyncLoginTests : IDisposable
     {
         _server.On(ApiRoutes.Token, HttpStatusCode.OK, """{"access_token":"access-login","refresh_token":"refresh-login","expires_in":1}""");
 
-        var authorization = await _auth.BeginAuthorizationAsync(Ct);
+        var authorization = await _auth.BeginAuthorizationAsync(includeRemote: false, Ct);
         var query = Form(authorization.AuthorizeUrl.Query.TrimStart('?'));
 
         query["client_id"].Should().Be(SyncSchema.MobileClientId);
@@ -80,7 +80,7 @@ public sealed class AppLinkSyncLoginTests : IDisposable
     [Fact]
     public async Task ARevokedPhone_IsToldAsSuch()
     {
-        var authorization = await _auth.BeginAuthorizationAsync(Ct);
+        var authorization = await _auth.BeginAuthorizationAsync(includeRemote: false, Ct);
         var state = Form(authorization.AuthorizeUrl.Query.TrimStart('?'))["state"];
 
         _redirect.Deliver(new Dictionary<string, string> { ["state"] = state, ["error"] = "device_revoked" });
@@ -92,7 +92,7 @@ public sealed class AppLinkSyncLoginTests : IDisposable
     [Fact]
     public async Task ThePhoneOverTheDeviceCap_IsToldToRevokeAnOldOne()
     {
-        var authorization = await _auth.BeginAuthorizationAsync(Ct);
+        var authorization = await _auth.BeginAuthorizationAsync(includeRemote: false, Ct);
         var state = Form(authorization.AuthorizeUrl.Query.TrimStart('?'))["state"];
 
         _redirect.Deliver(new Dictionary<string, string> { ["state"] = state, ["error"] = SyncErrorCodes.DeviceLimitReached });
@@ -104,7 +104,7 @@ public sealed class AppLinkSyncLoginTests : IDisposable
     [Fact]
     public async Task ADeniedLogin_SaysSo_AndStoresNothing()
     {
-        var authorization = await _auth.BeginAuthorizationAsync(Ct);
+        var authorization = await _auth.BeginAuthorizationAsync(includeRemote: false, Ct);
         var state = Form(authorization.AuthorizeUrl.Query.TrimStart('?'))["state"];
 
         _redirect.Deliver(new Dictionary<string, string> { ["state"] = state, ["error"] = "access_denied" });
@@ -117,7 +117,7 @@ public sealed class AppLinkSyncLoginTests : IDisposable
     [Fact]
     public async Task AReturnWithAnotherState_IsNotThisLogin()
     {
-        var authorization = await _auth.BeginAuthorizationAsync(Ct);
+        var authorization = await _auth.BeginAuthorizationAsync(includeRemote: false, Ct);
 
         _redirect.Deliver(new Dictionary<string, string> { ["state"] = "de-outro-login", ["code"] = "codigo-enfiado" });
 
@@ -129,7 +129,7 @@ public sealed class AppLinkSyncLoginTests : IDisposable
     [Fact]
     public async Task ClosingTheBrowser_CancelsTheLogin()
     {
-        var authorization = await _auth.BeginAuthorizationAsync(Ct);
+        var authorization = await _auth.BeginAuthorizationAsync(includeRemote: false, Ct);
 
         _redirect.Abandon();
 
@@ -140,8 +140,8 @@ public sealed class AppLinkSyncLoginTests : IDisposable
     [Fact]
     public async Task ASecondLogin_ReplacesTheFirst()
     {
-        var first = await _auth.BeginAuthorizationAsync(Ct);
-        var second = await _auth.BeginAuthorizationAsync(Ct);
+        var first = await _auth.BeginAuthorizationAsync(includeRemote: false, Ct);
+        var second = await _auth.BeginAuthorizationAsync(includeRemote: false, Ct);
         _server.On(ApiRoutes.Token, HttpStatusCode.OK, """{"access_token":"a","refresh_token":"r","expires_in":900}""");
 
         var replaced = () => first.Completion.WaitAsync(TimeSpan.FromSeconds(10), Ct);
@@ -179,7 +179,7 @@ public sealed class AppLinkSyncLoginTests : IDisposable
             _clock,
             log.For<SyncAuthenticationService>());
 
-        var authorization = await desktop.BeginAuthorizationAsync(Ct);
+        var authorization = await desktop.BeginAuthorizationAsync(includeRemote: false, Ct);
         var query = Form(authorization.AuthorizeUrl.Query.TrimStart('?'));
 
         query["client_id"].Should().Be(SyncSchema.DesktopClientId);

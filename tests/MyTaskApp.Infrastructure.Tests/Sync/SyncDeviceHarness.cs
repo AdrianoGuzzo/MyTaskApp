@@ -146,7 +146,7 @@ internal sealed class SyncDeviceHarness : IAsyncDisposable
 
         public Uri? ServerBaseUrl { get; } = new("https://sync.exemplo.com/");
 
-        public Task<SyncAuthorization> BeginAuthorizationAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<SyncAuthorization> BeginAuthorizationAsync(bool includeRemote, CancellationToken cancellationToken) => throw new NotSupportedException();
 
         public Task<string> GetAccessTokenAsync(CancellationToken cancellationToken) => Task.FromResult("token");
 

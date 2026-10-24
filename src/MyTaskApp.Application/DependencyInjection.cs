@@ -214,6 +214,17 @@ public static class DependencyInjection
         // O pareamento da orquestração remota, do lado da máquina executora (ADR-087).
         services.AddScoped<GetOpenPairingsHandler>();
         services.AddScoped<ConfirmPairingHandler>();
+
+        // A janela "Máquinas" e o sinal de vida (T-06).
+        services.AddScoped<GetRemoteSettingsHandler>();
+        services.AddScoped<UpdateRemoteSettingsHandler>();
+        services.AddScoped<GetMachinesHandler>();
+        services.AddScoped<RegisterThisMachineHandler>();
+        services.AddScoped<RequestPairingHandler>();
+        services.AddScoped<GetPairingStatusHandler>();
+        services.AddScoped<RevokeTrustedControllerHandler>();
+        services.TryAddSingleton<MachineCapabilities>();
+        services.TryAddSingleton<RemotePresenceScheduler>();
         services.AddScoped<ConsultationLauncher>();
         services.AddScoped<ConsultationTargetResolver>();
         services.AddScoped<ConsultationFolders>();

@@ -27,6 +27,8 @@ public sealed class ConfirmPairingHandlerTests : IDisposable
 
     private readonly FakeTrustedControllerRepository _trusted = new();
 
+    private readonly FakeRemoteSettingsStore _settings = new();
+
     private readonly Guid _controller = Guid.CreateVersion7();
 
     public ConfirmPairingHandlerTests() => _server.ExecutorKeys[_identity.DeviceId] = _signer.PublicKey;
@@ -42,7 +44,7 @@ public sealed class ConfirmPairingHandlerTests : IDisposable
     }
 
     private ConfirmPairingHandler Handler() =>
-        new(_server, _signer, _identity, _trusted, _trusted, new FakeTimeProvider(Now), NullLogger<ConfirmPairingHandler>.Instance);
+        new(_settings, _server, _signer, _identity, _trusted, _trusted, new FakeTimeProvider(Now), NullLogger<ConfirmPairingHandler>.Instance);
 
     private PairingInfo Ask(DevicePublicKey? controllerKey = null, PairingStatus status = PairingStatus.Pending, Guid? executor = null, string? executorFingerprint = null)
     {
@@ -81,6 +83,20 @@ public sealed class ConfirmPairingHandlerTests : IDisposable
         trusted.Nickname.Should().Be("Celular");
         trusted.ApprovedAt.Should().Be(Now);
         _trusted.SaveCount.Should().Be(1);
+    }
+
+    /// <summary>RS-10: sem "Aceitar controle remoto" ligado aqui, nem o código certo pareia.</summary>
+    [Fact]
+    public async Task AMachineThatDoesNotAcceptControl_PairsWithNobody()
+    {
+        _settings.Settings = new RemoteSettings(Enabled: true, AcceptControl: false);
+        var pairing = Ask();
+
+        var act = () => Handler().HandleAsync(new ConfirmPairing(pairing.PairingId, CodeOnTheController(pairing)), Ct);
+
+        await act.Should().ThrowAsync<DomainException>().WithMessage("*Aceitar controle remoto*");
+        _server.Approved.Should().BeEmpty();
+        _trusted.All.Should().BeEmpty();
     }
 
     [Fact]

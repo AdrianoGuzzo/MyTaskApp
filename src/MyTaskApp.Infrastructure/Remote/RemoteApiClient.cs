@@ -12,6 +12,15 @@ namespace MyTaskApp.Infrastructure.Remote;
 /// </summary>
 internal sealed class RemoteApiClient(SyncHttp http, ISyncAuthenticator authenticator) : IRemoteApi
 {
+    public Task<RemoteDeviceInfo> RegisterAsync(DeviceRegistration registration, CancellationToken cancellationToken) =>
+        CallAsync<RemoteDeviceInfo>(HttpMethod.Put, RemoteRoutes.CurrentDevice, registration, cancellationToken);
+
+    public async Task<IReadOnlyList<RemoteDeviceInfo>> ListDevicesAsync(CancellationToken cancellationToken) =>
+        await CallAsync<List<RemoteDeviceInfo>>(HttpMethod.Get, RemoteRoutes.Devices, null, cancellationToken);
+
+    public Task<PairingInfo> RequestPairingAsync(Guid executorDeviceId, CancellationToken cancellationToken) =>
+        CallAsync<PairingInfo>(HttpMethod.Post, RemoteRoutes.Pairings, new PairingRequest(executorDeviceId), cancellationToken);
+
     public Task<PairingInfo> GetPairingAsync(Guid pairingId, CancellationToken cancellationToken) =>
         CallAsync<PairingInfo>(HttpMethod.Get, RemoteRoutes.Pairing(pairingId), null, cancellationToken);
 

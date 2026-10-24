@@ -134,7 +134,11 @@ public interface ISyncAuthenticator
     /// Abre a porta da volta e devolve o endereço para o navegador. A
     /// conclusão grava o refresh token; um clique novo desiste do anterior.
     /// </summary>
-    Task<SyncAuthorization> BeginAuthorizationAsync(CancellationToken cancellationToken);
+    /// <param name="includeRemote">
+    /// Pede também o escopo da orquestração remota (ADR-087). Só com o remoto
+    /// ligado nesta instalação: um servidor antigo recusa o login inteiro.
+    /// </param>
+    Task<SyncAuthorization> BeginAuthorizationAsync(bool includeRemote, CancellationToken cancellationToken);
 
     /// <summary>Um access token válido, renovado se preciso. Sem refresh válido, <see cref="SyncFailureKind.NeedsReconnect"/>.</summary>
     Task<string> GetAccessTokenAsync(CancellationToken cancellationToken);

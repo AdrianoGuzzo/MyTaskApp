@@ -4,6 +4,7 @@ using MyTaskApp.Application.Sync;
 using MyTaskApp.Domain;
 using MyTaskApp.Infrastructure.OAuth;
 using MyTaskApp.Infrastructure.Secrets;
+using MyTaskApp.Remote.Contracts;
 using MyTaskApp.Sync.Contracts;
 
 namespace MyTaskApp.Infrastructure.Sync.Http;
@@ -63,7 +64,7 @@ internal sealed class SyncAuthenticationService(
     /// <summary>Sem uma volta registrada pelo app, a do desktop: o loopback.</summary>
     private ISyncAuthorizationRedirect Redirect => redirect ??= new LoopbackSyncAuthorizationRedirect(options, logger);
 
-    public async Task<SyncAuthorization> BeginAuthorizationAsync(CancellationToken cancellationToken)
+    public async Task<SyncAuthorization> BeginAuthorizationAsync(bool includeRemote, CancellationToken cancellationToken)
     {
         if (!options.IsAvailable)
         {
@@ -93,7 +94,7 @@ internal sealed class SyncAuthenticationService(
         logger.LogInformation("SyncAuthorizationStarted {Client} {RedirectUri}", Redirect.ClientId, listener.RedirectUri);
 
         return new SyncAuthorization(
-            AuthorizeUrl(listener.RedirectUri, state, Pkce.ChallengeFor(verifier)),
+            AuthorizeUrl(listener.RedirectUri, state, Pkce.ChallengeFor(verifier), includeRemote),
             CompleteAsync(listener, state, verifier, pending, cancellationToken));
     }
 
@@ -182,13 +183,15 @@ internal sealed class SyncAuthenticationService(
         _gate.Dispose();
     }
 
-    private Uri AuthorizeUrl(Uri redirectUri, string state, string challenge)
+    private Uri AuthorizeUrl(Uri redirectUri, string state, string challenge, bool includeRemote)
     {
+        var scopes = includeRemote ? $"{Scopes} {RemoteSchema.Scope}" : Scopes;
+
         var query = new StringBuilder()
             .Append("client_id=").Append(Uri.EscapeDataString(Redirect.ClientId))
             .Append("&response_type=code")
             .Append("&redirect_uri=").Append(Uri.EscapeDataString(redirectUri.ToString()))
-            .Append("&scope=").Append(Uri.EscapeDataString(Scopes))
+            .Append("&scope=").Append(Uri.EscapeDataString(scopes))
             .Append("&state=").Append(Uri.EscapeDataString(state))
             .Append("&code_challenge=").Append(Uri.EscapeDataString(challenge))
             .Append("&code_challenge_method=S256")
@@ -238,6 +241,13 @@ internal sealed class SyncAuthenticationService(
         catch (AuthorizationRefusedException refused) when (refused.Error == SyncErrorCodes.DeviceRevoked)
         {
             throw new SyncApiException(SyncFailureKind.DeviceRevoked, "Este computador foi revogado na sua conta. Ele será registrado como um dispositivo novo.");
+        }
+        catch (AuthorizationRefusedException refused) when (refused.Error == "invalid_scope")
+        {
+            // O único escopo que pode faltar é o remote: o servidor é anterior à orquestração (ADR-087).
+            throw new DomainException(
+                "O servidor de sincronização ainda não tem o controle remoto. Atualize o servidor, "
+                + "ou desligue o controle remoto em Máquinas para conectar só a sincronização.");
         }
         catch (AuthorizationRefusedException refused) when (refused.Error == SyncErrorCodes.DeviceLimitReached)
         {

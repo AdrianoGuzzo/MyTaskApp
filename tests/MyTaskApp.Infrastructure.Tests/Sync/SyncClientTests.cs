@@ -211,7 +211,7 @@ public sealed class SyncClientTests : IDisposable
                 : FakeJiraServer.Json(HttpStatusCode.BadRequest, """{"error":"invalid_grant"}""");
         });
 
-        var authorization = await _auth.BeginAuthorizationAsync(Ct);
+        var authorization = await _auth.BeginAuthorizationAsync(includeRemote: false, Ct);
         var query = Form(authorization.AuthorizeUrl.Query.TrimStart('?'));
         challenge = query["code_challenge"];
         redirect = query["redirect_uri"];
@@ -237,7 +237,7 @@ public sealed class SyncClientTests : IDisposable
     [Fact]
     public async Task ARevokedDevice_IsToldAsSuch_WhenLoggingInAgain()
     {
-        var authorization = await _auth.BeginAuthorizationAsync(Ct);
+        var authorization = await _auth.BeginAuthorizationAsync(includeRemote: false, Ct);
         var query = Form(authorization.AuthorizeUrl.Query.TrimStart('?'));
 
         using var browser = new HttpClient();
@@ -247,10 +247,38 @@ public sealed class SyncClientTests : IDisposable
         (await completion.Should().ThrowAsync<SyncApiException>()).Which.Kind.Should().Be(SyncFailureKind.DeviceRevoked);
     }
 
+    /// <summary>
+    /// O escopo remote só vai no pedido de quem ligou o controle remoto
+    /// (ADR-087): um servidor antigo recusaria o login inteiro por ele.
+    /// </summary>
+    [Fact]
+    public async Task TheRemoteScope_GoesOnlyWhenAskedFor()
+    {
+        var syncOnly = await _auth.BeginAuthorizationAsync(includeRemote: false, Ct);
+        Form(syncOnly.AuthorizeUrl.Query.TrimStart('?'))["scope"].Should().Be("openid profile email offline_access sync");
+
+        var withRemote = await _auth.BeginAuthorizationAsync(includeRemote: true, Ct);
+        Form(withRemote.AuthorizeUrl.Query.TrimStart('?'))["scope"].Should().Be("openid profile email offline_access sync remote");
+    }
+
+    [Fact]
+    public async Task AServerWithoutTheRemote_IsToldAsSuch()
+    {
+        var authorization = await _auth.BeginAuthorizationAsync(includeRemote: true, Ct);
+        var query = Form(authorization.AuthorizeUrl.Query.TrimStart('?'));
+
+        using var browser = new HttpClient();
+        await browser.GetAsync($"{query["redirect_uri"]}?state={query["state"]}&error=invalid_scope", Ct);
+
+        var completion = () => authorization.Completion.WaitAsync(TimeSpan.FromSeconds(10), Ct);
+        (await completion.Should().ThrowAsync<DomainException>()).Which.Message.Should().Contain("ainda não tem o controle remoto");
+        _secrets.Secrets.Should().NotContainKey(SyncOptions.SecretName);
+    }
+
     [Fact]
     public async Task TheDeviceCap_TellsWhereToRevokeAnOldOne_AndStoresNothing()
     {
-        var authorization = await _auth.BeginAuthorizationAsync(Ct);
+        var authorization = await _auth.BeginAuthorizationAsync(includeRemote: false, Ct);
         var query = Form(authorization.AuthorizeUrl.Query.TrimStart('?'));
 
         using var browser = new HttpClient();

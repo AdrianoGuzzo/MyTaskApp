@@ -96,6 +96,7 @@ public class ApplicationRegistrationTests
             .AddSingleton<MyTaskApp.Application.Remote.IRemoteApi>(new FakeRemoteApi())
             .AddSingleton<MyTaskApp.Application.Remote.IDeviceSigner>(new FakeDeviceSigner())
             .AddSingleton<MyTaskApp.Application.Remote.ITrustedControllerRepository>(new FakeTrustedControllerRepository())
+            .AddSingleton<MyTaskApp.Application.Remote.IRemoteSettingsStore>(new FakeRemoteSettingsStore())
             .AddSingleton<IConsultationDatabase>(new FakeConsultationDatabase())
             .AddSingleton<IConsultationReadAccessProvisioner>(new FakeReadAccessProvisioner(new MyTaskApp.Domain.DatabaseOperations.DatabaseSecurityPolicy()))
             // O servidor MCP (ADR-059): configuração, token e as consultas novas.
@@ -184,6 +185,13 @@ public class ApplicationRegistrationTests
     [InlineData(typeof(SaveTaskConsultationHandler))]
     [InlineData(typeof(MyTaskApp.Application.Remote.GetOpenPairingsHandler))]
     [InlineData(typeof(MyTaskApp.Application.Remote.ConfirmPairingHandler))]
+    [InlineData(typeof(MyTaskApp.Application.Remote.GetRemoteSettingsHandler))]
+    [InlineData(typeof(MyTaskApp.Application.Remote.UpdateRemoteSettingsHandler))]
+    [InlineData(typeof(MyTaskApp.Application.Remote.GetMachinesHandler))]
+    [InlineData(typeof(MyTaskApp.Application.Remote.RegisterThisMachineHandler))]
+    [InlineData(typeof(MyTaskApp.Application.Remote.RequestPairingHandler))]
+    [InlineData(typeof(MyTaskApp.Application.Remote.GetPairingStatusHandler))]
+    [InlineData(typeof(MyTaskApp.Application.Remote.RevokeTrustedControllerHandler))]
     [InlineData(typeof(ClearTaskConsultationHandler))]
     [InlineData(typeof(PreviewConsultationContextHandler))]
     [InlineData(typeof(CheckConsultationDatabaseHandler))]

@@ -190,7 +190,7 @@ public sealed class SyncServerSwitchTests : IAsyncLifetime
 
         public bool HasCredentials { get; set; } = true;
 
-        public Task<SyncAuthorization> BeginAuthorizationAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<SyncAuthorization> BeginAuthorizationAsync(bool includeRemote, CancellationToken cancellationToken) => throw new NotSupportedException();
 
         public Task<string> GetAccessTokenAsync(CancellationToken cancellationToken) => Task.FromResult("token");
 

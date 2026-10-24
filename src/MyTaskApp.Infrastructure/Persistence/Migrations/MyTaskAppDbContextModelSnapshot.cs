@@ -1473,6 +1473,25 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("MyTaskApp.Infrastructure.Persistence.RemoteSettingsRow", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("AcceptControl")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("RemoteSettings", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_RemoteSettings_SingleRow", "Id = 1");
+                        });
+                });
+
             modelBuilder.Entity("MyTaskApp.Infrastructure.Sync.Persistence.SyncConflictRow", b =>
                 {
                     b.Property<Guid>("Id")

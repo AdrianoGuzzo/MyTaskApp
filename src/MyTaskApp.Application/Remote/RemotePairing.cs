@@ -10,6 +10,15 @@ namespace MyTaskApp.Application.Remote;
 /// <summary>A orquestração no servidor, vista desta máquina (ADR-084).</summary>
 public interface IRemoteApi
 {
+    /// <summary>Esta máquina se registra: chave, papéis e capacidades. Conta como sinal de vida.</summary>
+    Task<RemoteDeviceInfo> RegisterAsync(DeviceRegistration registration, CancellationToken cancellationToken);
+
+    /// <summary>As máquinas da conta.</summary>
+    Task<IReadOnlyList<RemoteDeviceInfo>> ListDevicesAsync(CancellationToken cancellationToken);
+
+    /// <summary>Esta máquina, como controladora, pede para controlar outra.</summary>
+    Task<PairingInfo> RequestPairingAsync(Guid executorDeviceId, CancellationToken cancellationToken);
+
     Task<PairingInfo> GetPairingAsync(Guid pairingId, CancellationToken cancellationToken);
 
     /// <summary>Os pedidos de pareamento em aberto para esta máquina.</summary>
@@ -32,6 +41,11 @@ public interface ITrustedControllerRepository
 {
     /// <summary>Os ainda valendo do dispositivo controlador.</summary>
     Task<IReadOnlyList<TrustedController>> ListActiveAsync(Guid controllerDeviceId, CancellationToken cancellationToken = default);
+
+    /// <summary>Todos os que ainda valem, de qualquer controlador.</summary>
+    Task<IReadOnlyList<TrustedController>> ListAllActiveAsync(CancellationToken cancellationToken = default);
+
+    Task<TrustedController?> FindAsync(Guid id, CancellationToken cancellationToken = default);
 
     Task AddAsync(TrustedController controller, CancellationToken cancellationToken = default);
 }
@@ -69,6 +83,7 @@ public sealed record ConfirmPairing(Guid PairingId, string TypedCode);
 /// ainda trata como aberto.
 /// </remarks>
 public sealed class ConfirmPairingHandler(
+    IRemoteSettingsStore settings,
     IRemoteApi remote,
     IDeviceSigner signer,
     IDeviceIdentity identity,
@@ -79,6 +94,12 @@ public sealed class ConfirmPairingHandler(
 {
     public async Task<TrustedController> HandleAsync(ConfirmPairing command, CancellationToken cancellationToken = default)
     {
+        // RS-10: só confia em controlador quem aceita ser controlado, e isso se liga aqui.
+        if (!(await settings.GetAsync(cancellationToken)).AcceptControl)
+        {
+            throw new DomainException("Ligue \"Aceitar controle remoto\" neste computador antes de parear.");
+        }
+
         var pairing = await remote.GetPairingAsync(command.PairingId, cancellationToken);
 
         if (pairing.Status != PairingStatus.Pending)

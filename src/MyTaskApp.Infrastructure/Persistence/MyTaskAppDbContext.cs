@@ -54,6 +54,9 @@ public sealed class MyTaskAppDbContext(DbContextOptions<MyTaskAppDbContext> opti
     /// <summary>Os controladores remotos em que esta máquina confia (ADR-087). Só deste computador.</summary>
     public DbSet<TrustedController> TrustedControllers => Set<TrustedController>();
 
+    /// <summary>O controle remoto nesta instalação (ADR-087): desligado de fábrica, só deste computador.</summary>
+    internal DbSet<RemoteSettingsRow> RemoteSettings => Set<RemoteSettingsRow>();
+
     /// <summary>Os períodos de trabalho de cada ocorrência (ADR-052).</summary>
     public DbSet<TimeEntry> TimeEntries => Set<TimeEntry>();
 

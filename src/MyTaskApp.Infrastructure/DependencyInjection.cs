@@ -123,6 +123,7 @@ public static class DependencyInjection
         services.AddScoped<IAgentSessionRepository, AgentSessionRepository>();
         services.AddScoped<ITaskConsultationRepository, TaskConsultationRepository>();
         services.AddScoped<ITrustedControllerRepository, TrustedControllerRepository>();
+        services.AddScoped<IRemoteSettingsStore, RemoteSettingsStore>();
         services.AddScoped<ICommandExecutionRepository, CommandExecutionRepository>();
         services.AddScoped<IAgentSettingsStore, AgentSettingsStore>();
         services.AddScoped<IAgentAlertSoundStore, AgentAlertSoundStore>();

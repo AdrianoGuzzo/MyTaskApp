@@ -1,5 +1,4 @@
 using System.Net;
-using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
@@ -7,7 +6,6 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using MyTaskApp.Application.Remote;
-using MyTaskApp.Application.Sync;
 using MyTaskApp.Domain;
 using MyTaskApp.Remote.Contracts;
 
@@ -87,23 +85,23 @@ public sealed class RemotePairingEndToEndTests(PostgresFixture postgres) : IAsyn
         (await reopened.Services.GetRequiredService<IDeviceSigner>().GetPublicKeyAsync(Ct)).Fingerprint.Should().Be(notebookFingerprint);
     }
 
-    /// <summary>Um desktop conectado com o escopo remote e registrado como executor, com a chave do próprio cofre.</summary>
+    /// <summary>
+    /// O caminho da pessoa (T-06): liga o controle remoto e "Aceitar controle
+    /// remoto", conecta pela tela de sempre (que agora pede o escopo remote) e
+    /// se registra pelo caso de uso, com a chave do próprio cofre.
+    /// </summary>
     private async Task<SyncedDesktop> DesktopAsync(string nickname)
     {
         var desktop = await SyncedDesktop.CreateAsync(_api, nickname, Ct);
         _desktops.Add(desktop);
-        await desktop.ConnectAsync("ana", Ct, extraScope: RemoteSchema.Scope);
 
-        // O registro ainda não tem caso de uso (T-06): o teste faz a chamada com o token e a chave do desktop.
-        var key = await desktop.Services.GetRequiredService<IDeviceSigner>().GetPublicKeyAsync(Ct);
-        var token = await desktop.Services.GetRequiredService<ISyncAuthenticator>().GetAccessTokenAsync(Ct);
-        using var client = _api.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        using var response = await client.PutAsync(
-            RemoteRoutes.CurrentDevice,
-            Body(new DeviceRegistration(desktop.Device.DeviceId, DeviceRoles.Executor, key, Capabilities)),
-            Ct);
-        response.StatusCode.Should().Be(HttpStatusCode.OK, await response.Content.ReadAsStringAsync(Ct));
+        await desktop.UseCaseAsync<UpdateRemoteSettingsHandler, RemoteSettings>(
+            (handler, cancel) => handler.HandleAsync(new UpdateRemoteSettings(Enabled: true, AcceptControl: true), cancel));
+        await desktop.ConnectAsync("ana", Ct);
+
+        (await desktop.UseCaseAsync<RegisterThisMachineHandler, RemoteAvailability>(
+                (handler, cancel) => handler.HandleAsync(new RegisterThisMachine(), cancel)))
+            .Should().Be(RemoteAvailability.Ready);
 
         return desktop;
     }
