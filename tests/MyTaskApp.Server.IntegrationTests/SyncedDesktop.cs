@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Net;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -107,10 +108,23 @@ internal sealed class SyncedDesktop : IAsyncDisposable
     }
 
     /// <summary>"Conectar com o Google": o navegador segue os redirects e volta pela porta de loopback.</summary>
-    public async Task ConnectAsync(string googleSubject, CancellationToken cancellationToken)
+    /// <param name="extraScope">
+    /// Um escopo a mais no pedido, como o app vai pedir o <c>remote</c> ao ligar o
+    /// controle remoto (T-06). O app de hoje pede só o do sync.
+    /// </param>
+    public async Task ConnectAsync(string googleSubject, CancellationToken cancellationToken, string? extraScope = null)
     {
         var authorization = await Account.BeginConnectAsync(cancellationToken);
-        var callback = await _api.FollowToCallbackAsync(googleSubject, authorization.AuthorizeUrl.PathAndQuery);
+        var start = authorization.AuthorizeUrl.PathAndQuery;
+
+        if (extraScope is not null)
+        {
+            var query = QueryHelpers.ParseQuery(authorization.AuthorizeUrl.Query);
+            query["scope"] = $"{query["scope"]} {extraScope}";
+            start = authorization.AuthorizeUrl.AbsolutePath + QueryString.Create(query);
+        }
+
+        var callback = await _api.FollowToCallbackAsync(googleSubject, start);
 
         // A porta efêmera que o desktop abriu para este login (ADR-074), sem nada registrado com ela no servidor.
         var redirect = new Uri(QueryHelpers.ParseQuery(authorization.AuthorizeUrl.Query)["redirect_uri"].ToString());
