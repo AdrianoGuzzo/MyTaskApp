@@ -30,6 +30,9 @@ public static class ServerSetup
 
     public const string RemotePolicy = "remote";
 
+    /// <summary>A <see cref="RemotePolicy"/> e o dispositivo não revogado: o hub não tem o <c>DeviceFilter</c> das rotas.</summary>
+    public const string RemoteHubPolicy = "remote-hub";
+
     public const string AuthLimiter = "auth";
 
     public const string SyncLimiter = "sync";
@@ -67,6 +70,11 @@ public static class ServerSetup
         services.AddServerInfrastructure(connectionString);
         services.AddScoped<IAuthorizationRevoker, OpenIddictAuthorizationRevoker>();
         services.AddScoped<DeviceGate>();
+
+        // O hub da orquestração (ADR-086): os avisos com o mesmo JSON da API remota.
+        services.AddSignalR().AddJsonProtocol(json => RemoteJson.Configure(json.PayloadSerializerOptions));
+        services.AddSingleton<RemoteConnections>();
+        services.AddSingleton<IRemoteNotifier, HubRemoteNotifier>();
         services.AddHostedService<PublicClientSeeder>();
         services.AddHostedService<ProcessedOperationsPruner>();
         services.AddHostedService<RemoteOperationSweeper>();
@@ -111,6 +119,7 @@ public static class ServerSetup
         // com o Bearer já validado, e antes do UseAuthorization, para contar também
         // quem vai levar 401.
         app.UseRateLimiter(EdgeRateLimits(app.Services.GetRequiredService<SyncServerOptions>().RateLimits));
+        app.Use(HubAccessToken.MoveToHeaderAsync);
         app.UseAuthentication();
         app.Use(IdentifyApiCallerAsync);
         app.UseRateLimiter();
@@ -122,6 +131,11 @@ public static class ServerSetup
         app.MapConnectEndpoints();
         app.MapSyncApi();
         app.MapRemoteApi();
+
+        // O token vencido fecha a conexão: o cliente volta com um novo, e o revogado não volta.
+        app.MapHub<RemoteHub>(RemoteRoutes.Hub, hub => hub.CloseOnAuthenticationExpiration = true)
+            .RequireAuthorization(RemoteHubPolicy)
+            .RequireRateLimiting(RemoteLimiter);
 
         return app;
     }
@@ -309,7 +323,12 @@ public static class ServerSetup
             .AddValidation(validation =>
             {
                 validation.UseLocalServer();
-                validation.UseAspNetCore();
+
+                // Só o cabeçalho Authorization. O OpenIddict lia também ?access_token= em
+                // qualquer rota, e a URL vai parar em log de proxy e em histórico; o hub,
+                // que precisa dela, a passa para o cabeçalho antes (HubAccessToken).
+                validation.UseAspNetCore()
+                    .DisableAccessTokenExtractionFromQueryString();
 
                 // O token e a autorização dele conferidos no banco a cada chamada (SEC-010): o /connect/revoke do access
                 // e a autorização revogada (entrar de novo no mesmo dispositivo) derrubam na hora. Só com a da autorização,
@@ -325,8 +344,19 @@ public static class ServerSetup
             // A orquestração remota (RS-07): tudo o que o sync pede e, além disso, o escopo remote.
             authorization.AddPolicy(RemotePolicy, policy => RequireSyncToken(policy)
                 .RequireAssertion(context => context.User.HasScope(RemoteSchema.Scope)));
+
+            // Recusado já no negotiate (403): a máquina revogada nem chega a abrir a conexão.
+            authorization.AddPolicy(RemoteHubPolicy, policy => RequireSyncToken(policy)
+                .RequireAssertion(context => context.User.HasScope(RemoteSchema.Scope))
+                .RequireAssertion(IsActiveDeviceAsync));
         });
     }
+
+    private static async Task<bool> IsActiveDeviceAsync(AuthorizationHandlerContext context) =>
+        context.Resource is HttpContext http
+        && context.User.GetClaim(Claims.Subject) is { } subject && Guid.TryParse(subject, out var userId)
+        && context.User.GetClaim(SyncSchema.DeviceIdClaim) is { } device && Guid.TryParse(device, out var deviceId)
+        && await http.RequestServices.GetRequiredService<DeviceGate>().IsActiveAsync(new SyncCaller(userId, deviceId), http.RequestAborted);
 
     private static AuthorizationPolicyBuilder RequireSyncToken(AuthorizationPolicyBuilder policy) => policy
         .AddAuthenticationSchemes(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme)

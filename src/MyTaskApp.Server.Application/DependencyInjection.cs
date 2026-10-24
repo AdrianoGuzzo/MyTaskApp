@@ -11,6 +11,7 @@ public static class DependencyInjection
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton(new PullLimits());
         services.TryAddSingleton(new PushLimits());
+        services.TryAddSingleton<IRemoteNotifier>(NullRemoteNotifier.Instance);
         services.AddScoped<PushProcessor>();
         services.AddScoped<SyncQueries>();
         services.AddScoped<DeviceUseCases>();

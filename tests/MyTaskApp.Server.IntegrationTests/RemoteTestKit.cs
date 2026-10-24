@@ -1,9 +1,12 @@
 using System.Buffers.Text;
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Microsoft.AspNetCore.Http.Connections;
+using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.DependencyInjection;
 using MyTaskApp.Remote.Contracts;
 using MyTaskApp.Server.Infrastructure.Persistence;
@@ -82,6 +85,54 @@ internal sealed class RemoteTestKit(ApiFactory api) : IDisposable
     public static Task<RemoteOperationView> MoveAsync(RemoteDevice agent, Guid operationId, RemoteOperationStatus status, string? code = null, string? summary = null) =>
         SendAsync<RemoteOperationView>(agent.Session, HttpMethod.Post, RemoteRoutes.OperationStatus(operationId), new OperationStatusUpdate(status, code, summary));
 
+    /// <summary>
+    /// Uma conexão ao hub como o cliente de verdade faz. Com o token no
+    /// cabeçalho, por WebSocket direto; na query (o WebSocket do navegador),
+    /// por long polling, com o negotiate e cada volta levando o token na URL.
+    /// </summary>
+    public async Task<HubInbox> ListenAsync(DesktopSession session, bool tokenInQuery = false)
+    {
+        var token = session.Tokens.AccessToken;
+        var url = new Uri(api.Server.BaseAddress, tokenInQuery ? $"{RemoteRoutes.Hub}?access_token={Uri.EscapeDataString(token)}" : RemoteRoutes.Hub);
+
+        var connection = new HubConnectionBuilder()
+            .WithUrl(url, options =>
+            {
+                options.HttpMessageHandlerFactory = _ => api.Server.CreateHandler();
+
+                if (tokenInQuery)
+                {
+                    options.Transports = HttpTransportType.LongPolling;
+                    return;
+                }
+
+                options.Transports = HttpTransportType.WebSockets;
+                options.SkipNegotiation = true;
+                options.WebSocketFactory = async (context, cancellationToken) =>
+                {
+                    var client = api.Server.CreateWebSocketClient();
+                    client.ConfigureRequest = request => request.Headers.Authorization = "Bearer " + token;
+                    return await client.ConnectAsync(context.Uri, cancellationToken);
+                };
+            })
+            .AddJsonProtocol(json => RemoteJson.Configure(json.PayloadSerializerOptions))
+            .Build();
+
+        var inbox = new HubInbox(connection);
+
+        try
+        {
+            await connection.StartAsync(Ct);
+        }
+        catch
+        {
+            await connection.DisposeAsync();
+            throw;
+        }
+
+        return inbox;
+    }
+
     /// <summary>Mexe no banco direto, para o que o teste não espera acontecer (o prazo, a hora da entrega).</summary>
     public async Task WithDatabaseAsync(Func<ServerDbContext, Task> change)
     {
@@ -122,6 +173,62 @@ internal sealed class RemoteTestKit(ApiFactory api) : IDisposable
 
         return await client.SendAsync(request, Ct);
     }
+}
+
+/// <summary>O que chegou pelo hub, na ordem, com os argumentos de cada aviso.</summary>
+internal sealed class HubInbox : IAsyncDisposable
+{
+    private readonly ConcurrentQueue<(string Message, object?[] Args)> _received = new();
+
+    private readonly TaskCompletionSource _closed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    private readonly HubConnection _connection;
+
+    public HubInbox(HubConnection connection)
+    {
+        _connection = connection;
+
+        foreach (var message in new[] { RemoteHubMessages.OperationAvailable, RemoteHubMessages.CancelRequested, RemoteHubMessages.PairingRequested, RemoteHubMessages.PairingApproved })
+        {
+            connection.On<Guid>(message, id => _received.Enqueue((message, [id])));
+        }
+
+        foreach (var message in new[] { RemoteHubMessages.ApprovalRequested, RemoteHubMessages.ApprovalResolved })
+        {
+            connection.On<Guid, Guid>(message, (approvalId, operationId) => _received.Enqueue((message, [approvalId, operationId])));
+        }
+
+        connection.On<Guid, RemoteOperationStatus>(RemoteHubMessages.OperationChanged, (id, status) => _received.Enqueue((RemoteHubMessages.OperationChanged, [id, status])));
+        connection.On<Guid, long>(RemoteHubMessages.EventsAppended, (id, seq) => _received.Enqueue((RemoteHubMessages.EventsAppended, [id, seq])));
+        connection.Closed += _ =>
+        {
+            _closed.TrySetResult();
+            return Task.CompletedTask;
+        };
+    }
+
+    public IReadOnlyList<(string Message, object?[] Args)> Received => [.. _received];
+
+    /// <summary>A conexão caiu (o servidor fechou).</summary>
+    public Task Closed => _closed.Task;
+
+    /// <summary>Espera um aviso com estes argumentos; o hub entrega fora de ordem com o REST.</summary>
+    public async Task ExpectAsync(string message, params object?[] args)
+    {
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(10);
+
+        while (!_received.Any(item => item.Message == message && item.Args.SequenceEqual(args)))
+        {
+            if (DateTimeOffset.UtcNow > deadline)
+            {
+                Assert.Fail($"Não chegou {message}({string.Join(", ", args)}). Chegou: {string.Join("; ", _received.Select(item => $"{item.Message}({string.Join(", ", item.Args)})"))}");
+            }
+
+            await Task.Delay(20, TestContext.Current.CancellationToken);
+        }
+    }
+
+    public ValueTask DisposeAsync() => _connection.DisposeAsync();
 }
 
 /// <summary>Um dispositivo registrado na orquestração, com a chave dele.</summary>

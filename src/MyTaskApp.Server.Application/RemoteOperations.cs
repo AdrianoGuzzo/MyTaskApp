@@ -18,6 +18,7 @@ public sealed class RemoteOperationUseCases(
     IWorkspaceAccess workspaces,
     IRemoteDeviceStore remote,
     IRemoteOperationStore operations,
+    IRemoteNotifier notifier,
     TimeProvider timeProvider,
     ILogger<RemoteOperationUseCases> logger)
 {
@@ -104,6 +105,9 @@ public sealed class RemoteOperationUseCases(
             "RemoteOperationQueued {UserId} {OperationId} {Kind} {TargetDeviceId}",
             caller.UserId, operation.OperationId, operation.Kind, operation.TargetDeviceId);
 
+        await notifier.ToDeviceAsync(caller.UserId, operation.TargetDeviceId, RemoteHubMessages.OperationAvailable, operation.OperationId);
+        await ChangedAsync(caller.UserId, operation.OperationId, RemoteOperationStatus.Queued);
+
         // Relida: o banco guarda microssegundos, e o reenvio tem de devolver a mesma.
         return ToView(await FindAsync(caller, operation.OperationId, cancellationToken));
     }
@@ -131,6 +135,11 @@ public sealed class RemoteOperationUseCases(
         if (dispatched.Count > 0)
         {
             logger.LogInformation("RemoteOperationsDispatched {UserId} {DeviceId} {Count}", caller.UserId, caller.DeviceId, dispatched.Count);
+        }
+
+        foreach (var operationId in dispatched)
+        {
+            await ChangedAsync(caller.UserId, operationId, RemoteOperationStatus.Dispatched);
         }
 
         return
@@ -171,7 +180,11 @@ public sealed class RemoteOperationUseCases(
             // Aceitar depois do prazo, antes de a varredura passar: vence agora.
             if (update.Status == RemoteOperationStatus.Accepted && operation.NotAfter <= now)
             {
-                await operations.TryMoveAsync(operationId, operation.Status, RemoteOperationStatus.Expired, now, null, null, cancellationToken);
+                if (await operations.TryMoveAsync(operationId, operation.Status, RemoteOperationStatus.Expired, now, null, null, cancellationToken))
+                {
+                    await ChangedAsync(caller.UserId, operationId, RemoteOperationStatus.Expired);
+                }
+
                 throw new SyncServerException(RemoteErrorCodes.AlreadyExpired, 409, "O prazo para aceitar esta operação já passou.");
             }
 
@@ -180,6 +193,8 @@ public sealed class RemoteOperationUseCases(
                 logger.LogInformation(
                     "RemoteOperationStatusChanged {UserId} {OperationId} {From} {To}",
                     caller.UserId, operationId, operation.Status, update.Status);
+
+                await ChangedAsync(caller.UserId, operationId, update.Status);
 
                 return ToView(await FindAsync(caller, operationId, cancellationToken));
             }
@@ -209,6 +224,8 @@ public sealed class RemoteOperationUseCases(
 
         var last = await operations.AppendEventsAsync(
             operation.OperationId, events, RemoteLimits.MaxEventsPerOperation, timeProvider.GetUtcNow(), cancellationToken);
+
+        await notifier.ToAccountAsync(caller.UserId, RemoteHubMessages.EventsAppended, operationId, last);
 
         return new EventBatchAck(last);
     }
@@ -255,7 +272,17 @@ public sealed class RemoteOperationUseCases(
 
             logger.LogInformation("RemoteOperationCancelRequested {UserId} {OperationId} {Status}", caller.UserId, operationId, operation.Status);
 
-            return ToView(await FindAsync(caller, operationId, cancellationToken));
+            var view = ToView(await FindAsync(caller, operationId, cancellationToken));
+
+            // A fila não chegou ao agente; a entregue, ele pode ter na mão.
+            if (operation.Status != RemoteOperationStatus.Queued)
+            {
+                await notifier.ToDeviceAsync(caller.UserId, operation.TargetDeviceId, RemoteHubMessages.CancelRequested, operationId);
+            }
+
+            await ChangedAsync(caller.UserId, operationId, view.Status);
+
+            return view;
         }
 
         return ToView(await FindAsync(caller, operationId, cancellationToken));
@@ -275,6 +302,17 @@ public sealed class RemoteOperationUseCases(
         if (expired.Count > 0 || requeued.Count > 0 || pruned > 0)
         {
             logger.LogInformation("RemoteOperationsSwept {Expired} {Requeued} {PrunedEvents}", expired.Count, requeued.Count, pruned);
+        }
+
+        foreach (var operation in expired)
+        {
+            await ChangedAsync(operation.UserId, operation.OperationId, RemoteOperationStatus.Expired);
+        }
+
+        foreach (var operation in requeued)
+        {
+            await notifier.ToDeviceAsync(operation.UserId, operation.TargetDeviceId, RemoteHubMessages.OperationAvailable, operation.OperationId);
+            await ChangedAsync(operation.UserId, operation.OperationId, RemoteOperationStatus.Queued);
         }
 
         return new RemoteSweepResult(expired, requeued, pruned);
@@ -336,6 +374,9 @@ public sealed class RemoteOperationUseCases(
     /// <summary>SHA-256 dos bytes do envelope, em hexadecimal: o "mesmo pedido" da idempotência.</summary>
     internal static string HashOf(SignedEnvelope envelope) =>
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(envelope.Jws)));
+
+    private Task ChangedAsync(Guid userId, Guid operationId, RemoteOperationStatus status) =>
+        notifier.ToAccountAsync(userId, RemoteHubMessages.OperationChanged, operationId, status);
 
     private async Task<RemoteOperationRecord> FindAsync(SyncCaller caller, Guid operationId, CancellationToken cancellationToken) =>
         await operations.FindAsync(caller.UserId, operationId, cancellationToken) ?? throw SyncServerException.NotFound();

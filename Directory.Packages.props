@@ -80,6 +80,7 @@
     <!-- O servidor de sincronizacao contra PostgreSQL de verdade e a API em memoria (ADR-061). -->
     <PackageVersion Include="Testcontainers.PostgreSql" Version="4.16.0" />
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.13" />
   </ItemGroup>
 
 </Project>
