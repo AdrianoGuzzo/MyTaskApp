@@ -282,4 +282,95 @@ public class AgentSessionTests
 
         failing.Should().Throw<DomainException>();
     }
+
+    private static readonly Guid Conversation = Guid.Parse("3f9c2a7e-1b4d-4c8e-9a51-6d2e8f0b7c13");
+
+    private static readonly Guid FirstOperation = Guid.CreateVersion7(Now);
+
+    private static AgentSession NewHeadless() =>
+        AgentSession.CreateHeadless(TaskId, DevelopmentId, "claude-code", Claude, Worktree, Conversation, FirstOperation, Now);
+
+    /// <summary>Sem terminal (ADR-089): a conversa nasce com o id e a operação que a pediu.</summary>
+    [Fact]
+    public void AHeadlessSession_IsTheConversation_AndStartsByTheOperation()
+    {
+        var session = NewHeadless();
+
+        session.Mode.Should().Be(AgentSessionMode.Headless);
+        session.ExternalSessionId.Should().Be(Conversation.ToString());
+        session.RemoteOperationId.Should().Be(FirstOperation);
+        session.PromptStartedAt.Should().Be(Now);
+        session.Status.Should().Be(AgentSessionStatus.Starting);
+        NewSession().Mode.Should().Be(AgentSessionMode.Interactive);
+        NewSession().RemoteOperationId.Should().BeNull();
+    }
+
+    [Fact]
+    public void AfterAPromptEnds_TheConversationContinues_ByAnotherOperation_InAnotherProcess()
+    {
+        var session = NewHeadless();
+        session.MarkRunning(4242, Now);
+        session.MarkExited(Now.AddMinutes(1));
+        session.CanContinue.Should().BeTrue();
+
+        var next = Guid.CreateVersion7();
+        session.ContinueWith(next, Now.AddHours(2));
+
+        session.Status.Should().Be(AgentSessionStatus.Starting);
+        session.RemoteOperationId.Should().Be(next);
+        session.PromptStartedAt.Should().Be(Now.AddHours(2), "a folga da reconciliação conta do prompt, não da conversa");
+        session.ProcessId.Should().BeNull("o processo do prompt anterior não é este");
+        session.EndedAt.Should().BeNull();
+        session.Activity.Should().Be(AgentActivity.Working);
+        session.ExternalSessionId.Should().Be(Conversation.ToString());
+    }
+
+    [Fact]
+    public void APromptRunning_OrAStoppedConversation_OrTheTerminal_DoNotContinue()
+    {
+        var running = NewHeadless();
+        FluentActions.Invoking(() => running.ContinueWith(Guid.CreateVersion7(), Now)).Should().Throw<DomainException>().WithMessage("*ainda está respondendo*");
+
+        var stopped = NewHeadless();
+        stopped.MarkStopped(Now);
+        FluentActions.Invoking(() => stopped.ContinueWith(Guid.CreateVersion7(), Now)).Should().Throw<DomainException>().WithMessage("*foi parada*");
+
+        var terminal = NewSession();
+        terminal.MarkRunning(1, Now);
+        terminal.MarkExited(Now);
+        FluentActions.Invoking(() => terminal.ContinueWith(Guid.CreateVersion7(), Now)).Should().Throw<DomainException>();
+        terminal.CanContinue.Should().BeFalse();
+    }
+
+    /// <summary><c>Stopped</c> só a pedido, e só sem terminal: no terminal, quem encerra é o usuário.</summary>
+    [Fact]
+    public void Stopping_EndsTheConversation_WithOrWithoutAPromptRunning()
+    {
+        var mid = NewHeadless();
+        mid.MarkRunning(4242, Now);
+        mid.MarkStopped(Now.AddMinutes(3));
+        mid.Status.Should().Be(AgentSessionStatus.Stopped);
+        mid.EndedAt.Should().Be(Now.AddMinutes(3));
+        mid.IsActive.Should().BeFalse();
+
+        var idle = NewHeadless();
+        idle.MarkRunning(4242, Now);
+        idle.MarkExited(Now.AddMinutes(1));
+        idle.MarkStopped(Now.AddMinutes(9));
+        idle.EndedAt.Should().Be(Now.AddMinutes(1), "o fim do último prompt fica");
+        idle.MarkStopped(Now.AddMinutes(10));
+        idle.Status.Should().Be(AgentSessionStatus.Stopped);
+
+        var exitedLater = NewHeadless();
+        exitedLater.MarkStopped(Now);
+        exitedLater.MarkExited(Now.AddMinutes(1));
+        exitedLater.Status.Should().Be(AgentSessionStatus.Stopped, "o fim do processo chega depois e não desfaz o pedido");
+
+        FluentActions.Invoking(() => NewSession().MarkStopped(Now)).Should().Throw<DomainException>().WithMessage("*no próprio terminal*");
+    }
+
+    [Fact]
+    public void AHeadlessSession_NeedsTheConversationAndTheOperation() =>
+        FluentActions.Invoking(() => AgentSession.CreateHeadless(TaskId, DevelopmentId, "claude-code", Claude, Worktree, Guid.Empty, FirstOperation, Now))
+            .Should().Throw<DomainException>();
 }

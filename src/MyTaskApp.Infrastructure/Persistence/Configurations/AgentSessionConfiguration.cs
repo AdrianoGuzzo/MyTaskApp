@@ -81,6 +81,14 @@ internal sealed class AgentSessionConfiguration : IEntityTypeConfiguration<Agent
 
         builder.Property(session => session.Status).HasConversion<int>();
 
+        // Sem terminal (ADR-089): a conversa pedida de longe e a operação do prompt atual.
+        builder.Property(session => session.Mode).HasConversion<int>();
+
+        builder.HasIndex(session => session.RemoteOperationId);
+
+        builder.Property(session => session.PromptStartedAt)
+            .HasConversion(UtcInstantConverter.Instance);
+
         builder.Property(session => session.ProcessStartedAt)
             .HasConversion(UtcInstantConverter.Instance);
 

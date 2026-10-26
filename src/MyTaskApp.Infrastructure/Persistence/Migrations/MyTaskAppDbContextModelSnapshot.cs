@@ -59,15 +59,24 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                     b.Property<int>("Kind")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("Mode")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int?>("ProcessId")
                         .HasColumnType("INTEGER");
 
                     b.Property<long?>("ProcessStartedAt")
                         .HasColumnType("INTEGER");
 
+                    b.Property<long?>("PromptStartedAt")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("ProviderId")
                         .IsRequired()
                         .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("RemoteOperationId")
                         .HasColumnType("TEXT");
 
                     b.Property<long>("StartedAt")
@@ -90,6 +99,8 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ConsultationTokenHash");
+
+                    b.HasIndex("RemoteOperationId");
 
                     b.HasIndex("Status");
 

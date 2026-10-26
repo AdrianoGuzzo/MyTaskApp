@@ -83,6 +83,31 @@ public class AgentSessionPersistenceTests
         stored.Status.Should().Be(AgentSessionStatus.Running);
     }
 
+    /// <summary>Sem terminal (ADR-089): o modo, a operação do prompt e quando ele começou voltam iguais.</summary>
+    [Fact]
+    public async Task AHeadlessConversation_SurvivesAReopen_WithTheOperationOfThePrompt()
+    {
+        await using var db = await new TempSqliteDatabase().MigrateAsync(Ct);
+        var task = await SeedTaskAsync(db);
+        var conversation = Guid.CreateVersion7();
+        var operation = Guid.CreateVersion7();
+        var session = AgentSession.CreateHeadless(task.Id, task.Developments[0].Id, "claude-code", Claude, Worktree, conversation, operation, Now);
+        session.MarkRunning(777, Now.AddSeconds(1));
+        session.MarkStopped(Now.AddMinutes(2));
+
+        await AddAsync(db, session);
+
+        await using var read = db.CreateContext();
+        var stored = await new AgentSessionRepository(read).FindLatestForTaskAsync(task.Id, Ct);
+
+        stored!.Mode.Should().Be(AgentSessionMode.Headless);
+        stored.RemoteOperationId.Should().Be(operation);
+        stored.PromptStartedAt.Should().Be(Now);
+        stored.ExternalSessionId.Should().Be(conversation.ToString());
+        stored.Status.Should().Be(AgentSessionStatus.Stopped);
+        stored.EndedAt.Should().Be(Now.AddMinutes(2));
+    }
+
     [Fact]
     public async Task TheLatestSession_IsTheOneShown_AndOnlyActivesAreListed()
     {
