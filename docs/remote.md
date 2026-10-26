@@ -9,7 +9,7 @@ A arquitetura está em
 [`architecture/remote-orchestration.md`](architecture/remote-orchestration.md),
 as ameaças e os requisitos em
 [`architecture/remote-security-threat-model.md`](architecture/remote-security-threat-model.md),
-e as decisões nos ADR-084 a ADR-090 do [`ARCHITECTURE.md`](ARCHITECTURE.md).
+e as decisões nos ADR-084 a ADR-090 do [índice de ADRs](architecture/README.md).
 
 ## Antes de começar
 

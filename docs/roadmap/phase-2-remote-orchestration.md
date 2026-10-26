@@ -6,7 +6,7 @@
 > [`../architecture/remote-orchestration.md`](../architecture/remote-orchestration.md),
 > as ameaças e os requisitos RS-xx em
 > [`../architecture/remote-security-threat-model.md`](../architecture/remote-security-threat-model.md)
-> e as decisões nos ADR-084 a ADR-090 de [`../ARCHITECTURE.md`](../ARCHITECTURE.md).
+> e as decisões nos ADR-084 a ADR-090 de [índice de ADRs](../architecture/README.md).
 
 ## Princípios do roteiro
 

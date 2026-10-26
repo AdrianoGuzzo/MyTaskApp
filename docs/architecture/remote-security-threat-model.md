@@ -1,7 +1,7 @@
 # Orquestração remota — modelo de ameaças
 
 > **Estado: implementado (fase 2, E1 a E8).** Acompanha [`remote-orchestration.md`](remote-orchestration.md)
-> e os ADR-084 a ADR-090 de [`ARCHITECTURE.md`](../ARCHITECTURE.md). Os
+> e os ADR-084 a ADR-090 do [índice de ADRs](README.md). Os
 > requisitos (RS-xx) são critérios de aceitação das entregas em
 > [`../roadmap/phase-2-remote-orchestration.md`](../roadmap/phase-2-remote-orchestration.md);
 > a seção 8 diz o teste de cada um, ou o risco aceito.

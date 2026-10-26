@@ -5,7 +5,7 @@ PostgreSQL por ambiente e copia Produção para Desenvolvimento, Teste ou
 Homologação. Os dados chegam anonimizados, mascarados na própria consulta à
 origem, sem nada instalado nela. A janela registra auditoria, mostra o
 progresso e confere o resultado. As decisões de arquitetura estão nos
-[ADR-056, ADR-057 e ADR-058](ARCHITECTURE.md).
+[ADR-056, ADR-057 e ADR-058](architecture/README.md).
 
 O ponto central: **Produção nunca é alterada a partir do app**. O app não faz
 `INSERT`, `UPDATE`, `DELETE`, DDL, restore, `createdb`/`dropdb` nem

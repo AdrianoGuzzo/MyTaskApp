@@ -2,14 +2,14 @@
 
 O servidor da [sincronização](sync.md) é um ASP.NET Core com PostgreSQL:
 contas pelo Google, OAuth do desktop pelo OpenIddict, e a API `/api/v1`. A
-decisão está no [ADR-061](ARCHITECTURE.md), e a publicação em Production
+decisão está no [ADR-061](architecture/decisions/061-sincronizacao-outbox-mescla-por-campo.md), e a publicação em Production
 atrás de TLS, no ADR-070.
 
 Quem usa o app só local não precisa disto. Este guia é para quem publica o
 servidor (o seu, para você e quem você autorizar), ou para quem desenvolve a
 sincronização.
 
-**Não existe servidor padrão** ([ADR-078](ARCHITECTURE.md)). Nenhuma build do
+**Não existe servidor padrão** ([ADR-078](architecture/decisions/078-servidor-de-sync-do-usuario.md)). Nenhuma build do
 desktop ou do celular traz endereço embutido, e o projeto não mantém uma
 instância compartilhada. Cada pessoa sobe a sua e aponta os apps para ela.
 
