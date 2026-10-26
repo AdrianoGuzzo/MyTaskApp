@@ -200,6 +200,7 @@ public class ApplicationRegistrationTests
     [InlineData(typeof(MyTaskApp.Application.Remote.GetPendingApprovalsHandler))]
     [InlineData(typeof(MyTaskApp.Application.Remote.AnswerApprovalHandler))]
     [InlineData(typeof(MyTaskApp.Application.Remote.SendRemoteOperationHandler))]
+    [InlineData(typeof(MyTaskApp.Application.Development.ProvisionEnvironmentHandler))]
     [InlineData(typeof(MyTaskApp.Application.Remote.GetRemoteControlHandler))]
     [InlineData(typeof(MyTaskApp.Application.Remote.GetRemoteOperationProgressHandler))]
     [InlineData(typeof(MyTaskApp.Application.Remote.CancelRemoteOperationHandler))]

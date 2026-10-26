@@ -149,6 +149,9 @@ public static class DependencyInjection
         services.AddScoped<ListBranchesHandler>();
         services.AddScoped<PrepareDevelopmentHandler>();
         services.AddScoped<StartDevelopmentHandler>();
+
+        // O mesmo "Iniciar implementação", sem tela (E4): um escopo por etapa, pelo runner.
+        services.AddSingleton<ProvisionEnvironmentHandler>();
         services.AddScoped<InspectWorktreeHandler>();
         services.AddScoped<RemoveWorktreeHandler>();
         services.AddScoped<ProbeWorktreesHandler>();
