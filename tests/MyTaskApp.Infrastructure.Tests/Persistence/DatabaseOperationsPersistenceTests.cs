@@ -38,6 +38,7 @@ public class DatabaseOperationsPersistenceTests
         await using var db = await new TempSqliteDatabase().MigrateAsync(Ct);
         var production = Connection("ECO Produção", DatabaseEnvironment.Production, "eco_core");
         production.AttachSecret(production.SecretNameForThis(), Now);
+        production.AllowRemote(true, Now);
         await SeedAsync(db, production);
 
         await using var read = db.CreateContext();
@@ -50,6 +51,7 @@ public class DatabaseOperationsPersistenceTests
         reloaded.Environment.Should().Be(DatabaseEnvironment.Production);
         reloaded.SslMode.Should().Be(DatabaseSslMode.Require);
         reloaded.SecretReference.Should().Be(production.SecretNameForThis());
+        reloaded.RemoteAllowed.Should().BeTrue();
         reloaded.CreatedAt.Should().Be(Now);
         reloaded.Permissions.Should().Be(production.Permissions);
         (await connections.NameExistsAsync("eco produção", null, Ct)).Should().BeTrue();

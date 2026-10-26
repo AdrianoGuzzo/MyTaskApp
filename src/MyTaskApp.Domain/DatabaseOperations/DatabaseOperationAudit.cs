@@ -111,6 +111,11 @@ public sealed class DatabaseOperationAudit
     /// </summary>
     public int? OwnerProcessId { get; private set; }
 
+    /// <summary>Quem confirmou a produção, quando não foi a tela: o dispositivo que assinou a aprovação (ADR-090).</summary>
+    public string? ConfirmedBy { get; private set; }
+
+    public void RecordConfirmation(string? confirmedBy) => ConfirmedBy = Clean(confirmedBy, MaxNameLength);
+
     public DateTimeOffset? OwnerProcessStartedAt { get; private set; }
 
     /// <summary>Quem grava a operação em andamento é o dono dela. Só enquanto ela roda.</summary>

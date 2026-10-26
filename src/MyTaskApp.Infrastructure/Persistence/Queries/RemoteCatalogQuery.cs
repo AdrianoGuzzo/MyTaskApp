@@ -49,6 +49,13 @@ internal sealed class RemoteCatalogQuery(MyTaskAppDbContext context, ITagQuery t
             .Take(MaxItems)
             .ToList();
 
+        // Só as liberadas aqui e ligadas; o controlador vê o nome e o ambiente, nunca host, usuário ou senha.
+        var databases = (await context.DatabaseConnections.AsNoTracking().ToListAsync(cancellationToken))
+            .Where(connection => connection is { RemoteAllowed: true, IsEnabled: true })
+            .OrderBy(connection => connection.Name, StringComparer.CurrentCultureIgnoreCase)
+            .Take(MaxItems)
+            .ToList();
+
         return new AgentCatalog(
             string.Empty,
             [
@@ -74,7 +81,14 @@ internal sealed class RemoteCatalogQuery(MyTaskAppDbContext context, ITagQuery t
                                 parameter.DefaultValue is { } value ? Clean(value) : null)),
                         ])),
             ],
-            [],
+            [
+                .. databases.Select(connection => new CatalogDatabase(
+                    connection.Id,
+                    Clean(connection.Name),
+                    connection.Environment.ToString(),
+                    CanBeSource: connection is { AllowAsSource: true, CanDump: true },
+                    CanBeTarget: connection is { AllowAsDestination: true, CanRestore: true, IsProtected: false })),
+            ],
 
             // Os perfis do Claude sem terminal (ADR-089): fixos no código; o que cada um libera é decidido aqui.
             [.. AgentToolProfiles.All.Select(profile => new CatalogAgentProfile(profile.Id, profile.Name, profile.Description))])

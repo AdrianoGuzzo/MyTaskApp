@@ -99,7 +99,9 @@ public sealed class RemoteOperationsEndToEndTests(PostgresFixture postgres) : IA
     [Fact]
     public async Task AKindThisAgentDoesNotRunIsRejectedWithTheReason()
     {
-        var (notebook, phone, phoneKey) = await PairedAsync();
+        // Um agente de uma versão que ainda não copiava banco.
+        var (notebook, phone, phoneKey) = await PairedAsync(services =>
+            services.Remove(services.Single(service => service.ImplementationType == typeof(DatabaseCopyExecutor))));
         using var _ = phoneKey;
         var request = await RequestAsync(
             notebook,
@@ -441,9 +443,9 @@ public sealed class RemoteOperationsEndToEndTests(PostgresFixture postgres) : IA
     }
 
     /// <summary>O notebook aceita ser controlado e confia no celular, pelo código, como no pareamento de verdade.</summary>
-    private async Task<(SyncedDesktop Notebook, DesktopSession Phone, ECDsa PhoneKey)> PairedAsync()
+    private async Task<(SyncedDesktop Notebook, DesktopSession Phone, ECDsa PhoneKey)> PairedAsync(Action<IServiceCollection>? configure = null)
     {
-        var notebook = await SyncedDesktop.CreateAsync(_api, "Notebook", Ct);
+        var notebook = await SyncedDesktop.CreateAsync(_api, "Notebook", Ct, configure: configure);
         _desktops.Add(notebook);
 
         await notebook.UseCaseAsync<UpdateRemoteSettingsHandler, RemoteSettings>(

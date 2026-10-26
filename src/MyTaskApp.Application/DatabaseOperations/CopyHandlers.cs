@@ -140,7 +140,8 @@ public sealed class ValidateDatabaseCopyHandler(
 /// <see cref="TypedConfirmation"/> são conferidos aqui, e não só na tela:
 /// pular a janela de confirmação não pula a confirmação.
 /// </summary>
-public sealed record RunDatabaseCopy(DatabaseCopyRequest Request, bool ProductionConfirmed, string? TypedConfirmation = null);
+/// <param name="ConfirmedBy">Quem confirmou, quando não foi a tela: o dispositivo da aprovação remota (ADR-090).</param>
+public sealed record RunDatabaseCopy(DatabaseCopyRequest Request, bool ProductionConfirmed, string? TypedConfirmation = null, string? ConfirmedBy = null);
 
 /// <summary>Como terminou: o estado de cada etapa, a verificação e o dump mantido, se foi.</summary>
 public sealed record DatabaseCopyResult(
@@ -208,6 +209,7 @@ public sealed class RunDatabaseCopyHandler(
         var entry = DatabaseOperationAudit.Start(
             plan.Request.Operation, plan.Source, plan.Destination, plan.Request.CopyProfileId, plan.CopyProfileName,
             host, user, timeProvider.GetUtcNow());
+        entry.RecordConfirmation(command.ConfirmedBy);
 
         await using var turn = await gate.EnterAsync(entry.Id, cancellationToken);
 

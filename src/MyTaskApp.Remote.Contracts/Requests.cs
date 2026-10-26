@@ -90,7 +90,7 @@ public sealed record DatabaseCopyRequest(
     Guid SourceConnectionId,
     string? SourceDatabase,
     Guid TargetConnectionId,
-    string TargetDatabase,
+    string? TargetDatabase,
     Guid? AnonymizationProfileId,
     Guid? CopyProfileId,
     Guid? DevelopmentId = null);

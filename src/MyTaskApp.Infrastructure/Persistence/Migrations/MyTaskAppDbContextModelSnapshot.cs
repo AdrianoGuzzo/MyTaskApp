@@ -610,6 +610,9 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                     b.Property<int>("Port")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("RemoteAllowed")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("SecretReference")
                         .HasMaxLength(100)
                         .HasColumnType("TEXT");
@@ -716,6 +719,10 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
 
                     b.Property<long?>("CompletedAt")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("ConfirmedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
 
                     b.Property<Guid?>("DestinationConnectionId")
                         .HasColumnType("TEXT");

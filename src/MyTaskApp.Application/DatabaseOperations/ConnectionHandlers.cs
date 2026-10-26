@@ -19,7 +19,8 @@ public sealed record DatabaseConnectionRow(
     bool IsEnabled,
     ConnectionPermissions Permissions,
     bool HasPassword,
-    DateTimeOffset UpdatedAt)
+    DateTimeOffset UpdatedAt,
+    bool RemoteAllowed = false)
 {
     public bool IsProtected => EnvironmentPolicy.IsProtected(Environment);
 }
@@ -51,7 +52,8 @@ public sealed class GetDatabaseConnectionsHandler(
                 connection.IsEnabled,
                 connection.Permissions,
                 await credentials.HasAsync(connection.SecretReference, cancellationToken),
-                connection.UpdatedAt));
+                connection.UpdatedAt,
+                connection.RemoteAllowed));
         }
 
         return rows;
@@ -74,7 +76,8 @@ public sealed record SaveDatabaseConnection(
     DatabaseSslMode SslMode,
     string? Description,
     ConnectionPermissions Requested,
-    SecretText? Password);
+    SecretText? Password,
+    bool? RemoteAllowed = null);
 
 public sealed class SaveDatabaseConnectionHandler(
     IDatabaseConnectionRepository connections,
@@ -107,6 +110,12 @@ public sealed class SaveDatabaseConnectionHandler(
                 command.Name!, command.Host, command.Port, command.Database, command.Username,
                 command.Environment, command.SslMode, command.Description, command.Requested, now);
             await connections.AddAsync(connection, cancellationToken);
+        }
+
+        // Nulo: como está (o MCP nunca mexe; ADR-090).
+        if (command.RemoteAllowed is { } remoteAllowed)
+        {
+            connection.AllowRemote(remoteAllowed, now);
         }
 
         // O cofre antes do banco: se o sistema recusar guardar (Linux sem

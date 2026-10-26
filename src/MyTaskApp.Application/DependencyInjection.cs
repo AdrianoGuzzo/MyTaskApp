@@ -273,6 +273,10 @@ public static class DependencyInjection
         services.TryAddSingleton<HeadlessPromptRunner>();
         services.AddScoped<HeadlessAgentPlanner>();
         services.AddScoped<HeadlessSessionStore>();
+
+        // A cópia de banco de longe (T-32, ADR-090): o mesmo caso de uso da tela.
+        services.AddSingleton<IRemoteOperationExecutor, DatabaseCopyExecutor>();
+        services.AddScoped<RemoteDatabaseCopyPlanner>();
         services.AddScoped<RecordRemoteOperationHandler>();
         services.TryAddSingleton(new SupportedRemoteOperations([
             RemoteOperationKinds.EnvironmentInspect,
@@ -282,6 +286,7 @@ public static class DependencyInjection
             RemoteOperationKinds.AgentStart,
             RemoteOperationKinds.AgentPrompt,
             RemoteOperationKinds.AgentStop,
+            RemoteOperationKinds.DatabaseCopy,
         ]));
         services.AddScoped<ConsultationLauncher>();
         services.AddScoped<ConsultationTargetResolver>();

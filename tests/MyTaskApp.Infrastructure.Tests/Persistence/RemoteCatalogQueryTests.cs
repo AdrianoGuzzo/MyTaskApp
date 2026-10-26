@@ -22,6 +22,44 @@ public sealed class RemoteCatalogQueryTests : IDisposable
     public void Dispose() => Directory.Delete(_repository, recursive: true);
 
     [Fact]
+    public async Task OnlyTheConnectionsAllowedHere_GoIn_WithoutHostOrUser()
+    {
+        await using var db = await new TempSqliteDatabase().MigrateAsync(Ct);
+        var everything = MyTaskApp.Domain.DatabaseOperations.ConnectionPermissions.FromFlags(MyTaskApp.Domain.DatabaseOperations.ConnectionPermission.All);
+        var production = MyTaskApp.Domain.DatabaseOperations.DatabaseConnection.Create(
+            "ECO Produção", "198.51.100.112", 5432, "eco_core", "backup_user", MyTaskApp.Domain.DatabaseOperations.DatabaseEnvironment.Production,
+            MyTaskApp.Domain.DatabaseOperations.DatabaseSslMode.Require, null, everything, Now);
+        production.AllowRemote(true, Now);
+        var local = MyTaskApp.Domain.DatabaseOperations.DatabaseConnection.Create(
+            "Local", "localhost", 5432, null, "postgres", MyTaskApp.Domain.DatabaseOperations.DatabaseEnvironment.Development,
+            MyTaskApp.Domain.DatabaseOperations.DatabaseSslMode.Disable, null, everything, Now);
+        local.AllowRemote(true, Now);
+        var notAllowed = MyTaskApp.Domain.DatabaseOperations.DatabaseConnection.Create(
+            "Homologação", "203.0.113.7", 5432, "eco_hml", "hml", MyTaskApp.Domain.DatabaseOperations.DatabaseEnvironment.Staging,
+            MyTaskApp.Domain.DatabaseOperations.DatabaseSslMode.Require, null, everything, Now);
+        var disabled = MyTaskApp.Domain.DatabaseOperations.DatabaseConnection.Create(
+            "Desligada", "localhost", 5433, null, "postgres", MyTaskApp.Domain.DatabaseOperations.DatabaseEnvironment.Development,
+            MyTaskApp.Domain.DatabaseOperations.DatabaseSslMode.Disable, null, everything, Now);
+        disabled.AllowRemote(true, Now);
+        disabled.SetEnabled(false, Now);
+
+        await using (var write = db.CreateContext())
+        {
+            write.DatabaseConnections.AddRange(production, local, notAllowed, disabled);
+            await write.SaveChangesAsync(Ct);
+        }
+
+        await using var read = db.CreateContext();
+        var catalog = RemoteCatalogs.Seal(await Query(read).ReadAsync(Ct));
+
+        catalog.Databases.Should().Equal(
+            new CatalogDatabase(production.Id, "ECO Produção", "Production", CanBeSource: true, CanBeTarget: false),
+            new CatalogDatabase(local.Id, "Local", "Development", CanBeSource: true, CanBeTarget: true));
+        var json = System.Text.Json.JsonSerializer.Serialize(catalog, RemoteJson.Options);
+        json.Should().NotContain("198.51.100.112").And.NotContain("backup_user").And.NotContain("Homologação");
+    }
+
+    [Fact]
     public async Task OnlyWhatThisMachineAllowedGoesIn_AndNoPathLeaves()
     {
         await using var db = await new TempSqliteDatabase().MigrateAsync(Ct);

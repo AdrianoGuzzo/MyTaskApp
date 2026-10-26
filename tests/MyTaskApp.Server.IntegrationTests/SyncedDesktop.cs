@@ -57,7 +57,8 @@ internal sealed class SyncedDesktop : IAsyncDisposable
         string? folder = null,
         TestDevice? device = null,
         MemorySecretStore? secrets = null,
-        Network? network = null)
+        Network? network = null,
+        Action<IServiceCollection>? configure = null)
     {
         folder ??= Path.Combine(Path.GetTempPath(), $"mytaskapp-e2e-{Guid.NewGuid():N}");
         device ??= new TestDevice(nickname);
@@ -78,7 +79,8 @@ internal sealed class SyncedDesktop : IAsyncDisposable
         // lado, e só o servidor decide quando ele expirou.
         var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
 
-        var services = new ServiceCollection()
+        var collection = new ServiceCollection();
+        collection
             .AddLogging(logging => logging.SetMinimumLevel(LogLevel.Warning))
             .AddSingleton<TimeProvider>(clock)
             .AddSingleton<IDeviceIdentity>(device)
@@ -88,8 +90,9 @@ internal sealed class SyncedDesktop : IAsyncDisposable
             .AddSingleton(provider =>
             {
                 return new SyncHttp(new HttpClient(network.Over(api.Server.CreateHandler())), provider.GetRequiredService<SyncOptions>(), provider.GetRequiredService<TimeProvider>(), provider.GetRequiredService<ILogger<SyncHttp>>());
-            })
-            .BuildServiceProvider(validateScopes: true);
+            });
+        configure?.Invoke(collection);
+        var services = collection.BuildServiceProvider(validateScopes: true);
 
         await using (var scope = services.CreateAsyncScope())
         {
