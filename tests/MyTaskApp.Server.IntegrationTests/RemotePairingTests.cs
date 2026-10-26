@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using MyTaskApp.Remote.Contracts;
 using MyTaskApp.Server.Infrastructure.Persistence;
+using MyTaskApp.Sync.Contracts;
 
 namespace MyTaskApp.Server.IntegrationTests;
 
@@ -68,6 +69,22 @@ public sealed class RemotePairingTests(PostgresFixture postgres) : IAsyncLifetim
         // Aprovar de novo devolve o mesmo pareamento.
         (await SendAsync<PairingInfo>(notebook, HttpMethod.Post, RemoteRoutes.ApprovePairing(asked.PairingId), Approval(notebookKey, seen)))
             .Status.Should().Be(PairingStatus.Approved);
+    }
+
+    /// <summary>RS-06: revogado o dispositivo, a chave dele deixa de valer, e o pareamento que ele pediu não se completa.</summary>
+    [Fact]
+    public async Task AControllerRevokedBeforeTheApproval_CannotBePaired()
+    {
+        var (phone, _) = await DeviceAsync("Celular", DeviceRoles.Controller);
+        var (notebook, notebookKey) = await DeviceAsync("Notebook", DeviceRoles.Executor);
+        await SendAsync<PairingInfo>(phone, HttpMethod.Post, RemoteRoutes.Pairings, new PairingRequest(notebook.DeviceId));
+        var seen = (await GetAsync<List<PairingInfo>>(notebook, RemoteRoutes.Pairings)).Should().ContainSingle().Subject;
+
+        await notebook.SendAsync<object, DeviceInfo>(HttpMethod.Post, ApiRoutes.RevokeDevice(phone.DeviceId), new { });
+
+        (await ErrorAsync(notebook, HttpMethod.Post, RemoteRoutes.ApprovePairing(seen.PairingId), Approval(notebookKey, seen)))
+            .Should().Be((HttpStatusCode.Conflict, RemoteErrorCodes.KeyChanged));
+        (await GetAsync<List<RemoteDeviceInfo>>(notebook, RemoteRoutes.Devices)).Should().NotContain(device => device.DeviceId == phone.DeviceId);
     }
 
     [Fact]

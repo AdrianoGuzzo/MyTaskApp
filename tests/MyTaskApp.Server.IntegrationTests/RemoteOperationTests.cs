@@ -331,6 +331,28 @@ public sealed class RemoteOperationTests(PostgresFixture postgres) : IAsyncLifet
             .Should().Be((HttpStatusCode.Conflict, RemoteErrorCodes.IdempotencyKeyReuse));
     }
 
+    /// <summary>RS-31: a fila de uma máquina tem teto; terminar uma abre a vaga.</summary>
+    [Fact]
+    public async Task AMachineWithTwentyOpenOperations_RefusesTheNext_UntilOneEnds()
+    {
+        var (phone, notebook, workspace) = await PairAsync();
+        var open = new List<RemoteOperationRequest>();
+
+        for (var i = 0; i < RemoteLimits.MaxOpenOperationsPerExecutor; i++)
+        {
+            var request = Inspection(workspace, phone, notebook);
+            await CreateAsync(phone, request);
+            open.Add(request);
+        }
+
+        (await ErrorAsync(phone.Session, HttpMethod.Post, RemoteRoutes.Operations, Sign(phone.Key, Inspection(workspace, phone, notebook), RemoteJws.OperationType)))
+            .Should().Be((HttpStatusCode.Conflict, RemoteErrorCodes.TooManyOperations));
+
+        await SendAsync<RemoteOperationView>(phone.Session, HttpMethod.Post, RemoteRoutes.CancelOperation(open[0].OperationId), null);
+
+        (await CreateAsync(phone, Inspection(workspace, phone, notebook))).Status.Should().Be(RemoteOperationStatus.Queued);
+    }
+
     [Fact]
     public async Task ARevokedMachine_IsNeitherATargetNorAnAgent()
     {

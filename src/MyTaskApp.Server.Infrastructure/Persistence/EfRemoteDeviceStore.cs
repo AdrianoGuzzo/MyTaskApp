@@ -96,9 +96,11 @@ internal sealed class EfRemoteDeviceStore(ServerDbContext context) : IRemoteDevi
         return outcome;
     }
 
+    /// <remarks>A chave de um dispositivo revogado não vale mais (RS-06), mesmo antes de ele registrar outra.</remarks>
     public async Task<DevicePublicKey?> FindActiveKeyAsync(Guid userId, Guid deviceId, CancellationToken cancellationToken) =>
         await context.DeviceKeys.AsNoTracking()
             .Where(key => key.UserId == userId && key.DeviceId == deviceId && key.RevokedAt == null)
+            .Where(key => context.Devices.Any(device => device.UserId == userId && device.DeviceId == deviceId && device.RevokedAt == null))
             .Select(key => new DevicePublicKey(DevicePublicKey.Es256, key.SubjectPublicKeyInfo, key.Fingerprint))
             .SingleOrDefaultAsync(cancellationToken);
 

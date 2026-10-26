@@ -41,6 +41,9 @@ public static class RemoteLimits
     /// <summary>Pedidos de pareamento em aberto por conta: ninguém enche a tela do executor de pedidos.</summary>
     public const int MaxOpenPairings = 10;
 
+    /// <summary>Operações não terminadas por máquina executora (RS-31): acima, o servidor recusa o pedido novo.</summary>
+    public const int MaxOpenOperationsPerExecutor = 20;
+
     /// <summary>Sem sinal de vida por mais que isto, a máquina aparece desligada.</summary>
     public static readonly TimeSpan OfflineAfter = TimeSpan.FromSeconds(90);
 

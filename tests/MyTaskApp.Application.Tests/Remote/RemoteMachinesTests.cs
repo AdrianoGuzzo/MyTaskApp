@@ -62,7 +62,7 @@ public sealed class RemoteMachinesTests : IDisposable
             NullLogger<RemoteCatalogPublisher>.Instance);
 
     private RegisterThisMachineHandler Register(MachineCapabilities? capabilities = null) =>
-        new(_settings, _server, _signer, _identity, capabilities ?? Capabilities(), Publisher(), NullLogger<RegisterThisMachineHandler>.Instance);
+        new(_settings, _server, _signer, _identity, capabilities ?? Capabilities(), Publisher(), _trusted, _trusted, _clock, NullLogger<RegisterThisMachineHandler>.Instance);
 
     private GetMachinesHandler Machines() => new(_settings, _server, _trusted, _clock);
 
@@ -102,6 +102,68 @@ public sealed class RemoteMachinesTests : IDisposable
 
         _queue.Catalogs.Should().HaveCount(2);
         _queue.Catalogs[1].Hash.Should().NotBe(published.Hash);
+    }
+
+    /// <summary>
+    /// RS-06: o controlador que saiu da conta (revogado) ou que trocou de chave
+    /// deixa de valer aqui no próximo registro; o que continua igual fica.
+    /// </summary>
+    [Fact]
+    public async Task AnExecutor_ForgetsTheControllersRevokedOnTheAccount_OrWithAnotherKey()
+    {
+        var kept = Controller("Pixel 8", "a");
+        var revoked = Controller("Celular perdido", "b");
+        var rekeyed = Controller("Notebook", "c");
+        _trusted.All.AddRange([kept, revoked, rekeyed]);
+        _server.Devices.Add(Device(kept.ControllerDeviceId, kept.Fingerprint));
+        _server.Devices.Add(Device(rekeyed.ControllerDeviceId, new string('d', 64)));
+
+        await Register().HandleAsync(new RegisterThisMachine(), Ct);
+
+        kept.IsActive.Should().BeTrue();
+        revoked.RevokedAt.Should().Be(Now);
+        rekeyed.RevokedAt.Should().Be(Now, "a chave nova só vale com um pareamento novo");
+        _trusted.SaveCount.Should().Be(1);
+    }
+
+    /// <summary>Sem a lista da conta, nada é esquecido: a falha do servidor não derruba a confiança, nem a cria.</summary>
+    [Fact]
+    public async Task WhenTheAccountListFails_TheTrustStaysAsItWas()
+    {
+        var controller = Controller("Pixel 8", "a");
+        _trusted.All.Add(controller);
+        var failing = new FailingList(_server);
+
+        await new RegisterThisMachineHandler(
+                _settings, failing, _signer, _identity, Capabilities(), Publisher(), _trusted, _trusted, _clock, NullLogger<RegisterThisMachineHandler>.Instance)
+            .HandleAsync(new RegisterThisMachine(), Ct);
+
+        controller.IsActive.Should().BeTrue();
+        _trusted.SaveCount.Should().Be(0);
+    }
+
+    private static TrustedController Controller(string nickname, string fingerprint) =>
+        TrustedController.Approve(Guid.CreateVersion7(), nickname, new string(fingerprint[0], 64), "AQID", Guid.CreateVersion7(), Now.AddDays(-1));
+
+    private static RemoteDeviceInfo Device(Guid deviceId, string fingerprint) =>
+        new(deviceId, "Outro", "android", "1.0.0", false, DeviceRoles.Controller, fingerprint, null, Now);
+
+    private sealed class FailingList(FakeRemoteApi inner) : IRemoteApi
+    {
+        public Task<RemoteDeviceInfo> RegisterAsync(DeviceRegistration registration, CancellationToken cancellationToken) =>
+            inner.RegisterAsync(registration, cancellationToken);
+
+        public Task<IReadOnlyList<RemoteDeviceInfo>> ListDevicesAsync(CancellationToken cancellationToken) =>
+            throw new SyncApiException(SyncFailureKind.Transient, "Sem conexão com o servidor de sincronização.");
+
+        public Task<PairingInfo> RequestPairingAsync(Guid executorDeviceId, CancellationToken cancellationToken) => inner.RequestPairingAsync(executorDeviceId, cancellationToken);
+
+        public Task<PairingInfo> GetPairingAsync(Guid pairingId, CancellationToken cancellationToken) => inner.GetPairingAsync(pairingId, cancellationToken);
+
+        public Task<IReadOnlyList<PairingInfo>> ListOpenPairingsAsync(CancellationToken cancellationToken) => inner.ListOpenPairingsAsync(cancellationToken);
+
+        public Task<PairingInfo> ApprovePairingAsync(Guid pairingId, PairingApproval approval, CancellationToken cancellationToken) =>
+            inner.ApprovePairingAsync(pairingId, approval, cancellationToken);
     }
 
     [Fact]

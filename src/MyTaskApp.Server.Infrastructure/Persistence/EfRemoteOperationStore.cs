@@ -95,6 +95,13 @@ internal sealed class EfRemoteOperationStore(ServerDbContext context) : IRemoteO
         return ids;
     }
 
+    public Task<int> CountOpenForTargetAsync(Guid userId, Guid targetDeviceId, DateTimeOffset now, CancellationToken cancellationToken) =>
+        context.RemoteOperations
+            .Where(row => row.UserId == userId && row.TargetDeviceId == targetDeviceId)
+            .Where(row => ((row.Status == (int)RemoteOperationStatus.Queued || row.Status == (int)RemoteOperationStatus.Dispatched) && row.NotAfter > now)
+                || Started.Contains(row.Status))
+            .CountAsync(cancellationToken);
+
     public async Task<IReadOnlyList<RemoteOperationRecord>> ListActiveForTargetAsync(
         Guid userId,
         Guid targetDeviceId,

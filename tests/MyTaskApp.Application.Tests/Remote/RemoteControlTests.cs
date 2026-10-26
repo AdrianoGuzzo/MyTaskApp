@@ -163,5 +163,40 @@ public sealed class RemoteControlTests
         RemoteOperationTexts.Line(new(operation, 1, Now, RemoteEventKind.Output, Text: "ok")).Should().Be("ok");
         RemoteOperationTexts.Line(new(operation, 2, Now, RemoteEventKind.AgentMessage, Text: "Pronto")).Should().Be("Claude: Pronto");
         RemoteOperationTexts.Line(new(operation, 3, Now, RemoteEventKind.StatusChanged, Status: RemoteOperationStatus.Running)).Should().BeNull();
+        RemoteOperationTexts.Line(new(operation, 4, Now, RemoteEventKind.ToolUse, Text: "Read")).Should().Be("» usou Read");
+        RemoteOperationTexts.Line(new(operation, 5, Now, RemoteEventKind.Warning, Text: "lento")).Should().Be("» lento");
+        RemoteOperationTexts.Line(new(operation, 6, Now, RemoteEventKind.ApprovalRequested, Text: "rm")).Should().Be("» Esperando aprovação: rm");
+        RemoteOperationTexts.Line(new(operation, 7, Now, RemoteEventKind.ApprovalResolved, Text: "Permitido")).Should().Be("» Permitido");
+        RemoteOperationTexts.Line(new(operation, 8, Now, RemoteEventKind.StepStarted, Text: "Worktree")).Should().Be("» Worktree");
+        RemoteOperationTexts.Line(new(operation, 9, Now, RemoteEventKind.StepStarted)).Should().BeNull();
+    }
+
+    /// <summary>Cada estado tem a frase dele, nas duas telas; nenhum cai no nome do enum.</summary>
+    [Fact]
+    public void EveryStatus_HasItsOwnSentence_AndACancelInFlightSaysSo()
+    {
+        var sentences = Enum.GetValues<RemoteOperationStatus>()
+            .Select(status => RemoteOperationTexts.Status(View(Guid.CreateVersion7(), status)))
+            .ToList();
+
+        sentences.Should().OnlyHaveUniqueItems();
+        sentences.Should().NotContain(Enum.GetNames<RemoteOperationStatus>());
+        RemoteOperationTexts.Status(View(Guid.CreateVersion7(), RemoteOperationStatus.Running) with { CancelRequestedAt = Now })
+            .Should().Be("Cancelando…");
+    }
+
+    [Fact]
+    public void ACopyProfile_SaysFromWhereToWhere_AndWarnsWhenTheSourceIsProduction()
+    {
+        var production = new CatalogDatabase(Guid.CreateVersion7(), "Produção", "CriticalProduction", true, false);
+        var local = new CatalogDatabase(Guid.CreateVersion7(), "Local", "Development", true, true);
+        var databases = new Dictionary<Guid, CatalogDatabase> { [production.ConnectionId] = production, [local.ConnectionId] = local };
+
+        RemoteOperationTexts.CopyProfile(new(Guid.CreateVersion7(), "Diária", production.ConnectionId, local.ConnectionId, true), databases)
+            .Should().Be("Diária (Produção → Local, produção: pede aprovação)");
+        RemoteOperationTexts.CopyProfile(new(Guid.CreateVersion7(), "Entre locais", local.ConnectionId, local.ConnectionId, false), databases)
+            .Should().Be("Entre locais (Local → Local)");
+        RemoteOperationTexts.CopyProfile(new(Guid.CreateVersion7(), "Sumida", Guid.CreateVersion7(), local.ConnectionId, false), databases)
+            .Should().Be("Sumida (? → Local)", "a conexão saiu do catálogo depois");
     }
 }

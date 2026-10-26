@@ -589,9 +589,9 @@ dotnet test tests/MyTaskApp.Server.IntegrationTests --filter "PhoneSyncTests"   
 - **Sem sincronização em segundo plano;** sem push. Abrir o app, puxar para
   atualizar ou a rede voltar disparam um ciclo.
 - **Sem lembretes nem notificações** no celular.
-- **Fora do celular:** cronômetro, post-its, Jira, comandos e ambientes de
-  desenvolvimento ficam no desktop. Os dados deles sincronizam, mas não
-  aparecem.
+- **Fora do celular:** cronômetro, post-its e Jira ficam no desktop. Os dados
+  deles sincronizam, mas não aparecem. Comandos e ambientes de desenvolvimento
+  rodam nos computadores; o celular só os pede, pela aba Remoto.
 - **Etiquetas:** não se criam nem se editam no celular.
 - **Projeto** não existe no domínio.
 - **Um servidor por vez.** Não há perfis de vários servidores; trocar esquece
@@ -608,16 +608,31 @@ dotnet test tests/MyTaskApp.Server.IntegrationTests --filter "PhoneSyncTests"   
 - **Tema por aparelho:** a escolha não sincroniza com o desktop, que também
   guarda o tema por computador. "Automático" não liga o Alto contraste sozinho.
 
-## Integração futura com agentes de IA
+## Controle remoto (aba Remoto)
 
-Fora do escopo: o celular não roda comandos, não abre terminal e não conversa
-com agentes. O que fica pronto:
+O celular é controlador da orquestração remota (fase 2, E7): pede a um
+computador pareado que prepare uma tarefa, rode um comando, copie o banco ou
+converse com o Claude Code, e aprova o que ele perguntar. Ele não roda nada:
+quem executa é o computador, com as regras dele. O guia é o
+[`remote.md`](remote.md).
 
-- O desenvolvimento da tarefa (repositórios, branches, worktrees) já chega ao
-  celular pela sincronização e aparece no detalhe, só para leitura.
-- Status de tarefa nunca é status de agente: o celular não mostra sessões.
-
-Uma versão futura que consulte ou acione agentes deve passar por uma API
-autenticada própria, com autorização explícita, validação de comandos e
-auditoria. Isso é uma funcionalidade separada, não uma extensão da
-sincronização.
+- **Ligar** registra o celular no servidor só como controlador, com uma chave
+  ES256 gerada aqui e guardada no Keystore/Keychain. Não é a sincronização:
+  passa pelas rotas `/api/v1/remote`, com o escopo `remote`, e cada pedido é
+  assinado.
+- **A aba** mostra os computadores que aceitam controle, o código do
+  pareamento (digitado lá, na janela Máquinas), as aprovações pendentes (lidas
+  a cada 1,5 s com o app aberto; a nova avisa e conta no título da aba) e os
+  pedidos feitos daqui.
+- **A máquina** lista os worktrees de lá: rodar um comando liberado, abrir o
+  Claude, apagar o worktree. **A operação** mostra o estado, a saída ao vivo,
+  as perguntas dela, cancelar, mandar mais um prompt e parar o Claude. Na
+  tarefa, **"Preparar em…"** escolhe o computador, o repositório, a cópia do
+  banco e o Claude.
+- **Destravar antes de assinar:** todo pedido e toda resposta pedem a
+  biometria ou o bloqueio da tela (`BiometricPrompt` com o PIN no Android 10+,
+  a tela de confirmação do bloqueio no 9 e anteriores, `LAContext` no iOS).
+  Destravado, vale 30 s, e tranca ao ir para segundo plano. Sem bloqueio de
+  tela, o celular não assina.
+- **Sem push:** as aprovações só chegam com o app aberto. Uma pergunta sem
+  resposta em 10 minutos é negada.

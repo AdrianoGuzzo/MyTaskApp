@@ -735,6 +735,57 @@ Mount** do painel, com o mesmo layout do compose (§5, passo 4):
 - Para conferir: `docker service inspect <serviço> | grep -cE
   'Base64|Password|ClientSecret|ConnectionStrings'` dá `0`.
 
+### O hub do controle remoto atrás do proxy
+
+O controle remoto ([`remote.md`](remote.md)) usa, além da API, o hub SignalR
+`/hubs/remote`: uma campainha que avisa o agente de um pedido novo e o
+controlador de uma aprovação respondida. Ele não carrega dado nenhum; sem ele,
+tudo funciona pela busca de 30 s, só mais devagar.
+
+- **WebSocket passando pelo proxy.** O cliente prefere WebSocket e cai para
+  Server-Sent Events ou long polling se o `Upgrade` não passar. O Caddy do
+  `docker-compose.prod.yml` e o Traefik repassam sem configuração. No nginx:
+
+  ```nginx
+  location /hubs/ {
+      proxy_pass http://api:8080;
+      proxy_http_version 1.1;
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection "upgrade";
+      proxy_set_header Host $host;
+      proxy_set_header X-Forwarded-Proto $scheme;
+      proxy_read_timeout 120s;
+  }
+  ```
+
+- **Tempo ocioso acima de 30 s.** O cliente manda um keep-alive a cada 15 s,
+  e o servidor fecha quem fica 30 s calado. Um proxy ou balanceador que corta
+  conexão ociosa antes disso derruba o hub a todo instante (o cliente religa,
+  e o log enche de `RemoteHubReconnected`).
+- **Uma réplica.** As conexões do hub ficam na memória da instância: com duas
+  réplicas, o aviso só chega a quem está conectado na mesma, e o resto espera a
+  busca. Os transportes que não são WebSocket também precisam de sessão
+  fixa (sticky) entre a negociação e a conexão.
+- **O token fora do log.** O SignalR do navegador manda o token na query
+  (`?access_token=`); a API o move para o cabeçalho e não registra query
+  (RS-03). Os apps mandam o token no cabeçalho, mas, se você ligar o log de
+  acesso do proxy, tire a query das rotas `/hubs/*`. No Caddy:
+
+  ```caddy
+  log {
+      format filter {
+          request>uri query {
+              delete access_token
+          }
+      }
+  }
+  ```
+
+  O Caddy já esconde `Authorization` e `Cookie` do log por padrão.
+- **O token vencido fecha a conexão.** O hub encerra quem passou do access
+  token (15 min); o cliente religa com um novo, e um dispositivo revogado não
+  religa.
+
 ### Rate limit
 
 Os limites contam por minuto e respondem 429 com `Retry-After` e

@@ -305,6 +305,9 @@ public sealed class RegisterThisMachineHandler(
     IDeviceIdentity identity,
     MachineCapabilities capabilities,
     RemoteCatalogPublisher catalogs,
+    ITrustedControllerRepository trusted,
+    IUnitOfWork unitOfWork,
+    TimeProvider timeProvider,
     ILogger<RegisterThisMachineHandler> logger)
 {
     public async Task<RemoteAvailability> HandleAsync(RegisterThisMachine command, CancellationToken cancellationToken = default)
@@ -332,6 +335,7 @@ public sealed class RegisterThisMachineHandler(
             if (catalog is not null)
             {
                 await catalogs.PublishAsync(cancellationToken);
+                await ForgetGoneControllersAsync(cancellationToken);
             }
 
             return RemoteAvailability.Ready;
@@ -341,6 +345,41 @@ public sealed class RegisterThisMachineHandler(
             var (availability, _) = RemoteProblems.Of(exception);
             logger.LogWarning("RemoteRegistrationFailed {Kind} {Code}", exception.Kind, exception.Code);
             return availability;
+        }
+    }
+
+    /// <summary>
+    /// RS-06: o controlador revogado na conta, ou que trocou de chave, deixa de
+    /// valer aqui também. O servidor já recusa o token dele; isto vale para um
+    /// servidor que mentisse, porque só se esquece, nunca se confia por ele.
+    /// Uma chave nova só volta a valer com um pareamento novo.
+    /// </summary>
+    private async Task ForgetGoneControllersAsync(CancellationToken cancellationToken)
+    {
+        var active = await trusted.ListAllActiveAsync(cancellationToken);
+
+        if (active.Count == 0)
+        {
+            return;
+        }
+
+        var keys = (await remote.ListDevicesAsync(cancellationToken)).ToDictionary(device => device.DeviceId, device => device.KeyFingerprint);
+        var now = timeProvider.GetUtcNow();
+        var forgotten = 0;
+
+        foreach (var controller in active)
+        {
+            if (!keys.TryGetValue(controller.ControllerDeviceId, out var fingerprint) || fingerprint != controller.Fingerprint)
+            {
+                controller.Revoke(now);
+                forgotten++;
+                logger.LogInformation("TrustedControllerGone {ControllerDeviceId} {StillOnAccount}", controller.ControllerDeviceId, fingerprint is not null);
+            }
+        }
+
+        if (forgotten > 0)
+        {
+            await unitOfWork.SaveChangesAsync(cancellationToken);
         }
     }
 }

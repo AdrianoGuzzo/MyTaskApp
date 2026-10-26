@@ -453,6 +453,32 @@ O app do celular é mais um dispositivo da mesma sincronização
   conta no servidor antigo e não apaga tarefa ([ADR-078](docs/ARCHITECTURE.md));
 - entra com a mesma conta Google; o refresh token fica no Keystore/Keychain.
 
+### Controle remoto (opcional)
+
+Em *☰ → Máquinas…*, um computador seu passa a aceitar pedidos de outro, ou do
+celular (aba **Remoto**): preparar o worktree de uma tarefa ("Preparar em…"),
+rodar os comandos dela, copiar o banco, conversar com o Claude Code e aprovar,
+de longe, as ferramentas que ele quiser usar. O guia está em
+[`docs/remote.md`](docs/remote.md), e as decisões nos
+[ADR-084 a ADR-090](docs/ARCHITECTURE.md).
+
+- **Quem executa decide.** Cada pedido é assinado pela chave do dispositivo
+  que pediu, e a máquina de lá só aceita quem foi pareado nela, com um código
+  digitado. Nem o servidor nem a sua conta bastam para rodar alguma coisa.
+- **Só o que foi liberado lá.** Um comando roda de longe só com "Pode rodar a
+  pedido de outro computador pareado", e uma conexão de banco só com "Liberar
+  para cópias pedidas de longe". Mudar o texto do comando desmarca.
+- **Com o app fechado.** Um agente sem tela, do seu usuário, sobe no logon e
+  roda os mesmos casos de uso do desktop. Ele só disca para fora: nenhuma
+  porta aberta.
+- **Perguntas, ao vivo.** O comando que pede confirmação, a cópia de
+  produção, apagar um worktree e a ferramenta do Claude fora do perfil param
+  e perguntam no controlador. Sem resposta em 10 minutos, é não.
+- **O Claude com perfil.** Ler, editar ou editar e testar, decididos na
+  máquina de lá; `git push`, `curl` e afins nunca; `--restricted` sempre e
+  `--dangerously-skip-permissions` nunca.
+- **No celular, destravar antes de assinar**: biometria ou o bloqueio da tela.
+
 ---
 
 ## Instalação
@@ -873,12 +899,13 @@ fica em [`CHANGELOG.md`](CHANGELOG.md).
 
 | Documento | Conteúdo |
 |---|---|
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | decisões de arquitetura (ADR-001 a ADR-090), com o motivo de cada uma; de ADR-084 em diante, a fase 2 (orquestração remota), em implementação |
-| [`docs/architecture/remote-orchestration.md`](docs/architecture/remote-orchestration.md) | fase 2 (proposta): inventário do código, arquitetura da orquestração remota, contratos, ciclo de vida e reaproveitamento |
-| [`docs/architecture/remote-security-threat-model.md`](docs/architecture/remote-security-threat-model.md) | fase 2 (proposta): ameaças da execução remota e os requisitos de segurança |
-| [`docs/roadmap/phase-2-remote-orchestration.md`](docs/roadmap/phase-2-remote-orchestration.md) | fase 2 (proposta): entregas, critérios de aceitação e tarefas priorizadas |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | decisões de arquitetura (ADR-001 a ADR-090), com o motivo de cada uma; de ADR-084 em diante, a fase 2 (orquestração remota) |
+| [`docs/architecture/remote-orchestration.md`](docs/architecture/remote-orchestration.md) | fase 2: inventário do código, arquitetura da orquestração remota, contratos, ciclo de vida, casos de falha e reaproveitamento |
+| [`docs/architecture/remote-security-threat-model.md`](docs/architecture/remote-security-threat-model.md) | fase 2: ameaças da execução remota, os requisitos de segurança e o teste (ou o risco aceito) de cada um |
+| [`docs/roadmap/phase-2-remote-orchestration.md`](docs/roadmap/phase-2-remote-orchestration.md) | fase 2: entregas, critérios de aceitação e tarefas, com o que foi feito em cada uma |
 | [`docs/sync.md`](docs/sync.md) | sincronização entre computadores: a tela, o que sincroniza, onde cada tarefa aparece, conflitos e limitações |
 | [`docs/sync-server.md`](docs/sync-server.md) | o servidor de sincronização: cliente OAuth do Google, configuração, migrations, implantação e testes |
+| [`docs/remote.md`](docs/remote.md) | controle remoto: ligar, parear, o que dá para pedir, aprovar, os perfis do Claude, revogar, limites e solução de problemas |
 | [`docs/mobile.md`](docs/mobile.md) | o app do celular: arquitetura, login, sincronização, ambiente, rodar no Android, o que falta no iOS, testes e limitações |
 | [`docs/mcp-server.md`](docs/mcp-server.md) | servidor MCP local: ativar, porta, token, Claude Code, as ferramentas, segurança e limitações |
 | [`docs/consulta-inteligente.md`](docs/consulta-inteligente.md) | Consulta Inteligente: o passo a passo da aba, pré-requisitos, segurança do código e do banco, e limitações |

@@ -74,6 +74,14 @@ public sealed class RemoteOperationUseCases(
 
         await EnsureExecutorAsync(caller.UserId, request.TargetDeviceId, cancellationToken);
 
+        if (await operations.CountOpenForTargetAsync(caller.UserId, request.TargetDeviceId, now, cancellationToken) >= RemoteLimits.MaxOpenOperationsPerExecutor)
+        {
+            throw new SyncServerException(
+                RemoteErrorCodes.TooManyOperations,
+                409,
+                $"Essa máquina já tem {RemoteLimits.MaxOpenOperationsPerExecutor} pedidos sem terminar. Espere ou cancele algum.");
+        }
+
         var operation = new RemoteOperationRecord
         {
             OperationId = request.OperationId,
@@ -488,6 +496,9 @@ public interface IRemoteOperationStore
 
     /// <summary>A fila não vencida da máquina passa a entregue; devolve os ids que passaram.</summary>
     Task<IReadOnlyList<Guid>> DispatchQueuedAsync(Guid userId, Guid targetDeviceId, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>As da fila e as entregues ainda no prazo, mais as aceitas, as rodando e as esperando aprovação da máquina.</summary>
+    Task<int> CountOpenForTargetAsync(Guid userId, Guid targetDeviceId, DateTimeOffset now, CancellationToken cancellationToken);
 
     /// <summary>As entregues e não vencidas, as aceitas, as rodando e as esperando aprovação da máquina, das mais velhas às mais novas.</summary>
     Task<IReadOnlyList<RemoteOperationRecord>> ListActiveForTargetAsync(Guid userId, Guid targetDeviceId, DateTimeOffset now, CancellationToken cancellationToken);

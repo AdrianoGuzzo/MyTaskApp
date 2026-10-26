@@ -1,7 +1,8 @@
 # Fase 2 — Orquestração remota: roteiro de implementação
 
-> **Estado: em implementação.** As tarefas feitas estão marcadas com ✔ na lista
-> do fim, com o commit de cada uma. A arquitetura está em
+> **Estado: tarefas feitas.** Cada uma está marcada com ✔ na lista do fim, com
+> o que foi feito. Os critérios ainda abertos (`[ ]`) são as conferências à mão
+> com várias máquinas de verdade (Linux, rede cortada, `netstat`). A arquitetura está em
 > [`../architecture/remote-orchestration.md`](../architecture/remote-orchestration.md),
 > as ameaças e os requisitos RS-xx em
 > [`../architecture/remote-security-threat-model.md`](../architecture/remote-security-threat-model.md)
@@ -467,11 +468,13 @@ sem ninguém ver (é seguro, porque nega, mas frustra). Mitigação futura: push
 
 **Critérios de aceitação**
 
-- [ ] Todo RS-xx tem um teste automatizado ou uma linha de "risco aceito" no
+- [x] Todo RS-xx tem um teste automatizado ou uma linha de "risco aceito" no
       modelo de ameaças.
 - [x] Os cenários de 4.6 da arquitetura têm teste ponta a ponta.
-- [ ] Cobertura das classes novas de Application e Server.Application ≥ a média
-      do projeto.
+- [x] Cobertura das classes novas de Application e Server.Application ≥ a média
+      do projeto. (Medido na T-36, em linhas: as da orquestração na
+      Application, 89,5% contra 86,8% do assembly, só com os testes dela; na
+      Server.Application, 96,3% contra 95,6%.)
 
 ---
 
@@ -516,7 +519,7 @@ Cada tarefa cabe num PR. "Pronto" é o critério objetivo de conclusão.
 | T-33 ✔ | "Preparar tudo": o `worktree.provision` com `Database` e `StartAgent`, na ordem do ADR-060 — a cópia validada e a produção aprovada antes do Git (negar não cria nada), o worktree, a cópia no ambiente, os comandos já com `{database}`, o Claude por último (`RemoteDatabaseCopy` e o `agent.start` reaproveitados). Checkpoints `database`/`prepare`/`worktree`/`commands`/`agent`; a falha diz a etapa ("Banco: …", "Claude: …") e o que já foi feito fica. O catálogo publica os perfis de cópia entre conexões liberadas (`CopyProfiles`); o "Preparar em…" ganhou "Copiar o banco" e "Abrir o Claude no fim" | E6 | T-23, T-30, T-32 | `PrepareEverythingTests`, `RemotePrepareViewModelTests`, `RemoteCatalogQueryTests` |
 | T-34 ✔ | O celular como controlador (E7): a aba Remoto (ligar o remoto, que registra o celular só como controlador e sem ferramentas; as máquinas que aceitam controle; o código do pareamento; as aprovações; os pedidos feitos daqui), a tela da máquina (os worktrees de lá: rodar comando, abrir o Claude, apagar), a da operação (estado, saída e aprovações ao vivo, cancelar, mais um prompt, parar o Claude) e o "Preparar em…" da tarefa (repositório, comandos, banco e Claude). A chave fica no cofre como no desktop, mas só assina depois de destravar (`UnlockedDeviceSigner`: `BiometricPrompt` com o PIN no Android, a tela do bloqueio no 9 e anteriores, `LAContext` no iOS; vale 30 s e tranca em segundo plano). As aprovações são lidas a cada 1,5 s em primeiro plano; a vencida some na hora, a nova avisa e conta na aba; a produção crítica pede o nome digitado. As palavras da tela "Operação" (`RemoteOperationTexts`) passaram para a Application, as mesmas no desktop | E7 | T-15 (e T-20, T-30 para os recursos) | `RemoteTests` (servidor falso que confere a assinatura com a chave registrada), `RemoteMachinesTests`, `RemoteControlTests`, `MobileLayerTests`; a aba aberta no emulador |
 | T-35 ✔ | Testes de caos ponta a ponta (`RemoteOperationsChaosTests.cs`), um por linha de 4.6 e o relógio adiantado: o envelope e o lote repetidos contam uma vez; o servidor entrega os eventos só até o primeiro buraco (antes, o controlador pulava o atrasado); a máquina desligada deixa o pedido expirar e não o roda ao voltar; sem servidor no meio do comando, o agente termina e conta tudo depois, e o controlador segue do `after`; o agente que caiu encerra como `Interrupted`; o processo morto de fora falha com o motivo; a aprovação sem resposta nega no prazo. O que faltava no agente: revogado (403 `device_revoked`), o `RemoteOperationScheduler` encerra o que roda, marca a sincronização e para; com o banco copiado de outro computador, não liga e grava o `device_changed` | E8 | T-15, T-23 | `RemoteOperationsChaosTests`, `RemoteOperationSchedulerTests`, `RemoteOperationTests` |
-| T-36 | Revisão de segurança RS-xx e `docs/remote.md` | E8 | todas | cada RS com teste ou risco aceito |
+| T-36 ✔ | Revisão de segurança: a seção 8 do modelo de ameaças dá o teste de cada RS, ou o risco aceito. O que a revisão achou e corrigiu: revogar um dispositivo não tirava a validade da chave dele nem o tirava dos executores (RS-06: a chave do revogado não vale mais no servidor, e o registro de cada minuto esquece o controlador que saiu da conta ou trocou de chave); a fila de um executor não tinha teto (RS-31: 20 abertas, `too_many_operations`); nada cobrava a validação do certificado (RS-02: `NoCertificateBypassTests`). Os textos de RS-08, RS-09, RS-29 e RS-31 passaram a dizer o que o código faz, e os riscos R-08 (cancelamento sem assinatura), R-09 (pareamento sem tela) e R-10 (log do proxy) entraram na seção 7. Guia do usuário `docs/remote.md`, a seção no README, o hub atrás do proxy no `sync-server.md` e a aba Remoto no `mobile.md`. As cinco divergências da seção 1.12 já estavam corrigidas no código | E8 | todas | `NoCertificateBypassTests`, `RemoteMachinesTests`, `RemotePairingTests`, `RemoteOperationTests`; para a cobertura, `RemotePresenceSchedulerTests` e os textos da operação em `RemoteControlTests` |
 
 **Caminho crítico até a v1** (dois computadores reais, desktop fechado no
 executor): T-01 → T-02 → T-03 → T-04 → T-05 → T-07 → T-08 → T-09 → T-10 → T-12 →
