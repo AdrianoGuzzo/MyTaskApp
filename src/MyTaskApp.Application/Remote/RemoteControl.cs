@@ -88,6 +88,26 @@ public static class RemoteRequests
     public static SendRemoteOperation Provision(Guid deviceId, EnvironmentProvisioningRequest request) =>
         new(deviceId, RemoteOperationKinds.WorktreeProvision, Payload(request), request.TaskId, [request.TaskId]);
 
+    /// <summary>Abre uma conversa do Claude no worktree de lá; o perfil é o id do catálogo, e lá se decide o que ele libera.</summary>
+    public static SendRemoteOperation StartAgent(Guid deviceId, RemoteEnvironmentView environment, string profileId, string prompt) =>
+        new(
+            deviceId,
+            RemoteOperationKinds.AgentStart,
+            Payload(new ClaudeCodeSessionRequest(environment.DevelopmentId, profileId, null, null, new PromptRequest(null, prompt.Trim()))),
+            environment.TaskId,
+            [environment.TaskId]);
+
+    /// <summary>Mais um prompt na mesma conversa: perfil, modelo e esforço são os dela.</summary>
+    public static SendRemoteOperation PromptAgent(Guid deviceId, RemoteEnvironmentView environment, Guid agentSessionId, string prompt) =>
+        new(
+            deviceId,
+            RemoteOperationKinds.AgentPrompt,
+            Payload(new PromptRequest(agentSessionId, prompt.Trim())),
+            environment.TaskId);
+
+    public static SendRemoteOperation StopAgent(Guid deviceId, RemoteEnvironmentView environment, Guid agentSessionId) =>
+        new(deviceId, RemoteOperationKinds.AgentStop, Payload(new AgentStopRequest(agentSessionId)), environment.TaskId);
+
     private static JsonElement Payload<T>(T payload) => JsonSerializer.SerializeToElement(payload, RemoteJson.Options);
 }
 

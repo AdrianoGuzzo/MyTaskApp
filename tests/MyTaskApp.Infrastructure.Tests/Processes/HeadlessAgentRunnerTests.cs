@@ -41,7 +41,7 @@ public sealed class HeadlessAgentRunnerTests : IDisposable
         var result = await Runner().RunAsync(
             Echo(),
             "primeira \"com aspas\" e 100%\nsegunda linha\n",
-            id => processId = id,
+            (id, _) => { processId = id; return Task.CompletedTask; },
             line =>
             {
                 lines.Add(line);
@@ -64,7 +64,7 @@ public sealed class HeadlessAgentRunnerTests : IDisposable
             : new HeadlessAgentLaunch("/usr/bin/env", [], _folder, Session(), []);
         var lines = new List<string>();
 
-        await Runner().RunAsync(launch, string.Empty, _ => { }, line => { lines.Add(line); return Task.CompletedTask; }, Ct);
+        await Runner().RunAsync(launch, string.Empty, (_, _) => Task.CompletedTask, line => { lines.Add(line); return Task.CompletedTask; }, Ct);
 
         lines.Should().NotContain(line => line.StartsWith(Probe, StringComparison.OrdinalIgnoreCase));
         lines.Should().Contain("MYTASKAPP_AGENT_APPROVAL_TOKEN=da-sessao");
@@ -78,7 +78,7 @@ public sealed class HeadlessAgentRunnerTests : IDisposable
         var file = Path.Combine(_folder, "x.settings.json");
         await File.WriteAllTextAsync(file, "{}", Ct);
 
-        var act = () => Runner().RunAsync(Echo([file]), "uma\nduas\n", _ => { }, _ => throw new InvalidOperationException("o diário caiu"), Ct);
+        var act = () => Runner().RunAsync(Echo([file]), "uma\nduas\n", (_, _) => Task.CompletedTask, _ => throw new InvalidOperationException("o diário caiu"), Ct);
 
         await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("o diário caiu");
         File.Exists(file).Should().BeFalse();
@@ -93,7 +93,7 @@ public sealed class HeadlessAgentRunnerTests : IDisposable
         using var cancel = CancellationTokenSource.CreateLinkedTokenSource(Ct);
         int? processId = null;
 
-        var run = Runner().RunAsync(launch, string.Empty, id => { processId = id; cancel.CancelAfter(TimeSpan.FromMilliseconds(300)); }, _ => Task.CompletedTask, cancel.Token);
+        var run = Runner().RunAsync(launch, string.Empty, (id, _) => { processId = id; cancel.CancelAfter(TimeSpan.FromMilliseconds(300)); return Task.CompletedTask; }, _ => Task.CompletedTask, cancel.Token);
         var result = await run.WaitAsync(TimeSpan.FromSeconds(20), Ct);
 
         result.Canceled.Should().BeTrue();

@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using MyTaskApp.Application.Agents;
 using MyTaskApp.Domain;
+using MyTaskApp.Infrastructure.Storage;
 
 namespace MyTaskApp.Infrastructure.Agents.ClaudeCode;
 
@@ -138,8 +139,9 @@ internal sealed partial class ClaudeCodeCliProvider
             arguments.AddRange(["--permission-prompts", "none"]);
         }
 
+        // Os dados do app (o banco, o cofre, os logs) entram sempre, além dos que o pedido trouxer.
         var settings = Path.Combine(directory, $"{stamp}.settings.json");
-        Write(settings, HeadlessSettingsJson(request.DeniedPaths));
+        Write(settings, HeadlessSettingsJson([.. request.DeniedPaths, .. AppDataPaths()]));
         files.Add(settings);
         arguments.AddRange(["--settings", settings]);
 
@@ -156,6 +158,8 @@ internal sealed partial class ClaudeCodeCliProvider
     }
 
     public IReadOnlyList<HeadlessAgentEvent> ReadEvents(string line) => ClaudeStreamJsonReader.Read(line);
+
+    public string Summarize(string tool, JsonElement input) => ClaudeStreamJsonReader.Summarize(tool, input);
 
     /// <summary>
     /// A última trava daqui: nenhum argumento que pule as permissões ou troque o
@@ -232,6 +236,9 @@ internal sealed partial class ClaudeCodeCliProvider
 
         return "/" + (full.StartsWith('/') ? full : "/" + full);
     }
+
+    private static IEnumerable<string> AppDataPaths() =>
+        new[] { UserDataLocation.Current.Root, UserDataLocation.Current.LocalRoot }.Distinct(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>O <c>x.y.z</c> do começo da versão, para comparar; <c>null</c> se não houver.</summary>
     internal static Version? ParseComparableVersion(string? version)

@@ -86,7 +86,7 @@ public sealed class ApprovalClaudeTests : IAsyncDisposable
         await _host.Services.GetRequiredService<IHeadlessAgentRunner>().RunAsync(
             launch,
             prompt,
-            _ => { },
+            (_, _) => Task.CompletedTask,
             line =>
             {
                 lines.Add(line);

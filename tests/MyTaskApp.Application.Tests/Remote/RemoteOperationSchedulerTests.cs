@@ -167,6 +167,9 @@ public sealed class RemoteOperationSchedulerTests
         nameof(CommandRunExecutor) => RemoteOperationKinds.CommandRun,
         nameof(WorktreeProvisionExecutor) => RemoteOperationKinds.WorktreeProvision,
         nameof(WorktreeRemoveExecutor) => RemoteOperationKinds.WorktreeRemove,
+        nameof(AgentStartExecutor) => RemoteOperationKinds.AgentStart,
+        nameof(AgentPromptExecutor) => RemoteOperationKinds.AgentPrompt,
+        nameof(AgentStopExecutor) => RemoteOperationKinds.AgentStop,
         _ => throw new InvalidOperationException($"Diga aqui o tipo de {executor.Name}."),
     };
 

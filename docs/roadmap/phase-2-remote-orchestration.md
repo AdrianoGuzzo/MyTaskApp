@@ -363,13 +363,13 @@ mínima conferida no `DetectAsync`; recusa com mensagem clara). Prompt injection
 
 **Critérios de aceitação**
 
-- [ ] Do celular ou de A, mandar um prompt para a tarefa em B; ver a resposta e
-      as ferramentas usadas ao vivo.
-- [ ] Uma ferramenta fora do perfil aparece para aprovação; negar faz o Claude
-      seguir sem ela.
-- [ ] Um segundo prompt continua a mesma conversa (`--resume`).
-- [ ] "Parar" encerra o processo e a sessão fica `Stopped`.
-- [ ] Em nenhum caminho o processo recebe `--dangerously-skip-permissions`.
+- [x] Do celular ou de A, mandar um prompt para a tarefa em B; ver a resposta e
+      as ferramentas usadas ao vivo. (De A; o celular vem na E7.)
+- [x] Uma ferramenta fora do perfil aparece para aprovação; negar faz o Claude
+      seguir sem ela. (Com o Claude falso; com o real, falta o login: T-26.)
+- [x] Um segundo prompt continua a mesma conversa (`--resume`).
+- [x] "Parar" encerra o processo e a sessão fica `Stopped`.
+- [x] Em nenhum caminho o processo recebe `--dangerously-skip-permissions`.
 
 ---
 
@@ -510,7 +510,7 @@ Cada tarefa cabe num PR. "Pronto" é o critério objetivo de conclusão.
 | T-27 ✔ | `IHeadlessAgentProvider` (o `ClaudeCodeCliProvider`, no mesmo singleton do interativo) + `ClaudeStreamJsonReader` + `IHeadlessAgentRunner` (prompt pelo stdin, linhas em ordem, ambiente sem `PG*`, tokens do GitHub e `MYTASKAPP_*` alheios, a árvore encerrada ao cancelar, os arquivos da linha apagados no fim). `-p --restricted`, `--tools`/`--allowedTools`/`--disallowedTools` do perfil, `--strict-mcp-config`, a aprovação pelo MCP ou `--permission-prompts none`, `--settings` com o `permissions.deny` gerado, tetos de turnos e de custo; nada que pule as permissões passa | E5 | T-26 | `ClaudeStreamJsonReaderTests`, `ClaudeCodeHeadlessLaunchTests`, `HeadlessAgentRunnerTests` |
 | T-28 ✔ | `AgentSession.Mode` (Interativo/Headless), `Stopped` (só a pedido, só sem terminal), `RemoteOperationId` (a operação do prompt atual) e `PromptStartedAt` (a folga da reconciliação conta do prompt, não da conversa); entre um prompt e outro a sessão fica `Exited` e `ContinueWith` a reabre; migration `HeadlessAgentSessions` | E5 | — | `AgentSessionTests`, `AgentSessionPersistenceTests` |
 | T-29 ✔ | MCP de aprovação no agente (`ApprovalMcpServer`: Kestrel no loopback numa porta livre, uma ferramenta `approval`, o segredo por sessão no ambiente do Claude e só o hash aqui; loopback, `Host`, sem `Origin` e segredo de sessão aberta antes do SDK; falha ao decidir é negação; o contrato `{tool_name, input, tool_use_id}` → `allow` com a entrada como veio, ou `deny` com o motivo) + perfis locais (`read`, `edit`, `edit-test`, no catálogo; Bash nunca liberado inteiro, `git push`, `curl` e afins recusados sem pergunta). Conferido no 2.1.310 sem chamar o modelo: o `--restricted` mantém o Bash que o `--tools` nomeia, e o Claude conecta no MCP do agente (`status: connected`) | E5 | T-19, T-27 | `ApprovalMcpServerTests`; opt-in `ApprovalClaudeTests` (a conexão, verde; o Bash negado pede o Claude logado). A espera de 10 min vem da aprovação do executor (T-30) |
-| T-30 | `agent.start` / `agent.prompt` / `agent.stop` + painel no desktop | E5 | T-27, T-28, T-29 | critérios da E5 |
+| T-30 ✔ | `agent.start` / `agent.prompt` / `agent.stop` (`AgentSessionExecutors.cs`): o `HeadlessAgentPlanner` confere antes de abrir processo (o ambiente pronto e com a pasta, o perfil, a conversa sem terminal da mesma tarefa, outro agente aberto no worktree); o `HeadlessPromptRunner` abre o canal do MCP de aprovação, monta a linha pelo provider com os tetos locais (`HeadlessAgentLimits`: 40 turnos, US$ 3; o pedido só baixa), traduz o `stream-json` em `AgentMessage`/`ToolUse`/`Warning` mascarados e a ferramenta fora do perfil em `ApprovalKind.ToolUse` (sem resposta, nega; "permitir sempre nesta sessão" fica na memória da conversa); o `agent.stop` marca `Stopped` antes de encerrar o processo que outra operação abriu (`HeadlessConversations`). A sessão guarda perfil, modelo e esforço (migration `HeadlessSessionChoices`); o id da conversa e o "ainda recebe prompts" vão no primeiro evento e no resultado. Desktop: na tela "Controlar", a seção Claude Code (perfil do catálogo, prompt, "Mandar na conversa", "Nova conversa", "Parar o Claude"); as aprovações aparecem na lista que já existia | E5 | T-27, T-28, T-29 | `AgentSessionExecutorsTests`, `RemoteControlTests`, `RemoteControlViewModelTests`. Com o Claude de verdade, depende do login (T-26) |
 | T-31 | Gate e recuperação de cópia entre processos | E6 | T-07 | a janela de Bancos não interrompe a cópia do agente |
 | T-32 | `database.copy` com aprovação de produção | E6 | T-19, T-31 | critérios da E6 |
 | T-33 | "Preparar tudo" (worktree + banco + comandos + Claude) | E6 | T-23, T-30, T-32 | checkpoints visíveis; falha diz a etapa |

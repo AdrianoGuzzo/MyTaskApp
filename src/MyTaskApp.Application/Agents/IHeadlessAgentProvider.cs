@@ -40,6 +40,9 @@ public interface IHeadlessAgentProvider
     /// tipo novo de uma versão mais nova) volta vazia: nunca lança.
     /// </summary>
     IReadOnlyList<HeadlessAgentEvent> ReadEvents(string line);
+
+    /// <summary>A entrada de uma ferramenta em uma linha, para a pessoa decidir (o comando, o arquivo).</summary>
+    string Summarize(string tool, System.Text.Json.JsonElement input);
 }
 
 /// <summary>
@@ -118,13 +121,13 @@ public sealed record HeadlessResult(
 /// <summary>Roda um prompt: escreve o texto no stdin, entrega cada linha da saída e espera o fim.</summary>
 public interface IHeadlessAgentRunner
 {
-    /// <param name="started">O id do processo, assim que ele existe: a sessão grava para a reconciliação.</param>
+    /// <param name="started">O id do processo e quando ele começou, assim que ele existe: a sessão grava para a reconciliação.</param>
     /// <param name="line">Cada linha do stdout, na ordem, uma de cada vez.</param>
     /// <param name="cancellationToken">Cancelado: a árvore do processo é encerrada.</param>
     Task<HeadlessRunResult> RunAsync(
         HeadlessAgentLaunch launch,
         string prompt,
-        Action<int> started,
+        Func<int, DateTimeOffset, Task> started,
         Func<string, Task> line,
         CancellationToken cancellationToken);
 }

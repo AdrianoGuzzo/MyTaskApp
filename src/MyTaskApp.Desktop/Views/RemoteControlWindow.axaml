@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
+        xmlns:contracts="using:MyTaskApp.Remote.Contracts"
         x:Class="MyTaskApp.Desktop.Views.RemoteControlWindow"
         x:DataType="vm:RemoteControlViewModel"
         x:Name="Root"
@@ -187,6 +188,48 @@
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
+
+            <!-- O Claude de lá, sem terminal (E5): o perfil é escolhido aqui e decidido lá. -->
+            <StackPanel x:Name="AgentPanel" Spacing="6" Margin="0,8,0,0" IsVisible="{Binding HasAgentProfiles}">
+              <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                <TextBlock Classes="sectionTitle" VerticalAlignment="Center" Text="Claude Code" />
+                <Button Grid.Column="1" x:Name="NewConversationButton" Content="Nova conversa"
+                        IsVisible="{Binding HasConversation}"
+                        Command="{Binding NewConversationCommand}" />
+                <Button Grid.Column="2" x:Name="StopAgentButton" Content="Parar o Claude"
+                        ToolTip.Tip="Encerra a resposta em andamento lá. A conversa não recebe mais prompts."
+                        IsVisible="{Binding HasConversation}"
+                        Command="{Binding StopAgentCommand}" />
+              </Grid>
+              <ComboBox x:Name="AgentProfileBox"
+                        HorizontalAlignment="Stretch"
+                        IsVisible="{Binding HasNoConversation}"
+                        ItemsSource="{Binding AgentProfiles}"
+                        SelectedItem="{Binding SelectedProfile}">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="contracts:CatalogAgentProfile">
+                    <StackPanel Spacing="1">
+                      <TextBlock Text="{Binding Name}" />
+                      <TextBlock Classes="meta" Text="{Binding Description}" />
+                    </StackPanel>
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+              <TextBox x:Name="AgentPromptBox"
+                       AcceptsReturn="True"
+                       TextWrapping="Wrap"
+                       MinHeight="72"
+                       PlaceholderText="O que o Claude deve fazer no worktree"
+                       Text="{Binding AgentPrompt}" />
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                <TextBlock Classes="meta" VerticalAlignment="Center"
+                           Text="As ferramentas fora do perfil chegam aqui para você permitir ou negar. Sem resposta, são negadas." />
+                <Button Grid.Column="1" x:Name="SendPromptButton" Classes="accent"
+                        Content="{Binding PromptButtonText}"
+                        IsEnabled="{Binding !IsBusy}"
+                        Command="{Binding SendPromptCommand}" />
+              </Grid>
+            </StackPanel>
           </StackPanel>
         </Grid>
       </Border>

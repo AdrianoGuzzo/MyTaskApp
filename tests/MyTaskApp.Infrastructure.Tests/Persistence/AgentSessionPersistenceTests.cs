@@ -91,7 +91,7 @@ public class AgentSessionPersistenceTests
         var task = await SeedTaskAsync(db);
         var conversation = Guid.CreateVersion7();
         var operation = Guid.CreateVersion7();
-        var session = AgentSession.CreateHeadless(task.Id, task.Developments[0].Id, "claude-code", Claude, Worktree, conversation, operation, Now);
+        var session = AgentSession.CreateHeadless(task.Id, task.Developments[0].Id, "claude-code", Claude, Worktree, conversation, operation, "edit-test", "opus", "high", Now);
         session.MarkRunning(777, Now.AddSeconds(1));
         session.MarkStopped(Now.AddMinutes(2));
 
@@ -106,6 +106,7 @@ public class AgentSessionPersistenceTests
         stored.ExternalSessionId.Should().Be(conversation.ToString());
         stored.Status.Should().Be(AgentSessionStatus.Stopped);
         stored.EndedAt.Should().Be(Now.AddMinutes(2));
+        (stored.HeadlessProfileId, stored.Model, stored.Effort).Should().Be(("edit-test", "opus", "high"));
     }
 
     [Fact]

@@ -262,8 +262,27 @@ public static class DependencyInjection
         services.AddScoped<RemoteProvisionPlanner>();
         services.AddSingleton<IRemoteOperationExecutor, WorktreeRemoveExecutor>();
         services.AddScoped<RemoteRemovalPlanner>();
+
+        // O Claude sem terminal (T-30, ADR-089): o MCP de aprovação é do agente;
+        // sem ele, o que perguntaria é negado.
+        services.AddSingleton<IRemoteOperationExecutor, AgentStartExecutor>();
+        services.AddSingleton<IRemoteOperationExecutor, AgentPromptExecutor>();
+        services.AddSingleton<IRemoteOperationExecutor, AgentStopExecutor>();
+        services.TryAddSingleton(HeadlessAgentLimits.Default);
+        services.TryAddSingleton<HeadlessConversations>();
+        services.TryAddSingleton<HeadlessPromptRunner>();
+        services.AddScoped<HeadlessAgentPlanner>();
+        services.AddScoped<HeadlessSessionStore>();
         services.AddScoped<RecordRemoteOperationHandler>();
-        services.TryAddSingleton(new SupportedRemoteOperations([RemoteOperationKinds.EnvironmentInspect, RemoteOperationKinds.CommandRun, RemoteOperationKinds.WorktreeProvision, RemoteOperationKinds.WorktreeRemove]));
+        services.TryAddSingleton(new SupportedRemoteOperations([
+            RemoteOperationKinds.EnvironmentInspect,
+            RemoteOperationKinds.CommandRun,
+            RemoteOperationKinds.WorktreeProvision,
+            RemoteOperationKinds.WorktreeRemove,
+            RemoteOperationKinds.AgentStart,
+            RemoteOperationKinds.AgentPrompt,
+            RemoteOperationKinds.AgentStop,
+        ]));
         services.AddScoped<ConsultationLauncher>();
         services.AddScoped<ConsultationTargetResolver>();
         services.AddScoped<ConsultationFolders>();

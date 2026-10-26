@@ -113,7 +113,7 @@ public sealed class ClaudeHeadlessTests : IDisposable
         var result = await new HeadlessAgentRunner(NullLogger<HeadlessAgentRunner>.Instance).RunAsync(
             launch,
             prompt,
-            _ => { },
+            (_, _) => Task.CompletedTask,
             line =>
             {
                 lines.Add(line);

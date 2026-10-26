@@ -105,8 +105,8 @@ public sealed class RemoteOperationsEndToEndTests(PostgresFixture postgres) : IA
             notebook,
             phone,
             phoneKey,
-            RemoteOperationKinds.AgentStop,
-            JsonSerializer.SerializeToElement(new AgentStopRequest(Guid.CreateVersion7()), RemoteJson.Options));
+            RemoteOperationKinds.DatabaseCopy,
+            JsonSerializer.SerializeToElement(new DatabaseCopyRequest(Guid.CreateVersion7(), null, Guid.CreateVersion7(), "eco_dev", null, null), RemoteJson.Options));
 
         await notebook.Services.GetRequiredService<RemoteOperationDispatcher>().PollAsync(Ct);
         var operation = await FinishedAsync(phone, request.OperationId);

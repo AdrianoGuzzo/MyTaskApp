@@ -288,7 +288,7 @@ public class AgentSessionTests
     private static readonly Guid FirstOperation = Guid.CreateVersion7(Now);
 
     private static AgentSession NewHeadless() =>
-        AgentSession.CreateHeadless(TaskId, DevelopmentId, "claude-code", Claude, Worktree, Conversation, FirstOperation, Now);
+        AgentSession.CreateHeadless(TaskId, DevelopmentId, "claude-code", Claude, Worktree, Conversation, FirstOperation, "edit", "haiku", null, Now);
 
     /// <summary>Sem terminal (ADR-089): a conversa nasce com o id e a operação que a pediu.</summary>
     [Fact]
@@ -301,6 +301,9 @@ public class AgentSessionTests
         session.RemoteOperationId.Should().Be(FirstOperation);
         session.PromptStartedAt.Should().Be(Now);
         session.Status.Should().Be(AgentSessionStatus.Starting);
+        session.HeadlessProfileId.Should().Be("edit");
+        session.Model.Should().Be("haiku");
+        session.Effort.Should().BeNull();
         NewSession().Mode.Should().Be(AgentSessionMode.Interactive);
         NewSession().RemoteOperationId.Should().BeNull();
     }
@@ -371,6 +374,6 @@ public class AgentSessionTests
 
     [Fact]
     public void AHeadlessSession_NeedsTheConversationAndTheOperation() =>
-        FluentActions.Invoking(() => AgentSession.CreateHeadless(TaskId, DevelopmentId, "claude-code", Claude, Worktree, Guid.Empty, FirstOperation, Now))
+        FluentActions.Invoking(() => AgentSession.CreateHeadless(TaskId, DevelopmentId, "claude-code", Claude, Worktree, Guid.Empty, FirstOperation, "edit", null, null, Now))
             .Should().Throw<DomainException>();
 }

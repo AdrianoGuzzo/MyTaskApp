@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Text;
+using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
@@ -94,6 +95,9 @@ public sealed partial class RemoteControlViewModel : ObservableObject
     private readonly ILogger<RemoteControlViewModel> _logger;
     private readonly StringBuilder _lines = new();
 
+    /// <summary>A conversa de cada ambiente (pelo id do ambiente), lida dos eventos das operações do Claude.</summary>
+    private readonly Dictionary<Guid, Guid> _conversations = [];
+
     private long _after;
     private int _ticks;
     private bool _ticking;
@@ -112,9 +116,18 @@ public sealed partial class RemoteControlViewModel : ObservableObject
 
     public ObservableCollection<RemoteApprovalItem> Approvals { get; } = [];
 
+    /// <summary>Os perfis do Claude que a outra máquina oferece; o que cada um libera é decidido lá.</summary>
+    public ObservableCollection<CatalogAgentProfile> AgentProfiles { get; } = [];
+
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasSelection))]
+    [NotifyPropertyChangedFor(nameof(HasSelection), nameof(Conversation), nameof(HasConversation), nameof(HasNoConversation), nameof(PromptButtonText))]
     private RemoteEnvironmentItem? _selectedEnvironment;
+
+    [ObservableProperty]
+    private CatalogAgentProfile? _selectedProfile;
+
+    [ObservableProperty]
+    private string _agentPrompt = string.Empty;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasOperation), nameof(IsRunning), nameof(CanCancel), nameof(OperationState))]
@@ -142,6 +155,18 @@ public sealed partial class RemoteControlViewModel : ObservableObject
     public bool HasSelection => SelectedEnvironment is not null;
 
     public bool HasApprovals => Approvals.Count > 0;
+
+    public bool HasAgentProfiles => AgentProfiles.Count > 0;
+
+    /// <summary>A conversa do Claude aberta neste ambiente por esta tela: o próximo prompt vai nela.</summary>
+    public Guid? Conversation => SelectedEnvironment is { } environment && _conversations.TryGetValue(environment.View.DevelopmentId, out var id) ? id : null;
+
+    public bool HasConversation => Conversation is not null;
+
+    /// <summary>Sem conversa, escolhe-se o perfil; com ela, o perfil é o dela.</summary>
+    public bool HasNoConversation => !HasConversation;
+
+    public string PromptButtonText => HasConversation ? "Mandar na conversa" : "Abrir conversa";
 
     public bool HasOperation => Operation is not null;
 
@@ -180,6 +205,15 @@ public sealed partial class RemoteControlViewModel : ObservableObject
                 cancellationToken);
 
             var selected = SelectedEnvironment?.View.DevelopmentId;
+            var profile = SelectedProfile?.Id;
+            AgentProfiles.Clear();
+
+            foreach (var item in view.Catalog.AgentProfiles)
+            {
+                AgentProfiles.Add(item);
+            }
+
+            SelectedProfile = AgentProfiles.FirstOrDefault(item => item.Id == profile) ?? AgentProfiles.FirstOrDefault();
             Environments.Clear();
 
             foreach (var environment in view.Environments)
@@ -192,6 +226,7 @@ public sealed partial class RemoteControlViewModel : ObservableObject
         catch (SyncApiException exception) when (exception.Kind == SyncFailureKind.NotFound)
         {
             Environments.Clear();
+            AgentProfiles.Clear();
             SelectedEnvironment = null;
             ErrorMessage = $"{machine.Nickname} ainda não publicou o que dá para pedir a ela. Ela precisa estar com o controle remoto ligado e aceitando controle.";
         }
@@ -207,6 +242,7 @@ public sealed partial class RemoteControlViewModel : ObservableObject
 
         OnPropertyChanged(nameof(HasEnvironments));
         OnPropertyChanged(nameof(HasNoEnvironments));
+        OnPropertyChanged(nameof(HasAgentProfiles));
         await LoadApprovalsAsync(cancellationToken);
     }
 
@@ -267,6 +303,84 @@ public sealed partial class RemoteControlViewModel : ObservableObject
     [RelayCommand]
     public Task DenyAsync(RemoteApprovalItem approval) => AnswerAsync(approval, ApprovalDecision.Deny);
 
+    /// <summary>
+    /// O prompt ao Claude de lá: abre a conversa do ambiente, ou continua a que
+    /// esta tela abriu. O que ele pode usar é o perfil, decidido lá.
+    /// </summary>
+    [RelayCommand]
+    public async Task SendPromptAsync()
+    {
+        if (Machine is not { } machine || SelectedEnvironment is not { } environment)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(AgentPrompt))
+        {
+            ErrorMessage = "Escreva o que o Claude deve fazer.";
+            return;
+        }
+
+        SendRemoteOperation request;
+
+        if (Conversation is { } conversation)
+        {
+            request = RemoteRequests.PromptAgent(machine.DeviceId, environment.View, conversation, AgentPrompt);
+        }
+        else if (SelectedProfile is { } profile)
+        {
+            request = RemoteRequests.StartAgent(machine.DeviceId, environment.View, profile.Id, AgentPrompt);
+        }
+        else
+        {
+            ErrorMessage = "Escolha o perfil do Claude.";
+            return;
+        }
+
+        if (await SendAsync(request, $"Claude em {machine.Nickname} · {environment.Title}"))
+        {
+            AgentPrompt = string.Empty;
+        }
+    }
+
+    /// <summary>
+    /// Para o Claude de lá: encerra o prompt em andamento, se houver, e a
+    /// conversa não recebe mais nada. A tela segue o prompt até ele acabar.
+    /// </summary>
+    [RelayCommand]
+    public async Task StopAgentAsync()
+    {
+        if (Machine is not { } machine || SelectedEnvironment is not { } environment || Conversation is not { } conversation)
+        {
+            return;
+        }
+
+        ErrorMessage = null;
+
+        try
+        {
+            await _runner.RunAsync<SendRemoteOperationHandler, RemoteOperationView>(
+                (handler, token) => handler.HandleAsync(RemoteRequests.StopAgent(machine.DeviceId, environment.View, conversation), token),
+                CancellationToken.None);
+            Forget(environment.View.DevelopmentId);
+            StatusMessage = "Pedido para parar o Claude enviado.";
+        }
+        catch (Exception exception) when (exception is DomainException or SyncApiException)
+        {
+            ErrorMessage = exception.Message;
+        }
+    }
+
+    /// <summary>O próximo prompt abre outra conversa; a de antes fica lá, sem processo entre um prompt e outro.</summary>
+    [RelayCommand]
+    public void NewConversation()
+    {
+        if (SelectedEnvironment is { } environment)
+        {
+            Forget(environment.View.DevelopmentId);
+        }
+    }
+
     /// <summary>Acompanha uma operação já pedida (o "Preparar em…" da aba Desenvolvimento): a saída começa do zero.</summary>
     public void Watch(RemoteOperationView operation, string title)
     {
@@ -315,7 +429,7 @@ public sealed partial class RemoteControlViewModel : ObservableObject
         }
     }
 
-    private async Task SendAsync(SendRemoteOperation request, string title)
+    private async Task<bool> SendAsync(SendRemoteOperation request, string title)
     {
         ErrorMessage = null;
         StatusMessage = null;
@@ -328,6 +442,7 @@ public sealed partial class RemoteControlViewModel : ObservableObject
                 CancellationToken.None);
 
             Watch(operation, title);
+            return true;
         }
         catch (Exception exception) when (exception is DomainException or SyncApiException)
         {
@@ -342,6 +457,8 @@ public sealed partial class RemoteControlViewModel : ObservableObject
         {
             IsBusy = false;
         }
+
+        return false;
     }
 
     private async Task ReadProgressAsync(CancellationToken cancellationToken)
@@ -358,6 +475,7 @@ public sealed partial class RemoteControlViewModel : ObservableObject
                 cancellationToken);
 
             Append(progress.Events);
+            RememberConversation(progress.Operation, progress.Events);
             _after = progress.After;
             Operation = progress.Operation;
 
@@ -385,6 +503,8 @@ public sealed partial class RemoteControlViewModel : ObservableObject
             var line = item.Kind switch
             {
                 RemoteEventKind.Output => item.Text,
+                RemoteEventKind.AgentMessage => $"Claude: {item.Text}",
+                RemoteEventKind.ToolUse => $"» usou {item.Text}",
                 RemoteEventKind.Warning => $"» {item.Text}",
                 RemoteEventKind.ApprovalRequested => $"» Esperando aprovação: {item.Text}",
                 RemoteEventKind.ApprovalResolved => $"» {item.Text}",
@@ -408,6 +528,52 @@ public sealed partial class RemoteControlViewModel : ObservableObject
         {
             Output = _lines.ToString();
         }
+    }
+
+    /// <summary>
+    /// O id da conversa vem no primeiro evento do prompt e no resultado, com o
+    /// "ainda recebe prompts": parada ou que nem abriu, o próximo abre outra.
+    /// </summary>
+    private void RememberConversation(RemoteOperationView operation, IReadOnlyList<RemoteOperationEvent> events)
+    {
+        if (operation.Kind is not (RemoteOperationKinds.AgentStart or RemoteOperationKinds.AgentPrompt)
+            || Environments.FirstOrDefault(item => item.View.TaskId == operation.TaskId) is not { } environment)
+        {
+            return;
+        }
+
+        foreach (var item in events)
+        {
+            if (item.Data is { ValueKind: JsonValueKind.Object } data
+                && data.TryGetProperty("agentSessionId", out var id)
+                && id.TryGetGuid(out var conversation))
+            {
+                if (data.TryGetProperty("canContinue", out var canContinue) && canContinue.ValueKind == JsonValueKind.False)
+                {
+                    _conversations.Remove(environment.View.DevelopmentId);
+                }
+                else
+                {
+                    _conversations[environment.View.DevelopmentId] = conversation;
+                }
+            }
+        }
+
+        NotifyConversation();
+    }
+
+    private void Forget(Guid developmentId)
+    {
+        _conversations.Remove(developmentId);
+        NotifyConversation();
+    }
+
+    private void NotifyConversation()
+    {
+        OnPropertyChanged(nameof(Conversation));
+        OnPropertyChanged(nameof(HasConversation));
+        OnPropertyChanged(nameof(HasNoConversation));
+        OnPropertyChanged(nameof(PromptButtonText));
     }
 
     private async Task LoadApprovalsAsync(CancellationToken cancellationToken)

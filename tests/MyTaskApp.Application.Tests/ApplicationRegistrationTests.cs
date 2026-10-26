@@ -24,6 +24,7 @@ using MyTaskApp.Application.StickyNotes;
 using MyTaskApp.Application.Tags;
 using MyTaskApp.Application.Tests.Fakes;
 using MyTaskApp.Application.TimeTracking;
+using NSubstitute;
 
 namespace MyTaskApp.Application.Tests;
 
@@ -64,6 +65,8 @@ public class ApplicationRegistrationTests
             .AddSingleton<ITerminalWindowManager>(new FakeTerminalWindowManager())
             .AddSingleton<ITerminalLauncher>(new FakeTerminalLauncher(new FakeAgentProcessTracker(), DateTimeOffset.UnixEpoch))
             .AddSingleton<IAgentCliProvider>(new FakeAgentCliProvider())
+            .AddSingleton(Substitute.For<IHeadlessAgentProvider>())
+            .AddSingleton(Substitute.For<IHeadlessAgentRunner>())
             .AddSingleton<IAgentSettingsStore>(new FakeAgentSettingsStore())
             .AddSingleton<IAgentAlertSoundStore>(new FakeAgentAlertSoundStore())
             .AddSingleton<ISoundLibrary>(new FakeSoundLibrary())
@@ -201,6 +204,8 @@ public class ApplicationRegistrationTests
     [InlineData(typeof(MyTaskApp.Application.Remote.AnswerApprovalHandler))]
     [InlineData(typeof(MyTaskApp.Application.Remote.SendRemoteOperationHandler))]
     [InlineData(typeof(MyTaskApp.Application.Remote.RemoteRemovalPlanner))]
+    [InlineData(typeof(MyTaskApp.Application.Remote.HeadlessAgentPlanner))]
+    [InlineData(typeof(MyTaskApp.Application.Remote.HeadlessSessionStore))]
     [InlineData(typeof(MyTaskApp.Application.Remote.RemoteProvisionPlanner))]
     [InlineData(typeof(MyTaskApp.Application.Development.ProvisionEnvironmentHandler))]
     [InlineData(typeof(MyTaskApp.Application.Remote.GetRemoteControlHandler))]

@@ -84,6 +84,27 @@ public sealed class RemoteControlTests
     }
 
     [Fact]
+    public void TheClaudeRequests_CarryOnlyIdsAndThePrompt()
+    {
+        var environment = new RemoteEnvironmentView(Guid.CreateVersion7(), Guid.CreateVersion7(), "Validar", "feature/1", []);
+        var conversation = Guid.CreateVersion7();
+
+        var start = RemoteRequests.StartAgent(Notebook, environment, "edit-test", "  Rode os testes  ");
+        var prompt = RemoteRequests.PromptAgent(Notebook, environment, conversation, "E agora?");
+        var stop = RemoteRequests.StopAgent(Notebook, environment, conversation);
+
+        start.Kind.Should().Be(RemoteOperationKinds.AgentStart);
+        start.RequiredEntities.Should().Equal([environment.TaskId]);
+        start.Payload.Deserialize<ClaudeCodeSessionRequest>(RemoteJson.Options)!.Should().BeEquivalentTo(
+            new ClaudeCodeSessionRequest(environment.DevelopmentId, "edit-test", null, null, new PromptRequest(null, "Rode os testes")));
+        prompt.Kind.Should().Be(RemoteOperationKinds.AgentPrompt);
+        prompt.Payload.Deserialize<PromptRequest>(RemoteJson.Options).Should().Be(new PromptRequest(conversation, "E agora?"));
+        stop.Kind.Should().Be(RemoteOperationKinds.AgentStop);
+        stop.Payload.Deserialize<AgentStopRequest>(RemoteJson.Options).Should().Be(new AgentStopRequest(conversation));
+        new[] { start.TaskId, prompt.TaskId, stop.TaskId }.Should().AllBeEquivalentTo(environment.TaskId);
+    }
+
+    [Fact]
     public async Task TheProgressReadsEveryNewEvent_AndTheStatusAfterThem()
     {
         var id = Guid.CreateVersion7();

@@ -36,7 +36,7 @@ internal sealed class HeadlessAgentRunner(ILogger<HeadlessAgentRunner> logger) :
     public async Task<HeadlessRunResult> RunAsync(
         HeadlessAgentLaunch launch,
         string prompt,
-        Action<int> started,
+        Func<int, DateTimeOffset, Task> started,
         Func<string, Task> line,
         CancellationToken cancellationToken)
     {
@@ -56,7 +56,7 @@ internal sealed class HeadlessAgentRunner(ILogger<HeadlessAgentRunner> logger) :
     private async Task<HeadlessRunResult> RunCoreAsync(
         HeadlessAgentLaunch launch,
         string prompt,
-        Action<int> started,
+        Func<int, DateTimeOffset, Task> started,
         Func<string, Task> line,
         CancellationToken cancellationToken)
     {
@@ -104,7 +104,7 @@ internal sealed class HeadlessAgentRunner(ILogger<HeadlessAgentRunner> logger) :
                 exception);
         }
 
-        started(process.Id);
+        await started(process.Id, new DateTimeOffset(process.StartTime.ToUniversalTime(), TimeSpan.Zero));
 
         var error = new CapturedOutput(MaxErrorChars);
         var readError = ProcessOutputPump.PumpAsync(process.StandardError, error, isError: true, output: null);

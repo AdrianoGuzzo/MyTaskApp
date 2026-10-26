@@ -41,6 +41,10 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Effort")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
                     b.Property<long?>("EndedAt")
                         .HasColumnType("INTEGER");
 
@@ -52,6 +56,10 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("HeadlessProfileId")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("HookTokenHash")
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
@@ -61,6 +69,10 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
 
                     b.Property<int>("Mode")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("Model")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
 
                     b.Property<int?>("ProcessId")
                         .HasColumnType("INTEGER");

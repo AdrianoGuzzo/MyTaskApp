@@ -110,6 +110,8 @@ public sealed class AgentSession
 
     public const int MaxExternalSessionIdLength = 128;
 
+    public const int MaxChoiceLength = 32;
+
     /// <summary>SHA-256 em hexadecimal.</summary>
     public const int HookTokenHashLength = 64;
 
@@ -155,6 +157,17 @@ public sealed class AgentSession
     /// conta daqui.
     /// </summary>
     public DateTimeOffset? PromptStartedAt { get; private set; }
+
+    /// <summary>
+    /// O perfil do agente sem terminal (ADR-089), escolhido no primeiro prompt:
+    /// os seguintes continuam com o mesmo, como o modelo e o esforço.
+    /// </summary>
+    public string? HeadlessProfileId { get; private set; }
+
+    /// <summary>O modelo do agente sem terminal (ADR-040); <c>null</c> é o padrão dele.</summary>
+    public string? Model { get; private set; }
+
+    public string? Effort { get; private set; }
 
     /// <summary>A sessão sem terminal pode receber mais um prompt: o último acabou e ninguém a parou.</summary>
     public bool CanContinue => IsHeadless && Status == AgentSessionStatus.Exited;
@@ -264,6 +277,9 @@ public sealed class AgentSession
         string workingDirectory,
         Guid conversationId,
         Guid remoteOperationId,
+        string profileId,
+        string? model,
+        string? effort,
         DateTimeOffset startedAt)
     {
         if (conversationId == Guid.Empty || remoteOperationId == Guid.Empty)
@@ -273,6 +289,9 @@ public sealed class AgentSession
 
         var session = Create(taskItemId, taskDevelopmentId, providerId, command, workingDirectory, startedAt);
         session.Mode = AgentSessionMode.Headless;
+        session.HeadlessProfileId = Required(profileId, MaxChoiceLength, "Informe o perfil da sessão.");
+        session.Model = Truncate(model, MaxChoiceLength);
+        session.Effort = Truncate(effort, MaxChoiceLength);
         session.ExternalSessionId = conversationId.ToString();
         session.RemoteOperationId = remoteOperationId;
         session.PromptStartedAt = startedAt;

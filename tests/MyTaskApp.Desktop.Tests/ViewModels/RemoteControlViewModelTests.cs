@@ -26,11 +26,15 @@ public class RemoteControlViewModelTests
 
     private static readonly Guid OperationId = Guid.CreateVersion7();
 
+    private static readonly CatalogAgentProfile Read = new("read", "Ler", "Lê o código, sem editar nem rodar nada.");
+
+    private static readonly CatalogAgentProfile EditAndTest = new("edit-test", "Editar e testar", "Edita no worktree e roda build e testes.");
+
     private readonly FakeUseCaseRunner _runner = new();
 
     public RemoteControlViewModelTests()
     {
-        _runner.ResultsByHandler[typeof(GetRemoteControlHandler)] = new RemoteControlView(new AgentCatalog("h", [], [Tests], [], []), [Environment]);
+        _runner.ResultsByHandler[typeof(GetRemoteControlHandler)] = new RemoteControlView(new AgentCatalog("h", [], [Tests], [], [Read, EditAndTest]), [Environment]);
         _runner.ResultsByHandler[typeof(GetPendingApprovalsHandler)] = (IReadOnlyList<ApprovalView>)[];
         _runner.ResultsByHandler[typeof(SendRemoteOperationHandler)] = Operation(RemoteOperationStatus.Queued);
     }
@@ -186,6 +190,86 @@ public class RemoteControlViewModelTests
     }
 
     [AvaloniaFact]
+    public async Task TheClaudeThere_OpensAConversation_AndTheNextPromptGoesInIt()
+    {
+        var conversation = Guid.CreateVersion7();
+        var viewModel = ViewModel();
+        await viewModel.OpenAsync(Notebook, Ct);
+
+        viewModel.AgentProfiles.Should().Equal(Read, EditAndTest);
+        viewModel.SelectedProfile.Should().Be(Read);
+        viewModel.PromptButtonText.Should().Be("Abrir conversa");
+
+        await viewModel.SendPromptCommand.ExecuteAsync(null);
+        viewModel.ErrorMessage.Should().Be("Escreva o que o Claude deve fazer.");
+        _runner.Invoked.Should().NotContain(typeof(SendRemoteOperationHandler));
+
+        _runner.ResultsByHandler[typeof(SendRemoteOperationHandler)] = Operation(RemoteOperationStatus.Queued, kind: RemoteOperationKinds.AgentStart);
+        viewModel.SelectedProfile = EditAndTest;
+        viewModel.AgentPrompt = "Rode os testes e corrija o que falhar";
+        await viewModel.SendPromptCommand.ExecuteAsync(null);
+
+        viewModel.ErrorMessage.Should().BeNull();
+        viewModel.AgentPrompt.Should().BeEmpty();
+        viewModel.OperationTitle.Should().Be("Claude em Notebook · Validar antimicrobianos");
+
+        _runner.Enqueue<GetRemoteOperationProgressHandler>(
+            new RemoteOperationProgress(
+                Operation(RemoteOperationStatus.Running, kind: RemoteOperationKinds.AgentStart),
+                [
+                    Event(1, RemoteEventKind.StepStarted, "Claude em feature/ECO-12 · perfil Editar e testar.", Conversation(conversation, true)),
+                    Event(2, RemoteEventKind.AgentMessage, "Vou rodar os testes."),
+                    Event(3, RemoteEventKind.ToolUse, "Bash: dotnet test"),
+                ],
+                3));
+        await viewModel.TickAsync(Ct);
+
+        viewModel.Output.Should().Be("» Claude em feature/ECO-12 · perfil Editar e testar.\nClaude: Vou rodar os testes.\n» usou Bash: dotnet test\n");
+        viewModel.Conversation.Should().Be(conversation, "já dá para parar o primeiro prompt");
+        viewModel.PromptButtonText.Should().Be("Mandar na conversa");
+        viewModel.HasNoConversation.Should().BeFalse("o perfil é o da conversa");
+    }
+
+    [AvaloniaFact]
+    public async Task AConversationThatCannotContinue_IsForgotten_AndStopForgetsItToo()
+    {
+        var conversation = Guid.CreateVersion7();
+        var viewModel = ViewModel();
+        await viewModel.OpenAsync(Notebook, Ct);
+        _runner.ResultsByHandler[typeof(SendRemoteOperationHandler)] = Operation(RemoteOperationStatus.Queued, kind: RemoteOperationKinds.AgentStart);
+        viewModel.AgentPrompt = "oi";
+        await viewModel.SendPromptCommand.ExecuteAsync(null);
+
+        _runner.Enqueue<GetRemoteOperationProgressHandler>(
+            new RemoteOperationProgress(
+                Operation(RemoteOperationStatus.Running, kind: RemoteOperationKinds.AgentStart),
+                [Event(1, RemoteEventKind.StepStarted, "Claude…", Conversation(conversation, true))],
+                1),
+            new RemoteOperationProgress(
+                Operation(RemoteOperationStatus.Failed, "O Claude não abriu.", RemoteOperationKinds.AgentStart),
+                [Event(2, RemoteEventKind.Result, "O Claude não abriu.", Conversation(conversation, false))],
+                2));
+        await viewModel.TickAsync(Ct);
+        viewModel.HasConversation.Should().BeTrue();
+        await viewModel.TickAsync(Ct);
+        viewModel.HasConversation.Should().BeFalse("o próximo prompt abre outra");
+
+        _runner.Enqueue<GetRemoteOperationProgressHandler>(
+            new RemoteOperationProgress(
+                Operation(RemoteOperationStatus.Succeeded, "Respondeu.", RemoteOperationKinds.AgentStart),
+                [Event(3, RemoteEventKind.Result, "Respondeu.", Conversation(conversation, true))],
+                3));
+        viewModel.AgentPrompt = "de novo";
+        await viewModel.SendPromptCommand.ExecuteAsync(null);
+        await viewModel.TickAsync(Ct);
+        viewModel.HasConversation.Should().BeTrue();
+
+        await viewModel.StopAgentCommand.ExecuteAsync(null);
+        viewModel.StatusMessage.Should().Be("Pedido para parar o Claude enviado.");
+        viewModel.HasConversation.Should().BeFalse();
+    }
+
+    [AvaloniaFact]
     public async Task TheWindowOpensWithTheScreen()
     {
         var viewModel = ViewModel();
@@ -198,11 +282,14 @@ public class RemoteControlViewModelTests
         window.Close();
     }
 
-    private static RemoteOperationView Operation(RemoteOperationStatus status, string? summary = null) =>
-        new(OperationId, Guid.CreateVersion7(), Notebook.DeviceId, Guid.CreateVersion7(), RemoteOperationKinds.CommandRun, Environment.TaskId, status, Now, Now.AddMinutes(5), Now, null, null, summary, 0);
+    private static RemoteOperationView Operation(RemoteOperationStatus status, string? summary = null, string kind = RemoteOperationKinds.CommandRun) =>
+        new(OperationId, Guid.CreateVersion7(), Notebook.DeviceId, Guid.CreateVersion7(), kind, Environment.TaskId, status, Now, Now.AddMinutes(5), Now, null, null, summary, 0);
 
-    private static RemoteOperationEvent Event(long seq, RemoteEventKind kind, string text) =>
-        new(OperationId, seq, Now, kind, "stdout", Text: text);
+    private static RemoteOperationEvent Event(long seq, RemoteEventKind kind, string text, System.Text.Json.JsonElement? data = null) =>
+        new(OperationId, seq, Now, kind, "stdout", Text: text, Data: data);
+
+    private static System.Text.Json.JsonElement Conversation(Guid id, bool canContinue) =>
+        System.Text.Json.JsonSerializer.SerializeToElement(new { agentSessionId = id, canContinue });
 
     private static ApprovalView Approval(string? hint) =>
         new(
