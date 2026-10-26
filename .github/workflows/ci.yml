@@ -169,6 +169,9 @@ jobs:
   # O publish self-contained é o que o instalador empacota. Quebrar aqui
   # significa release quebrada, e é barato descobrir antes da tag.
   publish-smoke:
+    # O nome sem o "agent" da matriz: a regra da master exige o check por este
+    # nome exato, e com o agente nele o check exigido nunca aparece.
+    name: publish-smoke (${{ matrix.os }}, ${{ matrix.rid }}, ${{ matrix.binary }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
