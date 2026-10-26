@@ -52,6 +52,7 @@
                     <Button Text="Concluir" Command="{Binding CompleteCommand}" IsVisible="{Binding CanComplete}" Margin="0,0,8,8" />
                     <Button Text="Reabrir" Command="{Binding ReopenCommand}" IsVisible="{Binding CanReopen}" Margin="0,0,8,8" />
                     <Button Text="Cancelar tarefa" Style="{StaticResource Secondary}" Command="{Binding CancelTaskCommand}" IsVisible="{Binding CanCancel}" Margin="0,0,8,8" />
+                    <Button Text="Preparar em…" Style="{StaticResource Secondary}" Command="{Binding PrepareRemotelyCommand}" IsVisible="{Binding CanPrepareRemotely}" Margin="0,0,8,8" />
                     <Button Text="Arquivar" Style="{StaticResource Secondary}" Command="{Binding ArchiveCommand}" IsVisible="{Binding CanArchive}" Margin="0,0,8,8" />
                     <Button Text="Restaurar do arquivo" Command="{Binding RestoreFromArchiveCommand}" IsVisible="{Binding CanRestoreFromArchive}" Margin="0,0,8,8" />
                     <Button Text="Restaurar da lixeira" Command="{Binding RestoreFromTrashCommand}" IsVisible="{Binding CanRestoreFromTrash}" Margin="0,0,8,8" />

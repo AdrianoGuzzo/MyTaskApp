@@ -34,12 +34,32 @@ internal sealed class RecordingNavigator : INavigator
 
     public Task OpenAccountAsync() => Record("account");
 
+    public Task OpenMachineAsync(Guid deviceId) => Record($"machine/{deviceId}");
+
+    public Task OpenRemotePrepareAsync(Guid taskId) => Record($"prepare/{taskId}");
+
+    public Task OpenOperationAsync(Guid operationId, Guid deviceId) => Record($"operation/{operationId}");
+
     public Task BackAsync() => Record("back");
 
     private Task Record(string visit)
     {
         Visits.Add(visit);
         return Task.CompletedTask;
+    }
+}
+
+/// <summary>A biometria do aparelho: responde o que o teste mandou e conta as vezes que perguntou.</summary>
+internal sealed class FakeUnlock : IDeviceUnlock
+{
+    public UnlockResult Answer { get; set; } = UnlockResult.Unlocked;
+
+    public int Asked { get; private set; }
+
+    public Task<UnlockResult> UnlockAsync(string reason, CancellationToken cancellationToken)
+    {
+        Asked++;
+        return Task.FromResult(Answer);
     }
 }
 

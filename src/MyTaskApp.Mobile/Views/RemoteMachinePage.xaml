@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:MyTaskApp.Mobile.Core.ViewModels;assembly=MyTaskApp.Mobile.Core"
+             x:Class="MyTaskApp.Mobile.Views.RemoteMachinePage"
+             x:DataType="vm:RemoteMachineViewModel"
+             Title="{Binding Title}">
+
+    <ContentPage.ToolbarItems>
+        <ToolbarItem Text="Ver o ambiente" Command="{Binding InspectCommand}" />
+    </ContentPage.ToolbarItems>
+
+    <RefreshView Command="{Binding RefreshCommand}" IsRefreshing="{Binding IsRefreshing}">
+        <ScrollView>
+            <VerticalStackLayout Padding="16" Spacing="8">
+
+                <Label Text="{Binding LoadError}" Style="{StaticResource Error}" IsVisible="{Binding LoadError, Converter={StaticResource HasValue}}" />
+
+                <Label Text="Worktrees prontos" Style="{StaticResource Section}" />
+                <Label Text="Nenhum por enquanto. Para criar um, abra a tarefa e toque em &quot;Preparar em…&quot;."
+                       Style="{StaticResource Muted}"
+                       IsVisible="{Binding HasEnvironments, Converter={StaticResource Not}}" />
+
+                <VerticalStackLayout BindableLayout.ItemsSource="{Binding Environments}" Spacing="8">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="vm:EnvironmentLine">
+                            <Border Style="{StaticResource Card}">
+                                <VerticalStackLayout Spacing="4">
+                                    <Label Text="{Binding Title}" FontAttributes="Bold" />
+                                    <Label Text="{Binding Detail}" Style="{StaticResource Muted}" />
+                                    <FlexLayout Wrap="Wrap" JustifyContent="Start" Margin="0,4,0,0">
+                                        <Button Text="Rodar comando"
+                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:RemoteMachineViewModel}}, x:DataType=vm:RemoteMachineViewModel, Path=RunCommandCommand}"
+                                                CommandParameter="{Binding .}"
+                                                IsVisible="{Binding HasCommands}"
+                                                Margin="0,0,8,8" />
+                                        <Button Text="Claude"
+                                                Style="{StaticResource Secondary}"
+                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:RemoteMachineViewModel}}, x:DataType=vm:RemoteMachineViewModel, Path=StartAgentCommand}"
+                                                CommandParameter="{Binding .}"
+                                                Margin="0,0,8,8" />
+                                        <Button Text="Apagar"
+                                                Style="{StaticResource Destructive}"
+                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:RemoteMachineViewModel}}, x:DataType=vm:RemoteMachineViewModel, Path=RemoveCommand}"
+                                                CommandParameter="{Binding .}"
+                                                Margin="0,0,8,8" />
+                                    </FlexLayout>
+                                </VerticalStackLayout>
+                            </Border>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </VerticalStackLayout>
+
+            </VerticalStackLayout>
+        </ScrollView>
+    </RefreshView>
+</ContentPage>

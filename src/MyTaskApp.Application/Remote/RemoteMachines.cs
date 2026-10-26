@@ -345,6 +345,55 @@ public sealed class RegisterThisMachineHandler(
     }
 }
 
+public sealed record RegisterThisController;
+
+/// <summary>
+/// O celular se apresenta ao servidor (E7): só controlador, com a chave dele e
+/// sem ferramenta nenhuma. Sem o registro, o servidor não aceita o pareamento
+/// nem os pedidos assinados. Com o remoto desligado, não faz nada.
+/// </summary>
+public sealed class RegisterThisControllerHandler(
+    IRemoteSettingsStore settings,
+    IRemoteApi remote,
+    IDeviceSigner signer,
+    IDeviceIdentity identity,
+    ILogger<RegisterThisControllerHandler> logger)
+{
+    public async Task<RemoteAvailability> HandleAsync(RegisterThisController command, CancellationToken cancellationToken = default)
+    {
+        if (!(await settings.GetAsync(cancellationToken)).Enabled)
+        {
+            return RemoteAvailability.Off;
+        }
+
+        var capabilities = new DeviceCapabilities(
+            RemoteLimits.ProtocolVersion,
+            [],
+            OperatingSystem.IsAndroid() ? "android" : OperatingSystem.IsIOS() ? "ios" : "outro",
+            ToolStatus.Missing,
+            ToolStatus.Missing,
+            ToolStatus.Missing,
+            ToolStatus.Missing,
+            // O servidor pede de 1 a 16, mesmo de quem não executa nada.
+            MaxConcurrentOperations: 1,
+            CatalogHash: string.Empty);
+
+        try
+        {
+            await remote.RegisterAsync(
+                new DeviceRegistration(identity.DeviceId, DeviceRoles.Controller, await signer.GetPublicKeyAsync(cancellationToken), capabilities),
+                cancellationToken);
+            return RemoteAvailability.Ready;
+        }
+        catch (SyncApiException exception)
+        {
+            var (availability, _) = RemoteProblems.Of(exception);
+            logger.LogWarning("RemoteControllerRegistrationFailed {Kind} {Code}", exception.Kind, exception.Code);
+            return availability;
+        }
+    }
+}
+
 /// <summary>O código que este controlador mostra, para a pessoa digitar na outra máquina.</summary>
 public sealed record PairingCodeView(Guid PairingId, Guid ExecutorDeviceId, string Code, DateTimeOffset ExpiresAt);
 

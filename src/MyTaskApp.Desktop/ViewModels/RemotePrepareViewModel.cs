@@ -263,17 +263,8 @@ public sealed partial class RemotePrepareViewModel(
     }
 
     /// <summary>"Produção LGPD (ECO Produção → Local, produção: pede aprovação)": quem pede vê antes o que vai acontecer lá.</summary>
-    private static string CopyProfileName(CatalogCopyProfile profile, Dictionary<Guid, CatalogDatabase> databases)
-    {
-        var source = databases.GetValueOrDefault(profile.SourceConnectionId);
-        var target = databases.GetValueOrDefault(profile.TargetConnectionId);
-        var production = source?.Environment is nameof(Domain.DatabaseOperations.DatabaseEnvironment.Production)
-            or nameof(Domain.DatabaseOperations.DatabaseEnvironment.CriticalProduction)
-            ? ", produção: pede aprovação"
-            : string.Empty;
-
-        return $"{profile.Name} ({source?.Name ?? "?"} → {target?.Name ?? "?"}{production})";
-    }
+    private static string CopyProfileName(CatalogCopyProfile profile, Dictionary<Guid, CatalogDatabase> databases) =>
+        RemoteOperationTexts.CopyProfile(profile, databases);
 
     /// <summary>O pedido do formulário; nulo, com o motivo em <see cref="ErrorMessage"/>, quando falta algo.</summary>
     internal EnvironmentProvisioningRequest? CreateRequest(RemoteRepositoryOption repository)

@@ -99,16 +99,90 @@ public static class RemoteRequests
 
     /// <summary>Mais um prompt na mesma conversa: perfil, modelo e esforço são os dela.</summary>
     public static SendRemoteOperation PromptAgent(Guid deviceId, RemoteEnvironmentView environment, Guid agentSessionId, string prompt) =>
-        new(
-            deviceId,
-            RemoteOperationKinds.AgentPrompt,
-            Payload(new PromptRequest(agentSessionId, prompt.Trim())),
-            environment.TaskId);
+        PromptAgent(deviceId, environment.TaskId, agentSessionId, prompt);
+
+    /// <summary>A mesma, de quem só tem a tarefa da operação anterior (o celular, na tela da operação).</summary>
+    public static SendRemoteOperation PromptAgent(Guid deviceId, Guid? taskId, Guid agentSessionId, string prompt) =>
+        new(deviceId, RemoteOperationKinds.AgentPrompt, Payload(new PromptRequest(agentSessionId, prompt.Trim())), taskId);
 
     public static SendRemoteOperation StopAgent(Guid deviceId, RemoteEnvironmentView environment, Guid agentSessionId) =>
-        new(deviceId, RemoteOperationKinds.AgentStop, Payload(new AgentStopRequest(agentSessionId)), environment.TaskId);
+        StopAgent(deviceId, environment.TaskId, agentSessionId);
+
+    public static SendRemoteOperation StopAgent(Guid deviceId, Guid? taskId, Guid agentSessionId) =>
+        new(deviceId, RemoteOperationKinds.AgentStop, Payload(new AgentStopRequest(agentSessionId)), taskId);
 
     private static JsonElement Payload<T>(T payload) => JsonSerializer.SerializeToElement(payload, RemoteJson.Options);
+}
+
+/// <summary>
+/// As palavras da tela "Operação", as mesmas no desktop e no celular: o estado
+/// de uma operação e a linha de cada evento.
+/// </summary>
+public static class RemoteOperationTexts
+{
+    public static string Status(RemoteOperationView operation) => operation.Status switch
+    {
+        RemoteOperationStatus.Queued => "Na fila, esperando a outra máquina",
+        RemoteOperationStatus.Dispatched => "Entregue à outra máquina",
+        RemoteOperationStatus.Accepted => "Aceito, começando",
+        RemoteOperationStatus.Running when operation.CancelRequestedAt is not null => "Cancelando…",
+        RemoteOperationStatus.Running => "Rodando",
+        RemoteOperationStatus.WaitingApproval => "Esperando aprovação",
+        RemoteOperationStatus.Succeeded => "Terminou bem",
+        RemoteOperationStatus.Failed => "Falhou",
+        RemoteOperationStatus.Canceled => "Cancelado",
+        RemoteOperationStatus.Rejected => "Recusado pela outra máquina",
+        RemoteOperationStatus.Expired => "Expirou sem a outra máquina pegar",
+        RemoteOperationStatus.Interrupted => "Interrompido na outra máquina",
+        _ => operation.Status.ToString(),
+    };
+
+    /// <summary>O perfil de cópia como a lista mostra: de onde para onde, e se a origem é produção.</summary>
+    public static string CopyProfile(CatalogCopyProfile profile, IReadOnlyDictionary<Guid, CatalogDatabase> databases)
+    {
+        var source = databases.GetValueOrDefault(profile.SourceConnectionId);
+        var target = databases.GetValueOrDefault(profile.TargetConnectionId);
+        var production = source?.Environment is nameof(Domain.DatabaseOperations.DatabaseEnvironment.Production)
+            or nameof(Domain.DatabaseOperations.DatabaseEnvironment.CriticalProduction)
+            ? ", produção: pede aprovação"
+            : string.Empty;
+
+        return $"{profile.Name} ({source?.Name ?? "?"} → {target?.Name ?? "?"}{production})";
+    }
+
+    /// <summary>A linha que o evento vira na saída; nula para os que não aparecem (estado, resultado).</summary>
+    public static string? Line(RemoteOperationEvent item) => item.Kind switch
+    {
+        RemoteEventKind.Output => item.Text,
+        RemoteEventKind.AgentMessage => $"Claude: {item.Text}",
+        RemoteEventKind.ToolUse => $"» usou {item.Text}",
+        RemoteEventKind.Warning => $"» {item.Text}",
+        RemoteEventKind.ApprovalRequested => $"» Esperando aprovação: {item.Text}",
+        RemoteEventKind.ApprovalResolved => $"» {item.Text}",
+        RemoteEventKind.StepStarted when item.Text is not null => $"» {item.Text}",
+        _ => null,
+    };
+
+    /// <summary>
+    /// A conversa do Claude que a operação abriu ou continuou, no último evento
+    /// que diz: o id dela e se aceita mais um prompt (sem o "canContinue", aceita).
+    /// </summary>
+    public static (Guid AgentSessionId, bool CanContinue)? Conversation(IEnumerable<RemoteOperationEvent> events)
+    {
+        (Guid, bool)? found = null;
+
+        foreach (var item in events)
+        {
+            if (item.Data is { ValueKind: JsonValueKind.Object } data
+                && data.TryGetProperty("agentSessionId", out var id)
+                && id.TryGetGuid(out var sessionId))
+            {
+                found = (sessionId, !(data.TryGetProperty("canContinue", out var more) && more.ValueKind == JsonValueKind.False));
+            }
+        }
+
+        return found;
+    }
 }
 
 /// <summary>Como vai uma operação pedida daqui, a partir do evento <paramref name="After"/>.</summary>

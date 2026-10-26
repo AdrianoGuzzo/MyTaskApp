@@ -337,4 +337,42 @@ public sealed class RemoteMachinesTests : IDisposable
         public Task<PairingInfo> ApprovePairingAsync(Guid pairingId, PairingApproval approval, CancellationToken cancellationToken) =>
             inner.ApprovePairingAsync(pairingId, approval, cancellationToken);
     }
+
+    private RegisterThisControllerHandler RegisterController() =>
+        new(_settings, _server, _signer, _identity, NullLogger<RegisterThisControllerHandler>.Instance);
+
+    [Fact]
+    public async Task ThePhone_RegistersAsControllerOnly_WithItsKeyAndNoTools()
+    {
+        _settings.Settings = new RemoteSettings(true, AcceptControl: false);
+
+        (await RegisterController().HandleAsync(new RegisterThisController(), Ct)).Should().Be(RemoteAvailability.Ready);
+
+        var registration = _server.Registrations.Should().ContainSingle().Subject;
+        registration.Roles.Should().Be(DeviceRoles.Controller);
+        registration.Key.Should().Be(_signer.PublicKey);
+        registration.Capabilities.Operations.Should().BeEmpty();
+        registration.Capabilities.Git.Should().Be(ToolStatus.Missing);
+        registration.Capabilities.MaxConcurrentOperations.Should().Be(1, "o servidor pede de 1 a 16");
+        _signer.Signatures.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task ThePhone_WithTheRemoteOff_RegistersNothing()
+    {
+        _settings.Settings = new RemoteSettings(false, false);
+
+        (await RegisterController().HandleAsync(new RegisterThisController(), Ct)).Should().Be(RemoteAvailability.Off);
+
+        _server.Registrations.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ThePhone_ALoginWithoutTheRemoteScope_SaysToSignInAgain()
+    {
+        _settings.Settings = new RemoteSettings(true, AcceptControl: false);
+        _server.Failure = new SyncApiException(SyncFailureKind.Forbidden, "Sem escopo.");
+
+        (await RegisterController().HandleAsync(new RegisterThisController(), Ct)).Should().Be(RemoteAvailability.NeedsRemoteLogin);
+    }
 }

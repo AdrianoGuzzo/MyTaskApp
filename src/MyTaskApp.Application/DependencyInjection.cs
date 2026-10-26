@@ -232,6 +232,7 @@ public static class DependencyInjection
         services.AddScoped<ApplyAgentAutostartHandler>();
         services.AddScoped<GetMachinesHandler>();
         services.AddScoped<RegisterThisMachineHandler>();
+        services.AddScoped<RegisterThisControllerHandler>();
         services.AddScoped<RequestPairingHandler>();
         services.AddScoped<GetPairingStatusHandler>();
         services.AddScoped<RevokeTrustedControllerHandler>();

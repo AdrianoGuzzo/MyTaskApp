@@ -500,19 +500,7 @@ public sealed partial class RemoteControlViewModel : ObservableObject
     {
         foreach (var item in events)
         {
-            var line = item.Kind switch
-            {
-                RemoteEventKind.Output => item.Text,
-                RemoteEventKind.AgentMessage => $"Claude: {item.Text}",
-                RemoteEventKind.ToolUse => $"» usou {item.Text}",
-                RemoteEventKind.Warning => $"» {item.Text}",
-                RemoteEventKind.ApprovalRequested => $"» Esperando aprovação: {item.Text}",
-                RemoteEventKind.ApprovalResolved => $"» {item.Text}",
-                RemoteEventKind.StepStarted when item.Text is not null => $"» {item.Text}",
-                _ => null,
-            };
-
-            if (line is not null)
+            if (RemoteOperationTexts.Line(item) is { } line)
             {
                 _lines.Append(line).Append('\n');
             }
@@ -636,20 +624,5 @@ public sealed partial class RemoteControlViewModel : ObservableObject
     private string MachineName(Guid deviceId) =>
         Machine is { } machine && machine.DeviceId == deviceId ? machine.Nickname : "Outra máquina";
 
-    internal static string StatusText(RemoteOperationView operation) => operation.Status switch
-    {
-        RemoteOperationStatus.Queued => "Na fila, esperando a outra máquina",
-        RemoteOperationStatus.Dispatched => "Entregue à outra máquina",
-        RemoteOperationStatus.Accepted => "Aceito, começando",
-        RemoteOperationStatus.Running when operation.CancelRequestedAt is not null => "Cancelando…",
-        RemoteOperationStatus.Running => "Rodando",
-        RemoteOperationStatus.WaitingApproval => "Esperando aprovação",
-        RemoteOperationStatus.Succeeded => "Terminou bem",
-        RemoteOperationStatus.Failed => "Falhou",
-        RemoteOperationStatus.Canceled => "Cancelado",
-        RemoteOperationStatus.Rejected => "Recusado pela outra máquina",
-        RemoteOperationStatus.Expired => "Expirou sem a outra máquina pegar",
-        RemoteOperationStatus.Interrupted => "Interrompido na outra máquina",
-        _ => operation.Status.ToString(),
-    };
+    internal static string StatusText(RemoteOperationView operation) => RemoteOperationTexts.Status(operation);
 }

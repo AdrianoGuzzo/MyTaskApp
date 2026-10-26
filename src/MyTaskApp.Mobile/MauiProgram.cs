@@ -47,6 +47,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<MauiThemeService>();
         builder.Services.AddSingleton<IThemeService>(provider => provider.GetRequiredService<MauiThemeService>());
         builder.Services.AddSingleton<IPreferenceStore, MauiPreferences>();
+        builder.Services.AddSingleton<IDeviceUnlock, MauiDeviceUnlock>();
 
         builder.Services.AddMobileCore(new MobileHostOptions
         {
@@ -62,11 +63,15 @@ public static class MauiProgram
         builder.Services.AddSingleton<TaskListPage>();
         builder.Services.AddSingleton<HistoryPage>();
         builder.Services.AddSingleton<AccountPage>();
+        builder.Services.AddSingleton<RemotePage>();
         builder.Services.AddTransient<TaskDetailPage>();
         builder.Services.AddTransient<TaskFormPage>();
         builder.Services.AddTransient<FiltersPage>();
         builder.Services.AddTransient<ConnectPage>();
         builder.Services.AddTransient<SyncServerPage>();
+        builder.Services.AddTransient<RemoteMachinePage>();
+        builder.Services.AddTransient<RemoteOperationPage>();
+        builder.Services.AddTransient<RemotePreparePage>();
 
         return builder.Build();
     }

@@ -138,4 +138,30 @@ public sealed class RemoteControlTests
 
     internal static RemoteOperationView View(Guid id, RemoteOperationStatus status, string? summary = null) =>
         new(id, Guid.CreateVersion7(), Notebook, Guid.CreateVersion7(), RemoteOperationKinds.CommandRun, null, status, Now, Now.AddMinutes(5), Now, null, null, summary, 0);
+
+    [Fact]
+    public void TheConversation_IsTheLastOneTheEventsMention_AndStoppedOnesDoNotTakePrompts()
+    {
+        var first = Guid.CreateVersion7();
+        var second = Guid.CreateVersion7();
+        var operation = Guid.CreateVersion7();
+
+        RemoteOperationEvent Event(long seq, object? data) =>
+            new(operation, seq, Now, RemoteEventKind.Result, Data: data is null ? null : JsonSerializer.SerializeToElement(data));
+
+        RemoteOperationTexts.Conversation([Event(1, null)]).Should().BeNull();
+        RemoteOperationTexts.Conversation([Event(1, new { agentSessionId = first })]).Should().Be((first, true));
+        RemoteOperationTexts.Conversation([Event(1, new { agentSessionId = first }), Event(2, new { agentSessionId = second, canContinue = false })])
+            .Should().Be((second, false));
+    }
+
+    [Fact]
+    public void TheEventLines_AreTheSameOnTheDesktopAndThePhone()
+    {
+        var operation = Guid.CreateVersion7();
+
+        RemoteOperationTexts.Line(new(operation, 1, Now, RemoteEventKind.Output, Text: "ok")).Should().Be("ok");
+        RemoteOperationTexts.Line(new(operation, 2, Now, RemoteEventKind.AgentMessage, Text: "Pronto")).Should().Be("Claude: Pronto");
+        RemoteOperationTexts.Line(new(operation, 3, Now, RemoteEventKind.StatusChanged, Status: RemoteOperationStatus.Running)).Should().BeNull();
+    }
 }
