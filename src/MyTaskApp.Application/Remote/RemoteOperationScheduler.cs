@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Sync;
 using MyTaskApp.Remote.Contracts;
 
 namespace MyTaskApp.Application.Remote;
@@ -66,14 +67,24 @@ public sealed class NoRemoteHub : IRemoteHub
 /// A primeira volta com "Aceitar controle" ligado recupera o diário antes de
 /// buscar (4.5): o que rodava quando o agente caiu é encerrado, e o que não
 /// foi contado ao servidor, contado.
+/// <para>
+/// Dois casos de 4.6 param o laço: o banco que veio de outro computador (o
+/// mesmo do <c>device_changed</c> do sync) não liga, e este dispositivo
+/// revogado na conta para de aceitar e encerra o que roda, com o aviso na
+/// sincronização desta máquina.
+/// </para>
 /// </remarks>
 public sealed class RemoteOperationScheduler(
     RemoteOperationDispatcher dispatcher,
     IRemoteHub hub,
     IUseCaseRunner runner,
+    IDeviceIdentity identity,
     TimeProvider timeProvider,
     ILogger<RemoteOperationScheduler> logger) : IAsyncDisposable, IDisposable
 {
+    /// <summary>O código que a sincronização mostra quando o banco veio de outro computador.</summary>
+    public const string DeviceChangedCode = "device_changed";
+
     /// <summary>Quanto o agente espera as operações em curso ao fechar.</summary>
     public static readonly TimeSpan ShutdownGrace = TimeSpan.FromSeconds(5);
 
@@ -156,15 +167,66 @@ public sealed class RemoteOperationScheduler(
             return;
         }
 
-        await hub.ConnectAsync(cancellationToken);
-
-        if (!_recovered)
+        if (!await MayRunAsync(cancellationToken))
         {
-            await dispatcher.RecoverAsync(cancellationToken);
-            _recovered = true;
+            if (hub.IsConnected)
+            {
+                await hub.DisconnectAsync(cancellationToken);
+            }
+
+            return;
         }
 
-        await dispatcher.PollAsync(cancellationToken);
+        await hub.ConnectAsync(cancellationToken);
+
+        try
+        {
+            if (!_recovered)
+            {
+                await dispatcher.RecoverAsync(cancellationToken);
+                _recovered = true;
+            }
+
+            await dispatcher.PollAsync(cancellationToken);
+        }
+        catch (SyncApiException exception) when (exception.Kind == SyncFailureKind.DeviceRevoked)
+        {
+            // Revogado na conta: o servidor já não aceita nada deste dispositivo, e o que roda aqui para.
+            logger.LogWarning("RemoteDeviceRevoked {Running}", dispatcher.RunningCount);
+            await dispatcher.StopAsync(ShutdownGrace);
+            await runner.RunAsync<ISyncLocalStore>((store, token) => store.SetStateAsync(SyncLinkState.DeviceRevoked, token), cancellationToken);
+            await hub.DisconnectAsync(cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// O banco é desta máquina e o dispositivo não foi revogado. Um banco
+    /// copiado de outro computador traz a conta dele: aceitar pedidos aqui
+    /// seria executar em nome de outra máquina.
+    /// </summary>
+    private async Task<bool> MayRunAsync(CancellationToken cancellationToken)
+    {
+        var sync = await runner.RunAsync<ISyncLocalStore, SyncLocalState>((store, token) => store.ReadAsync(token), cancellationToken);
+
+        if (sync.State == SyncLinkState.DeviceRevoked)
+        {
+            return false;
+        }
+
+        if (sync.LinkedDeviceId is { } linked && linked != identity.DeviceId)
+        {
+            if (sync.LastErrorCode != DeviceChangedCode)
+            {
+                logger.LogWarning("RemoteAgentDeviceChanged");
+                await runner.RunAsync<ISyncLocalStore>(
+                    (store, token) => store.RecordErrorAsync(DeviceChangedCode, "Este banco veio de outro computador. Conecte a conta de novo.", token),
+                    cancellationToken);
+            }
+
+            return false;
+        }
+
+        return true;
     }
 
     private void OnAvailable(Guid operationId)

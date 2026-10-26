@@ -172,6 +172,12 @@ internal sealed class SyncedPhone : IAsyncDisposable
 
         public Task OpenAccountAsync() => Task.CompletedTask;
 
+        public Task OpenMachineAsync(Guid deviceId) => Task.CompletedTask;
+
+        public Task OpenRemotePrepareAsync(Guid taskId) => Task.CompletedTask;
+
+        public Task OpenOperationAsync(Guid operationId, Guid deviceId) => Task.CompletedTask;
+
         public Task BackAsync() => Task.CompletedTask;
     }
 

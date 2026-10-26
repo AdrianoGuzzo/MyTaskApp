@@ -450,8 +450,16 @@ internal sealed class FakeOperationQueue : IRemoteOperationsApi
         new(id, Guid.Empty, Guid.Empty, Guid.Empty, RemoteOperationKinds.EnvironmentInspect, null, Operations[id].Status,
             DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, null, null, null, 0);
 
+    /// <summary>Este dispositivo foi revogado na conta: todo pedido volta 403 <c>device_revoked</c>.</summary>
+    public bool Revoked { get; set; }
+
     private void ThrowIfOffline()
     {
+        if (Revoked)
+        {
+            throw new SyncApiException(SyncFailureKind.DeviceRevoked, "Este dispositivo foi revogado.", "device_revoked");
+        }
+
         if (Offline)
         {
             throw new SyncApiException(SyncFailureKind.Transient, "Sem conexão com o servidor de sincronização.");

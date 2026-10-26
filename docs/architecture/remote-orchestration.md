@@ -981,7 +981,7 @@ sequenceDiagram
 | Situação | Comportamento |
 |---|---|
 | **Mensagem duplicada** (hub ou REST) | o hub só avisa; a operação é buscada por id; aceite e eventos são idempotentes |
-| **Eventos fora de ordem** | o servidor guarda por `(OperationId, Seq)` e entrega aos controladores ordenado; buraco no `Seq` = ainda não chegou |
+| **Eventos fora de ordem** | o servidor guarda por `(OperationId, Seq)` e entrega aos controladores ordenado, e só até o primeiro buraco: o que veio depois dele espera, senão o controlador, que anda o `after` pelo que recebeu, pularia o atrasado |
 | **Máquina desligada** | a operação fica `Queued` até `NotAfter` e expira; o controlador vê "offline há 2 h" antes de pedir |
 | **Servidor fora do ar** | o agente continua a operação em curso, guarda eventos no diário (com teto; acima dele, mantém início e fim e marca "saída truncada") e reenvia depois; nada novo começa |
 | **Agente reiniciado** | seção 4.5 |
@@ -990,6 +990,14 @@ sequenceDiagram
 | **Aprovação sem resposta** | nega no `ExpiresAt`; a operação vira `Failed` (ou o Claude recebe "negado" e segue) |
 | **Token expirado / dispositivo revogado** | 401 → refresh; 403 `device_revoked` → o agente para de aceitar e mata o que roda, com aviso local |
 | **Duas máquinas com o mesmo `device.json`** (banco copiado) | o sync já detecta `device_changed`; o agente também se recusa a ligar |
+
+Cada linha tem um teste ponta a ponta (servidor e PostgreSQL de verdade, o
+notebook sem tela) em `RemoteOperationsChaosTests.cs`, mais o relógio adiantado
+no agente (o pedido parece vencido lá e é recusado, `already_expired`). A
+revogação e o banco copiado ficam no `RemoteOperationScheduler`: revogado, ele
+encerra o que roda com a folga do encerramento, marca a sincronização como
+`DeviceRevoked` e não pergunta mais nada; com o banco de outro computador, não
+conecta e grava o `device_changed` que a tela da sincronização já mostra.
 
 ### 4.7 Cancelamento e encerramento seguro
 

@@ -179,6 +179,8 @@ public sealed class RemoteOperationTests(PostgresFixture postgres) : IAsyncLifet
         var id = (await CreateAsync(phone, Inspection(workspace, phone, notebook))).OperationId;
 
         (await AppendAsync(notebook, id, Event(id, 1), Event(id, 2), Event(id, 4))).LastContiguousSeq.Should().Be(2);
+        (await GetAsync<RemoteEventPage>(phone.Session, RemoteRoutes.OperationEvents(id))).Events.Select(item => item.Seq)
+            .Should().Equal([1, 2], "o 4 espera o 3: entregue antes, quem lê pularia o 3");
         (await AppendAsync(notebook, id, Event(id, 1, "repetido"), Event(id, 2))).LastContiguousSeq.Should().Be(2, "o repetido é ignorado");
         (await AppendAsync(notebook, id, Event(id, 3, new string('x', RemoteLimits.MaxEventTextLength + 10)))).LastContiguousSeq.Should().Be(4);
 

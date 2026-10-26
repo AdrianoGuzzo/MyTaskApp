@@ -24,7 +24,7 @@ namespace MyTaskApp.Server.IntegrationTests;
 /// o SQLite e o shell de verdade, sem tela nenhuma, como o agente — confere,
 /// roda e conta.
 /// </summary>
-public sealed class RemoteOperationsEndToEndTests(PostgresFixture postgres) : IAsyncLifetime
+public sealed partial class RemoteOperationsEndToEndTests(PostgresFixture postgres) : IAsyncLifetime
 {
     private const string WithRemote = ApiFactory.SyncScopes + " " + RemoteSchema.Scope;
 
@@ -478,9 +478,24 @@ public sealed class RemoteOperationsEndToEndTests(PostgresFixture postgres) : IA
         JsonElement? payload = null,
         Guid? taskId = null)
     {
+        var request = await DraftAsync(notebook, phone, kind, payload, taskId);
+        var created = await SendAsync<RemoteOperationView>(phone, HttpMethod.Post, RemoteRoutes.Operations, Sign(key, request, RemoteJws.OperationType));
+
+        created.Status.Should().Be(RemoteOperationStatus.Queued);
+        return request;
+    }
+
+    /// <summary>O pedido do celular ao notebook, ainda sem assinar nem mandar.</summary>
+    private static async Task<RemoteOperationRequest> DraftAsync(
+        SyncedDesktop notebook,
+        DesktopSession phone,
+        string kind = RemoteOperationKinds.EnvironmentInspect,
+        JsonElement? payload = null,
+        Guid? taskId = null)
+    {
         var workspace = (await notebook.RunAsync(services => services.GetRequiredService<ISyncLocalStore>().ReadAsync(Ct))).WorkspaceId!.Value;
         var now = DateTimeOffset.UtcNow;
-        var request = new RemoteOperationRequest(
+        return new RemoteOperationRequest(
             Guid.CreateVersion7(),
             workspace,
             notebook.Device.DeviceId,
@@ -491,11 +506,6 @@ public sealed class RemoteOperationsEndToEndTests(PostgresFixture postgres) : IA
             [],
             now,
             now + RemoteLimits.DefaultAcceptanceWindow);
-
-        var created = await SendAsync<RemoteOperationView>(phone, HttpMethod.Post, RemoteRoutes.Operations, Sign(key, request, RemoteJws.OperationType));
-
-        created.Status.Should().Be(RemoteOperationStatus.Queued);
-        return request;
     }
 
     /// <param name="clock">O relógio do notebook, que anda junto quando a espera dele é nele.</param>

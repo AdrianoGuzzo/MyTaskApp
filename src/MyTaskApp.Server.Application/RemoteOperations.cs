@@ -230,14 +230,21 @@ public sealed class RemoteOperationUseCases(
         return new EventBatchAck(last);
     }
 
-    /// <summary>Os eventos depois de <paramref name="after"/>, em ordem, para quem é da conta.</summary>
+    /// <summary>
+    /// Os eventos depois de <paramref name="after"/>, em ordem, para quem é da
+    /// conta, e só até o primeiro buraco (4.6): o que vem depois dele espera o
+    /// que falta chegar. Quem lê anda o <c>after</c> pelo último que recebeu, e
+    /// um evento entregue depois do buraco faria o que falta nunca aparecer.
+    /// </summary>
     public async Task<RemoteEventPage> ListEventsAsync(SyncCaller caller, Guid operationId, long? after, int? limit, CancellationToken cancellationToken)
     {
         var operation = await FindAsync(caller, operationId, cancellationToken);
         var size = Math.Clamp(limit ?? RemoteLimits.MaxEventPageSize, 1, RemoteLimits.MaxEventPageSize);
 
         // Um a mais que a página: sobrando, há mais depois dela.
-        var events = await operations.ListEventsAsync(operationId, Math.Max(after ?? 0, 0), size + 1, cancellationToken);
+        var events = (await operations.ListEventsAsync(operationId, Math.Max(after ?? 0, 0), size + 1, cancellationToken))
+            .Where(item => item.Seq <= operation.LastContiguousSeq)
+            .ToList();
 
         return new RemoteEventPage([.. events.Take(size)], operation.LastContiguousSeq, events.Count > size);
     }

@@ -1,7 +1,9 @@
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using MyTaskApp.Application.Remote;
+using MyTaskApp.Application.Sync;
 using MyTaskApp.Remote.Contracts;
+using NSubstitute;
 
 namespace MyTaskApp.Application.Tests.Remote;
 
@@ -173,6 +175,72 @@ public sealed class RemoteOperationSchedulerTests
         nameof(DatabaseCopyExecutor) => RemoteOperationKinds.DatabaseCopy,
         _ => throw new InvalidOperationException($"Diga aqui o tipo de {executor.Name}."),
     };
+
+    /// <summary>4.6: revogado na conta, o agente para de aceitar e encerra o que roda, com o aviso na sincronização.</summary>
+    [Fact]
+    public async Task ARevokedDevice_StopsWhatRuns_AndStopsAsking()
+    {
+        await using var kit = new RemoteDispatchKit();
+        kit.Trust(kit.Phone);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        kit.Executor.Behavior = async (_, token) =>
+        {
+            started.TrySetResult();
+            await using (token.Register(() => stopped.TrySetResult()))
+            {
+                await Task.Delay(Timeout.Infinite, token);
+            }
+
+            return RemoteOperationResult.Success("não devia terminar");
+        };
+        var request = kit.Request();
+        kit.Queue(request);
+        kit.Scheduler.Start();
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+
+        kit.Server.Revoked = true;
+        await kit.Scheduler.TickAsync();
+
+        await stopped.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+        Assert.False(kit.Hub.IsConnected);
+        await kit.Sync.Received(1).SetStateAsync(SyncLinkState.DeviceRevoked, Arg.Any<CancellationToken>());
+
+        // Revogado, o laço não pergunta mais nada ao servidor.
+        kit.Sync.ReadAsync(Arg.Any<CancellationToken>()).Returns(SyncLocalState.Unlinked with { State = SyncLinkState.DeviceRevoked });
+        kit.Server.Revoked = false;
+        var next = kit.Request();
+        kit.Queue(next);
+        await kit.Scheduler.TickAsync();
+
+        Assert.Equal(RemoteOperationStatus.Queued, kit.Server.StatusOf(next.OperationId));
+    }
+
+    /// <summary>4.6: o banco copiado de outro computador traz a conta dele; o agente não liga, e diz por quê.</summary>
+    [Fact]
+    public async Task ADatabaseCopiedFromAnotherComputer_DoesNotTakeOperations()
+    {
+        await using var kit = new RemoteDispatchKit();
+        kit.Trust(kit.Phone);
+        kit.Sync.ReadAsync(Arg.Any<CancellationToken>()).Returns(SyncLocalState.Unlinked with
+        {
+            State = SyncLinkState.Linked,
+            IsEnabled = true,
+            WorkspaceId = kit.LinkedWorkspace,
+            LinkedDeviceId = Guid.CreateVersion7(),
+        });
+        var request = kit.Request();
+        kit.Queue(request);
+
+        kit.Scheduler.Start();
+        await TicksAsync(kit, 1);
+        await kit.Scheduler.TickAsync();
+
+        Assert.False(kit.Hub.IsConnected);
+        Assert.Equal(RemoteOperationStatus.Queued, kit.Server.StatusOf(request.OperationId));
+        Assert.Equal(0, kit.Executor.Runs);
+        await kit.Sync.Received().RecordErrorAsync(RemoteOperationScheduler.DeviceChangedCode, Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
 
     private static async Task TicksAsync(RemoteDispatchKit kit, int count)
     {
