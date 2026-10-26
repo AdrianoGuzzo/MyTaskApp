@@ -189,6 +189,9 @@ internal static class AppServices
             .AddSingleton<SyncViewModel>()
             .AddSingleton<SyncWindow>()
             .AddSingleton<MachinesViewModel>()
+            .AddTransient<RemoteControlViewModel>()
+            .AddTransient<Func<RemoteControlViewModel>>(provider =>
+                () => provider.GetRequiredService<RemoteControlViewModel>())
             .AddSingleton<MachinesWindow>()
 
             // A bolinha do cabeçalho (ADR-063): uma só, como o agendador que ela escuta.

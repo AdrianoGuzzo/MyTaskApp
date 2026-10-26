@@ -133,6 +133,12 @@ public sealed class RemoteOperationsEndToEndTests(PostgresFixture postgres) : IA
         echo.AllowRemote(true);
         var (taskId, developmentId) = await ReadyEnvironmentAsync(notebook, echo);
 
+        // O celular escolhe pelo catálogo: o ambiente pronto lá, com o comando liberado.
+        await notebook.Services.GetRequiredService<RemoteCatalogPublisher>().PublishAsync(Ct);
+        var catalog = await SendAsync<AgentCatalog>(phone, HttpMethod.Get, RemoteRoutes.Catalog(notebook.Device.DeviceId), null);
+        catalog.Environments.Should().ContainSingle(environment => environment.DevelopmentId == developmentId)
+            .Which.CommandIds.Should().Equal([echo.Id]);
+
         var request = await RequestAsync(notebook, phone, phoneKey, RemoteOperationKinds.CommandRun, Run(developmentId, echo), taskId);
         await notebook.Services.GetRequiredService<RemoteOperationDispatcher>().PollAsync(Ct);
         var operation = await FinishedAsync(phone, request.OperationId);

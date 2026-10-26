@@ -1,6 +1,9 @@
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
+using MyTaskApp.Application.QuickCommands;
 using MyTaskApp.Application.Remote;
+using MyTaskApp.Application.Tags;
+using MyTaskApp.Domain.Tasks;
 using MyTaskApp.Remote.Contracts;
 
 namespace MyTaskApp.Infrastructure.Persistence.Queries;
@@ -11,7 +14,7 @@ namespace MyTaskApp.Infrastructure.Persistence.Queries;
 /// daqui: o controlador vê o nome do diretório e o id, e a pasta é resolvida
 /// de novo neste computador na hora de rodar.
 /// </summary>
-internal sealed class RemoteCatalogQuery(MyTaskAppDbContext context) : IRemoteCatalogQuery
+internal sealed class RemoteCatalogQuery(MyTaskAppDbContext context, ITagQuery tagQuery) : IRemoteCatalogQuery
 {
     // Os tetos do servidor (RemoteCatalogUseCases): passar de um recusa o catálogo inteiro.
     private const int MaxItems = 500;
@@ -39,6 +42,12 @@ internal sealed class RemoteCatalogQuery(MyTaskAppDbContext context) : IRemoteCa
             .Where(command => command.RemoteAllowed)
             .ToListAsync(cancellationToken);
 
+        var listed = commands
+            .Where(command => command.TagDirectoryId is null || mapped.Contains(command.TagDirectoryId.Value))
+            .Where(command => command.Parameters.Count <= MaxParameters)
+            .Take(MaxItems)
+            .ToList();
+
         return new AgentCatalog(
             string.Empty,
             [
@@ -50,10 +59,7 @@ internal sealed class RemoteCatalogQuery(MyTaskAppDbContext context) : IRemoteCa
                     IsGitRepository(directory.Path!))),
             ],
             [
-                .. commands
-                    .Where(command => command.TagDirectoryId is null || mapped.Contains(command.TagDirectoryId.Value))
-                    .Where(command => command.Parameters.Count <= MaxParameters)
-                    .Take(MaxItems)
+                .. listed
                     .Select(command => new CatalogCommand(
                         command.Id,
                         Clean(command.Name ?? command.Alias ?? command.Command),
@@ -68,7 +74,70 @@ internal sealed class RemoteCatalogQuery(MyTaskAppDbContext context) : IRemoteCa
                         ])),
             ],
             [],
-            []);
+            [])
+        {
+            Environments = await EnvironmentsAsync(listed, cancellationToken),
+        };
+    }
+
+    /// <summary>
+    /// Os worktrees prontos aqui, com os comandos liberados que rodam em cada
+    /// um, como na tela (ADR-051): os botões dos diretórios que casam com o
+    /// repositório, e os globais, que sem botão rodam como avulso.
+    /// </summary>
+    private async Task<IReadOnlyList<CatalogEnvironment>> EnvironmentsAsync(
+        IReadOnlyList<Domain.Commands.DevelopmentCommand> allowed,
+        CancellationToken cancellationToken)
+    {
+        var developments = await context.TaskDevelopments
+            .AsNoTracking()
+            .Where(development => development.Status == TaskDevelopmentStatus.Ready)
+            .Join(
+                context.Tasks.Where(task => task.DeletedAt == null),
+                development => development.TaskItemId,
+                task => task.Id,
+                (development, task) => new { development.Id, development.TaskItemId, development.RepositoryPath, development.WorktreePath, development.StatusChangedAt })
+            .OrderByDescending(development => development.StatusChangedAt)
+            .Take(MaxItems)
+            .ToListAsync(cancellationToken);
+
+        if (developments.Count == 0)
+        {
+            return [];
+        }
+
+        var taskIds = developments.Select(development => development.TaskItemId).ToHashSet();
+        var tags = (await context.TaskItemTags
+                .AsNoTracking()
+                .Where(link => taskIds.Contains(link.TaskItemId))
+                .Select(link => new { link.TaskItemId, link.TagId })
+                .ToListAsync(cancellationToken))
+            .ToLookup(link => link.TaskItemId, link => link.TagId);
+        var directories = await tagQuery.ListCommandDirectoriesAsync(cancellationToken);
+
+        return
+        [
+            .. developments
+                .Where(development => Directory.Exists(development.WorktreePath))
+                .Select(development =>
+                {
+                    var buttons = QuickCommandCatalog
+                        .Match(development.RepositoryPath, [.. tags[development.TaskItemId]], directories)
+                        .SelectMany(match => match.Directory.Commands)
+                        .Where(binding => binding.IsEnabled)
+                        .Select(binding => binding.CommandId)
+                        .ToHashSet();
+
+                    return new CatalogEnvironment(
+                        development.TaskItemId,
+                        development.Id,
+                        [
+                            .. allowed
+                                .Where(command => command.TagDirectoryId is null || buttons.Contains(command.Id))
+                                .Select(command => command.Id),
+                        ]);
+                }),
+        ];
     }
 
     /// <summary>Repositório ou worktree: a pasta <c>.git</c> ou o arquivo <c>.git</c> que aponta para ela.</summary>

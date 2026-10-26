@@ -1,6 +1,8 @@
 using MyTaskApp.Application.Remote;
 using MyTaskApp.Domain.Commands;
 using MyTaskApp.Domain.Tags;
+using MyTaskApp.Domain.Tasks;
+using MyTaskApp.Infrastructure.Persistence;
 using MyTaskApp.Infrastructure.Persistence.Queries;
 using MyTaskApp.Remote.Contracts;
 
@@ -51,7 +53,7 @@ public sealed class RemoteCatalogQueryTests : IDisposable
         }
 
         await using var read = db.CreateContext();
-        var catalog = RemoteCatalogs.Seal(await new RemoteCatalogQuery(read).ReadAsync(Ct));
+        var catalog = RemoteCatalogs.Seal(await Query(read).ReadAsync(Ct));
 
         catalog.Commands.Select(command => command.CommandId).Should().BeEquivalentTo([allowed.Id, own.Id]);
 
@@ -87,9 +89,73 @@ public sealed class RemoteCatalogQueryTests : IDisposable
         }
 
         await using var read = db.CreateContext();
-        var catalog = await new RemoteCatalogQuery(read).ReadAsync(Ct);
+        var catalog = await Query(read).ReadAsync(Ct);
 
         catalog.Commands.Should().BeEmpty();
         catalog.Directories.Should().BeEmpty();
+        catalog.Environments.Should().BeEmpty();
     }
+
+    [Fact]
+    public async Task AReadyWorktreeGoesIn_WithTheAllowedCommandsThatAreButtonsThere()
+    {
+        await using var db = await new TempSqliteDatabase().MigrateAsync(Ct);
+        var worktree = _repository + "-feature-1";
+        Directory.CreateDirectory(worktree);
+
+        try
+        {
+            var tag = Tag.Create("ECO CORE", "#22C55E", Now);
+            var repository = tag.AddDirectory("@eco", _repository, "Núcleo", null, Now);
+            var other = tag.AddDirectory("@outro", Path.Combine(Path.GetTempPath(), $"outro-{Guid.NewGuid():N}"), null, null, Now);
+
+            var global = DevelopmentCommand.Create("@testes", "dotnet test", null, Now);
+            global.AllowRemote(true);
+            var own = DevelopmentCommand.CreateForDirectory(repository.Id, "npm run dev", null, new DevelopmentCommandSettings("Front"), Now);
+            own.AllowRemote(true);
+            var elsewhere = DevelopmentCommand.CreateForDirectory(other.Id, "make", null, new DevelopmentCommandSettings("Make"), Now);
+            elsewhere.AllowRemote(true);
+            var denied = DevelopmentCommand.Create("@deploy", "deploy.ps1", null, Now);
+            tag.AddDirectoryCommand(repository.Id, own.Id, Now);
+            tag.AddDirectoryCommand(other.Id, elsewhere.Id, Now);
+            tag.AddDirectoryCommand(repository.Id, denied.Id, Now);
+
+            var task = TaskItem.Create("Validar antimicrobianos", Now);
+            task.SetTags([tag.Id]);
+            var ready = task.BeginDevelopment(null, _repository, "origin/develop", "feature/1", worktree, Now);
+            task.MarkDevelopmentReady(ready.Id, Now);
+
+            var gone = TaskItem.Create("Worktree apagado à mão", Now);
+            var missing = gone.BeginDevelopment(null, _repository, "origin/develop", "feature/2", worktree + "-sumiu", Now);
+            gone.MarkDevelopmentReady(missing.Id, Now);
+
+            var creating = TaskItem.Create("Ainda criando", Now);
+            creating.BeginDevelopment(null, _repository, "origin/develop", "feature/3", worktree, Now);
+
+            await using (var write = db.CreateContext())
+            {
+                write.Tags.Add(tag);
+                write.DevelopmentCommands.AddRange(global, own, elsewhere, denied);
+                write.Tasks.AddRange(task, gone, creating);
+                await write.SaveChangesAsync(Ct);
+            }
+
+            await using var read = db.CreateContext();
+            var catalog = RemoteCatalogs.Seal(await Query(read).ReadAsync(Ct));
+
+            var environment = catalog.Environments.Should().ContainSingle(
+                "o que não está pronto, ou cuja pasta sumiu, não roda nada").Subject;
+            environment.TaskId.Should().Be(task.Id);
+            environment.DevelopmentId.Should().Be(ready.Id);
+            environment.CommandIds.Should().BeEquivalentTo([global.Id, own.Id], "o do outro diretório não vira botão aqui, e o negado não sai");
+
+            System.Text.Json.JsonSerializer.Serialize(catalog, RemoteJson.Options).Should().NotContain("feature/1", "a branch o controlador lê no sync");
+        }
+        finally
+        {
+            Directory.Delete(worktree, recursive: true);
+        }
+    }
+
+    private static RemoteCatalogQuery Query(MyTaskAppDbContext context) => new(context, new TagQuery(context));
 }

@@ -241,6 +241,9 @@ public static class DependencyInjection
         services.AddScoped<GetPendingApprovalsHandler>();
         services.AddScoped<AnswerApprovalHandler>();
         services.AddScoped<SendRemoteOperationHandler>();
+        services.AddScoped<GetRemoteControlHandler>();
+        services.AddScoped<GetRemoteOperationProgressHandler>();
+        services.AddScoped<CancelRemoteOperationHandler>();
         services.TryAddSingleton(RemoteDispatchLimits.Default);
         services.TryAddSingleton<RemoteOperationDispatcher>();
         services.TryAddSingleton<IRemoteHub, NoRemoteHub>();

@@ -36,6 +36,12 @@ public static class RemoteCatalogs
             Commands = [.. catalog.Commands.OrderBy(command => command.CommandId)],
             Databases = [.. catalog.Databases.OrderBy(database => database.ConnectionId)],
             AgentProfiles = [.. catalog.AgentProfiles.OrderBy(profile => profile.Id, StringComparer.Ordinal)],
+            Environments =
+            [
+                .. catalog.Environments
+                    .OrderBy(environment => environment.DevelopmentId)
+                    .Select(environment => environment with { CommandIds = [.. environment.CommandIds.Order()] }),
+            ],
         };
 
         var hash = Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(ordered, RemoteJson.Options)));

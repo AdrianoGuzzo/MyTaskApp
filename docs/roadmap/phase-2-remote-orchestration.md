@@ -215,7 +215,10 @@ pedir só ao ligar o remoto). O código curto precisa de entropia suficiente
   só depois da aprovação)
 - `src/MyTaskApp.Infrastructure/Processes/*` (Job Object / grupo)
 - `src/MyTaskApp.Server.*` (aprovações)
-- Desktop A: tela "Operação" (saída ao vivo, cancelar, aprovar)
+- Desktop A: tela "Operação" (saída ao vivo, cancelar, aprovar): feita, em
+  `RemoteControlWindow`, aberta por "Controlar" na janela Máquinas. Escolhe
+  pelos ambientes prontos que o catálogo traz (`AgentCatalog.Environments`, só
+  ids; o título e a branch vêm do sync)
 
 **Testes**
 
@@ -234,12 +237,13 @@ tela (refatoração com teste). Saída muito grande: teto por operação.
 
 **Critérios de aceitação**
 
-- [ ] De A, rodar em B um comando global liberado e ver a saída linha a linha
-      com menos de 1 s de atraso.
-- [ ] Um comando com "pedir confirmação" para em `WaitingApproval` até
+- [x] De A, rodar em B um comando global liberado e ver a saída linha a linha
+      com menos de 1 s de atraso (o agente manda a cada 500 ms; a tela
+      "Operação", `RemoteControlWindow`, lê a cada 500 ms).
+- [x] Um comando com "pedir confirmação" para em `WaitingApproval` até
       alguém aprovar em A.
-- [ ] Cancelar em A encerra o processo em B em até 5 s.
-- [ ] Um comando não liberado nunca roda, nem com a operação forjada direto no
+- [x] Cancelar em A encerra o processo em B em até 5 s.
+- [x] Um comando não liberado nunca roda, nem com a operação forjada direto no
       banco do servidor (teste com o servidor "comprometido").
 
 ---

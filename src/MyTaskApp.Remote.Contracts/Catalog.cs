@@ -10,7 +10,21 @@ public sealed record AgentCatalog(
     IReadOnlyList<CatalogDirectory> Directories,
     IReadOnlyList<CatalogCommand> Commands,
     IReadOnlyList<CatalogDatabase> Databases,
-    IReadOnlyList<CatalogAgentProfile> AgentProfiles);
+    IReadOnlyList<CatalogAgentProfile> AgentProfiles)
+{
+    /// <summary>
+    /// Os ambientes prontos nesta máquina, onde o <c>command.run</c> roda. O
+    /// catálogo de um agente antigo não traz: a lista vem vazia.
+    /// </summary>
+    public IReadOnlyList<CatalogEnvironment> Environments { get; init; } = [];
+}
+
+/// <summary>
+/// Um ambiente (worktree) pronto na máquina executora. Só ids: o título da
+/// tarefa e a branch o controlador lê no que o sync já trouxe.
+/// </summary>
+/// <param name="CommandIds">Os comandos do catálogo que viram botão neste ambiente.</param>
+public sealed record CatalogEnvironment(Guid TaskId, Guid DevelopmentId, IReadOnlyList<Guid> CommandIds);
 
 /// <param name="MappedHere">O diretório da etiqueta tem pasta nesta máquina.</param>
 public sealed record CatalogDirectory(Guid TagDirectoryId, Guid TagId, string Label, bool MappedHere, bool IsGitRepository);

@@ -63,8 +63,11 @@ public sealed class RemoteCatalogUseCases(
             throw SyncServerException.BadRequest($"O hash do catálogo vai de 1 a {RemoteDeviceUseCases.MaxCatalogHashLength} caracteres.");
         }
 
-        if (new[] { catalog.Directories.Count, catalog.Commands.Count, catalog.Databases.Count, catalog.AgentProfiles.Count }.Any(count => count > MaxItems)
-            || catalog.Commands.Any(command => command.Parameters.Count > MaxParameters))
+        var environments = catalog.Environments ?? [];
+
+        if (new[] { catalog.Directories.Count, catalog.Commands.Count, catalog.Databases.Count, catalog.AgentProfiles.Count, environments.Count }.Any(count => count > MaxItems)
+            || catalog.Commands.Any(command => command.Parameters.Count > MaxParameters)
+            || environments.Any(environment => environment.CommandIds is null || environment.CommandIds.Count > MaxItems))
         {
             throw SyncServerException.BadRequest($"Até {MaxItems} itens por lista, e {MaxParameters} parâmetros por comando.");
         }
@@ -72,7 +75,9 @@ public sealed class RemoteCatalogUseCases(
         if (!Distinct(catalog.Directories.Select(directory => directory.TagDirectoryId))
             || !Distinct(catalog.Commands.Select(command => command.CommandId))
             || !Distinct(catalog.Databases.Select(database => database.ConnectionId))
-            || !Distinct(catalog.AgentProfiles.Select(profile => profile.Id)))
+            || !Distinct(catalog.AgentProfiles.Select(profile => profile.Id))
+            || !Distinct(environments.Select(environment => environment.DevelopmentId))
+            || environments.Any(environment => !Distinct(environment.CommandIds)))
         {
             throw SyncServerException.BadRequest("Um id repetido no catálogo.");
         }

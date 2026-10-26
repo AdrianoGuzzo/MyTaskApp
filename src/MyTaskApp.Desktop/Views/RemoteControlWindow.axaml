@@ -1,0 +1,190 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
+        x:Class="MyTaskApp.Desktop.Views.RemoteControlWindow"
+        x:DataType="vm:RemoteControlViewModel"
+        x:Name="Root"
+        Title="{Binding Title}"
+        Width="760"
+        Height="760"
+        MinWidth="560"
+        MinHeight="480"
+        WindowStartupLocation="CenterOwner">
+
+  <!--
+    Operação (E3; ADR-086): pedir à outra máquina para ver o ambiente ou rodar
+    um comando que foi liberado lá, ver a saída chegando, cancelar, e responder
+    às aprovações. Daqui só saem ids: o que roda é decidido na outra máquina.
+  -->
+
+  <Window.Styles>
+
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="{DynamicResource WidgetSurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetStrokeSoftBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetCardRadius}" />
+      <Setter Property="Padding" Value="14,12" />
+    </Style>
+
+    <Style Selector="TextBlock.sectionTitle">
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.meta">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style Selector="TextBlock.caution">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetCautionBrush}" />
+    </Style>
+
+    <Style Selector="TextBox.output">
+      <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, monospace" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="IsReadOnly" Value="True" />
+      <Setter Property="TextWrapping" Value="NoWrap" />
+      <Setter Property="AcceptsReturn" Value="True" />
+    </Style>
+
+  </Window.Styles>
+
+  <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+    <StackPanel Margin="16,14" Spacing="12">
+
+      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+        <StackPanel Spacing="4">
+          <TextBlock Text="{Binding Title}" FontSize="18" FontWeight="SemiBold" />
+          <TextBlock Classes="meta"
+                     Text="Só aparece o que foi liberado na outra máquina para rodar de longe. Ela confere de novo cada pedido antes de rodar." />
+        </StackPanel>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Top">
+          <Button x:Name="InspectButton" Content="Ver o ambiente" IsEnabled="{Binding !IsBusy}" Command="{Binding InspectCommand}" />
+          <Button Content="Atualizar" Command="{Binding LoadCommand}" />
+        </StackPanel>
+      </Grid>
+
+      <Border Padding="10,8"
+              CornerRadius="6"
+              Background="{DynamicResource SystemFillColorCriticalBackgroundBrush}"
+              IsVisible="{Binding ErrorMessage, Converter={x:Static ObjectConverters.IsNotNull}}">
+        <TextBlock x:Name="ErrorText" Text="{Binding ErrorMessage}" TextWrapping="Wrap" />
+      </Border>
+
+      <TextBlock x:Name="StatusText"
+                 Classes="meta"
+                 Text="{Binding StatusMessage}"
+                 IsVisible="{Binding StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+      <!-- ============================ APROVAÇÕES ============================ -->
+      <Border x:Name="ApprovalsCard" Classes="card" IsVisible="{Binding HasApprovals}">
+        <StackPanel Spacing="8">
+          <TextBlock Classes="sectionTitle" Text="Esperando a sua resposta" />
+          <ItemsControl x:Name="ApprovalList" ItemsSource="{Binding Approvals}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:RemoteApprovalItem">
+                <StackPanel Spacing="6" Margin="0,4">
+                  <TextBlock FontWeight="SemiBold" TextWrapping="Wrap" Text="{Binding Summary}" />
+                  <TextBlock Classes="meta" Text="{Binding Details}" />
+                  <TextBlock Classes="meta caution" Text="{Binding Hint}" IsVisible="{Binding NeedsTyping}" />
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBox Width="220" IsVisible="{Binding NeedsTyping}" Text="{Binding TypedConfirmation}" />
+                    <Button Classes="accent" Content="Permitir"
+                            Command="{Binding #Root.((vm:RemoteControlViewModel)DataContext).AllowCommand}"
+                            CommandParameter="{Binding}" />
+                    <Button Content="Negar"
+                            Command="{Binding #Root.((vm:RemoteControlViewModel)DataContext).DenyCommand}"
+                            CommandParameter="{Binding}" />
+                  </StackPanel>
+                </StackPanel>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+
+      <!-- ============================ OPERAÇÃO ============================ -->
+      <Border x:Name="OperationCard" Classes="card" IsVisible="{Binding HasOperation}">
+        <StackPanel Spacing="8">
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+            <StackPanel Spacing="2">
+              <TextBlock Classes="sectionTitle" TextWrapping="Wrap" Text="{Binding OperationTitle}" />
+              <TextBlock x:Name="OperationStateText" TextWrapping="Wrap" Text="{Binding OperationState}" />
+            </StackPanel>
+            <Button Grid.Column="1" x:Name="CancelButton" VerticalAlignment="Top" Content="Cancelar"
+                    IsVisible="{Binding CanCancel}"
+                    Command="{Binding CancelCommand}" />
+          </Grid>
+          <TextBox x:Name="OutputBox" Classes="output" Height="300" Text="{Binding Output}" />
+        </StackPanel>
+      </Border>
+
+      <!-- ============================ AMBIENTES ============================ -->
+      <Border Classes="card" IsVisible="{Binding HasNoEnvironments}">
+        <TextBlock Classes="meta"
+                   Text="Nenhum ambiente pronto na outra máquina, ou nenhum comando liberado lá. Na outra máquina: prepare o worktree da tarefa e marque o comando como liberado para rodar de longe." />
+      </Border>
+
+      <Border Classes="card" IsVisible="{Binding HasEnvironments}">
+        <Grid ColumnDefinitions="260,*" ColumnSpacing="12">
+          <StackPanel Spacing="8">
+            <TextBlock Classes="sectionTitle" Text="Ambientes prontos lá" />
+            <ListBox x:Name="EnvironmentList"
+                     ItemsSource="{Binding Environments}"
+                     SelectedItem="{Binding SelectedEnvironment}"
+                     MaxHeight="360">
+              <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:RemoteEnvironmentItem">
+                  <StackPanel Spacing="2">
+                    <TextBlock FontWeight="SemiBold" TextWrapping="Wrap" Text="{Binding Title}" />
+                    <TextBlock Classes="meta" Text="{Binding Details}" />
+                  </StackPanel>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+          </StackPanel>
+
+          <StackPanel Grid.Column="1" Spacing="8" IsVisible="{Binding HasSelection}">
+            <TextBlock Classes="sectionTitle" Text="Comandos" />
+            <ItemsControl x:Name="CommandList" ItemsSource="{Binding SelectedEnvironment.Commands}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:RemoteCommandItem">
+                  <Border Padding="0,6" BorderBrush="{DynamicResource WidgetStrokeSoftBrush}" BorderThickness="0,0,0,1">
+                    <StackPanel Spacing="6">
+                      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <StackPanel Spacing="2">
+                          <TextBlock FontWeight="SemiBold" Text="{Binding Name}" />
+                          <TextBlock Classes="meta" Text="{Binding Note}" IsVisible="{Binding Note, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                        </StackPanel>
+                        <Button Grid.Column="1" VerticalAlignment="Top" Content="Rodar lá"
+                                IsEnabled="{Binding !#Root.((vm:RemoteControlViewModel)DataContext).IsBusy}"
+                                Command="{Binding #Root.((vm:RemoteControlViewModel)DataContext).RunCommand}"
+                                CommandParameter="{Binding}" />
+                      </Grid>
+                      <ItemsControl ItemsSource="{Binding Parameters}" IsVisible="{Binding HasParameters}">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="vm:RemoteParameterItem">
+                            <Grid ColumnDefinitions="140,*" ColumnSpacing="8" Margin="0,2">
+                              <TextBlock VerticalAlignment="Center" Text="{Binding Label}" />
+                              <TextBox Grid.Column="1" PlaceholderText="{Binding Placeholder}" Text="{Binding Value}" />
+                            </Grid>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Grid>
+      </Border>
+
+    </StackPanel>
+  </ScrollViewer>
+
+</Window>

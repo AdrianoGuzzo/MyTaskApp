@@ -179,11 +179,16 @@
                       <TextBlock Classes="meta" Text="{Binding Tools}" IsVisible="{Binding Tools, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                       <TextBlock Classes="mono" Text="{Binding Fingerprint}" IsVisible="{Binding Fingerprint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                     </StackPanel>
-                    <Button Grid.Column="1" VerticalAlignment="Top" Content="Parear"
-                            IsVisible="{Binding CanPair}"
-                            IsEnabled="{Binding !#Root.((vm:MachinesViewModel)DataContext).IsBusy}"
-                            Command="{Binding #Root.((vm:MachinesViewModel)DataContext).PairCommand}"
-                            CommandParameter="{Binding}" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Top" IsVisible="{Binding CanPair}">
+                      <Button Content="Parear"
+                              IsEnabled="{Binding !#Root.((vm:MachinesViewModel)DataContext).IsBusy}"
+                              Command="{Binding #Root.((vm:MachinesViewModel)DataContext).PairCommand}"
+                              CommandParameter="{Binding}" />
+                      <Button Classes="accent" Content="Controlar"
+                              IsEnabled="{Binding #Root.((vm:MachinesViewModel)DataContext).IsReady}"
+                              Command="{Binding #Root.((vm:MachinesViewModel)DataContext).ControlCommand}"
+                              CommandParameter="{Binding}" />
+                    </StackPanel>
                   </Grid>
                 </Border>
               </DataTemplate>

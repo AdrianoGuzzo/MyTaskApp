@@ -70,6 +70,10 @@ public sealed class RemoteApprovalUseCasesTests
     {
         var directory = new CatalogDirectory(Guid.CreateVersion7(), Guid.CreateVersion7(), "api", true, true);
         var repeated = new AgentCatalog("h", [directory, directory], [], [], []);
+        var environment = new CatalogEnvironment(Guid.CreateVersion7(), Guid.CreateVersion7(), []);
+        var repeatedEnvironment = new AgentCatalog("h", [], [], [], []) { Environments = [environment, environment] };
+        var command = Guid.CreateVersion7();
+        var repeatedCommand = new AgentCatalog("h", [], [], [], []) { Environments = [environment with { CommandIds = [command, command] }] };
         var tooMany = new AgentCatalog(
             "h",
             [],
@@ -77,7 +81,7 @@ public sealed class RemoteApprovalUseCasesTests
             [.. Enumerable.Range(0, RemoteCatalogUseCases.MaxItems + 1).Select(index => new CatalogDatabase(Guid.CreateVersion7(), $"db{index}", "Development", true, true))],
             []);
 
-        foreach (var catalog in new[] { repeated, tooMany })
+        foreach (var catalog in new[] { repeated, tooMany, repeatedEnvironment, repeatedCommand })
         {
             var act = () => RemoteCatalogUseCases.Validate(catalog);
             act.Should().Throw<SyncServerException>().Which.Status.Should().Be(400);
