@@ -16,7 +16,8 @@ public abstract record RemoteAdmission
     /// assinatura válida, nada é gravado — senão bastaria ao servidor inventar
     /// um envelope com o id de um pedido legítimo para bloqueá-lo.
     /// </summary>
-    public sealed record Refused(string Code, RemoteJournalEntry? Entry) : RemoteAdmission;
+    /// <param name="Summary">O motivo em palavras, quando o executor deu um.</param>
+    public sealed record Refused(string Code, RemoteJournalEntry? Entry, string? Summary = null) : RemoteAdmission;
 
     /// <summary>Faltam entidades que o sync ainda vai trazer: fica para a próxima busca.</summary>
     public sealed record Deferred(IReadOnlyList<Guid> Missing) : RemoteAdmission;
@@ -105,7 +106,7 @@ public sealed class AdmitRemoteOperationHandler(
         if (await RefusalAsync(request, controller, command.Running, now, cancellationToken) is { } refusal)
         {
             return refusal is RemoteAdmission.Refused refused
-                ? await RecordAsync(entry with { Status = RemoteOperationStatus.Rejected, ResultCode = refused.Code }, refused, cancellationToken)
+                ? await RecordAsync(entry with { Status = RemoteOperationStatus.Rejected, ResultCode = refused.Code, ResultSummary = refused.Summary }, refused, cancellationToken)
                 : refusal;
         }
 
@@ -160,9 +161,9 @@ public sealed class AdmitRemoteOperationHandler(
                 : Refuse(RemoteErrorCodes.EntitiesMissing);
         }
 
-        if (await executor.CheckAsync(request, cancellationToken) is { } code)
+        if (await executor.CheckAsync(request, cancellationToken) is { } refusal)
         {
-            return Refuse(code);
+            return new RemoteAdmission.Refused(refusal.Code, null, Clip(refusal.Summary));
         }
 
         // 8. Os tetos: quantas ao mesmo tempo, e quantas por hora de cada controlador.
@@ -176,6 +177,9 @@ public sealed class AdmitRemoteOperationHandler(
         return null;
 
         static RemoteAdmission.Refused Refuse(string code) => new(code, null);
+
+        static string? Clip(string? summary) =>
+            summary is { Length: > RemoteLimits.MaxResultSummaryLength } ? summary[..RemoteLimits.MaxResultSummaryLength] : summary;
     }
 
     private async Task<RemoteAdmission> RecordAsync(RemoteJournalEntry entry, RemoteAdmission.Refused refused, CancellationToken cancellationToken) =>

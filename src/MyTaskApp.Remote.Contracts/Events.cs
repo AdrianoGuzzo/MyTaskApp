@@ -9,7 +9,10 @@ public enum RemoteEventKind
     StepCompleted,
     Checkpoint,
 
-    /// <summary>Uma linha de stdout ou stderr, já mascarada.</summary>
+    /// <summary>
+    /// Linhas de stdout ou de stderr (o <c>Step</c> diz qual), já mascaradas.
+    /// As que chegam juntas vêm num evento só, uma por linha.
+    /// </summary>
     Output,
 
     /// <summary>Texto do Claude, do <c>stream-json</c>.</summary>

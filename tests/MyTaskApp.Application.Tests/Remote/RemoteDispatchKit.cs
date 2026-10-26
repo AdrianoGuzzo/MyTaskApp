@@ -43,6 +43,10 @@ internal sealed class RemoteDispatchKit : IAsyncDisposable
             .AddSingleton<IRemoteOperationExecutor>(Executor)
             .AddSingleton(limits ?? RemoteDispatchLimits.Default)
             .AddSingleton<IRemoteOperationsApi>(Server)
+            .AddSingleton<ITaskItemRepository>(Tasks)
+            .AddSingleton<IUnitOfWork>(Tasks)
+            .AddSingleton<ITaskAuditLog>(Audit)
+            .AddScoped<RecordRemoteOperationHandler>()
             .AddSingleton<ISyncTrigger>(Trigger)
             .AddSingleton<IUseCaseRunner, ScopedUseCaseRunner>()
             .AddSingleton<ILogger<RemoteOperationDispatcher>>(NullLogger<RemoteOperationDispatcher>.Instance)
@@ -77,6 +81,10 @@ internal sealed class RemoteDispatchKit : IAsyncDisposable
     public FakeExecutor Executor { get; } = new();
 
     public FakeOperationQueue Server { get; } = new();
+
+    public FakeTaskItemRepository Tasks { get; } = new();
+
+    public FakeTaskAuditLog Audit { get; } = new();
 
     public CountingSyncTrigger Trigger { get; } = new();
 
@@ -467,7 +475,10 @@ internal sealed class FakeExecutor : IRemoteOperationExecutor
 
     public string? SeenOrigin { get; private set; }
 
-    public Task<string?> CheckAsync(RemoteOperationRequest request, CancellationToken cancellationToken) => Task.FromResult(Refusal);
+    public string? RefusalSummary { get; set; }
+
+    public Task<RemoteRefusal?> CheckAsync(RemoteOperationRequest request, CancellationToken cancellationToken) =>
+        Task.FromResult(Refusal is null ? null : new RemoteRefusal(Refusal, RefusalSummary));
 
     public Task<RemoteOperationResult> ExecuteAsync(RemoteExecution execution, CancellationToken cancellationToken)
     {

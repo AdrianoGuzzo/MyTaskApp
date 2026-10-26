@@ -250,7 +250,10 @@ public static class DependencyInjection
         // Os tipos vão escritos, e não lidos dos executores: o das ferramentas
         // depende das capacidades, que listam os tipos. Um teste confere que batem.
         services.AddSingleton<IRemoteOperationExecutor, EnvironmentInspectExecutor>();
-        services.TryAddSingleton(new SupportedRemoteOperations([RemoteOperationKinds.EnvironmentInspect]));
+        services.AddSingleton<IRemoteOperationExecutor, CommandRunExecutor>();
+        services.AddScoped<RemoteCommandPlanner>();
+        services.AddScoped<RecordRemoteOperationHandler>();
+        services.TryAddSingleton(new SupportedRemoteOperations([RemoteOperationKinds.EnvironmentInspect, RemoteOperationKinds.CommandRun]));
         services.AddScoped<ConsultationLauncher>();
         services.AddScoped<ConsultationTargetResolver>();
         services.AddScoped<ConsultationFolders>();

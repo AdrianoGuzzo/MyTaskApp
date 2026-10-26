@@ -424,9 +424,10 @@ public static class ServerSetup
             : AnonymousPartition(context, limits));
 
         // A orquestração (RS-30) com balde próprio: um controlador insistente não come a cota do sync.
+        // E um por dispositivo: a saída ao vivo do agente não come a do celular que a lê, que é da mesma conta.
         limiter.AddPolicy(RemoteLimiter, context => ApiSubject(context) is { } subject
             ? RateLimitPartition.GetFixedWindowLimiter(
-                $"r:{subject}",
+                $"r:{subject}:{context.Features.Get<ApiCaller>()?.Device}",
                 _ => new FixedWindowRateLimiterOptions { PermitLimit = limits.RemotePerMinute, Window = TimeSpan.FromMinutes(1) })
             : AnonymousPartition(context, limits));
     }
@@ -461,7 +462,9 @@ public static class ServerSetup
         if (context.GetEndpoint()?.Metadata.GetMetadata<EnableRateLimitingAttribute>()?.PolicyName is SyncLimiter or ApiLimiter or RemoteLimiter)
         {
             var result = await context.AuthenticateAsync(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme);
-            context.Features.Set(new ApiCaller(result.Succeeded ? result.Principal.FindFirst(Claims.Subject)?.Value : null));
+            context.Features.Set(result.Succeeded
+                ? new ApiCaller(result.Principal.FindFirst(Claims.Subject)?.Value, result.Principal.FindFirst(SyncSchema.DeviceIdClaim)?.Value)
+                : new ApiCaller(null, null));
         }
 
         await next(context);
@@ -540,5 +543,5 @@ public static class ServerSetup
         return null;
     }
 
-    private sealed record ApiCaller(string? Subject);
+    private sealed record ApiCaller(string? Subject, string? Device);
 }

@@ -42,6 +42,13 @@ public sealed class RemoteOperationDispatcher(
     /// <summary>De quanto em quanto o agente pergunta por uma aprovação, quando o hub não toca.</summary>
     public static readonly TimeSpan ApprovalPollInterval = TimeSpan.FromSeconds(5);
 
+    /// <summary>
+    /// O menor intervalo entre dois envios de eventos da mesma operação: com
+    /// saída contínua, um lote a cada meio segundo cabe na cota por dispositivo
+    /// do servidor e ainda chega em menos de 1 s.
+    /// </summary>
+    public static readonly TimeSpan MinEventSendInterval = TimeSpan.FromMilliseconds(500);
+
     /// <summary>A saída junta em lotes por este tempo antes de ir: uma linha não vira um POST.</summary>
     public static readonly TimeSpan EventFlushDelay = TimeSpan.FromMilliseconds(250);
 
@@ -58,6 +65,9 @@ public sealed class RemoteOperationDispatcher(
 
     /// <summary>As operações com um envio de eventos já marcado.</summary>
     private readonly ConcurrentDictionary<Guid, byte> _flushQueued = new();
+
+    /// <summary>Quando cada operação mandou eventos pela última vez: o piso de <see cref="MinEventSendInterval"/>.</summary>
+    private readonly ConcurrentDictionary<Guid, DateTimeOffset> _lastEventSend = new();
 
     private readonly SemaphoreSlim _polling = new(1, 1);
 
@@ -86,6 +96,7 @@ public sealed class RemoteOperationDispatcher(
             await JournalAsync(
                 (journal, token) => journal.SetStatusAsync(entry.OperationId, RemoteOperationStatus.Interrupted, RemoteErrorCodes.Interrupted, summary, token),
                 cancellationToken);
+            await AuditAsync(entry.OperationId, cancellationToken);
 
             logger.LogWarning("RemoteOperationInterrupted {OperationId} {Kind} {Step}", entry.OperationId, entry.Kind, entry.Step);
         }
@@ -187,6 +198,7 @@ public sealed class RemoteOperationDispatcher(
 
             case RemoteAdmission.Refused { Entry: { } entry } refused:
                 logger.LogWarning("RemoteOperationRejected {OperationId} {Code}", entry.OperationId, refused.Code);
+                await AuditAsync(entry.OperationId, cancellationToken);
                 await ReportAsync(entry.OperationId, cancellationToken);
                 break;
 
@@ -317,6 +329,7 @@ public sealed class RemoteOperationDispatcher(
             await JournalAsync(
                 (journal, token) => journal.SetStatusAsync(id, status, result.Code, Clip(result.Summary, RemoteLimits.MaxResultSummaryLength), token),
                 CancellationToken.None);
+            await AuditAsync(id, CancellationToken.None);
             await ReportAsync(id, CancellationToken.None);
 
             logger.LogInformation("RemoteOperationFinished {OperationId} {Status} {Code}", id, status, result.Code);
@@ -490,12 +503,46 @@ public sealed class RemoteOperationDispatcher(
         }
     }
 
+    /// <summary>
+    /// A linha na trilha da tarefa do pedido (T-21), quando há tarefa e ela
+    /// está aqui. Não derruba nada: sem a linha, a operação ainda conta ao servidor.
+    /// </summary>
+    private async Task AuditAsync(Guid operationId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (await JournalAsync((journal, token) => journal.FindAsync(operationId, token), cancellationToken) is not { TaskId: { } taskId } entry)
+            {
+                return;
+            }
+
+            await runner.RunAsync<RecordRemoteOperationHandler, bool>(
+                (handler, token) => handler.HandleAsync(
+                    new RecordRemoteOperation(taskId, entry.Kind, entry.ControllerNickname, entry.Status, entry.ResultSummary),
+                    token),
+                cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.LogWarning(exception, "RemoteOperationAuditFailed {OperationId}", operationId);
+        }
+    }
+
+    /// <summary>Quanto esperar para mandar: junta o que vier em <see cref="EventFlushDelay"/>, e nunca antes do piso desde o último envio.</summary>
+    internal static TimeSpan EventSendDelay(DateTimeOffset? lastSend, DateTimeOffset now) =>
+        lastSend is { } last && last + MinEventSendInterval - now is var floor && floor > EventFlushDelay
+            ? floor
+            : EventFlushDelay;
+
     private async Task FlushLaterAsync(Guid id)
     {
         try
         {
-            await Task.Delay(EventFlushDelay, timeProvider);
+            await Task.Delay(
+                EventSendDelay(_lastEventSend.TryGetValue(id, out var last) ? last : null, timeProvider.GetUtcNow()),
+                timeProvider);
             _flushQueued.TryRemove(id, out _);
+            _lastEventSend[id] = timeProvider.GetUtcNow();
             await ReportAsync(id, CancellationToken.None);
         }
         catch (Exception exception)

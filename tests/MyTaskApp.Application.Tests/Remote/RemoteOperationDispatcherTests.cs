@@ -59,6 +59,7 @@ public sealed class RemoteOperationDispatcherTests
         await using var kit = new RemoteDispatchKit();
         kit.Trust(kit.Phone);
         kit.Executor.Refusal = RemoteErrorCodes.NotInCatalog;
+        kit.Executor.RefusalSummary = "Este comando não está liberado para rodar de longe nesta máquina.";
         var request = kit.Request();
         kit.Queue(request);
 
@@ -66,7 +67,9 @@ public sealed class RemoteOperationDispatcherTests
 
         Assert.Equal(0, kit.Executor.Runs);
         Assert.Equal(RemoteOperationStatus.Rejected, kit.Server.StatusOf(request.OperationId));
-        Assert.Equal(RemoteErrorCodes.NotInCatalog, Assert.Single(kit.Server.Updates[request.OperationId]).Code);
+        var update = Assert.Single(kit.Server.Updates[request.OperationId]);
+        Assert.Equal(RemoteErrorCodes.NotInCatalog, update.Code);
+        Assert.Equal(kit.Executor.RefusalSummary, update.Summary);
     }
 
     [Fact]
@@ -120,6 +123,18 @@ public sealed class RemoteOperationDispatcherTests
 
         Assert.Equal(RemoteOperationStatus.Succeeded, await kit.WaitFinishedAsync(request.OperationId));
         Assert.Equal(1, kit.Executor.Runs);
+    }
+
+    /// <summary>Saída contínua: um lote a cada meio segundo, no máximo — cabe na cota por dispositivo e chega em menos de 1 s.</summary>
+    [Fact]
+    public void ContinuousOutputIsSentAtMostEveryHalfSecond()
+    {
+        var now = new DateTimeOffset(2026, 10, 24, 12, 0, 0, TimeSpan.Zero);
+
+        Assert.Equal(RemoteOperationDispatcher.EventFlushDelay, RemoteOperationDispatcher.EventSendDelay(null, now));
+        Assert.Equal(TimeSpan.FromMilliseconds(400), RemoteOperationDispatcher.EventSendDelay(now.AddMilliseconds(-100), now));
+        Assert.Equal(RemoteOperationDispatcher.EventFlushDelay, RemoteOperationDispatcher.EventSendDelay(now.AddSeconds(-2), now));
+        Assert.True(RemoteOperationDispatcher.MinEventSendInterval < TimeSpan.FromSeconds(1));
     }
 
     [Fact]

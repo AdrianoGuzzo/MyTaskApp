@@ -4,6 +4,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Infrastructure.Persistence;
+using MyTaskApp.Infrastructure.Processes;
 using MyTaskApp.Infrastructure.Storage;
 using Serilog;
 using Serilog.Settings.Configuration;
@@ -53,6 +54,9 @@ internal static class Program
                 .Enrich.FromLogContext());
             await Log.CloseAndFlushAsync();
             Log.Logger = configured;
+
+            // Antes de qualquer filho: o comando pedido de longe, e o neto que ele abrir, morrem com o agente.
+            KeepNoOrphans();
 
             await using var services = new ServiceCollection()
                 .AddLogging(builder => builder.AddSerilog(Log.Logger))
@@ -121,6 +125,25 @@ internal static class Program
         {
             context.Cancel = true;
             stopping.Cancel();
+        }
+    }
+
+    /// <summary>
+    /// O agente num Job Object que morre com ele (Windows). Sem o job, o
+    /// agente ainda serve; só a queda dele deixaria o comando órfão, e o log diz.
+    /// </summary>
+    private static void KeepNoOrphans()
+    {
+        try
+        {
+            if (OperatingSystem.IsWindows() && KillOnCloseJob.KillChildrenWithThisProcess())
+            {
+                Log.Information("AgentProcessJobAttached");
+            }
+        }
+        catch (Exception exception)
+        {
+            Log.Warning(exception, "AgentProcessJobFailed");
         }
     }
 

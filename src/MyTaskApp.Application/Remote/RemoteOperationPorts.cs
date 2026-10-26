@@ -144,9 +144,9 @@ public interface IRemoteOperationExecutor
 
     /// <summary>
     /// O item 6 de 4.4: cada id do pedido existe aqui e está liberado. Devolve
-    /// o código da recusa (<see cref="RemoteErrorCodes"/>), ou nulo.
+    /// a recusa, com o motivo que a tela de quem pediu mostra, ou nulo.
     /// </summary>
-    Task<string?> CheckAsync(RemoteOperationRequest request, CancellationToken cancellationToken);
+    Task<RemoteRefusal?> CheckAsync(RemoteOperationRequest request, CancellationToken cancellationToken);
 
     /// <summary>
     /// Roda num escopo só dela, que dura a operação inteira. O cancelamento é
@@ -164,6 +164,9 @@ public sealed record RemoteOperationResult(bool Succeeded, string? Summary = nul
 
     public static RemoteOperationResult Failure(string code, string? summary = null) => new(false, summary, code);
 }
+
+/// <summary>Por que esta máquina não roda o pedido: o código (<see cref="RemoteErrorCodes"/>) e, se houver, o motivo em palavras.</summary>
+public sealed record RemoteRefusal(string Code, string? Summary = null);
 
 /// <summary>O que o executor recebe: o pedido conferido, quem pediu, por onde contar o andamento e pedir aprovação.</summary>
 public sealed class RemoteExecution(

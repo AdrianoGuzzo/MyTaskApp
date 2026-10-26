@@ -99,7 +99,7 @@ public sealed class EnvironmentInspectExecutor(
 
     public string Kind => RemoteOperationKinds.EnvironmentInspect;
 
-    public Task<string?> CheckAsync(RemoteOperationRequest request, CancellationToken cancellationToken) => Task.FromResult<string?>(null);
+    public Task<RemoteRefusal?> CheckAsync(RemoteOperationRequest request, CancellationToken cancellationToken) => Task.FromResult<RemoteRefusal?>(null);
 
     public async Task<RemoteOperationResult> ExecuteAsync(RemoteExecution execution, CancellationToken cancellationToken)
     {

@@ -6,19 +6,23 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Time.Testing;
 using MyTaskApp.Application.Remote;
 using MyTaskApp.Application.Sync;
+using MyTaskApp.Domain.Commands;
+using MyTaskApp.Domain.Tasks;
 using MyTaskApp.Infrastructure.Remote;
 using MyTaskApp.Remote.Contracts;
 
 namespace MyTaskApp.Server.IntegrationTests;
 
 /// <summary>
-/// A E2 de ponta a ponta (fase 2, T-15): um celular pede <c>environment.inspect</c>
-/// assinado ao servidor de verdade, e o notebook — só os casos de uso, a fila
-/// e o SQLite, sem tela nenhuma, como o agente — confere, roda e conta.
+/// A E2 e a E3 de ponta a ponta (fase 2, T-15 e T-20): um celular pede
+/// assinado ao servidor de verdade, e o notebook — só os casos de uso, a fila,
+/// o SQLite e o shell de verdade, sem tela nenhuma, como o agente — confere,
+/// roda e conta.
 /// </summary>
-public sealed class RemoteInspectEndToEndTests(PostgresFixture postgres) : IAsyncLifetime
+public sealed class RemoteOperationsEndToEndTests(PostgresFixture postgres) : IAsyncLifetime
 {
     private const string WithRemote = ApiFactory.SyncScopes + " " + RemoteSchema.Scope;
 
@@ -120,6 +124,119 @@ public sealed class RemoteInspectEndToEndTests(PostgresFixture postgres) : IAsyn
         (await rang.Task.WaitAsync(TimeSpan.FromSeconds(30), Ct)).Should().Be(request.OperationId);
     }
 
+    [Fact]
+    public async Task AnAllowedCommandRunsOnTheOtherMachineWithItsOutput()
+    {
+        var (notebook, phone, phoneKey) = await PairedAsync();
+        using var _ = phoneKey;
+        var echo = DevelopmentCommand.Create("@ola", "echo ola-de-longe", null, DateTimeOffset.UtcNow);
+        echo.AllowRemote(true);
+        var (taskId, developmentId) = await ReadyEnvironmentAsync(notebook, echo);
+
+        var request = await RequestAsync(notebook, phone, phoneKey, RemoteOperationKinds.CommandRun, Run(developmentId, echo), taskId);
+        await notebook.Services.GetRequiredService<RemoteOperationDispatcher>().PollAsync(Ct);
+        var operation = await FinishedAsync(phone, request.OperationId);
+
+        operation.Status.Should().Be(RemoteOperationStatus.Succeeded, operation.ResultSummary);
+        var events = await SendAsync<RemoteEventPage>(phone, HttpMethod.Get, $"{RemoteRoutes.OperationEvents(request.OperationId)}?after=0", null);
+        events.Events.Should().Contain(item => item.Kind == RemoteEventKind.Output && item.Text!.Contains("ola-de-longe"));
+    }
+
+    /// <summary>O "pedir confirmação" para em Esperando aprovação até o celular responder, assinando.</summary>
+    [Fact]
+    public async Task AConfirmationAnsweredOnThePhoneLetsTheCommandRun()
+    {
+        var (notebook, phone, phoneKey) = await PairedAsync();
+        using var _ = phoneKey;
+        var confirm = DevelopmentCommand.Create(
+            "@confirmar", "echo confirmado", null, new DevelopmentCommandSettings("Confirmar", RequiresConfirmation: true), DateTimeOffset.UtcNow);
+        confirm.AllowRemote(true);
+        var (taskId, developmentId) = await ReadyEnvironmentAsync(notebook, confirm);
+
+        var request = await RequestAsync(notebook, phone, phoneKey, RemoteOperationKinds.CommandRun, Run(developmentId, confirm), taskId);
+        await notebook.Services.GetRequiredService<RemoteOperationDispatcher>().PollAsync(Ct);
+
+        var pending = await PendingApprovalAsync(phone, request.OperationId);
+        pending.Request.Kind.Should().Be(ApprovalKind.CommandConfirmation);
+        (await SendAsync<RemoteOperationView>(phone, HttpMethod.Get, RemoteRoutes.Operation(request.OperationId), null))
+            .Status.Should().Be(RemoteOperationStatus.WaitingApproval);
+
+        var answer = new ApprovalResponse(
+            pending.Request.ApprovalId, request.OperationId, pending.Request.RequestHash, ApprovalDecision.Allow, null, false, DateTimeOffset.UtcNow);
+        await SendAsync<ApprovalView>(phone, HttpMethod.Post, RemoteRoutes.ApprovalResponse(pending.Request.ApprovalId), Sign(phoneKey, answer, RemoteJws.ApprovalType));
+
+        // Sem hub aqui, o notebook pergunta de novo a cada 5 s — no relógio dele, que neste teste é de mentira.
+        var operation = await FinishedAsync(phone, request.OperationId, (FakeTimeProvider)notebook.Services.GetRequiredService<TimeProvider>());
+        operation.Status.Should().Be(RemoteOperationStatus.Succeeded, operation.ResultSummary);
+    }
+
+    /// <summary>A liberação é desta máquina: o pedido bem assinado de um comando não liberado aqui volta recusado, com o motivo.</summary>
+    [Fact]
+    public async Task ACommandNotAllowedThereIsRejectedWithTheReason()
+    {
+        var (notebook, phone, phoneKey) = await PairedAsync();
+        using var _ = phoneKey;
+        var deploy = DevelopmentCommand.Create("@deploy", "echo nao-devia-rodar", null, DateTimeOffset.UtcNow);
+        var (taskId, developmentId) = await ReadyEnvironmentAsync(notebook, deploy);
+
+        var request = await RequestAsync(notebook, phone, phoneKey, RemoteOperationKinds.CommandRun, Run(developmentId, deploy), taskId);
+        await notebook.Services.GetRequiredService<RemoteOperationDispatcher>().PollAsync(Ct);
+        var operation = await FinishedAsync(phone, request.OperationId);
+
+        operation.Status.Should().Be(RemoteOperationStatus.Rejected);
+        operation.ResultCode.Should().Be(RemoteErrorCodes.PolicyRefused);
+        operation.ResultSummary.Should().Be("Este comando não está liberado para rodar de longe nesta máquina.");
+    }
+
+    /// <summary>Uma tarefa com o worktree pronto numa pasta de verdade, e os comandos, no SQLite do notebook.</summary>
+    private static async Task<(Guid TaskId, Guid DevelopmentId)> ReadyEnvironmentAsync(SyncedDesktop notebook, params DevelopmentCommand[] commands)
+    {
+        var worktree = Path.Combine(notebook.Folder, $"worktree-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(worktree);
+        var now = DateTimeOffset.UtcNow;
+        var task = TaskItem.Create("Validar antimicrobianos", now);
+        var development = task.BeginDevelopment(null, worktree, "origin/develop", "feature/validacao", worktree, now);
+        task.MarkDevelopmentReady(development.Id, now);
+
+        await notebook.ChangeAsync(
+            db =>
+            {
+                db.Tasks.Add(task);
+                db.DevelopmentCommands.AddRange(commands);
+            },
+            Ct);
+
+        return (task.Id, development.Id);
+    }
+
+    private static JsonElement Run(Guid developmentId, DevelopmentCommand command) =>
+        JsonSerializer.SerializeToElement(new WorktreeExecutionRequest(developmentId, command.Id, new Dictionary<string, string>()), RemoteJson.Options);
+
+    private static async Task<ApprovalView> PendingApprovalAsync(DesktopSession phone, Guid operationId)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+
+        while (true)
+        {
+            var pending = await SendAsync<List<ApprovalView>>(phone, HttpMethod.Get, RemoteRoutes.Approvals, null);
+
+            if (pending.FirstOrDefault(view => view.Request.OperationId == operationId) is { } found)
+            {
+                return found;
+            }
+
+            DateTime.UtcNow.Should().BeBefore(deadline, "a máquina devia ter pedido a aprovação");
+            await Task.Delay(500, Ct);
+        }
+    }
+
+    private static SignedEnvelope Sign<T>(ECDsa key, T payload, string type)
+    {
+        var input = RemoteJws.SigningInput(payload, DevicePublicKey.FingerprintOf(key.ExportSubjectPublicKeyInfo()), type);
+        var signature = key.SignData(Encoding.ASCII.GetBytes(input), HashAlgorithmName.SHA256, DSASignatureFormat.IeeeP1363FixedFieldConcatenation);
+        return RemoteJws.Compose(input, Base64Url.EncodeToString(signature));
+    }
+
     /// <summary>O notebook aceita ser controlado e confia no celular, pelo código, como no pareamento de verdade.</summary>
     private async Task<(SyncedDesktop Notebook, DesktopSession Phone, ECDsa PhoneKey)> PairedAsync()
     {
@@ -147,13 +264,14 @@ public sealed class RemoteInspectEndToEndTests(PostgresFixture postgres) : IAsyn
         return (notebook, phone, phoneKey);
     }
 
-    /// <summary>O celular monta, assina e põe na fila um <c>environment.inspect</c> para o notebook.</summary>
+    /// <summary>O celular monta, assina e põe na fila um pedido para o notebook (por padrão, <c>environment.inspect</c>).</summary>
     private static async Task<RemoteOperationRequest> RequestAsync(
         SyncedDesktop notebook,
         DesktopSession phone,
         ECDsa key,
         string kind = RemoteOperationKinds.EnvironmentInspect,
-        JsonElement? payload = null)
+        JsonElement? payload = null,
+        Guid? taskId = null)
     {
         var workspace = (await notebook.RunAsync(services => services.GetRequiredService<ISyncLocalStore>().ReadAsync(Ct))).WorkspaceId!.Value;
         var now = DateTimeOffset.UtcNow;
@@ -164,23 +282,19 @@ public sealed class RemoteInspectEndToEndTests(PostgresFixture postgres) : IAsyn
             phone.DeviceId,
             kind,
             payload ?? JsonSerializer.SerializeToElement(new EnvironmentInspectionRequest(), RemoteJson.Options),
-            null,
+            taskId,
             [],
             now,
             now + RemoteLimits.DefaultAcceptanceWindow);
 
-        var fingerprint = DevicePublicKey.FingerprintOf(key.ExportSubjectPublicKeyInfo());
-        var input = RemoteJws.SigningInput(request, fingerprint, RemoteJws.OperationType);
-        var signature = key.SignData(Encoding.ASCII.GetBytes(input), HashAlgorithmName.SHA256, DSASignatureFormat.IeeeP1363FixedFieldConcatenation);
-
-        var created = await SendAsync<RemoteOperationView>(phone, HttpMethod.Post, RemoteRoutes.Operations,
-            RemoteJws.Compose(input, Base64Url.EncodeToString(signature)));
+        var created = await SendAsync<RemoteOperationView>(phone, HttpMethod.Post, RemoteRoutes.Operations, Sign(key, request, RemoteJws.OperationType));
 
         created.Status.Should().Be(RemoteOperationStatus.Queued);
         return request;
     }
 
-    private static async Task<RemoteOperationView> FinishedAsync(DesktopSession phone, Guid operationId)
+    /// <param name="clock">O relógio do notebook, que anda junto quando a espera dele é nele.</param>
+    private static async Task<RemoteOperationView> FinishedAsync(DesktopSession phone, Guid operationId, FakeTimeProvider? clock = null)
     {
         var deadline = DateTime.UtcNow.AddSeconds(30);
 
@@ -193,7 +307,8 @@ public sealed class RemoteInspectEndToEndTests(PostgresFixture postgres) : IAsyn
                 return operation;
             }
 
-            await Task.Delay(100, Ct);
+            clock?.Advance(RemoteOperationDispatcher.ApprovalPollInterval);
+            await Task.Delay(500, Ct);
         }
     }
 
