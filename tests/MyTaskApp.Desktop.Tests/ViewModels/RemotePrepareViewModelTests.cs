@@ -24,6 +24,12 @@ public class RemotePrepareViewModelTests
 
     private static readonly Guid TaskId = Guid.CreateVersion7();
 
+    private static readonly CatalogDatabase Production = new(Guid.CreateVersion7(), "ECO Produção", "Production", CanBeSource: true, CanBeTarget: false);
+
+    private static readonly CatalogDatabase Local = new(Guid.CreateVersion7(), "Local", "Development", CanBeSource: true, CanBeTarget: true);
+
+    private static readonly CatalogCopyProfile Lgpd = new(Guid.CreateVersion7(), "Produção LGPD", Production.ConnectionId, Local.ConnectionId, Anonymizes: true);
+
     private readonly FakeUseCaseRunner _runner = new();
 
     private readonly ISyncAccount _account = Substitute.For<ISyncAccount>();
@@ -35,7 +41,15 @@ public class RemotePrepareViewModelTests
         _account.IsAvailable.Returns(true);
         _runner.ResultsByHandler[typeof(GetMachinesHandler)] = Machines(This, Notebook, Machine("Desligado", online: false), Machine("Fechado", accepts: false));
         _runner.ResultsByHandler[typeof(GetRemoteControlHandler)] = new RemoteControlView(
-            new AgentCatalog("h", [Eco, Eco with { TagDirectoryId = Guid.CreateVersion7(), Label = "Sem pasta", MappedHere = false }], [], [], []),
+            new AgentCatalog(
+                "h",
+                [Eco, Eco with { TagDirectoryId = Guid.CreateVersion7(), Label = "Sem pasta", MappedHere = false }],
+                [],
+                [Production, Local],
+                [new CatalogAgentProfile("read", "Ler", "Só lê o repositório."), new CatalogAgentProfile("edit", "Editar", "Edita os arquivos.")])
+            {
+                CopyProfiles = [Lgpd],
+            },
             []);
         _runner.ResultsByHandler[typeof(GetPendingApprovalsHandler)] = (IReadOnlyList<ApprovalView>)[];
         _runner.ResultsByHandler[typeof(SendRemoteOperationHandler)] = new RemoteOperationView(
@@ -143,6 +157,56 @@ public class RemotePrepareViewModelTests
 
         _runner.Invoked.Should().NotContain(typeof(SendRemoteOperationHandler));
         _opened.Should().BeEmpty();
+    }
+
+    [AvaloniaFact]
+    public async Task PreparingEverything_SendsTheCopyProfileAndTheFirstPrompt()
+    {
+        var viewModel = ViewModel();
+        await viewModel.RefreshAsync(Ct);
+        viewModel.Open();
+        await Until(() => viewModel.SelectedRepository is not null);
+
+        viewModel.HasCopyProfiles.Should().BeTrue();
+        viewModel.CopyProfiles.Single().Name.Should().Be("Produção LGPD (ECO Produção → Local, produção: pede aprovação)");
+        viewModel.SelectedCopyProfile.Should().Be(viewModel.CopyProfiles[0], "o único perfil já vem escolhido");
+        viewModel.SelectedAgentProfile!.Id.Should().Be("read");
+
+        viewModel.CopyDatabase = true;
+        viewModel.StartAgent = true;
+        viewModel.SelectedAgentProfile = viewModel.AgentProfiles[1];
+        viewModel.AgentPrompt = "  Leia o README.  ";
+
+        var request = viewModel.CreateRequest(viewModel.SelectedRepository!)!;
+
+        request.Database.Should().Be(new DatabaseCopyRequest(Production.ConnectionId, null, Local.ConnectionId, null, null, Lgpd.CopyProfileId));
+        request.StartAgent!.ProfileId.Should().Be("edit");
+        request.StartAgent.Prompt.Should().Be(new PromptRequest(null, "Leia o README."));
+        request.RunPostWorktreeCommands.Should().BeTrue();
+
+        await viewModel.PrepareCommand.ExecuteAsync(null);
+        _opened.Should().ContainSingle().Which.OperationTitle.Should().Be("Preparar tudo em Notebook · ECO · Núcleo");
+    }
+
+    [AvaloniaFact]
+    public async Task ClaudeWithoutAPrompt_OrACopyWithoutAProfile_IsNotSent()
+    {
+        var viewModel = ViewModel();
+        await viewModel.RefreshAsync(Ct);
+        viewModel.Open();
+        await Until(() => viewModel.SelectedRepository is not null);
+
+        viewModel.StartAgent = true;
+        await viewModel.PrepareCommand.ExecuteAsync(null);
+        viewModel.ErrorMessage.Should().Be("Escreva o primeiro prompt do Claude.");
+
+        viewModel.StartAgent = false;
+        viewModel.CopyDatabase = true;
+        viewModel.SelectedCopyProfile = null;
+        await viewModel.PrepareCommand.ExecuteAsync(null);
+        viewModel.ErrorMessage.Should().Be("Escolha o perfil de cópia do banco.");
+
+        _runner.Invoked.Should().NotContain(typeof(SendRemoteOperationHandler));
     }
 
     [AvaloniaFact]

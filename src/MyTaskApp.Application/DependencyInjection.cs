@@ -276,6 +276,7 @@ public static class DependencyInjection
 
         // A cópia de banco de longe (T-32, ADR-090): o mesmo caso de uso da tela.
         services.AddSingleton<IRemoteOperationExecutor, DatabaseCopyExecutor>();
+        services.AddSingleton<RemoteDatabaseCopy>();
         services.AddScoped<RemoteDatabaseCopyPlanner>();
         services.AddScoped<RecordRemoteOperationHandler>();
         services.TryAddSingleton(new SupportedRemoteOperations([

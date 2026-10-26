@@ -545,7 +545,16 @@ public sealed class AgentStartExecutor(IUseCaseRunner runner, HeadlessPromptRunn
         return (await prompts.DetectAsync(cancellationToken)).Refusal;
     }
 
-    public async Task<RemoteOperationResult> ExecuteAsync(RemoteExecution execution, CancellationToken cancellationToken)
+    public Task<RemoteOperationResult> ExecuteAsync(RemoteExecution execution, CancellationToken cancellationToken) =>
+        StartAsync(runner, prompts, execution, execution.Payload<ClaudeCodeSessionRequest>(), cancellationToken);
+
+    /// <summary>Abre a conversa e manda o primeiro prompt; o "Preparar tudo" chama com o ambiente que acabou de criar.</summary>
+    internal static async Task<RemoteOperationResult> StartAsync(
+        IUseCaseRunner runner,
+        HeadlessPromptRunner prompts,
+        RemoteExecution execution,
+        ClaudeCodeSessionRequest request,
+        CancellationToken cancellationToken)
     {
         var (detection, refusal) = await prompts.DetectAsync(cancellationToken);
 
@@ -554,18 +563,20 @@ public sealed class AgentStartExecutor(IUseCaseRunner runner, HeadlessPromptRunn
             return RemoteOperationResult.Failure(refusal.Code, refusal.Summary);
         }
 
-        var target = await TargetAsync(execution.Request, cancellationToken);
-        var payload = execution.Payload<ClaudeCodeSessionRequest>();
+        var target = await TargetAsync(runner, execution.Request.TaskId, request, cancellationToken);
         var sessionId = await runner.RunAsync<HeadlessSessionStore, Guid>(
             (store, token) => store.OpenAsync(target, prompts.ProviderId, detection!.ExecutablePath!, execution.Request.OperationId, token),
             CancellationToken.None);
 
-        return await prompts.RunAsync(execution, sessionId, target, detection!, payload.Prompt, resume: false, cancellationToken);
+        return await prompts.RunAsync(execution, sessionId, target, detection!, request.Prompt, resume: false, cancellationToken);
     }
 
     private Task<HeadlessTarget> TargetAsync(RemoteOperationRequest request, CancellationToken cancellationToken) =>
+        TargetAsync(runner, request.TaskId, RemoteOperationRules.PayloadOf<ClaudeCodeSessionRequest>(request), cancellationToken);
+
+    private static Task<HeadlessTarget> TargetAsync(IUseCaseRunner runner, Guid? taskId, ClaudeCodeSessionRequest request, CancellationToken cancellationToken) =>
         runner.RunAsync<HeadlessAgentPlanner, HeadlessTarget>(
-            (planner, token) => planner.StartAsync(request.TaskId, RemoteOperationRules.PayloadOf<ClaudeCodeSessionRequest>(request), token),
+            (planner, token) => planner.StartAsync(taskId, request, token),
             cancellationToken);
 }
 

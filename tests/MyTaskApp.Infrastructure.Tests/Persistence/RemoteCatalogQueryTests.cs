@@ -43,18 +43,31 @@ public sealed class RemoteCatalogQueryTests : IDisposable
         disabled.AllowRemote(true, Now);
         disabled.SetEnabled(false, Now);
 
+        var lgpd = MyTaskApp.Domain.DatabaseOperations.DatabaseCopyProfile.Create(
+            "Produção LGPD", production.Id, local.Id, null, MyTaskApp.Domain.DatabaseOperations.DatabaseCopyOptions.Default with { RequireAnonymization = false }, Now);
+        var toStaging = MyTaskApp.Domain.DatabaseOperations.DatabaseCopyProfile.Create(
+            "Para homologação", production.Id, notAllowed.Id, null, MyTaskApp.Domain.DatabaseOperations.DatabaseCopyOptions.Default with { RequireAnonymization = false }, Now);
+        var intoProduction = MyTaskApp.Domain.DatabaseOperations.DatabaseCopyProfile.Create(
+            "Para produção", local.Id, production.Id, null, MyTaskApp.Domain.DatabaseOperations.DatabaseCopyOptions.Default with { RequireAnonymization = false }, Now);
+
         await using (var write = db.CreateContext())
         {
             write.DatabaseConnections.AddRange(production, local, notAllowed, disabled);
+            write.DatabaseCopyProfiles.AddRange(lgpd, toStaging, intoProduction);
             await write.SaveChangesAsync(Ct);
         }
 
         await using var read = db.CreateContext();
         var catalog = RemoteCatalogs.Seal(await Query(read).ReadAsync(Ct));
 
-        catalog.Databases.Should().Equal(
+        catalog.Databases.Should().BeEquivalentTo(
+        [
             new CatalogDatabase(production.Id, "ECO Produção", "Production", CanBeSource: true, CanBeTarget: false),
-            new CatalogDatabase(local.Id, "Local", "Development", CanBeSource: true, CanBeTarget: true));
+            new CatalogDatabase(local.Id, "Local", "Development", CanBeSource: true, CanBeTarget: true),
+        ]);
+        catalog.CopyProfiles.Should().Equal(
+            [new CatalogCopyProfile(lgpd.Id, "Produção LGPD", production.Id, local.Id, Anonymizes: false)],
+            "só entre conexões publicadas, e nunca com produção de destino");
         var json = System.Text.Json.JsonSerializer.Serialize(catalog, RemoteJson.Options);
         json.Should().NotContain("198.51.100.112").And.NotContain("backup_user").And.NotContain("Homologação");
     }

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Threading.Channels;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Commands;
 using MyTaskApp.Application.Development;
 using MyTaskApp.Application.External;
@@ -39,9 +40,17 @@ public sealed class RemoteProvisionPlanner(
             throw new DomainException("O pedido diz uma tarefa e o ambiente, outra.");
         }
 
-        if (request.Database is not null || request.StartAgent is not null)
+        if (request.StartAgent is { } agent)
         {
-            throw new DomainException("Esta versão do agente prepara o worktree e roda os comandos; o banco e o Claude vêm em pedidos próprios.");
+            if (AgentToolProfiles.Find(agent.ProfileId) is null)
+            {
+                throw new DomainException($"Perfil desconhecido nesta máquina: {agent.ProfileId}.");
+            }
+
+            if (agent.Prompt.AgentSessionId is not null)
+            {
+                throw new DomainException("A preparação abre uma conversa nova; para continuar outra, mande um prompt nela.");
+            }
         }
 
         if (request.SourceBranch is not null && request.SourceTag is not null)
@@ -116,24 +125,43 @@ public sealed class RemoteProvisionPlanner(
 }
 
 /// <summary>
-/// <c>worktree.provision</c> (E4): o "Iniciar implementação" da aba
-/// Desenvolvimento, na máquina de longe, sem a tela dela aberta. Cada etapa
-/// (<c>prepare</c>, <c>worktree</c>, <c>commands</c>) vira um evento antes de
-/// começar: o agente que cair no meio deixa dito onde parou, e a retomada com
-/// <see cref="WorktreeConflictPolicy.AdoptExisting"/> adota o worktree que ficou.
+/// <c>worktree.provision</c> (E4, E6): o "Iniciar implementação" da aba
+/// Desenvolvimento, na máquina de longe, sem a tela dela aberta; com banco e
+/// Claude, o "Preparar tudo". Cada etapa (<c>prepare</c>, <c>database</c>,
+/// <c>worktree</c>, <c>commands</c>, <c>agent</c>) vira um evento antes de
+/// começar: o agente que cair no meio deixa dito onde parou, a falha diz em
+/// qual foi, e a retomada com <see cref="WorktreeConflictPolicy.AdoptExisting"/>
+/// adota o worktree que ficou.
 /// </summary>
 /// <remarks>
+/// <para>
+/// A ordem é a do ADR-060: a cópia é validada, e a produção aprovada, antes do
+/// Git (negar não cria nada); o worktree; a cópia; os comandos, já com o
+/// <c>{database}</c>; o Claude por último. O que já foi feito fica quando uma
+/// etapa falha, como na tela.
+/// </para>
+/// <para>
 /// Os comandos pós-Worktree são a lista gravada no ambiente, definida nesta
 /// máquina ou conferida aqui ao chegar pelo sync (ADR-061); quem pede de longe
 /// só escolhe rodar ou não. O caminho das pastas não sai daqui.
+/// </para>
 /// </remarks>
-public sealed class WorktreeProvisionExecutor(IUseCaseRunner runner, ProvisionEnvironmentHandler provision) : IRemoteOperationExecutor
+public sealed class WorktreeProvisionExecutor(
+    IUseCaseRunner runner,
+    ProvisionEnvironmentHandler provision,
+    RemoteDatabaseCopy copies,
+    HeadlessPromptRunner prompts) : IRemoteOperationExecutor
 {
     public const string PrepareStep = "prepare";
 
     public const string WorktreeStep = "worktree";
 
+    public const string DatabaseStep = "database";
+
     public const string CommandsStep = "commands";
+
+    /// <summary>A etapa do Claude: o evento é o do <see cref="HeadlessPromptRunner"/>.</summary>
+    public const string AgentStep = "agent";
 
     public string Kind => RemoteOperationKinds.WorktreeProvision;
 
@@ -142,23 +170,54 @@ public sealed class WorktreeProvisionExecutor(IUseCaseRunner runner, ProvisionEn
         try
         {
             await PlanAsync(request, cancellationToken);
-            return null;
+
+            if (RemoteOperationRules.PayloadOf<EnvironmentProvisioningRequest>(request).Database is { } database)
+            {
+                await copies.PlanAsync(request.TaskId, database with { DevelopmentId = null }, cancellationToken);
+            }
         }
         catch (DomainException exception)
         {
             return new RemoteRefusal(RemoteErrorCodes.PolicyRefused, exception.Message);
         }
+
+        return RemoteOperationRules.PayloadOf<EnvironmentProvisioningRequest>(request).StartAgent is null
+            ? null
+            : (await prompts.DetectAsync(cancellationToken)).Refusal;
     }
 
     public async Task<RemoteOperationResult> ExecuteAsync(RemoteExecution execution, CancellationToken cancellationToken)
     {
         var plan = await PlanAsync(execution.Request, cancellationToken);
+        var payload = execution.Payload<EnvironmentProvisioningRequest>();
+
+        // Tudo o que pode recusar vem antes do Git: o Claude desta máquina, e a cópia com a aprovação dela.
+        if (payload.StartAgent is not null && (await prompts.DetectAsync(cancellationToken)).Refusal is { } unavailable)
+        {
+            return RemoteOperationResult.Failure(unavailable.Code, $"Claude: {unavailable.Summary} Nada foi criado.");
+        }
+
+        RemoteCopyTarget? copy = null;
+        RemoteCopyClearance? clearance = null;
+
+        if (payload.Database is { } database)
+        {
+            copy = await copies.PlanAsync(execution.Request.TaskId, database with { DevelopmentId = null }, cancellationToken);
+            (clearance, var refused) = await copies.ClearAsync(execution, copy, DatabaseStep, cancellationToken);
+
+            if (refused is not null)
+            {
+                return refused with { Summary = $"Banco: {refused.Summary} Nada foi criado." };
+            }
+        }
+
         var events = new ProvisionEvents(execution);
         ProvisionResult result;
 
         try
         {
-            result = await provision.HandleAsync(plan.Command, events, cancellationToken);
+            // Com banco, os comandos esperam a cópia: precisam do {database}.
+            result = await provision.HandleAsync(plan.Command with { RunCommands = plan.RunCommands && copy is null }, events, cancellationToken);
         }
         catch (DevelopmentStepException exception)
         {
@@ -175,36 +234,120 @@ public sealed class WorktreeProvisionExecutor(IUseCaseRunner runner, ProvisionEn
             await events.CompleteAsync();
         }
 
-        var data = JsonSerializer.SerializeToElement(
-            new Dictionary<string, object?>
-            {
-                ["developmentId"] = result.Development.Id,
-                ["branch"] = result.Development.Branch,
-                ["adopted"] = result.Adopted,
-                ["commands"] = result.Commands.Steps.Count,
-                ["commandsSucceeded"] = result.Commands.Succeeded,
-            },
-            RemoteJson.Options);
-
+        var data = new Dictionary<string, object?>
+        {
+            ["developmentId"] = result.Development.Id,
+            ["branch"] = result.Development.Branch,
+            ["adopted"] = result.Adopted,
+        };
         var worktree = result.Adopted ? "Worktree adotado" : "Worktree criado";
+        var commands = result.Commands;
+        string? databaseName = null;
 
-        if (result.Commands.Steps.Count == 0)
+        if (copy is not null)
         {
-            return RemoteOperationResult.Success($"{worktree}: {plan.Describe()}.", data);
+            try
+            {
+                var copied = await copies.CopyAsync(
+                    execution,
+                    copy with { TaskId = result.Development.TaskId, DevelopmentId = result.Development.Id },
+                    clearance!,
+                    DatabaseStep,
+                    cancellationToken);
+                data["databaseAuditId"] = copied.AuditId;
+
+                if (!copied.Succeeded)
+                {
+                    return Failed($"Banco: {RemoteDatabaseCopy.Error(copied)} {worktree}; copie o banco de novo e rode os comandos.", data);
+                }
+
+                databaseName = copied.DestinationDatabase;
+                data["database"] = databaseName;
+            }
+            catch (DomainException exception)
+            {
+                return Failed($"Banco: {SensitiveText.Mask(exception.Message)} {worktree}; copie o banco de novo e rode os comandos.", data);
+            }
+
+            if (plan.RunCommands)
+            {
+                var later = new ProvisionEvents(execution);
+
+                try
+                {
+                    commands = await provision.RunCommandsAsync(result.Development, later, cancellationToken);
+                }
+                catch (DomainException exception)
+                {
+                    return Failed($"Comandos: {SensitiveText.Mask(exception.Message)}", data);
+                }
+                finally
+                {
+                    await later.CompleteAsync();
+                }
+            }
         }
 
-        if (result.Commands.Succeeded)
+        data["commands"] = commands.Steps.Count;
+        data["commandsSucceeded"] = commands.Succeeded;
+
+        if (commands.Steps.Count > 0 && !commands.Succeeded)
         {
-            return RemoteOperationResult.Success($"{worktree} e {Count(result.Commands.Steps.Count)}: {plan.Describe()}.", data);
+            var failed = commands.Steps.FirstOrDefault(step => step.State is CommandStepState.Failed or CommandStepState.Canceled);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            return Failed(
+                $"{worktree}, mas um comando pós-Worktree falhou{(failed is null ? string.Empty : $" ({SensitiveText.Mask(failed.Command)})")}. O worktree fica.",
+                data);
         }
 
-        var failed = result.Commands.Steps.FirstOrDefault(step => step.State is CommandStepState.Failed or CommandStepState.Canceled);
-        cancellationToken.ThrowIfCancellationRequested();
+        var summary = commands.Steps.Count == 0
+            ? $"{worktree}: {plan.Describe()}."
+            : $"{worktree} e {Count(commands.Steps.Count)}: {plan.Describe()}.";
 
-        return RemoteOperationResult.Failure(
-            RemoteErrorCodes.ExecutionFailed,
-            $"{worktree}, mas um comando pós-Worktree falhou{(failed is null ? string.Empty : $" ({SensitiveText.Mask(failed.Command)})")}. O worktree fica.");
+        if (databaseName is not null)
+        {
+            summary += $" Banco: {databaseName}.";
+        }
+
+        if (payload.StartAgent is not { } agent)
+        {
+            return RemoteOperationResult.Success(summary, Json(data));
+        }
+
+        // O evento da etapa (agent) é o do HeadlessPromptRunner, já com o id da conversa.
+        RemoteOperationResult answer;
+
+        try
+        {
+            answer = await AgentStartExecutor.StartAsync(
+                runner,
+                prompts,
+                execution,
+                agent with { DevelopmentId = result.Development.Id },
+                cancellationToken);
+        }
+        catch (DomainException exception)
+        {
+            return Failed($"{summary} Claude: {SensitiveText.Mask(exception.Message)}", data);
+        }
+
+        // O id da conversa vai junto: quem pediu já pode mandar o próximo prompt.
+        if (answer.Data is { ValueKind: JsonValueKind.Object } agentData)
+        {
+            foreach (var property in agentData.EnumerateObject())
+            {
+                data[property.Name] = property.Value;
+            }
+        }
+
+        return new RemoteOperationResult(answer.Succeeded, $"{summary} Claude: {answer.Summary}", answer.Code, Json(data));
     }
+
+    private static RemoteOperationResult Failed(string summary, Dictionary<string, object?> data) =>
+        new(false, summary, RemoteErrorCodes.ExecutionFailed, Json(data));
+
+    private static JsonElement Json(Dictionary<string, object?> data) => JsonSerializer.SerializeToElement(data, RemoteJson.Options);
 
     internal static string StepName(DevelopmentStep step) => step switch
     {

@@ -42,6 +42,11 @@ public sealed class RemoteDatabaseCopyPlanner(
             var profile = await copyProfiles.FindByIdAsync(copyProfileId, cancellationToken)
                 ?? throw new DomainException("O perfil de cópia não existe nesta máquina.");
 
+            if (!profile.IsEnabled)
+            {
+                throw new DomainException($"O perfil {profile.Name} está desligado nesta máquina.");
+            }
+
             if (profile.SourceConnectionId != source.Id || profile.DestinationConnectionId != destination.Id)
             {
                 throw new DomainException($"O perfil {profile.Name} é de outras conexões.");
@@ -95,94 +100,94 @@ public sealed class RemoteDatabaseCopyPlanner(
             : throw new DomainException($"A conexão {side} não está liberada para cópias pedidas de longe nesta máquina.");
 }
 
-/// <summary>
-/// <c>database.copy</c> (ADR-090): o mesmo <see cref="RunDatabaseCopyHandler"/>
-/// da tela, com a política, o processo e a auditoria de sempre. A confirmação
-/// de produção, que na tela é um diálogo, vira aprovação de quem pediu; a
-/// produção crítica pede o nome do banco digitado.
-/// </summary>
-public sealed class DatabaseCopyExecutor(IUseCaseRunner runner) : IRemoteOperationExecutor
+/// <summary>A cópia validada e, quando a política pediu, aprovada: pode rodar.</summary>
+/// <param name="ConfirmedBy">Quem aprovou a produção; nulo quando ninguém precisou.</param>
+public sealed record RemoteCopyClearance(DatabaseCopyValidation Validation, string? ConfirmedBy)
 {
-    public const string ValidateStep = "validar";
+    public string? TypedConfirmation => Validation.RequiresTypedConfirmation ? Validation.ConfirmationText : null;
+}
 
-    public string Kind => RemoteOperationKinds.DatabaseCopy;
+/// <summary>
+/// A cópia de longe em duas metades (ADR-090): <see cref="ClearAsync"/> e
+/// <see cref="CopyAsync"/>. O <c>database.copy</c> faz uma depois da outra; o
+/// "Preparar tudo" valida e pede a aprovação antes do Git, e só copia depois
+/// do worktree (ADR-060). As duas usam os casos de uso da tela.
+/// </summary>
+public sealed class RemoteDatabaseCopy(IUseCaseRunner runner)
+{
+    public Task<RemoteCopyTarget> PlanAsync(Guid? taskId, RemoteCopyRequest request, CancellationToken cancellationToken) =>
+        runner.RunAsync<RemoteDatabaseCopyPlanner, RemoteCopyTarget>(
+            (planner, token) => planner.PlanAsync(taskId, request, token),
+            cancellationToken);
 
-    public async Task<RemoteRefusal?> CheckAsync(RemoteOperationRequest request, CancellationToken cancellationToken)
+    /// <summary>
+    /// Valida, e a confirmação de produção que na tela é um diálogo vira
+    /// aprovação de quem pediu; a produção crítica pede o nome digitado.
+    /// Recusa ou negação voltam como o resultado da operação, sem copiar nada.
+    /// </summary>
+    public async Task<(RemoteCopyClearance? Clearance, RemoteOperationResult? Failure)> ClearAsync(
+        RemoteExecution execution,
+        RemoteCopyTarget target,
+        string step,
+        CancellationToken cancellationToken)
     {
-        try
-        {
-            await PlanAsync(request, cancellationToken);
-            return null;
-        }
-        catch (DomainException exception)
-        {
-            return new RemoteRefusal(RemoteErrorCodes.PolicyRefused, exception.Message);
-        }
-    }
-
-    public async Task<RemoteOperationResult> ExecuteAsync(RemoteExecution execution, CancellationToken cancellationToken)
-    {
-        var target = await PlanAsync(execution.Request, cancellationToken);
-
-        await execution.EmitAsync(RemoteEventKind.StepStarted, "Conferindo origem, destino, ferramentas e máscaras.", ValidateStep, cancellationToken: cancellationToken);
+        await execution.EmitAsync(RemoteEventKind.StepStarted, "Conferindo origem, destino, ferramentas e máscaras.", step, cancellationToken: cancellationToken);
         var validation = await runner.RunAsync<ValidateDatabaseCopyHandler, DatabaseCopyValidation>(
             (handler, token) => handler.HandleAsync(new ValidateDatabaseCopy(target.Request), token),
             cancellationToken);
 
         if (!validation.CanRun)
         {
-            return RemoteOperationResult.Failure(RemoteErrorCodes.PolicyRefused, Refusal(validation));
+            return (null, RemoteOperationResult.Failure(RemoteErrorCodes.PolicyRefused, Refusal(validation)));
         }
 
-        string? confirmedBy = null;
-
-        if (validation.RequiresProductionConfirmation)
+        if (!validation.RequiresProductionConfirmation)
         {
-            var approval = await execution.RequestApprovalAsync(Ask(validation), cancellationToken);
-
-            if (!approval.IsAllowed)
-            {
-                return approval.AsFailure("A cópia de produção");
-            }
-
-            confirmedBy = $"Remoto: {approval.ControllerNickname ?? execution.ControllerNickname}";
+            return (new RemoteCopyClearance(validation, null), null);
         }
 
-        var typed = validation.RequiresTypedConfirmation ? validation.ConfirmationText : null;
-        var progress = new RemoteCopyProgress(execution);
-        DatabaseCopyResult result;
+        var approval = await execution.RequestApprovalAsync(Ask(validation), cancellationToken);
+
+        return approval.IsAllowed
+            ? (new RemoteCopyClearance(validation, $"Remoto: {approval.ControllerNickname ?? execution.ControllerNickname}"), null)
+            : (null, approval.AsFailure("A cópia de produção"));
+    }
+
+    /// <summary>A cópia, com as etapas como eventos; com <paramref name="step"/> nulo, cada evento leva o nome da etapa da cópia.</summary>
+    public async Task<DatabaseCopyResult> CopyAsync(
+        RemoteExecution execution,
+        RemoteCopyTarget target,
+        RemoteCopyClearance clearance,
+        string? step,
+        CancellationToken cancellationToken)
+    {
+        var confirmed = clearance.ConfirmedBy is not null;
+        var progress = new RemoteCopyProgress(execution, step);
 
         try
         {
-            result = target is { DevelopmentId: { } developmentId, TaskId: { } taskId }
+            return target is { DevelopmentId: { } developmentId, TaskId: { } taskId }
                 ? (await runner.RunAsync<CopyDevelopmentDatabaseHandler, DevelopmentDatabaseCopyResult>(
                     (handler, token) => handler.HandleAsync(
-                        new CopyDevelopmentDatabase(taskId, developmentId, target.Request, confirmedBy is not null, typed, confirmedBy),
+                        new CopyDevelopmentDatabase(taskId, developmentId, target.Request, confirmed, clearance.TypedConfirmation, clearance.ConfirmedBy),
                         progress,
                         token),
                     cancellationToken)).Copy
                 : await runner.RunAsync<RunDatabaseCopyHandler, DatabaseCopyResult>(
-                    (handler, token) => handler.HandleAsync(new RunDatabaseCopy(target.Request, confirmedBy is not null, typed, confirmedBy), progress, token),
+                    (handler, token) => handler.HandleAsync(
+                        new RunDatabaseCopy(target.Request, confirmed, clearance.TypedConfirmation, clearance.ConfirmedBy),
+                        progress,
+                        token),
                     cancellationToken);
         }
         finally
         {
             await progress.FlushAsync();
         }
-
-        var data = JsonSerializer.SerializeToElement(
-            new Dictionary<string, object?>
-            {
-                ["auditId"] = result.AuditId,
-                ["destinationDatabase"] = result.DestinationDatabase,
-                ["status"] = result.Status.ToString(),
-            },
-            RemoteJson.Options);
-
-        return result.Succeeded
-            ? RemoteOperationResult.Success($"Cópia pronta em {validation.DestinationName}: {result.DestinationDatabase}.", data)
-            : new RemoteOperationResult(false, Clip(SensitiveText.Mask(result.Error ?? "A cópia não terminou.")), RemoteErrorCodes.ExecutionFailed, data);
     }
+
+    /// <summary>O motivo de uma cópia que não terminou, sem o que não sai daqui.</summary>
+    public static string Error(DatabaseCopyResult result) => Clip(SensitiveText.Mask(result.Error ?? "A cópia não terminou."));
 
     /// <summary>
     /// O que a pessoa lê antes de permitir (o risco é dar sem ler, num celular):
@@ -225,11 +230,6 @@ public sealed class DatabaseCopyExecutor(IUseCaseRunner runner) : IRemoteOperati
         return Clip(SensitiveText.Mask(string.Join(" ", failed)));
     }
 
-    private Task<RemoteCopyTarget> PlanAsync(RemoteOperationRequest request, CancellationToken cancellationToken) =>
-        runner.RunAsync<RemoteDatabaseCopyPlanner, RemoteCopyTarget>(
-            (planner, token) => planner.PlanAsync(request.TaskId, RemoteOperationRules.PayloadOf<RemoteCopyRequest>(request), token),
-            cancellationToken);
-
     private static string Clip(string text) =>
         text.Length <= RemoteLimits.MaxEventTextLength ? text : $"{text[..(RemoteLimits.MaxEventTextLength - 1)]}…";
 
@@ -238,7 +238,7 @@ public sealed class DatabaseCopyExecutor(IUseCaseRunner runner) : IRemoteOperati
     /// é síncrono, e cada evento espera o anterior. As linhas das ferramentas
     /// não saem: só a etapa, o que a tela mostra no cabeçalho.
     /// </summary>
-    private sealed class RemoteCopyProgress(RemoteExecution execution) : IProgress<DatabaseCopyProgress>
+    private sealed class RemoteCopyProgress(RemoteExecution execution, string? step) : IProgress<DatabaseCopyProgress>
     {
         private readonly Lock _gate = new();
 
@@ -258,7 +258,7 @@ public sealed class DatabaseCopyExecutor(IUseCaseRunner runner) : IRemoteOperati
                 _step = value.Step;
                 var text = DatabaseCopySteps.Label(value.Step);
                 _tail = _tail.ContinueWith(
-                    _ => execution.EmitAsync(RemoteEventKind.StepStarted, text, value.Step.ToString(), cancellationToken: CancellationToken.None),
+                    _ => execution.EmitAsync(RemoteEventKind.StepStarted, text, step ?? value.Step.ToString(), cancellationToken: CancellationToken.None),
                     CancellationToken.None,
                     TaskContinuationOptions.None,
                     TaskScheduler.Default).Unwrap();
@@ -273,4 +273,57 @@ public sealed class DatabaseCopyExecutor(IUseCaseRunner runner) : IRemoteOperati
             }
         }
     }
+}
+
+/// <summary>
+/// <c>database.copy</c> (ADR-090): o mesmo <see cref="RunDatabaseCopyHandler"/>
+/// da tela, com a política, o processo e a auditoria de sempre, e a produção
+/// atrás da aprovação de quem pediu (<see cref="RemoteDatabaseCopy"/>).
+/// </summary>
+public sealed class DatabaseCopyExecutor(RemoteDatabaseCopy copies) : IRemoteOperationExecutor
+{
+    public const string ValidateStep = "validar";
+
+    public string Kind => RemoteOperationKinds.DatabaseCopy;
+
+    public async Task<RemoteRefusal?> CheckAsync(RemoteOperationRequest request, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await PlanAsync(request, cancellationToken);
+            return null;
+        }
+        catch (DomainException exception)
+        {
+            return new RemoteRefusal(RemoteErrorCodes.PolicyRefused, exception.Message);
+        }
+    }
+
+    public async Task<RemoteOperationResult> ExecuteAsync(RemoteExecution execution, CancellationToken cancellationToken)
+    {
+        var target = await PlanAsync(execution.Request, cancellationToken);
+        var (clearance, failure) = await copies.ClearAsync(execution, target, ValidateStep, cancellationToken);
+
+        if (failure is not null)
+        {
+            return failure;
+        }
+
+        var result = await copies.CopyAsync(execution, target, clearance!, step: null, cancellationToken);
+        var data = JsonSerializer.SerializeToElement(
+            new Dictionary<string, object?>
+            {
+                ["auditId"] = result.AuditId,
+                ["destinationDatabase"] = result.DestinationDatabase,
+                ["status"] = result.Status.ToString(),
+            },
+            RemoteJson.Options);
+
+        return result.Succeeded
+            ? RemoteOperationResult.Success($"Cópia pronta em {clearance!.Validation.DestinationName}: {result.DestinationDatabase}.", data)
+            : new RemoteOperationResult(false, RemoteDatabaseCopy.Error(result), RemoteErrorCodes.ExecutionFailed, data);
+    }
+
+    private Task<RemoteCopyTarget> PlanAsync(RemoteOperationRequest request, CancellationToken cancellationToken) =>
+        copies.PlanAsync(request.TaskId, RemoteOperationRules.PayloadOf<RemoteCopyRequest>(request), cancellationToken);
 }

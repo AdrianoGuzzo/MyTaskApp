@@ -140,6 +140,7 @@ public sealed class DatabaseCopyExecutorTests : IAsyncDisposable
             .AddSingleton(new RemoteDatabaseCopyPlanner(
                 scenario.Catalog.Connections, scenario.Catalog.CopyProfiles, scenario.Catalog.AnonymizationProfiles, new FakeTaskItemRepository()))
             .AddSingleton<IUseCaseRunner, ScopedUseCaseRunner>()
+            .AddSingleton<RemoteDatabaseCopy>()
             .AddSingleton<DatabaseCopyExecutor>()
             .BuildServiceProvider();
     }

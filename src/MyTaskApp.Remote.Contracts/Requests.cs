@@ -32,8 +32,12 @@ public sealed record EnvironmentInspection(
 /// <param name="SourceBranch">Nula: o padrão do diretório (ADR-035). Exclusiva com <paramref name="SourceTag"/>.</param>
 /// <param name="SourceTag">A versão de partida (ADR-043).</param>
 /// <param name="BranchName">Nula: a convenção, inclusive a do Jira (ADR-045).</param>
-/// <param name="Database">A cópia do banco do ambiente (ADR-060), se pedida.</param>
-/// <param name="StartAgent">Já abre a sessão do Claude no fim, se pedida.</param>
+/// <param name="Database">
+/// A cópia do banco do ambiente (ADR-060), se pedida: validada e aprovada antes
+/// do Git, copiada depois do worktree, e os comandos só rodam depois dela. O
+/// <c>DevelopmentId</c> dela é ignorado: vale o ambiente que a preparação cria.
+/// </param>
+/// <param name="StartAgent">Já abre a sessão do Claude no fim, se pedida. O <c>DevelopmentId</c> dela também é ignorado.</param>
 public sealed record EnvironmentProvisioningRequest(
     Guid TaskId,
     Guid TagDirectoryId,

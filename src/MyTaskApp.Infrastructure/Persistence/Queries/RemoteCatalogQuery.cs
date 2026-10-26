@@ -55,6 +55,13 @@ internal sealed class RemoteCatalogQuery(MyTaskAppDbContext context, ITagQuery t
             .OrderBy(connection => connection.Name, StringComparer.CurrentCultureIgnoreCase)
             .Take(MaxItems)
             .ToList();
+        var sources = databases.Where(connection => connection is { AllowAsSource: true, CanDump: true }).Select(connection => connection.Id).ToHashSet();
+        var targets = databases.Where(connection => connection is { AllowAsDestination: true, CanRestore: true, IsProtected: false }).Select(connection => connection.Id).ToHashSet();
+        var copyProfiles = (await context.DatabaseCopyProfiles.AsNoTracking().ToListAsync(cancellationToken))
+            .Where(profile => profile.IsEnabled && sources.Contains(profile.SourceConnectionId) && targets.Contains(profile.DestinationConnectionId))
+            .OrderBy(profile => profile.Name, StringComparer.CurrentCultureIgnoreCase)
+            .Take(MaxItems)
+            .ToList();
 
         return new AgentCatalog(
             string.Empty,
@@ -94,6 +101,15 @@ internal sealed class RemoteCatalogQuery(MyTaskAppDbContext context, ITagQuery t
             [.. AgentToolProfiles.All.Select(profile => new CatalogAgentProfile(profile.Id, profile.Name, profile.Description))])
         {
             Environments = await EnvironmentsAsync(listed, cancellationToken),
+            CopyProfiles =
+            [
+                .. copyProfiles.Select(profile => new CatalogCopyProfile(
+                    profile.Id,
+                    Clean(profile.Name),
+                    profile.SourceConnectionId,
+                    profile.DestinationConnectionId,
+                    profile.AnonymizationProfileId is not null)),
+            ],
         };
     }
 

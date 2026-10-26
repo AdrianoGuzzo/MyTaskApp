@@ -94,16 +94,20 @@ public sealed class RemoteProvisionPlannerTests
     }
 
     [Fact]
-    public async Task ADirectoryNotMappedHere_OrAnotherTask_OrTheDatabase_AreRefused()
+    public async Task ADirectoryNotMappedHere_OrAnotherTask_OrAClaudeProfileUnknownHere_AreRefused()
     {
         await FluentActions.Awaiting(() => Planner().PlanAsync(_task.Id, Request(directory: Guid.CreateVersion7()), Ct))
             .Should().ThrowAsync<DomainException>().WithMessage("*não está mapeado nesta máquina*");
         await FluentActions.Awaiting(() => Planner().PlanAsync(Guid.CreateVersion7(), Request(), Ct))
             .Should().ThrowAsync<DomainException>().WithMessage("*uma tarefa e o ambiente, outra*");
 
-        var database = Request() with { Database = new DatabaseCopyRequest(Guid.CreateVersion7(), null, Guid.CreateVersion7(), "eco_dev", null, null) };
-        await FluentActions.Awaiting(() => Planner().PlanAsync(_task.Id, database, Ct))
-            .Should().ThrowAsync<DomainException>().WithMessage("*o banco e o Claude vêm em pedidos próprios*");
+        var unknown = Request() with { StartAgent = new ClaudeCodeSessionRequest(Guid.Empty, "admin", null, null, new PromptRequest(null, "oi")) };
+        await FluentActions.Awaiting(() => Planner().PlanAsync(_task.Id, unknown, Ct))
+            .Should().ThrowAsync<DomainException>().WithMessage("Perfil desconhecido nesta máquina: admin.");
+
+        var resumed = Request() with { StartAgent = new ClaudeCodeSessionRequest(Guid.Empty, "read", null, null, new PromptRequest(Guid.CreateVersion7(), "oi")) };
+        await FluentActions.Awaiting(() => Planner().PlanAsync(_task.Id, resumed, Ct))
+            .Should().ThrowAsync<DomainException>().WithMessage("A preparação abre uma conversa nova*");
     }
 
     [Fact]

@@ -7,6 +7,7 @@
         xmlns:views="using:MyTaskApp.Desktop.Views"
         xmlns:agents="using:MyTaskApp.Application.Agents"
         xmlns:commands="using:MyTaskApp.Application.Commands"
+        xmlns:contracts="using:MyTaskApp.Remote.Contracts"
         x:Class="MyTaskApp.Desktop.Views.TaskNotesWindow"
         x:DataType="vm:TaskNotesViewModel"
         x:Name="Root"
@@ -1601,6 +1602,44 @@
                            Text="{Binding BranchError}"
                            IsVisible="{Binding BranchError, Converter={x:Static ObjectConverters.IsNotNull}}" />
                 <CheckBox Content="Rodar os comandos pós-Worktree gravados lá" IsChecked="{Binding RunCommands}" />
+                <!--
+                  Preparar tudo (T-33): o banco e o Claude no mesmo pedido. Lá,
+                  a cópia é validada (e a produção espera a aprovação) antes do
+                  Git; os comandos rodam depois dela, e o Claude por último.
+                -->
+                <StackPanel Spacing="6" IsVisible="{Binding HasCopyProfiles}">
+                  <CheckBox x:Name="RemotePrepareCopyDatabase"
+                            Content="Copiar o banco para o ambiente"
+                            IsChecked="{Binding CopyDatabase}" />
+                  <ComboBox x:Name="RemotePrepareCopyProfile" HorizontalAlignment="Stretch"
+                            IsVisible="{Binding CopyDatabase}"
+                            ItemsSource="{Binding CopyProfiles}" SelectedItem="{Binding SelectedCopyProfile}">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate x:DataType="vm:RemoteCopyProfileOption">
+                        <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                      </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
+                </StackPanel>
+                <StackPanel Spacing="6" IsVisible="{Binding HasAgentProfiles}">
+                  <CheckBox x:Name="RemotePrepareStartAgent"
+                            Content="Abrir o Claude no fim"
+                            IsChecked="{Binding StartAgent}" />
+                  <StackPanel Spacing="6" IsVisible="{Binding StartAgent}">
+                    <ComboBox x:Name="RemotePrepareAgentProfile" HorizontalAlignment="Stretch"
+                              ItemsSource="{Binding AgentProfiles}" SelectedItem="{Binding SelectedAgentProfile}">
+                      <ComboBox.ItemTemplate>
+                        <DataTemplate x:DataType="contracts:CatalogAgentProfile">
+                          <TextBlock Text="{Binding Name}" ToolTip.Tip="{Binding Description}" />
+                        </DataTemplate>
+                      </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <TextBox x:Name="RemotePrepareAgentPrompt"
+                             AcceptsReturn="True" TextWrapping="Wrap" MinHeight="60"
+                             PlaceholderText="O primeiro prompt do Claude"
+                             Text="{Binding AgentPrompt}" />
+                  </StackPanel>
+                </StackPanel>
                 <TextBlock x:Name="RemotePrepareError" TextWrapping="Wrap"
                            Foreground="{DynamicResource WidgetCautionBrush}"
                            Text="{Binding ErrorMessage}"

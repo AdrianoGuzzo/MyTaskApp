@@ -17,7 +17,17 @@ public sealed record AgentCatalog(
     /// catálogo de um agente antigo não traz: a lista vem vazia.
     /// </summary>
     public IReadOnlyList<CatalogEnvironment> Environments { get; init; } = [];
+
+    /// <summary>
+    /// Os perfis de cópia ligados cujas duas conexões estão em
+    /// <see cref="Databases"/>: o "Preparar tudo" escolhe um, e as opções e a
+    /// anonimização vêm dele. O catálogo de um agente antigo não traz.
+    /// </summary>
+    public IReadOnlyList<CatalogCopyProfile> CopyProfiles { get; init; } = [];
 }
+
+/// <param name="Anonymizes">O perfil leva um perfil de anonimização.</param>
+public sealed record CatalogCopyProfile(Guid CopyProfileId, string Name, Guid SourceConnectionId, Guid TargetConnectionId, bool Anonymizes);
 
 /// <summary>
 /// Um ambiente (worktree) pronto na máquina executora. Só ids: o título da

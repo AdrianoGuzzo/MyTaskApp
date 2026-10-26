@@ -93,19 +93,33 @@ public sealed class ProvisionEnvironmentHandler(IUseCaseRunner runner)
                 token),
             CancellationToken.None);
 
-        if (!command.RunCommands || development.Commands is not [_, ..])
+        var summary = command.RunCommands
+            ? await RunCommandsAsync(development, progress, cancellationToken)
+            : CommandRunSummary.Empty;
+
+        return new ProvisionResult(development, adopt, summary);
+    }
+
+    /// <summary>
+    /// A lista pós-Worktree do ambiente. O "Preparar tudo" chama à parte,
+    /// depois da cópia do banco, para os comandos já terem o <c>{database}</c> (ADR-060).
+    /// </summary>
+    public async Task<CommandRunSummary> RunCommandsAsync(
+        TaskDevelopmentView development,
+        IProgress<ProvisionProgress>? progress,
+        CancellationToken cancellationToken = default)
+    {
+        if (development.Commands is not [_, ..])
         {
-            return new ProvisionResult(development, adopt, CommandRunSummary.Empty);
+            return CommandRunSummary.Empty;
         }
 
         progress?.Report(new ProvisionProgress(ProvisionStage.Commands));
         var commands = new InlineProgress<CommandStepProgress>(step => progress?.Report(new ProvisionProgress(ProvisionStage.Commands, Command: step)));
 
-        var summary = await runner.RunAsync<RunDevelopmentCommandsHandler, CommandRunSummary>(
-            (handler, token) => handler.HandleAsync(new RunDevelopmentCommands(command.TaskId, development.Id), commands, token),
+        return await runner.RunAsync<RunDevelopmentCommandsHandler, CommandRunSummary>(
+            (handler, token) => handler.HandleAsync(new RunDevelopmentCommands(development.TaskId, development.Id), commands, token),
             cancellationToken);
-
-        return new ProvisionResult(development, adopt, summary);
     }
 
     /// <summary>

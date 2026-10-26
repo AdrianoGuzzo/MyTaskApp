@@ -23,6 +23,9 @@ public sealed record RemoteRepositoryOption(CatalogDirectory Directory)
     public string Name => Directory.Label;
 }
 
+/// <summary>Um perfil de cópia de lá, com as conexões pelo nome e o aviso de produção.</summary>
+public sealed record RemoteCopyProfileOption(CatalogCopyProfile Profile, string Name);
+
 /// <summary>
 /// "Preparar em…" na aba Desenvolvimento (T-25): a mesma preparação do
 /// "Iniciar implementação", só que em outra máquina, com o app dela fechado.
@@ -30,6 +33,11 @@ public sealed record RemoteRepositoryOption(CatalogDirectory Directory)
 /// vazias, são escolhidas lá como a aba escolheria. O andamento abre na tela
 /// "Operação", que mostra a saída e as aprovações.
 /// </summary>
+/// <remarks>
+/// Com o banco e o Claude marcados, é o "Preparar tudo" (T-33): o mesmo pedido,
+/// que lá valida a cópia (e espera a aprovação da produção) antes do Git, copia
+/// depois do worktree, roda os comandos e abre a conversa.
+/// </remarks>
 public sealed partial class RemotePrepareViewModel(
     IUseCaseRunner runner,
     ISyncAccount account,
@@ -43,6 +51,11 @@ public sealed partial class RemotePrepareViewModel(
     public ObservableCollection<RemoteMachineOption> Machines { get; } = [];
 
     public ObservableCollection<RemoteRepositoryOption> Repositories { get; } = [];
+
+    /// <summary>Os perfis de cópia que a outra máquina liberou: as opções e a anonimização vêm dele.</summary>
+    public ObservableCollection<RemoteCopyProfileOption> CopyProfiles { get; } = [];
+
+    public ObservableCollection<CatalogAgentProfile> AgentProfiles { get; } = [];
 
     /// <summary>A tela "Operação" com o pedido em andamento: a janela abre.</summary>
     public event EventHandler<RemoteControlViewModel>? ControlOpened;
@@ -70,12 +83,31 @@ public sealed partial class RemotePrepareViewModel(
     private bool _runCommands = true;
 
     [ObservableProperty]
+    private bool _copyDatabase;
+
+    [ObservableProperty]
+    private RemoteCopyProfileOption? _selectedCopyProfile;
+
+    [ObservableProperty]
+    private bool _startAgent;
+
+    [ObservableProperty]
+    private CatalogAgentProfile? _selectedAgentProfile;
+
+    [ObservableProperty]
+    private string _agentPrompt = string.Empty;
+
+    [ObservableProperty]
     private bool _isBusy;
 
     [ObservableProperty]
     private string? _errorMessage;
 
     public bool HasNoRepositories => SelectedMachine is not null && Repositories.Count == 0 && !IsBusy;
+
+    public bool HasCopyProfiles => CopyProfiles.Count > 0;
+
+    public bool HasAgentProfiles => AgentProfiles.Count > 0;
 
     public string? BranchError => BranchName.Trim() is { Length: > 0 } branch ? GitBranchName.Validate(branch) : null;
 
@@ -138,7 +170,13 @@ public sealed partial class RemotePrepareViewModel(
     {
         Repositories.Clear();
         SelectedRepository = null;
+        CopyProfiles.Clear();
+        SelectedCopyProfile = null;
+        AgentProfiles.Clear();
+        SelectedAgentProfile = null;
         OnPropertyChanged(nameof(HasNoRepositories));
+        OnPropertyChanged(nameof(HasCopyProfiles));
+        OnPropertyChanged(nameof(HasAgentProfiles));
 
         if (value is not null && IsOpen)
         {
@@ -183,6 +221,24 @@ public sealed partial class RemotePrepareViewModel(
             }
 
             SelectedRepository = Repositories.Count == 1 ? Repositories[0] : null;
+
+            var databases = view.Catalog.Databases.ToDictionary(database => database.ConnectionId);
+            CopyProfiles.Clear();
+
+            foreach (var profile in view.Catalog.CopyProfiles.OrderBy(profile => profile.Name, StringComparer.CurrentCultureIgnoreCase))
+            {
+                CopyProfiles.Add(new RemoteCopyProfileOption(profile, CopyProfileName(profile, databases)));
+            }
+
+            SelectedCopyProfile = CopyProfiles.Count == 1 ? CopyProfiles[0] : null;
+            AgentProfiles.Clear();
+
+            foreach (var profile in view.Catalog.AgentProfiles)
+            {
+                AgentProfiles.Add(profile);
+            }
+
+            SelectedAgentProfile = AgentProfiles.FirstOrDefault();
         }
         catch (SyncApiException exception) when (exception.Kind == SyncFailureKind.NotFound)
         {
@@ -201,7 +257,69 @@ public sealed partial class RemotePrepareViewModel(
         {
             IsBusy = false;
             OnPropertyChanged(nameof(HasNoRepositories));
+            OnPropertyChanged(nameof(HasCopyProfiles));
+            OnPropertyChanged(nameof(HasAgentProfiles));
         }
+    }
+
+    /// <summary>"Produção LGPD (ECO Produção → Local, produção: pede aprovação)": quem pede vê antes o que vai acontecer lá.</summary>
+    private static string CopyProfileName(CatalogCopyProfile profile, Dictionary<Guid, CatalogDatabase> databases)
+    {
+        var source = databases.GetValueOrDefault(profile.SourceConnectionId);
+        var target = databases.GetValueOrDefault(profile.TargetConnectionId);
+        var production = source?.Environment is nameof(Domain.DatabaseOperations.DatabaseEnvironment.Production)
+            or nameof(Domain.DatabaseOperations.DatabaseEnvironment.CriticalProduction)
+            ? ", produção: pede aprovação"
+            : string.Empty;
+
+        return $"{profile.Name} ({source?.Name ?? "?"} → {target?.Name ?? "?"}{production})";
+    }
+
+    /// <summary>O pedido do formulário; nulo, com o motivo em <see cref="ErrorMessage"/>, quando falta algo.</summary>
+    internal EnvironmentProvisioningRequest? CreateRequest(RemoteRepositoryOption repository)
+    {
+        DatabaseCopyRequest? database = null;
+        ClaudeCodeSessionRequest? agent = null;
+
+        if (CopyDatabase)
+        {
+            if (SelectedCopyProfile?.Profile is not { } profile)
+            {
+                ErrorMessage = "Escolha o perfil de cópia do banco.";
+                return null;
+            }
+
+            database = new DatabaseCopyRequest(profile.SourceConnectionId, null, profile.TargetConnectionId, null, null, profile.CopyProfileId);
+        }
+
+        if (StartAgent)
+        {
+            if (SelectedAgentProfile is not { } agentProfile)
+            {
+                ErrorMessage = "Escolha o perfil do Claude.";
+                return null;
+            }
+
+            if (AgentPrompt.Trim() is not { Length: > 0 } prompt)
+            {
+                ErrorMessage = "Escreva o primeiro prompt do Claude.";
+                return null;
+            }
+
+            // O ambiente ainda não existe: lá, vale o que a preparação criar.
+            agent = new ClaudeCodeSessionRequest(Guid.Empty, agentProfile.Id, null, null, new PromptRequest(null, prompt));
+        }
+
+        return new EnvironmentProvisioningRequest(
+            _taskId,
+            repository.Directory.TagDirectoryId,
+            SourceBranch.Trim() is { Length: > 0 } source ? source : null,
+            null,
+            BranchName.Trim() is { Length: > 0 } branch ? branch : null,
+            WorktreeConflictPolicy.Fail,
+            RunCommands,
+            database,
+            agent);
     }
 
     /// <summary>
@@ -229,20 +347,17 @@ public sealed partial class RemotePrepareViewModel(
         }
 
         ErrorMessage = null;
+
+        if (CreateRequest(repository) is not { } request)
+        {
+            return;
+        }
+
         IsBusy = true;
 
         try
         {
             account.SyncNow();
-
-            var request = new EnvironmentProvisioningRequest(
-                _taskId,
-                repository.Directory.TagDirectoryId,
-                SourceBranch.Trim() is { Length: > 0 } source ? source : null,
-                null,
-                BranchName.Trim() is { Length: > 0 } branch ? branch : null,
-                WorktreeConflictPolicy.Fail,
-                RunCommands);
 
             var operation = await runner.RunAsync<SendRemoteOperationHandler, RemoteOperationView>(
                 (handler, token) => handler.HandleAsync(RemoteRequests.Provision(machine.View.DeviceId, request), token),
@@ -251,7 +366,8 @@ public sealed partial class RemotePrepareViewModel(
             var screen = control();
             ControlOpened?.Invoke(this, screen);
             await screen.OpenAsync(machine.View, CancellationToken.None);
-            screen.Watch(operation, $"Preparar o worktree em {machine.Name} · {repository.Name}");
+            var what = request.Database is null && request.StartAgent is null ? "o worktree" : "tudo";
+            screen.Watch(operation, $"Preparar {what} em {machine.Name} · {repository.Name}");
             IsOpen = false;
         }
         catch (Exception exception) when (exception is DomainException or SyncApiException)
