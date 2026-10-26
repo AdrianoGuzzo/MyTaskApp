@@ -753,6 +753,12 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                     b.Property<int>("OperationType")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int?>("OwnerProcessId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("OwnerProcessStartedAt")
+                        .HasColumnType("INTEGER");
+
                     b.Property<Guid?>("ProfileId")
                         .HasColumnType("TEXT");
 

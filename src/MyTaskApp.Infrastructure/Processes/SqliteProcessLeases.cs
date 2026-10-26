@@ -24,6 +24,14 @@ internal sealed record ProcessOwner(int ProcessId, DateTimeOffset StartedAt)
     }
 }
 
+/// <summary>Este processo e os outros, para a Application (a recuperação das operações de banco).</summary>
+internal sealed class SystemProcessOwnership(ProcessOwner current, IProcessLiveness liveness) : IProcessOwnership
+{
+    public ProcessStamp Current { get; } = new(current.ProcessId, current.StartedAt);
+
+    public bool IsAlive(ProcessStamp process) => liveness.IsAlive(process.ProcessId, process.StartedAt);
+}
+
 /// <summary>Se o dono de um lease ainda existe.</summary>
 internal interface IProcessLiveness
 {

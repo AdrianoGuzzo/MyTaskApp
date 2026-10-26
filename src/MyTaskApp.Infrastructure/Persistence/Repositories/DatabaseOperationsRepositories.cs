@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.DatabaseOperations;
 using MyTaskApp.Domain.DatabaseOperations;
 
@@ -98,11 +99,18 @@ internal sealed class SavedDatabaseRepository(MyTaskAppDbContext context) : ISav
     public void Remove(SavedDatabase saved) => context.SavedDatabases.Remove(saved);
 }
 
-internal sealed class EfDatabaseOperationAuditLog(MyTaskAppDbContext context) : IDatabaseOperationAuditLog
+internal sealed class EfDatabaseOperationAuditLog(MyTaskAppDbContext context, IProcessOwnership processes) : IDatabaseOperationAuditLog
 {
-    /// <summary>Só rastreia; quem grava é o <c>SaveChanges</c> do caso de uso, como no <see cref="EfTaskAuditLog"/>.</summary>
-    public async Task RecordAsync(DatabaseOperationAudit audit, CancellationToken cancellationToken = default) =>
+    /// <summary>
+    /// Só rastreia; quem grava é o <c>SaveChanges</c> do caso de uso, como no
+    /// <see cref="EfTaskAuditLog"/>. A operação em andamento sai com o dono:
+    /// este processo, para a recuperação do outro saber que ela está viva.
+    /// </summary>
+    public async Task RecordAsync(DatabaseOperationAudit audit, CancellationToken cancellationToken = default)
+    {
+        audit.RecordOwner(processes.Current.ProcessId, processes.Current.StartedAt);
         await context.DatabaseOperationAudits.AddAsync(audit, cancellationToken);
+    }
 
     public async Task<IReadOnlyList<DatabaseOperationAudit>> ListRecentAsync(int limit, CancellationToken cancellationToken = default) =>
         await context.DatabaseOperationAudits

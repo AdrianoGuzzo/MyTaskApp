@@ -31,6 +31,9 @@ public static class ProcessLeaseNames
 
     /// <summary>A renovação do token da sincronização: o refresh gira a cada uso, e dois girando revogam a cadeia.</summary>
     public const string SyncToken = "sync-token";
+
+    /// <summary>Uma operação de banco por vez no computador, não só no processo (ADR-056).</summary>
+    public const string DatabaseOperation = "database-operation";
 }
 
 /// <summary>

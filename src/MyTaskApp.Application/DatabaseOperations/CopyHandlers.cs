@@ -209,7 +209,7 @@ public sealed class RunDatabaseCopyHandler(
             plan.Request.Operation, plan.Source, plan.Destination, plan.Request.CopyProfileId, plan.CopyProfileName,
             host, user, timeProvider.GetUtcNow());
 
-        using var turn = gate.Enter(entry.Id);
+        await using var turn = await gate.EnterAsync(entry.Id, cancellationToken);
 
         // Gravada antes do primeiro processo: uma queda deixa rastro.
         await audit.RecordAsync(entry, cancellationToken);
@@ -218,7 +218,9 @@ public sealed class RunDatabaseCopyHandler(
         var run = new DatabaseCopyRun(
             plan, entry, policy, locator, inspector, copier, verifier, dumps, restores, scripts, workspaces, timeProvider, logger, progress);
 
-        var result = await run.ExecuteAsync(cancellationToken);
+        // Perder o lease é outro processo começando a dele: esta para, como cancelada.
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, turn.Lost);
+        var result = await run.ExecuteAsync(stop.Token);
 
         await unitOfWork.SaveChangesAsync(CancellationToken.None);
         logger.LogInformation("DatabaseCopyFinished {AuditId} {Status}", entry.Id, result.Status);

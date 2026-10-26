@@ -242,6 +242,7 @@ internal sealed class DatabaseOperationAuditConfiguration : IEntityTypeConfigura
 
         builder.Property(audit => audit.StartedAt).HasConversion(UtcInstantConverter.Instance).IsRequired();
         builder.Property(audit => audit.CompletedAt).HasConversion(UtcInstantConverter.Instance);
+        builder.Property(audit => audit.OwnerProcessStartedAt).HasConversion(UtcInstantConverter.Instance);
         builder.Property(audit => audit.Duration).HasConversion(TimeSpanTicksConverter.Instance);
 
         builder.HasIndex(audit => audit.StartedAt);

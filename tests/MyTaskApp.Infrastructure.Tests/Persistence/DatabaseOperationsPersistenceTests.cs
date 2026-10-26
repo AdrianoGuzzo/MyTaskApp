@@ -2,7 +2,10 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using MyTaskApp.Domain.DatabaseOperations;
 using MyTaskApp.Domain.Tasks;
+using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Infrastructure.Persistence.Repositories;
+using MyTaskApp.Infrastructure.Processes;
+using MyTaskApp.Infrastructure.Tests.Processes;
 
 namespace MyTaskApp.Infrastructure.Tests.Persistence;
 
@@ -16,6 +19,9 @@ public class DatabaseOperationsPersistenceTests
     private static readonly DateTimeOffset Now = new(2026, 10, 8, 18, 41, 2, TimeSpan.Zero);
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
+
+    /// <summary>O processo que grava, nos testes: o agente, aberto há 5 minutos.</summary>
+    private static readonly IProcessOwnership Agent = new SystemProcessOwnership(new ProcessOwner(4242, Now.AddMinutes(-5)), new FakeLiveness());
 
     private static readonly ConnectionPermissions Everything = ConnectionPermissions.FromFlags(ConnectionPermission.All);
 
@@ -235,7 +241,7 @@ public class DatabaseOperationsPersistenceTests
         }
 
         await using var read = db.CreateContext();
-        var log = new EfDatabaseOperationAuditLog(read);
+        var log = new EfDatabaseOperationAuditLog(read, Agent);
         var recent = await log.ListRecentAsync(10, Ct);
 
         recent.Select(audit => audit.Id).Should().Equal(running.Id, finished.Id);
@@ -246,9 +252,10 @@ public class DatabaseOperationsPersistenceTests
         reloaded.Status.Should().Be(DatabaseOperationStatus.Succeeded);
         (await log.ListRunningAsync(Ct)).Select(audit => audit.Id).Should().Equal(running.Id);
 
-        await log.RecordAsync(DatabaseOperationAudit.Start(DatabaseOperationType.Diagnose, null, null, null, null, "PC", "u", Now), Ct);
+        await log.RecordAsync(DatabaseOperationAudit.Start(DatabaseOperationType.Diagnose, null, null, null, null, "PC", "u", Now.AddHours(2)), Ct);
         await read.SaveChangesAsync(Ct);
-        (await log.ListRecentAsync(1, Ct)).Should().ContainSingle();
+        var recorded = (await log.ListRecentAsync(1, Ct)).Should().ContainSingle().Subject;
+        (recorded.OwnerProcessId, recorded.OwnerProcessStartedAt).Should().Be((4242, Now.AddMinutes(-5)), "quem grava a operação em andamento é o dono dela");
     }
 
     [Fact]
@@ -339,7 +346,7 @@ public class DatabaseOperationsPersistenceTests
 
         await using var read = db.CreateContext();
         (await new DatabaseCopyProfileRepository(read).FindByIdAsync(copy.Id, Ct))!.SourceDatabase.Should().Be("eco_core_1010");
-        var reloaded = (await new EfDatabaseOperationAuditLog(read).ListRecentAsync(1, Ct)).Single();
+        var reloaded = (await new EfDatabaseOperationAuditLog(read, Agent).ListRecentAsync(1, Ct)).Single();
         reloaded.SourceDatabase.Should().Be("eco_core_1010");
         reloaded.DestinationDatabase.Should().Be("lock_eco_core_1010_20261008_184102");
     }

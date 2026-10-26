@@ -66,6 +66,7 @@ public class ApplicationRegistrationTests
             .AddSingleton<ITerminalLauncher>(new FakeTerminalLauncher(new FakeAgentProcessTracker(), DateTimeOffset.UnixEpoch))
             .AddSingleton<IAgentCliProvider>(new FakeAgentCliProvider())
             .AddSingleton(Substitute.For<IHeadlessAgentProvider>())
+            .AddSingleton<IProcessOwnership>(new FakeProcessOwnership())
             .AddSingleton(Substitute.For<IHeadlessAgentRunner>())
             .AddSingleton<IAgentSettingsStore>(new FakeAgentSettingsStore())
             .AddSingleton<IAgentAlertSoundStore>(new FakeAgentAlertSoundStore())

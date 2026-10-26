@@ -156,6 +156,9 @@ public static class DependencyInjection
 
         // Desktop e agente abrem o mesmo banco (ADR-085): o lease diz quem roda
         // o ciclo da sincronização e quem gira o token. O celular é um processo só.
+        var owner = ProcessOwner.Current();
+        services.TryAddSingleton<IProcessOwnership>(new SystemProcessOwnership(owner, new SystemProcessLiveness()));
+
         if (local?.SingleProcess == true)
         {
             services.TryAddSingleton<IProcessLeases, SingleProcessLeases>();
@@ -164,7 +167,7 @@ public static class DependencyInjection
         {
             services.TryAddSingleton<IProcessLeases>(provider => new SqliteProcessLeases(
                 databaseOptions.BuildConnectionString(),
-                ProcessOwner.Current(),
+                owner,
                 new SystemProcessLiveness(),
                 provider.GetRequiredService<TimeProvider>()));
         }

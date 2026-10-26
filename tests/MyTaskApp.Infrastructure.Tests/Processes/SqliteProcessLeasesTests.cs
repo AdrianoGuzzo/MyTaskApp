@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Time.Testing;
+using MyTaskApp.Application.DatabaseOperations;
+using MyTaskApp.Domain;
 using MyTaskApp.Infrastructure.Persistence;
 using MyTaskApp.Infrastructure.Processes;
 using MyTaskApp.Infrastructure.Tests.Persistence;
@@ -44,6 +46,23 @@ public sealed class SqliteProcessLeasesTests : IAsyncLifetime
         (await desktop.TryAcquireAsync("sync", Duration, Ct)).Should().BeTrue();
         (await agent.TryAcquireAsync("sync", Duration, Ct)).Should().BeFalse();
         (await desktop.TryAcquireAsync("sync", Duration, Ct)).Should().BeTrue("renovar o próprio lease sempre dá");
+    }
+
+    [Fact]
+    public async Task TwoDatabaseCopiesInDifferentProcesses_TheSecondIsRefused_UntilTheFirstEnds()
+    {
+        var desktop = new DatabaseOperationGate(Process(1), _clock);
+        var agent = new DatabaseOperationGate(Process(2), _clock);
+
+        await using (await agent.EnterAsync(Guid.CreateVersion7(), Ct))
+        {
+            await FluentActions.Awaiting(() => desktop.EnterAsync(Guid.CreateVersion7(), Ct))
+                .Should().ThrowAsync<DomainException>().WithMessage("Outro processo deste computador*");
+            desktop.IsBusy.Should().BeFalse("a recusa não deixa a vaga deste processo ocupada");
+        }
+
+        await using var turn = await desktop.EnterAsync(Guid.CreateVersion7(), Ct);
+        desktop.IsBusy.Should().BeTrue();
     }
 
     [Fact]

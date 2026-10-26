@@ -104,6 +104,27 @@ public sealed class DatabaseOperationAudit
 
     public bool IsRunning => Status == DatabaseOperationStatus.Running;
 
+    /// <summary>
+    /// O processo que roda a operação (PID e início; o PID sozinho se repete).
+    /// O desktop e o agente abrem o mesmo banco (ADR-085): a recuperação de um
+    /// não chama de interrompida a cópia viva do outro.
+    /// </summary>
+    public int? OwnerProcessId { get; private set; }
+
+    public DateTimeOffset? OwnerProcessStartedAt { get; private set; }
+
+    /// <summary>Quem grava a operação em andamento é o dono dela. Só enquanto ela roda.</summary>
+    public void RecordOwner(int processId, DateTimeOffset processStartedAt)
+    {
+        if (!IsRunning || processId <= 0)
+        {
+            return;
+        }
+
+        OwnerProcessId = processId;
+        OwnerProcessStartedAt = processStartedAt;
+    }
+
     public static DatabaseOperationAudit Start(
         DatabaseOperationType operationType,
         DatabaseConnectionSnapshot? source,
