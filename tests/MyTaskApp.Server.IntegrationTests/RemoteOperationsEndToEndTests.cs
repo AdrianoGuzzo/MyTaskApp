@@ -1,4 +1,5 @@
 using System.Buffers.Text;
+using System.Diagnostics;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
@@ -10,6 +11,7 @@ using Microsoft.Extensions.Time.Testing;
 using MyTaskApp.Application.Remote;
 using MyTaskApp.Application.Sync;
 using MyTaskApp.Domain.Commands;
+using MyTaskApp.Domain.Tags;
 using MyTaskApp.Domain.Tasks;
 using MyTaskApp.Infrastructure.Remote;
 using MyTaskApp.Remote.Contracts;
@@ -43,6 +45,16 @@ public sealed class RemoteOperationsEndToEndTests(PostgresFixture postgres) : IA
         foreach (var desktop in _desktops)
         {
             await desktop.DisposeAsync();
+
+            // O Git deixa os objetos só leitura no Windows; sem isto a pasta não sai.
+            if (Directory.Exists(desktop.Folder))
+            {
+                foreach (var file in Directory.EnumerateFiles(desktop.Folder, "*", SearchOption.AllDirectories))
+                {
+                    File.SetAttributes(file, FileAttributes.Normal);
+                }
+            }
+
             desktop.DeleteFolder();
         }
 
@@ -195,6 +207,142 @@ public sealed class RemoteOperationsEndToEndTests(PostgresFixture postgres) : IA
     }
 
     /// <summary>Uma tarefa com o worktree pronto numa pasta de verdade, e os comandos, no SQLite do notebook.</summary>
+    /// <summary>
+    /// A v1 da E4: o celular pede, e o notebook — sem tela, como o agente —
+    /// cria o worktree da tarefa no repositório da etiqueta, com a branch da
+    /// convenção, a partir da padrão do diretório.
+    /// </summary>
+    [Fact]
+    public async Task TheOtherMachineCreatesTheWorktreeOfATask()
+    {
+        Assert.SkipUnless(await GitAsync(null, "--version") is not null, "Git não instalado nesta máquina.");
+
+        var (notebook, phone, phoneKey) = await PairedAsync();
+        using var _ = phoneKey;
+        var (taskId, directoryId, repository) = await RepositoryAsync(notebook);
+
+        var request = await RequestAsync(notebook, phone, phoneKey, RemoteOperationKinds.WorktreeProvision, Provision(taskId, directoryId), taskId);
+        await notebook.Services.GetRequiredService<RemoteOperationDispatcher>().PollAsync(Ct);
+        var operation = await FinishedAsync(phone, request.OperationId);
+
+        operation.Status.Should().Be(RemoteOperationStatus.Succeeded, operation.ResultSummary);
+        operation.ResultSummary.Should().Be("Worktree criado: feature/validar-antimicrobianos em ECO · eco, a partir de main.");
+        operation.ResultSummary.Should().NotContain(notebook.Folder, "o caminho das pastas não sai da máquina");
+
+        var development = await DevelopmentAsync(notebook, taskId);
+        development.Status.Should().Be(TaskDevelopmentStatus.Ready);
+        development.Branch.Should().Be("feature/validar-antimicrobianos");
+        Directory.Exists(development.WorktreePath).Should().BeTrue();
+        development.WorktreePath.Should().StartWith(Path.GetDirectoryName(repository)!);
+
+        var events = await SendAsync<RemoteEventPage>(phone, HttpMethod.Get, $"{RemoteRoutes.OperationEvents(request.OperationId)}?after=0", null);
+        events.Events.Where(item => item.Kind == RemoteEventKind.StepStarted).Select(item => item.Step)
+            .Should().Equal(WorktreeProvisionExecutor.PrepareStep, WorktreeProvisionExecutor.WorktreeStep);
+    }
+
+    /// <summary>
+    /// O agente caiu no meio do <c>git worktree add</c>: o ambiente ficou em
+    /// "Criando" e o worktree, no disco. Repetir com "adotar" termina o que faltou.
+    /// </summary>
+    [Fact]
+    public async Task RepeatingAfterAFall_AdoptsTheWorktreeLeftBehind()
+    {
+        Assert.SkipUnless(await GitAsync(null, "--version") is not null, "Git não instalado nesta máquina.");
+
+        var (notebook, phone, phoneKey) = await PairedAsync();
+        using var _ = phoneKey;
+        var (taskId, directoryId, repository) = await RepositoryAsync(notebook);
+        var worktree = repository + "-feature-validar-antimicrobianos";
+        await GitAsync(repository, "worktree", "add", "-q", "-b", "feature/validar-antimicrobianos", worktree, "main");
+
+        await notebook.RunAsync(async services =>
+        {
+            var task = await services.GetRequiredService<MyTaskApp.Application.Abstractions.ITaskItemRepository>().FindByIdAsync(taskId, Ct);
+            task!.BeginDevelopment(null, repository, "main", "feature/validar-antimicrobianos", worktree, DateTimeOffset.UtcNow);
+            await services.GetRequiredService<MyTaskApp.Application.Abstractions.IUnitOfWork>().SaveChangesAsync(Ct);
+            return true;
+        });
+
+        var payload = Provision(taskId, directoryId, WorktreeConflictPolicy.AdoptExisting);
+        var request = await RequestAsync(notebook, phone, phoneKey, RemoteOperationKinds.WorktreeProvision, payload, taskId);
+        await notebook.Services.GetRequiredService<RemoteOperationDispatcher>().PollAsync(Ct);
+        var operation = await FinishedAsync(phone, request.OperationId);
+
+        operation.Status.Should().Be(RemoteOperationStatus.Succeeded, operation.ResultSummary);
+        operation.ResultSummary.Should().StartWith("Worktree adotado");
+        (await DevelopmentAsync(notebook, taskId)).Status.Should().Be(TaskDevelopmentStatus.Ready);
+    }
+
+    private static JsonElement Provision(Guid taskId, Guid directoryId, WorktreeConflictPolicy policy = WorktreeConflictPolicy.Fail) =>
+        JsonSerializer.SerializeToElement(
+            new EnvironmentProvisioningRequest(taskId, directoryId, null, null, null, policy, RunPostWorktreeCommands: true),
+            RemoteJson.Options);
+
+    /// <summary>Um repositório de brinquedo, com a etiqueta que o mapeia no notebook e a tarefa marcada com ela.</summary>
+    private static async Task<(Guid TaskId, Guid DirectoryId, string Repository)> RepositoryAsync(SyncedDesktop notebook)
+    {
+        var repository = Path.Combine(notebook.Folder, $"eco-{Guid.NewGuid():N}"[..12]);
+        Directory.CreateDirectory(repository);
+        await GitAsync(repository, "init", "-q", "-b", "main");
+        await File.WriteAllTextAsync(Path.Combine(repository, "README.md"), "eco\n", Ct);
+        await GitAsync(repository, "add", "-A");
+        await GitAsync(repository, "-c", "user.name=Teste", "-c", "user.email=teste@example.com", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "inicial");
+
+        var now = DateTimeOffset.UtcNow;
+        var tag = Tag.Create("ECO", "#22C55E", now);
+        var directory = tag.AddDirectory("@eco", repository, "eco", null, now);
+        var task = TaskItem.Create("Validar antimicrobianos", now);
+        task.SetTags([tag.Id]);
+
+        await notebook.ChangeAsync(
+            db =>
+            {
+                db.Tags.Add(tag);
+                db.Tasks.Add(task);
+            },
+            Ct);
+
+        return (task.Id, directory.Id, repository);
+    }
+
+    private static Task<TaskDevelopment> DevelopmentAsync(SyncedDesktop notebook, Guid taskId) =>
+        notebook.RunAsync(async services =>
+        {
+            var task = await services.GetRequiredService<MyTaskApp.Application.Abstractions.ITaskItemRepository>().FindByIdAsync(taskId, Ct);
+            return task!.Developments.Single();
+        });
+
+    /// <summary>O Git da máquina, sem a configuração global de quem roda: <c>null</c> se não há Git.</summary>
+    private static async Task<string?> GitAsync(string? directory, params string[] arguments)
+    {
+        var start = new ProcessStartInfo("git") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+
+        if (directory is not null)
+        {
+            start.ArgumentList.Add("-C");
+            start.ArgumentList.Add(directory);
+        }
+
+        foreach (var argument in arguments)
+        {
+            start.ArgumentList.Add(argument);
+        }
+
+        try
+        {
+            using var process = Process.Start(start)!;
+            var output = await process.StandardOutput.ReadToEndAsync(Ct);
+            var error = await process.StandardError.ReadToEndAsync(Ct);
+            await process.WaitForExitAsync(Ct);
+            process.ExitCode.Should().Be(0, $"git {string.Join(' ', arguments)}: {error}");
+            return output;
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            return null;
+        }
+    }
+
     private static async Task<(Guid TaskId, Guid DevelopmentId)> ReadyEnvironmentAsync(SyncedDesktop notebook, params DevelopmentCommand[] commands)
     {
         var worktree = Path.Combine(notebook.Folder, $"worktree-{Guid.NewGuid():N}");

@@ -116,4 +116,7 @@ public interface ITagQuery
     /// </summary>
     Task<IReadOnlyList<CommandDirectoryRow>> ListCommandDirectoriesAsync(
         CancellationToken cancellationToken = default);
+
+    /// <summary>Uma pasta de etiqueta pelo id, mapeada aqui ou não; <c>null</c> se não existe.</summary>
+    Task<TagDirectoryRow?> FindDirectoryAsync(Guid directoryId, CancellationToken cancellationToken = default);
 }

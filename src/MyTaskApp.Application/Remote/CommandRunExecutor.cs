@@ -174,7 +174,7 @@ public sealed class CommandRunExecutor(IUseCaseRunner runner) : IRemoteOperation
 
         var asked = execution.Payload<WorktreeExecutionRequest>().Timeout;
         var timeout = asked is { } wanted && wanted > TimeSpan.Zero && wanted < MaxTimeout ? wanted : MaxTimeout;
-        var output = new OutputStream(execution);
+        var output = new RemoteOutputStream(execution);
 
         CommandExecutionView view;
 
@@ -230,96 +230,96 @@ public sealed class CommandRunExecutor(IUseCaseRunner runner) : IRemoteOperation
         runner.RunAsync<RemoteCommandPlanner, RemoteCommandPlan>(
             (planner, token) => planner.PlanAsync(request.TaskId, RemoteOperationRules.PayloadOf<WorktreeExecutionRequest>(request), token),
             cancellationToken);
+}
 
-    /// <summary>
-    /// As linhas do shell, na ordem em que chegam, para eventos de saída. O
-    /// <c>Report</c> não espera a rede: só enfileira; um leitor junta o que
-    /// já chegou e emite.
-    /// </summary>
-    private sealed class OutputStream : IProgress<CommandOutputLine>
+/// <summary>
+/// As linhas do shell, na ordem em que chegam, para eventos de saída. O
+/// <c>Report</c> não espera a rede: só enfileira; um leitor junta o que
+/// já chegou e emite. De <c>command.run</c> e dos comandos pós-Worktree.
+/// </summary>
+internal sealed class RemoteOutputStream : IProgress<CommandOutputLine>
+{
+    private readonly Channel<CommandOutputLine> _lines = Channel.CreateUnbounded<CommandOutputLine>(new UnboundedChannelOptions { SingleReader = true });
+
+    private readonly RemoteExecution _execution;
+
+    private readonly Task _reader;
+
+    private long _sent;
+
+    public RemoteOutputStream(RemoteExecution execution)
     {
-        private readonly Channel<CommandOutputLine> _lines = Channel.CreateUnbounded<CommandOutputLine>(new UnboundedChannelOptions { SingleReader = true });
+        _execution = execution;
+        _reader = Task.Run(ReadAsync);
+    }
 
-        private readonly RemoteExecution _execution;
+    public bool Truncated { get; private set; }
 
-        private readonly Task _reader;
+    public void Report(CommandOutputLine value) => _lines.Writer.TryWrite(value);
 
-        private long _sent;
+    public async Task CompleteAsync()
+    {
+        _lines.Writer.TryComplete();
+        await _reader;
+    }
 
-        public OutputStream(RemoteExecution execution)
+    private async Task ReadAsync()
+    {
+        var chunk = new StringBuilder();
+        bool? isError = null;
+
+        while (await _lines.Reader.WaitToReadAsync())
         {
-            _execution = execution;
-            _reader = Task.Run(ReadAsync);
-        }
-
-        public bool Truncated { get; private set; }
-
-        public void Report(CommandOutputLine value) => _lines.Writer.TryWrite(value);
-
-        public async Task CompleteAsync()
-        {
-            _lines.Writer.TryComplete();
-            await _reader;
-        }
-
-        private async Task ReadAsync()
-        {
-            var chunk = new StringBuilder();
-            bool? isError = null;
-
-            while (await _lines.Reader.WaitToReadAsync())
+            while (_lines.Reader.TryRead(out var line))
             {
-                while (_lines.Reader.TryRead(out var line))
+                if (isError is { } current && (current != line.IsError || chunk.Length + line.Text.Length > CommandRunExecutor.MaxChunkLength))
                 {
-                    if (isError is { } current && (current != line.IsError || chunk.Length + line.Text.Length > MaxChunkLength))
-                    {
-                        await SendAsync(chunk, current);
-                    }
-
-                    isError = line.IsError;
-                    chunk.Append(chunk.Length == 0 ? string.Empty : "\n").Append(line.Text);
+                    await SendAsync(chunk, current);
                 }
 
-                if (isError is { } stream)
-                {
-                    await SendAsync(chunk, stream);
-                    isError = null;
-                }
+                isError = line.IsError;
+                chunk.Append(chunk.Length == 0 ? string.Empty : "\n").Append(line.Text);
+            }
+
+            if (isError is { } stream)
+            {
+                await SendAsync(chunk, stream);
+                isError = null;
             }
         }
+    }
 
-        private async Task SendAsync(StringBuilder chunk, bool isError)
+    private async Task SendAsync(StringBuilder chunk, bool isError)
+    {
+        var text = SensitiveText.Mask(chunk.ToString());
+        chunk.Clear();
+
+        if (Truncated)
         {
-            var text = SensitiveText.Mask(chunk.ToString());
-            chunk.Clear();
-
-            if (Truncated)
-            {
-                return;
-            }
-
-            if (_sent + text.Length > MaxOutputBytes)
-            {
-                Truncated = true;
-                await EmitAsync(RemoteEventKind.Warning, $"A saída passou de {MaxOutputBytes / 1024 / 1024} MiB: o resto fica só no histórico desta máquina.", null);
-                return;
-            }
-
-            _sent += text.Length;
-            await EmitAsync(RemoteEventKind.Output, text, isError ? StandardError : StandardOutput);
+            return;
         }
 
-        private async Task EmitAsync(RemoteEventKind kind, string text, string? step)
+        if (_sent + text.Length > CommandRunExecutor.MaxOutputBytes)
         {
-            try
-            {
-                // Sem o token da operação: a saída que já veio é contada mesmo com o cancelamento a caminho.
-                await _execution.EmitAsync(kind, text: text, step: step, cancellationToken: CancellationToken.None);
-            }
-            catch (Exception exception) when (exception is not OutOfMemoryException)
-            {
-                // O diário que não gravou uma linha não para o comando; o histórico daqui tem tudo.
-            }
+            Truncated = true;
+            await EmitAsync(RemoteEventKind.Warning, $"A saída passou de {CommandRunExecutor.MaxOutputBytes / 1024 / 1024} MiB: o resto fica só no histórico desta máquina.", null);
+            return;
+        }
+
+        _sent += text.Length;
+        await EmitAsync(RemoteEventKind.Output, text, isError ? CommandRunExecutor.StandardError : CommandRunExecutor.StandardOutput);
+    }
+
+    private async Task EmitAsync(RemoteEventKind kind, string text, string? step)
+    {
+        try
+        {
+            // Sem o token da operação: a saída que já veio é contada mesmo com o cancelamento a caminho.
+            await _execution.EmitAsync(kind, text: text, step: step, cancellationToken: CancellationToken.None);
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            // O diário que não gravou uma linha não para o comando; o histórico daqui tem tudo.
         }
     }
 }

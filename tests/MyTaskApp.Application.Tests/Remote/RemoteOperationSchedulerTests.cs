@@ -165,6 +165,7 @@ public sealed class RemoteOperationSchedulerTests
     {
         nameof(EnvironmentInspectExecutor) => RemoteOperationKinds.EnvironmentInspect,
         nameof(CommandRunExecutor) => RemoteOperationKinds.CommandRun,
+        nameof(WorktreeProvisionExecutor) => RemoteOperationKinds.WorktreeProvision,
         _ => throw new InvalidOperationException($"Diga aqui o tipo de {executor.Name}."),
     };
 
