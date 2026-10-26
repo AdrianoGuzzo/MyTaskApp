@@ -6,7 +6,7 @@ conhecimento técnico perguntar como o sistema funciona — "por que o pedido
 se ela quiser, nos dados de uma cópia local do banco. Quem investiga é o
 Claude Code, aberto pelo app num terminal, **só lendo**.
 
-A decisão e os motivos estão no [ADR-081](ARCHITECTURE.md). As ferramentas de
+A decisão e os motivos estão no [ADR-081](architecture/decisions/081-consulta-inteligente-somente-leitura.md). As ferramentas de
 banco estão no [guia do servidor MCP](mcp-server.md#consulta-inteligente).
 
 ## Sumário
