@@ -33,7 +33,7 @@ internal sealed partial class ClaudeCodeCliProvider(
     ExecutableLocator locator,
     IProcessRunner runner,
     ClaudeCodeHooks hooks,
-    ILogger<ClaudeCodeCliProvider> logger) : IAgentCliProvider, IConsultationLaunchBuilder
+    ILogger<ClaudeCodeCliProvider> logger) : IAgentCliProvider, IConsultationLaunchBuilder, IHeadlessAgentProvider
 {
     public const string ProviderId = "claude-code";
 

@@ -9017,7 +9017,7 @@ filtra só os valores de contexto.
 
 ## ADR-089 — Claude Code remoto: headless, perfil escolhido no executor e aprovação humana
 
-**Estado:** proposto (fase 2). Nada implementado; os flags do Claude Code foram conferidos no 2.1.309 (T-26 é o teste com o Claude de verdade).
+**Estado:** em implementação (fase 2). Os flags foram conferidos no 2.1.309, e a linha inteira que o app gera foi aceita pelo 2.1.310 (T-26); a versão mínima do modo é a 2.1.309. Conferido no 2.1.310: uma falha de login chega como `result` com `subtype: success` e `is_error: true`, então o leitor decide pelo `is_error`.
 
 **Contexto:** hoje o Claude abre num terminal real (`WindowsTerminalLauncher`;
 no Linux não abre), e o app o acompanha pelos hooks (ADR-037). O argumento

@@ -228,7 +228,12 @@ public static class DependencyInjection
         // Agentes de IA num terminal real, por tarefa (ADR-030). Um agente novo
         // é mais um IAgentCliProvider aqui; o terminal é escolhido por sistema.
         services.AddSingleton(_ => ExecutableLocator.ForCurrentSystem());
-        services.AddSingleton<IAgentCliProvider, ClaudeCodeCliProvider>();
+        services.AddSingleton<ClaudeCodeCliProvider>();
+        services.AddSingleton<IAgentCliProvider>(provider => provider.GetRequiredService<ClaudeCodeCliProvider>());
+
+        // O mesmo Claude sem terminal, para a sessão pedida de longe (ADR-089).
+        services.AddSingleton<IHeadlessAgentProvider>(provider => provider.GetRequiredService<ClaudeCodeCliProvider>());
+        services.AddSingleton<IHeadlessAgentRunner, HeadlessAgentRunner>();
         services.AddSingleton<IAgentProcessTracker, AgentProcessTracker>();
 
         // Os avisos do agente (ADR-037): o arquivo de hooks mora com os dados
