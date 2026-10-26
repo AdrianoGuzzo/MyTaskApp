@@ -295,10 +295,11 @@ comportamento, como em `docs/refactoring/PROGRESS.md`).
 - [ ] No celular ou em A: criar uma tarefa, escolher B, escolher o
       repositório e a branch de origem, e B cria o worktree e roda os comandos
       pós-worktree, **com o desktop de B fechado**, em Windows e em Linux.
-- [ ] Derrubar o agente de B durante o `git worktree add` e religar: a
+- [x] Derrubar o agente de B durante o `git worktree add` e religar: a
       operação termina ou fica `Interrupted` com a etapa dita; "Repetir" adota
-      o worktree já criado.
-- [ ] Remover o worktree de longe exige aprovação e recusa se houver sessão do
+      o worktree já criado (a queda real, com o processo morto, fica para os
+      testes de caos da T-35).
+- [x] Remover o worktree de longe exige aprovação e recusa se houver sessão do
       Claude ativa (regra existente).
 
 ---
@@ -501,7 +502,7 @@ Cada tarefa cabe num PR. "Pronto" é o critério objetivo de conclusão.
 | T-21 ✔ | Auditoria com origem remota: cada operação de uma tarefa que termina aqui (inclusive a recusada e a interrompida) deixa uma linha `RemoteOperation` na trilha, com "Remoto: <dispositivo>" e como acabou | E3 | T-20 | `RemoteOperationAuditTests` |
 | T-22 ✔ | `ProvisionEnvironmentHandler` (Application): preparar → worktree → comandos pós-Worktree, com as mesmas etapas da tela (`PrepareDevelopment`, `StartDevelopment`, `RunDevelopmentCommands`), um escopo por etapa, e a pergunta "a pasta já existe" respondida pela `WorktreeConflictPolicy` (adotar só o worktree da mesma branch). Achado: a lógica já estava nos casos de uso; o ViewModel só orquestra, e continua orquestrando, porque entre as etapas ele pergunta à pessoa (conflito, banco de produção). Por isso o ViewModel e os testes dele não mudaram | E4 | — | `ProvisionEnvironmentHandlerTests`; `GitWorktreeIntegrationTests` (cria e roda os comandos; a retomada adota o worktree que ficou; pasta ocupada falha ou vai para a sugerida); `TaskDevelopmentViewModelTests` sem mudança |
 | T-23 ✔ | `worktree.provision` (agente): o diretório da etiqueta mapeado aqui, a origem e a branch escolhidas como a aba escolheria (a tentativa anterior, a padrão do diretório, os outros ambientes, a convenção do Jira, o título), as etapas `prepare` → `worktree` → `commands` como eventos antes de começar (o diário guarda onde parou), a retomada com `AdoptExisting`; os comandos pós-Worktree são a lista gravada no ambiente, e de longe só se escolhe rodar; banco e Claude no mesmo pedido são recusados até a E5/E6; a tarefa ainda não sincronizada espera pelo `RequiredEntities` da admissão (T-14); o fetch já roda sem janela de login (`GCM_INTERACTIVE=Never`) | E4 | T-20, T-22 | `RemoteProvisionPlannerTests`; `RemoteOperationsEndToEndTests` (cria o worktree sem tela; a retomada depois da queda adota o worktree que ficou). No Windows; o Linux fica para o CI |
-| T-24 | `worktree.remove` com aprovação | E4 | T-19, T-23 | recusa com sessão ativa; exige aprovação |
+| T-24 ✔ | `worktree.remove` (agente): sempre com aprovação, que diz a branch, a tarefa e quantas alterações não commitadas vão junto; com o Claude aberto no worktree, é recusado antes de perguntar (e o caso de uso confere de novo); sem `Force`, alterações recusam; a branch fica; quem segura a pasta não é encerrado de longe | E4 | T-19, T-23 | `RemoteRemovalPlannerTests` (recusa com sessão ativa), `RemoteOperationsEndToEndTests.RemovingAWorktreeFromAfar_AlwaysAsks` (negado fica, permitido sai) |
 | T-25 | "Preparar em…" no desktop | E4 | T-23 | fluxo da v1 pelo desktop A |
 | T-26 | Teste opt-in com o Claude real: eventos do `stream-json` e contrato da `--permission-prompt-tool` (os flags já conferidos no 2.1.309) | E5 | — | teste opt-in verde; saídas gravadas para os testes de unidade; versão mínima no ADR-089 |
 | T-27 | `IHeadlessAgentProvider` + leitor de `stream-json` | E5 | T-26 | testes com saídas gravadas |

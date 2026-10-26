@@ -273,6 +273,55 @@ public sealed class RemoteOperationsEndToEndTests(PostgresFixture postgres) : IA
         (await DevelopmentAsync(notebook, taskId)).Status.Should().Be(TaskDevelopmentStatus.Ready);
     }
 
+    /// <summary>
+    /// Apagar de longe sempre pergunta: negado no celular, o worktree fica;
+    /// permitido, sai, e a branch continua no repositório.
+    /// </summary>
+    [Fact]
+    public async Task RemovingAWorktreeFromAfar_AlwaysAsks()
+    {
+        Assert.SkipUnless(await GitAsync(null, "--version") is not null, "Git não instalado nesta máquina.");
+
+        var (notebook, phone, phoneKey) = await PairedAsync();
+        using var _ = phoneKey;
+        var (taskId, directoryId, repository) = await RepositoryAsync(notebook);
+        var provision = await RequestAsync(notebook, phone, phoneKey, RemoteOperationKinds.WorktreeProvision, Provision(taskId, directoryId), taskId);
+        var dispatcher = notebook.Services.GetRequiredService<RemoteOperationDispatcher>();
+        await dispatcher.PollAsync(Ct);
+        (await FinishedAsync(phone, provision.OperationId)).Status.Should().Be(RemoteOperationStatus.Succeeded);
+        var development = await DevelopmentAsync(notebook, taskId);
+        var clock = (FakeTimeProvider)notebook.Services.GetRequiredService<TimeProvider>();
+
+        foreach (var decision in new[] { ApprovalDecision.Deny, ApprovalDecision.Allow })
+        {
+            var remove = JsonSerializer.SerializeToElement(new WorktreeRemovalRequest(taskId, development.Id, Force: false), RemoteJson.Options);
+            var request = await RequestAsync(notebook, phone, phoneKey, RemoteOperationKinds.WorktreeRemove, remove, taskId);
+            await dispatcher.PollAsync(Ct);
+
+            var pending = await PendingApprovalAsync(phone, request.OperationId);
+            pending.Request.Kind.Should().Be(ApprovalKind.WorktreeRemoval);
+            pending.Request.Summary.Should().Contain("feature/validar-antimicrobianos").And.Contain("A branch fica no repositório");
+
+            var answer = new ApprovalResponse(pending.Request.ApprovalId, request.OperationId, pending.Request.RequestHash, decision, null, false, DateTimeOffset.UtcNow);
+            await SendAsync<ApprovalView>(phone, HttpMethod.Post, RemoteRoutes.ApprovalResponse(pending.Request.ApprovalId), Sign(phoneKey, answer, RemoteJws.ApprovalType));
+            var operation = await FinishedAsync(phone, request.OperationId, clock);
+
+            if (decision == ApprovalDecision.Deny)
+            {
+                operation.Status.Should().Be(RemoteOperationStatus.Failed);
+                operation.ResultCode.Should().Be(RemoteErrorCodes.ApprovalDenied);
+                Directory.Exists(development.WorktreePath).Should().BeTrue("negado, nada sai");
+            }
+            else
+            {
+                operation.Status.Should().Be(RemoteOperationStatus.Succeeded, operation.ResultSummary);
+                Directory.Exists(development.WorktreePath).Should().BeFalse();
+                (await DevelopmentAsync(notebook, taskId)).Status.Should().Be(TaskDevelopmentStatus.Removed);
+                (await GitAsync(repository, "branch", "--list", "feature/validar-antimicrobianos")).Should().Contain("feature/validar-antimicrobianos");
+            }
+        }
+    }
+
     private static JsonElement Provision(Guid taskId, Guid directoryId, WorktreeConflictPolicy policy = WorktreeConflictPolicy.Fail) =>
         JsonSerializer.SerializeToElement(
             new EnvironmentProvisioningRequest(taskId, directoryId, null, null, null, policy, RunPostWorktreeCommands: true),

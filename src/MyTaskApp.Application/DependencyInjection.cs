@@ -260,8 +260,10 @@ public static class DependencyInjection
         services.AddScoped<RemoteCommandPlanner>();
         services.AddSingleton<IRemoteOperationExecutor, WorktreeProvisionExecutor>();
         services.AddScoped<RemoteProvisionPlanner>();
+        services.AddSingleton<IRemoteOperationExecutor, WorktreeRemoveExecutor>();
+        services.AddScoped<RemoteRemovalPlanner>();
         services.AddScoped<RecordRemoteOperationHandler>();
-        services.TryAddSingleton(new SupportedRemoteOperations([RemoteOperationKinds.EnvironmentInspect, RemoteOperationKinds.CommandRun, RemoteOperationKinds.WorktreeProvision]));
+        services.TryAddSingleton(new SupportedRemoteOperations([RemoteOperationKinds.EnvironmentInspect, RemoteOperationKinds.CommandRun, RemoteOperationKinds.WorktreeProvision, RemoteOperationKinds.WorktreeRemove]));
         services.AddScoped<ConsultationLauncher>();
         services.AddScoped<ConsultationTargetResolver>();
         services.AddScoped<ConsultationFolders>();
