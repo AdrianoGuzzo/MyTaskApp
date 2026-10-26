@@ -149,7 +149,14 @@
           </StackPanel>
 
           <StackPanel Grid.Column="1" Spacing="8" IsVisible="{Binding HasSelection}">
-            <TextBlock Classes="sectionTitle" Text="Comandos" />
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Classes="sectionTitle" VerticalAlignment="Center" Text="Comandos" />
+              <Button Grid.Column="1" x:Name="RemoveWorktreeButton" Content="Apagar o worktree lá"
+                      ToolTip.Tip="A outra máquina pede aprovação antes. A branch fica no repositório."
+                      IsEnabled="{Binding !IsBusy}"
+                      Command="{Binding RemoveCommand}"
+                      CommandParameter="{Binding SelectedEnvironment}" />
+            </Grid>
             <ItemsControl x:Name="CommandList" ItemsSource="{Binding SelectedEnvironment.Commands}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:RemoteCommandItem">

@@ -677,6 +677,11 @@ public sealed partial class App : Avalonia.Application
         viewModel.Developments.CommandsRequested += () => ShowDevelopmentCommands(services, notes);
         viewModel.Developments.DatabaseOperationsRequested += () => ShowDatabaseOperations(services, notes);
 
+        if (viewModel.Developments.RemotePrepare is { } prepare)
+        {
+            prepare.ControlOpened += (_, control) => new RemoteControlWindow(control).Show(notes);
+        }
+
         // A Consulta Inteligente (ADR-081) leva às mesmas janelas: etiquetas,
         // bancos e o servidor MCP que as ferramentas de banco usam.
         if (viewModel.Consultation is { } consultation)

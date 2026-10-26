@@ -67,6 +67,19 @@ public class RemoteControlViewModelTests
     }
 
     [AvaloniaFact]
+    public async Task RemovingTheWorktreeThere_IsSent_AndWaitsForTheApprovalThere()
+    {
+        var viewModel = ViewModel();
+        await viewModel.OpenAsync(Notebook, Ct);
+
+        await viewModel.RemoveCommand.ExecuteAsync(viewModel.SelectedEnvironment!);
+
+        _runner.Invoked.Should().Contain(typeof(SendRemoteOperationHandler));
+        viewModel.OperationTitle.Should().Be("Apagar o worktree de Validar antimicrobianos em Notebook");
+        viewModel.CanCancel.Should().BeTrue();
+    }
+
+    [AvaloniaFact]
     public async Task ARequiredValueLeftEmpty_IsNotSent()
     {
         var viewModel = ViewModel();

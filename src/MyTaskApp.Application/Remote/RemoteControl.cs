@@ -76,6 +76,18 @@ public static class RemoteRequests
             environment.TaskId,
             [environment.TaskId]);
 
+    /// <summary>Sem forçar: com alterações não commitadas, a outra máquina recusa e diz quantas.</summary>
+    public static SendRemoteOperation RemoveWorktree(Guid deviceId, RemoteEnvironmentView environment) =>
+        new(
+            deviceId,
+            RemoteOperationKinds.WorktreeRemove,
+            Payload(new WorktreeRemovalRequest(environment.TaskId, environment.DevelopmentId, Force: false)),
+            environment.TaskId);
+
+    /// <summary>O "Preparar em…": a tarefa vai junto, para a outra máquina esperar o sync trazê-la.</summary>
+    public static SendRemoteOperation Provision(Guid deviceId, EnvironmentProvisioningRequest request) =>
+        new(deviceId, RemoteOperationKinds.WorktreeProvision, Payload(request), request.TaskId, [request.TaskId]);
+
     private static JsonElement Payload<T>(T payload) => JsonSerializer.SerializeToElement(payload, RemoteJson.Options);
 }
 

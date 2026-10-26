@@ -267,6 +267,23 @@ public sealed partial class RemoteControlViewModel : ObservableObject
     [RelayCommand]
     public Task DenyAsync(RemoteApprovalItem approval) => AnswerAsync(approval, ApprovalDecision.Deny);
 
+    /// <summary>Acompanha uma operação já pedida (o "Preparar em…" da aba Desenvolvimento): a saída começa do zero.</summary>
+    public void Watch(RemoteOperationView operation, string title)
+    {
+        _after = 0;
+        _lines.Clear();
+        Output = string.Empty;
+        OperationTitle = title;
+        Operation = operation;
+    }
+
+    /// <summary>Apagar o worktree lá: a outra máquina sempre pede aprovação antes, e as travas da tela valem.</summary>
+    [RelayCommand]
+    public Task RemoveAsync(RemoteEnvironmentItem environment) =>
+        Machine is { } machine
+            ? SendAsync(RemoteRequests.RemoveWorktree(machine.DeviceId, environment.View), $"Apagar o worktree de {environment.Title} em {machine.Nickname}")
+            : Task.CompletedTask;
+
     /// <summary>
     /// O relógio da janela, a cada meio segundo: os eventos novos da operação
     /// em andamento e, de tempos em tempos, as aprovações.
@@ -310,11 +327,7 @@ public sealed partial class RemoteControlViewModel : ObservableObject
                 (handler, token) => handler.HandleAsync(request, token),
                 CancellationToken.None);
 
-            _after = 0;
-            _lines.Clear();
-            Output = string.Empty;
-            OperationTitle = title;
-            Operation = operation;
+            Watch(operation, title);
         }
         catch (Exception exception) when (exception is DomainException or SyncApiException)
         {

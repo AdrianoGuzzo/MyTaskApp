@@ -66,6 +66,24 @@ public sealed class RemoteControlTests
     }
 
     [Fact]
+    public void PreparingAndRemoving_NameTheTask_AndPreparingWaitsForIt()
+    {
+        var environment = new RemoteEnvironmentView(Guid.CreateVersion7(), Guid.CreateVersion7(), "Validar", "feature/1", []);
+        var asked = new EnvironmentProvisioningRequest(environment.TaskId, Guid.CreateVersion7(), null, null, null, WorktreeConflictPolicy.Fail, true);
+
+        var provision = RemoteRequests.Provision(Notebook, asked);
+        var remove = RemoteRequests.RemoveWorktree(Notebook, environment);
+
+        provision.Kind.Should().Be(RemoteOperationKinds.WorktreeProvision);
+        provision.RequiredEntities.Should().Equal([environment.TaskId], "a tarefa recém-criada aqui pode não ter chegado lá");
+        provision.Payload.Deserialize<EnvironmentProvisioningRequest>(RemoteJson.Options).Should().Be(asked);
+        remove.Kind.Should().Be(RemoteOperationKinds.WorktreeRemove);
+        remove.TaskId.Should().Be(environment.TaskId);
+        remove.Payload.Deserialize<WorktreeRemovalRequest>(RemoteJson.Options)
+            .Should().Be(new WorktreeRemovalRequest(environment.TaskId, environment.DevelopmentId, Force: false));
+    }
+
+    [Fact]
     public async Task TheProgressReadsEveryNewEvent_AndTheStatusAfterThem()
     {
         var id = Guid.CreateVersion7();
