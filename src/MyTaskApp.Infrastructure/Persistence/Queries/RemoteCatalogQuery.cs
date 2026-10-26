@@ -1,5 +1,6 @@
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
+using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.QuickCommands;
 using MyTaskApp.Application.Remote;
 using MyTaskApp.Application.Tags;
@@ -74,7 +75,9 @@ internal sealed class RemoteCatalogQuery(MyTaskAppDbContext context, ITagQuery t
                         ])),
             ],
             [],
-            [])
+
+            // Os perfis do Claude sem terminal (ADR-089): fixos no código; o que cada um libera é decidido aqui.
+            [.. AgentToolProfiles.All.Select(profile => new CatalogAgentProfile(profile.Id, profile.Name, profile.Description))])
         {
             Environments = await EnvironmentsAsync(listed, cancellationToken),
         };

@@ -17,13 +17,18 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- O MCP de aprovação do Claude sem terminal (ADR-089): Kestrel só no loopback, como o do desktop. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\MyTaskApp.Application\MyTaskApp.Application.csproj" />
     <ProjectReference Include="..\MyTaskApp.Infrastructure\MyTaskApp.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Json" />
+    <!-- DependencyInjection e Configuration.Json vêm com o ASP.NET Core. -->
+    <PackageReference Include="ModelContextProtocol.AspNetCore" />
     <PackageReference Include="Serilog" />
     <PackageReference Include="Serilog.Extensions.Logging" />
     <PackageReference Include="Serilog.Settings.Configuration" />

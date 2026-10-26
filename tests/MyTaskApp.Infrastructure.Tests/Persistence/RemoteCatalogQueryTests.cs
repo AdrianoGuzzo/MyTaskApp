@@ -94,6 +94,7 @@ public sealed class RemoteCatalogQueryTests : IDisposable
         catalog.Commands.Should().BeEmpty();
         catalog.Directories.Should().BeEmpty();
         catalog.Environments.Should().BeEmpty();
+        catalog.AgentProfiles.Select(profile => profile.Id).Should().Equal(["read", "edit", "edit-test"], "os perfis do Claude são do código, não do banco");
     }
 
     [Fact]

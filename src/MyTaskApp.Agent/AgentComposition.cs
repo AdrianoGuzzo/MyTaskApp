@@ -2,7 +2,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using MyTaskApp.Application;
+using MyTaskApp.Agent.Approvals;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Infrastructure;
 using MyTaskApp.Infrastructure.Processes;
@@ -51,6 +53,9 @@ internal static class AgentComposition
 
         services.AddApplication(configuration);
         services.AddInfrastructure(configuration);
+
+        // Só o agente pergunta de longe antes de o Claude usar o que o perfil não libera (ADR-089).
+        services.AddSingleton<IHeadlessApprovalGateway, ApprovalMcpServer>();
 
         services.AddSingleton<AgentHost>();
 
