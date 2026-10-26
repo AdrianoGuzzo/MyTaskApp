@@ -117,7 +117,7 @@ public sealed partial class RemoteOperationsEndToEndTests
     {
         var (notebook, phone, phoneKey) = await PairedAsync();
         using var _ = phoneKey;
-        var slow = DevelopmentCommand.Create("@devagar", "echo antes-da-queda & ping -n 8 127.0.0.1 >nul & echo depois-da-queda", null, DateTimeOffset.UtcNow);
+        var slow = DevelopmentCommand.Create("@devagar", Sequence("echo antes-da-queda", Pause(7), "echo depois-da-queda"), null, DateTimeOffset.UtcNow);
         slow.AllowRemote(true);
         var (taskId, developmentId) = await ReadyEnvironmentAsync(notebook, slow);
         var dispatcher = notebook.Services.GetRequiredService<RemoteOperationDispatcher>();
@@ -156,7 +156,7 @@ public sealed partial class RemoteOperationsEndToEndTests
     {
         var (notebook, phone, phoneKey) = await PairedAsync();
         using var _ = phoneKey;
-        var slow = DevelopmentCommand.Create("@demorado", "echo comecou & ping -n 60 127.0.0.1 >nul", null, DateTimeOffset.UtcNow);
+        var slow = DevelopmentCommand.Create("@demorado", Sequence("echo comecou", Pause(60)), null, DateTimeOffset.UtcNow);
         slow.AllowRemote(true);
         var (taskId, developmentId) = await ReadyEnvironmentAsync(notebook, slow);
         var request = await RequestAsync(notebook, phone, phoneKey, RemoteOperationKinds.CommandRun, Run(developmentId, slow), taskId);
@@ -182,16 +182,15 @@ public sealed partial class RemoteOperationsEndToEndTests
     [Fact]
     public async Task Chaos_ACommandKilledFromOutside_FailsWithTheReason()
     {
-        if (!OperatingSystem.IsWindows())
-        {
-            Assert.Skip("O comando do teste é do cmd.");
-        }
-
         var (notebook, phone, phoneKey) = await PairedAsync();
         using var _ = phoneKey;
+
+        // O processo que espera grava o próprio PID: no sh, o exec faz o sleep herdar o PID do shell.
         var victim = DevelopmentCommand.Create(
             "@vitima",
-            "powershell -NoProfile -Command \"$PID | Out-File -Encoding ascii pid.txt; Start-Sleep -Seconds 120\"",
+            OperatingSystem.IsWindows()
+                ? "powershell -NoProfile -Command \"$PID | Out-File -Encoding ascii pid.txt; Start-Sleep -Seconds 120\""
+                : "echo $$ > pid.txt; exec sleep 120",
             null,
             DateTimeOffset.UtcNow);
         victim.AllowRemote(true);
@@ -249,7 +248,7 @@ public sealed partial class RemoteOperationsEndToEndTests
     {
         var (notebook, phone, phoneKey) = await PairedAsync();
         using var _ = phoneKey;
-        var slow = DevelopmentCommand.Create("@demorado", "echo comecou & ping -n 60 127.0.0.1 >nul & echo nao-devia-chegar", null, DateTimeOffset.UtcNow);
+        var slow = DevelopmentCommand.Create("@demorado", Sequence("echo comecou", Pause(60), "echo nao-devia-chegar"), null, DateTimeOffset.UtcNow);
         slow.AllowRemote(true);
         var (taskId, developmentId) = await ReadyEnvironmentAsync(notebook, slow);
         var dispatcher = notebook.Services.GetRequiredService<RemoteOperationDispatcher>();
@@ -347,6 +346,19 @@ public sealed partial class RemoteOperationsEndToEndTests
             await Task.Delay(200, Ct);
         }
     }
+
+    /// <summary>
+    /// Os passos um depois do outro, no shell da máquina: o <c>cmd</c> no
+    /// Windows e o <c>/bin/sh</c> no Linux (o CI). No <c>sh</c>, o <c>&amp;</c>
+    /// do <c>cmd</c> manda o passo para o fundo, e tudo roda junto.
+    /// </summary>
+    private static string Sequence(params string[] steps) => string.Join(OperatingSystem.IsWindows() ? " & " : "; ", steps);
+
+    /// <summary>Espera, sem ler a entrada: o <c>timeout</c> do Windows recusa a entrada redirecionada, e o <c>ping</c> do Linux sem <c>-c</c> não para.</summary>
+    private static string Pause(int seconds) =>
+        OperatingSystem.IsWindows()
+            ? $"ping -n {seconds + 1} 127.0.0.1 >nul"
+            : $"sleep {seconds}";
 
     private static RemoteOperationEvent Output(Guid operationId, long seq) =>
         new(operationId, seq, DateTimeOffset.UtcNow, RemoteEventKind.Output, Text: $"linha {seq}");
