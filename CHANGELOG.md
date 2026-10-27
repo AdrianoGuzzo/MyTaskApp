@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.27.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.26.0...v1.27.0) (2026-10-27)
+
+
+### Added
+
+* **remoto:** orquestração remota, a fase 2 inteira (E1–E8) ([#160](https://github.com/AdrianoGuzzo/MyTaskApp/issues/160)) ([9acf215](https://github.com/AdrianoGuzzo/MyTaskApp/commit/9acf21525a95d53488e66a38ad52700c98924ba0))
+
 ## [1.26.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.25.0...v1.26.0) (2026-10-24)
 
 
