@@ -150,6 +150,22 @@
                       CommandParameter="{Binding}" />
             <Separator IsVisible="{Binding HasBranchName}" />
             <!--
+              Lançar horas (ADR-052) sem abrir a tarefa: os atalhos gravam o
+              período que acabou agora, num clique (Tag em minutos, ver
+              OnRecentTimeClick); "Outro período…" é o diálogo da aba Tempo.
+            -->
+            <MenuItem Classes="logTime" Header="Lançar horas">
+              <MenuItem Header="15 min" Tag="15" Click="OnRecentTimeClick" />
+              <MenuItem Header="30 min" Tag="30" Click="OnRecentTimeClick" />
+              <MenuItem Header="1 h" Tag="60" Click="OnRecentTimeClick" />
+              <MenuItem Header="2 h" Tag="120" Click="OnRecentTimeClick" />
+              <Separator />
+              <MenuItem Header="Outro período…"
+                        Command="{Binding #Root.((vm:TodayViewModel)DataContext).AddTimeEntryCommand}"
+                        CommandParameter="{Binding}" />
+            </MenuItem>
+            <Separator />
+            <!--
               O prazo (ADR-050, §9): definir ou mudar sem abrir a tarefa. Os
               atalhos são cliques de code-behind porque o comando precisa da
               linha e do atalho juntos (ver OnDeadlineShortcutClick).

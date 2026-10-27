@@ -225,14 +225,8 @@ public sealed partial class TaskTimeLogViewModel : ObservableObject
     [RelayCommand]
     public async Task AddEntryAsync(CancellationToken cancellationToken)
     {
-        var end = TimeOnly.FromTimeSpan(TimeSpan.FromMinutes(Math.Floor(_clock.CurrentTime.ToTimeSpan().TotalMinutes)));
-        var start = end.Hour == 0 ? TimeOnly.MinValue : end.AddHours(-1);
-
-        var saved = await _editor.EditAsync(new TimeEntryEditorRequest(
-            "Adicionar tempo",
-            "Adicionar",
-            new TimeEntryDraft(_clock.Today, start, _clock.Today, end, null),
-            _clock.Today,
+        var saved = await _editor.EditAsync(TimeEntryEditorRequest.NewEntry(
+            _clock,
             (draft, token) => SaveAsync(
                 () => _runner.RunAsync<AddTimeEntryHandler, Guid>(
                     (handler, inner) => handler.HandleAsync(
