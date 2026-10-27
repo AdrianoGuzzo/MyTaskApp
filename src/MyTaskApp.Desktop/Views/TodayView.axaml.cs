@@ -361,6 +361,17 @@ public sealed partial class TodayView : UserControl
         }
     }
 
+    /// <summary>"Lançar horas › 30 min": o <c>Tag</c> do item é a duração, em minutos.</summary>
+    private void OnRecentTimeClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem { DataContext: TaskRowViewModel row, Tag: string tag }
+            && int.TryParse(tag, NumberStyles.None, CultureInfo.InvariantCulture, out var minutes)
+            && DataContext is TodayViewModel viewModel)
+        {
+            viewModel.LogRecentTimeCommand.Execute(new RecentTimeRequest(row, TimeSpan.FromMinutes(minutes)));
+        }
+    }
+
     /// <summary>
     /// O botão "⋯" abre o <c>ContextFlyout</c> da própria linha, em vez de ter
     /// um menu só dele. Assim clique direito e botão são literalmente o mesmo

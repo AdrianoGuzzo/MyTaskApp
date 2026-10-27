@@ -1,3 +1,4 @@
+using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -85,6 +86,7 @@ public class TodayRowMenuRenderingTests
             "Copiar chave do Jira",
             "Copiar link do Jira",
             "Copiar nome da branch",
+            "Lançar horas",
             "Definir prazo",
             "Remover prazo",
             "Abrir Claude Code",
@@ -123,13 +125,14 @@ public class TodayRowMenuRenderingTests
         var window = await ShowAsync(new TodayBoard(Date, [], [], [Row("Fechar o mês")], [], []));
 
         // "Abrir Claude Code", o terminal e a pasta são clique de code-behind:
-        // podem precisar perguntar o ambiente (ADR-036, ADR-045). O prazo é um
-        // submenu, conferido no teste seguinte. "Onde aparece…" monta as
+        // podem precisar perguntar o ambiente (ADR-036, ADR-045). O prazo e o
+        // "Lançar horas" são submenus, conferidos nos testes seguintes. "Onde aparece…" monta as
         // escolhas com os computadores da conta, na hora (ADR-062).
         var items = OpenRowMenu(window).Items.OfType<MenuItem>()
             .Where(item => !item.Classes.Contains("startAgent")
                 && !item.Classes.Contains("worktreeAction")
                 && !item.Classes.Contains("deadline")
+                && !item.Classes.Contains("logTime")
                 && !item.Classes.Contains("placement"))
             .ToList();
 
@@ -167,6 +170,30 @@ public class TodayRowMenuRenderingTests
         var custom = entries.Single(item => item.Tag is null);
         custom.Command.Should().NotBeNull();
         custom.CommandParameter.Should().BeOfType<TaskRowViewModel>();
+    }
+
+    /// <summary>
+    /// O submenu "Lançar horas" (ADR-052): cada atalho tem a linha e a duração
+    /// em minutos, e o "Outro período…" resolve o comando com a linha.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task TheLogTimeSubmenu_KnowsItsRowAndItsDurations()
+    {
+        var window = await ShowAsync(new TodayBoard(Date, [], [], [Row("Fechar o mês")], [], []));
+
+        var logTime = OpenRowMenu(window).Items.OfType<MenuItem>()
+            .Single(item => item.Classes.Contains("logTime"));
+        var entries = logTime.Items.OfType<MenuItem>().ToList();
+
+        logTime.IsVisible.Should().BeTrue();
+        entries.Select(item => item.Header).Should().Equal("15 min", "30 min", "1 h", "2 h", "Outro período…");
+        entries.Where(item => item.Tag is not null).Select(item => int.Parse((string)item.Tag!, CultureInfo.InvariantCulture))
+            .Should().Equal(15, 30, 60, 120);
+        entries.Should().AllSatisfy(item => item.DataContext.Should().BeOfType<TaskRowViewModel>());
+
+        var other = entries.Single(item => item.Tag is null);
+        other.Command.Should().NotBeNull();
+        other.CommandParameter.Should().BeOfType<TaskRowViewModel>();
     }
 
     /// <summary>

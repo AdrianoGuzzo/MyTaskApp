@@ -1,5 +1,6 @@
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
+using MyTaskApp.Application.Planning;
 using MyTaskApp.Domain.TimeTracking;
 
 namespace MyTaskApp.Desktop.ViewModels;
@@ -24,7 +25,28 @@ public sealed record TimeEntryEditorRequest(
     string AcceptLabel,
     TimeEntryDraft Initial,
     DateOnly Today,
-    Func<TimeEntryDraft, CancellationToken, Task<string?>> SaveAsync);
+    Func<TimeEntryDraft, CancellationToken, Task<string?>> SaveAsync)
+{
+    /// <summary>
+    /// "Adicionar tempo", da aba Tempo ou do menu da linha: a última hora, até
+    /// o minuto de agora, e sem atravessar a meia-noite — o usuário corrige o
+    /// horário, o dia já vem certo.
+    /// </summary>
+    public static TimeEntryEditorRequest NewEntry(
+        IUserClock clock,
+        Func<TimeEntryDraft, CancellationToken, Task<string?>> saveAsync)
+    {
+        var end = TimeOnly.FromTimeSpan(TimeSpan.FromMinutes(Math.Floor(clock.CurrentTime.ToTimeSpan().TotalMinutes)));
+        var start = end.Hour == 0 ? TimeOnly.MinValue : end.AddHours(-1);
+
+        return new TimeEntryEditorRequest(
+            "Adicionar tempo",
+            "Adicionar",
+            new TimeEntryDraft(clock.Today, start, clock.Today, end, null),
+            clock.Today,
+            saveAsync);
+    }
+}
 
 /// <summary>
 /// Lança ou corrige um período (ADR-052). Porta, como

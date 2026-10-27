@@ -5,7 +5,7 @@
 | **Status** | Implementado (Windows e Linux) |
 | **Decisões** | [ADR-052](../architecture/decisions/052-tempo-trabalhado-por-periodo.md) tempo trabalhado · [ADR-053](../architecture/decisions/053-historico-sete-dias-projecao.md) histórico de 7 dias |
 | **Código** | `src/MyTaskApp.Domain/TimeTracking/`, `src/MyTaskApp.Application/TimeTracking/`, `src/MyTaskApp.Desktop/ViewModels/ActiveTimerViewModel.cs`, `src/MyTaskApp.Desktop/ViewModels/TaskTimeLogViewModel.cs`, `src/MyTaskApp.Desktop/ViewModels/TimeEntryEditorViewModel.cs`, `src/MyTaskApp.Application/History/`, `src/MyTaskApp.Domain/Planning/ActivityHistory.cs`, `src/MyTaskApp.Desktop/ViewModels/ActivityHistoryViewModel.cs` |
-| **Testes** | `tests/MyTaskApp.Domain.Tests/TimeTracking/`, `tests/MyTaskApp.Application.Tests/TimeTracking/`, `tests/MyTaskApp.Desktop.Tests/ViewModels/TimeTrackingViewModelTests.cs`, `tests/MyTaskApp.Application.Tests/History/GetActivityHistoryHandlerTests.cs`, `tests/MyTaskApp.Domain.Tests/Planning/ActivityHistoryBuilderTests.cs` |
+| **Testes** | `tests/MyTaskApp.Domain.Tests/TimeTracking/`, `tests/MyTaskApp.Application.Tests/TimeTracking/`, `tests/MyTaskApp.Desktop.Tests/ViewModels/TimeTrackingViewModelTests.cs`, `tests/MyTaskApp.Desktop.Tests/ViewModels/RowTimeEntryTests.cs`, `tests/MyTaskApp.Application.Tests/History/GetActivityHistoryHandlerTests.cs`, `tests/MyTaskApp.Domain.Tests/Planning/ActivityHistoryBuilderTests.cs` |
 
 ## Cronômetro e períodos
 
@@ -23,6 +23,14 @@
   por dia, com início, fim, duração, origem (Timer ou Manual) e observação.
   **+ Adicionar tempo** lança um período esquecido. Cada período pode ser
   editado ou excluído, e períodos da mesma tarefa não se sobrepõem.
+- **Lançar horas sem abrir a tarefa.** No menu `⋯` da linha (ou clique
+  direito), **Lançar horas** tem atalhos de um clique: **15 min**, **30 min**,
+  **1 h** e **2 h**. Cada um grava o período que acabou agora, terminando no
+  minuto atual; se começar antes da meia-noite, começa no dia anterior. A
+  confirmação diz o que entrou ("30min lançados (13:30 → 14:00).") e o total
+  da linha se atualiza. **Outro período…** abre o mesmo diálogo do
+  **+ Adicionar tempo**. Um período que se sobrepõe a outro da tarefa (por
+  exemplo, com o cronômetro dela correndo) é recusado com a mensagem do motivo.
 - No HUD, uma faixa com a tarefa e o relógio fica visível enquanto o
   cronômetro corre.
 - Os mesmos períodos alimentam os relatórios de horas do [MCP](../mcp-server.md).

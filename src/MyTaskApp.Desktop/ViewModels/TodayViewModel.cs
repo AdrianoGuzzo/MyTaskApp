@@ -25,6 +25,7 @@ using MyTaskApp.Domain.Devices;
 using MyTaskApp.Domain.External;
 using MyTaskApp.Domain.Lifecycle;
 using MyTaskApp.Domain.Planning;
+using MyTaskApp.Domain.TimeTracking;
 
 namespace MyTaskApp.Desktop.ViewModels;
 
@@ -37,6 +38,9 @@ public sealed record SectionReorder(TodaySectionViewModel Section, int From, int
 
 /// <summary>Um atalho de prazo pedido no menu de uma linha (ADR-050).</summary>
 public sealed record DeadlineShortcutRequest(TaskRowViewModel Row, DeadlineShortcut Shortcut);
+
+/// <summary>Um atalho de "Lançar horas" no menu de uma linha: a duração que acabou agora (ADR-052).</summary>
+public sealed record RecentTimeRequest(TaskRowViewModel Row, TimeSpan Duration);
 
 /// <summary>Um lugar no menu "Onde aparece" da linha (ADR-062).</summary>
 public sealed record PlacementChoice(TaskRowViewModel Row, string Label, DevicePlacement Placement, bool IsCurrent);
@@ -56,7 +60,11 @@ public sealed partial class TodayViewModel(
     // mesmo. Opcional para os testes que não falam de tempo (ADR-052).
     ActiveTimerViewModel? activeTimer = null,
     // Quem é "este computador" (ADR-062). Sem ele, a lista é a de sempre.
-    DevicePlacementState? placements = null) : ObservableObject, IDisposable
+    DevicePlacementState? placements = null,
+    // "Lançar horas" no menu da linha (ADR-052): a hora de parede do usuário e
+    // o diálogo do período. Sem eles, o menu não lança nada.
+    IUserClock? userClock = null,
+    ITimeEntryEditor? timeEntryEditor = null) : ObservableObject, IDisposable
 {
     /// <summary>
     /// O rótulo "aguardando há N minutos" envelhece sozinho, então o quadro
@@ -1407,6 +1415,111 @@ public sealed partial class TodayViewModel(
             $"Você está trabalhando em:{Environment.NewLine}{Environment.NewLine}\"{runningTitle}\"{Environment.NewLine}{Environment.NewLine}"
             + $"Deseja parar essa tarefa e iniciar:{Environment.NewLine}{Environment.NewLine}\"{nextTitle}\"?",
             "Parar e iniciar");
+
+    /// <summary>
+    /// "Lançar horas › 30 min" no menu da linha: o período que acabou agora, num
+    /// clique, sem abrir a tarefa. Termina no minuto de agora e começa a duração
+    /// antes — se for antes da meia-noite, começa ontem. Sobreposição e o resto
+    /// são regra do caso de uso, e a recusa vira a mensagem da tela.
+    /// </summary>
+    [RelayCommand]
+    public async Task LogRecentTimeAsync(RecentTimeRequest request, CancellationToken cancellationToken)
+    {
+        if (userClock is null)
+        {
+            return;
+        }
+
+        var end = userClock.Today.ToDateTime(userClock.CurrentTime);
+        end = end.AddTicks(-(end.Ticks % TimeSpan.TicksPerMinute));
+        var start = end - request.Duration;
+
+        var logged = await TryAsync(
+            () => runner.RunAsync<AddTimeEntryHandler, Guid>(
+                (handler, token) => handler.HandleAsync(
+                    new AddTimeEntry(
+                        request.Row.OccurrenceId,
+                        DateOnly.FromDateTime(start),
+                        TimeOnly.FromDateTime(start),
+                        DateOnly.FromDateTime(end),
+                        TimeOnly.FromDateTime(end),
+                        Note: null),
+                    token),
+                cancellationToken),
+            "Não foi possível lançar o tempo desta tarefa.");
+
+        if (logged)
+        {
+            await LoadAsync(cancellationToken);
+            StatusMessage = LoggedMessage(start, end, userClock.Today);
+        }
+    }
+
+    /// <summary>
+    /// "Lançar horas › Outro período…": o mesmo diálogo do "+ Adicionar tempo"
+    /// da aba Tempo, aberto direto da lista.
+    /// </summary>
+    [RelayCommand]
+    public async Task AddTimeEntryAsync(TaskRowViewModel row, CancellationToken cancellationToken)
+    {
+        if (userClock is null || timeEntryEditor is null)
+        {
+            return;
+        }
+
+        TimeEntryDraft? added = null;
+
+        var saved = await timeEntryEditor.EditAsync(TimeEntryEditorRequest.NewEntry(
+            userClock,
+            (draft, token) =>
+            {
+                added = draft;
+                return SaveTimeEntryAsync(row.OccurrenceId, draft, token);
+            }));
+
+        if (saved && added is not null)
+        {
+            await LoadAsync(cancellationToken);
+            StatusMessage = LoggedMessage(
+                added.StartDate.ToDateTime(added.StartTime),
+                added.EndDate.ToDateTime(added.EndTime),
+                userClock.Today);
+        }
+    }
+
+    /// <summary>"30min lançados (14:00 → 14:30)." — com o dia quando não é hoje.</summary>
+    public static string LoggedMessage(DateTime start, DateTime end, DateOnly today)
+    {
+        var day = DateOnly.FromDateTime(start) == today
+            ? string.Empty
+            : start.ToString("dd/MM ", CultureInfo.InvariantCulture);
+
+        return $"{WorkTimeFormatter.Duration(end - start)} lançados ({day}{WallClockInput.Format(TimeOnly.FromDateTime(start))} → {WallClockInput.Format(TimeOnly.FromDateTime(end))}).";
+    }
+
+    /// <summary>A gravação do diálogo: a mensagem do domínio volta para ele, que fica aberto.</summary>
+    private async Task<string?> SaveTimeEntryAsync(Guid occurrenceId, TimeEntryDraft draft, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await runner.RunAsync<AddTimeEntryHandler, Guid>(
+                (handler, token) => handler.HandleAsync(
+                    new AddTimeEntry(occurrenceId, draft.StartDate, draft.StartTime, draft.EndDate, draft.EndTime, draft.Note),
+                    token),
+                cancellationToken);
+
+            return null;
+        }
+        catch (DomainException exception)
+        {
+            return exception.Message;
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "TimeEntrySaveFailed {OccurrenceId}", occurrenceId);
+            return "Não foi possível salvar este período.";
+        }
+    }
 
     [RelayCommand]
     public async Task ToggleAsync(TaskRowViewModel row, CancellationToken cancellationToken)
