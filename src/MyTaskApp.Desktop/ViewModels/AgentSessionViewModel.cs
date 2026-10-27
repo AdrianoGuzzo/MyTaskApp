@@ -567,7 +567,7 @@ public sealed partial class AgentSessionViewModel(
     private AgentPanelState StateFor(AgentSessionView? session) => session?.Status switch
     {
         AgentSessionStatus.Running or AgentSessionStatus.Starting => AgentPanelState.Running,
-        AgentSessionStatus.Exited => Installed ? AgentPanelState.Finished : AgentPanelState.NotInstalled,
+        AgentSessionStatus.Exited or AgentSessionStatus.Stopped => Installed ? AgentPanelState.Finished : AgentPanelState.NotInstalled,
         AgentSessionStatus.Failed => Installed ? AgentPanelState.Failed : AgentPanelState.NotInstalled,
         _ => Installed ? AgentPanelState.Idle : AgentPanelState.NotInstalled,
     };

@@ -1,6 +1,8 @@
 using System.Security.Cryptography;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
+using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Remote;
 using MyTaskApp.Application.Sync;
@@ -38,11 +40,29 @@ public sealed class RemoteMachinesTests : IDisposable
 
     public void Dispose() => _signer.Dispose();
 
+    private readonly FakeOperationQueue _queue = new();
+
+    private readonly FakeCatalogQuery _catalog = new();
+
+    private RemoteCatalogPublisher? _publisher;
+
     private MachineCapabilities Capabilities() =>
-        new(_git, new AgentCliProviders([new FakeAgentCliProvider()]), new FakeToolLocator(), _clock);
+        new(
+            _git,
+            new AgentCliProviders([new FakeAgentCliProvider()]),
+            new FakeToolLocator(),
+            new SupportedRemoteOperations([RemoteOperationKinds.EnvironmentInspect]),
+            RemoteDispatchLimits.Default,
+            _clock);
+
+    private RemoteCatalogPublisher Publisher() =>
+        _publisher ??= new RemoteCatalogPublisher(
+            new ScopedUseCaseRunner(new ServiceCollection().AddSingleton<IRemoteCatalogQuery>(_catalog).BuildServiceProvider().GetRequiredService<IServiceScopeFactory>()),
+            _queue,
+            NullLogger<RemoteCatalogPublisher>.Instance);
 
     private RegisterThisMachineHandler Register(MachineCapabilities? capabilities = null) =>
-        new(_settings, _server, _signer, _identity, capabilities ?? Capabilities(), NullLogger<RegisterThisMachineHandler>.Instance);
+        new(_settings, _server, _signer, _identity, capabilities ?? Capabilities(), Publisher(), _trusted, _trusted, _clock, NullLogger<RegisterThisMachineHandler>.Instance);
 
     private GetMachinesHandler Machines() => new(_settings, _server, _trusted, _clock);
 
@@ -60,7 +80,113 @@ public sealed class RemoteMachinesTests : IDisposable
         registration.Roles.Should().Be(roles);
         registration.Key.Should().Be(_signer.PublicKey);
         registration.Capabilities.ProtocolVersion.Should().Be(RemoteLimits.ProtocolVersion);
-        registration.Capabilities.Operations.Should().BeEmpty("nenhuma operação antes do agente");
+        registration.Capabilities.Operations.Should().Equal(RemoteOperationKinds.EnvironmentInspect);
+        registration.Capabilities.MaxConcurrentOperations.Should().Be(RemoteDispatchLimits.Default.MaxConcurrent);
+    }
+
+    /// <summary>O registro grava o hash do catálogo de agora; o catálogo sobe só quando muda, e só de quem é executora.</summary>
+    [Fact]
+    public async Task AnExecutor_SendsTheHashOfItsCatalog_AndPublishesItOnlyWhenItChanges()
+    {
+        _catalog.Commands.Add(new CatalogCommand(Guid.CreateVersion7(), "testes", CommandScope.Global, null, false, []));
+
+        await Register().HandleAsync(new RegisterThisMachine(), Ct);
+        await Register().HandleAsync(new RegisterThisMachine(), Ct);
+
+        var published = _queue.Catalogs.Should().ContainSingle().Subject;
+        published.Hash.Should().HaveLength(64);
+        _server.Registrations.Should().HaveCount(2).And.OnlyContain(registration => registration.Capabilities.CatalogHash == published.Hash);
+
+        _catalog.Commands.Add(new CatalogCommand(Guid.CreateVersion7(), "lint", CommandScope.Global, null, true, []));
+        await Register().HandleAsync(new RegisterThisMachine(), Ct);
+
+        _queue.Catalogs.Should().HaveCount(2);
+        _queue.Catalogs[1].Hash.Should().NotBe(published.Hash);
+    }
+
+    /// <summary>
+    /// RS-06: o controlador que saiu da conta (revogado) ou que trocou de chave
+    /// deixa de valer aqui no próximo registro; o que continua igual fica.
+    /// </summary>
+    [Fact]
+    public async Task AnExecutor_ForgetsTheControllersRevokedOnTheAccount_OrWithAnotherKey()
+    {
+        var kept = Controller("Pixel 8", "a");
+        var revoked = Controller("Celular perdido", "b");
+        var rekeyed = Controller("Notebook", "c");
+        _trusted.All.AddRange([kept, revoked, rekeyed]);
+        _server.Devices.Add(Device(kept.ControllerDeviceId, kept.Fingerprint));
+        _server.Devices.Add(Device(rekeyed.ControllerDeviceId, new string('d', 64)));
+
+        await Register().HandleAsync(new RegisterThisMachine(), Ct);
+
+        kept.IsActive.Should().BeTrue();
+        revoked.RevokedAt.Should().Be(Now);
+        rekeyed.RevokedAt.Should().Be(Now, "a chave nova só vale com um pareamento novo");
+        _trusted.SaveCount.Should().Be(1);
+    }
+
+    /// <summary>Sem a lista da conta, nada é esquecido: a falha do servidor não derruba a confiança, nem a cria.</summary>
+    [Fact]
+    public async Task WhenTheAccountListFails_TheTrustStaysAsItWas()
+    {
+        var controller = Controller("Pixel 8", "a");
+        _trusted.All.Add(controller);
+        var failing = new FailingList(_server);
+
+        await new RegisterThisMachineHandler(
+                _settings, failing, _signer, _identity, Capabilities(), Publisher(), _trusted, _trusted, _clock, NullLogger<RegisterThisMachineHandler>.Instance)
+            .HandleAsync(new RegisterThisMachine(), Ct);
+
+        controller.IsActive.Should().BeTrue();
+        _trusted.SaveCount.Should().Be(0);
+    }
+
+    private static TrustedController Controller(string nickname, string fingerprint) =>
+        TrustedController.Approve(Guid.CreateVersion7(), nickname, new string(fingerprint[0], 64), "AQID", Guid.CreateVersion7(), Now.AddDays(-1));
+
+    private static RemoteDeviceInfo Device(Guid deviceId, string fingerprint) =>
+        new(deviceId, "Outro", "android", "1.0.0", false, DeviceRoles.Controller, fingerprint, null, Now);
+
+    private sealed class FailingList(FakeRemoteApi inner) : IRemoteApi
+    {
+        public Task<RemoteDeviceInfo> RegisterAsync(DeviceRegistration registration, CancellationToken cancellationToken) =>
+            inner.RegisterAsync(registration, cancellationToken);
+
+        public Task<IReadOnlyList<RemoteDeviceInfo>> ListDevicesAsync(CancellationToken cancellationToken) =>
+            throw new SyncApiException(SyncFailureKind.Transient, "Sem conexão com o servidor de sincronização.");
+
+        public Task<PairingInfo> RequestPairingAsync(Guid executorDeviceId, CancellationToken cancellationToken) => inner.RequestPairingAsync(executorDeviceId, cancellationToken);
+
+        public Task<PairingInfo> GetPairingAsync(Guid pairingId, CancellationToken cancellationToken) => inner.GetPairingAsync(pairingId, cancellationToken);
+
+        public Task<IReadOnlyList<PairingInfo>> ListOpenPairingsAsync(CancellationToken cancellationToken) => inner.ListOpenPairingsAsync(cancellationToken);
+
+        public Task<PairingInfo> ApprovePairingAsync(Guid pairingId, PairingApproval approval, CancellationToken cancellationToken) =>
+            inner.ApprovePairingAsync(pairingId, approval, cancellationToken);
+    }
+
+    [Fact]
+    public async Task OnlyAController_PublishesNoCatalog()
+    {
+        _settings.Settings = new RemoteSettings(true, false);
+
+        await Register().HandleAsync(new RegisterThisMachine(), Ct);
+
+        _queue.Catalogs.Should().BeEmpty();
+        _server.Registrations.Should().ContainSingle().Which.Capabilities.CatalogHash.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void TheSameCatalogInAnotherOrder_HasTheSameHash()
+    {
+        var first = new CatalogCommand(Guid.CreateVersion7(), "a", CommandScope.Global, null, false, []);
+        var second = new CatalogCommand(Guid.CreateVersion7(), "b", CommandScope.Global, null, false, []);
+
+        var one = RemoteCatalogs.Seal(new AgentCatalog(string.Empty, [], [first, second], [], []));
+        var other = RemoteCatalogs.Seal(new AgentCatalog("qualquer", [], [second, first], [], []));
+
+        other.Hash.Should().Be(one.Hash);
     }
 
     [Fact]
@@ -204,11 +330,38 @@ public sealed class RemoteMachinesTests : IDisposable
     [Fact]
     public async Task UpdatingTheSettings_NeverAcceptsControlWithTheRemoteOff()
     {
-        var handler = new UpdateRemoteSettingsHandler(_settings, _trusted, NullLogger<UpdateRemoteSettingsHandler>.Instance);
+        var autostart = new RecordingAutostart();
+        var handler = new UpdateRemoteSettingsHandler(_settings, _trusted, autostart, NullLogger<UpdateRemoteSettingsHandler>.Instance);
 
         (await handler.HandleAsync(new UpdateRemoteSettings(Enabled: false, AcceptControl: true), Ct)).Should().Be(RemoteSettings.Off);
         (await handler.HandleAsync(new UpdateRemoteSettings(Enabled: true, AcceptControl: true), Ct)).Should().Be(new RemoteSettings(true, true));
         _trusted.SaveCount.Should().Be(2);
+        autostart.Applied.Should().Equal(false, true);
+    }
+
+    /// <summary>T-16: aceitar controle põe o agente no logon; o desktop reaplica o gravado ao abrir.</summary>
+    [Fact]
+    public async Task TheAgentAutostart_FollowsAcceptingControl()
+    {
+        var autostart = new RecordingAutostart();
+        await _settings.SaveAsync(new RemoteSettings(true, true), Ct);
+
+        await new ApplyAgentAutostartHandler(_settings, autostart).HandleAsync(new ApplyAgentAutostart(), Ct);
+        await _settings.SaveAsync(new RemoteSettings(true, false), Ct);
+        await new ApplyAgentAutostartHandler(_settings, autostart).HandleAsync(new ApplyAgentAutostart(), Ct);
+
+        autostart.Applied.Should().Equal(true, false);
+    }
+
+    private sealed class RecordingAutostart : IAgentAutostart
+    {
+        public List<bool> Applied { get; } = [];
+
+        public Task ApplyAsync(bool wanted, CancellationToken cancellationToken = default)
+        {
+            Applied.Add(wanted);
+            return Task.CompletedTask;
+        }
     }
 
     [Fact]
@@ -245,5 +398,43 @@ public sealed class RemoteMachinesTests : IDisposable
 
         public Task<PairingInfo> ApprovePairingAsync(Guid pairingId, PairingApproval approval, CancellationToken cancellationToken) =>
             inner.ApprovePairingAsync(pairingId, approval, cancellationToken);
+    }
+
+    private RegisterThisControllerHandler RegisterController() =>
+        new(_settings, _server, _signer, _identity, NullLogger<RegisterThisControllerHandler>.Instance);
+
+    [Fact]
+    public async Task ThePhone_RegistersAsControllerOnly_WithItsKeyAndNoTools()
+    {
+        _settings.Settings = new RemoteSettings(true, AcceptControl: false);
+
+        (await RegisterController().HandleAsync(new RegisterThisController(), Ct)).Should().Be(RemoteAvailability.Ready);
+
+        var registration = _server.Registrations.Should().ContainSingle().Subject;
+        registration.Roles.Should().Be(DeviceRoles.Controller);
+        registration.Key.Should().Be(_signer.PublicKey);
+        registration.Capabilities.Operations.Should().BeEmpty();
+        registration.Capabilities.Git.Should().Be(ToolStatus.Missing);
+        registration.Capabilities.MaxConcurrentOperations.Should().Be(1, "o servidor pede de 1 a 16");
+        _signer.Signatures.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task ThePhone_WithTheRemoteOff_RegistersNothing()
+    {
+        _settings.Settings = new RemoteSettings(false, false);
+
+        (await RegisterController().HandleAsync(new RegisterThisController(), Ct)).Should().Be(RemoteAvailability.Off);
+
+        _server.Registrations.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ThePhone_ALoginWithoutTheRemoteScope_SaysToSignInAgain()
+    {
+        _settings.Settings = new RemoteSettings(true, AcceptControl: false);
+        _server.Failure = new SyncApiException(SyncFailureKind.Forbidden, "Sem escopo.");
+
+        (await RegisterController().HandleAsync(new RegisterThisController(), Ct)).Should().Be(RemoteAvailability.NeedsRemoteLogin);
     }
 }

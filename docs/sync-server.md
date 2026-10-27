@@ -137,7 +137,7 @@ o da variável, e o conteúdo é o valor. É o que o compose de produção usa (
 | `Sync__RateLimits__AuthPerMinute` | não | login e token, por IP. Padrão 20 |
 | `Sync__RateLimits__SyncPerMinute` / `SyncBurst` | não | push, pull e fetch, por usuário (o `sub` do token). Padrão 60 por minuto, rajada de 20 |
 | `Sync__RateLimits__ApiPerMinute` | não | o resto da API, por usuário (o `sub` do token). Padrão 120 |
-| `Sync__RateLimits__RemotePerMinute` | não | a orquestração remota (`/api/v1/remote`), por usuário, separada da cota da API. Padrão 120 |
+| `Sync__RateLimits__RemotePerMinute` | não | a orquestração remota (`/api/v1/remote`), por dispositivo da conta, separada da cota da API. Padrão 300 (a saída ao vivo de um comando manda um lote a cada 500 ms) |
 | `Sync__RateLimits__AnonymousPerMinute` | não | rotas da API sem token válido (o que vai dar 401), por IP. Padrão 30 |
 | `Sync__RateLimits__GlobalPerMinute` | não | teto de proteção de qualquer rota, por IP, somado aos outros. Padrão 600; `0` desliga |
 | `Sync__Pull__MaxEntities` | não | entidades por página do pull, contando o que vem de carona (ADR-071). Padrão 1000 |
@@ -734,6 +734,57 @@ Mount** do painel, com o mesmo layout do compose (§5, passo 4):
   `docker ps -a -f name=<serviço> -f status=exited -q | xargs -r docker rm`.
 - Para conferir: `docker service inspect <serviço> | grep -cE
   'Base64|Password|ClientSecret|ConnectionStrings'` dá `0`.
+
+### O hub do controle remoto atrás do proxy
+
+O controle remoto ([`remote.md`](remote.md)) usa, além da API, o hub SignalR
+`/hubs/remote`: uma campainha que avisa o agente de um pedido novo e o
+controlador de uma aprovação respondida. Ele não carrega dado nenhum; sem ele,
+tudo funciona pela busca de 30 s, só mais devagar.
+
+- **WebSocket passando pelo proxy.** O cliente prefere WebSocket e cai para
+  Server-Sent Events ou long polling se o `Upgrade` não passar. O Caddy do
+  `docker-compose.prod.yml` e o Traefik repassam sem configuração. No nginx:
+
+  ```nginx
+  location /hubs/ {
+      proxy_pass http://api:8080;
+      proxy_http_version 1.1;
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection "upgrade";
+      proxy_set_header Host $host;
+      proxy_set_header X-Forwarded-Proto $scheme;
+      proxy_read_timeout 120s;
+  }
+  ```
+
+- **Tempo ocioso acima de 30 s.** O cliente manda um keep-alive a cada 15 s,
+  e o servidor fecha quem fica 30 s calado. Um proxy ou balanceador que corta
+  conexão ociosa antes disso derruba o hub a todo instante (o cliente religa,
+  e o log enche de `RemoteHubReconnected`).
+- **Uma réplica.** As conexões do hub ficam na memória da instância: com duas
+  réplicas, o aviso só chega a quem está conectado na mesma, e o resto espera a
+  busca. Os transportes que não são WebSocket também precisam de sessão
+  fixa (sticky) entre a negociação e a conexão.
+- **O token fora do log.** O SignalR do navegador manda o token na query
+  (`?access_token=`); a API o move para o cabeçalho e não registra query
+  (RS-03). Os apps mandam o token no cabeçalho, mas, se você ligar o log de
+  acesso do proxy, tire a query das rotas `/hubs/*`. No Caddy:
+
+  ```caddy
+  log {
+      format filter {
+          request>uri query {
+              delete access_token
+          }
+      }
+  }
+  ```
+
+  O Caddy já esconde `Authorization` e `Cookie` do log por padrão.
+- **O token vencido fecha a conexão.** O hub encerra quem passou do access
+  token (15 min); o cliente religa com um novo, e um dispositivo revogado não
+  religa.
 
 ### Rate limit
 

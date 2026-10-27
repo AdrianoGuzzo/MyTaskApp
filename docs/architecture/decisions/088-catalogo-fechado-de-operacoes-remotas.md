@@ -2,15 +2,15 @@
 
 | | |
 |---|---|
-| **Status** | Proposto |
-| **Implementação** | Parcial |
+| **Status** | Aceito |
+| **Implementação** | Implementado |
 | **Categoria** | remoto |
 | **Registrado** | 2026-10-24, commit `36eb99c` (primeiro commit em que o ADR aparece) |
 | **Palavras-chave** | catálogo de operações, RemoteAllowed, command.run, RequiresConfirmation, RunQuickCommand.Confirmed, UnsafeCharacter, ICommandReviewGate |
 | **Relações** | relacionado: [ADR-028](028-comandos-pos-worktree-e-globais.md), [ADR-051](051-comandos-rapidos-no-worktree.md), [ADR-066](066-comandos-globais-locais-por-padrao.md), [ADR-084](084-orquestracao-remota-coordenador-e-agente.md), [ADR-090](090-copia-de-banco-remota-com-aprovacao.md) |
-| **Código** | `src/MyTaskApp.Remote.Contracts/Operations.cs`, `src/MyTaskApp.Remote.Contracts/Requests.cs`, `src/MyTaskApp.Remote.Contracts/Catalog.cs`, `src/MyTaskApp.Application/QuickCommands/QuickCommandHandlers.cs` |
+| **Código** | `src/MyTaskApp.Remote.Contracts/Operations.cs`, `src/MyTaskApp.Remote.Contracts/Requests.cs`, `src/MyTaskApp.Remote.Contracts/Catalog.cs`, `src/MyTaskApp.Application/QuickCommands/QuickCommandHandlers.cs`, `src/MyTaskApp.Application/Remote/CommandRunExecutor.cs` |
 
-**Estado:** proposto (fase 2), em implementação: o contrato do catálogo (T-01) e o "pedir confirmação" cobrado no caso de uso (T-18) já existem; o `RemoteAllowed` e as operações ainda não.
+**Estado:** aceito (fase 2), implementado: o catálogo fechado (`environment.inspect`, `command.run`, `worktree.provision`, `worktree.remove`, `agent.start`, `agent.prompt`, `agent.stop` e `database.copy`), o `RemoteAllowed` só local, que cai quando o texto do comando muda, e o "pedir confirmação" que vira aprovação.
 
 **Contexto:** o app não tem allowlist de executáveis: o comando cadastrado
 roda no `cmd`/`sh` como foi escrito (ADR-028). A confiança vem de quem

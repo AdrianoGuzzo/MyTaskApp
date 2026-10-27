@@ -68,6 +68,10 @@ public sealed partial class DatabaseConnectionsViewModel(
     [ObservableProperty]
     private string _description = string.Empty;
 
+    /// <summary>Outro computador pareado pode pedir uma cópia com ela (ADR-090). Só desta máquina; nasce desligado.</summary>
+    [ObservableProperty]
+    private bool _remoteAllowed;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsProductionSelected), nameof(EnvironmentHint))]
     private Choice<DatabaseEnvironment> _selectedEnvironment = Environments[0];
@@ -193,6 +197,7 @@ public sealed partial class DatabaseConnectionsViewModel(
         Database = row.Database ?? string.Empty;
         Username = row.Username;
         Description = row.Description ?? string.Empty;
+        RemoteAllowed = row.RemoteAllowed;
         Password = string.Empty;
         HasStoredPassword = row.HasPassword;
         SelectedSslMode = SslModes.First(choice => choice.Value == row.SslMode);
@@ -250,7 +255,8 @@ public sealed partial class DatabaseConnectionsViewModel(
             SelectedSslMode.Value,
             Description,
             ConnectionPermissions.FromFlags(CurrentPermissions()),
-            SecretText.FromOptional(Password));
+            SecretText.FromOptional(Password),
+            RemoteAllowed);
 
         var saved = await TryAsync(
             () => runner.RunAsync<SaveDatabaseConnectionHandler, Guid>(
@@ -373,6 +379,7 @@ public sealed partial class DatabaseConnectionsViewModel(
         Username = string.Empty;
         Password = string.Empty;
         Description = string.Empty;
+        RemoteAllowed = false;
         HasStoredPassword = false;
         TestResult = null;
         SelectedSslMode = SslModes[0];

@@ -44,6 +44,7 @@ public sealed record UpdateRemoteSettings(bool Enabled, bool AcceptControl);
 public sealed class UpdateRemoteSettingsHandler(
     IRemoteSettingsStore settings,
     IUnitOfWork unitOfWork,
+    IAgentAutostart autostart,
     ILogger<UpdateRemoteSettingsHandler> logger)
 {
     public async Task<RemoteSettings> HandleAsync(UpdateRemoteSettings command, CancellationToken cancellationToken = default)
@@ -54,6 +55,9 @@ public sealed class UpdateRemoteSettingsHandler(
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation("RemoteSettingsUpdated {Enabled} {AcceptControl}", updated.Enabled, updated.AcceptControl);
+
+        // Aceitar pedidos com o desktop fechado é o agente no logon (ADR-085).
+        await autostart.ApplyAsync(updated.AcceptControl, cancellationToken);
 
         return updated;
     }
@@ -207,6 +211,8 @@ public sealed class MachineCapabilities(
     IGitClient git,
     IAgentCliProviders agents,
     IPostgresToolLocator postgres,
+    SupportedRemoteOperations supported,
+    RemoteDispatchLimits limits,
     TimeProvider timeProvider)
 {
     internal static readonly TimeSpan Lifetime = TimeSpan.FromHours(1);
@@ -218,7 +224,8 @@ public sealed class MachineCapabilities(
 
     private (DeviceCapabilities Value, DateTimeOffset At)? _cached;
 
-    public async Task<DeviceCapabilities> GetAsync(CancellationToken cancellationToken)
+    /// <param name="refresh">Mede de novo: o <c>environment.inspect</c> responde com o que há agora.</param>
+    public async Task<DeviceCapabilities> GetAsync(CancellationToken cancellationToken, bool refresh = false)
     {
         await _gate.WaitAsync(cancellationToken);
 
@@ -226,7 +233,7 @@ public sealed class MachineCapabilities(
         {
             var now = timeProvider.GetUtcNow();
 
-            if (_cached is { } cached && now - cached.At < Lifetime)
+            if (!refresh && _cached is { } cached && now - cached.At < Lifetime)
             {
                 return cached.Value;
             }
@@ -250,8 +257,8 @@ public sealed class MachineCapabilities(
         return new DeviceCapabilities(
             RemoteLimits.ProtocolVersion,
 
-            // Nenhuma operação ainda: quem as atende é o agente (T-10 em diante).
-            [],
+            // As que esta versão roda. Quem atende é o agente; o desktop registra o mesmo, do mesmo código.
+            supported.Kinds,
             OperatingSystem.IsWindows() ? "windows" : OperatingSystem.IsLinux() ? "linux" : "outro",
             Tool(gitInstallation.IsInstalled, gitInstallation.Version),
             Tool(claude.IsInstalled, claude.Version),
@@ -259,7 +266,9 @@ public sealed class MachineCapabilities(
             // Sem porta que diga a versão do gh ainda.
             ToolStatus.Missing,
             Tool(pgDump.Found, pgDump.VersionText),
-            MaxConcurrentOperations: 1,
+            limits.MaxConcurrent,
+
+            // Quem registra põe o do catálogo de agora (RegisterThisMachineHandler): este fica em cache.
             CatalogHash: string.Empty);
     }
 
@@ -295,6 +304,10 @@ public sealed class RegisterThisMachineHandler(
     IDeviceSigner signer,
     IDeviceIdentity identity,
     MachineCapabilities capabilities,
+    RemoteCatalogPublisher catalogs,
+    ITrustedControllerRepository trusted,
+    IUnitOfWork unitOfWork,
+    TimeProvider timeProvider,
     ILogger<RegisterThisMachineHandler> logger)
 {
     public async Task<RemoteAvailability> HandleAsync(RegisterThisMachine command, CancellationToken cancellationToken = default)
@@ -306,21 +319,115 @@ public sealed class RegisterThisMachineHandler(
             return RemoteAvailability.Off;
         }
 
+        // O registro grava as capacidades inteiras, inclusive o hash do catálogo: vai o de agora.
+        var catalog = current.AcceptControl ? await catalogs.CurrentAsync(cancellationToken) : null;
         var registration = new DeviceRegistration(
             identity.DeviceId,
             current.AcceptControl ? DeviceRoles.Controller | DeviceRoles.Executor : DeviceRoles.Controller,
             await signer.GetPublicKeyAsync(cancellationToken),
-            await capabilities.GetAsync(cancellationToken));
+            (await capabilities.GetAsync(cancellationToken)) with { CatalogHash = catalog?.Hash ?? string.Empty });
 
         try
         {
             await remote.RegisterAsync(registration, cancellationToken);
+
+            // Executora registrada: o catálogo pode subir, se mudou.
+            if (catalog is not null)
+            {
+                await catalogs.PublishAsync(cancellationToken);
+                await ForgetGoneControllersAsync(cancellationToken);
+            }
+
             return RemoteAvailability.Ready;
         }
         catch (SyncApiException exception)
         {
             var (availability, _) = RemoteProblems.Of(exception);
             logger.LogWarning("RemoteRegistrationFailed {Kind} {Code}", exception.Kind, exception.Code);
+            return availability;
+        }
+    }
+
+    /// <summary>
+    /// RS-06: o controlador revogado na conta, ou que trocou de chave, deixa de
+    /// valer aqui também. O servidor já recusa o token dele; isto vale para um
+    /// servidor que mentisse, porque só se esquece, nunca se confia por ele.
+    /// Uma chave nova só volta a valer com um pareamento novo.
+    /// </summary>
+    private async Task ForgetGoneControllersAsync(CancellationToken cancellationToken)
+    {
+        var active = await trusted.ListAllActiveAsync(cancellationToken);
+
+        if (active.Count == 0)
+        {
+            return;
+        }
+
+        var keys = (await remote.ListDevicesAsync(cancellationToken)).ToDictionary(device => device.DeviceId, device => device.KeyFingerprint);
+        var now = timeProvider.GetUtcNow();
+        var forgotten = 0;
+
+        foreach (var controller in active)
+        {
+            if (!keys.TryGetValue(controller.ControllerDeviceId, out var fingerprint) || fingerprint != controller.Fingerprint)
+            {
+                controller.Revoke(now);
+                forgotten++;
+                logger.LogInformation("TrustedControllerGone {ControllerDeviceId} {StillOnAccount}", controller.ControllerDeviceId, fingerprint is not null);
+            }
+        }
+
+        if (forgotten > 0)
+        {
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+    }
+}
+
+public sealed record RegisterThisController;
+
+/// <summary>
+/// O celular se apresenta ao servidor (E7): só controlador, com a chave dele e
+/// sem ferramenta nenhuma. Sem o registro, o servidor não aceita o pareamento
+/// nem os pedidos assinados. Com o remoto desligado, não faz nada.
+/// </summary>
+public sealed class RegisterThisControllerHandler(
+    IRemoteSettingsStore settings,
+    IRemoteApi remote,
+    IDeviceSigner signer,
+    IDeviceIdentity identity,
+    ILogger<RegisterThisControllerHandler> logger)
+{
+    public async Task<RemoteAvailability> HandleAsync(RegisterThisController command, CancellationToken cancellationToken = default)
+    {
+        if (!(await settings.GetAsync(cancellationToken)).Enabled)
+        {
+            return RemoteAvailability.Off;
+        }
+
+        var capabilities = new DeviceCapabilities(
+            RemoteLimits.ProtocolVersion,
+            [],
+            OperatingSystem.IsAndroid() ? "android" : OperatingSystem.IsIOS() ? "ios" : "outro",
+            ToolStatus.Missing,
+            ToolStatus.Missing,
+            ToolStatus.Missing,
+            ToolStatus.Missing,
+            // O servidor pede de 1 a 16, mesmo de quem não executa nada.
+            MaxConcurrentOperations: 1,
+            CatalogHash: string.Empty);
+
+        try
+        {
+            await remote.RegisterAsync(
+                new DeviceRegistration(identity.DeviceId, DeviceRoles.Controller, await signer.GetPublicKeyAsync(cancellationToken), capabilities),
+                cancellationToken);
+            return RemoteAvailability.Ready;
+        }
+        catch (SyncApiException exception)
+        {
+            var (availability, _) = RemoteProblems.Of(exception);
+            logger.LogWarning("RemoteControllerRegistrationFailed {Kind} {Code}", exception.Kind, exception.Code);
             return availability;
         }
     }

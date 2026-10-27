@@ -38,7 +38,7 @@ public class MachinesViewModelTests
     public MachinesViewModelTests()
     {
         _runner.Handlers[typeof(UpdateRemoteSettingsHandler)] =
-            new UpdateRemoteSettingsHandler(_settings, _settings, NullLogger<UpdateRemoteSettingsHandler>.Instance);
+            new UpdateRemoteSettingsHandler(_settings, _settings, new NoAgentAutostart(), NullLogger<UpdateRemoteSettingsHandler>.Instance);
         _runner.ResultsByHandler[typeof(RegisterThisMachineHandler)] = RemoteAvailability.Ready;
         Show(View(new RemoteSettings(true, false)));
     }
@@ -53,6 +53,7 @@ public class MachinesViewModelTests
             _shell,
             _confirmation,
             new FakeTimeProvider(Now),
+            () => new RemoteControlViewModel(_runner, NullLogger<RemoteControlViewModel>.Instance),
             NullLogger<MachinesViewModel>.Instance);
 
     private void Show(MachinesView view) => _runner.ResultsByHandler[typeof(GetMachinesHandler)] = view;
@@ -268,6 +269,22 @@ public class MachinesViewModelTests
     }
 
     /// <summary>As mudanças de chave disparam o salvamento sem esperar; o teste deixa a fila do despachante andar.</summary>
+    [AvaloniaFact]
+    public async Task Controlling_OpensTheOperationScreenForThatMachine()
+    {
+        _runner.ResultsByHandler[typeof(GetRemoteControlHandler)] = new RemoteControlView(new AgentCatalog("h", [], [], [], []), []);
+        _runner.ResultsByHandler[typeof(GetPendingApprovalsHandler)] = (IReadOnlyList<ApprovalView>)[];
+        var viewModel = ViewModel();
+        await viewModel.LoadAsync(Ct);
+        RemoteControlViewModel? opened = null;
+        viewModel.ControlOpened += (_, control) => opened = control;
+
+        await viewModel.ControlCommand.ExecuteAsync(viewModel.Machines[1]);
+
+        opened!.Title.Should().Be("Controlar Notebook");
+        _runner.Invoked.Should().Contain(typeof(GetRemoteControlHandler));
+    }
+
     private static async Task Settled()
     {
         for (var turn = 0; turn < 5; turn++)

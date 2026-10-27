@@ -33,7 +33,14 @@ mkdir -p "$install_dir" "$bin_dir" "$desktop_dir" "$icon_dir"
 # Substitui os binarios antigos sem apagar a pasta inteira primeiro: uma queda
 # no meio deixa uma instalacao reparavel rodando install.sh de novo.
 cp -rf "$source_dir/bin/." "$install_dir/"
-chmod +x "$install_dir/MyTaskApp"
+chmod +x "$install_dir/MyTaskApp" "$install_dir/MyTaskApp.Agent"
+
+# O agente (ADR-085) so roda se o app o ligou ("Aceitar ser controlada", que
+# escreve a unit do systemd --user). Ligado, ele volta com os binarios novos.
+agent_unit="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/mytaskapp-agent.service"
+if [ -f "$agent_unit" ] && command -v systemctl >/dev/null 2>&1; then
+  systemctl --user try-restart mytaskapp-agent.service >/dev/null 2>&1 || true
+fi
 
 ln -sfn "$install_dir/MyTaskApp" "$bin_dir/mytaskapp"
 

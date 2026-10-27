@@ -19,10 +19,12 @@ namespace MyTaskApp.Desktop.ViewModels;
 /// ainda no formulário é um rascunho: vira ambiente quando o worktree é criado
 /// ou quando a criação falha e fica gravada.
 /// </remarks>
+/// <param name="remotePrepare">O "Preparar em…" (T-25); nulo nos testes que não falam dele.</param>
 public sealed partial class TaskDevelopmentsViewModel(
     IUseCaseRunner runner,
     Func<TaskDevelopmentViewModel> createEnvironment,
-    ILogger<TaskDevelopmentsViewModel> logger) : ObservableObject
+    ILogger<TaskDevelopmentsViewModel> logger,
+    RemotePrepareViewModel? remotePrepare = null) : ObservableObject
 {
     private Guid _taskId;
 
@@ -36,6 +38,9 @@ public sealed partial class TaskDevelopmentsViewModel(
     private string? _suggestedBranch;
 
     public ObservableCollection<TaskDevelopmentViewModel> Items { get; } = [];
+
+    /// <summary>Preparar o worktree desta tarefa em outra máquina, com o app dela fechado.</summary>
+    public RemotePrepareViewModel? RemotePrepare { get; } = remotePrepare;
 
     /// <summary>A janela fechou: cada ambiente para o que só servia para mostrar algo nela.</summary>
     public void Detach()
@@ -81,6 +86,7 @@ public sealed partial class TaskDevelopmentsViewModel(
         DirectoryCompletion.PropertyChanged -= OnDirectoriesChanged;
         DirectoryCompletion.PropertyChanged += OnDirectoriesChanged;
         PromptReferences.Load(taskId, isReadOnly);
+        RemotePrepare?.Load(taskId, isReadOnly);
 
         foreach (var item in Items.ToList())
         {
@@ -120,6 +126,11 @@ public sealed partial class TaskDevelopmentsViewModel(
         Reconcile();
         await ActivateSelectedAsync(cancellationToken);
         await RefreshAgentsAsync(except: Selected);
+
+        if (RemotePrepare is { } prepare)
+        {
+            await prepare.RefreshAsync(cancellationToken);
+        }
     }
 
     /// <summary>

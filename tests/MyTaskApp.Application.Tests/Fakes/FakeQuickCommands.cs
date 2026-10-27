@@ -186,4 +186,7 @@ internal sealed class FakeTagQuery : ITagQuery
 
     public Task<IReadOnlyList<string>> ListMappedDirectoryPathsAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<string>>([.. MappedPaths]);
+
+    public Task<TagDirectoryRow?> FindDirectoryAsync(Guid directoryId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Directories.FirstOrDefault(directory => directory.Id == directoryId));
 }

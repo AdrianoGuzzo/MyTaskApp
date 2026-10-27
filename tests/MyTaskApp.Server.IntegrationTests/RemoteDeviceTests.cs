@@ -193,6 +193,28 @@ public sealed class RemoteDeviceTests(PostgresFixture postgres) : IAsyncLifetime
         (await session.GetAsync<MeResponse>(ApiRoutes.Me)).Device!.DeviceId.Should().Be(session.DeviceId);
     }
 
+    /// <summary>A cota é de cada dispositivo: o agente que manda a saída ao vivo não tira a do celular que a lê.</summary>
+    [Fact]
+    public async Task TheRemoteQuota_IsPerDevice()
+    {
+        await using var api = new ApiFactory(await postgres.CreateDatabaseAsync(Ct), new Dictionary<string, string?> { ["Sync:RateLimits:RemotePerMinute"] = "2" });
+        var notebook = await api.LoginAsync("ana", deviceName: "Notebook", scope: WithRemote);
+        var phone = await api.LoginAsync("ana", deviceName: "Celular", scope: WithRemote);
+        using var busy = notebook.Api();
+        using var other = phone.Api();
+
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            using var _ = await busy.GetAsync(RemoteRoutes.Devices, Ct);
+        }
+
+        using var exhausted = await busy.GetAsync(RemoteRoutes.Devices, Ct);
+        using var fresh = await other.GetAsync(RemoteRoutes.Devices, Ct);
+
+        exhausted.StatusCode.Should().Be(HttpStatusCode.TooManyRequests);
+        fresh.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
     private static DevicePublicKey NewKey()
     {
         using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);

@@ -16,4 +16,10 @@ public sealed class LocalDataOptions
 
     /// <summary>O apelido sugerido ao servidor no login — o nome do celular.</summary>
     public string? DeviceNickname { get; init; }
+
+    /// <summary>
+    /// Só este processo abre o banco (o celular): os leases entre processos
+    /// (ADR-085) são sempre dele, sem tabela nem conferência de PID.
+    /// </summary>
+    public bool SingleProcess { get; init; }
 }

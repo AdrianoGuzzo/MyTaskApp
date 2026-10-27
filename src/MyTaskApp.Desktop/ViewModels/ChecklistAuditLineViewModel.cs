@@ -54,6 +54,7 @@ public sealed class ChecklistAuditLineViewModel
         TaskAuditOperation.TimeEntryAdded => "Tempo lançado",
         TaskAuditOperation.TimeEntryChanged => "Tempo corrigido",
         TaskAuditOperation.TimeEntryDeleted => "Tempo excluído",
+        TaskAuditOperation.RemoteOperation => "Pedido de outra máquina",
         _ => operation.ToString(),
     };
 }

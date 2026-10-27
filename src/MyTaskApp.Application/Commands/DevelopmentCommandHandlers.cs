@@ -10,6 +10,7 @@ namespace MyTaskApp.Application.Commands;
 /// <param name="BindingCount">Em quantos diretórios de etiqueta ele é botão — o aviso antes de excluir.</param>
 /// <param name="TagDirectoryId">O diretório dono do comando; <c>null</c> é global (ADR-055).</param>
 /// <param name="IsShared">Se o comando global vai para os outros computadores (ADR-066).</param>
+/// <param name="RemoteAllowed">Se outro computador pareado pode pedir para rodá-lo aqui (ADR-087).</param>
 public sealed record DevelopmentCommandRow(
     Guid Id,
     string? Alias,
@@ -24,7 +25,8 @@ public sealed record DevelopmentCommandRow(
     IReadOnlyList<CommandParameterSpec>? Parameters = null,
     int BindingCount = 0,
     Guid? TagDirectoryId = null,
-    bool IsShared = true)
+    bool IsShared = true,
+    bool RemoteAllowed = false)
 {
     public string DisplayName => Name ?? Alias ?? string.Empty;
 
@@ -48,7 +50,8 @@ public sealed record DevelopmentCommandRow(
             [.. command.Parameters.Select(parameter => parameter.ToSpec())],
             bindingCount,
             command.TagDirectoryId,
-            command.IsShared);
+            command.IsShared,
+            command.RemoteAllowed);
 
     /// <summary>A definição de cada <c>{nome}</c> do texto (ver <see cref="DevelopmentCommand.ParametersOf"/>).</summary>
     /// <param name="databaseAliases">
@@ -82,12 +85,14 @@ public sealed class GetDevelopmentCommandsHandler(IDevelopmentCommandRepository 
 
 /// <param name="Settings">O comando rápido (ADR-051). <c>null</c> é o padrão: escondido, na raiz.</param>
 /// <param name="IsShared">Vai para os outros computadores (ADR-066). O padrão é ficar só neste.</param>
+/// <param name="RemoteAllowed">Outro computador pareado pode pedir para rodá-lo aqui (ADR-087). Nasce desligado.</param>
 public sealed record CreateDevelopmentCommand(
     string Alias,
     string Command,
     string? Description,
     DevelopmentCommandSettings? Settings = null,
-    bool IsShared = false);
+    bool IsShared = false,
+    bool RemoteAllowed = false);
 
 public sealed class CreateDevelopmentCommandHandler(
     IDevelopmentCommandRepository commands,
@@ -109,6 +114,7 @@ public sealed class CreateDevelopmentCommandHandler(
             timeProvider.GetUtcNow());
 
         created.SetSharing(command.IsShared);
+        created.AllowRemote(command.RemoteAllowed);
 
         await commands.EnsureAliasIsFreeAsync(alias, exceptId: null, cancellationToken);
 
@@ -127,13 +133,19 @@ public sealed class CreateDevelopmentCommandHandler(
 /// Compartilhar com os outros computadores (ADR-066). <c>null</c> mantém como
 /// está. Desmarcar não apaga as cópias de lá: só deixa de acompanhá-las.
 /// </param>
+/// <param name="RemoteAllowed">
+/// Liberar para o controle remoto (ADR-087). <c>null</c> mantém como está —
+/// salvo se o que o comando roda mudou nesta edição: aí cai. Marcado aqui, com
+/// o texto novo à vista, vale para ele.
+/// </param>
 public sealed record UpdateDevelopmentCommand(
     Guid CommandId,
     string Alias,
     string Command,
     string? Description,
     DevelopmentCommandSettings? Settings = null,
-    bool? IsShared = null);
+    bool? IsShared = null,
+    bool? RemoteAllowed = null);
 
 public sealed class UpdateDevelopmentCommandHandler(
     IDevelopmentCommandRepository commands,
@@ -170,10 +182,19 @@ public sealed class UpdateDevelopmentCommandHandler(
             existing.SetSharing(isShared);
         }
 
+        if (command.RemoteAllowed is { } remoteAllowed)
+        {
+            existing.AllowRemote(remoteAllowed);
+        }
+
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation(
-            "DevelopmentCommandUpdated {CommandId} {Alias} {IsShared}", existing.Id, existing.Alias, existing.IsShared);
+            "DevelopmentCommandUpdated {CommandId} {Alias} {IsShared} {RemoteAllowed}",
+            existing.Id,
+            existing.Alias,
+            existing.IsShared,
+            existing.RemoteAllowed);
 
         var bindings = await commands.CountBindingsAsync(cancellationToken);
 

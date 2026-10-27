@@ -1,11 +1,17 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using MyTaskApp.Application;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Remote;
 using MyTaskApp.Infrastructure;
+using MyTaskApp.Infrastructure.Remote;
+using MyTaskApp.Infrastructure.Secrets;
 using MyTaskApp.Infrastructure.Sync.Http;
+using MyTaskApp.Mobile.Core.Ports;
 using MyTaskApp.Mobile.Core.Presentation;
+using MyTaskApp.Mobile.Core.Remote;
 using MyTaskApp.Mobile.Core.SignIn;
 using MyTaskApp.Mobile.Core.ViewModels;
 using MyTaskApp.Sync.Contracts;
@@ -37,9 +43,13 @@ public sealed class MobileHostOptions
 /// A composição do celular (ADR-067): a mesma Application e os mesmos dados do
 /// desktop (<see cref="DependencyInjection.AddLocalData"/>), e nada de
 /// processo, Git, terminal ou Jira. A casca MAUI registra as portas da
-/// plataforma (<see cref="Ports"/>, inclusive o <see cref="Ports.IPreferenceStore"/>,
-/// e o <see cref="Infrastructure.Secrets.ISecretStore"/>).
+/// plataforma (<see cref="Ports"/>, inclusive o <see cref="Ports.IPreferenceStore"/>
+/// e o <see cref="IDeviceUnlock"/>, e o <see cref="ISecretStore"/>).
 /// </summary>
+/// <remarks>
+/// No controle remoto (E7), o celular só controla: pede e aprova, assinando
+/// com a chave dele depois de destravar, e não executa nada.
+/// </remarks>
 public static class MobileServices
 {
     public static IServiceCollection AddMobileCore(this IServiceCollection services, MobileHostOptions host)
@@ -67,7 +77,7 @@ public static class MobileServices
         services.AddApplication(configuration);
         services.AddLocalData(
             configuration,
-            new LocalDataOptions { DeviceIdentityFolder = host.DataDirectory, DeviceNickname = host.DeviceName });
+            new LocalDataOptions { DeviceIdentityFolder = host.DataDirectory, DeviceNickname = host.DeviceName, SingleProcess = true });
 
         // O login volta pelo esquema do app; a casca entrega a volta aqui.
         var redirect = new AppLinkAuthorizationRedirect(SyncSchema.MobileClientId, new Uri(SyncSchema.MobileRedirectUri));
@@ -88,6 +98,21 @@ public static class MobileServices
         services.AddTransient<SyncServerViewModel>();
         services.AddTransient<TaskDetailViewModel>();
         services.AddTransient<TaskFormViewModel>();
+
+        // A chave no cofre, como no desktop (ADR-087), mas só assina destravado.
+        services.AddSingleton(provider => new UnlockedDeviceSigner(
+            DeviceSigning.Create(provider.GetRequiredService<ISecretStore>(), provider.GetRequiredService<ILoggerFactory>()),
+            provider.GetRequiredService<IDeviceUnlock>(),
+            provider.GetRequiredService<TimeProvider>()));
+        services.AddSingleton<IDeviceSigner>(provider => provider.GetRequiredService<UnlockedDeviceSigner>());
+        services.AddSingleton<ApprovalWatcher>();
+        services.AddSingleton<ApprovalAnswers>();
+        services.AddSingleton<SentOperations>();
+        services.AddSingleton<RemoteSender>();
+        services.AddSingleton<RemoteViewModel>();
+        services.AddTransient<RemoteMachineViewModel>();
+        services.AddTransient<RemoteOperationViewModel>();
+        services.AddTransient<RemotePrepareViewModel>();
 
         return services;
     }

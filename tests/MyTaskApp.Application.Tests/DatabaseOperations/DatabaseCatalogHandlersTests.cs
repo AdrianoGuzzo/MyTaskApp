@@ -521,7 +521,7 @@ public class DatabaseCatalogHandlersTests
         _scenario.Workspaces.SweepResult = 1;
 
         var handler = new RecoverInterruptedDatabaseOperationsHandler(
-            Catalog.Audit, _scenario.Workspaces, _scenario.Gate, Catalog, _scenario.Clock,
+            Catalog.Audit, _scenario.Workspaces, _scenario.Gate, new FakeProcessOwnership(), Catalog, _scenario.Clock,
             NullLogger<RecoverInterruptedDatabaseOperationsHandler>.Instance);
 
         (await handler.HandleAsync(new RecoverInterruptedDatabaseOperations(), Ct)).Should().Be(1);
@@ -533,10 +533,44 @@ public class DatabaseCatalogHandlersTests
     }
 
     [Fact]
+    public async Task Recovery_LeavesTheLiveCopyOfAnotherProcess_AndItsDump()
+    {
+        var processes = new FakeProcessOwnership();
+        var agents = Running(ownerProcessId: 200);
+        var deadAgents = Running(ownerProcessId: 300);
+        var mineFromBefore = Running(ownerProcessId: 100);
+        var older = Running(ownerProcessId: null);
+        processes.Dead.Add(300);
+        Catalog.Audit.Entries.AddRange([agents, deadAgents, mineFromBefore, older]);
+
+        var handler = new RecoverInterruptedDatabaseOperationsHandler(
+            Catalog.Audit, _scenario.Workspaces, _scenario.Gate, processes, Catalog, _scenario.Clock,
+            NullLogger<RecoverInterruptedDatabaseOperationsHandler>.Instance);
+
+        (await handler.HandleAsync(new RecoverInterruptedDatabaseOperations(), Ct)).Should().Be(3);
+
+        agents.Status.Should().Be(DatabaseOperationStatus.Running, "o agente está copiando agora");
+        new[] { deadAgents, mineFromBefore, older }.Should().AllSatisfy(entry => entry.Status.Should().Be(DatabaseOperationStatus.Interrupted));
+        _scenario.Workspaces.Sweeps.Single().Should().Equal(agents.Id);
+    }
+
+    private static DatabaseOperationAudit Running(int? ownerProcessId)
+    {
+        var entry = DatabaseOperationAudit.Start(DatabaseOperationType.CopyAndAnonymize, null, null, null, null, "PC", "u", DatabaseCopyScenario.Now);
+
+        if (ownerProcessId is { } processId)
+        {
+            entry.RecordOwner(processId, FakeProcessOwnership.Started);
+        }
+
+        return entry;
+    }
+
+    [Fact]
     public async Task Recovery_WithNothingToDo_SavesNothing()
     {
         var handler = new RecoverInterruptedDatabaseOperationsHandler(
-            Catalog.Audit, _scenario.Workspaces, _scenario.Gate, Catalog, _scenario.Clock,
+            Catalog.Audit, _scenario.Workspaces, _scenario.Gate, new FakeProcessOwnership(), Catalog, _scenario.Clock,
             NullLogger<RecoverInterruptedDatabaseOperationsHandler>.Instance);
 
         (await handler.HandleAsync(new RecoverInterruptedDatabaseOperations(), Ct)).Should().Be(0);

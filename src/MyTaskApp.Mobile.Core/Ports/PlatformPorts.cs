@@ -27,6 +27,15 @@ public interface INavigator
 
     Task OpenAccountAsync();
 
+    /// <summary>O que dá para pedir a uma máquina pareada (E7).</summary>
+    Task OpenMachineAsync(Guid deviceId);
+
+    /// <summary>O "Preparar em…" de uma tarefa: máquina, repositório, banco e Claude.</summary>
+    Task OpenRemotePrepareAsync(Guid taskId);
+
+    /// <summary>Uma operação pedida de longe, ao vivo.</summary>
+    Task OpenOperationAsync(Guid operationId, Guid deviceId);
+
     Task BackAsync();
 }
 
@@ -81,4 +90,25 @@ public interface IWebAuthenticatorPort
 {
     /// <summary><c>null</c> = a pessoa fechou o navegador sem terminar.</summary>
     Task<IReadOnlyDictionary<string, string>?> AuthenticateAsync(Uri url, Uri callback, CancellationToken cancellationToken);
+}
+
+public enum UnlockResult
+{
+    Unlocked,
+
+    /// <summary>A pessoa desistiu ou errou.</summary>
+    Canceled,
+
+    /// <summary>O aparelho não tem bloqueio de tela: não há como confirmar que é o dono.</summary>
+    NotAvailable,
+}
+
+/// <summary>
+/// A biometria ou o PIN do aparelho, antes de assinar um pedido ou uma
+/// aprovação de longe (E7): <c>BiometricPrompt</c> no Android,
+/// <c>LAContext</c> no iOS.
+/// </summary>
+public interface IDeviceUnlock
+{
+    Task<UnlockResult> UnlockAsync(string reason, CancellationToken cancellationToken);
 }

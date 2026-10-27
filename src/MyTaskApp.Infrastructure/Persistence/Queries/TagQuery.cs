@@ -64,6 +64,12 @@ internal sealed class TagQuery(MyTaskAppDbContext context) : ITagQuery
             cancellationToken,
             mappedOnly: true);
 
+    public async Task<TagDirectoryRow?> FindDirectoryAsync(Guid directoryId, CancellationToken cancellationToken = default) =>
+        (await ListDirectoriesAsync(
+            context.Tags.Where(tag => context.TagDirectories.Any(directory => directory.Id == directoryId && directory.TagId == tag.Id)),
+            cancellationToken))
+        .FirstOrDefault(directory => directory.Id == directoryId);
+
     public async Task<IReadOnlyList<string>> ListMappedDirectoryPathsAsync(CancellationToken cancellationToken = default) =>
         await context.TagDirectories
             .AsNoTracking()

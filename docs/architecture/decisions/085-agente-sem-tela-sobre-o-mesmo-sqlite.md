@@ -2,15 +2,15 @@
 
 | | |
 |---|---|
-| **Status** | Proposto |
+| **Status** | Aceito |
 | **Implementação** | Parcial |
 | **Categoria** | remoto |
 | **Registrado** | 2026-10-24, commit `36eb99c` (primeiro commit em que o ADR aparece) |
 | **Palavras-chave** | MyTaskApp.Agent, ScopedUseCaseRunner, WAL, ProcessLeases, named pipe, systemd --user, DatabaseInitializer |
 | **Relações** | relacionado: [ADR-049](049-instalador-fecha-o-app-aberto.md), [ADR-059](059-servidor-mcp-local-loopback.md), [ADR-061](061-sincronizacao-outbox-mescla-por-campo.md), [ADR-063](063-indicador-sincronizacao-no-cabecalho.md), [ADR-066](066-comandos-globais-locais-por-padrao.md), [ADR-084](084-orquestracao-remota-coordenador-e-agente.md), [ADR-086](086-operacao-remota-registro-diario-e-signalr.md), [ADR-090](090-copia-de-banco-remota-com-aprovacao.md) |
-| **Código** | `src/MyTaskApp.Infrastructure/Persistence/DatabaseInitializer.cs`, `src/MyTaskApp.Application/Abstractions/ScopedUseCaseRunner.cs` |
+| **Código** | `src/MyTaskApp.Infrastructure/Persistence/DatabaseInitializer.cs`, `src/MyTaskApp.Application/Abstractions/ScopedUseCaseRunner.cs`, `src/MyTaskApp.Agent/AgentHost.cs`, `src/MyTaskApp.Infrastructure/Processes/SqliteProcessLeases.cs`, `src/MyTaskApp.Infrastructure/Processes/PipeLocalPeerChannel.cs` |
 
-**Estado:** proposto (fase 2), em implementação: o SQLite garantido em WAL (T-07) e o `ScopedUseCaseRunner` único (T-09) já existem; o agente, o lease e o IPC ainda não.
+**Estado:** aceito (fase 2), implementado quase todo: o SQLite garantido em WAL (T-07), os leases entre processos com o ciclo do sync e o refresh do token sob eles (T-08), o `ScopedUseCaseRunner` único (T-09), o agente `MyTaskApp.Agent` no logon, o canal local com o desktop e o gate de banco entre processos (T-31). Falta o item 3: um processo mais velho que o esquema recusar subir.
 
 **Contexto:** a máquina executora precisa atender pedidos com o desktop
 fechado. O que o agente usa só existe nela: o caminho do repositório
@@ -39,10 +39,16 @@ disso.
    (`__EFMigrationsLock`). Feito na T-07. Falta: um processo mais velho que o
    esquema recusar subir.
 4. **Um dono para cada laço**, por lease numa tabela (`ProcessLeases`: nome,
-   PID, início, validade): o `SyncScheduler` e a manutenção rodam em quem tem o
-   lease. Lembretes, bandeja e post-its são só do desktop. A renovação do token
-   do sync roda sob o mesmo lease, relendo o cofre antes, para dois processos
-   não girarem o mesmo refresh token.
+   PID, início, validade): o ciclo do sync roda em quem tem o lease `sync`, e
+   o outro processo devolve `Elsewhere` até o lease vencer ou o dono morrer
+   (PID + início que não existem mais passam o lease na hora). O gate fica no
+   `SyncEngine`, depois de conferir a conta: sem sync ligado, nada é gravado.
+   Lembretes, bandeja e post-its são só do desktop; a manutenção ainda roda nos
+   dois, porque os lotes são idempotentes. A renovação do token do sync, o
+   login e o "desconectar" seguram o lease `sync-token`, relendo o cofre lá
+   dentro, para dois processos não girarem o mesmo refresh token. O celular é
+   um processo só e usa `SingleProcessLeases` (o iOS nem deixa perguntar por
+   outro PID).
 5. **Gate de banco entre processos.** A `DatabaseOperationAudit` ganha o dono
    (PID + início); a recuperação só marca como interrompida a operação cujo dono
    não existe mais.

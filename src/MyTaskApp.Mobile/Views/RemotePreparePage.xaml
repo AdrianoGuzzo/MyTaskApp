@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:MyTaskApp.Mobile.Core.ViewModels;assembly=MyTaskApp.Mobile.Core"
+             x:Class="MyTaskApp.Mobile.Views.RemotePreparePage"
+             x:DataType="vm:RemotePrepareViewModel"
+             Title="Preparar em…">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="16" Spacing="8">
+
+            <Label Text="{Binding TaskTitle}" Style="{StaticResource Title}" />
+            <Label Text="{Binding Problem}" Style="{StaticResource Error}" IsVisible="{Binding Problem, Converter={StaticResource HasValue}}" />
+
+            <!-- As opções mostram o nome (ToString): o catálogo só tem ids. -->
+            <Label Text="Máquina" Style="{StaticResource Section}" />
+            <Picker ItemsSource="{Binding Machines}" SelectedItem="{Binding SelectedMachine}" Title="Máquina" />
+
+            <Label Text="Repositório" Style="{StaticResource Section}" />
+            <Picker ItemsSource="{Binding Repositories}" SelectedItem="{Binding SelectedRepository}" Title="Repositório" />
+
+            <Label Text="Branch (vazio: a convenção de lá)" Style="{StaticResource Section}" />
+            <Entry Text="{Binding BranchName}" Placeholder="feature/…" Keyboard="Plain" IsSpellCheckEnabled="False" />
+
+            <Grid ColumnDefinitions="*,Auto">
+                <Label Text="Rodar os comandos depois do worktree" VerticalOptions="Center" />
+                <Switch Grid.Column="1" IsToggled="{Binding RunCommands}" />
+            </Grid>
+
+            <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding HasCopyProfiles}">
+                <Label Text="Copiar o banco" VerticalOptions="Center" />
+                <Switch Grid.Column="1" IsToggled="{Binding CopyDatabase}" />
+            </Grid>
+            <Picker ItemsSource="{Binding CopyProfiles}" SelectedItem="{Binding SelectedCopyProfile}" Title="Perfil de cópia"
+                    IsVisible="{Binding CopyDatabase}" />
+
+            <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding HasAgentProfiles}">
+                <Label Text="Abrir o Claude no fim" VerticalOptions="Center" />
+                <Switch Grid.Column="1" IsToggled="{Binding StartAgent}" />
+            </Grid>
+            <VerticalStackLayout IsVisible="{Binding StartAgent}" Spacing="8">
+                <Picker ItemsSource="{Binding AgentProfiles}" SelectedItem="{Binding SelectedAgentProfile}" Title="Perfil do Claude" />
+                <Editor Text="{Binding AgentPrompt}" Placeholder="O primeiro prompt" AutoSize="TextChanges" MinimumHeightRequest="96" MaxLength="8000" />
+            </VerticalStackLayout>
+
+            <Label Text="{Binding ErrorMessage}" Style="{StaticResource Error}" IsVisible="{Binding ErrorMessage, Converter={StaticResource HasValue}}" />
+            <Button Text="Preparar" Command="{Binding PrepareCommand}" IsEnabled="{Binding IsBusy, Converter={StaticResource Not}}" Margin="0,8,0,0" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

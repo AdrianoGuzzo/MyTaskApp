@@ -246,13 +246,20 @@ public sealed class PrepareQuickCommandHandler(
 /// Alguém viu a linha e confirmou. Um comando com "pedir confirmação" não roda
 /// sem isto: a regra é do caso de uso, e não só da tela que pergunta.
 /// </param>
+/// <param name="Hidden">
+/// Escondido mesmo sendo de terminal: de longe (<c>command.run</c>), não há
+/// quem veja a janela, e a saída vai ao vivo para quem pediu.
+/// </param>
+/// <param name="Timeout">Nulo: o padrão do executor (30 min).</param>
 public sealed record RunQuickCommand(
     Guid TaskId,
     Guid DevelopmentId,
     Guid CommandId,
     Guid? BindingId,
     IReadOnlyDictionary<string, string>? Values = null,
-    bool Confirmed = false);
+    bool Confirmed = false,
+    bool Hidden = false,
+    TimeSpan? Timeout = null);
 
 /// <remarks>
 /// <para>
@@ -339,6 +346,7 @@ public sealed class RunQuickCommandHandler(
 
         await EnsureNotRunningAsync(entry, history, cancellationToken);
 
+        var mode = command.Hidden ? CommandMode.Execute : entry.Mode;
         var execution = CommandExecution.Create(
             task.Id,
             development.Id,
@@ -347,7 +355,7 @@ public sealed class RunQuickCommandHandler(
             entry.Name,
             commandLine,
             folder,
-            entry.Mode,
+            mode,
             entry.KeepTerminalOpen,
             timeProvider.GetUtcNow());
 
@@ -363,13 +371,13 @@ public sealed class RunQuickCommandHandler(
             task.Id,
             execution.Id,
             entry.CommandId,
-            entry.Mode,
+            mode,
             commandLine,
             folder);
 
-        return entry.Mode == CommandMode.Terminal
+        return mode == CommandMode.Terminal
             ? await OpenTerminalAsync(execution, cancellationToken)
-            : await ExecuteAsync(execution, output, cancellationToken);
+            : await ExecuteAsync(execution, output, command.Timeout, cancellationToken);
     }
 
     /// <summary>
@@ -402,6 +410,7 @@ public sealed class RunQuickCommandHandler(
     private async Task<CommandExecutionView> ExecuteAsync(
         CommandExecution execution,
         IProgress<CommandOutputLine>? output,
+        TimeSpan? timeout,
         CancellationToken cancellationToken)
     {
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -416,7 +425,7 @@ public sealed class RunQuickCommandHandler(
         try
         {
             var result = await executor.ExecuteAsync(
-                new CommandExecutionRequest(execution.CommandLine, execution.WorkingDirectory),
+                new CommandExecutionRequest(execution.CommandLine, execution.WorkingDirectory, timeout),
                 output,
                 cancellation.Token);
 

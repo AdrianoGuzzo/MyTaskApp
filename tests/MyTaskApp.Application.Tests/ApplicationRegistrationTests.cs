@@ -24,6 +24,7 @@ using MyTaskApp.Application.StickyNotes;
 using MyTaskApp.Application.Tags;
 using MyTaskApp.Application.Tests.Fakes;
 using MyTaskApp.Application.TimeTracking;
+using NSubstitute;
 
 namespace MyTaskApp.Application.Tests;
 
@@ -64,6 +65,9 @@ public class ApplicationRegistrationTests
             .AddSingleton<ITerminalWindowManager>(new FakeTerminalWindowManager())
             .AddSingleton<ITerminalLauncher>(new FakeTerminalLauncher(new FakeAgentProcessTracker(), DateTimeOffset.UnixEpoch))
             .AddSingleton<IAgentCliProvider>(new FakeAgentCliProvider())
+            .AddSingleton(Substitute.For<IHeadlessAgentProvider>())
+            .AddSingleton<IProcessOwnership>(new FakeProcessOwnership())
+            .AddSingleton(Substitute.For<IHeadlessAgentRunner>())
             .AddSingleton<IAgentSettingsStore>(new FakeAgentSettingsStore())
             .AddSingleton<IAgentAlertSoundStore>(new FakeAgentAlertSoundStore())
             .AddSingleton<ISoundLibrary>(new FakeSoundLibrary())
@@ -98,6 +102,11 @@ public class ApplicationRegistrationTests
             .AddSingleton<MyTaskApp.Application.Remote.IDeviceSigner>(new FakeDeviceSigner())
             .AddSingleton<MyTaskApp.Application.Remote.ITrustedControllerRepository>(new FakeTrustedControllerRepository())
             .AddSingleton<MyTaskApp.Application.Remote.IRemoteSettingsStore>(new FakeRemoteSettingsStore())
+            .AddSingleton<MyTaskApp.Application.Remote.IRemoteOperationsApi>(new Remote.FakeOperationQueue())
+            .AddSingleton<MyTaskApp.Application.Remote.IRemoteCatalogQuery>(new Remote.FakeCatalogQuery())
+            .AddSingleton<MyTaskApp.Application.Remote.IRemoteOperationJournal>(new Remote.InMemoryRemoteJournal())
+            .AddSingleton<MyTaskApp.Application.Remote.IRemoteEntityProbe>(new Remote.FakeEntityProbe())
+            .AddSingleton(NSubstitute.Substitute.For<MyTaskApp.Application.Sync.ISyncLocalStore>())
             .AddSingleton<IConsultationDatabase>(new FakeConsultationDatabase())
             .AddSingleton<IConsultationReadAccessProvisioner>(new FakeReadAccessProvisioner(new MyTaskApp.Domain.DatabaseOperations.DatabaseSecurityPolicy()))
             // O servidor MCP (ADR-059): configuração, token e as consultas novas.
@@ -190,6 +199,22 @@ public class ApplicationRegistrationTests
     [InlineData(typeof(MyTaskApp.Application.Remote.UpdateRemoteSettingsHandler))]
     [InlineData(typeof(MyTaskApp.Application.Remote.GetMachinesHandler))]
     [InlineData(typeof(MyTaskApp.Application.Remote.RegisterThisMachineHandler))]
+    [InlineData(typeof(MyTaskApp.Application.Remote.AdmitRemoteOperationHandler))]
+    [InlineData(typeof(MyTaskApp.Application.Remote.RemoteOperationScheduler))]
+    [InlineData(typeof(MyTaskApp.Application.Remote.GetPendingApprovalsHandler))]
+    [InlineData(typeof(MyTaskApp.Application.Remote.AnswerApprovalHandler))]
+    [InlineData(typeof(MyTaskApp.Application.Remote.SendRemoteOperationHandler))]
+    [InlineData(typeof(MyTaskApp.Application.Remote.RemoteRemovalPlanner))]
+    [InlineData(typeof(MyTaskApp.Application.Remote.HeadlessAgentPlanner))]
+    [InlineData(typeof(MyTaskApp.Application.Remote.RemoteDatabaseCopyPlanner))]
+    [InlineData(typeof(MyTaskApp.Application.Remote.HeadlessSessionStore))]
+    [InlineData(typeof(MyTaskApp.Application.Remote.RemoteProvisionPlanner))]
+    [InlineData(typeof(MyTaskApp.Application.Development.ProvisionEnvironmentHandler))]
+    [InlineData(typeof(MyTaskApp.Application.Remote.GetRemoteControlHandler))]
+    [InlineData(typeof(MyTaskApp.Application.Remote.GetRemoteOperationProgressHandler))]
+    [InlineData(typeof(MyTaskApp.Application.Remote.CancelRemoteOperationHandler))]
+    [InlineData(typeof(MyTaskApp.Application.Remote.RemoteCommandPlanner))]
+    [InlineData(typeof(MyTaskApp.Application.Remote.RecordRemoteOperationHandler))]
     [InlineData(typeof(MyTaskApp.Application.Remote.RequestPairingHandler))]
     [InlineData(typeof(MyTaskApp.Application.Remote.GetPairingStatusHandler))]
     [InlineData(typeof(MyTaskApp.Application.Remote.RevokeTrustedControllerHandler))]

@@ -15,6 +15,7 @@ using MyTaskApp.Application.External;
 using MyTaskApp.Application.External.Jira;
 using MyTaskApp.Application.History;
 using MyTaskApp.Application.Lifecycle;
+using MyTaskApp.Application.LocalPeers;
 using MyTaskApp.Application.Mcp;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.QuickCommands;
@@ -27,6 +28,7 @@ using MyTaskApp.Application.Tags;
 using MyTaskApp.Application.Tasks;
 using MyTaskApp.Application.TimeTracking;
 using MyTaskApp.Domain.DatabaseOperations;
+using MyTaskApp.Remote.Contracts;
 
 namespace MyTaskApp.Application;
 
@@ -81,6 +83,11 @@ public static class DependencyInjection
             provider.GetRequiredService<TimeProvider>(),
             provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<SyncScheduler>>()));
         services.TryAddSingleton<SyncAccountService>();
+
+        // O desktop e o agente no mesmo computador (ADR-085): sem o canal da
+        // Infrastructure, ninguém do outro lado.
+        services.TryAddSingleton<ILocalPeerChannel, NoLocalPeerChannel>();
+        services.TryAddSingleton<LocalPeerBridge>();
         services.TryAddSingleton<ISyncAccount>(provider => provider.GetRequiredService<SyncAccountService>());
         services.AddScoped<ReconcileAfterRemoteChangeHandler>();
         services.AddScoped<RemoteRefetcher>();
@@ -142,6 +149,9 @@ public static class DependencyInjection
         services.AddScoped<ListBranchesHandler>();
         services.AddScoped<PrepareDevelopmentHandler>();
         services.AddScoped<StartDevelopmentHandler>();
+
+        // O mesmo "Iniciar implementação", sem tela (E4): um escopo por etapa, pelo runner.
+        services.AddSingleton<ProvisionEnvironmentHandler>();
         services.AddScoped<InspectWorktreeHandler>();
         services.AddScoped<RemoveWorktreeHandler>();
         services.AddScoped<ProbeWorktreesHandler>();
@@ -218,13 +228,68 @@ public static class DependencyInjection
         // A janela "Máquinas" e o sinal de vida (T-06).
         services.AddScoped<GetRemoteSettingsHandler>();
         services.AddScoped<UpdateRemoteSettingsHandler>();
+        services.TryAddSingleton<IAgentAutostart, NoAgentAutostart>();
+        services.AddScoped<ApplyAgentAutostartHandler>();
         services.AddScoped<GetMachinesHandler>();
         services.AddScoped<RegisterThisMachineHandler>();
+        services.AddScoped<RegisterThisControllerHandler>();
         services.AddScoped<RequestPairingHandler>();
         services.AddScoped<GetPairingStatusHandler>();
         services.AddScoped<RevokeTrustedControllerHandler>();
         services.TryAddSingleton<MachineCapabilities>();
         services.TryAddSingleton<RemotePresenceScheduler>();
+
+        // A fila de operações, do lado do agente (T-14, T-15): a validação local,
+        // o despachante, o laço e o que esta versão sabe rodar (ADR-088).
+        services.AddScoped<AdmitRemoteOperationHandler>();
+        services.AddScoped<GetPendingApprovalsHandler>();
+        services.AddScoped<AnswerApprovalHandler>();
+        services.AddScoped<SendRemoteOperationHandler>();
+        services.AddScoped<GetRemoteControlHandler>();
+        services.AddScoped<GetRemoteOperationProgressHandler>();
+        services.AddScoped<CancelRemoteOperationHandler>();
+        services.TryAddSingleton(RemoteDispatchLimits.Default);
+        services.TryAddSingleton<RemoteOperationDispatcher>();
+        services.TryAddSingleton<IRemoteHub, NoRemoteHub>();
+        services.TryAddSingleton<RemoteOperationScheduler>();
+        services.TryAddSingleton<RemoteCatalogPublisher>();
+
+        // Os tipos vão escritos, e não lidos dos executores: o das ferramentas
+        // depende das capacidades, que listam os tipos. Um teste confere que batem.
+        services.AddSingleton<IRemoteOperationExecutor, EnvironmentInspectExecutor>();
+        services.AddSingleton<IRemoteOperationExecutor, CommandRunExecutor>();
+        services.AddScoped<RemoteCommandPlanner>();
+        services.AddSingleton<IRemoteOperationExecutor, WorktreeProvisionExecutor>();
+        services.AddScoped<RemoteProvisionPlanner>();
+        services.AddSingleton<IRemoteOperationExecutor, WorktreeRemoveExecutor>();
+        services.AddScoped<RemoteRemovalPlanner>();
+
+        // O Claude sem terminal (T-30, ADR-089): o MCP de aprovação é do agente;
+        // sem ele, o que perguntaria é negado.
+        services.AddSingleton<IRemoteOperationExecutor, AgentStartExecutor>();
+        services.AddSingleton<IRemoteOperationExecutor, AgentPromptExecutor>();
+        services.AddSingleton<IRemoteOperationExecutor, AgentStopExecutor>();
+        services.TryAddSingleton(HeadlessAgentLimits.Default);
+        services.TryAddSingleton<HeadlessConversations>();
+        services.TryAddSingleton<HeadlessPromptRunner>();
+        services.AddScoped<HeadlessAgentPlanner>();
+        services.AddScoped<HeadlessSessionStore>();
+
+        // A cópia de banco de longe (T-32, ADR-090): o mesmo caso de uso da tela.
+        services.AddSingleton<IRemoteOperationExecutor, DatabaseCopyExecutor>();
+        services.AddSingleton<RemoteDatabaseCopy>();
+        services.AddScoped<RemoteDatabaseCopyPlanner>();
+        services.AddScoped<RecordRemoteOperationHandler>();
+        services.TryAddSingleton(new SupportedRemoteOperations([
+            RemoteOperationKinds.EnvironmentInspect,
+            RemoteOperationKinds.CommandRun,
+            RemoteOperationKinds.WorktreeProvision,
+            RemoteOperationKinds.WorktreeRemove,
+            RemoteOperationKinds.AgentStart,
+            RemoteOperationKinds.AgentPrompt,
+            RemoteOperationKinds.AgentStop,
+            RemoteOperationKinds.DatabaseCopy,
+        ]));
         services.AddScoped<ConsultationLauncher>();
         services.AddScoped<ConsultationTargetResolver>();
         services.AddScoped<ConsultationFolders>();

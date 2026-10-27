@@ -16,6 +16,7 @@ using MyTaskApp.Application.External;
 using MyTaskApp.Application.External.Jira;
 using MyTaskApp.Application.History;
 using MyTaskApp.Application.Lifecycle;
+using MyTaskApp.Application.LocalPeers;
 using MyTaskApp.Application.Mcp;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.QuickCommands;
@@ -124,6 +125,9 @@ public static class DependencyInjection
         services.AddScoped<ITaskConsultationRepository, TaskConsultationRepository>();
         services.AddScoped<ITrustedControllerRepository, TrustedControllerRepository>();
         services.AddScoped<IRemoteSettingsStore, RemoteSettingsStore>();
+        services.AddScoped<IRemoteOperationJournal, RemoteOperationJournal>();
+        services.AddScoped<IRemoteEntityProbe, RemoteEntityProbe>();
+        services.AddScoped<IRemoteCatalogQuery, RemoteCatalogQuery>();
         services.AddScoped<ICommandExecutionRepository, CommandExecutionRepository>();
         services.AddScoped<IAgentSettingsStore, AgentSettingsStore>();
         services.AddScoped<IAgentAlertSoundStore, AgentAlertSoundStore>();
@@ -149,6 +153,24 @@ public static class DependencyInjection
 
         // O relógio vem da Application; TryAdd para a Infrastructure subir sozinha nos testes.
         services.TryAddSingleton(TimeProvider.System);
+
+        // Desktop e agente abrem o mesmo banco (ADR-085): o lease diz quem roda
+        // o ciclo da sincronização e quem gira o token. O celular é um processo só.
+        var owner = ProcessOwner.Current();
+        services.TryAddSingleton<IProcessOwnership>(new SystemProcessOwnership(owner, new SystemProcessLiveness()));
+
+        if (local?.SingleProcess == true)
+        {
+            services.TryAddSingleton<IProcessLeases, SingleProcessLeases>();
+        }
+        else
+        {
+            services.TryAddSingleton<IProcessLeases>(provider => new SqliteProcessLeases(
+                databaseOptions.BuildConnectionString(),
+                owner,
+                new SystemProcessLiveness(),
+                provider.GetRequiredService<TimeProvider>()));
+        }
 
         AddSyncClient(services, configuration);
 
@@ -209,7 +231,12 @@ public static class DependencyInjection
         // Agentes de IA num terminal real, por tarefa (ADR-030). Um agente novo
         // é mais um IAgentCliProvider aqui; o terminal é escolhido por sistema.
         services.AddSingleton(_ => ExecutableLocator.ForCurrentSystem());
-        services.AddSingleton<IAgentCliProvider, ClaudeCodeCliProvider>();
+        services.AddSingleton<ClaudeCodeCliProvider>();
+        services.AddSingleton<IAgentCliProvider>(provider => provider.GetRequiredService<ClaudeCodeCliProvider>());
+
+        // O mesmo Claude sem terminal, para a sessão pedida de longe (ADR-089).
+        services.AddSingleton<IHeadlessAgentProvider>(provider => provider.GetRequiredService<ClaudeCodeCliProvider>());
+        services.AddSingleton<IHeadlessAgentRunner, HeadlessAgentRunner>();
         services.AddSingleton<IAgentProcessTracker, AgentProcessTracker>();
 
         // Os avisos do agente (ADR-037): o arquivo de hooks mora com os dados
@@ -352,7 +379,12 @@ public static class DependencyInjection
         services.AddSingleton<SyncAuthenticationService>();
         services.AddSingleton<ISyncAuthenticator>(provider => provider.GetRequiredService<SyncAuthenticationService>());
         services.AddSingleton<ISyncApi, SyncApiClient>();
-        services.AddSingleton<IRemoteApi, RemoteApiClient>();
+        services.AddSingleton<RemoteApiClient>();
+        services.AddSingleton<IRemoteApi>(provider => provider.GetRequiredService<RemoteApiClient>());
+        services.AddSingleton<IRemoteOperationsApi>(provider => provider.GetRequiredService<RemoteApiClient>());
+
+        // A campainha do servidor (T-15): só o agente liga, pelo RemoteOperationScheduler.
+        services.AddSingleton<IRemoteHub, SignalRRemoteHub>();
         services.AddSingleton<ISyncServerAddress, SyncServerAddress>();
         services.AddSingleton<ISyncServerProbe, SyncServerProbe>();
     }
@@ -394,6 +426,57 @@ public static class DependencyInjection
             services.AddSingleton<ISecretStore, UnsupportedSecretStore>();
         }
     }
+
+    /// <summary>
+    /// O canal entre o desktop e o agente deste computador (ADR-085): o agente
+    /// escuta, o desktop conecta. Antes da Application, que registra com
+    /// <c>TryAdd</c> o canal que não fala com ninguém.
+    /// </summary>
+    public static IServiceCollection AddLocalPeer(this IServiceCollection services, IConfiguration configuration, LocalPeerRole role)
+    {
+        var databaseOptions =
+            configuration.GetSection(DatabaseOptions.SectionName).Get<DatabaseOptions>()
+            ?? new DatabaseOptions();
+
+        services.TryAddSingleton<ILocalPeerChannel>(provider => new PipeLocalPeerChannel(
+            PipeLocalPeerChannel.NameFor(databaseOptions.ResolveFullPath()),
+            role,
+            provider.GetRequiredService<ILogger<PipeLocalPeerChannel>>()));
+
+        return services;
+    }
+
+    /// <summary>
+    /// O agente no logon desta conta (ADR-085), a partir da pasta do app: só o
+    /// desktop registra, porque é ele quem tem a tela que liga e desliga.
+    /// </summary>
+    public static IServiceCollection AddAgentAutostart(this IServiceCollection services)
+    {
+        var executable = AgentProcess.ExecutablePath(AppContext.BaseDirectory);
+
+        if (OperatingSystem.IsWindows())
+        {
+            AddWindowsAgentAutostart(services, executable);
+        }
+        else if (OperatingSystem.IsLinux())
+        {
+            services.TryAddSingleton<IAgentAutostart>(provider => new AgentAutostart(
+                executable,
+                SystemdUserLogonEntry.ForCurrentUser(provider.GetRequiredService<IProcessRunner>()),
+                AgentProcess.IsRunning,
+                provider.GetRequiredService<ILogger<AgentAutostart>>()));
+        }
+
+        return services;
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static void AddWindowsAgentAutostart(IServiceCollection services, string executable) =>
+        services.TryAddSingleton<IAgentAutostart>(provider => new AgentAutostart(
+            executable,
+            RunKeyLogonEntry.ForCurrentUser(),
+            AgentProcess.IsRunning,
+            provider.GetRequiredService<ILogger<AgentAutostart>>()));
 
     [SupportedOSPlatform("windows")]
     private static void AddWindowsSecrets(IServiceCollection services) =>

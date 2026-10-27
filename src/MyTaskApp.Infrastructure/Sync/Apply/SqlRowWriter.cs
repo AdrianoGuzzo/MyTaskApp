@@ -97,6 +97,10 @@ internal sealed class SqlRowWriter(MyTaskAppDbContext context, TimeProvider time
         var entity = Entity(mapper);
         var assignments = SharedValues(mapper, entity, fields, onlyPresent: true).ToList();
 
+        // O servidor manda a linha inteira: o que decide é se o valor guardado mudou.
+        var resets = mapper.UpdateResets.Where(reset => reset.WhenFields.Any(fields.ContainsKey)).ToList();
+        var watchedBefore = resets.Count > 0 ? await WatchedStateAsync(mapper, entity, id, keyFields, resets, cancellationToken) : null;
+
         if (assignments.Count > 0)
         {
             var parameters = new List<(IProperty?, object?)>();
@@ -117,6 +121,95 @@ internal sealed class SqlRowWriter(MyTaskAppDbContext context, TimeProvider time
         }
 
         await ReplaceChildrenAsync(mapper, id, fields, cancellationToken);
+
+        if (watchedBefore is not null
+            && await WatchedStateAsync(mapper, entity, id, keyFields, resets, cancellationToken) != watchedBefore)
+        {
+            foreach (var reset in resets)
+            {
+                var (where, keyParameters) = KeyCondition(mapper, entity, id, keyFields, offset: 1);
+
+                await ExecuteAsync(
+                    $"UPDATE {Quote(entity.GetTableName()!)} SET {Quote(FindProperty(entity, reset.Property).GetColumnName())} = @p0 WHERE {where}",
+                    [(FindProperty(entity, reset.Property), reset.Value), .. keyParameters],
+                    cancellationToken);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Os valores guardados dos campos que derrubam uma coluna local (o texto, o
+    /// modo, os parâmetros do comando), como texto comparável. As listas filhas
+    /// entram ordenadas: o sync as regrava inteiras, com outros ids.
+    /// </summary>
+    private async Task<string> WatchedStateAsync(
+        SyncEntityMapper mapper,
+        IEntityType entity,
+        Guid id,
+        IReadOnlyDictionary<string, JsonElement> keyFields,
+        IReadOnlyList<SyncLocalReset> resets,
+        CancellationToken cancellationToken)
+    {
+        var watched = resets.SelectMany(reset => reset.WhenFields).ToHashSet(StringComparer.Ordinal);
+        var state = new StringBuilder();
+
+        var columns = mapper.Columns
+            .Where(column => column.Member is null && watched.Contains(column.Field))
+            .Select(column => Quote(FindProperty(entity, column.Property).GetColumnName()))
+            .ToList();
+
+        if (columns.Count > 0)
+        {
+            var (where, parameters) = KeyCondition(mapper, entity, id, keyFields);
+            state.AppendJoin('\u001e', await ReadRowsAsync(
+                $"SELECT {string.Join(", ", columns)} FROM {Quote(entity.GetTableName()!)} WHERE {where}",
+                parameters,
+                cancellationToken));
+        }
+
+        foreach (var child in mapper.Children.Where(child => watched.Contains(child.Field)))
+        {
+            var childEntity = context.Model.FindEntityType(child.ChildType)!;
+            var parentKey = childEntity.FindProperty(child.ParentKey)!;
+            var childColumns = child.SharedProperties.Select(path => Quote(FindProperty(childEntity, path).GetColumnName()));
+
+            var rows = await ReadRowsAsync(
+                $"SELECT {string.Join(", ", childColumns)} FROM {Quote(childEntity.GetTableName()!)} WHERE {Quote(parentKey.GetColumnName())} = @p0",
+                [(parentKey, id)],
+                cancellationToken);
+
+            state.Append('\u001d').AppendJoin('\u001e', rows.Order(StringComparer.Ordinal));
+        }
+
+        return state.ToString();
+    }
+
+    private async Task<List<string>> ReadRowsAsync(
+        string sql,
+        IReadOnlyList<(IProperty?, object?)> parameters,
+        CancellationToken cancellationToken)
+    {
+        var connection = await OpenAsync(cancellationToken);
+        await using var command = CreateCommand(connection, sql, parameters);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        var rows = new List<string>();
+
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var values = new string[reader.FieldCount];
+
+            for (var index = 0; index < values.Length; index++)
+            {
+                values[index] = reader.IsDBNull(index)
+                    ? "\u0000"
+                    : Convert.ToString(reader.GetValue(index), System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
+            }
+
+            rows.Add(string.Join('\u001f', values));
+        }
+
+        return rows;
     }
 
     /// <summary>Apaga a linha; o banco leva os filhos pela cascata, como a exclusão local.</summary>

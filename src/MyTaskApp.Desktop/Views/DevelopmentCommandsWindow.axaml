@@ -218,6 +218,17 @@
                      Text="Desmarcado, o comando fica só neste computador. Quem já tem uma cópia fica com ela, e ela deixa de acompanhar as mudanças daqui." />
         </StackPanel>
 
+        <!-- ADR-087: liberado só aqui, para este texto. O sync não liga, e mudar o comando desliga. -->
+        <StackPanel Spacing="2">
+          <CheckBox x:Name="RemoteAllowedBox"
+                    FontSize="12"
+                    Content="Pode rodar a pedido de outro computador pareado"
+                    IsChecked="{Binding RemoteAllowed}" />
+          <TextBlock Classes="meta"
+                     TextWrapping="Wrap"
+                     Text="Vale para este texto: mudar o comando, aqui ou em outro computador, desmarca." />
+        </StackPanel>
+
         <!-- Uma linha por {nome}: como a tela pergunta o valor antes de executar. -->
         <StackPanel Spacing="6" IsVisible="{Binding HasParameterEditors}">
           <TextBlock Classes="meta" Text="Parâmetros — perguntados antes de executar o botão:" />

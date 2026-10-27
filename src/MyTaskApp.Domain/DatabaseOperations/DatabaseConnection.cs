@@ -143,6 +143,24 @@ public sealed class DatabaseConnection
         UpdatedAt = at;
     }
 
+    /// <summary>
+    /// Outro computador pareado pode pedir uma cópia que use esta conexão
+    /// (ADR-090). Desligado por padrão, e só desta máquina: a conexão não
+    /// sincroniza.
+    /// </summary>
+    public bool RemoteAllowed { get; private set; }
+
+    public void AllowRemote(bool allowed, DateTimeOffset at)
+    {
+        if (RemoteAllowed == allowed)
+        {
+            return;
+        }
+
+        RemoteAllowed = allowed;
+        UpdatedAt = at;
+    }
+
     public void SetEnabled(bool enabled, DateTimeOffset at)
     {
         if (IsEnabled == enabled)

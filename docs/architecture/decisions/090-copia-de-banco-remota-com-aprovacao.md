@@ -2,15 +2,15 @@
 
 | | |
 |---|---|
-| **Status** | Proposto |
-| **Implementação** | Planejado |
+| **Status** | Aceito |
+| **Implementação** | Implementado |
 | **Categoria** | remoto |
 | **Registrado** | 2026-10-24, commit `36eb99c` (primeiro commit em que o ADR aparece) |
 | **Palavras-chave** | database.copy, DatabaseCopyRequest, ApprovalKind.ProductionDatabase, TypedConfirmation, CriticalProduction, RunDatabaseCopyHandler, WaitingApproval |
 | **Relações** | relacionado: [ADR-056](056-operacoes-de-banco-politica-central.md), [ADR-060](060-banco-do-ambiente-variavel-database.md), [ADR-082](082-script-depois-da-copia.md), [ADR-085](085-agente-sem-tela-sobre-o-mesmo-sqlite.md), [ADR-088](088-catalogo-fechado-de-operacoes-remotas.md) |
-| **Código** | `src/MyTaskApp.Remote.Contracts/Requests.cs`, `src/MyTaskApp.Remote.Contracts/Approvals.cs`, `src/MyTaskApp.Application/DatabaseOperations/CopyHandlers.cs` |
+| **Código** | `src/MyTaskApp.Remote.Contracts/Requests.cs`, `src/MyTaskApp.Remote.Contracts/Approvals.cs`, `src/MyTaskApp.Application/DatabaseOperations/CopyHandlers.cs`, `src/MyTaskApp.Application/Remote/DatabaseCopyExecutor.cs` |
 
-**Estado:** proposto (fase 2). Nada implementado.
+**Estado:** aceito (fase 2), implementado (T-31 a T-33): a cópia de longe pelo mesmo `RunDatabaseCopyHandler`, só entre conexões com `RemoteAllowed`, a produção como `ApprovalKind.ProductionDatabase` com o nome digitado na crítica, e o "Preparar tudo", que valida e aprova antes do Git.
 
 **Contexto:** o ADR-056 pôs a cópia de produção atrás de quatro barreiras
 (política, fluxo, processo, PostgreSQL só leitura), e a confirmação de produção

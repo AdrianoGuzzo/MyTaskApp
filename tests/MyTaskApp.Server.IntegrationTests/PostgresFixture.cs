@@ -75,7 +75,15 @@ public sealed class PostgresFixture : IAsyncLifetime
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
 
-        var connectionString = new NpgsqlConnectionStringBuilder(_admin) { Database = name }.ConnectionString;
+        // A conexão parada fecha em segundos: o pool de um teste que já acabou não
+        // segura as do servidor até o fim da montagem (os testes da orquestração
+        // somaram classes, e as 400 acabavam).
+        var connectionString = new NpgsqlConnectionStringBuilder(_admin)
+        {
+            Database = name,
+            ConnectionIdleLifetime = 5,
+            ConnectionPruningInterval = 1,
+        }.ConnectionString;
 
         await using var context = new ServerDbContext(new DbContextOptionsBuilder<ServerDbContext>().UseNpgsql(connectionString).Options);
         await context.Database.MigrateAsync(cancellationToken);

@@ -24,7 +24,11 @@ public sealed partial class MachinesWindow : Window
     }
 
     public MachinesWindow(MachinesViewModel viewModel)
-        : this() => DataContext = viewModel;
+        : this()
+    {
+        DataContext = viewModel;
+        viewModel.ControlOpened += (_, control) => new RemoteControlWindow(control).Show(this);
+    }
 
     /// <summary>
     /// O "X" esconde, não fecha: singleton, como as outras janelas do menu.

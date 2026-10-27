@@ -16,7 +16,7 @@ public sealed record MachineItem(MachineView View, string Presence, string Detai
 {
     public bool IsOnline => View.IsOnline;
 
-    /// <summary>Outra máquina que aceita ser controlada: dá para pedir o pareamento.</summary>
+    /// <summary>Outra máquina que aceita ser controlada: dá para pedir o pareamento, e depois controlar.</summary>
     public bool CanPair => View.AcceptsControl && !View.IsThis;
 }
 
@@ -53,6 +53,7 @@ public sealed partial class MachinesViewModel : ObservableObject
     private readonly IShellLauncher _shell;
     private readonly IConfirmationDialog _confirmation;
     private readonly TimeProvider _timeProvider;
+    private readonly Func<RemoteControlViewModel> _control;
     private readonly ILogger<MachinesViewModel> _logger;
 
     private CancellationTokenSource? _authorization;
@@ -66,6 +67,7 @@ public sealed partial class MachinesViewModel : ObservableObject
         IShellLauncher shell,
         IConfirmationDialog confirmation,
         TimeProvider timeProvider,
+        Func<RemoteControlViewModel> control,
         ILogger<MachinesViewModel> logger)
     {
         _runner = runner;
@@ -74,8 +76,12 @@ public sealed partial class MachinesViewModel : ObservableObject
         _shell = shell;
         _confirmation = confirmation;
         _timeProvider = timeProvider;
+        _control = control;
         _logger = logger;
     }
+
+    /// <summary>A pessoa escolheu controlar uma máquina: a janela abre a tela "Operação" com este ViewModel.</summary>
+    public event EventHandler<RemoteControlViewModel>? ControlOpened;
 
     /// <summary>A janela está à vista: só então o relógio dela recarrega a lista.</summary>
     public bool IsShown { get; set; }
@@ -338,6 +344,15 @@ public sealed partial class MachinesViewModel : ObservableObject
             },
             null,
             "Não foi possível pedir o pareamento.");
+
+    /// <summary>A tela "Operação" para a máquina: o que dá para pedir a ela, e o que já foi pedido.</summary>
+    [RelayCommand]
+    public async Task ControlAsync(MachineItem machine)
+    {
+        var control = _control();
+        ControlOpened?.Invoke(this, control);
+        await control.OpenAsync(machine.View, CancellationToken.None);
+    }
 
     [RelayCommand]
     public void ClosePairing()

@@ -11,4 +11,9 @@
     <PackageReference Include="Testcontainers.PostgreSql" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- As saídas do stream-json que o leitor confere (ADR-089). -->
+    <None Include="Agents\StreamJson\*.jsonl" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

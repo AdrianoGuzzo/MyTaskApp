@@ -1,9 +1,10 @@
 # Orquestração remota — modelo de ameaças
 
-> **Estado: proposta.** Acompanha [`remote-orchestration.md`](remote-orchestration.md)
-> e os ADR-084 a ADR-090 de [índice de ADRs](README.md). Os
+> **Estado: implementado (fase 2, E1 a E8).** Acompanha [`remote-orchestration.md`](remote-orchestration.md)
+> e os ADR-084 a ADR-090 do [índice de ADRs](README.md). Os
 > requisitos (RS-xx) são critérios de aceitação das entregas em
-> [`../roadmap/phase-2-remote-orchestration.md`](../roadmap/phase-2-remote-orchestration.md).
+> [`../roadmap/phase-2-remote-orchestration.md`](../roadmap/phase-2-remote-orchestration.md);
+> a seção 8 diz o teste de cada um, ou o risco aceito.
 
 A fase 2 transforma o MyTaskApp num **executor remoto de código** na máquina do
 usuário. Hoje, tudo o que roda foi pedido por alguém sentado na frente da
@@ -86,7 +87,7 @@ flowchart LR
 | A-22 | T4 | Elevation | Celular roubado aprova e manda operações | revogar o dispositivo de qualquer outro remove a chave dele de todos os agentes; destravar o app (biometria/PIN do sistema) antes de assinar | RS-33, RS-34 |
 | A-23 | T7 | — | Aprovação por cansaço (aprovar tudo) | resumo legível e completo; "lembrar nesta sessão" só para a mesma ferramenta e padrão; produção exige digitar; nenhuma aprovação de "tudo" | RS-13, RS-35 |
 | A-24 | F2 | Repudiation | Não saber quem mandou rodar o quê | auditoria nos dois lados, com o dispositivo que assinou; a assinatura guardada prova a origem | RS-36 |
-| A-25 | Diário/T6 | Information disclosure | Saída sensível guardada no SQLite do agente | diário com teto e retenção (7 dias); mascarado antes de gravar | RS-29 |
+| A-25 | Diário/T6 | Information disclosure | Saída sensível guardada no SQLite do agente | mascarada antes de gravar; sai do diário quando o servidor confirma; o registro da operação, sem a saída, fica 30 dias (a janela de replay) | RS-29 |
 
 ## 5. Requisitos
 
@@ -106,21 +107,23 @@ flowchart LR
   nunca sai da máquina.
 - **RS-05** Access token de 15 min e refresh com rotação, como hoje; o refresh
   roda sob trava entre processos (desktop e agente), relendo o cofre.
-- **RS-06** Revogar um dispositivo (ADR-061) também revoga a chave em
-  `DeviceKeys`; o servidor avisa os agentes, que a removem de
-  `TrustedControllers`; um agente que não recebe o aviso continua protegido,
-  porque o servidor recusa o token do revogado (403 `device_revoked`).
+- **RS-06** Revogar um dispositivo (ADR-061) também tira a validade da chave
+  dele em `DeviceKeys`; os agentes, no registro de cada minuto, esquecem o
+  controlador que saiu da conta ou trocou de chave (`TrustedControllers`); um
+  agente que ainda não registrou continua protegido, porque o servidor recusa
+  o token do revogado (403 `device_revoked`). O agente só esquece pela lista
+  da conta, nunca passa a confiar por ela.
 
 ### Autenticação, autorização e pareamento
 
 - **RS-07** Escopo OAuth novo `remote`; endpoints remotos exigem `sync` + `remote`
   e dispositivo ativo (`DeviceFilter`).
 - **RS-08** Pareamento com aprovação explícita **na máquina executora**, com o
-  código curto derivado das duas impressões digitais. Sem tela, pelo CLI do
-  agente. O pareamento expira em 10 min.
-- **RS-09** Toda operação, cancelamento e resposta de aprovação é um JWS ES256
-  conferido pelo agente contra `TrustedControllers`. O servidor confere também,
-  mas não decide sozinho.
+  código curto derivado das duas impressões digitais. O pareamento expira em
+  10 min. (Sem tela, pelo CLI do agente: não feito; R-09.)
+- **RS-09** Toda operação e resposta de aprovação é um JWS ES256 conferido
+  pelo agente contra `TrustedControllers`. O servidor confere também, mas não
+  decide sozinho. O cancelamento não é assinado (R-08): só para, nunca começa.
 - **RS-10** "Aceitar controle remoto" é ligado **só localmente**, vem
   desligado e não sincroniza.
 
@@ -192,15 +195,18 @@ flowchart LR
 - **RS-28** Catálogo, eventos e resultados sem caminho absoluto, host, usuário,
   senha, token ou texto de comando; um teste de reflexão sobre os contratos.
 - **RS-29** Toda saída passa por `SensitiveText.Mask` antes do diário e do
-  servidor; o diário tem teto e retenção de 7 dias; o servidor guarda no máximo
-  1 MiB de eventos por operação e 30 dias.
+  servidor; a saída sai do diário quando o servidor confirma; o servidor guarda
+  no máximo 10 000 eventos de até 8 KiB por operação (acima, a saída é
+  confirmada e descartada, e o fim nunca se perde) e 30 dias.
 
 ### Limites
 
 - **RS-30** Rate limit `remote` por conta (separado de `sync`, ADR-069) e por
   dispositivo controlador.
-- **RS-31** Por executor: operações simultâneas (padrão 2, uma "pesada" — cópia
-  de banco ou sessão do Claude), fila máxima de 20 abertas.
+- **RS-31** Por executor: 3 operações simultâneas e 120 por hora de cada
+  controlador, no agente; 20 abertas, no servidor. As "pesadas" têm a trava
+  delas: uma operação de banco por vez no computador (o gate e o lease entre
+  processos) e um Claude por worktree.
 - **RS-32** Timeout por operação e morte da árvore de processos, inclusive
   quando o agente cai.
 
@@ -244,3 +250,52 @@ O que muda é **quem confirma**: em vez do diálogo da tela, uma
 | R-05 | Celular desbloqueado nas mãos de outro | a chave está no aparelho | biometria antes de assinar; revogação rápida |
 | R-06 | O agente roda com a sessão do usuário aberta | DPAPI e libsecret são do usuário | cofre de máquina, se um dia rodar sem logon |
 | R-07 | Disponibilidade depende do servidor do usuário | é o desenho do ADR-078 | nada: sem servidor, nada remoto, e o local segue inteiro |
+| R-08 | O cancelamento não é assinado: um servidor comprometido pode parar uma operação | parar é sempre o lado seguro (a etapa crítica termina antes, 4.7), e assinar o cancelamento pediria o destravamento no celular para parar algo | `CancelRequest` assinado, se parar de propósito virar um dano |
+| R-09 | Uma máquina sem tela não pareia | o código é confirmado na janela Máquinas | o `pair` no CLI do agente, lendo o código no terminal |
+| R-10 | O log de acesso do proxy guarda a query do hub | o proxy é do usuário | a nota no `sync-server.md` (o filtro do Caddy); os apps já mandam o token no cabeçalho |
+
+## 8. Verificação (T-36)
+
+Cada requisito com o teste que o cobra, e o que fica sem teste com o motivo.
+"Aceito" é um risco da seção 7, ou uma parte que nenhum teste automatizado
+consegue provar.
+
+| RS | Teste | Sem teste (aceito) |
+|---|---|---|
+| RS-01 | `SyncServerUrlTests` (http e `ws://` para fora do loopback recusados), `DevelopmentLoopbackTests` | o hub usa o mesmo endereço já validado; o HTTPS do servidor é o do ADR-070 |
+| RS-02 | `NoCertificateBypassTests` (nenhum código troca a validação do certificado) | — |
+| RS-03 | `RemoteHubTests.ATokenInTheQuery_OnlyAuthenticatesTheHub_AndIsNeverLogged` | o log do proxy é do usuário (R-10) |
+| RS-04 | `DeviceKeyStoreTests`, `RemoteDeviceTests` (desktop e agente com uma chave só) | — |
+| RS-05 | `ApiTests` (15 min, rotação do refresh), `TwoProcessSyncTests` | — |
+| RS-06 | `RemoteOperationTests.ARevokedMachine_IsNeitherATargetNorAnAgent`, `RemotePairingTests.AControllerRevokedBeforeTheApproval_CannotBePaired` (a chave do revogado não vale), `RemoteMachinesTests.AnExecutor_ForgetsTheControllersRevokedOnTheAccount_OrWithAnotherKey`, `RemoteOperationsEndToEndTests.Chaos_ARevokedMachine_StopsWhatRuns_AndStopsAccepting` | — |
+| RS-07 | `RemoteScopeTests`, `RemoteHubTests.WithoutTheRemoteScopeOrAToken_TheHubRefuses` | — |
+| RS-08 | `ConfirmPairingHandlerTests` (código errado, chave trocada), `RemotePairingTests` (mesmo código dos dois lados, expirado dá 410) | o CLI sem tela (R-09) |
+| RS-09 | `AdmitRemoteOperationTests` (chave não pareada, bytes mexidos), `RemoteOperationTests.ASignatureThatIsNotTheCallersActiveKey_IsRefused`, `RemoteApprovalsTests` | o cancelamento (R-08) |
+| RS-10 | `AdmitRemoteOperationTests`, `ConfirmPairingHandlerTests` (desligado, nada entra) | vem desligado e fica fora do `SyncRegistry` (`RemoteExecutionSettings`, seção 2.4 da arquitetura) |
+| RS-11 | `RemoteOperationTests.TheSameEnvelopeTwice_IsTheSameOperation_AndAnotherRequestWithTheSameId_IsRefused`, `RemoteOperationJournalTests`, `Chaos_DuplicatedRequestsAndEvents_RunAndCountOnce` | — |
+| RS-12 | `RemoteJwsTests`, `AdmitRemoteOperationTests` (outro alvo, outra conta), `RemoteOperationTests` (`NotAfter` acima de 24 h) | — |
+| RS-13 | `RemoteApprovalsTests` (hash, id, prazo, chave e revogado), `RemoteApprovalTests` (uso único), `Chaos_AnApprovalNobodyAnswers_IsDeniedAtTheDeadline` | — |
+| RS-14 | `RemoteOperationRulesTests`, `ContractSafetyTests` | — |
+| RS-15 | `CommandRunExecutorTests` (não liberado não roda; confirmação vira aprovação) | — |
+| RS-16 | `CommandRunExecutorTests` (metacaracteres de shell recusados) | — |
+| RS-17 | `CommandRemoteAllowedTests`, `CommandRemoteAllowedSyncTests`, `CommandRunExecutorTests` | — |
+| RS-18 | `CommandVariablesTests` (`..` e absoluto), `RemoteProvisionPlannerTests` (diretório não mapeado aqui) | o link simbólico para fora: o worktree é criado pelo Git a partir de repositório cadastrado (R-02) |
+| RS-19 | `ClaudeCodeHeadlessLaunchTests` (`--restricted`, nada de "dangerously", sem os argumentos do card) | — |
+| RS-20 | `ClaudeCodeHeadlessLaunchTests`, `AgentSessionExecutorsTests` (perfil desconhecido recusado) | — |
+| RS-21 | `ClaudeCodeHeadlessLaunchTests` (`--restricted`, `--settings`, `--strict-mcp-config`) | ignorar os hooks é do próprio Claude Code com `--restricted` (conferido no 2.1.309, opt-in `ApprovalClaudeTests`) |
+| RS-22 | `ClaudeCodeHeadlessLaunchTests` (`--permission-prompts none`), `AgentSessionExecutorsTests` (vira aprovação; sem resposta, nega) | — |
+| RS-22a | `AgentSessionExecutorsTests` (o pedido só baixa os tetos), `ClaudeCodeHeadlessLaunchTests` | — |
+| RS-23 | `ClaudeCodeHeadlessLaunchTests`, `HeadlessAgentRunnerTests` (ambiente real; prompt pelo stdin) | — |
+| RS-24 | `ApprovalMcpServerTests` (sem segredo 401, `Origin` 403, outro `Host` 400, segredo morto ao fechar) | — |
+| RS-25 | `PipeLocalPeerChannelTests` (nenhum pedido de execução atendido) | o `CurrentUserOnly` é o do .NET no servidor do pipe |
+| RS-26 | `DatabaseCopyExecutorTests` (o mesmo `RunDatabaseCopyHandler`, etapas e auditoria) | — |
+| RS-27 | `DatabaseCopyExecutorTests` (conexão não liberada; produção aprova; crítica digita), `RemoteApprovalsTests` | — |
+| RS-28 | `ContractSafetyTests` (reflexão sobre os contratos), `RemoteCatalogQueryTests` | — |
+| RS-29 | `CommandRunExecutorTests` (saída mascarada e cortada), `RemoteOperationTests.AboveTheCeiling_OutputIsAcknowledgedButDropped_AndTheRestIsKept`, `RemoteOperationTests.OldEvents_AreSweptAway` | — |
+| RS-30 | `RemoteDeviceTests` (cota própria, por dispositivo) | — |
+| RS-31 | `AdmitRemoteOperationTests` (teto de simultâneas), `RemoteOperationTests.AMachineWithTwentyOpenOperations_RefusesTheNext_UntilOneEnds`, `SqliteProcessLeasesTests` (uma cópia por vez) | — |
+| RS-32 | `KillOnCloseJobTests` (o neto morre com o job, no Windows), `ShellCommandExecutorTests` (timeout mata), `Chaos_ACommandKilledFromOutside_FailsWithTheReason` | o grupo de processos do Linux: CI do Linux |
+| RS-33 | `RemoteTests` do celular (assina só destravado, tranca em segundo plano, sem bloqueio de tela não assina) | o desktop: a sessão do usuário |
+| RS-34 | `RemoteDeviceTests`, `RemoteOperationTests.ARevokedMachine_IsNeitherATargetNorAnAgent` (revoga com o alvo parado) | — |
+| RS-35 | `AgentSessionExecutorsTests` (o comando inteiro no resumo), `RemoteTests` do celular | — |
+| RS-36 | `RemoteOperationAuditTests` ("Remoto: Pixel 8"), `DatabaseCopyExecutorTests` (`ConfirmedBy`), `RemoteOperationTests` (o servidor guarda os bytes assinados) | a operação sem tarefa fica no diário do agente e no servidor, não no `ITaskAuditLog` |

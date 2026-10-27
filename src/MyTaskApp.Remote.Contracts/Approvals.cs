@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text.Json;
 
 namespace MyTaskApp.Remote.Contracts;
@@ -47,3 +48,45 @@ public sealed record ApprovalResponse(
     string? TypedConfirmation,
     bool RememberForThisSession,
     DateTimeOffset RespondedAt);
+
+public enum ApprovalState
+{
+    Pending,
+    Allowed,
+    Denied,
+
+    /// <summary>Passou de <see cref="ApprovalRequest.ExpiresAt"/> sem resposta: vale negar.</summary>
+    Expired,
+}
+
+/// <summary>
+/// Uma aprovação como o servidor a guarda (<c>GET /api/v1/remote/approvals/{id}</c>).
+/// A resposta vai assinada, como veio do controlador: o agente confere a
+/// assinatura com as chaves em que confia, e não a palavra do servidor.
+/// </summary>
+/// <param name="RespondedByDeviceId">Quem respondeu, conferido pelo servidor com a chave ativa dele.</param>
+public sealed record ApprovalView(
+    ApprovalRequest Request,
+    Guid TargetDeviceId,
+    ApprovalState State,
+    SignedEnvelope? Response,
+    Guid? RespondedByDeviceId,
+    DateTimeOffset? RespondedAt);
+
+/// <summary>
+/// O <see cref="ApprovalRequest.RequestHash"/>: SHA-256, em hexadecimal, do
+/// pedido inteiro com o hash vazio. O agente calcula ao pedir e compara com o
+/// que volta na resposta assinada; se o servidor mudou o que a pessoa viu, os
+/// hashes não batem.
+/// </summary>
+public static class ApprovalHash
+{
+    public static string Of(ApprovalRequest request) =>
+        Convert.ToHexStringLower(SHA256.HashData(
+            JsonSerializer.SerializeToUtf8Bytes(request with { RequestHash = string.Empty }, RemoteJson.Options)));
+
+    /// <summary>O pedido com o hash calculado.</summary>
+    public static ApprovalRequest Seal(ApprovalRequest request) => request with { RequestHash = Of(request) };
+
+    public static bool IsSealed(ApprovalRequest request) => request.RequestHash == Of(request);
+}

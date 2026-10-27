@@ -98,3 +98,46 @@ public enum StatusAuthority
     Server,
     Agent,
 }
+
+/// <summary>
+/// Uma operação como o servidor a guarda e a mostra a quem é da conta
+/// (<c>GET /api/v1/remote/operations/{id}</c>). O pedido assinado fica de fora:
+/// só o agente alvo o recebe, em <see cref="AgentOperation"/>.
+/// </summary>
+/// <param name="CancelRequestedAt">Alguém pediu para cancelar; o agente decide quando vira <see cref="RemoteOperationStatus.Canceled"/>.</param>
+/// <param name="ResultCode">O motivo da recusa (<see cref="RemoteErrorCodes"/>) ou da falha, quando há.</param>
+/// <param name="ResultSummary">Uma linha para a lista: "3 comandos, 1 falhou".</param>
+/// <param name="LastContiguousSeq">Até onde os eventos chegaram sem buraco.</param>
+public sealed record RemoteOperationView(
+    Guid OperationId,
+    Guid WorkspaceId,
+    Guid TargetDeviceId,
+    Guid RequestedByDeviceId,
+    string Kind,
+    Guid? TaskId,
+    RemoteOperationStatus Status,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset NotAfter,
+    DateTimeOffset UpdatedAt,
+    DateTimeOffset? CancelRequestedAt,
+    string? ResultCode,
+    string? ResultSummary,
+    long LastContiguousSeq);
+
+/// <summary>
+/// <c>GET /api/v1/remote/agent/operations</c>: o que o agente da máquina do
+/// token tem a fazer. A que estava na fila passa a <see cref="RemoteOperationStatus.Dispatched"/>
+/// ao ser entregue; as já entregues e não terminadas voltam, com o pedido de
+/// cancelamento, se houver: um agente reiniciado não perde nenhuma.
+/// </summary>
+public sealed record AgentOperation(SignedEnvelope Request, RemoteOperationStatus Status, DateTimeOffset? CancelRequestedAt);
+
+/// <summary>
+/// <c>POST /api/v1/remote/operations/{id}/status</c>: o agente alvo muda o
+/// estado. Repetir o estado atual não muda nada; regressão é recusada.
+/// </summary>
+public sealed record OperationStatusUpdate(RemoteOperationStatus Status, string? Code = null, string? Summary = null);
+
+/// <summary><c>GET /api/v1/remote/operations/{id}/events?after=N</c>: os eventos depois de N, em ordem.</summary>
+/// <param name="HasMore">Há mais depois desta página.</param>
+public sealed record RemoteEventPage(IReadOnlyList<RemoteOperationEvent> Events, long LastContiguousSeq, bool HasMore);

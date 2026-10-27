@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Development;
 using MyTaskApp.Application.Lifecycle;
+using MyTaskApp.Application.Remote;
 using MyTaskApp.Application.Sync;
 using MyTaskApp.Application.Tasks;
 using MyTaskApp.Domain;
@@ -40,7 +41,7 @@ public sealed partial class TaskDetailViewModel(
     ILogger<TaskDetailViewModel> logger) : MobileViewModel(dialogs, logger)
 {
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanComplete), nameof(CanReopen), nameof(CanCancel), nameof(CanArchive))]
+    [NotifyPropertyChangedFor(nameof(CanComplete), nameof(CanReopen), nameof(CanCancel), nameof(CanArchive), nameof(CanPrepareRemotely))]
     [NotifyPropertyChangedFor(nameof(CanRestoreFromArchive), nameof(CanMoveToTrash), nameof(CanRestoreFromTrash), nameof(CanEdit))]
     [NotifyPropertyChangedFor(nameof(HasNotes), nameof(HasDeadline), nameof(HasTags))]
     private TaskListItem? _item;
@@ -81,6 +82,11 @@ public sealed partial class TaskDetailViewModel(
     [ObservableProperty]
     private string? _loadError;
 
+    /// <summary>O controle remoto está ligado aqui: a tarefa pode ser preparada em outra máquina (E7).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanPrepareRemotely))]
+    private bool _remoteEnabled;
+
     public Guid TaskId { get; private set; }
 
     public bool HasNotes => !string.IsNullOrWhiteSpace(Notes);
@@ -108,6 +114,8 @@ public sealed partial class TaskDetailViewModel(
     /// <summary>Editar é coisa da lista principal: arquivada e lixeira se restauram antes.</summary>
     public bool CanEdit => InMainList;
 
+    public bool CanPrepareRemotely => RemoteEnabled && CanComplete;
+
     public async Task LoadAsync(Guid taskId)
     {
         TaskId = taskId;
@@ -131,7 +139,15 @@ public sealed partial class TaskDetailViewModel(
         Provenance = await TryReadAsync(ReadProvenanceAsync, "MobileTaskOriginFailed");
         History = await TryReadAsync(ReadHistoryAsync, "MobileTaskHistoryFailed") ?? [];
         Developments = await TryReadAsync(ReadDevelopmentsAsync, "MobileTaskDevelopmentFailed") ?? [];
+        RemoteEnabled = await TryReadAsync(
+            async () => (await runner.RunAsync<GetRemoteSettingsHandler, RemoteSettings>(
+                (handler, token) => handler.HandleAsync(new GetRemoteSettings(), token))).Enabled,
+            "MobileTaskRemoteSettingsFailed");
     }
+
+    /// <summary>O "Preparar em…": worktree, comandos, banco e Claude numa máquina pareada.</summary>
+    [RelayCommand]
+    public Task PrepareRemotelyAsync() => navigator.OpenRemotePrepareAsync(TaskId);
 
     [RelayCommand]
     public Task CompleteAsync() => ChangeAsync(

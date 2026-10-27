@@ -57,6 +57,15 @@ public sealed class SyncServerOptions
     /// <summary>Por quanto tempo o resultado de uma operação fica guardado para o reenvio.</summary>
     public TimeSpan ProcessedOperationRetention { get; set; } = TimeSpan.FromDays(90);
 
+    /// <summary>Por quanto tempo os eventos de uma operação remota ficam guardados.</summary>
+    public TimeSpan RemoteEventRetention { get; set; } = TimeSpan.FromDays(30);
+
+    /// <summary>
+    /// De quanto em quanto tempo a varredura da orquestração passa: bem abaixo
+    /// do <c>RemoteLimits.DispatchTimeout</c>, para a entregue sem aceite voltar logo.
+    /// </summary>
+    public TimeSpan RemoteSweepInterval { get; set; } = TimeSpan.FromSeconds(30);
+
     public RateLimitOptions RateLimits { get; set; } = new();
 
     public RegistrationOptions Registration { get; set; } = new();
@@ -96,8 +105,11 @@ public sealed class RateLimitOptions
     /// <summary>O resto da API, pelo <c>sub</c> do token.</summary>
     public int ApiPerMinute { get; set; } = 120;
 
-    /// <summary>A orquestração remota, pelo <c>sub</c> do token, num balde separado do sync.</summary>
-    public int RemotePerMinute { get; set; } = 120;
+    /// <summary>
+    /// A orquestração remota, por dispositivo da conta, num balde separado do
+    /// sync. Cabe a saída ao vivo de um comando (um lote a cada 500 ms) com folga.
+    /// </summary>
+    public int RemotePerMinute { get; set; } = 300;
 
     /// <summary>Rotas da API sem token válido, por IP: não gastam a cota de ninguém.</summary>
     public int AnonymousPerMinute { get; set; } = 30;

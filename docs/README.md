@@ -40,22 +40,27 @@ mova sem atualizar essas referências (`rg -n "docs/<arquivo>"`).
 | [`mcp-server.md`](mcp-server.md) | Servidor MCP local: ativar, porta, token, cliente, todas as ferramentas (`DocumentationTests` confere a lista), segurança |
 | [`sync.md`](sync.md) | Sincronização: a tela, o que sincroniza, onde cada tarefa aparece, conflitos, limitações |
 | [`sync-server.md`](sync-server.md) | Servidor de sincronização: OAuth do Google, configuração, certificados, migrations, implantação, testes |
-| [`mobile.md`](mobile.md) | App do celular: arquitetura, login, ambiente, Android, iOS, testes, limitações |
+| [`mobile.md`](mobile.md) | App do celular: arquitetura, login, ambiente, Android, iOS, a aba Remoto, testes, limitações |
+| [`remote.md`](remote.md) | Controle remoto: ligar, parear, o que dá para pedir, aprovar, os perfis do Claude, revogar, limites, solução de problemas |
 | [`release-process.md`](release-process.md) | Conventional Commits, SemVer, CI, pipeline de release, hotfix, assinatura |
 | [`../installer/README.md`](../installer/README.md) | Instaladores Windows e Linux, parâmetros, atualização, teste de fumaça |
 | [`../installer/macos/README.md`](../installer/macos/README.md) | Roteiro do empacotamento macOS (não implementado) |
 | [`../CHANGELOG.md`](../CHANGELOG.md) | O que mudou em cada versão (gerado pelo Release Please) |
 
-## Fase 2: orquestração remota (em implementação)
+## Fase 2: orquestração remota
 
-Pareamento e registro de dispositivos já existem; agente, execução de operações
-e hub ainda não (status por ADR no [índice](architecture/README.md), ADR-084 a ADR-090).
+Implementada: o agente em cada máquina, a fila de operações e o hub no servidor,
+o pareamento, as aprovações e o celular como controlador. O guia do usuário é o
+[`remote.md`](remote.md); o status de cada decisão está no
+[índice](architecture/README.md) (ADR-084 a ADR-090). Ficaram de fora o
+pareamento sem tela (ADR-087) e o processo mais velho que o esquema recusar
+subir (ADR-085).
 
 | Documento | Conteúdo |
 |---|---|
 | [`architecture/remote-orchestration.md`](architecture/remote-orchestration.md) | Desenho técnico: inventário, arquitetura, contratos, ciclo de vida, resiliência |
-| [`architecture/remote-security-threat-model.md`](architecture/remote-security-threat-model.md) | Ameaças (STRIDE) e requisitos de segurança RS-xx |
-| [`roadmap/phase-2-remote-orchestration.md`](roadmap/phase-2-remote-orchestration.md) | Entregas, critérios de aceitação e tarefas (as feitas marcadas com ✔ e o commit) |
+| [`architecture/remote-security-threat-model.md`](architecture/remote-security-threat-model.md) | Ameaças (STRIDE), requisitos de segurança RS-xx e o teste (ou o risco aceito) de cada um |
+| [`roadmap/phase-2-remote-orchestration.md`](roadmap/phase-2-remote-orchestration.md) | Entregas, critérios de aceitação e tarefas (as feitas marcadas com ✔); os critérios abertos são as conferências com várias máquinas |
 
 ## Histórico (não descreve o estado atual)
 

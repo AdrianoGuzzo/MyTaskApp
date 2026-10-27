@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Sync;
 using MyTaskApp.Infrastructure.Persistence;
 using MyTaskApp.Mobile.Core.Presentation;
+using MyTaskApp.Mobile.Core.Remote;
 
 namespace MyTaskApp.Mobile.Core.Composition;
 
@@ -15,9 +16,15 @@ namespace MyTaskApp.Mobile.Core.Composition;
 /// <remarks>
 /// Lembretes, a varredura do arquivo e os monitores de agente do desktop não
 /// sobem aqui: avisos no celular pediriam notificações do sistema, fora do
-/// escopo desta fase.
+/// escopo desta fase. As aprovações do controle remoto (E7) seguem a mesma
+/// regra: lidas só em primeiro plano, e a chave tranca ao sair.
 /// </remarks>
-public sealed class MobileLifecycle(IServiceProvider services, SyncScheduler scheduler, ILogger<MobileLifecycle> logger)
+public sealed class MobileLifecycle(
+    IServiceProvider services,
+    SyncScheduler scheduler,
+    ApprovalWatcher approvals,
+    UnlockedDeviceSigner signer,
+    ILogger<MobileLifecycle> logger)
 {
     private readonly Lock _gate = new();
 
@@ -40,9 +47,12 @@ public sealed class MobileLifecycle(IServiceProvider services, SyncScheduler sch
         }
     }
 
-    /// <summary>Foi para segundo plano: para o laço.</summary>
+    /// <summary>Foi para segundo plano: para o laço, as aprovações e tranca a chave.</summary>
     public async Task SleepAsync()
     {
+        signer.Lock();
+        approvals.Stop();
+
         if (IsReady)
         {
             await scheduler.StopAsync();
@@ -57,6 +67,7 @@ public sealed class MobileLifecycle(IServiceProvider services, SyncScheduler sch
         {
             scheduler.Start();
             scheduler.RequestNow();
+            approvals.Start();
         }
     }
 
@@ -85,5 +96,6 @@ public sealed class MobileLifecycle(IServiceProvider services, SyncScheduler sch
 
         scheduler.Start();
         scheduler.RequestNow();
+        approvals.Start();
     }
 }

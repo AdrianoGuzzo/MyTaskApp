@@ -352,6 +352,14 @@
                   </ItemsControl>
                 </StackPanel>
 
+                <StackPanel Spacing="2">
+                  <CheckBox x:Name="RemoteAllowedBox"
+                            Content="Liberar para cópias pedidas de longe"
+                            IsChecked="{Binding RemoteAllowed}" />
+                  <TextBlock Classes="meta"
+                             Text="Outro computador pareado pode pedir uma cópia que use esta conexão. Lá aparecem só o nome e o ambiente; produção sempre espera a sua aprovação." />
+                </StackPanel>
+
                 <TextBlock Classes="meta"
                            Text="{Binding TestResult}"
                            IsVisible="{Binding HasTestResult}" />

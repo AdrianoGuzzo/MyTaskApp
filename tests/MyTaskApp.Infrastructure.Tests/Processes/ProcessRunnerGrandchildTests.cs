@@ -15,7 +15,10 @@ public sealed class ProcessRunnerGrandchildCollection;
 /// <remarks>
 /// Fora do paralelismo: com a suíte inteira disputando o pool de threads, a
 /// leitura do pipe pode atrasar mais que o prazo curto deste teste, e o "pronto"
-/// ficaria de fora sem que o código tivesse culpa.
+/// ficaria de fora sem que o código tivesse culpa. Os outros assemblies de
+/// teste rodam ao mesmo tempo, e no CI, com cobertura, uma leitura chegou a
+/// atrasar 6 s: o prazo tem folga para isso, e o neto vive o bastante para
+/// a folga não esconder a espera.
 /// </remarks>
 [Collection(nameof(ProcessRunnerGrandchildCollection))]
 public class ProcessRunnerGrandchildTests
@@ -27,10 +30,10 @@ public class ProcessRunnerGrandchildTests
     [InlineData(true)]
     public async Task AGrandchildHoldingTheOutput_DoesNotHoldTheResult(bool live)
     {
-        var runner = new ProcessRunner(drainTimeout: TimeSpan.FromSeconds(3));
+        var runner = new ProcessRunner(drainTimeout: TimeSpan.FromSeconds(10));
         var request = OperatingSystem.IsWindows()
-            ? new ProcessRequest("cmd.exe", ["/d", "/c", "echo pronto& start /b ping -n 25 127.0.0.1 >nul"], TimeSpan.FromMinutes(1))
-            : new ProcessRequest("/bin/sh", ["-c", "echo pronto; sleep 25 &"], TimeSpan.FromMinutes(1));
+            ? new ProcessRequest("cmd.exe", ["/d", "/c", "echo pronto& start /b ping -n 90 127.0.0.1 >nul"], TimeSpan.FromMinutes(2))
+            : new ProcessRequest("/bin/sh", ["-c", "echo pronto; sleep 90 &"], TimeSpan.FromMinutes(2));
 
         var watch = Stopwatch.StartNew();
 
@@ -38,7 +41,7 @@ public class ProcessRunnerGrandchildTests
             ? await runner.RunAsync(request, new Progress<CommandOutputLine>(), Ct)
             : await runner.RunAsync(request, Ct);
 
-        watch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(15));
+        watch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(45), "o neto vive 90 s");
         result.ExitCode.Should().Be(0);
         result.TimedOut.Should().BeFalse();
         result.StandardOutput.Should().Contain("pronto");

@@ -14,6 +14,11 @@
                       Icon="tab_history.png"
                       Route="history"
                       ContentTemplate="{DataTemplate views:HistoryPage}" />
+        <ShellContent x:Name="RemoteTab"
+                      Title="Remoto"
+                      Icon="tab_remote.png"
+                      Route="remote"
+                      ContentTemplate="{DataTemplate views:RemotePage}" />
         <ShellContent Title="Conta"
                       Icon="tab_account.png"
                       Route="account"

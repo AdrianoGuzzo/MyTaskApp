@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Lifecycle;
+using MyTaskApp.Application.LocalPeers;
 using MyTaskApp.Application.QuickCommands;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Application.Remote;
@@ -453,6 +454,14 @@ public sealed partial class App : Avalonia.Application
 
         // O sinal de vida do controle remoto (ADR-087): com ele desligado, o tique só lê a configuração.
         services.GetRequiredService<RemotePresenceScheduler>().Start();
+
+        // Com o agente rodando (ADR-085), o que um grava o outro mostra, e quem tem o lease sincroniza.
+        services.GetRequiredService<LocalPeerBridge>().Start();
+
+        // Aceitando controle, o agente fica no logon e, se tiver caído, sobe de novo agora.
+        _ = services.GetRequiredService<IUseCaseRunner>().RunAsync<ApplyAgentAutostartHandler>(
+            (handler, token) => handler.HandleAsync(new ApplyAgentAutostart(), token),
+            CancellationToken.None);
     }
 
     private void SetUpMcpServer(IServiceProvider services, TodayViewModel todayViewModel)
@@ -667,6 +676,11 @@ public sealed partial class App : Avalonia.Application
 
         viewModel.Developments.CommandsRequested += () => ShowDevelopmentCommands(services, notes);
         viewModel.Developments.DatabaseOperationsRequested += () => ShowDatabaseOperations(services, notes);
+
+        if (viewModel.Developments.RemotePrepare is { } prepare)
+        {
+            prepare.ControlOpened += (_, control) => new RemoteControlWindow(control).Show(notes);
+        }
 
         // A Consulta Inteligente (ADR-081) leva às mesmas janelas: etiquetas,
         // bancos e o servidor MCP que as ferramentas de banco usam.
@@ -908,6 +922,7 @@ public sealed partial class App : Avalonia.Application
         // Um push no meio para; o outbox guarda, e o próximo início reenvia com os mesmos ids (ADR-061).
         services.GetRequiredService<SyncScheduler>().Dispose();
         services.GetRequiredService<RemotePresenceScheduler>().Dispose();
+        _ = services.GetRequiredService<LocalPeerBridge>().DisposeAsync().AsTask();
         services.GetRequiredService<AgentSessionMonitor>().Dispose();
         services.GetRequiredService<CommandExecutionMonitor>().Dispose();
         (services.GetRequiredService<IAgentEventEndpoint>() as IDisposable)?.Dispose();

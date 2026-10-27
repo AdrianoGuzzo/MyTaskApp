@@ -1,7 +1,6 @@
 # Orquestração remota — arquitetura (fase 2)
 
-> **Estado: proposta, em implementação** (o roteiro marca as tarefas feitas e o
-> commit de cada uma). Este documento é o
+> **Estado: implementado** (o roteiro marca o que foi feito em cada tarefa). Este documento é o
 > desenho técnico da fase 2; as decisões estão nos ADR-084 a ADR-090 de
 > [índice de ADRs](README.md), a análise de ameaças em
 > [`remote-security-threat-model.md`](remote-security-threat-model.md) e as
@@ -353,14 +352,21 @@ usuário. O preço:
    tempo prova que ela roda uma vez. Falta: um processo com versão de esquema
    menor que o banco recusar subir e dizer por quê (o instalador atualiza os
    dois juntos).
-3. **Um dono para cada laço**: uma tabela `ProcessLeases` (nome, PID, início
-   do processo, validade) no SQLite decide quem roda o `SyncScheduler` e a
-   manutenção. É portável (mutex nomeado funciona no Linux; evento nomeado não)
-   e observável. Lembretes, bandeja e post-its continuam **só no desktop**.
-4. **Renovação do token sob trava entre processos**: o refresh do sync
-   (rotação com reuso de 30 s no servidor) é feito sob o mesmo lease, relendo o
-   cofre antes: se outro processo já girou o token, usa o novo. Sem isso, dois
-   processos girando o mesmo refresh token revogariam a cadeia.
+3. **Um dono para cada laço** (feito, T-08): uma tabela `ProcessLeases` (nome,
+   PID, início do processo, quando foi tomado, validade) no SQLite decide quem
+   roda o ciclo do sync. Tomar é um upsert condicional, numa instrução só; um
+   lease vencido, ou de um PID que não existe mais com aquele início, passa
+   para quem pedir. O lease `sync` vale 2 min, é renovado durante o ciclo e
+   fica com o dono entre um ciclo e outro; o outro processo recebe
+   `SyncCycleStatus.Elsewhere` e pergunta de novo no minuto seguinte. É
+   portável (mutex nomeado funciona no Linux; evento nomeado não) e observável.
+   A manutenção ainda roda nos dois (os lotes são idempotentes); lembretes,
+   bandeja e post-its continuam **só no desktop**.
+4. **Renovação do token sob trava entre processos** (feito, T-08): o refresh do
+   sync (rotação com reuso de 30 s no servidor), o login e o "desconectar"
+   seguram o lease `sync-token` e releem o cofre lá dentro: se outro processo
+   já girou o token, usa o novo. Sem isso, dois processos girando o mesmo
+   refresh token revogariam a cadeia (o `TwoProcessSyncTests` falha sem o lease).
 5. **`DatabaseOperationGate` e a recuperação de interrompidas entre processos**:
    a auditoria ganha o dono (PID + início); só é "interrompida" a operação cujo
    dono não existe mais.
@@ -368,10 +374,25 @@ usuário. O preço:
    no Linux o .NET usa Unix domain socket). O desktop, quando aberto, assina
    "dados mudaram" (o `IDataChangeNotifier` hoje é do processo), pede
    "sincronizar agora" ao dono do lease e mostra as operações remotas em curso.
+   Feito na T-11: uma linha de JSON por aviso (`dataChanged`, `syncWanted`,
+   `syncNow`), linha acima de 4 KiB derruba a conexão, tipo desconhecido é
+   ignorado, e o nome do pipe é um hash do usuário com o caminho do banco —
+   duas instalações isoladas nunca dividem o canal. Só avisos: nada que
+   execute passa por ali.
 7. **Instalação**: tarefa agendada "ao fazer logon" no Windows (por usuário,
    sem privilégio) e `systemd --user` no Linux (com `loginctl enable-linger`
    documentado como opcional). O instalador fecha e reabre o agente como faz
    com o app (ADR-049), com um segundo mutex (`MyTaskApp.Agent`).
+   Feito na T-16, com uma troca: no Windows, a chave `Run` do usuário em vez
+   da tarefa agendada — criar tarefa com gatilho de logon pede administrador a
+   quem não é, e a `Run` é o que o próprio app já usa (ADR-023). Quem escreve
+   é o app, ao "Aceitar ser controlada" (e de novo a cada abertura, o que
+   reergue um agente que caiu); o instalador só reabre o agente se o valor
+   existe e o apaga ao desinstalar. No Linux, o app escreve a unit com
+   `Restart=on-failure` e a liga; o `uninstall.sh` desliga e remove. O agente
+   é publicado antes do desktop na mesma pasta, e lê só os sinks dele (sem
+   varrer a pasta, onde estão DLLs do desktop que o deps.json do agente não
+   carrega).
 
 > **Requisito "sem o desktop aberto"**: atendido com o usuário logado (tela
 > bloqueada vale). Rodar sem sessão de usuário exige cofre de máquina e fica
@@ -959,7 +980,7 @@ sequenceDiagram
 | Situação | Comportamento |
 |---|---|
 | **Mensagem duplicada** (hub ou REST) | o hub só avisa; a operação é buscada por id; aceite e eventos são idempotentes |
-| **Eventos fora de ordem** | o servidor guarda por `(OperationId, Seq)` e entrega aos controladores ordenado; buraco no `Seq` = ainda não chegou |
+| **Eventos fora de ordem** | o servidor guarda por `(OperationId, Seq)` e entrega aos controladores ordenado, e só até o primeiro buraco: o que veio depois dele espera, senão o controlador, que anda o `after` pelo que recebeu, pularia o atrasado |
 | **Máquina desligada** | a operação fica `Queued` até `NotAfter` e expira; o controlador vê "offline há 2 h" antes de pedir |
 | **Servidor fora do ar** | o agente continua a operação em curso, guarda eventos no diário (com teto; acima dele, mantém início e fim e marca "saída truncada") e reenvia depois; nada novo começa |
 | **Agente reiniciado** | seção 4.5 |
@@ -968,6 +989,14 @@ sequenceDiagram
 | **Aprovação sem resposta** | nega no `ExpiresAt`; a operação vira `Failed` (ou o Claude recebe "negado" e segue) |
 | **Token expirado / dispositivo revogado** | 401 → refresh; 403 `device_revoked` → o agente para de aceitar e mata o que roda, com aviso local |
 | **Duas máquinas com o mesmo `device.json`** (banco copiado) | o sync já detecta `device_changed`; o agente também se recusa a ligar |
+
+Cada linha tem um teste ponta a ponta (servidor e PostgreSQL de verdade, o
+notebook sem tela) em `RemoteOperationsChaosTests.cs`, mais o relógio adiantado
+no agente (o pedido parece vencido lá e é recusado, `already_expired`). A
+revogação e o banco copiado ficam no `RemoteOperationScheduler`: revogado, ele
+encerra o que roda com a folga do encerramento, marca a sincronização como
+`DeviceRevoked` e não pergunta mais nada; com o banco de outro computador, não
+conecta e grava o `device_changed` que a tela da sincronização já mostra.
 
 ### 4.7 Cancelamento e encerramento seguro
 
@@ -1015,8 +1044,8 @@ princípios:
 | Funcionalidade | Reaproveita direto | Refatorar | Abstração nova | Domínio / persistência | Testes de regressão |
 |---|---|---|---|---|---|
 | **Composição** | `AddApplication`, `AddInfrastructure` | ~~mover `ScopedUseCaseRunner`~~ feito (T-09): está em `Application/Abstractions` | `AgentServices.Build` (o host do agente) | — | `McpCompositionTests` e um `AgentCompositionTests` que resolve todos os handlers |
-| **SQLite** | `MyTaskAppDbContext`, migrations; WAL (o EF já criava assim), a espera do escritor ocupado do Microsoft.Data.Sqlite e a trava de migration do EF | feito (T-07): o `DatabaseInitializer` garante o WAL a cada abertura | `IProcessLease` | `ProcessLeases`, `RemoteOperationJournal*`, `TrustedControllers`, `RemoteExecutionSettings` (fora do `SyncRegistry`) | `UpgradePreservationTests`; teste novo com dois processos escrevendo ao mesmo tempo |
-| **Sync** | todo o protocolo | `SyncScheduler` só no dono do lease; refresh do token sob trava entre processos | pedido "sincronizar agora" por IPC | — | `SyncSchedulerTests`, `TwoDeviceSyncTests` com o agente ligado |
+| **SQLite** | `MyTaskAppDbContext`, migrations; WAL (o EF já criava assim), a espera do escritor ocupado do Microsoft.Data.Sqlite e a trava de migration do EF | feito (T-07): o `DatabaseInitializer` garante o WAL a cada abertura | `IProcessLeases` (feito, T-08) | `ProcessLeases`, `RemoteOperationJournal*`, `TrustedControllers`, `RemoteExecutionSettings` (fora do `SyncRegistry`) | `UpgradePreservationTests`; teste novo com dois processos escrevendo ao mesmo tempo |
+| **Sync** | todo o protocolo | feito (T-08): o ciclo só no dono do lease, dentro do `SyncEngine`; refresh do token sob o lease `sync-token` | pedido "sincronizar agora" por IPC | — | `SyncSchedulerTests`, `TwoDeviceSyncTests` com o agente ligado |
 | **Dispositivos** | `DeviceRow`, revogação, `DeviceGate` | `DeviceHello.Capabilities` passa a ser persistido | `DeviceKeys`, `DeviceCapabilities`, `RemotePairings` | migration no servidor | `ApiTests` (revogar derruba o hub e o remoto) |
 | **Worktrees** | `PrepareDevelopmentHandler`, `StartDevelopmentHandler`, `RemoveWorktreeHandler`, `WorktreeEraser`, `GitClient` | **extrair a sequência de `TaskDevelopmentViewModel.StartAsync/CreateAsync`** para um caso de uso `ProvisionEnvironmentHandler`, com as decisões (conflito, confirmação) como parâmetros; o ViewModel passa a chamá-lo | — | — | `TaskDevelopmentViewModelTests` inteiros devem continuar verdes; `ProvisionEnvironmentHandlerTests` novos |
 | **Clone** | `CloneTagRepositoryHandler` | no agente, `GCM_INTERACTIVE=Never` também no clone (sem janela de login) | — | — | `GitClientTests` |

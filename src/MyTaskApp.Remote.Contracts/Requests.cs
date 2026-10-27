@@ -14,13 +14,30 @@ public enum WorktreeConflictPolicy
 /// <summary><c>environment.inspect</c>: Git, Claude, gh, ferramentas do PostgreSQL e o catálogo. Não muda nada.</summary>
 public sealed record EnvironmentInspectionRequest;
 
+/// <summary>
+/// O <c>Data</c> do resultado de <c>environment.inspect</c>. O catálogo
+/// inteiro não vem aqui (o servidor descarta <c>Data</c> acima de 8 KiB): o
+/// agente o publica antes de responder, e quem pediu o lê em
+/// <see cref="RemoteRoutes.Catalog"/> pelo <paramref name="CatalogHash"/>.
+/// </summary>
+public sealed record EnvironmentInspection(
+    DeviceCapabilities Capabilities,
+    string CatalogHash,
+    int Directories,
+    int Commands,
+    string AgentVersion);
+
 /// <summary><c>worktree.provision</c>: o "Iniciar implementação" da tela, sem a tela.</summary>
 /// <param name="TagDirectoryId">O repositório, pelo diretório da etiqueta desta máquina.</param>
 /// <param name="SourceBranch">Nula: o padrão do diretório (ADR-035). Exclusiva com <paramref name="SourceTag"/>.</param>
 /// <param name="SourceTag">A versão de partida (ADR-043).</param>
 /// <param name="BranchName">Nula: a convenção, inclusive a do Jira (ADR-045).</param>
-/// <param name="Database">A cópia do banco do ambiente (ADR-060), se pedida.</param>
-/// <param name="StartAgent">Já abre a sessão do Claude no fim, se pedida.</param>
+/// <param name="Database">
+/// A cópia do banco do ambiente (ADR-060), se pedida: validada e aprovada antes
+/// do Git, copiada depois do worktree, e os comandos só rodam depois dela. O
+/// <c>DevelopmentId</c> dela é ignorado: vale o ambiente que a preparação cria.
+/// </param>
+/// <param name="StartAgent">Já abre a sessão do Claude no fim, se pedida. O <c>DevelopmentId</c> dela também é ignorado.</param>
 public sealed record EnvironmentProvisioningRequest(
     Guid TaskId,
     Guid TagDirectoryId,
@@ -77,7 +94,7 @@ public sealed record DatabaseCopyRequest(
     Guid SourceConnectionId,
     string? SourceDatabase,
     Guid TargetConnectionId,
-    string TargetDatabase,
+    string? TargetDatabase,
     Guid? AnonymizationProfileId,
     Guid? CopyProfileId,
     Guid? DevelopmentId = null);

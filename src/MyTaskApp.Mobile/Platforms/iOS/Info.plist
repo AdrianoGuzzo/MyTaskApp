@@ -47,6 +47,9 @@
 			</array>
 		</dict>
 	</array>
+	<!-- O Face ID antes de assinar um pedido ou uma aprovação de longe (E7). -->
+	<key>NSFaceIDUsageDescription</key>
+	<string>Confirmar que é você antes de pedir ou aprovar algo em outro computador.</string>
 	<!-- HTTP só no loopback, para o servidor de desenvolvimento; o app recusa HTTP fora dele. -->
 	<key>NSAppTransportSecurity</key>
 	<dict>

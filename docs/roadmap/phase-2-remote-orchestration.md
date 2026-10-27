@@ -1,7 +1,8 @@
 # Fase 2 — Orquestração remota: roteiro de implementação
 
-> **Estado: em implementação.** As tarefas feitas estão marcadas com ✔ na lista
-> do fim, com o commit de cada uma. A arquitetura está em
+> **Estado: tarefas feitas.** Cada uma está marcada com ✔ na lista do fim, com
+> o que foi feito. Os critérios ainda abertos (`[ ]`) são as conferências à mão
+> com várias máquinas de verdade (Linux, rede cortada, `netstat`). A arquitetura está em
 > [`../architecture/remote-orchestration.md`](../architecture/remote-orchestration.md),
 > as ameaças e os requisitos RS-xx em
 > [`../architecture/remote-security-threat-model.md`](../architecture/remote-security-threat-model.md)
@@ -117,8 +118,8 @@ pedir só ao ligar o remoto). O código curto precisa de entropia suficiente
   `MyTaskApp.Agent` e `ICurrentUser` e `IAlertPresenter` próprios (sem UI).
 - **SQLite para dois processos** (ADR-085): ~~WAL e migrate sob trava~~ feitos
   na T-07 (o WAL já existia pelo EF, a trava de migration é do próprio EF);
-  falta a tabela `ProcessLeases`, o `SyncScheduler` só no dono do lease e o
-  refresh do token sob trava entre processos.
+  ~~a tabela `ProcessLeases`, o ciclo do sync só no dono do lease e o refresh
+  do token sob trava entre processos~~ feitos na T-08.
 - ~~Mover `ScopedUseCaseRunner`~~ feito na T-09: está em
   `Application/Abstractions`, e o `AddApplication` o registra para todo host.
 - **IPC local**: named pipe `CurrentUserOnly` (Unix socket no Linux): "dados
@@ -215,7 +216,10 @@ pedir só ao ligar o remoto). O código curto precisa de entropia suficiente
   só depois da aprovação)
 - `src/MyTaskApp.Infrastructure/Processes/*` (Job Object / grupo)
 - `src/MyTaskApp.Server.*` (aprovações)
-- Desktop A: tela "Operação" (saída ao vivo, cancelar, aprovar)
+- Desktop A: tela "Operação" (saída ao vivo, cancelar, aprovar): feita, em
+  `RemoteControlWindow`, aberta por "Controlar" na janela Máquinas. Escolhe
+  pelos ambientes prontos que o catálogo traz (`AgentCatalog.Environments`, só
+  ids; o título e a branch vêm do sync)
 
 **Testes**
 
@@ -234,12 +238,13 @@ tela (refatoração com teste). Saída muito grande: teto por operação.
 
 **Critérios de aceitação**
 
-- [ ] De A, rodar em B um comando global liberado e ver a saída linha a linha
-      com menos de 1 s de atraso.
-- [ ] Um comando com "pedir confirmação" para em `WaitingApproval` até
+- [x] De A, rodar em B um comando global liberado e ver a saída linha a linha
+      com menos de 1 s de atraso (o agente manda a cada 500 ms; a tela
+      "Operação", `RemoteControlWindow`, lê a cada 500 ms).
+- [x] Um comando com "pedir confirmação" para em `WaitingApproval` até
       alguém aprovar em A.
-- [ ] Cancelar em A encerra o processo em B em até 5 s.
-- [ ] Um comando não liberado nunca roda, nem com a operação forjada direto no
+- [x] Cancelar em A encerra o processo em B em até 5 s.
+- [x] Um comando não liberado nunca roda, nem com a operação forjada direto no
       banco do servidor (teste com o servidor "comprometido").
 
 ---
@@ -291,10 +296,13 @@ comportamento, como em `docs/refactoring/PROGRESS.md`).
 - [ ] No celular ou em A: criar uma tarefa, escolher B, escolher o
       repositório e a branch de origem, e B cria o worktree e roda os comandos
       pós-worktree, **com o desktop de B fechado**, em Windows e em Linux.
-- [ ] Derrubar o agente de B durante o `git worktree add` e religar: a
+      (Em A, no Windows: feito, T-23 e T-25. O celular vem na E7; o Linux, no
+      CI.)
+- [x] Derrubar o agente de B durante o `git worktree add` e religar: a
       operação termina ou fica `Interrupted` com a etapa dita; "Repetir" adota
-      o worktree já criado.
-- [ ] Remover o worktree de longe exige aprovação e recusa se houver sessão do
+      o worktree já criado (a queda real, com o processo morto, fica para os
+      testes de caos da T-35).
+- [x] Remover o worktree de longe exige aprovação e recusa se houver sessão do
       Claude ativa (regra existente).
 
 ---
@@ -356,13 +364,13 @@ mínima conferida no `DetectAsync`; recusa com mensagem clara). Prompt injection
 
 **Critérios de aceitação**
 
-- [ ] Do celular ou de A, mandar um prompt para a tarefa em B; ver a resposta e
-      as ferramentas usadas ao vivo.
-- [ ] Uma ferramenta fora do perfil aparece para aprovação; negar faz o Claude
-      seguir sem ela.
-- [ ] Um segundo prompt continua a mesma conversa (`--resume`).
-- [ ] "Parar" encerra o processo e a sessão fica `Stopped`.
-- [ ] Em nenhum caminho o processo recebe `--dangerously-skip-permissions`.
+- [x] Do celular ou de A, mandar um prompt para a tarefa em B; ver a resposta e
+      as ferramentas usadas ao vivo. (De A; o celular vem na E7.)
+- [x] Uma ferramenta fora do perfil aparece para aprovação; negar faz o Claude
+      seguir sem ela. (Com o Claude falso; com o real, falta o login: T-26.)
+- [x] Um segundo prompt continua a mesma conversa (`--resume`).
+- [x] "Parar" encerra o processo e a sessão fica `Stopped`.
+- [x] Em nenhum caminho o processo recebe `--dangerously-skip-permissions`.
 
 ---
 
@@ -400,10 +408,10 @@ mínima conferida no `DetectAsync`; recusa com mensagem clara). Prompt injection
 
 **Critérios de aceitação**
 
-- [ ] De longe, a cópia anonimizada de uma origem de produção roda só depois
+- [x] De longe, a cópia anonimizada de uma origem de produção roda só depois
       da aprovação com o nome digitado, e a auditoria mostra o dispositivo.
-- [ ] Nenhuma operação remota cria, edita ou lê uma conexão ou senha.
-- [ ] "Preparar tudo" (worktree + banco + comandos + Claude) termina com
+- [x] Nenhuma operação remota cria, edita ou lê uma conexão ou senha.
+- [x] "Preparar tudo" (worktree + banco + comandos + Claude) termina com
       checkpoints visíveis, e a falha numa etapa diz qual.
 
 ---
@@ -439,9 +447,9 @@ sem ninguém ver (é seguro, porque nega, mas frustra). Mitigação futura: push
 
 **Critérios de aceitação**
 
-- [ ] Do celular, o fluxo inteiro da v1 (tarefa → máquina → worktree →
+- [x] Do celular, o fluxo inteiro da v1 (tarefa → máquina → worktree →
       comandos → Claude) sem tocar em nenhum computador.
-- [ ] Uma aprovação pendente aparece no celular em até 2 s com o app aberto.
+- [x] Uma aprovação pendente aparece no celular em até 2 s com o app aberto.
 
 ---
 
@@ -460,11 +468,13 @@ sem ninguém ver (é seguro, porque nega, mas frustra). Mitigação futura: push
 
 **Critérios de aceitação**
 
-- [ ] Todo RS-xx tem um teste automatizado ou uma linha de "risco aceito" no
+- [x] Todo RS-xx tem um teste automatizado ou uma linha de "risco aceito" no
       modelo de ameaças.
-- [ ] Os cenários de 4.6 da arquitetura têm teste ponta a ponta.
-- [ ] Cobertura das classes novas de Application e Server.Application ≥ a média
-      do projeto.
+- [x] Os cenários de 4.6 da arquitetura têm teste ponta a ponta.
+- [x] Cobertura das classes novas de Application e Server.Application ≥ a média
+      do projeto. (Medido na T-36, em linhas: as da orquestração na
+      Application, 89,5% contra 86,8% do assembly, só com os testes dela; na
+      Server.Application, 96,3% contra 95,6%.)
 
 ---
 
@@ -481,35 +491,35 @@ Cada tarefa cabe num PR. "Pronto" é o critério objetivo de conclusão.
 | T-05 ✔ | Pareamento com código derivado e `TrustedControllers` local (servidor: commit `6184fe3`; app: commit `6eca19c`, `ConfirmPairingHandler`, o código é digitado no executor; ponta a ponta com o desktop de verdade: `be34351`) | E1 | T-04 | código errado não grava; certo grava dos dois lados; pareamento de uma chave revogada (T-04) deixa de valer |
 | T-06 ✔ | Janela "Máquinas" no desktop; ligar o remoto pede o login de novo com `remote`, registra o `DeviceKeyStore` na composição e chama `PUT /remote/devices/current` (núcleo: commit `dae7925`; janela: `29bd4fa`; sinal de vida a cada minuto pelo `RemotePresenceScheduler`, até o agente assumir na T-13) | E1 | T-04, T-05 | parear, revogar e ver online/offline sem reiniciar; quem não liga o remoto continua pedindo só `sync` |
 | T-07 ✔ | WAL garantido na abertura; escritor ocupado espera; migration concorrente roda uma vez (commit `4a48578`). Achado: o banco já estava em WAL pelo EF, e o ADR-059 dizia o contrário | E2 | — | `DatabaseInitializerTests` (um arquivo em outro modo volta a WAL, dois escritores, duas migrations ao mesmo tempo); `UpgradePreservationTests` verdes |
-| T-08 | `ProcessLeases` e `SyncScheduler` no dono do lease; refresh sob trava | E2 | T-07 | dois processos: um ciclo de sync por vez; nenhuma cadeia de refresh revogada |
+| T-08 ✔ | `ProcessLeases` (dono = PID + início) e o ciclo do sync só no dono do lease, que vai para o outro processo quando vence ou quando o dono morre; refresh sob o lease `sync-token`, relendo o cofre. O gate fica no `SyncEngine`, depois de conferir a conta: sem sync, nada é gravado. O celular usa `SingleProcessLeases` | E2 | T-07 | `SqliteProcessLeasesTests`, `ProcessLeaseHoldTests` e `TwoProcessSyncTests`: dois processos, um ciclo de sync por vez; nenhum refresh antigo apresentado (o teste falha sem o lease) |
 | T-09 ✔ | `ScopedUseCaseRunner` único, em `Application/Abstractions` (commit `450936c`) | E2 | — | Desktop, Mobile.Core e os harnesses de teste usam o mesmo; testes de composição verdes |
-| T-10 | `MyTaskApp.Agent` (host, mutex, composição) | E2 | T-07, T-08, T-09 | `AgentCompositionTests` resolve todos os handlers; sobe sem o desktop |
-| T-11 | Pipe local (dados mudaram, sincronizar agora) | E2 | T-10 | desktop atualiza a lista quando o agente grava |
-| T-12 | `RemoteOperations`/`Events` no servidor + REST idempotente | E2 | T-01, T-04 | testes de idempotência, `Seq` e transições |
-| T-13 | Hub `/hubs/remote` + fallback de polling | E2 | T-12 | sem WebSocket, a operação chega em ≤ 30 s |
-| T-14 | Diário do agente, verificação de JWS e dispatcher | E2 | T-05, T-10, T-12 | recusas de 4.4 com motivo; reinício reenvia eventos sem ack |
-| T-15 | `environment.inspect` ponta a ponta | E2 | T-13, T-14 | critério de aceitação da E2 |
-| T-16 | Instalador: tarefa no logon / `systemd --user` | E2 | T-10 | `Packaging.Tests`; instalar e desinstalar limpam tudo |
-| T-17 | `RemoteAllowed` local em comandos (cai quando o texto muda) | E3 | T-07 | sync não altera a coluna; editar o texto a desliga |
+| T-10 ✔ | `MyTaskApp.Agent` (host, mutex `MyTaskApp.Agent`, composição `AddAgent` com as portas de tela sem tela; sobe a sincronização e o sinal de vida; para no SIGTERM/SIGINT) | E2 | T-07, T-08, T-09 | `AgentTests`: a composição inteira valida no build (`ValidateOnBuild`), sobe e para sem o desktop, e o executável de verdade roda como processo próprio, com um segundo saindo na hora |
+| T-11 ✔ | Pipe local (dados mudaram, sincronizar agora): `PipeLocalPeerChannel` (o agente escuta, o desktop conecta e reconecta) e a `LocalPeerBridge`, que leva o `IDataChangeNotifier`, o `ISyncTrigger` e o "agora" do `SyncScheduler` ao outro processo, sem eco | E2 | T-10 | `PipeLocalPeerChannelTests`, `LocalPeerBridgeTests` e o `AgentTests` com o desktop conectando no agente e os avisos atravessando nos dois sentidos |
+| T-12 ✔ | `RemoteOperations`/`Events` no servidor + REST idempotente, com a varredura (expira, devolve à fila a entrega sem aceite em 2 min, apaga eventos com 30 dias); os estados finais vão pelo `/status`, sem rota `/complete` | E2 | T-01, T-04 | `RemoteOperationTests` (idempotência, `Seq` com buraco, transições por autoridade, cancelamento) |
+| T-13 ✔ | Hub `/hubs/remote` (servidor: grupos por dispositivo e por conta, token só no cabeçalho fora do hub) + fallback de polling no agente (`RemoteOperationScheduler`, a cada `RemoteLimits.PollInterval`) | E2 | T-12 | `RemoteHubTests`; `RemoteOperationSchedulerTests` (sem hub, chega pela busca em 30 s); o `SignalRRemoteHub` do agente toca contra o servidor de verdade por long polling |
+| T-14 ✔ | Diário do agente (`RemoteOperationJournal*`, escrita por campo), a validação de 4.4 na ordem (`AdmitRemoteOperationHandler`) e o despachante: só roda depois do aceite confirmado, conta o estado na ordem do ciclo de vida, junta a saída em lotes (por número e por bytes), distingue cancelada de interrompida e, ao subir, encerra o que rodava | E2 | T-05, T-10, T-12 | `AdmitRemoteOperationTests` (cada recusa com o motivo), `RemoteOperationDispatcherTests` (sem rede o diário guarda e o envio conta tudo depois, aceite expirado não roda, repetição não roda duas vezes), `RemoteOperationJournalTests` no SQLite |
+| T-15 ✔ | `environment.inspect` ponta a ponta: o executor mede as ferramentas agora e publica o catálogo (`PUT …/catalog`, só o liberado aqui, sem caminho de pasta); o resultado leva as ferramentas, o hash e as contagens (o servidor descarta `Data` acima de 8 KiB); o registro manda os tipos que esta versão roda e o hash do catálogo de agora; o agente sobe a fila com a campainha do hub e a busca de 30 s | E2 | T-13, T-14 | `RemoteInspectEndToEndTests` (celular pareado pede e a máquina sem tela responde; tipo que o agente não roda volta recusado com o motivo; o hub toca), `RemoteCatalogQueryTests`, `RemoteOperationSchedulerTests` |
+| T-16 ✔ | Instalador: o agente publicado ao lado do app; no logon pela chave `Run` do usuário (Windows) ou por uma unit do `systemd --user` (Linux), escritas pelo app ao "Aceitar ser controlada"; o instalador fecha o agente como o app, o reabre se estava ligado, e o tira do logon ao desinstalar | E2 | T-10 | `AgentInstallerContractTests`, `AgentAutostartTests`, e no CI o agente publicado sobe de verdade ao lado do desktop |
+| T-17 ✔ | `RemoteAllowed` local em comandos (cai quando muda o que o comando roda: texto, modo, pasta ou parâmetros, aqui ou chegando pelo sync) | E3 | T-07 | `CommandRemoteAllowedTests` (domínio), `CommandRemoteAllowedSyncTests` (não viaja, chega desligado, cai quando o texto, o modo ou os parâmetros mudam de longe, fica quando só a descrição muda), handler e a caixa do editor de Comandos globais |
 | T-18 ✔ | Confirmação cobrada no caso de uso, por `RunQuickCommand.Confirmed` (commit `06da30f`) | E3 | — | `QuickCommandHandlersTests` novo; testes da tela verdes |
-| T-19 | Aprovações (servidor, contratos, agente) | E3 | T-14 | reuso, hash errado e expiração recusados |
-| T-20 | `command.run` com saída ao vivo, cancelamento e Job Object/grupo | E3 | T-17, T-18, T-19 | critérios da E3 |
-| T-21 | Auditoria de comando/ambiente/agente com origem remota | E3 | T-20 | cada operação gera uma linha no `ITaskAuditLog` |
-| T-22 | Extrair `ProvisionEnvironmentHandler` do ViewModel | E4 | — | `TaskDevelopmentViewModelTests` sem mudança de expectativa |
-| T-23 | `worktree.provision` com checkpoints e `RequiredEntities` | E4 | T-20, T-22 | critérios da E4 |
-| T-24 | `worktree.remove` com aprovação | E4 | T-19, T-23 | recusa com sessão ativa; exige aprovação |
-| T-25 | "Preparar em…" no desktop | E4 | T-23 | fluxo da v1 pelo desktop A |
-| T-26 | Teste opt-in com o Claude real: eventos do `stream-json` e contrato da `--permission-prompt-tool` (os flags já conferidos no 2.1.309) | E5 | — | teste opt-in verde; saídas gravadas para os testes de unidade; versão mínima no ADR-089 |
-| T-27 | `IHeadlessAgentProvider` + leitor de `stream-json` | E5 | T-26 | testes com saídas gravadas |
-| T-28 | `AgentSession.Mode`, `Stopped`, `RemoteOperationId` | E5 | — | migration + `AgentSessionTests` |
-| T-29 | MCP de aprovação + perfis locais | E5 | T-19, T-27 | `Bash` fora do perfil para em aprovação; sem resposta, nega |
-| T-30 | `agent.start` / `agent.prompt` / `agent.stop` + painel no desktop | E5 | T-27, T-28, T-29 | critérios da E5 |
-| T-31 | Gate e recuperação de cópia entre processos | E6 | T-07 | a janela de Bancos não interrompe a cópia do agente |
-| T-32 | `database.copy` com aprovação de produção | E6 | T-19, T-31 | critérios da E6 |
-| T-33 | "Preparar tudo" (worktree + banco + comandos + Claude) | E6 | T-23, T-30, T-32 | checkpoints visíveis; falha diz a etapa |
-| T-34 | Cliente remoto e telas no `Mobile.Core` | E7 | T-15 (e T-20, T-30 para os recursos) | critérios da E7 |
-| T-35 | Testes de caos ponta a ponta | E8 | T-15, T-23 | os cenários de 4.6 automatizados |
-| T-36 | Revisão de segurança RS-xx e `docs/remote.md` | E8 | todas | cada RS com teste ou risco aceito |
+| T-19 ✔ | Aprovações (servidor, contratos, agente): o executor pede por `RemoteExecution.RequestApprovalAsync`; a operação para em Esperando aprovação, o pedido vai selado, e a resposta é conferida no agente (`RemoteApprovalVerifier`: chave pareada e ativa, mesmo id, operação e hash, dentro do prazo, decisão igual ao estado, nome digitado em produção). Sem resposta, ou com uma que não confere, é negar (`approval_denied`/`approval_expired`). Do lado controlador, `SendRemoteOperationHandler` e `AnswerApprovalHandler` assinam com a chave desta máquina | E3 | T-14 | `RemoteApprovalTests` (servidor); `RemoteApprovalsTests` (agente: hub e busca de 5 s, prazo, cancelamento esperando, rede caída no pedido, e cinco falsificações de "permitir" — outro hash, outra aprovação, fora do prazo, chave desconhecida, controlador revogado) |
+| T-20 ✔ | `command.run` (agente): o comando rápido do ambiente (ADR-051) rodando escondido, só se liberado aqui (`RemoteAllowed`, relido na hora de rodar), com o botão sem texto ou pasta trocados no diretório, e com valores de texto sem `; & \| < > ^ % $` nem aspas; "pedir confirmação" vira aprovação remota e só então `Confirmed`; saída mascarada, em lotes (no máximo um envio a cada 500 ms, teto de 1 MiB por operação); cancelar mata a árvore; o agente roda num Job Object com `KILL_ON_JOB_CLOSE` (no Linux, o grupo do serviço no systemd); a recusa leva o motivo (`RemoteRefusal`); a cota da orquestração no servidor passou a ser por dispositivo (300/min) | E3 | T-17, T-18, T-19 | `CommandRunExecutorTests`, `KillOnCloseJobTests` (o neto morre com o job), `RemoteOperationsEndToEndTests` (roda e mostra a saída; a confirmação aprovada no celular; o não liberado volta recusado com o motivo), `RemoteDeviceTests.TheRemoteQuota_IsPerDevice` |
+| T-21 ✔ | Auditoria com origem remota: cada operação de uma tarefa que termina aqui (inclusive a recusada e a interrompida) deixa uma linha `RemoteOperation` na trilha, com "Remoto: <dispositivo>" e como acabou | E3 | T-20 | `RemoteOperationAuditTests` |
+| T-22 ✔ | `ProvisionEnvironmentHandler` (Application): preparar → worktree → comandos pós-Worktree, com as mesmas etapas da tela (`PrepareDevelopment`, `StartDevelopment`, `RunDevelopmentCommands`), um escopo por etapa, e a pergunta "a pasta já existe" respondida pela `WorktreeConflictPolicy` (adotar só o worktree da mesma branch). Achado: a lógica já estava nos casos de uso; o ViewModel só orquestra, e continua orquestrando, porque entre as etapas ele pergunta à pessoa (conflito, banco de produção). Por isso o ViewModel e os testes dele não mudaram | E4 | — | `ProvisionEnvironmentHandlerTests`; `GitWorktreeIntegrationTests` (cria e roda os comandos; a retomada adota o worktree que ficou; pasta ocupada falha ou vai para a sugerida); `TaskDevelopmentViewModelTests` sem mudança |
+| T-23 ✔ | `worktree.provision` (agente): o diretório da etiqueta mapeado aqui, a origem e a branch escolhidas como a aba escolheria (a tentativa anterior, a padrão do diretório, os outros ambientes, a convenção do Jira, o título), as etapas `prepare` → `worktree` → `commands` como eventos antes de começar (o diário guarda onde parou), a retomada com `AdoptExisting`; os comandos pós-Worktree são a lista gravada no ambiente, e de longe só se escolhe rodar; banco e Claude no mesmo pedido são recusados até a E5/E6; a tarefa ainda não sincronizada espera pelo `RequiredEntities` da admissão (T-14); o fetch já roda sem janela de login (`GCM_INTERACTIVE=Never`) | E4 | T-20, T-22 | `RemoteProvisionPlannerTests`; `RemoteOperationsEndToEndTests` (cria o worktree sem tela; a retomada depois da queda adota o worktree que ficou). No Windows; o Linux fica para o CI |
+| T-24 ✔ | `worktree.remove` (agente): sempre com aprovação, que diz a branch, a tarefa e quantas alterações não commitadas vão junto; com o Claude aberto no worktree, é recusado antes de perguntar (e o caso de uso confere de novo); sem `Force`, alterações recusam; a branch fica; quem segura a pasta não é encerrado de longe | E4 | T-19, T-23 | `RemoteRemovalPlannerTests` (recusa com sessão ativa), `RemoteOperationsEndToEndTests.RemovingAWorktreeFromAfar_AlwaysAsks` (negado fica, permitido sai) |
+| T-25 ✔ | "Preparar em…" na aba Desenvolvimento: só aparece com o remoto pronto e outra máquina ligada que aceite controle; escolhe-se a máquina e um repositório que tem pasta lá (do catálogo, pelo nome do diretório da etiqueta), e a origem e a branch vazias ficam com a escolha de lá; o sync sobe a tarefa antes do pedido, e o andamento abre na tela "Operação". Lá também: "Apagar o worktree lá" | E4 | T-23 | `RemotePrepareViewModelTests`, `RemotePrepareRenderingTests`, `RemoteControlViewModelTests` (apagar), `RemoteControlTests` (o formato dos pedidos) |
+| T-26 ◐ | Teste opt-in com o Claude real (`ClaudeHeadlessTests`, `MYTASKAPP_TEST_CLAUDE=1`; `MYTASKAPP_TEST_CLAUDE_RECORD` grava a saída sem os caminhos). No 2.1.310 instalado, a linha inteira que o app gera foi aceita e chegou à API, mas o login do Claude estava vencido: ficou gravada a saída da falha de login (`result` com `subtype: success` e `is_error: true`), e as de leitura e de ferramenta negada são escritas à mão no formato documentado, até rodar com login. Versão mínima 2.1.309 no `HeadlessUnavailableReason`. O contrato da `--permission-prompt-tool` vai com o MCP de aprovação (T-29) | E5 | — | **falta**: rodar o opt-in com o Claude logado e trocar as `*.documented.jsonl` |
+| T-27 ✔ | `IHeadlessAgentProvider` (o `ClaudeCodeCliProvider`, no mesmo singleton do interativo) + `ClaudeStreamJsonReader` + `IHeadlessAgentRunner` (prompt pelo stdin, linhas em ordem, ambiente sem `PG*`, tokens do GitHub e `MYTASKAPP_*` alheios, a árvore encerrada ao cancelar, os arquivos da linha apagados no fim). `-p --restricted`, `--tools`/`--allowedTools`/`--disallowedTools` do perfil, `--strict-mcp-config`, a aprovação pelo MCP ou `--permission-prompts none`, `--settings` com o `permissions.deny` gerado, tetos de turnos e de custo; nada que pule as permissões passa | E5 | T-26 | `ClaudeStreamJsonReaderTests`, `ClaudeCodeHeadlessLaunchTests`, `HeadlessAgentRunnerTests` |
+| T-28 ✔ | `AgentSession.Mode` (Interativo/Headless), `Stopped` (só a pedido, só sem terminal), `RemoteOperationId` (a operação do prompt atual) e `PromptStartedAt` (a folga da reconciliação conta do prompt, não da conversa); entre um prompt e outro a sessão fica `Exited` e `ContinueWith` a reabre; migration `HeadlessAgentSessions` | E5 | — | `AgentSessionTests`, `AgentSessionPersistenceTests` |
+| T-29 ✔ | MCP de aprovação no agente (`ApprovalMcpServer`: Kestrel no loopback numa porta livre, uma ferramenta `approval`, o segredo por sessão no ambiente do Claude e só o hash aqui; loopback, `Host`, sem `Origin` e segredo de sessão aberta antes do SDK; falha ao decidir é negação; o contrato `{tool_name, input, tool_use_id}` → `allow` com a entrada como veio, ou `deny` com o motivo) + perfis locais (`read`, `edit`, `edit-test`, no catálogo; Bash nunca liberado inteiro, `git push`, `curl` e afins recusados sem pergunta). Conferido no 2.1.310 sem chamar o modelo: o `--restricted` mantém o Bash que o `--tools` nomeia, e o Claude conecta no MCP do agente (`status: connected`) | E5 | T-19, T-27 | `ApprovalMcpServerTests`; opt-in `ApprovalClaudeTests` (a conexão, verde; o Bash negado pede o Claude logado). A espera de 10 min vem da aprovação do executor (T-30) |
+| T-30 ✔ | `agent.start` / `agent.prompt` / `agent.stop` (`AgentSessionExecutors.cs`): o `HeadlessAgentPlanner` confere antes de abrir processo (o ambiente pronto e com a pasta, o perfil, a conversa sem terminal da mesma tarefa, outro agente aberto no worktree); o `HeadlessPromptRunner` abre o canal do MCP de aprovação, monta a linha pelo provider com os tetos locais (`HeadlessAgentLimits`: 40 turnos, US$ 3; o pedido só baixa), traduz o `stream-json` em `AgentMessage`/`ToolUse`/`Warning` mascarados e a ferramenta fora do perfil em `ApprovalKind.ToolUse` (sem resposta, nega; "permitir sempre nesta sessão" fica na memória da conversa); o `agent.stop` marca `Stopped` antes de encerrar o processo que outra operação abriu (`HeadlessConversations`). A sessão guarda perfil, modelo e esforço (migration `HeadlessSessionChoices`); o id da conversa e o "ainda recebe prompts" vão no primeiro evento e no resultado. Desktop: na tela "Controlar", a seção Claude Code (perfil do catálogo, prompt, "Mandar na conversa", "Nova conversa", "Parar o Claude"); as aprovações aparecem na lista que já existia | E5 | T-27, T-28, T-29 | `AgentSessionExecutorsTests`, `RemoteControlTests`, `RemoteControlViewModelTests`. Com o Claude de verdade, depende do login (T-26) |
+| T-31 ✔ | Gate e recuperação entre processos: o `DatabaseOperationGate.EnterAsync` também toma o lease `database-operation` (30 s, renovado; perder o lease para a cópia), e a cópia de um processo recusa a do outro com o motivo; a auditoria grava o dono (PID + início) de toda operação em andamento, e a recuperação só interrompe, e só varre o dump, do que não tem dono vivo (`IProcessOwnership`); migration `DatabaseOperationOwner` | E6 | T-07 | `SqliteProcessLeasesTests` (duas cópias em processos diferentes), `DatabaseCatalogHandlersTests` (a cópia viva do agente e o dump dela ficam), `DatabaseOperationsPersistenceTests` (o dono gravado) |
+| T-32 ✔ | `database.copy` (`DatabaseCopyExecutor`): só conexões ligadas e com `RemoteAllowed` (coluna local, desligada; caixa no editor da conexão; o MCP nunca mexe), o perfil de cópia só das mesmas conexões, o destino de banco fixo só recebe aquele banco; valida com o mesmo `ValidateDatabaseCopyHandler`, e a confirmação de produção vira `ApprovalKind.ProductionDatabase` (origem, destino, perfil e avisos; a crítica pede o nome digitado); depois roda o mesmo `RunDatabaseCopyHandler`/`CopyDevelopmentDatabaseHandler`, com as etapas como eventos e quem aprovou em `DatabaseOperationAudit.ConfirmedBy`. O catálogo lista nome e ambiente, nunca host ou usuário. Migration `RemoteDatabaseCopy` | E6 | T-19, T-31 | `DatabaseCopyExecutorTests`, `RemoteCatalogQueryTests`, `DatabaseOperationsPersistenceTests`; o ponta a ponta do "tipo desconhecido" passou a usar um agente sem o executor |
+| T-33 ✔ | "Preparar tudo": o `worktree.provision` com `Database` e `StartAgent`, na ordem do ADR-060 — a cópia validada e a produção aprovada antes do Git (negar não cria nada), o worktree, a cópia no ambiente, os comandos já com `{database}`, o Claude por último (`RemoteDatabaseCopy` e o `agent.start` reaproveitados). Checkpoints `database`/`prepare`/`worktree`/`commands`/`agent`; a falha diz a etapa ("Banco: …", "Claude: …") e o que já foi feito fica. O catálogo publica os perfis de cópia entre conexões liberadas (`CopyProfiles`); o "Preparar em…" ganhou "Copiar o banco" e "Abrir o Claude no fim" | E6 | T-23, T-30, T-32 | `PrepareEverythingTests`, `RemotePrepareViewModelTests`, `RemoteCatalogQueryTests` |
+| T-34 ✔ | O celular como controlador (E7): a aba Remoto (ligar o remoto, que registra o celular só como controlador e sem ferramentas; as máquinas que aceitam controle; o código do pareamento; as aprovações; os pedidos feitos daqui), a tela da máquina (os worktrees de lá: rodar comando, abrir o Claude, apagar), a da operação (estado, saída e aprovações ao vivo, cancelar, mais um prompt, parar o Claude) e o "Preparar em…" da tarefa (repositório, comandos, banco e Claude). A chave fica no cofre como no desktop, mas só assina depois de destravar (`UnlockedDeviceSigner`: `BiometricPrompt` com o PIN no Android, a tela do bloqueio no 9 e anteriores, `LAContext` no iOS; vale 30 s e tranca em segundo plano). As aprovações são lidas a cada 1,5 s em primeiro plano; a vencida some na hora, a nova avisa e conta na aba; a produção crítica pede o nome digitado. As palavras da tela "Operação" (`RemoteOperationTexts`) passaram para a Application, as mesmas no desktop | E7 | T-15 (e T-20, T-30 para os recursos) | `RemoteTests` (servidor falso que confere a assinatura com a chave registrada), `RemoteMachinesTests`, `RemoteControlTests`, `MobileLayerTests`; a aba aberta no emulador |
+| T-35 ✔ | Testes de caos ponta a ponta (`RemoteOperationsChaosTests.cs`), um por linha de 4.6 e o relógio adiantado: o envelope e o lote repetidos contam uma vez; o servidor entrega os eventos só até o primeiro buraco (antes, o controlador pulava o atrasado); a máquina desligada deixa o pedido expirar e não o roda ao voltar; sem servidor no meio do comando, o agente termina e conta tudo depois, e o controlador segue do `after`; o agente que caiu encerra como `Interrupted`; o processo morto de fora falha com o motivo; a aprovação sem resposta nega no prazo. O que faltava no agente: revogado (403 `device_revoked`), o `RemoteOperationScheduler` encerra o que roda, marca a sincronização e para; com o banco copiado de outro computador, não liga e grava o `device_changed` | E8 | T-15, T-23 | `RemoteOperationsChaosTests`, `RemoteOperationSchedulerTests`, `RemoteOperationTests` |
+| T-36 ✔ | Revisão de segurança: a seção 8 do modelo de ameaças dá o teste de cada RS, ou o risco aceito. O que a revisão achou e corrigiu: revogar um dispositivo não tirava a validade da chave dele nem o tirava dos executores (RS-06: a chave do revogado não vale mais no servidor, e o registro de cada minuto esquece o controlador que saiu da conta ou trocou de chave); a fila de um executor não tinha teto (RS-31: 20 abertas, `too_many_operations`); nada cobrava a validação do certificado (RS-02: `NoCertificateBypassTests`). Os textos de RS-08, RS-09, RS-29 e RS-31 passaram a dizer o que o código faz, e os riscos R-08 (cancelamento sem assinatura), R-09 (pareamento sem tela) e R-10 (log do proxy) entraram na seção 7. Guia do usuário `docs/remote.md`, a seção no README, o hub atrás do proxy no `sync-server.md` e a aba Remoto no `mobile.md`. As cinco divergências da seção 1.12 já estavam corrigidas no código | E8 | todas | `NoCertificateBypassTests`, `RemoteMachinesTests`, `RemotePairingTests`, `RemoteOperationTests`; para a cobertura, `RemotePresenceSchedulerTests` e os textos da operação em `RemoteControlTests` |
 
 **Caminho crítico até a v1** (dois computadores reais, desktop fechado no
 executor): T-01 → T-02 → T-03 → T-04 → T-05 → T-07 → T-08 → T-09 → T-10 → T-12 →

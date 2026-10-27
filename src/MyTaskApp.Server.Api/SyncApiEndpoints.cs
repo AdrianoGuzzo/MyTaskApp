@@ -38,11 +38,14 @@ internal static class SyncApiEndpoints
         devices.MapPatch("/{deviceId:guid}", (Guid deviceId, RenameDeviceRequest request, ClaimsPrincipal user, DeviceUseCases useCases, CancellationToken cancellationToken) =>
             useCases.RenameAsync(Caller(user), deviceId, request.Nickname, cancellationToken));
 
-        devices.MapPost("/{deviceId:guid}/revoke", async (Guid deviceId, ClaimsPrincipal user, DeviceUseCases useCases, DeviceGate gate, CancellationToken cancellationToken) =>
+        devices.MapPost("/{deviceId:guid}/revoke", async (Guid deviceId, ClaimsPrincipal user, DeviceUseCases useCases, DeviceGate gate, RemoteConnections connections, CancellationToken cancellationToken) =>
         {
             var caller = Caller(user);
             var revoked = await useCases.RevokeAsync(caller, deviceId, cancellationToken);
             gate.Forget(caller.UserId, deviceId);
+
+            // O hub da orquestração: a máquina revogada para de ouvir agora, e não quando a conexão cair.
+            connections.Drop(caller.UserId, deviceId);
             return revoked;
         });
 

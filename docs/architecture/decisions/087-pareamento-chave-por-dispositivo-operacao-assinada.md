@@ -2,15 +2,15 @@
 
 | | |
 |---|---|
-| **Status** | Proposto |
+| **Status** | Aceito |
 | **Implementação** | Parcial |
 | **Categoria** | remoto |
 | **Registrado** | 2026-10-24, commit `36eb99c` (primeiro commit em que o ADR aparece) |
 | **Palavras-chave** | DeviceKeyStore, device-key, ES256, PairingCode, ConfirmPairingHandler, TrustedControllers, escopo remote, janela Máquinas |
 | **Relações** | relacionado: [ADR-061](061-sincronizacao-outbox-mescla-por-campo.md), [ADR-069](069-rate-limit-por-conta.md), [ADR-084](084-orquestracao-remota-coordenador-e-agente.md) |
-| **Código** | `src/MyTaskApp.Infrastructure/Remote/DeviceKeyStore.cs`, `src/MyTaskApp.Application/Remote/RemotePairing.cs`, `src/MyTaskApp.Remote.Contracts/Pairings.cs`, `src/MyTaskApp.Desktop/Views/MachinesWindow.axaml` |
+| **Código** | `src/MyTaskApp.Infrastructure/Remote/DeviceKeyStore.cs`, `src/MyTaskApp.Application/Remote/RemotePairing.cs`, `src/MyTaskApp.Remote.Contracts/Pairings.cs`, `src/MyTaskApp.Desktop/Views/MachinesWindow.axaml`, `src/MyTaskApp.Application/Remote/AdmitRemoteOperation.cs` |
 
-**Estado:** proposto (fase 2), em implementação: a chave por dispositivo, o escopo `remote`, o pareamento com código digitado no executor, os `TrustedControllers` e a janela "Máquinas" já existem (T-02 a T-06); a operação assinada ainda não.
+**Estado:** aceito (fase 2), implementado: a chave por dispositivo, o escopo `remote`, o pareamento com código digitado no executor, os `TrustedControllers`, a operação e a aprovação assinadas, e o controlador revogado na conta esquecido pelos executores (T-36). Falta o pareamento pelo CLI do agente, numa máquina sem tela (R-09 do modelo de ameaças); o cancelamento não é assinado (R-08).
 
 **Contexto:** executar de longe é o maior poder que o app já teve. Hoje o
 token do sync prova "esta conta, este dispositivo", e o servidor é a

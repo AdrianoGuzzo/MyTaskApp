@@ -88,6 +88,12 @@ public sealed class SyncScheduler(
     /// </summary>
     public event Action? ChangeQueued;
 
+    /// <summary>
+    /// Pediram "Sincronizar agora" neste processo. A ponte local (ADR-085) leva
+    /// ao outro: o ciclo roda em quem tem o lease, que pode não ser este.
+    /// </summary>
+    public event Action? NowRequested;
+
     public SyncCycleResult? LastResult { get; private set; }
 
     public bool IsRunning { get; private set; }
@@ -225,6 +231,7 @@ public sealed class SyncScheduler(
     {
         _failures = 0;
         Volatile.Write(ref _immediate, true);
+        NowRequested?.Invoke();
         trigger.Signal();
     }
 

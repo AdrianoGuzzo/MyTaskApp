@@ -109,6 +109,15 @@ public sealed class DevelopmentCommand
     /// </summary>
     public bool IsShared { get; private set; }
 
+    /// <summary>
+    /// Se outro computador pareado pode pedir para este rodar o comando
+    /// (ADR-087). Nasce desligado, é escolha <b>deste</b> computador e não
+    /// viaja: o sync não tem como ligá-lo. Cai sozinho quando muda o que o
+    /// comando roda (<see cref="RunsLike"/>), aqui ou chegando de outro
+    /// computador — a pessoa liberou aquele texto, e não o que vier depois.
+    /// </summary>
+    public bool RemoteAllowed { get; private set; }
+
     /// <summary>Como perguntar cada <c>{nome}</c>, na ordem do formulário.</summary>
     public IReadOnlyList<DevelopmentCommandParameter> Parameters =>
         [.. _parameters.OrderBy(parameter => parameter.Order)];
@@ -208,6 +217,33 @@ public sealed class DevelopmentCommand
         IsShared = isShared;
     }
 
+    /// <summary>
+    /// Libera ou tira o comando do controle remoto (ADR-087). Como o
+    /// compartilhar, não conta como edição: <see cref="UpdatedAt"/> não muda.
+    /// </summary>
+    public void AllowRemote(bool allowed) => RemoteAllowed = allowed;
+
+    /// <summary>
+    /// O que decide o que roda: o texto, o modo, a pasta e as definições dos
+    /// parâmetros (tipo, padrão, obrigatório, opções). Nome, descrição e
+    /// rótulos não entram: mudá-los não pede liberar de novo.
+    /// </summary>
+    public string RunsLike() =>
+        string.Join(
+            '',
+            [
+                Command,
+                ((int)Mode).ToString(System.Globalization.CultureInfo.InvariantCulture),
+                WorkingDirectory ?? string.Empty,
+                .. Parameters.Select(parameter => string.Join(
+                    '',
+                    parameter.Name,
+                    ((int)parameter.Type).ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    parameter.DefaultValue ?? string.Empty,
+                    parameter.IsRequired ? "1" : "0",
+                    parameter.Options ?? string.Empty)),
+            ]);
+
     /// <summary>Atômico, como o global. Só no comando do diretório (ADR-055).</summary>
     public void UpdateForDirectory(
         string command,
@@ -236,11 +272,18 @@ public sealed class DevelopmentCommand
         // Valida antes de trocar qualquer coisa: Apply só falha aqui, e não no meio.
         _ = NormalizeSettings(normalizedCommand, settings);
 
+        var before = RunsLike();
+
         Alias = normalizedAlias;
         Command = normalizedCommand;
         Description = normalizedDescription;
         Apply(normalizedCommand, settings, at);
         UpdatedAt = at;
+
+        if (RunsLike() != before)
+        {
+            RemoteAllowed = false;
+        }
     }
 
     private void Apply(string command, DevelopmentCommandSettings settings, DateTimeOffset at)

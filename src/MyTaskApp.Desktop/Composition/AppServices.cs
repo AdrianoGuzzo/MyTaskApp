@@ -13,6 +13,7 @@ using MyTaskApp.Desktop.ViewModels;
 using MyTaskApp.Desktop.Views;
 using MyTaskApp.Desktop.Widget;
 using MyTaskApp.Infrastructure;
+using MyTaskApp.Infrastructure.Processes;
 using MyTaskApp.Infrastructure.Storage;
 using MyTaskApp.Mcp.Hosting;
 using Microsoft.Extensions.Logging;
@@ -188,6 +189,10 @@ internal static class AppServices
             .AddSingleton<SyncViewModel>()
             .AddSingleton<SyncWindow>()
             .AddSingleton<MachinesViewModel>()
+            .AddTransient<RemoteControlViewModel>()
+            .AddTransient<Func<RemoteControlViewModel>>(provider =>
+                () => provider.GetRequiredService<RemoteControlViewModel>())
+            .AddTransient<RemotePrepareViewModel>()
             .AddSingleton<MachinesWindow>()
 
             // A bolinha do cabeçalho (ADR-063): uma só, como o agendador que ela escuta.
@@ -243,6 +248,11 @@ internal static class AppServices
             // A aba Consulta Inteligente (ADR-081): uma por janela, com a sua
             // própria seção de cópia de banco.
             .AddTransient<TaskConsultationViewModel>()
+
+            // O agente deste computador (ADR-085) escuta; o desktop conecta
+            // quando ele está rodando, e segue sozinho quando não está.
+            .AddLocalPeer(configuration, LocalPeerRole.Connect)
+            .AddAgentAutostart()
             .AddApplication(configuration)
             .AddInfrastructure(configuration)
             .BuildServiceProvider(validateScopes: true);

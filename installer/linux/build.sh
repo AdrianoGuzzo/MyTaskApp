@@ -19,6 +19,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/../.." && pwd)"
 
 desktop_project="$repo_root/src/MyTaskApp.Desktop/MyTaskApp.Desktop.csproj"
+agent_project="$repo_root/src/MyTaskApp.Agent/MyTaskApp.Agent.csproj"
 publish_dir="$repo_root/artifacts/publish/$runtime"
 stage_dir="$repo_root/artifacts/stage/$runtime"
 output_dir="$repo_root/artifacts/installer"
@@ -41,6 +42,18 @@ step "Publicando $runtime (self-contained)"
 
 rm -rf "$publish_dir"
 
+# O agente sem tela (ADR-085) mora na mesma pasta. Antes do desktop de
+# proposito: o que os dois trazem em comum fica na versao do desktop.
+dotnet publish "$agent_project" \
+  -c Release \
+  -r "$runtime" \
+  --self-contained true \
+  -p:PublishTrimmed=false \
+  -p:PublishSingleFile=false \
+  -p:DebugType=none \
+  -o "$publish_dir" \
+  --nologo
+
 # Sem trimming: EF Core e Avalonia dependem de reflexao. InvariantGlobalization
 # continua false para os ids IANA de fuso resolverem (ADR-002).
 dotnet publish "$desktop_project" \
@@ -58,6 +71,11 @@ if [ ! -f "$publish_dir/MyTaskApp" ]; then
   exit 1
 fi
 
+if [ ! -f "$publish_dir/MyTaskApp.Agent" ]; then
+  echo "Publish nao produziu $publish_dir/MyTaskApp.Agent." >&2
+  exit 1
+fi
+
 # appsettings.json e carregado com optional:false -- sem ele o app nao inicia.
 if [ ! -f "$publish_dir/appsettings.json" ]; then
   echo "Publish nao produziu appsettings.json (o app nao inicia sem ele)." >&2
@@ -70,7 +88,7 @@ rm -rf "$stage_dir"
 mkdir -p "$stage_dir/bin"
 
 cp -r "$publish_dir/." "$stage_dir/bin/"
-chmod +x "$stage_dir/bin/MyTaskApp"
+chmod +x "$stage_dir/bin/MyTaskApp" "$stage_dir/bin/MyTaskApp.Agent"
 
 cp "$script_dir/payload/install.sh" "$stage_dir/install.sh"
 cp "$script_dir/payload/uninstall.sh" "$stage_dir/uninstall.sh"

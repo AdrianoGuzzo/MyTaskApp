@@ -80,7 +80,8 @@ public sealed record CopyDevelopmentDatabase(
     Guid DevelopmentId,
     DatabaseCopyRequest Request,
     bool ProductionConfirmed,
-    string? TypedConfirmation = null);
+    string? TypedConfirmation = null,
+    string? ConfirmedBy = null);
 
 /// <summary>Como a cópia terminou, e o ambiente depois dela.</summary>
 public sealed record DevelopmentDatabaseCopyResult(DatabaseCopyResult Copy, TaskDevelopmentView Development);
@@ -115,7 +116,7 @@ public sealed class CopyDevelopmentDatabaseHandler(
         task.EnsureDevelopmentDatabaseCanChange(command.DevelopmentId);
 
         var result = await copy.HandleAsync(
-            new RunDatabaseCopy(command.Request, command.ProductionConfirmed, command.TypedConfirmation),
+            new RunDatabaseCopy(command.Request, command.ProductionConfirmed, command.TypedConfirmation, command.ConfirmedBy),
             progress,
             cancellationToken);
 

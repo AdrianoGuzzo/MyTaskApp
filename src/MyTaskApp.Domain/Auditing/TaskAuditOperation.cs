@@ -28,4 +28,11 @@ public enum TaskAuditOperation
     TimeEntryChanged = 9,
 
     TimeEntryDeleted = 10,
+
+    /// <summary>
+    /// Uma operação pedida de outra máquina terminou aqui (orquestração
+    /// remota, T-21): o que foi, como acabou e o motivo ficam nos detalhes; quem
+    /// pediu, em <see cref="TaskAuditEntry.ActorName"/> ("Remoto: Pixel 8").
+    /// </summary>
+    RemoteOperation = 11,
 }

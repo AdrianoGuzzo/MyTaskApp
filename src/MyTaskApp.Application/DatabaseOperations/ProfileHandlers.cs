@@ -568,7 +568,8 @@ public sealed class GetDatabaseOperationHistoryHandler(IDatabaseOperationAuditLo
 
 /// <summary>
 /// Na volta do app: operações "em andamento" que ninguém está rodando viram
-/// interrompidas, e dumps esquecidos por uma queda são apagados.
+/// interrompidas, e dumps esquecidos por uma queda são apagados. "Ninguém"
+/// inclui o outro processo: a cópia do agente, viva, fica como está.
 /// </summary>
 public sealed record RecoverInterruptedDatabaseOperations;
 
@@ -576,6 +577,7 @@ public sealed class RecoverInterruptedDatabaseOperationsHandler(
     IDatabaseOperationAuditLog audit,
     IDatabaseOperationWorkspaceFactory workspaces,
     DatabaseOperationGate gate,
+    IProcessOwnership processes,
     IUnitOfWork unitOfWork,
     TimeProvider timeProvider,
     ILogger<RecoverInterruptedDatabaseOperationsHandler> logger)
@@ -584,11 +586,19 @@ public sealed class RecoverInterruptedDatabaseOperationsHandler(
     {
         var now = timeProvider.GetUtcNow();
         var interrupted = 0;
+        var live = new HashSet<Guid>(gate.LiveOperations);
 
         foreach (var entry in await audit.ListRunningAsync(cancellationToken))
         {
-            if (gate.IsLive(entry.Id))
+            if (live.Contains(entry.Id))
             {
+                continue;
+            }
+
+            if (OwnedByAnotherLiveProcess(entry))
+            {
+                // O dump dela também é dela: a varredura não apaga.
+                live.Add(entry.Id);
                 continue;
             }
 
@@ -601,7 +611,7 @@ public sealed class RecoverInterruptedDatabaseOperationsHandler(
             await unitOfWork.SaveChangesAsync(cancellationToken);
         }
 
-        var swept = await workspaces.SweepAsync(gate.LiveOperations, cancellationToken);
+        var swept = await workspaces.SweepAsync(live, cancellationToken);
 
         if (interrupted > 0 || swept > 0)
         {
@@ -610,6 +620,13 @@ public sealed class RecoverInterruptedDatabaseOperationsHandler(
 
         return interrupted;
     }
+
+    /// <summary>Sem dono gravado (de antes do ADR-085) ou deste processo e não viva aqui: interrompida.</summary>
+    private bool OwnedByAnotherLiveProcess(DatabaseOperationAudit entry) =>
+        entry is { OwnerProcessId: { } processId, OwnerProcessStartedAt: { } startedAt }
+        && new ProcessStamp(processId, startedAt) is var owner
+        && !owner.IsSameAs(processes.Current)
+        && processes.IsAlive(owner);
 }
 
 /// <summary>
@@ -617,8 +634,16 @@ public sealed class RecoverInterruptedDatabaseOperationsHandler(
 /// quais operações estão vivas, para a recuperação não chamar de
 /// "interrompida" uma cópia que ainda está rodando.
 /// </summary>
-public sealed class DatabaseOperationGate
+/// <remarks>
+/// E no computador inteiro: <see cref="EnterAsync"/> também toma o lease
+/// <see cref="ProcessLeaseNames.DatabaseOperation"/>, e o agente e o desktop
+/// não copiam ao mesmo tempo (ADR-085). Sem leases (os testes), só o processo.
+/// </remarks>
+public sealed class DatabaseOperationGate(IProcessLeases? leases = null, TimeProvider? timeProvider = null)
 {
+    /// <summary>Renovado a cada terço enquanto a operação roda; um processo que morre solta em até isto.</summary>
+    public static readonly TimeSpan LeaseDuration = TimeSpan.FromSeconds(30);
+
     private readonly Lock _gate = new();
 
     private readonly HashSet<Guid> _live = [];
@@ -669,6 +694,37 @@ public sealed class DatabaseOperationGate
         return new Release(this, operationId);
     }
 
+    /// <summary>
+    /// Entra aqui e no computador. Recusa com mensagem se outra operação roda
+    /// neste processo ou em outro (o agente, o app).
+    /// </summary>
+    public async Task<DatabaseOperationTurn> EnterAsync(Guid operationId, CancellationToken cancellationToken = default)
+    {
+        var turn = Enter(operationId);
+
+        try
+        {
+            var hold = leases is null
+                ? null
+                : await ProcessLeaseHold.TryTakeAsync(
+                      leases,
+                      ProcessLeaseNames.DatabaseOperation,
+                      LeaseDuration,
+                      timeProvider ?? TimeProvider.System,
+                      releaseOnDispose: true,
+                      cancellationToken)
+                  ?? throw new DomainException(
+                      "Outro processo deste computador (o agente do controle remoto, ou o app) está fazendo uma operação de banco. Espere terminar.");
+
+            return new DatabaseOperationTurn(turn, hold);
+        }
+        catch
+        {
+            turn.Dispose();
+            throw;
+        }
+    }
+
     private sealed class Release(DatabaseOperationGate gate, Guid operationId) : IDisposable
     {
         public void Dispose()
@@ -678,6 +734,23 @@ public sealed class DatabaseOperationGate
                 gate._live.Remove(operationId);
             }
         }
+    }
+}
+
+/// <summary>A vez de uma operação de banco: no processo e, com leases, no computador.</summary>
+public sealed class DatabaseOperationTurn(IDisposable local, ProcessLeaseHold? hold) : IAsyncDisposable
+{
+    /// <summary>Cancela se outro processo tomou o lease (este ficou congelado além da validade): a operação para.</summary>
+    public CancellationToken Lost => hold?.Lost ?? CancellationToken.None;
+
+    public async ValueTask DisposeAsync()
+    {
+        if (hold is not null)
+        {
+            await hold.DisposeAsync();
+        }
+
+        local.Dispose();
     }
 }
 

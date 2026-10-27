@@ -52,17 +52,21 @@ internal sealed class MobileHarness : IAsyncDisposable
 
     public MemorySecretStore Secrets => (MemorySecretStore)Services.GetRequiredService<ISecretStore>();
 
+    public FakeUnlock Unlock => (FakeUnlock)Services.GetRequiredService<IDeviceUnlock>();
+
     public IUseCaseRunner Runner => Services.GetRequiredService<IUseCaseRunner>();
 
     /// <param name="serverUrl">O servidor salvo na tela (ADR-078); <c>null</c> = celular sem servidor.</param>
     /// <param name="folder">A pasta de outro harness já descartado: "abrir o app de novo" sobre o mesmo banco.</param>
     /// <param name="preferences">As preferências de antes, com o mesmo propósito.</param>
+    /// <param name="configure">Depois da composição: troca um serviço por um de mentira (o servidor do controle remoto).</param>
     public static async Task<MobileHarness> CreateAsync(
         string? serverUrl = "https://sync.exemplo.com",
         string? folder = null,
         MemoryPreferences? preferences = null,
         ISecretStore? secrets = null,
-        string? suggestedServerUrl = null)
+        string? suggestedServerUrl = null,
+        Action<IServiceCollection>? configure = null)
     {
         folder ??= Path.Combine(Path.GetTempPath(), $"mytaskapp-mobile-{Guid.NewGuid():N}");
         var clock = new FakeTimeProvider(Now);
@@ -85,20 +89,24 @@ internal sealed class MobileHarness : IAsyncDisposable
             .AddSingleton<IDialogService, ScriptedDialogs>()
             .AddSingleton<IThemeService, RecordingThemes>()
             .AddSingleton<IWebAuthenticatorPort, FakeBrowser>()
+            .AddSingleton<IDeviceUnlock, FakeUnlock>()
             .AddSingleton(secrets ?? new MemorySecretStore())
             .AddSingleton<IPreferenceStore>(preferences)
-            .AddMobileCore(new MobileHostOptions { DataDirectory = folder, DeviceName = "Pixel de teste", SuggestedServerUrl = suggestedServerUrl })
-            .BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+            .AddMobileCore(new MobileHostOptions { DataDirectory = folder, DeviceName = "Pixel de teste", SuggestedServerUrl = suggestedServerUrl });
 
-        await using (var scope = services.CreateAsyncScope())
+        configure?.Invoke(services);
+
+        var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+
+        await using (var scope = provider.CreateAsyncScope())
         {
             await scope.ServiceProvider.GetRequiredService<IDatabaseInitializer>().InitializeAsync(TestContext.Current.CancellationToken);
         }
 
         // O que o MobileLifecycle faz na abertura, antes do primeiro ciclo.
-        await services.GetRequiredService<SyncServerSettings>().InitializeAsync(TestContext.Current.CancellationToken);
+        await provider.GetRequiredService<SyncServerSettings>().InitializeAsync(TestContext.Current.CancellationToken);
 
-        return new MobileHarness(folder, services, clock);
+        return new MobileHarness(folder, provider, clock);
     }
 
     public T Get<T>()

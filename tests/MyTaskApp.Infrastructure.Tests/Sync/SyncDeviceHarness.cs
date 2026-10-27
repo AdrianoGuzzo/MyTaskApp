@@ -7,6 +7,8 @@ using MyTaskApp.Application;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Sync;
 using MyTaskApp.Infrastructure.Persistence;
+using MyTaskApp.Infrastructure.Processes;
+using MyTaskApp.Infrastructure.Tests.Processes;
 using MyTaskApp.Sync.Contracts;
 
 namespace MyTaskApp.Infrastructure.Tests.Sync;
@@ -14,7 +16,8 @@ namespace MyTaskApp.Infrastructure.Tests.Sync;
 /// <summary>
 /// Um desktop inteiro para a sincronização: Application e Infrastructure de
 /// verdade sobre um SQLite em pasta própria, com a API trocada pelo que o
-/// teste quiser. Reabrir a mesma pasta é reiniciar o app.
+/// teste quiser. Reabrir a mesma pasta é reiniciar o app; abrir a mesma pasta
+/// com outro <see cref="ProcessOwner"/> é o agente ao lado do desktop (ADR-085).
 /// </summary>
 internal sealed class SyncDeviceHarness : IAsyncDisposable
 {
@@ -43,7 +46,9 @@ internal sealed class SyncDeviceHarness : IAsyncDisposable
         CancellationToken cancellationToken,
         string? folder = null,
         FakeDeviceIdentity? device = null,
-        ISyncAuthenticator? authenticator = null)
+        ISyncAuthenticator? authenticator = null,
+        ProcessOwner? process = null,
+        IProcessLiveness? liveness = null)
     {
         folder ??= Path.Combine(Path.GetTempPath(), $"mytaskapp-sync-{Guid.NewGuid():N}");
         device ??= new FakeDeviceIdentity();
@@ -64,15 +69,22 @@ internal sealed class SyncDeviceHarness : IAsyncDisposable
             .AddApplication(configuration)
             .AddInfrastructure(configuration)
             .AddSingleton(api)
-            .AddSingleton(authenticator ?? new AlwaysSignedIn())
-            .BuildServiceProvider(validateScopes: true);
+            .AddSingleton(authenticator ?? new AlwaysSignedIn());
 
-        await using (var scope = services.CreateAsyncScope())
+        if (process is not null)
+        {
+            services.AddSingleton<IProcessLeases>(new SqliteProcessLeases(
+                $"Data Source={Path.Combine(folder, "mytaskapp.db")}", process, liveness ?? new FakeLiveness(), clock));
+        }
+
+        var provider = services.BuildServiceProvider(validateScopes: true);
+
+        await using (var scope = provider.CreateAsyncScope())
         {
             await scope.ServiceProvider.GetRequiredService<IDatabaseInitializer>().InitializeAsync(cancellationToken);
         }
 
-        return new SyncDeviceHarness(folder, services, device, clock);
+        return new SyncDeviceHarness(folder, provider, device, clock);
     }
 
     public async Task<T> RunAsync<T>(Func<IServiceProvider, Task<T>> work)
@@ -183,6 +195,9 @@ internal sealed class ScriptedSyncApi : ISyncApi
 
     public SyncApiException? FailHello { get; set; }
 
+    /// <summary>Segura o ciclo no hello até o teste soltar: um ciclo "no meio".</summary>
+    public Func<Task>? BeforeHello { get; set; }
+
     public static OperationResult Applied(SyncOperation operation) =>
         new(operation.OpId, OperationOutcome.Applied, false, operation.BaseVersion + 1, operation.BaseVersion, []);
 
@@ -192,16 +207,24 @@ internal sealed class ScriptedSyncApi : ISyncApi
     public Task<IReadOnlyList<WorkspaceInfo>> WorkspacesAsync(CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<WorkspaceInfo>>([new WorkspaceInfo(Guid.CreateVersion7(), "Pessoal", WorkspaceRole.Owner, true)]);
 
-    public Task<DeviceInfo> HelloAsync(DeviceHello hello, CancellationToken cancellationToken)
+    public async Task<DeviceInfo> HelloAsync(DeviceHello hello, CancellationToken cancellationToken)
     {
-        Calls.Add("hello");
+        lock (Calls)
+        {
+            Calls.Add("hello");
+        }
+
+        if (BeforeHello is { } before)
+        {
+            await before();
+        }
 
         if (FailHello is { } failure)
         {
             throw failure;
         }
 
-        return Task.FromResult(new DeviceInfo(Guid.Empty, "PC", hello.Platform, hello.AppVersion, SyncDeviceHarness.Now, null, null, true));
+        return new DeviceInfo(Guid.Empty, "PC", hello.Platform, hello.AppVersion, SyncDeviceHarness.Now, null, null, true);
     }
 
     /// <summary>Os dispositivos da conta que o servidor devolve; o padrão é nenhum.</summary>

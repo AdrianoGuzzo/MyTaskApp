@@ -29,6 +29,12 @@ public interface IDeviceIdentity
 /// </summary>
 public interface ISyncTrigger
 {
+    /// <summary>
+    /// Disparou um aviso, na thread de quem avisou. A ponte local (ADR-085)
+    /// leva ao outro processo do computador: quem tem o lease do sync acorda.
+    /// </summary>
+    event Action? Signaled;
+
     void Signal();
 
     Task WaitAsync(CancellationToken cancellationToken);
@@ -39,8 +45,12 @@ public sealed class SyncTrigger : ISyncTrigger
 {
     private readonly SemaphoreSlim _signal = new(0, 1);
 
+    public event Action? Signaled;
+
     public void Signal()
     {
+        Signaled?.Invoke();
+
         try
         {
             _signal.Release();

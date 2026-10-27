@@ -2,15 +2,15 @@
 
 | | |
 |---|---|
-| **Status** | Proposto |
-| **Implementação** | Parcial |
+| **Status** | Aceito |
+| **Implementação** | Implementado |
 | **Categoria** | remoto |
 | **Registrado** | 2026-10-24, commit `36eb99c` (primeiro commit em que o ADR aparece) |
 | **Palavras-chave** | MyTaskApp.Remote.Contracts, controlador, coordenador, agente, conexão só de saída, RemoteApiEndpoints, orquestração remota |
 | **Relações** | relacionado: [ADR-061](061-sincronizacao-outbox-mescla-por-campo.md), [ADR-078](078-servidor-de-sync-do-usuario.md), [ADR-085](085-agente-sem-tela-sobre-o-mesmo-sqlite.md), [ADR-086](086-operacao-remota-registro-diario-e-signalr.md), [ADR-087](087-pareamento-chave-por-dispositivo-operacao-assinada.md), [ADR-088](088-catalogo-fechado-de-operacoes-remotas.md), [ADR-089](089-claude-code-remoto-headless-com-aprovacao.md) |
 | **Código** | `src/MyTaskApp.Remote.Contracts/Operations.cs`, `src/MyTaskApp.Server.Api/RemoteApiEndpoints.cs`, `src/MyTaskApp.Application/Remote/RemoteMachines.cs`, `tests/MyTaskApp.Desktop.Tests/Architecture/LayerDependencyTests.cs` |
 
-**Estado:** proposto (fase 2), em implementação: o contrato, o escopo `remote`, os dispositivos e o pareamento no servidor já existem (T-01 a T-06); o agente ainda não. O desenho completo está em
+**Estado:** aceito (fase 2), implementado (T-01 a T-36): o contrato, o escopo `remote`, os dispositivos, o pareamento, a fila de operações e o hub no servidor, e o agente em cada máquina. O que ficou de fora está nos riscos residuais do modelo de ameaças. O desenho completo está em
 [`architecture/remote-orchestration.md`](../remote-orchestration.md),
 as ameaças em
 [`architecture/remote-security-threat-model.md`](../remote-security-threat-model.md)

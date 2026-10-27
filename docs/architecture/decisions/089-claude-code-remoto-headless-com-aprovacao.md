@@ -2,15 +2,15 @@
 
 | | |
 |---|---|
-| **Status** | Proposto |
-| **Implementação** | Planejado |
+| **Status** | Aceito |
+| **Implementação** | Implementado |
 | **Categoria** | remoto |
 | **Registrado** | 2026-10-24, commit `36eb99c` (primeiro commit em que o ADR aparece) |
 | **Palavras-chave** | IHeadlessAgentProvider, claude -p, stream-json, --restricted, --permission-prompt-tool, perfil do agente, ApprovalRequest |
 | **Relações** | relacionado: [ADR-033](033-parametros-do-agente-lembrados.md), [ADR-037](037-acompanhar-claude-code-pelos-hooks.md), [ADR-040](040-modelo-e-esforco-do-agente.md), [ADR-081](081-consulta-inteligente-somente-leitura.md), [ADR-084](084-orquestracao-remota-coordenador-e-agente.md) |
-| **Código** | `src/MyTaskApp.Remote.Contracts/Requests.cs`, `src/MyTaskApp.Remote.Contracts/Approvals.cs`, `src/MyTaskApp.Domain/Agents/AgentSession.cs` |
+| **Código** | `src/MyTaskApp.Remote.Contracts/Requests.cs`, `src/MyTaskApp.Remote.Contracts/Approvals.cs`, `src/MyTaskApp.Domain/Agents/AgentSession.cs`, `src/MyTaskApp.Application/Remote/AgentSessionExecutors.cs`, `src/MyTaskApp.Agent/Approvals/ApprovalMcpServer.cs` |
 
-**Estado:** proposto (fase 2). Nada implementado; os flags do Claude Code foram conferidos no 2.1.309 (T-26 é o teste com o Claude de verdade).
+**Estado:** aceito (fase 2), implementado (T-26 a T-30). Os flags foram conferidos no 2.1.309, e a linha inteira que o app gera foi aceita pelo 2.1.310 (T-26); a versão mínima do modo é a 2.1.309. Conferido no 2.1.310: uma falha de login chega como `result` com `subtype: success` e `is_error: true`, então o leitor decide pelo `is_error`. Os testes com o Claude de verdade são opt-in (`MYTASKAPP_TEST_CLAUDE=1`) e pedem o login.
 
 **Contexto:** hoje o Claude abre num terminal real (`WindowsTerminalLauncher`;
 no Linux não abre), e o app o acompanha pelos hooks (ADR-037). O argumento

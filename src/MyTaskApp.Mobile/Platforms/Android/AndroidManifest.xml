@@ -15,6 +15,8 @@
 
 	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 	<uses-permission android:name="android.permission.INTERNET" />
+	<!-- O destravamento antes de assinar um pedido ou uma aprovação de longe (E7). -->
+	<uses-permission android:name="android.permission.USE_BIOMETRIC" />
 
 	<!-- O login abre no Custom Tabs do navegador do sistema (WebAuthenticator). -->
 	<queries>

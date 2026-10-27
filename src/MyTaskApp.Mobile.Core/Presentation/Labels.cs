@@ -51,6 +51,7 @@ public static class Labels
         TaskAuditOperation.TimeEntryAdded => "Tempo lançado",
         TaskAuditOperation.TimeEntryChanged => "Tempo alterado",
         TaskAuditOperation.TimeEntryDeleted => "Tempo removido",
+        TaskAuditOperation.RemoteOperation => "Pedido de outra máquina",
         _ => operation.ToString(),
     };
 

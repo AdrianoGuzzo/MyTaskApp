@@ -1,3 +1,5 @@
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using MyTaskApp.Application.Abstractions;
@@ -10,6 +12,7 @@ using MyTaskApp.Infrastructure.Persistence;
 using MyTaskApp.Infrastructure.Persistence.Repositories;
 using MyTaskApp.Infrastructure.Processes;
 using MyTaskApp.Infrastructure.Tests.Persistence;
+using MyTaskApp.Remote.Contracts;
 
 namespace MyTaskApp.Infrastructure.Tests.Git;
 
@@ -541,6 +544,112 @@ public sealed class GitWorktreeIntegrationTests : IAsyncLifetime
         var tags = await _git.ListTagsAsync(Repository, Ct);
 
         tags.Select(tag => tag.Name).Should().Equal("v1.10.0", "v1.9.0", "v1.2.0");
+    }
+
+    /// <summary>
+    /// O caminho do agente (E4): as mesmas etapas da tela, sem ninguém para
+    /// perguntar. Cria o worktree e roda os comandos pós-Worktree.
+    /// </summary>
+    [Fact]
+    public async Task Provisioning_CreatesTheWorktree_AndRunsThePostWorktreeCommands()
+    {
+        Assert.SkipWhen(_executable is null, "Git não instalado nesta máquina.");
+
+        var task = await SeedTaskAsync();
+        var stages = new List<ProvisionStage>();
+
+        var result = await Provisioner().HandleAsync(
+            Provision(task, WorktreeConflictPolicy.Fail, ["echo pronto> marcador.txt"]),
+            new SyncProgress<ProvisionProgress>(report => stages.Add(report.Stage)),
+            Ct);
+
+        result.Development.Status.Should().Be(TaskDevelopmentStatus.Ready);
+        result.Development.WorktreePath.Should().Be(ExpectedWorktree);
+        result.Adopted.Should().BeFalse();
+        result.Commands.Succeeded.Should().BeTrue();
+        File.Exists(Path.Combine(ExpectedWorktree, "marcador.txt")).Should().BeTrue();
+        stages.Distinct().Should().Equal(ProvisionStage.Prepare, ProvisionStage.Worktree, ProvisionStage.Commands);
+    }
+
+    /// <summary>
+    /// O agente caiu depois do <c>git worktree add</c>: a retomada adota o
+    /// worktree que ficou, em vez de falhar na pasta ocupada.
+    /// </summary>
+    [Fact]
+    public async Task ARetry_AdoptsTheWorktreeLeftBehind()
+    {
+        Assert.SkipWhen(_executable is null, "Git não instalado nesta máquina.");
+
+        await GitAsync(Repository, "worktree", "add", "-q", "-b", "feature/123-corrigir-animais", ExpectedWorktree, "main");
+        var task = await SeedTaskAsync();
+
+        var result = await Provisioner().HandleAsync(Provision(task, WorktreeConflictPolicy.AdoptExisting), null, Ct);
+
+        result.Adopted.Should().BeTrue();
+        result.Development.Status.Should().Be(TaskDevelopmentStatus.Ready);
+        result.Development.WorktreePath.Should().Be(ExpectedWorktree);
+    }
+
+    [Fact]
+    public async Task AnOccupiedPath_FailsByDefault_OrGoesToTheSuggestedOne()
+    {
+        Assert.SkipWhen(_executable is null, "Git não instalado nesta máquina.");
+
+        Directory.CreateDirectory(ExpectedWorktree);
+        await File.WriteAllTextAsync(Path.Combine(ExpectedWorktree, "meu.txt"), "meu\n", Ct);
+        var task = await SeedTaskAsync();
+
+        await FluentActions.Awaiting(() => Provisioner().HandleAsync(Provision(task, WorktreeConflictPolicy.Fail), null, Ct))
+            .Should().ThrowAsync<DevelopmentStepException>().WithMessage("*já existe*");
+        await FluentActions.Awaiting(() => Provisioner().HandleAsync(Provision(task, WorktreeConflictPolicy.AdoptExisting), null, Ct))
+            .Should().ThrowAsync<DevelopmentStepException>().WithMessage("*não é um worktree deste repositório*");
+        File.Exists(Path.Combine(ExpectedWorktree, "meu.txt")).Should().BeTrue("a pasta de outra pessoa não é tocada");
+
+        var result = await Provisioner().HandleAsync(Provision(task, WorktreeConflictPolicy.UseSuggestedPath), null, Ct);
+
+        result.Development.WorktreePath.Should().Be(ExpectedWorktree + "-2");
+        result.Development.Status.Should().Be(TaskDevelopmentStatus.Ready);
+    }
+
+    private ProvisionEnvironment Provision(TaskItem task, WorktreeConflictPolicy policy, IReadOnlyList<string>? commands = null) =>
+        new(task.Id, Repository, "refs/heads/main", "feature/123-corrigir-animais", policy, Commands: commands);
+
+    /// <summary>Os casos de uso de verdade, um escopo por etapa, como no agente.</summary>
+    private ProvisionEnvironmentHandler Provisioner()
+    {
+        var services = new ServiceCollection()
+            .AddSingleton(typeof(ILogger<>), typeof(NullLogger<>))
+            .AddSingleton<TimeProvider>(new FakeTimeProvider(Now))
+            .AddSingleton<IGitClient>(_git)
+            .AddSingleton<IDirectoryProbe, FileSystemDirectoryProbe>()
+            .AddSingleton<ICommandExecutor>(new ShellCommandExecutor(TimeProvider.System))
+            .AddScoped(_ => _database!.CreateContext())
+            .AddScoped<ITaskItemRepository, TaskItemRepository>()
+            .AddScoped<IDevelopmentCommandRepository, DevelopmentCommandRepository>()
+            .AddScoped<MyTaskApp.Application.DatabaseOperations.ISavedDatabaseRepository, SavedDatabaseRepository>()
+            .AddScoped<IUnitOfWork, EfUnitOfWork>()
+            .AddScoped<MyTaskApp.Application.Commands.ValidateCommandEntriesHandler>()
+            .AddScoped<PrepareDevelopmentHandler>()
+            .AddScoped<StartDevelopmentHandler>()
+            .AddScoped<RunDevelopmentCommandsHandler>()
+            .AddSingleton<IUseCaseRunner, ScopedUseCaseRunner>()
+            .BuildServiceProvider();
+
+        return new ProvisionEnvironmentHandler(services.GetRequiredService<IUseCaseRunner>());
+    }
+
+    /// <summary>Sem o contexto de sincronização do <see cref="Progress{T}"/>: cada aviso chega antes da próxima linha.</summary>
+    private sealed class SyncProgress<T>(Action<T> report) : IProgress<T>
+    {
+        private readonly Lock _gate = new();
+
+        public void Report(T value)
+        {
+            lock (_gate)
+            {
+                report(value);
+            }
+        }
     }
 
     private async Task<TaskItem> SeedTaskAsync()

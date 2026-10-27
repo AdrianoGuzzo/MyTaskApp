@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:MyTaskApp.Mobile.Core.ViewModels;assembly=MyTaskApp.Mobile.Core"
+             xmlns:remote="clr-namespace:MyTaskApp.Mobile.Core.Remote;assembly=MyTaskApp.Mobile.Core"
+             x:Class="MyTaskApp.Mobile.Views.RemotePage"
+             x:DataType="vm:RemoteViewModel"
+             Title="Remoto">
+
+    <RefreshView Command="{Binding LoadCommand}" IsRefreshing="{Binding IsRefreshing}">
+        <ScrollView>
+            <VerticalStackLayout Padding="16" Spacing="8">
+
+                <!-- Sem servidor ou com o remoto desligado: o celular não pede nem aprova nada. -->
+                <Border Style="{StaticResource Card}" IsVisible="{Binding IsOff}">
+                    <VerticalStackLayout Spacing="8">
+                        <Label Text="Controle remoto" FontAttributes="Bold" />
+                        <Label Text="Peça a um computador seu para preparar uma tarefa, rodar comandos ou falar com o Claude, e aprove o que ele perguntar. O celular só pede e aprova; quem executa é o computador."
+                               Style="{StaticResource Muted}" />
+                        <Label Text="Configure o servidor de sincronização na aba Conta antes."
+                               Style="{StaticResource Muted}"
+                               IsVisible="{Binding IsAvailable, Converter={StaticResource Not}}" />
+                        <Button Text="Ligar o controle remoto" Command="{Binding EnableCommand}" IsVisible="{Binding IsAvailable}" />
+                    </VerticalStackLayout>
+                </Border>
+
+                <Border Style="{StaticResource Card}" IsVisible="{Binding NeedsLogin}">
+                    <VerticalStackLayout Spacing="8">
+                        <Label Text="{Binding Problem}" Style="{StaticResource Muted}" />
+                        <Button Text="Entrar de novo" Command="{Binding ConnectCommand}" />
+                    </VerticalStackLayout>
+                </Border>
+
+                <Label Text="{Binding Problem}" Style="{StaticResource Error}"
+                       IsVisible="{Binding NeedsLogin, Converter={StaticResource Not}}" />
+
+                <!-- O código do pareamento: digitado lá, na janela Máquinas. -->
+                <Border Style="{StaticResource Card}" IsVisible="{Binding PairingStatus, Converter={StaticResource HasValue}}">
+                    <VerticalStackLayout Spacing="8">
+                        <Label Text="{Binding PairingCode}" FontSize="32" FontAttributes="Bold" HorizontalOptions="Center"
+                               CharacterSpacing="6" IsVisible="{Binding IsPairing}" />
+                        <Label Text="{Binding PairingStatus}" Style="{StaticResource Muted}" HorizontalTextAlignment="Center" />
+                        <Button Text="Fechar" Style="{StaticResource Secondary}" Command="{Binding ClosePairingCommand}" />
+                    </VerticalStackLayout>
+                </Border>
+
+                <Label Text="Esperando aprovação" Style="{StaticResource Section}" IsVisible="{Binding HasApprovals}" />
+                <VerticalStackLayout BindableLayout.ItemsSource="{Binding Approvals}" Spacing="8">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="remote:ApprovalLine">
+                            <Border Style="{StaticResource Card}">
+                                <VerticalStackLayout Spacing="4">
+                                    <Label Text="{Binding Title}" FontAttributes="Bold" />
+                                    <Label Text="{Binding Summary}" LineBreakMode="WordWrap" />
+                                    <Label Text="{Binding Detail}" Style="{StaticResource Muted}" />
+                                    <HorizontalStackLayout Spacing="8" Margin="0,4,0,0">
+                                        <Button Text="Permitir"
+                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:RemoteViewModel}}, x:DataType=vm:RemoteViewModel, Path=AllowCommand}"
+                                                CommandParameter="{Binding .}" />
+                                        <Button Text="Negar"
+                                                Style="{StaticResource Destructive}"
+                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:RemoteViewModel}}, x:DataType=vm:RemoteViewModel, Path=DenyCommand}"
+                                                CommandParameter="{Binding .}" />
+                                    </HorizontalStackLayout>
+                                </VerticalStackLayout>
+                            </Border>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </VerticalStackLayout>
+
+                <Label Text="Máquinas" Style="{StaticResource Section}" IsVisible="{Binding IsReady}" />
+                <Label Text="Nenhum computador da conta aceita controle ainda. Nele, abra Máquinas e ligue &quot;Aceitar controle&quot;."
+                       Style="{StaticResource Muted}"
+                       IsVisible="{Binding HasNoMachines}" />
+                <VerticalStackLayout BindableLayout.ItemsSource="{Binding Machines}" Spacing="8">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="vm:MachineLine">
+                            <Border Style="{StaticResource Card}">
+                                <VerticalStackLayout Spacing="4">
+                                    <Label Text="{Binding Name}" FontAttributes="Bold" />
+                                    <Label Text="{Binding Detail}" Style="{StaticResource Muted}" />
+                                    <HorizontalStackLayout Spacing="8" Margin="0,4,0,0">
+                                        <Button Text="Abrir"
+                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:RemoteViewModel}}, x:DataType=vm:RemoteViewModel, Path=OpenMachineCommand}"
+                                                CommandParameter="{Binding .}" />
+                                        <Button Text="Parear"
+                                                Style="{StaticResource Secondary}"
+                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:RemoteViewModel}}, x:DataType=vm:RemoteViewModel, Path=PairCommand}"
+                                                CommandParameter="{Binding .}" />
+                                    </HorizontalStackLayout>
+                                </VerticalStackLayout>
+                            </Border>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </VerticalStackLayout>
+
+                <Label Text="Pedidos daqui" Style="{StaticResource Section}" IsVisible="{Binding HasRecent}" />
+                <VerticalStackLayout BindableLayout.ItemsSource="{Binding Recent}" Spacing="4">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="vm:SentLine">
+                            <Grid ColumnDefinitions="*,Auto" Padding="0,6">
+                                <Grid.GestureRecognizers>
+                                    <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type vm:RemoteViewModel}}, x:DataType=vm:RemoteViewModel, Path=OpenOperationCommand}"
+                                                          CommandParameter="{Binding .}" />
+                                </Grid.GestureRecognizers>
+                                <VerticalStackLayout>
+                                    <Label Text="{Binding Operation.Title}" />
+                                    <Label Text="{Binding Status}" Style="{StaticResource Muted}" />
+                                </VerticalStackLayout>
+                                <Label Grid.Column="1" Text="›" Style="{StaticResource Muted}" VerticalOptions="Center" />
+                            </Grid>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </VerticalStackLayout>
+
+            </VerticalStackLayout>
+        </ScrollView>
+    </RefreshView>
+</ContentPage>

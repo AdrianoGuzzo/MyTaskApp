@@ -41,6 +41,10 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Effort")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
                     b.Property<long?>("EndedAt")
                         .HasColumnType("INTEGER");
 
@@ -52,6 +56,10 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("HeadlessProfileId")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("HookTokenHash")
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
@@ -59,15 +67,28 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                     b.Property<int>("Kind")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("Mode")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Model")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
                     b.Property<int?>("ProcessId")
                         .HasColumnType("INTEGER");
 
                     b.Property<long?>("ProcessStartedAt")
                         .HasColumnType("INTEGER");
 
+                    b.Property<long?>("PromptStartedAt")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("ProviderId")
                         .IsRequired()
                         .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("RemoteOperationId")
                         .HasColumnType("TEXT");
 
                     b.Property<long>("StartedAt")
@@ -90,6 +111,8 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ConsultationTokenHash");
+
+                    b.HasIndex("RemoteOperationId");
 
                     b.HasIndex("Status");
 
@@ -269,6 +292,9 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                     b.Property<string>("Name")
                         .HasMaxLength(80)
                         .HasColumnType("TEXT");
+
+                    b.Property<bool>("RemoteAllowed")
+                        .HasColumnType("INTEGER");
 
                     b.Property<bool>("RequiresConfirmation")
                         .HasColumnType("INTEGER");
@@ -584,6 +610,9 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                     b.Property<int>("Port")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("RemoteAllowed")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("SecretReference")
                         .HasMaxLength(100)
                         .HasColumnType("TEXT");
@@ -691,6 +720,10 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                     b.Property<long?>("CompletedAt")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("ConfirmedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid?>("DestinationConnectionId")
                         .HasColumnType("TEXT");
 
@@ -725,6 +758,12 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("OperationType")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("OwnerProcessId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("OwnerProcessStartedAt")
                         .HasColumnType("INTEGER");
 
                     b.Property<Guid?>("ProfileId")
@@ -1439,6 +1478,29 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("MyTaskApp.Infrastructure.Persistence.ProcessLeaseRow", b =>
+                {
+                    b.Property<string>("Name")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("AcquiredAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ExpiresAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ProcessId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ProcessStartedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Name");
+
+                    b.ToTable("ProcessLeases", (string)null);
+                });
+
             modelBuilder.Entity("MyTaskApp.Infrastructure.Persistence.ReminderSettingsRow", b =>
                 {
                     b.Property<int>("Id")
@@ -1471,6 +1533,102 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         {
                             t.HasCheckConstraint("CK_ReminderSettings_SingleRow", "Id = 1");
                         });
+                });
+
+            modelBuilder.Entity("MyTaskApp.Infrastructure.Persistence.RemoteOperationJournalEventRow", b =>
+                {
+                    b.Property<Guid>("OperationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Seq")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("At")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Data")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Step")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Text")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("OperationId", "Seq");
+
+                    b.ToTable("RemoteOperationJournalEvents", (string)null);
+                });
+
+            modelBuilder.Entity("MyTaskApp.Infrastructure.Persistence.RemoteOperationJournalRow", b =>
+                {
+                    b.Property<Guid>("OperationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("AckedSeq")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("ControllerDeviceId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ControllerNickname")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Envelope")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("NextSeq")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ReceivedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("ReportedStatus")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ResultCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ResultSummary")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Step")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("TaskId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("OperationId");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("ControllerDeviceId", "ReceivedAt");
+
+                    b.ToTable("RemoteOperationJournal", (string)null);
                 });
 
             modelBuilder.Entity("MyTaskApp.Infrastructure.Persistence.RemoteSettingsRow", b =>
@@ -2187,6 +2345,15 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                     b.HasOne("MyTaskApp.Domain.Tasks.TaskOccurrence", null)
                         .WithMany()
                         .HasForeignKey("TaskOccurrenceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MyTaskApp.Infrastructure.Persistence.RemoteOperationJournalEventRow", b =>
+                {
+                    b.HasOne("MyTaskApp.Infrastructure.Persistence.RemoteOperationJournalRow", null)
+                        .WithMany()
+                        .HasForeignKey("OperationId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

@@ -2,9 +2,9 @@ namespace MyTaskApp.Domain.Agents;
 
 /// <summary>Em que pé está uma sessão de agente (ADR-030).</summary>
 /// <remarks>
-/// Sem "Stopped": o app não encerra o agente nesta versão — quem sai é o
-/// usuário, no terminal, e isso é <see cref="Exited"/>. Os números são
-/// gravados no banco; não reordenar.
+/// No terminal, quem sai é o usuário, e isso é <see cref="Exited"/>. Só a
+/// sessão sem terminal (ADR-089) é parada pelo app, e só a pedido:
+/// <see cref="Stopped"/>. Os números são gravados no banco; não reordenar.
 /// </remarks>
 public enum AgentSessionStatus
 {
@@ -21,6 +21,26 @@ public enum AgentSessionStatus
 
     /// <summary>O terminal nem chegou a abrir.</summary>
     Failed = 4,
+
+    /// <summary>
+    /// Parada a pedido (<c>agent.stop</c>): o processo, se havia, foi
+    /// encerrado, e a conversa não recebe mais prompts.
+    /// </summary>
+    Stopped = 5,
+}
+
+/// <summary>Como o agente roda. Os números são gravados no banco; não reordenar.</summary>
+public enum AgentSessionMode
+{
+    /// <summary>Num terminal, com o usuário olhando, acompanhado pelos hooks (ADR-030, ADR-037).</summary>
+    Interactive = 0,
+
+    /// <summary>
+    /// Sem terminal, pedido de longe (ADR-089): cada prompt é um processo, e a
+    /// sessão é a conversa. Entre um prompt e outro ela fica
+    /// <see cref="AgentSessionStatus.Exited"/>, pronta para continuar.
+    /// </summary>
+    Headless = 1,
 }
 
 /// <summary>
@@ -90,6 +110,8 @@ public sealed class AgentSession
 
     public const int MaxExternalSessionIdLength = 128;
 
+    public const int MaxChoiceLength = 32;
+
     /// <summary>SHA-256 em hexadecimal.</summary>
     public const int HookTokenHashLength = 64;
 
@@ -118,6 +140,37 @@ public sealed class AgentSession
 
     /// <summary>Desenvolvimento (com ambiente) ou Consulta Inteligente (sem ambiente).</summary>
     public AgentSessionKind Kind { get; private set; }
+
+    public AgentSessionMode Mode { get; private set; }
+
+    public bool IsHeadless => Mode == AgentSessionMode.Headless;
+
+    /// <summary>
+    /// A operação remota do prompt atual, ou do último (ADR-089): é por ela que
+    /// a outra máquina acompanha a conversa. <c>null</c> no terminal.
+    /// </summary>
+    public Guid? RemoteOperationId { get; private set; }
+
+    /// <summary>
+    /// Quando o prompt atual começou, na sessão sem terminal. A conversa pode
+    /// ter horas; a folga da reconciliação para quem ainda não tem processo
+    /// conta daqui.
+    /// </summary>
+    public DateTimeOffset? PromptStartedAt { get; private set; }
+
+    /// <summary>
+    /// O perfil do agente sem terminal (ADR-089), escolhido no primeiro prompt:
+    /// os seguintes continuam com o mesmo, como o modelo e o esforço.
+    /// </summary>
+    public string? HeadlessProfileId { get; private set; }
+
+    /// <summary>O modelo do agente sem terminal (ADR-040); <c>null</c> é o padrão dele.</summary>
+    public string? Model { get; private set; }
+
+    public string? Effort { get; private set; }
+
+    /// <summary>A sessão sem terminal pode receber mais um prompt: o último acabou e ninguém a parou.</summary>
+    public bool CanContinue => IsHeadless && Status == AgentSessionStatus.Exited;
 
     public bool IsConsultation => Kind == AgentSessionKind.Consultation;
 
@@ -209,6 +262,99 @@ public sealed class AgentSession
             Required(command, MaxPathLength, "Informe o comando da sessão."),
             Required(workingDirectory, MaxPathLength, "Informe a pasta da sessão."),
             startedAt);
+    }
+
+    /// <summary>
+    /// A conversa sem terminal de um ambiente, pedida de longe (ADR-089). O id
+    /// da conversa nasce aqui (<c>--session-id</c>), e os prompts seguintes o
+    /// continuam (<c>--resume</c>).
+    /// </summary>
+    public static AgentSession CreateHeadless(
+        Guid taskItemId,
+        Guid taskDevelopmentId,
+        string providerId,
+        string command,
+        string workingDirectory,
+        Guid conversationId,
+        Guid remoteOperationId,
+        string profileId,
+        string? model,
+        string? effort,
+        DateTimeOffset startedAt)
+    {
+        if (conversationId == Guid.Empty || remoteOperationId == Guid.Empty)
+        {
+            throw new DomainException("A sessão sem terminal precisa da conversa e da operação.");
+        }
+
+        var session = Create(taskItemId, taskDevelopmentId, providerId, command, workingDirectory, startedAt);
+        session.Mode = AgentSessionMode.Headless;
+        session.HeadlessProfileId = Required(profileId, MaxChoiceLength, "Informe o perfil da sessão.");
+        session.Model = Truncate(model, MaxChoiceLength);
+        session.Effort = Truncate(effort, MaxChoiceLength);
+        session.ExternalSessionId = conversationId.ToString();
+        session.RemoteOperationId = remoteOperationId;
+        session.PromptStartedAt = startedAt;
+        return session;
+    }
+
+    /// <summary>
+    /// Mais um prompt na mesma conversa: a sessão volta a iniciar, agora pela
+    /// operação <paramref name="remoteOperationId"/>. O processo é outro; o
+    /// PID antigo sai, para a reconciliação não olhar para ele.
+    /// </summary>
+    public void ContinueWith(Guid remoteOperationId, DateTimeOffset at)
+    {
+        if (!IsHeadless)
+        {
+            throw new DomainException("Só a sessão sem terminal continua por um novo prompt.");
+        }
+
+        if (Status == AgentSessionStatus.Stopped)
+        {
+            throw new DomainException("A conversa foi parada. Abra outra para continuar.");
+        }
+
+        if (IsActive)
+        {
+            throw new DomainException("O Claude ainda está respondendo o prompt anterior.");
+        }
+
+        if (Status != AgentSessionStatus.Exited || remoteOperationId == Guid.Empty)
+        {
+            throw new DomainException("A conversa não chegou a abrir. Abra outra.");
+        }
+
+        Status = AgentSessionStatus.Starting;
+        RemoteOperationId = remoteOperationId;
+        PromptStartedAt = at;
+        ProcessId = null;
+        ProcessStartedAt = null;
+        EndedAt = null;
+        Activity = AgentActivity.Working;
+        ActivityMessage = null;
+        ActivityChangedAt = at;
+    }
+
+    /// <summary>
+    /// Parada a pedido (<c>agent.stop</c>), com ou sem prompt rodando: a
+    /// conversa não recebe mais nada. Idempotente.
+    /// </summary>
+    public void MarkStopped(DateTimeOffset at)
+    {
+        if (!IsHeadless)
+        {
+            throw new DomainException("A sessão no terminal é encerrada no próprio terminal.");
+        }
+
+        if (Status == AgentSessionStatus.Stopped)
+        {
+            return;
+        }
+
+        // O fim do último prompt fica; parar no meio de um é agora.
+        EndedAt = IsActive ? at : EndedAt ?? at;
+        Status = AgentSessionStatus.Stopped;
     }
 
     /// <summary>

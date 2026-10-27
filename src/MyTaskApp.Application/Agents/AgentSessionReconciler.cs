@@ -35,7 +35,7 @@ public static class AgentSessionReconciler
                 return false;
             }
         }
-        else if (now - session.StartedAt < StartingGrace)
+        else if (now - (session.PromptStartedAt ?? session.StartedAt) < StartingGrace)
         {
             return false;
         }

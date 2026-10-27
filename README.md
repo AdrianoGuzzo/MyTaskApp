@@ -35,6 +35,7 @@ opcional, que você hospeda.
 | **Servidor MCP** | Um cliente de IA consulta e altera as tarefas pelas mesmas regras da tela, só no loopback. [Guia](docs/mcp-server.md) |
 | **Sincronização (opcional)** | Tarefas, etiquetas, horas e post-its entre computadores, num servidor seu. [Guia](docs/sync.md) |
 | **Celular** | Mais um dispositivo da mesma sincronização, que funciona sem rede. [Guia](docs/mobile.md) |
+| **Controle remoto (opcional)** | Pedir a outro computador seu, ou pelo celular, que prepare uma tarefa, rode os comandos dela, copie o banco ou converse com o Claude Code, aprovando o que ele perguntar. Só roda o que foi liberado lá, com o app de lá fechado. [Guia](docs/remote.md) |
 
 No Linux não há corretor ortográfico, sons, terminal do agente, indicação de
 quem segura a pasta do worktree nem início automático com o sistema, porque

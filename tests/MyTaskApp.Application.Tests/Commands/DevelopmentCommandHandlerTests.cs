@@ -168,4 +168,22 @@ public class DevelopmentCommandHandlerTests
         (await Update().HandleAsync(new UpdateDevelopmentCommand(existing.Id, "@build", "dotnet build", null, IsShared: false), Ct))
             .IsShared.Should().BeFalse();
     }
+
+    /// <summary>ADR-087 (T-17): liberado para o controle remoto só quando pedido, e para o texto que estava à vista.</summary>
+    [Fact]
+    public async Task RemoteAllowed_FollowsTheText()
+    {
+        (await Create().HandleAsync(new CreateDevelopmentCommand("@build", "dotnet build", null), Ct))
+            .RemoteAllowed.Should().BeFalse();
+        var existing = _commands.Commands.Single();
+
+        (await Update().HandleAsync(new UpdateDevelopmentCommand(existing.Id, "@build", "dotnet build", null, RemoteAllowed: true), Ct))
+            .RemoteAllowed.Should().BeTrue();
+        (await Update().HandleAsync(new UpdateDevelopmentCommand(existing.Id, "@build", "dotnet build", "Compila"), Ct))
+            .RemoteAllowed.Should().BeTrue("a descrição não muda o que roda");
+        (await Update().HandleAsync(new UpdateDevelopmentCommand(existing.Id, "@build", "dotnet build -c Release", "Compila"), Ct))
+            .RemoteAllowed.Should().BeFalse("o texto mudou e ninguém liberou o novo");
+        (await Update().HandleAsync(new UpdateDevelopmentCommand(existing.Id, "@build", "dotnet build -c Debug", "Compila", RemoteAllowed: true), Ct))
+            .RemoteAllowed.Should().BeTrue("liberado de novo com o texto novo à vista");
+    }
 }
