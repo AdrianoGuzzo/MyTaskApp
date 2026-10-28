@@ -3,9 +3,11 @@ using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Remote;
 using MyTaskApp.Application.Sync;
 using MyTaskApp.Domain.Agents;
+using MyTaskApp.Infrastructure.Agents.ClaudeCode;
 using MyTaskApp.Infrastructure.Remote;
 using MyTaskApp.Remote.Contracts;
 
@@ -112,7 +114,7 @@ public sealed partial class RemoteOperationsEndToEndTests
     [Fact]
     public async Task AConversationStartedOnTheDesktop_IsContinuedFromThePhone()
     {
-        var (notebook, phone, phoneKey) = await PairedAsync();
+        var (notebook, phone, phoneKey) = await PairedAsync(InstalledClaude.Register);
         using var _ = phoneKey;
         var (taskId, developmentId) = await ReadyEnvironmentAsync(notebook);
         var conversation = await HeadlessConversationAsync(notebook, taskId, developmentId);
@@ -201,5 +203,41 @@ public sealed partial class RemoteOperationsEndToEndTests
                 ]),
             Ct);
         await api.UpdateStatusAsync(operationId, new OperationStatusUpdate(RemoteOperationStatus.Succeeded, null, "Respondeu."), Ct);
+    }
+
+    /// <summary>
+    /// O Claude Code "instalado" no notebook: a admissão do <c>agent.prompt</c>
+    /// confere o CLI, e o runner do CI não tem um. Aqui ninguém roda o Claude;
+    /// o resto é o provider de verdade.
+    /// </summary>
+    private sealed class InstalledClaude(IHeadlessAgentProvider inner) : IHeadlessAgentProvider
+    {
+        public static void Register(IServiceCollection services)
+        {
+            var real = services.Last(service => service.ServiceType == typeof(IHeadlessAgentProvider));
+            services.AddSingleton<IHeadlessAgentProvider>(provider =>
+                new InstalledClaude((IHeadlessAgentProvider)real.ImplementationFactory!(provider)));
+        }
+
+        public string Id => inner.Id;
+
+        public string Name => inner.Name;
+
+        public Task<CliDetectionResult> DetectAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(new CliDetectionResult
+            {
+                IsInstalled = true,
+                ExecutablePath = "/usr/local/bin/claude",
+                Version = ClaudeCodeCliProvider.MinimumHeadlessVersion.ToString(),
+            });
+
+        public string? HeadlessUnavailableReason(CliDetectionResult detection) => inner.HeadlessUnavailableReason(detection);
+
+        public HeadlessAgentLaunch CreateHeadlessLaunch(HeadlessAgentRequest request, CliDetectionResult detection) =>
+            inner.CreateHeadlessLaunch(request, detection);
+
+        public IReadOnlyList<HeadlessAgentEvent> ReadEvents(string line) => inner.ReadEvents(line);
+
+        public string Summarize(string tool, JsonElement input) => inner.Summarize(tool, input);
     }
 }
