@@ -34,7 +34,7 @@ Números dos ADRs; o link está na linha do índice abaixo.
 - **persistencia** (SQLite, EF Core, migrations): 005, 011
 - **ui-desktop** (janela, widget, HUD, temas, editor, ícones, post-its): 013, 016, 017, 022, 024, 032, 038, 041, 046, 048, 054
 - **lembretes-prazos** (lembretes, prazos, avisos): 004, 014, 050
-- **ciclo-de-vida** (conclusão, arquivamento, lixeira, auditoria, histórico, tempo trabalhado): 020, 021, 052, 053
+- **ciclo-de-vida** (conclusão, arquivamento, lixeira, auditoria, histórico, tempo trabalhado): 020, 021, 052, 053, 097
 - **etiquetas** (etiquetas, diretórios, aliases): 025, 026, 064, 077
 - **git-worktree** (worktrees, comandos, branches, PR, limpeza): 027, 028, 029, 031, 034, 035, 043, 047, 051, 055, 065
 - **agente-ia** (Claude Code, hooks, sessões, sons, Consulta Inteligente): 030, 033, 036, 037, 039, 040, 042, 081
@@ -146,6 +146,7 @@ Números dos ADRs; o link está na linha do índice abaixo.
 | [ADR-094](decisions/094-controladores-ouvem-o-hub.md) | Os controladores ouvem o hub, com a leitura por tempo como reserva | Aceito | Implementado | remoto | SignalR, EventsAppended, SessionChanged, polling, reconexão |
 | [ADR-095](decisions/095-fila-de-prompts-por-conversa.md) | A instrução com o Claude respondendo espera a vez na fila da conversa | Aceito | Implementado | remoto | fila por conversa, MaxWaiting, processo vivo, stream-json, replay-user-messages |
 | [ADR-096](decisions/096-verificacao-periodica-no-celular.md) | Com o app fechado, o celular verifica o controle remoto de tempos em tempos e avisa | Aceito | Implementado | remoto | verificação periódica, JobScheduler, notificação local, POST_NOTIFICATIONS, push, FCM |
+| [ADR-097](decisions/097-relatorio-de-horas-dia-mes-ano.md) | Relatório de horas: dia, mês e ano numa janela própria, agregado na hora | Aceito | Implementado | ciclo-de-vida | GetHoursHistory, LocalDayGrid, HoursReportWindow, HoursBarChart, HoursHeatmap, relatório de horas, CSV |
 
 ## Novo ADR
 

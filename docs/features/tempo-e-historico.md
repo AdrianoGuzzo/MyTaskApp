@@ -1,11 +1,11 @@
-# Tempo trabalhado e histórico de 7 dias
+# Tempo trabalhado, histórico de 7 dias e relatório de horas
 
 | | |
 |---|---|
 | **Status** | Implementado (Windows e Linux) |
-| **Decisões** | [ADR-052](../architecture/decisions/052-tempo-trabalhado-por-periodo.md) tempo trabalhado · [ADR-053](../architecture/decisions/053-historico-sete-dias-projecao.md) histórico de 7 dias |
-| **Código** | `src/MyTaskApp.Domain/TimeTracking/`, `src/MyTaskApp.Application/TimeTracking/`, `src/MyTaskApp.Desktop/ViewModels/ActiveTimerViewModel.cs`, `src/MyTaskApp.Desktop/ViewModels/TaskTimeLogViewModel.cs`, `src/MyTaskApp.Desktop/ViewModels/TimeEntryEditorViewModel.cs`, `src/MyTaskApp.Application/History/`, `src/MyTaskApp.Domain/Planning/ActivityHistory.cs`, `src/MyTaskApp.Desktop/ViewModels/ActivityHistoryViewModel.cs` |
-| **Testes** | `tests/MyTaskApp.Domain.Tests/TimeTracking/`, `tests/MyTaskApp.Application.Tests/TimeTracking/`, `tests/MyTaskApp.Desktop.Tests/ViewModels/TimeTrackingViewModelTests.cs`, `tests/MyTaskApp.Desktop.Tests/ViewModels/RowTimeEntryTests.cs`, `tests/MyTaskApp.Application.Tests/History/GetActivityHistoryHandlerTests.cs`, `tests/MyTaskApp.Domain.Tests/Planning/ActivityHistoryBuilderTests.cs` |
+| **Decisões** | [ADR-052](../architecture/decisions/052-tempo-trabalhado-por-periodo.md) tempo trabalhado · [ADR-053](../architecture/decisions/053-historico-sete-dias-projecao.md) histórico de 7 dias · [ADR-097](../architecture/decisions/097-relatorio-de-horas-dia-mes-ano.md) relatório de horas |
+| **Código** | `src/MyTaskApp.Domain/TimeTracking/`, `src/MyTaskApp.Application/TimeTracking/`, `src/MyTaskApp.Desktop/ViewModels/ActiveTimerViewModel.cs`, `src/MyTaskApp.Desktop/ViewModels/TaskTimeLogViewModel.cs`, `src/MyTaskApp.Desktop/ViewModels/TimeEntryEditorViewModel.cs`, `src/MyTaskApp.Application/History/`, `src/MyTaskApp.Domain/Planning/ActivityHistory.cs`, `src/MyTaskApp.Desktop/ViewModels/ActivityHistoryViewModel.cs`, `src/MyTaskApp.Desktop/Reports/`, `src/MyTaskApp.Desktop/ViewModels/HoursReportViewModel.cs`, `src/MyTaskApp.Desktop/Views/HoursReportWindow.axaml` |
+| **Testes** | `tests/MyTaskApp.Domain.Tests/TimeTracking/`, `tests/MyTaskApp.Application.Tests/TimeTracking/`, `tests/MyTaskApp.Desktop.Tests/ViewModels/TimeTrackingViewModelTests.cs`, `tests/MyTaskApp.Desktop.Tests/ViewModels/RowTimeEntryTests.cs`, `tests/MyTaskApp.Application.Tests/History/GetActivityHistoryHandlerTests.cs`, `tests/MyTaskApp.Domain.Tests/Planning/ActivityHistoryBuilderTests.cs`, `tests/MyTaskApp.Desktop.Tests/Reports/`, `tests/MyTaskApp.Desktop.Tests/ViewModels/HoursReportViewModelTests.cs`, `tests/MyTaskApp.Desktop.Tests/ViewModels/HoursReportWindowTests.cs` |
 
 ## Cronômetro e períodos
 
@@ -49,6 +49,58 @@
   todos).
 - O painel abre por cima do checklist e fecha com Esc, no × ou com um clique
   fora. No HUD compacto o botão fica de fora, por falta de espaço.
+- **Ver relatório completo**, no rodapé, fecha o painel e abre o relatório de
+  horas.
+
+## Relatório de horas
+
+O histórico completo das horas lançadas, numa janela própria
+([ADR-097](../architecture/decisions/097-relatorio-de-horas-dia-mes-ano.md)).
+
+- **Como abrir:** menu **Mais opções → Relatório de horas…**, **Ctrl+Shift+H**
+  com o painel em foco, ou **Ver relatório completo** no histórico de 7 dias.
+- **Escalas:**
+  - **Dia:** os dias de um mês.
+  - **Mês:** os meses de um ano, com o mapa de calor do ano em cima.
+  - **Ano:** do primeiro ano com horas até o atual.
+- **Navegar:**
+  - **‹** e **›** (ou PageUp e PageDown) trocam o período, sem ir ao futuro.
+  - **Hoje** volta ao período atual.
+  - A trilha **Anos › 2026 › outubro** sobe de escala.
+  - Trocar de escala mantém a data em foco: o mês escolhido vira os dias dele.
+- **Indicadores do período:**
+  - o total, com a variação contra o mesmo trecho do período anterior
+    ("▲ 12% vs 1–27 de setembro");
+  - a média por dia trabalhado;
+  - os dias trabalhados dos que já passaram ("18 de 27");
+  - o maior dia, mês ou ano.
+- **Gráfico:**
+  - uma barra por bloco, com a linha tracejada da média;
+  - sábado e domingo com outro fundo, e o bloco atual em destaque;
+  - passar o mouse mostra o balão ("ter, 14/10 · 6h 20min · 4 lançamentos");
+  - clicar escolhe o bloco, e clicar de novo desfaz;
+  - o duplo clique (ou Enter) desce de ano para meses e de mês para dias;
+  - pelo teclado: ←/→, Home e End escolhem, e Esc desfaz.
+- **Tabela:**
+  - as mesmas horas, uma linha por bloco: período, horas com barra
+    proporcional, dias trabalhados, lançamentos e % do total;
+  - a escolha é a mesma do gráfico, e a linha de total fica no fim;
+  - blocos sem horas aparecem apagados.
+- **Mapa de calor** (escala Mês): um quadrado por dia, semanas de domingo a
+  sábado. A cor sobe em faixas fixas: sem horas, menos de 2h, de 5h, de 8h, e
+  8h ou mais. Clicar num dia abre o mês dele, com o dia escolhido.
+- **Horas por tarefa**, ao lado: as tarefas do bloco escolhido, ou do período
+  inteiro, da que mais teve horas para a que menos teve, com a parte de cada uma.
+- **Filtros:**
+  - a etiqueta restringe tudo às horas das tarefas com ela;
+  - com a sincronização ligada, o computador é o mesmo seletor da lista.
+- **Exportar CSV** salva os blocos do período numa planilha que o Excel em
+  pt-BR abre direto (ponto e vírgula, vírgula decimal, acentos certos).
+- As horas seguem as regras do resto do app:
+  - um período que vira a noite conta em cada dia o que coube nele;
+  - o cronômetro em andamento conta até agora, e a lixeira fica de fora.
+- Aberta, a janela se atualiza sozinha quando as horas mudam: cronômetro,
+  lançamento, MCP ou outro computador.
 
 ## Não confirmado no código (2026-10-24)
 

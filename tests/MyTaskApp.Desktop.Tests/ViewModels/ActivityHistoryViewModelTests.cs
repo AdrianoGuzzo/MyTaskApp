@@ -37,6 +37,19 @@ public class ActivityHistoryViewModelTests
     }
 
     [Fact]
+    public void SeeingTheFullReport_ClosesThePanel_ThenAsksForTheReport()
+    {
+        var viewModel = ViewModel();
+        var events = new List<string>();
+        viewModel.CloseRequested += () => events.Add("fechar");
+        viewModel.ReportRequested += () => events.Add("relatório");
+
+        viewModel.OpenReportCommand.Execute(null);
+
+        events.Should().Equal("fechar", "relatório");
+    }
+
+    [Fact]
     public async Task AFailedLoad_SaysSo_WithoutTheTechnicalDetail()
     {
         _runner.FailuresByHandler[typeof(GetActivityHistoryHandler)] = new InvalidOperationException("SQLite Error 5");

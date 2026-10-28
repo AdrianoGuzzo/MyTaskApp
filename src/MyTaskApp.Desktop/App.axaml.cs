@@ -109,6 +109,7 @@ public sealed partial class App : Avalonia.Application
                 SetUpAgentSessions(Services, todayViewModel);
                 SetUpCommandExecutions(Services);
                 SetUpTimeTracking(todayViewModel);
+                SetUpHoursReport(Services, window, todayViewModel);
                 SetUpMcpServer(Services, todayViewModel);
                 SetUpSync(Services, todayViewModel);
                 ListenForSecondLaunch(Services, window);
@@ -609,6 +610,32 @@ public sealed partial class App : Avalonia.Application
     private static void ShowMachines(IServiceProvider services, Window owner)
     {
         var window = services.GetRequiredService<MachinesWindow>();
+
+        window.Show(owner);
+        window.Activate();
+        window.Reveal();
+    }
+
+    /// <summary>
+    /// O relatório de horas (ADR-097): pelo menu, pelo Ctrl+Shift+H e pelo
+    /// "Ver relatório completo" do histórico de 7 dias. Aberto, ele acompanha
+    /// cada recarga da lista — que já vem depois de toda mudança, daqui ou de
+    /// fora, e do refresh periódico, que mantém o cronômetro em dia.
+    /// </summary>
+    private static void SetUpHoursReport(IServiceProvider services, MainWindow window, TodayViewModel todayViewModel)
+    {
+        var report = services.GetRequiredService<HoursReportViewModel>();
+        report.FollowDevices(todayViewModel.Devices);
+
+        todayViewModel.HoursReportRequested += () => ShowHoursReport(services, window);
+        todayViewModel.History.ReportRequested += () => ShowHoursReport(services, window);
+        todayViewModel.BoardLoaded += () => _ = report.RefreshAsync(CancellationToken.None);
+    }
+
+    /// <summary>A janela "Relatório de horas" (ADR-097).</summary>
+    private static void ShowHoursReport(IServiceProvider services, Window owner)
+    {
+        var window = services.GetRequiredService<HoursReportWindow>();
 
         window.Show(owner);
         window.Activate();

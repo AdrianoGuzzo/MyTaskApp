@@ -278,26 +278,33 @@ public sealed class TimeReportHandlers(
         DateOnly to,
         DateTimeOffset now)
     {
+        var grid = new LocalDayGrid(from, to, day => clock.ToInstant(day, TimeOnly.MinValue));
+        var totals = new TimeSpan[grid.Count];
+        var ids = new List<Guid>?[grid.Count];
+
+        foreach (var item in items)
+        {
+            foreach (var (index, part) in grid.Split(item.StartedAt, item.EndedAt ?? now))
+            {
+                totals[index] += part;
+                (ids[index] ??= []).Add(item.Id);
+            }
+        }
+
         var groups = new List<TimeSummaryGroup>();
 
-        for (var day = from; day <= to; day = day.AddDays(1))
+        for (var index = 0; index < grid.Count; index++)
         {
-            var start = clock.ToInstant(day, TimeOnly.MinValue);
-            var end = clock.ToInstant(day.AddDays(1), TimeOnly.MinValue);
-
-            var inDay = items
-                .Select(item => (item.Id, Part: Overlap(item.StartedAt, item.EndedAt ?? now, start, end)))
-                .Where(part => part.Part > TimeSpan.Zero)
-                .ToList();
-
-            if (inDay.Count > 0)
+            if (ids[index] is { } inDay)
             {
+                var day = grid.DateAt(index);
+
                 groups.Add(new TimeSummaryGroup(
                     day.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
                     day.ToString("dd/MM/yyyy", System.Globalization.CultureInfo.InvariantCulture),
-                    inDay.Aggregate(TimeSpan.Zero, (total, part) => total + part.Part),
+                    totals[index],
                     inDay.Count,
-                    inDay.Select(part => part.Id).ToList()));
+                    inDay));
             }
         }
 

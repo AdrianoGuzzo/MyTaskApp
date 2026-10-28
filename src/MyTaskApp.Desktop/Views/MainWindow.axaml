@@ -31,9 +31,13 @@
     sempre visível", conforme o modo.
   -->
 
-  <!-- Ctrl+Shift+N com o painel em foco; fora dele, o atalho global (ADR-054). -->
+  <!--
+    Ctrl+Shift+N com o painel em foco; fora dele, o atalho global (ADR-054).
+    Ctrl+Shift+H abre o relatório de horas (ADR-097), só com o painel em foco.
+  -->
   <Window.KeyBindings>
     <KeyBinding Gesture="Ctrl+Shift+N" Command="{Binding NewStickyNoteCommand}" />
+    <KeyBinding Gesture="Ctrl+Shift+H" Command="{Binding OpenHoursReportCommand}" />
   </Window.KeyBindings>
 
   <Window.Resources>
@@ -300,6 +304,9 @@
                     <MenuItem Header="Sair do MyTaskApp"
                               Command="{Binding #Shell.Chrome.RequestExitCommand}" />
                     <Separator />
+                    <MenuItem Header="Relatório de horas…"
+                              InputGesture="Ctrl+Shift+H"
+                              Command="{Binding OpenHoursReportCommand}" />
                     <MenuItem Header="Configuração de lembretes…"
                               Command="{Binding OpenSettingsCommand}" />
                     <MenuItem Header="Etiquetas…"
