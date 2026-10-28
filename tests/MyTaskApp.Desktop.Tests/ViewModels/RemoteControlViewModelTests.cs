@@ -1,10 +1,12 @@
 using Avalonia.Headless.XUnit;
 using Microsoft.Extensions.Logging.Abstractions;
+using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Remote;
 using MyTaskApp.Application.Sync;
 using MyTaskApp.Desktop.ViewModels;
 using MyTaskApp.Desktop.Views;
 using MyTaskApp.Remote.Contracts;
+using NSubstitute;
 
 namespace MyTaskApp.Desktop.Tests.ViewModels;
 
@@ -368,6 +370,65 @@ public class RemoteControlViewModelTests
 
         _runner.Invoked.Should().Contain(typeof(AnswerApprovalHandler));
         viewModel.StatusMessage.Should().Be("Permitido nesta conversa.");
+    }
+
+    /// <summary>
+    /// A pergunta do Claude (ADR-093): as opções marcáveis, uma só quando a
+    /// pergunta pede uma, e "Responder" assina uma resposta por pergunta.
+    /// Sem resposta, nada sai; marcar sobrevive ao relógio.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task TheQuestionOfClaude_IsAnsweredByMarkingTheOptions()
+    {
+        var question = Approval(
+            ApprovalKind.ToolUse,
+            "O Claude pergunta: Qual banco?",
+            new
+            {
+                kind = "question",
+                canRemember = false,
+                questions = new object[]
+                {
+                    new { question = "Qual banco?", header = "Banco", multiSelect = false, options = new object[] { new { label = "Local", description = "O SQLite" }, new { label = "Docker" } } },
+                    new { question = "Quais testes?", multiSelect = true, options = new object[] { new { label = "Unidade" }, new { label = "Integração" } } },
+                },
+            });
+        question = question with { Request = ApprovalHash.Seal(question.Request) };
+        SignedEnvelope? sent = null;
+        var remote = Substitute.For<IRemoteOperationsApi>();
+        remote.GetApprovalAsync(question.Request.ApprovalId, Arg.Any<CancellationToken>()).Returns(question);
+        remote.RespondApprovalAsync(question.Request.ApprovalId, Arg.Do<SignedEnvelope>(envelope => sent = envelope), Arg.Any<CancellationToken>()).Returns(question);
+        var signer = Substitute.For<IDeviceSigner>();
+        signer.GetPublicKeyAsync(Arg.Any<CancellationToken>()).Returns(new DevicePublicKey(DevicePublicKey.Es256, "c3BraQ", "impressao"));
+        signer.SignAsync(Arg.Any<byte[]>(), Arg.Any<CancellationToken>()).Returns("assinatura");
+        _runner.Handlers[typeof(AnswerApprovalHandler)] = new AnswerApprovalHandler(remote, signer, TimeProvider.System);
+        _runner.ResultsByHandler[typeof(GetPendingApprovalsHandler)] = (IReadOnlyList<ApprovalView>)[question];
+        var viewModel = ViewModel();
+        await viewModel.OpenAsync(Notebook, Ct);
+
+        var item = viewModel.Approvals.Should().ContainSingle().Subject;
+        (item.IsQuestion, item.AllowLabel, item.DenyLabel).Should().Be((true, "Responder", "Deixar o Claude decidir"));
+        item.Questions[0].Text.Should().Be("Banco: Qual banco?");
+
+        await viewModel.AllowCommand.ExecuteAsync(item);
+        viewModel.ErrorMessage.Should().Be("Marque uma opção, ou escreva a resposta, em cada pergunta.");
+        sent.Should().BeNull();
+
+        item.Questions[0].Options[0].IsChosen = true;
+        item.Questions[0].Options[1].IsChosen = true;
+        item.Questions[0].Options[0].IsChosen.Should().BeFalse("a pergunta pede uma só");
+        item.Questions[1].Options[0].IsChosen = true;
+        item.Questions[1].Options[1].IsChosen = true;
+        await viewModel.TickAsync(Ct);
+        viewModel.Approvals.Single().Should().BeSameAs(item, "o relógio não apaga o que foi marcado");
+
+        await viewModel.AllowCommand.ExecuteAsync(item);
+
+        var response = System.Text.Json.JsonSerializer.Deserialize<ApprovalResponse>(
+            System.Buffers.Text.Base64Url.DecodeFromChars(sent!.Jws.Split('.')[1]), RemoteJson.Options)!;
+        response.Decision.Should().Be(ApprovalDecision.Allow);
+        HeadlessQuestions.ReadAnswers(response.TypedConfirmation, 2).Should().Equal("Docker", "Unidade, Integração");
+        viewModel.StatusMessage.Should().Be("Respondido.");
     }
 
     /// <summary>

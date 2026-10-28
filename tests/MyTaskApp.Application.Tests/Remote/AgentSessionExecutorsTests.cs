@@ -185,6 +185,60 @@ public sealed class AgentSessionExecutorsTests : IAsyncDisposable
     }
 
     /// <summary>
+    /// A pergunta do Claude (ADR-093) vai a quem pediu com as opções, e a
+    /// resposta assinada volta ao Claude na entrada, pelo texto da pergunta.
+    /// </summary>
+    [Fact]
+    public async Task TheQuestionOfClaude_GoesWithItsOptions_AndTheAnswerGoesBackInTheInput()
+    {
+        ToolPermissionDecision? decision = null;
+        _runner.Script(async () => decision = await _gateway.AskAsync("AskUserQuestion", """{"questions":[{"question":"Qual banco de teste?","header":"Banco","options":[{"label":"Local","description":"O SQLite da pasta"},{"label":"Docker"}]}]}"""), FakeHeadlessProvider.Done());
+
+        await Start.ExecuteAsync(
+            Execution(StartRequest("read", "Rode os testes"), _ => new RemoteApprovalResult(RemoteApprovalOutcome.Allowed, "adria", Answers: """["Docker"]""")),
+            Ct);
+
+        var ask = _asks.Should().ContainSingle().Subject;
+        ask.Summary.Should().Be("O Claude pergunta: Qual banco de teste?");
+        ask.Details.GetProperty("kind").GetString().Should().Be("question");
+        ask.Details.GetProperty("canRemember").GetBoolean().Should().BeFalse("a pergunta é respondida a cada vez");
+        HeadlessQuestions.FromDetails(ask.Details)!.Single().Options.Select(option => option.Label).Should().Equal("Local", "Docker");
+        decision!.IsAllowed.Should().BeTrue();
+        decision.UpdatedInput!.Value.GetProperty("answers").GetProperty("Qual banco de teste?").GetString().Should().Be("Docker");
+        decision.UpdatedInput.Value.GetProperty("questions").GetArrayLength().Should().Be(1);
+    }
+
+    [Theory]
+    [InlineData(RemoteApprovalOutcome.Denied, null, "adria preferiu não responder")]
+    [InlineData(RemoteApprovalOutcome.Expired, null, "Ninguém respondeu a tempo")]
+    [InlineData(RemoteApprovalOutcome.Allowed, null, "A pergunta foi aceita sem escolher")]
+    [InlineData(RemoteApprovalOutcome.Allowed, """["Docker","Local"]""", "A pergunta foi aceita sem escolher")]
+    public async Task AQuestionWithoutAnAnswer_LetsClaudeDecide_AndSayWhat(RemoteApprovalOutcome outcome, string? answers, string message)
+    {
+        ToolPermissionDecision? decision = null;
+        _runner.Script(async () => decision = await _gateway.AskAsync("AskUserQuestion", """{"questions":[{"question":"Qual banco de teste?","header":"Banco","options":[{"label":"Local","description":"O SQLite da pasta"},{"label":"Docker"}]}]}"""), FakeHeadlessProvider.Done());
+
+        await Start.ExecuteAsync(
+            Execution(StartRequest("read", "Rode os testes"), _ => new RemoteApprovalResult(outcome, "adria", Answers: answers)),
+            Ct);
+
+        decision!.IsAllowed.Should().BeFalse();
+        decision.Message.Should().StartWith(message).And.EndWith("Siga pelo seu julgamento e diga o que escolheu.");
+    }
+
+    [Fact]
+    public async Task AQuestionOutOfShape_IsNotAskedToAnyone()
+    {
+        ToolPermissionDecision? decision = null;
+        _runner.Script(async () => decision = await _gateway.AskAsync("AskUserQuestion", """{"questions":"qual?"}"""), FakeHeadlessProvider.Done());
+
+        await Start.ExecuteAsync(Execution(StartRequest("read", "Rode"), _ => new RemoteApprovalResult(RemoteApprovalOutcome.Allowed)), Ct);
+
+        _asks.Should().BeEmpty();
+        decision!.IsAllowed.Should().BeFalse();
+    }
+
+    /// <summary>
     /// "Permitir nesta conversa" lembra o comando exato: o mesmo passa sem
     /// perguntar, outro (mesmo parecido) pergunta, e o composto nem oferece.
     /// </summary>

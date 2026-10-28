@@ -104,6 +104,13 @@ destino.
   redirecionamento (`&&`, `|`, `;`, `>`, `$(…)`) sempre pergunta. Nas outras
   ferramentas, vale para a ferramenta. Só naquela conversa; não existe
   "aprovar tudo". Um agente antigo não oferece o botão.
+- **Quando o Claude pergunta** (o `AskUserQuestion`), a aprovação vem como
+  "O Claude pergunta", com as opções. **Responder** manda a escolha (ou a
+  resposta escrita, até 500 caracteres) e o Claude segue com ela; **Deixar o
+  Claude decidir**, ou não responder em 10 minutos, faz o Claude seguir pelo
+  próprio julgamento e dizer o que escolheu. No desktop, marque as opções na
+  própria pergunta; no celular, cada pergunta abre uma lista, com "Outra
+  resposta…" no fim. A pergunta nunca entra no "Permitir nesta conversa".
 - **A pergunta de uma operação que já terminou some**: não dá mais para
   responder, e nada muda lá.
 - No celular, cada resposta (e cada pedido) pede destravar o aparelho:

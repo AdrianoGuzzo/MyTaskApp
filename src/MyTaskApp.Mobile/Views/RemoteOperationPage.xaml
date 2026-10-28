@@ -20,12 +20,13 @@
                             <VerticalStackLayout Spacing="4">
                                 <Label Text="{Binding Title}" FontAttributes="Bold" />
                                 <Label Text="{Binding Summary}" LineBreakMode="WordWrap" />
+            <Label Text="{Binding QuestionText}" LineBreakMode="WordWrap" IsVisible="{Binding IsQuestion}" />
                                 <Label Text="{Binding Detail}" Style="{StaticResource Muted}" />
                                 <HorizontalStackLayout Spacing="8" Margin="0,4,0,0">
-                                    <Button Text="Permitir"
+                                    <Button Text="{Binding AllowLabel}"
                                             Command="{Binding Source={RelativeSource AncestorType={x:Type vm:RemoteOperationViewModel}}, x:DataType=vm:RemoteOperationViewModel, Path=AllowCommand}"
                                             CommandParameter="{Binding .}" />
-                                    <Button Text="Negar"
+                                    <Button Text="{Binding DenyLabel}"
                                             Style="{StaticResource Destructive}"
                                             Command="{Binding Source={RelativeSource AncestorType={x:Type vm:RemoteOperationViewModel}}, x:DataType=vm:RemoteOperationViewModel, Path=DenyCommand}"
                                             CommandParameter="{Binding .}" />

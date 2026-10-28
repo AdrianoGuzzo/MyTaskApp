@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
+using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Remote;
 using MyTaskApp.Application.Sync;
 using MyTaskApp.Mobile.Core.Composition;
@@ -186,6 +187,55 @@ public sealed class RemoteTests : IAsyncLifetime
         await remote.AllowForConversationAsync(compound);
 
         Server.Responses.Select(response => response.RememberForThisSession).Should().Equal(true, false);
+    }
+
+    /// <summary>
+    /// A pergunta do Claude (ADR-093): "Responder" abre as opções, e a
+    /// escolhida, ou a escrita em "Outra resposta…", vai assinada.
+    /// </summary>
+    [Theory]
+    [InlineData(1, null, "Docker")]
+    [InlineData(2, "  Postgres do CI  ", "Postgres do CI")]
+    public async Task TheQuestionOfClaude_IsAnsweredWithAChoice_OrWithWhatIsWritten(int choice, string? written, string expected)
+    {
+        var remote = await ReadyAsync();
+        Server.Ask(Guid.CreateVersion7(), Notebook, ApprovalKind.ToolUse, "O Claude pergunta: Qual banco?", details: new
+        {
+            kind = "question",
+            canRemember = false,
+            questions = new object[] { new { question = "Qual banco?", multiSelect = false, options = new object[] { new { label = "Local", description = "O SQLite" }, new { label = "Docker" } } } },
+        });
+        await _app.Get<ApprovalWatcher>().RefreshAsync(TestContext.Current.CancellationToken);
+
+        var line = remote.Approvals.Should().ContainSingle().Subject;
+        (line.IsQuestion, line.AllowLabel, line.DenyLabel, line.Title).Should().Be((true, "Responder", "Deixar o Claude decidir", "O Claude pergunta"));
+        line.QuestionText.Should().Be("Qual banco? (Local · Docker)");
+
+        _app.Dialogs.ChoiceAnswer = choice;
+        _app.Dialogs.PromptAnswer = written;
+        await remote.AllowAsync(line);
+
+        _app.Dialogs.LastChoices.Should().Equal("Local — O SQLite", "Docker", "Outra resposta…");
+        var response = Server.Responses.Should().ContainSingle().Subject;
+        response.Decision.Should().Be(ApprovalDecision.Allow);
+        HeadlessQuestions.ReadAnswers(response.TypedConfirmation, 1).Should().Equal(expected);
+    }
+
+    [Fact]
+    public async Task GivingUpOnTheQuestion_SendsNothing()
+    {
+        var remote = await ReadyAsync();
+        Server.Ask(Guid.CreateVersion7(), Notebook, ApprovalKind.ToolUse, "O Claude pergunta: Qual banco?", details: new
+        {
+            kind = "question",
+            questions = new object[] { new { question = "Qual banco?", options = new object[] { new { label = "Local" }, new { label = "Docker" } } } },
+        });
+        await _app.Get<ApprovalWatcher>().RefreshAsync(TestContext.Current.CancellationToken);
+
+        _app.Dialogs.ChoiceAnswer = null;
+        await remote.AllowAsync(remote.Approvals.Single());
+
+        Server.Responses.Should().BeEmpty();
     }
 
     [Fact]

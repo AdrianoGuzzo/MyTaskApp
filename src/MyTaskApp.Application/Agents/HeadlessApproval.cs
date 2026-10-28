@@ -31,9 +31,13 @@ public interface IHeadlessApprovalChannel : IAsyncDisposable
 public sealed record ToolPermissionRequest(string ToolName, JsonElement Input, string? ToolUseId);
 
 /// <summary>A resposta ao agente. Negar leva o motivo, que o modelo lê.</summary>
-public sealed record ToolPermissionDecision(bool IsAllowed, string? Message)
+/// <param name="UpdatedInput">
+/// Permitir com outra entrada: a pergunta do Claude volta com as respostas
+/// (ADR-093). Nulo: a entrada como o agente mandou.
+/// </param>
+public sealed record ToolPermissionDecision(bool IsAllowed, string? Message, JsonElement? UpdatedInput = null)
 {
-    public static ToolPermissionDecision Allow() => new(true, null);
+    public static ToolPermissionDecision Allow(JsonElement? updatedInput = null) => new(true, null, updatedInput);
 
     public static ToolPermissionDecision Deny(string message) => new(false, message);
 }
@@ -60,6 +64,9 @@ public static class AgentToolProfiles
     public const string TestId = "edit-test";
 
     private static readonly string[] Reading = ["Read", "Grep", "Glob"];
+
+    /// <summary>A pergunta do Claude (ADR-093): sempre vai a quem pediu, e nunca entra nos padrões liberados.</summary>
+    private static readonly string[] Asking = [HeadlessQuestions.Tool];
 
     private static readonly string[] Editing = ["Edit", "Write", "NotebookEdit"];
 
@@ -98,7 +105,7 @@ public static class AgentToolProfiles
         ReadId,
         "Ler",
         "Lê e procura nos arquivos do worktree. Não edita nem roda comandos.",
-        Reading,
+        [.. Reading, .. Asking],
         Reading,
         []);
 
@@ -106,7 +113,7 @@ public static class AgentToolProfiles
         EditId,
         "Editar no worktree",
         "Lê e edita os arquivos do worktree. Comandos, fora os de leitura do Git, pedem aprovação.",
-        [.. Reading, .. Editing, "Bash"],
+        [.. Reading, .. Editing, "Bash", .. Asking],
         [.. Reading, .. Editing, .. GitReading],
         Never);
 
@@ -114,7 +121,7 @@ public static class AgentToolProfiles
         TestId,
         "Editar e rodar testes",
         "Como \"Editar no worktree\", e roda build e testes sem perguntar. Outros comandos pedem aprovação.",
-        [.. Reading, .. Editing, "Bash"],
+        [.. Reading, .. Editing, "Bash", .. Asking],
         [.. Reading, .. Editing, .. GitReading, .. Testing],
         Never);
 

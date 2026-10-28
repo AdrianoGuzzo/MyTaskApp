@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Remote;
 using MyTaskApp.Application.Sync;
 using MyTaskApp.Domain;
@@ -60,10 +61,83 @@ public sealed class RemoteEnvironmentItem(RemoteEnvironmentView view)
     };
 }
 
+/// <summary>Uma opção de uma pergunta do Claude, marcável.</summary>
+public sealed partial class RemoteQuestionOption(RemoteQuestionItem question, HeadlessQuestionOption option) : ObservableObject
+{
+    public string Label => option.Label;
+
+    public string? Description => option.Description;
+
+    public bool HasDescription => option.Description is not null;
+
+    [ObservableProperty]
+    private bool _isChosen;
+
+    partial void OnIsChosenChanged(bool value)
+    {
+        if (value)
+        {
+            question.Chose(this);
+        }
+    }
+}
+
+/// <summary>Uma pergunta do Claude (ADR-093): as opções e, se nenhuma serve, a resposta escrita.</summary>
+public sealed partial class RemoteQuestionItem : ObservableObject
+{
+    public RemoteQuestionItem(HeadlessQuestion question)
+    {
+        Question = question;
+        Options = [.. question.Options.Select(option => new RemoteQuestionOption(this, option))];
+    }
+
+    public HeadlessQuestion Question { get; }
+
+    public string Text => Question.Header is { } header ? $"{header}: {Question.Text}" : Question.Text;
+
+    public string Hint => Question.MultiSelect ? "Marque uma ou mais, ou escreva." : "Marque uma, ou escreva.";
+
+    public IReadOnlyList<RemoteQuestionOption> Options { get; }
+
+    [ObservableProperty]
+    private string _written = string.Empty;
+
+    /// <summary>A resposta: a escrita, se houver; senão as opções marcadas. Nulo: sem resposta.</summary>
+    public string? Answer => Written.Trim() is { Length: > 0 } written
+        ? written
+        : Options.Where(option => option.IsChosen).Select(option => option.Label).ToList() is { Count: > 0 } labels
+            ? HeadlessQuestions.Join(labels)
+            : null;
+
+    /// <summary>Numa pergunta de uma opção só, marcar uma desmarca as outras.</summary>
+    internal void Chose(RemoteQuestionOption chosen)
+    {
+        if (Question.MultiSelect)
+        {
+            return;
+        }
+
+        foreach (var option in Options.Where(option => option != chosen))
+        {
+            option.IsChosen = false;
+        }
+    }
+}
+
 /// <summary>Uma aprovação à espera, de qualquer máquina da conta.</summary>
 public sealed partial class RemoteApprovalItem(ApprovalView view, string machine) : ObservableObject
 {
     public ApprovalView View { get; } = view;
+
+    /// <summary>As perguntas, quando o Claude pergunta (ADR-093); vazio nas outras aprovações.</summary>
+    public IReadOnlyList<RemoteQuestionItem> Questions { get; } =
+        [.. (RemoteApprovalTexts.Questions(view.Request) ?? []).Select(question => new RemoteQuestionItem(question))];
+
+    public bool IsQuestion => Questions.Count > 0;
+
+    public string AllowLabel => RemoteApprovalTexts.AllowLabel(View.Request);
+
+    public string DenyLabel => RemoteApprovalTexts.DenyLabel(View.Request);
 
     public string Summary => View.Request.Summary;
 
@@ -635,16 +709,13 @@ public sealed partial class RemoteControlViewModel : ObservableObject
                 (handler, token) => handler.HandleAsync(new GetPendingApprovals(), token),
                 cancellationToken);
 
-            // O que a pessoa digitou pela metade sobrevive ao relógio.
-            var typed = Approvals.ToDictionary(item => item.View.Request.ApprovalId, item => item.TypedConfirmation);
+            // O que a pessoa digitou ou marcou pela metade sobrevive ao relógio: a mesma aprovação é o mesmo item.
+            var shown = Approvals.ToDictionary(item => item.View.Request.ApprovalId);
             Approvals.Clear();
 
             foreach (var view in pending.Where(view => view.State == ApprovalState.Pending))
             {
-                Approvals.Add(new RemoteApprovalItem(view, MachineName(view.TargetDeviceId))
-                {
-                    TypedConfirmation = typed.GetValueOrDefault(view.Request.ApprovalId, string.Empty),
-                });
+                Approvals.Add(shown.GetValueOrDefault(view.Request.ApprovalId) ?? new RemoteApprovalItem(view, MachineName(view.TargetDeviceId)));
             }
         }
         catch (Exception exception) when (exception is DomainException or SyncApiException)
@@ -667,14 +738,32 @@ public sealed partial class RemoteControlViewModel : ObservableObject
             return;
         }
 
+        // A pergunta do Claude: responder é permitir com uma resposta para cada pergunta.
+        var answers = decision == ApprovalDecision.Allow && approval.IsQuestion
+            ? approval.Questions.Select(question => question.Answer).ToList()
+            : null;
+
+        if (answers is not null && answers.Any(answer => answer is null))
+        {
+            ErrorMessage = "Marque uma opção, ou escreva a resposta, em cada pergunta.";
+            return;
+        }
+
         try
         {
             await _runner.RunAsync<AnswerApprovalHandler, ApprovalView>(
                 (handler, token) => handler.HandleAsync(
-                    new AnswerApproval(approval.View.Request.ApprovalId, decision, approval.NeedsTyping ? approval.TypedConfirmation.Trim() : null, remember),
+                    new AnswerApproval(
+                        approval.View.Request.ApprovalId,
+                        decision,
+                        approval.NeedsTyping ? approval.TypedConfirmation.Trim() : null,
+                        remember,
+                        answers?.Select(answer => answer!).ToList()),
                     token),
                 CancellationToken.None);
-            StatusMessage = decision != ApprovalDecision.Allow ? "Negado." : remember ? "Permitido nesta conversa." : "Permitido.";
+            StatusMessage = approval.IsQuestion
+                ? decision == ApprovalDecision.Allow ? "Respondido." : "O Claude decide sozinho."
+                : decision != ApprovalDecision.Allow ? "Negado." : remember ? "Permitido nesta conversa." : "Permitido.";
         }
         catch (Exception exception) when (exception is DomainException or SyncApiException)
         {

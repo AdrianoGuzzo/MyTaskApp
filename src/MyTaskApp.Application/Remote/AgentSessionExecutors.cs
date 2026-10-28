@@ -500,9 +500,20 @@ public sealed class HeadlessPromptRunner(
             : await gateway.OpenAsync(
                 async (request, token) =>
                 {
-                    var summary = SensitiveText.Mask(provider.Summarize(request.ToolName, request.Input));
-                    await SetActivityAsync(AgentActivity.WaitingForUser, $"Aprovar {request.ToolName}?");
-                    var decision = await DecideAsync(execution, sessionId, request.ToolName, request.Input, summary, request.ToolUseId, token);
+                    ToolPermissionDecision decision;
+
+                    if (request.ToolName == HeadlessQuestions.Tool)
+                    {
+                        await SetActivityAsync(AgentActivity.WaitingForUser, "O Claude pergunta.");
+                        decision = await AskAsync(execution, sessionId, request.Input, request.ToolUseId, token);
+                    }
+                    else
+                    {
+                        var summary = SensitiveText.Mask(provider.Summarize(request.ToolName, request.Input));
+                        await SetActivityAsync(AgentActivity.WaitingForUser, $"Aprovar {request.ToolName}?");
+                        decision = await DecideAsync(execution, sessionId, request.ToolName, request.Input, summary, request.ToolUseId, token);
+                    }
+
                     await SetActivityAsync(AgentActivity.Working, null);
                     return decision;
                 },
@@ -657,6 +668,48 @@ public sealed class HeadlessPromptRunner(
             : ToolPermissionDecision.Deny(approval.Outcome == RemoteApprovalOutcome.Expired
                 ? "Ninguém respondeu a tempo: negado. Siga sem essa ferramenta."
                 : $"Negado por {approval.ControllerNickname ?? execution.ControllerNickname}. Siga sem essa ferramenta.");
+    }
+
+    /// <summary>
+    /// A pergunta do Claude (ADR-093): vai a quem pediu como uma aprovação de
+    /// ferramenta, com as opções nos detalhes, mascaradas. Permitir com as
+    /// respostas devolve ao Claude a entrada com elas; sem resposta que sirva,
+    /// ele segue pelo próprio julgamento, e diz qual.
+    /// </summary>
+    private static async Task<ToolPermissionDecision> AskAsync(
+        RemoteExecution execution,
+        Guid sessionId,
+        JsonElement input,
+        string? toolUseId,
+        CancellationToken cancellationToken)
+    {
+        if (HeadlessQuestions.Read(input) is not { } asked)
+        {
+            return ToolPermissionDecision.Deny("A pergunta não veio na forma esperada. Siga pelo seu julgamento e diga o que escolheu.");
+        }
+
+        var shown = HeadlessQuestions.Shown(asked, text => SensitiveText.Mask(text));
+        var approval = await execution.RequestApprovalAsync(
+            new RemoteApprovalAsk(
+                ApprovalKind.ToolUse,
+                Clip(asked.Count == 1 ? $"O Claude pergunta: {shown[0].Text}" : $"O Claude faz {asked.Count} perguntas: {shown[0].Text}"),
+                JsonSerializer.SerializeToElement(HeadlessQuestions.Details(sessionId, toolUseId, shown), RemoteJson.Options)),
+            cancellationToken);
+
+        if (approval.Outcome == RemoteApprovalOutcome.Expired)
+        {
+            return ToolPermissionDecision.Deny("Ninguém respondeu a tempo. Siga pelo seu julgamento e diga o que escolheu.");
+        }
+
+        if (!approval.IsAllowed)
+        {
+            return ToolPermissionDecision.Deny($"{approval.ControllerNickname ?? execution.ControllerNickname} preferiu não responder. Siga pelo seu julgamento e diga o que escolheu.");
+        }
+
+        // Um controlador antigo permite sem as respostas: vale como "decida você".
+        return HeadlessQuestions.ReadAnswers(approval.Answers, asked.Count) is { } answers
+            ? ToolPermissionDecision.Allow(HeadlessQuestions.Answer(input, HeadlessQuestions.ForClaude(asked, shown, answers)))
+            : ToolPermissionDecision.Deny("A pergunta foi aceita sem escolher uma opção. Siga pelo seu julgamento e diga o que escolheu.");
     }
 
     private Task Store(Func<HeadlessSessionStore, CancellationToken, Task> change) =>

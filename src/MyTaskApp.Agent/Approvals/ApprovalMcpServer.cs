@@ -237,7 +237,7 @@ internal sealed class ApprovalMcpServer(ILoggerFactory loggerFactory) : IHeadles
         var decision = await DecideAsync(request, cancellationToken);
 
         var answer = decision.IsAllowed
-            ? new JsonObject { ["behavior"] = "allow", ["updatedInput"] = JsonNode.Parse(Argument(request, "input")?.GetRawText() ?? "{}") }
+            ? new JsonObject { ["behavior"] = "allow", ["updatedInput"] = JsonNode.Parse(decision.UpdatedInput?.GetRawText() ?? Argument(request, "input")?.GetRawText() ?? "{}") }
             : new JsonObject { ["behavior"] = "deny", ["message"] = decision.Message ?? "Negado." };
 
         return new CallToolResult { Content = [new TextContentBlock { Text = answer.ToJsonString() }] };

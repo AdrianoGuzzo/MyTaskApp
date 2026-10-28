@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MyTaskApp.Application.Agents;
 using MyTaskApp.Remote.Contracts;
 
 namespace MyTaskApp.Application.Remote;
@@ -22,7 +23,8 @@ public static class HeadlessToolScope
     /// </summary>
     public static string? RememberKey(string tool, JsonElement input)
     {
-        if (string.IsNullOrWhiteSpace(tool))
+        // A pergunta do Claude (ADR-093) é respondida a cada vez: lembrar seria responder sem ler.
+        if (string.IsNullOrWhiteSpace(tool) || tool == HeadlessQuestions.Tool)
         {
             return null;
         }
@@ -55,6 +57,18 @@ public static class RemoteApprovalTexts
 {
     public const string RememberButton = "Permitir nesta conversa";
 
+    public const string QuestionTitle = "O Claude pergunta";
+
+    /// <summary>O texto do "permitir": numa pergunta do Claude, permitir é responder.</summary>
+    public static string AllowLabel(ApprovalRequest request) => Questions(request) is null ? "Permitir" : "Responder";
+
+    /// <summary>O texto do "negar": numa pergunta, o Claude segue pelo próprio julgamento.</summary>
+    public static string DenyLabel(ApprovalRequest request) => Questions(request) is null ? "Negar" : "Deixar o Claude decidir";
+
+    /// <summary>Uma pergunta numa linha, com as opções: "Qual cor? (Azul · Verde)".</summary>
+    public static string Describe(HeadlessQuestion question) =>
+        $"{question.Text} ({string.Join(" · ", question.Options.Select(option => option.Label))}{(question.MultiSelect ? "; mais de uma vale" : string.Empty)})";
+
     /// <summary>O agente disse que este pedido pode ser lembrado na conversa.</summary>
     public static bool CanRemember(ApprovalRequest request) =>
         request.Kind == ApprovalKind.ToolUse
@@ -62,6 +76,12 @@ public static class RemoteApprovalTexts
         && request.Details.ValueKind == JsonValueKind.Object
         && request.Details.TryGetProperty("canRemember", out var value)
         && value.ValueKind == JsonValueKind.True;
+
+    /// <summary>As perguntas do Claude (ADR-093), quando a aprovação é uma pergunta; nulo nas outras.</summary>
+    public static IReadOnlyList<HeadlessQuestion>? Questions(ApprovalRequest request) =>
+        request.Kind == ApprovalKind.ToolUse && request.TypedConfirmationHint is null
+            ? HeadlessQuestions.FromDetails(request.Details)
+            : null;
 
     /// <summary>O que "Permitir nesta conversa" deixa passar sem perguntar de novo; nulo se não pode.</summary>
     public static string? RememberLabel(ApprovalRequest request)

@@ -1,6 +1,6 @@
 # Fase 3 — A conversa do Claude como uma sessão só: roteiro
 
-> **Estado:** E1 a E3 feitas; E4 a E9 planejadas. O desenho, a auditoria e a
+> **Estado:** E1 a E4 feitas; E5 a E9 planejadas. O desenho, a auditoria e a
 > comparação das alternativas estão em
 > [`../architecture/remote-sessions.md`](../architecture/remote-sessions.md).
 > As decisões estão nos ADR-091 a 094 do [índice](../architecture/README.md).
@@ -23,7 +23,7 @@
 | E1 | os defeitos da fase 2 corrigidos; "Permitir nesta conversa" nos dois controladores | — | ✔ |
 | E2 | as conversas da máquina, com a linha do tempo, no celular e em outro desktop; agente parado visível | E1 | ✔ |
 | E3 | a saída e as aprovações na hora, pelo hub | E2 | ✔ |
-| E4 | responder a pergunta do Claude de longe | E1 | planejada |
+| E4 | responder a pergunta do Claude de longe | E1 | ✔ |
 | E5 | começar no computador e continuar no celular | E2 | planejada |
 | E6 | instrução com o Claude respondendo | E2 | planejada |
 | E7 | linha do tempo em cartões no celular | E2 | planejada |
@@ -188,16 +188,29 @@ mesma máquina abrem uma cada.
 
 **Arquivos:**
 
-- os perfis (`AgentToolProfiles`);
-- `HeadlessPromptRunner.DecideAsync` (`updatedInput.answers`);
-- `RemoteApprovalTexts`;
-- os cartões de opção no desktop e no celular.
+- `HeadlessApproval` (a ferramenta nos perfis, e `ToolPermissionDecision`
+  com `UpdatedInput`), `ApprovalMcpServer` (devolve a entrada nova);
+- `HeadlessQuestions` (ler, mascarar, assinar e traduzir as respostas);
+- `AgentSessionExecutors.AskAsync`; `AnswerApproval.Answers` e
+  `RemoteApprovalResult.Answers`;
+- `RemoteApprovalTexts` (os rótulos e a pergunta numa linha);
+- desktop: `RemoteQuestionItem` e a janela *Controlar*; celular:
+  `ApprovalAnswers` e as três páginas.
+
+**Migrations:** nenhuma. O fio não muda: as respostas vão no
+`TypedConfirmation` assinado.
 
 **Testes:**
 
-- a pergunta chega com as opções;
-- a resposta assinada volta como `updatedInput`;
-- o controlador antigo vê uma aprovação comum.
+- `HeadlessQuestionsTests`: a forma aceita, a máscara, as respostas pela ordem,
+  a escrita, o que não responde tudo;
+- `AgentSessionExecutorsTests`: a pergunta chega com as opções; a resposta
+  volta como `updatedInput`; negar, vencer ou permitir sem resposta deixa o
+  Claude decidir; a pergunta fora de forma nem é feita;
+- `RemoteApprovalsTests`: as respostas vão assinadas e o agente as lê;
+- `RemoteControlViewModelTests` e `RemoteTests` (celular): marcar, escrever,
+  desistir;
+- opcional, com o Claude de verdade: `ApprovalClaudeTests`.
 
 **Aceite:** responder a pergunta do celular e do desktop, e o Claude seguir com
 a resposta.

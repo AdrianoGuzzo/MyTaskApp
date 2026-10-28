@@ -10,6 +10,10 @@ namespace MyTaskApp.Application.Tests.Remote;
 /// </summary>
 public sealed class HeadlessToolScopeTests
 {
+    [Fact]
+    public void TheQuestionOfClaude_IsNeverRemembered() =>
+        HeadlessToolScope.RememberKey("AskUserQuestion", JsonDocument.Parse("""{"questions":[]}""").RootElement).Should().BeNull();
+
     [Theory]
     [InlineData("Bash", "dotnet test", "Bash: dotnet test")]
     [InlineData("Bash", "  dotnet   test\t--no-build ", "Bash: dotnet test --no-build")]

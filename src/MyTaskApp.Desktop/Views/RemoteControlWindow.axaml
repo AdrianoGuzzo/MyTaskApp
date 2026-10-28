@@ -91,17 +91,40 @@
                 <StackPanel Spacing="6" Margin="0,4">
                   <TextBlock FontWeight="SemiBold" TextWrapping="Wrap" Text="{Binding Summary}" />
                   <TextBlock Classes="meta" Text="{Binding Details}" />
+                  <ItemsControl ItemsSource="{Binding Questions}" IsVisible="{Binding IsQuestion}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:RemoteQuestionItem">
+                        <StackPanel Spacing="4" Margin="0,4">
+                          <TextBlock FontWeight="SemiBold" TextWrapping="Wrap" Text="{Binding Text}" />
+                          <TextBlock Classes="meta" Text="{Binding Hint}" />
+                          <ItemsControl ItemsSource="{Binding Options}">
+                            <ItemsControl.ItemTemplate>
+                              <DataTemplate x:DataType="vm:RemoteQuestionOption">
+                                <CheckBox IsChecked="{Binding IsChosen}">
+                                  <StackPanel>
+                                    <TextBlock TextWrapping="Wrap" Text="{Binding Label}" />
+                                    <TextBlock Classes="meta" TextWrapping="Wrap" Text="{Binding Description}" IsVisible="{Binding HasDescription}" />
+                                  </StackPanel>
+                                </CheckBox>
+                              </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                          </ItemsControl>
+                          <TextBox Width="420" HorizontalAlignment="Left" MaxLength="500" Watermark="Ou escreva a resposta" Text="{Binding Written}" />
+                        </StackPanel>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
                   <TextBlock Classes="meta caution" Text="{Binding Hint}" IsVisible="{Binding NeedsTyping}" />
                   <TextBlock Classes="meta" TextWrapping="Wrap" Text="{Binding RememberLabel}" IsVisible="{Binding CanRemember}" />
                   <StackPanel Orientation="Horizontal" Spacing="8">
                     <TextBox Width="220" IsVisible="{Binding NeedsTyping}" Text="{Binding TypedConfirmation}" />
-                    <Button Classes="accent" Content="Permitir"
+                    <Button Classes="accent" Content="{Binding AllowLabel}"
                             Command="{Binding #Root.((vm:RemoteControlViewModel)DataContext).AllowCommand}"
                             CommandParameter="{Binding}" />
                     <Button Content="Permitir nesta conversa" IsVisible="{Binding CanRemember}"
                             Command="{Binding #Root.((vm:RemoteControlViewModel)DataContext).AllowForConversationCommand}"
                             CommandParameter="{Binding}" />
-                    <Button Content="Negar"
+                    <Button Content="{Binding DenyLabel}"
                             Command="{Binding #Root.((vm:RemoteControlViewModel)DataContext).DenyCommand}"
                             CommandParameter="{Binding}" />
                   </StackPanel>
