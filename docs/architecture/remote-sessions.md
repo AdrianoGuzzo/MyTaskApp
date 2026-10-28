@@ -101,7 +101,7 @@ Não passa pelo servidor.
 ### Onde o processo roda
 
 O Windows tem o terminal e o headless. No Linux, o headless funciona igual, e o
-terminal não abre; a E9 trata disso.
+terminal abre desde a E9 (`LinuxTerminalLauncher`), sem focar nem piscar a janela.
 
 ## 4. A arquitetura-alvo, em passos
 

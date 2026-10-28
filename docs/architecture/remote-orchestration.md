@@ -150,7 +150,8 @@ comprometida que empurra comandos para todas as máquinas. ✔
 
 - **Porta**: `IAgentCliProvider` → `ClaudeCodeCliProvider`. **Só modo
   interativo**, num terminal real (`ITerminalLauncher` →
-  `WindowsTerminalLauncher`; no Linux, `UnsupportedTerminalLauncher`). O app
+  `WindowsTerminalLauncher`; no Linux, `LinuxTerminalLauncher` desde a fase 3,
+  E9). O app
   não lê a saída da sessão. ◐
 - **Argumentos padrão do card**: `DefaultArguments =
   "--dangerously-skip-permissions"` (ADR-033), editáveis pelo usuário. Esse

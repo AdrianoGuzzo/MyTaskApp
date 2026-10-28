@@ -50,6 +50,7 @@ using MyTaskApp.Infrastructure.Sync.Capture;
 using MyTaskApp.Infrastructure.Sync.Http;
 using MyTaskApp.Infrastructure.Storage;
 using MyTaskApp.Infrastructure.Terminals;
+using MyTaskApp.Infrastructure.Terminals.Linux;
 using MyTaskApp.Infrastructure.Terminals.Windows;
 
 namespace MyTaskApp.Infrastructure;
@@ -262,6 +263,13 @@ public static class DependencyInjection
         if (OperatingSystem.IsWindows())
         {
             AddWindowsTerminal(services);
+        }
+        else if (OperatingSystem.IsLinux())
+        {
+            // A janela abre (fase 3, E9); achar, focar e piscar a janela ainda não.
+            services.AddSingleton<ITerminalLauncher>(
+                provider => new LinuxTerminalLauncher(provider.GetRequiredService<ILogger<LinuxTerminalLauncher>>()));
+            services.AddSingleton<ITerminalWindowManager, UnsupportedTerminalWindowManager>();
         }
         else
         {

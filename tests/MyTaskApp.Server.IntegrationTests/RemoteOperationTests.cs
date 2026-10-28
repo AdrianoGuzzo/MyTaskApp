@@ -384,6 +384,89 @@ public sealed class RemoteOperationTests(PostgresFixture postgres) : IAsyncLifet
         (await GetAsync<RemoteEventPage>(phone.Session, RemoteRoutes.OperationEvents(id))).Events.Should().ContainSingle().Which.Seq.Should().Be(2);
     }
 
+    /// <summary>
+    /// O teto conta e grava de uma vez (fase 3, E9): pedidos juntos para uma
+    /// máquina vazia param exatamente nele.
+    /// </summary>
+    [Fact]
+    public async Task ManyRequestsAtOnce_StopExactlyAtTheCeiling()
+    {
+        var (phone, notebook, workspace) = await PairAsync();
+        var extra = 5;
+
+        var results = await Task.WhenAll(Enumerable.Range(0, RemoteLimits.MaxOpenOperationsPerExecutor + extra).Select(_ =>
+            ErrorAsync(phone.Session, HttpMethod.Post, RemoteRoutes.Operations, Sign(phone.Key, Inspection(workspace, phone, notebook), RemoteJws.OperationType))));
+
+        results.Count(result => result.Status == HttpStatusCode.Created).Should().Be(RemoteLimits.MaxOpenOperationsPerExecutor);
+        results.Where(result => result.Status != HttpStatusCode.Created).Should().HaveCount(extra)
+            .And.OnlyContain(result => result.Status == HttpStatusCode.Conflict && result.Code == RemoteErrorCodes.TooManyOperations);
+    }
+
+    /// <summary>O reenvio do mesmo pedido com a máquina cheia é o mesmo pedido, não um a mais.</summary>
+    [Fact]
+    public async Task ResendingAnAcceptedRequest_WithTheMachineFull_GivesTheSameOperation()
+    {
+        var (phone, notebook, workspace) = await PairAsync();
+        var first = Inspection(workspace, phone, notebook);
+        var envelope = Sign(phone.Key, first, RemoteJws.OperationType);
+        await SendAsync<RemoteOperationView>(phone.Session, HttpMethod.Post, RemoteRoutes.Operations, envelope, HttpStatusCode.Created);
+
+        for (var i = 1; i < RemoteLimits.MaxOpenOperationsPerExecutor; i++)
+        {
+            await CreateAsync(phone, Inspection(workspace, phone, notebook));
+        }
+
+        (await SendAsync<RemoteOperationView>(phone.Session, HttpMethod.Post, RemoteRoutes.Operations, envelope, HttpStatusCode.Created)).OperationId.Should().Be(first.OperationId);
+    }
+
+    /// <summary>
+    /// A retenção (fase 3, E9): a operação terminada há mais de 30 dias sai,
+    /// com os eventos; a recente e a que ainda não terminou ficam.
+    /// </summary>
+    [Fact]
+    public async Task FinishedOperationsOlderThanTheRetention_AreSweptAway_WithTheirEvents()
+    {
+        var (phone, notebook, workspace) = await PairAsync();
+        var old = (await CreateAsync(phone, Inspection(workspace, phone, notebook))).OperationId;
+        var recent = (await CreateAsync(phone, Inspection(workspace, phone, notebook))).OperationId;
+        var open = (await CreateAsync(phone, Inspection(workspace, phone, notebook))).OperationId;
+        await AppendAsync(notebook, old, Event(old, 1));
+        var longAgo = DateTimeOffset.UtcNow.AddDays(-31);
+
+        await _kit.WithDatabaseAsync(database => database.RemoteOperations
+            .Where(row => row.OperationId == old || row.OperationId == recent)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(row => row.Status, (int)RemoteOperationStatus.Canceled), Ct));
+        await _kit.WithDatabaseAsync(database => database.RemoteOperations
+            .Where(row => row.OperationId == old || row.OperationId == open)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(row => row.UpdatedAt, longAgo).SetProperty(row => row.NotAfter, longAgo), Ct));
+
+        (await SweepAsync()).PurgedOperations.Should().Be(1);
+
+        (await ErrorAsync(phone.Session, HttpMethod.Get, RemoteRoutes.Operation(old), null)).Status.Should().Be(HttpStatusCode.NotFound);
+        (await GetAsync<RemoteOperationView>(phone.Session, RemoteRoutes.Operation(recent))).Status.Should().Be(RemoteOperationStatus.Canceled);
+        (await GetAsync<RemoteOperationView>(phone.Session, RemoteRoutes.Operation(open))).OperationId.Should().Be(open, "a vencida sem aceite expira, mas só sai na volta seguinte à retenção");
+        await _kit.WithDatabaseAsync(async database =>
+            (await database.RemoteOperationEvents.CountAsync(row => row.OperationId == old, Ct)).Should().Be(0, "os eventos saem em cascata"));
+    }
+
+    /// <summary>O pedido de pareamento vencido há mais de 30 dias sai (fase 3, E9); a confiança fica no executor.</summary>
+    [Fact]
+    public async Task PairingsThatExpiredLongAgo_AreSweptAway()
+    {
+        var (phone, notebook, _) = await PairAsync();
+        var old = await SendAsync<PairingInfo>(phone.Session, HttpMethod.Post, RemoteRoutes.Pairings, new PairingRequest(notebook.DeviceId));
+        await _kit.WithDatabaseAsync(database => database.RemotePairings
+            .Where(row => row.PairingId == old.PairingId)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(row => row.ExpiresAt, DateTimeOffset.UtcNow.AddDays(-31)), Ct));
+
+        await using (var scope = _api.Services.CreateAsyncScope())
+        {
+            (await scope.ServiceProvider.GetRequiredService<RemotePairingUseCases>().SweepAsync(TimeSpan.FromDays(30), Ct)).Should().Be(1);
+        }
+
+        (await ErrorAsync(phone.Session, HttpMethod.Get, RemoteRoutes.Pairing(old.PairingId), null)).Status.Should().Be(HttpStatusCode.NotFound);
+    }
+
     private async Task<(RemoteDevice Phone, RemoteDevice Notebook, Guid Workspace)> PairAsync()
     {
         var phone = await _kit.DeviceAsync("Celular", DeviceRoles.Controller);

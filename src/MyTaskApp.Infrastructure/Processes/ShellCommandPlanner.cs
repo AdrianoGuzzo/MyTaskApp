@@ -79,6 +79,10 @@ internal static class ShellCommandPlanner
             return new ShellLaunch(shell, $"/d /s {mode} \"chcp 65001>nul & {command}\"", []);
         }
 
-        return new ShellLaunch("/bin/sh", null, ["-c", command]);
+        // Fora do Windows (fase 3, E9), a janela fica aberta com o shell da pessoa depois do comando.
+        return new ShellLaunch("/bin/sh", null, ["-c", keepOpen ? $"{command}\n{KeepOpenTail}" : command]);
     }
+
+    /// <summary>O que vem depois do comando no <c>sh</c> para a janela não fechar: o shell da pessoa.</summary>
+    public const string KeepOpenTail = "exec \"${SHELL:-/bin/sh}\"";
 }

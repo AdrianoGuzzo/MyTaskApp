@@ -1,6 +1,6 @@
 # Fase 3 — A conversa do Claude como uma sessão só: roteiro
 
-> **Estado:** E1 a E8 feitas; E9 planejada. O desenho, a auditoria e a
+> **Estado:** E1 a E9 feitas. O desenho, a auditoria e a
 > comparação das alternativas estão em
 > [`../architecture/remote-sessions.md`](../architecture/remote-sessions.md).
 > As decisões estão nos ADR-091 a 094 do [índice](../architecture/README.md).
@@ -28,7 +28,7 @@
 | E6 | instrução com o Claude respondendo | E2 | ✔ |
 | E7 | linha do tempo em cartões no celular | E2 | ✔ |
 | E8 | aviso com o app fechado (verificação periódica) | E3 | ✔ |
-| E9 | robustez: cancelamento assinado, retenção, Linux | — | planejada |
+| E9 | robustez: retenção, teto atômico, esquema mais novo, Linux | — | ✔ |
 
 ---
 
@@ -335,3 +335,40 @@ permissão e o toque). O APK monta sem avisos.
 - O ADR-085, item 3.
 - O limite atômico de 20 pedidos por executor.
 - O terminal no Linux.
+
+**Feito:**
+
+- **Retenção.** A varredura do servidor apaga a operação terminada há mais de
+  30 dias (`RemoteEventRetention`) e com o `NotAfter` vencido, com as
+  aprovações e os eventos em cascata. Reenviado depois, o pedido é recusado
+  pelo `NotAfter` e não volta como novo. O pedido de pareamento vencido há 30
+  dias sai também; a confiança fica nos `TrustedControllers` do executor.
+- **Teto atômico.** `IRemoteOperationStore.TryAddAsync` conta e grava numa
+  transação, com `pg_advisory_xact_lock` por máquina. O reenvio do mesmo
+  pedido com a máquina cheia devolve a mesma operação.
+- **ADR-085, item 3.** O `DatabaseInitializer` compara as migrations do banco
+  com as que o app conhece; com uma desconhecida, recusa antes de migrar
+  (`DomainException`, "DatabaseNewerThanApp" no log). O desktop e o agente
+  saem com o motivo no log, como em qualquer falha da partida.
+- **Terminal no Linux.** `LinuxTerminalLauncher`: o primeiro instalado entre
+  gnome-terminal (`--wait`), konsole (`--nofork`), xfce4-terminal
+  (`--disable-server`) e xterm, todos presos ao programa, para o PID ser o da
+  sessão. A pasta e o ambiente vão pelo `sh -c 'cd -- "$1" … exec "$@"'` e
+  pelo `env`, como argumentos separados. O comando rápido com "manter aberta"
+  termina no shell da pessoa.
+- **Cancelamento assinado (R-08): mantido como risco aceito.** O servidor já
+  pode segurar ou descartar qualquer pedido, e o cancelamento só para, nunca
+  começa. Assinar obrigaria a destravar o celular para parar algo e não tiraria
+  do servidor nada que ele não tenha.
+
+**Migrations:** nenhuma.
+
+**Testes:** `RemoteOperationTests` (pedidos juntos param exatamente no teto,
+e o teste falha sem a trava; o reenvio com a máquina cheia; a operação velha
+sai com os eventos e a recente fica; o pareamento vencido sai),
+`DatabaseInitializerTests` (o app mais velho que o esquema recusa),
+`LinuxTerminalLauncherTests` e `QuickCommandTerminalTests`.
+
+**Não verificado:** a janela do terminal num Linux com tela; os testes rodam o
+plano, não a janela. Achar, focar e piscar a janela no Linux continuam sem
+implementação.

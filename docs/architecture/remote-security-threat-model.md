@@ -200,7 +200,9 @@ flowchart LR
 - **RS-29** Toda saída passa por `SensitiveText.Mask` antes do diário e do
   servidor; a saída sai do diário quando o servidor confirma; o servidor guarda
   no máximo 10 000 eventos de até 8 KiB por operação (acima, a saída é
-  confirmada e descartada, e o fim nunca se perde) e 30 dias. Do Claude sem
+  confirmada e descartada, e o fim nunca se perde) e 30 dias. Desde a fase 3
+  (E9), a operação terminada há 30 dias sai inteira, com as aprovações, e o
+  pedido de pareamento vencido também. Do Claude sem
   terminal, desde a fase 3 (E7), vai também a saída dos comandos dele (Bash e
   PowerShell), mascarada e cortada; o resultado das outras ferramentas (o
   conteúdo de um arquivo lido, uma busca) não sai da máquina.
@@ -210,7 +212,8 @@ flowchart LR
 - **RS-30** Rate limit `remote` por conta (separado de `sync`, ADR-069) e por
   dispositivo controlador.
 - **RS-31** Por executor: 3 operações simultâneas e 120 por hora de cada
-  controlador, no agente; 20 abertas, no servidor. As "pesadas" têm a trava
+  controlador, no agente; 20 abertas, no servidor, contadas e gravadas sob uma
+  trava por máquina (fase 3, E9). As "pesadas" têm a trava
   delas: uma operação de banco por vez no computador (o gate e o lease entre
   processos) e um Claude por worktree.
 - **RS-32** Timeout por operação e morte da árvore de processos, inclusive
@@ -260,7 +263,7 @@ O que muda é **quem confirma**: em vez do diálogo da tela, uma
 | R-05 | Celular desbloqueado nas mãos de outro | a chave está no aparelho | biometria antes de assinar; revogação rápida |
 | R-06 | O agente roda com a sessão do usuário aberta | DPAPI e libsecret são do usuário | cofre de máquina, se um dia rodar sem logon |
 | R-07 | Disponibilidade depende do servidor do usuário | é o desenho do ADR-078 | nada: sem servidor, nada remoto, e o local segue inteiro |
-| R-08 | O cancelamento não é assinado: um servidor comprometido pode parar uma operação | parar é sempre o lado seguro (a etapa crítica termina antes, 4.7), e assinar o cancelamento pediria o destravamento no celular para parar algo | `CancelRequest` assinado, se parar de propósito virar um dano |
+| R-08 | O cancelamento não é assinado: um servidor comprometido pode parar uma operação | parar é sempre o lado seguro (a etapa crítica termina antes, 4.7), e assinar o cancelamento pediria o destravamento no celular para parar algo. Reavaliado na fase 3 (E9) e mantido: o mesmo servidor já pode segurar ou descartar qualquer pedido, então a assinatura não tira dele nada que ele não tenha | `CancelRequest` assinado, se parar de propósito virar um dano |
 | R-09 | Uma máquina sem tela não pareia | o código é confirmado na janela Máquinas | o `pair` no CLI do agente, lendo o código no terminal |
 | R-11 | A própria instalação pede e aprova sem pareamento (ADR-092) | quem lê a chave do cofre já roda tudo nesta máquina como o usuário; o servidor sozinho não tem a chave | desligar "aceitar controle" corta também a própria; a origem aparece como "Remoto: este computador" na auditoria |
 | R-10 | O log de acesso do proxy guarda a query do hub | o proxy é do usuário | a nota no `sync-server.md` (o filtro do Caddy); os apps já mandam o token no cabeçalho |

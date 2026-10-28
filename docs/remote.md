@@ -212,11 +212,11 @@ sincronização, e o agente só volta depois de conectar a conta de novo.
 | Pareamento aberto | 10 minutos, até 10 de uma vez | o servidor |
 | Operações ao mesmo tempo, por executor | 3; a quarta é recusada (`too_many_operations`) | o agente |
 | Pedidos por controlador, por executor | 120 por hora | o agente |
-| Pedidos sem terminar, por executor | 20; o próximo é recusado até um terminar | o servidor |
+| Pedidos sem terminar, por executor | 20, contados e gravados de uma vez: pedidos juntos não passam; o próximo é recusado até um terminar | o servidor |
 | Saída de uma operação | 10 000 eventos de até 8 KiB cada | o servidor |
 | Claude, por prompt | 40 turnos, US$ 3 | o agente |
 | Requisições do controle remoto | 300 por minuto por dispositivo (`Sync__RateLimits__RemotePerMinute`) | o servidor |
-| Guarda | eventos e conversas 30 dias no servidor; o diário do agente, 7 dias | os dois |
+| Guarda | eventos, conversas, operações terminadas (com as aprovações) e pedidos de pareamento vencidos: 30 dias no servidor; o diário do agente, 7 dias | os dois |
 | Conversas relatadas pelo agente | as abertas e as com prompt nos últimos 7 dias, até 200 | o agente |
 | Diferença de relógio aceita | 5 minutos; o pedido "do futuro" é recusado (`clock_skew`) | o servidor |
 
