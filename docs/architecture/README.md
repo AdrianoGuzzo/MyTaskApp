@@ -44,7 +44,7 @@ Números dos ADRs; o link está na linha do índice abaixo.
 - **mobile** (app do celular): 067, 075, 076, 079
 - **distribuicao** (instalador, versionamento, release, instância única, iniciar com o sistema): 018, 019, 023, 044, 049
 - **testes** (estratégia e ferramentas de teste): 006
-- **remoto** (orquestração remota (fases 2 e 3)): 084, 085, 086, 087, 088, 089, 090, 091, 092, 093, 094
+- **remoto** (orquestração remota (fases 2 e 3)): 084, 085, 086, 087, 088, 089, 090, 091, 092, 093, 094, 095
 
 ## Índice
 
@@ -144,6 +144,7 @@ Números dos ADRs; o link está na linha do índice abaixo.
 | [ADR-092](decisions/092-sessao-gerenciada-a-partir-do-desktop.md) | Sessão gerenciada a partir do desktop: o agente da própria máquina roda o Claude | Aceito | Implementado | remoto | sessão gerenciada, Abrir Claude gerenciado, desktop para celular |
 | [ADR-093](decisions/093-pergunta-do-claude-respondida-de-longe.md) | A pergunta do Claude (AskUserQuestion) respondida de longe | Aceito | Implementado | remoto | AskUserQuestion, updatedInput, answers, permission-prompt-tool |
 | [ADR-094](decisions/094-controladores-ouvem-o-hub.md) | Os controladores ouvem o hub, com a leitura por tempo como reserva | Aceito | Implementado | remoto | SignalR, EventsAppended, SessionChanged, polling, reconexão |
+| [ADR-095](decisions/095-fila-de-prompts-por-conversa.md) | A instrução com o Claude respondendo espera a vez na fila da conversa | Aceito | Implementado | remoto | fila por conversa, MaxWaiting, processo vivo, stream-json, replay-user-messages |
 
 ## Novo ADR
 

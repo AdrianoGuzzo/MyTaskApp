@@ -1,6 +1,6 @@
 # Fase 3 — A conversa do Claude como uma sessão só: roteiro
 
-> **Estado:** E1 a E5 feitas; E6 a E9 planejadas. O desenho, a auditoria e a
+> **Estado:** E1 a E6 feitas; E7 a E9 planejadas. O desenho, a auditoria e a
 > comparação das alternativas estão em
 > [`../architecture/remote-sessions.md`](../architecture/remote-sessions.md).
 > As decisões estão nos ADR-091 a 094 do [índice](../architecture/README.md).
@@ -25,7 +25,7 @@
 | E3 | a saída e as aprovações na hora, pelo hub | E2 | ✔ |
 | E4 | responder a pergunta do Claude de longe | E1 | ✔ |
 | E5 | começar no computador e continuar no celular | E2 | ✔ |
-| E6 | instrução com o Claude respondendo | E2 | planejada |
+| E6 | instrução com o Claude respondendo | E2 | ✔ |
 | E7 | linha do tempo em cartões no celular | E2 | planejada |
 | E8 | push com o app fechado | E3 | planejada |
 | E9 | robustez: cancelamento assinado, retenção, Linux | — | planejada |
@@ -251,9 +251,24 @@ dispositivo; quem recusava era o agente.
 
 **Passos:**
 
-1. Uma fila por conversa no agente: o prompt espera, em vez de ser recusado.
+1. Uma fila por conversa no agente: o prompt espera, em vez de ser recusado
+   ([ADR-095](../architecture/decisions/095-fila-de-prompts-por-conversa.md)).
 2. Avaliar o processo vivo (`--input-format stream-json` com
    `--replay-user-messages`), atrás de um teste opt-in com o Claude de verdade.
+
+**Feito:**
+
+- `HeadlessConversations.WaitAsync`: a vez na ordem de chegada, um esperando no
+  máximo, a parada dispensa a fila, o cancelamento sai dela;
+- o aviso "Na fila: …" na linha do tempo; `CanPrompt` aceita a conversa
+  respondendo, no desktop e no celular;
+- o processo vivo: avaliado e não adotado (ADR-095, item 5). O teste
+  `LiveProcessClaudeTests` guarda o comportamento; com o Claude sem login nesta
+  máquina, ele foi pulado, então o recibo de entrega não foi visto rodando.
+
+**Testes:** `AgentSessionExecutorsTests` (o segundo espera e roda depois; o
+terceiro é recusado; parar dispensa; cancelar sai da fila),
+`RemoteSessionsTests` (`CanPrompt`).
 
 **Aceite:** a instrução mandada no meio é entregue depois da resposta atual,
 na ordem.

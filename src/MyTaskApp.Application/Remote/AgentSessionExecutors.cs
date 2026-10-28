@@ -54,6 +54,11 @@ public sealed class HeadlessAgentPlanner(
 {
     public const string BusyMessage = "O Claude ainda está respondendo o prompt anterior.";
 
+    public const string StoppedMessage = "A conversa foi parada. Abra outra.";
+
+    /// <summary>A fila da conversa já tem quem espere (E6): um prompt rodando e um esperando, no máximo.</summary>
+    public const string QueueFullMessage = "Já há um prompt esperando a vez nesta conversa. Espere o Claude terminar.";
+
     public const string TerminalOpenMessage = "Há um Claude aberto no terminal deste worktree. Feche-o lá antes de mandar o prompt.";
 
     public async Task<HeadlessTarget> StartAsync(Guid? taskId, ClaudeCodeSessionRequest request, CancellationToken cancellationToken = default)
@@ -84,8 +89,10 @@ public sealed class HeadlessAgentPlanner(
 
     /// <summary>
     /// Confere o próximo prompt da conversa. <paramref name="leased"/> diz que
-    /// quem chama já tem a conversa (<see cref="HeadlessConversations.TryBegin"/>);
-    /// sem isso, a que tem prompt rodando aqui é recusada.
+    /// quem chama já tem a conversa (<see cref="HeadlessConversations.TryBegin"/>).
+    /// Sem isso, com um prompt rodando aqui, o novo espera a vez (E6): só a
+    /// conversa parada e a fila cheia recusam, e o resto é conferido quando
+    /// chegar a vez dele.
     /// </summary>
     /// <remarks>
     /// Sem prompt rodando nesta máquina, a sessão que ainda diz "rodando" é
@@ -99,25 +106,36 @@ public sealed class HeadlessAgentPlanner(
         CancellationToken cancellationToken = default)
     {
         var session = await SessionAsync(taskId, agentSessionId, cancellationToken);
+        var queued = !leased && conversations.IsBusy(session.Id);
 
-        if (!leased && conversations.IsBusy(session.Id))
+        if (queued)
         {
-            throw new DomainException(BusyMessage);
-        }
-
-        if (AgentSessionReconciler.EndIfGone(session, processes, timeProvider.GetUtcNow(), TimeSpan.Zero))
-        {
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-        }
-
-        if (!session.CanContinue)
-        {
-            throw new DomainException(session.Status switch
+            if (session.Status == AgentSessionStatus.Stopped)
             {
-                AgentSessionStatus.Stopped => "A conversa foi parada. Abra outra.",
-                AgentSessionStatus.Starting or AgentSessionStatus.Running => BusyMessage,
-                _ => "A conversa não chegou a abrir. Abra outra.",
-            });
+                throw new DomainException(StoppedMessage);
+            }
+
+            if (conversations.WaitingFor(session.Id) >= HeadlessConversations.MaxWaiting)
+            {
+                throw new DomainException(QueueFullMessage);
+            }
+        }
+        else
+        {
+            if (AgentSessionReconciler.EndIfGone(session, processes, timeProvider.GetUtcNow(), TimeSpan.Zero))
+            {
+                await unitOfWork.SaveChangesAsync(cancellationToken);
+            }
+
+            if (!session.CanContinue)
+            {
+                throw new DomainException(session.Status switch
+                {
+                    AgentSessionStatus.Stopped => StoppedMessage,
+                    AgentSessionStatus.Starting or AgentSessionStatus.Running => BusyMessage,
+                    _ => "A conversa não chegou a abrir. Abra outra.",
+                });
+            }
         }
 
         var profile = AgentToolProfiles.Find(session.HeadlessProfileId)
@@ -125,7 +143,9 @@ public sealed class HeadlessAgentPlanner(
         var (task, development) = await DevelopmentAsync(taskId, session.TaskDevelopmentId ?? Guid.Empty, cancellationToken);
 
         // O Claude do card, no terminal, no mesmo worktree: dois mexendo nos mesmos arquivos.
-        if (await sessions.FindLatestForDevelopmentAsync(development.Id, cancellationToken) is { IsActive: true } other && other.Id != session.Id)
+        if (!queued
+            && await sessions.FindLatestForDevelopmentAsync(development.Id, cancellationToken) is { IsActive: true } other
+            && other.Id != session.Id)
         {
             if (!AgentSessionReconciler.EndIfGone(other, processes, timeProvider.GetUtcNow()))
             {
@@ -328,7 +348,18 @@ public sealed class HeadlessSessionStore(
 /// </summary>
 public sealed class HeadlessConversations
 {
-    private readonly ConcurrentDictionary<Guid, HeadlessPromptLease> _running = new();
+    /// <summary>
+    /// Quantos prompts esperam a vez numa conversa (E6). Um: a próxima
+    /// instrução enquanto o Claude responde. Cada um que espera ocupa uma das
+    /// operações simultâneas do agente (<see cref="RemoteDispatchLimits.MaxConcurrent"/>).
+    /// </summary>
+    public const int MaxWaiting = 1;
+
+    private readonly Lock _gate = new();
+
+    private readonly Dictionary<Guid, HeadlessPromptLease> _running = [];
+
+    private readonly Dictionary<Guid, LinkedList<TaskCompletionSource<HeadlessPromptLease?>>> _waiting = [];
 
     private readonly ConcurrentDictionary<Guid, ConcurrentDictionary<string, bool>> _remembered = new();
 
@@ -339,24 +370,169 @@ public sealed class HeadlessConversations
     /// </summary>
     public HeadlessPromptLease? TryBegin(Guid sessionId)
     {
-        var lease = new HeadlessPromptLease(this, sessionId);
-
-        if (_running.TryAdd(sessionId, lease))
+        lock (_gate)
         {
+            if (_running.ContainsKey(sessionId))
+            {
+                return null;
+            }
+
+            var lease = new HeadlessPromptLease(this, sessionId);
+            _running[sessionId] = lease;
             return lease;
         }
-
-        lease.Dispose();
-        return null;
     }
 
-    public bool IsBusy(Guid sessionId) => _running.ContainsKey(sessionId);
+    /// <summary>
+    /// A conversa para este prompt, na ordem em que chegaram (E6): na hora, se
+    /// está livre; senão, quando o prompt da frente soltar. Nulo: a conversa
+    /// foi parada enquanto ele esperava.
+    /// </summary>
+    /// <exception cref="DomainException">A fila da conversa está cheia.</exception>
+    public async Task<HeadlessPromptLease?> WaitAsync(Guid sessionId, Func<Task> waiting, CancellationToken cancellationToken)
+    {
+        TaskCompletionSource<HeadlessPromptLease?> turn;
+        LinkedListNode<TaskCompletionSource<HeadlessPromptLease?>> node;
 
-    /// <summary>Encerra o prompt da conversa, se houver um aqui (rodando ou prestes a abrir o processo).</summary>
-    public bool Stop(Guid sessionId) => _running.TryGetValue(sessionId, out var lease) && lease.Cancel();
+        lock (_gate)
+        {
+            if (!_running.ContainsKey(sessionId))
+            {
+                var lease = new HeadlessPromptLease(this, sessionId);
+                _running[sessionId] = lease;
+                return lease;
+            }
 
-    internal void End(HeadlessPromptLease lease) =>
-        _running.TryRemove(new KeyValuePair<Guid, HeadlessPromptLease>(lease.SessionId, lease));
+            if (!_waiting.TryGetValue(sessionId, out var queue))
+            {
+                _waiting[sessionId] = queue = new LinkedList<TaskCompletionSource<HeadlessPromptLease?>>();
+            }
+
+            if (queue.Count >= MaxWaiting)
+            {
+                throw new DomainException(HeadlessAgentPlanner.QueueFullMessage);
+            }
+
+            turn = new TaskCompletionSource<HeadlessPromptLease?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            node = queue.AddLast(turn);
+        }
+
+        await using var registration = cancellationToken.Register(() =>
+        {
+            lock (_gate)
+            {
+                if (node.List is { } list)
+                {
+                    list.Remove(node);
+                }
+            }
+
+            turn.TrySetCanceled(cancellationToken);
+        });
+
+        try
+        {
+            await waiting();
+        }
+        catch
+        {
+            // Sem o aviso, o prompt não espera: a vez que talvez já tenha chegado passa adiante.
+            lock (_gate)
+            {
+                if (node.List is { } list)
+                {
+                    list.Remove(node);
+                }
+            }
+
+            if (!turn.TrySetCanceled() && turn.Task.IsCompletedSuccessfully)
+            {
+                turn.Task.Result?.Dispose();
+            }
+
+            throw;
+        }
+
+        return await turn.Task;
+    }
+
+    public bool IsBusy(Guid sessionId)
+    {
+        lock (_gate)
+        {
+            return _running.ContainsKey(sessionId);
+        }
+    }
+
+    /// <summary>Quantos prompts esperam a vez na conversa.</summary>
+    public int WaitingFor(Guid sessionId)
+    {
+        lock (_gate)
+        {
+            return _waiting.TryGetValue(sessionId, out var queue) ? queue.Count : 0;
+        }
+    }
+
+    /// <summary>
+    /// Encerra o prompt da conversa, se houver um aqui (rodando ou prestes a
+    /// abrir o processo), e dispensa os que esperavam a vez.
+    /// </summary>
+    public bool Stop(Guid sessionId)
+    {
+        HeadlessPromptLease? running;
+        List<TaskCompletionSource<HeadlessPromptLease?>> dismissed;
+
+        lock (_gate)
+        {
+            running = _running.GetValueOrDefault(sessionId);
+            dismissed = _waiting.Remove(sessionId, out var queue) ? [.. queue] : [];
+        }
+
+        foreach (var turn in dismissed)
+        {
+            turn.TrySetResult(null);
+        }
+
+        return running?.Cancel() == true;
+    }
+
+    /// <summary>O prompt soltou a conversa: a vez passa ao primeiro que espera, se houver.</summary>
+    internal void End(HeadlessPromptLease lease)
+    {
+        lock (_gate)
+        {
+            if (!_running.TryGetValue(lease.SessionId, out var current) || current != lease)
+            {
+                return;
+            }
+
+            _running.Remove(lease.SessionId);
+
+            if (!_waiting.TryGetValue(lease.SessionId, out var queue))
+            {
+                return;
+            }
+
+            while (queue.First is { } first)
+            {
+                queue.RemoveFirst();
+                var next = new HeadlessPromptLease(this, lease.SessionId);
+
+                if (first.Value.TrySetResult(next))
+                {
+                    _running[lease.SessionId] = next;
+                    break;
+                }
+
+                next.Dispose();
+            }
+
+            if (queue.Count == 0)
+            {
+                _waiting.Remove(lease.SessionId);
+            }
+        }
+    }
 
     public bool IsRemembered(Guid sessionId, string tool) =>
         _remembered.TryGetValue(sessionId, out var tools) && tools.ContainsKey(tool);
@@ -454,6 +630,10 @@ public sealed class HeadlessPromptRunner(
 
     /// <inheritdoc cref="HeadlessConversations.TryBegin"/>
     public HeadlessPromptLease? TryBegin(Guid sessionId) => conversations.TryBegin(sessionId);
+
+    /// <inheritdoc cref="HeadlessConversations.WaitAsync"/>
+    public Task<HeadlessPromptLease?> WaitAsync(Guid sessionId, Func<Task> waiting, CancellationToken cancellationToken) =>
+        conversations.WaitAsync(sessionId, waiting, cancellationToken);
 
     public async Task<RemoteOperationResult> RunAsync(
         RemoteExecution execution,
@@ -832,6 +1012,10 @@ public sealed class AgentStartExecutor(IUseCaseRunner runner, HeadlessPromptRunn
 /// <summary><c>agent.prompt</c>: mais um prompt na mesma conversa (<c>--resume</c>), com o perfil dela.</summary>
 public sealed class AgentPromptExecutor(IUseCaseRunner runner, HeadlessPromptRunner prompts) : IRemoteOperationExecutor
 {
+    public const string QueuedText = "Na fila: o Claude termina o prompt anterior e responde este em seguida.";
+
+    public const string StoppedWhileQueued = "A conversa foi parada antes deste prompt.";
+
     public string Kind => RemoteOperationKinds.AgentPrompt;
 
     public async Task<RemoteRefusal?> CheckAsync(RemoteOperationRequest request, CancellationToken cancellationToken)
@@ -858,14 +1042,33 @@ public sealed class AgentPromptExecutor(IUseCaseRunner runner, HeadlessPromptRun
         }
 
         var prompt = execution.Payload<PromptRequest>();
+        var conversation = prompt.AgentSessionId ?? Guid.Empty;
+        HeadlessPromptLease? lease;
 
-        // A conversa primeiro, antes de qualquer gravação: o segundo prompt junto é recusado sem tocar nela.
-        using var lease = prompts.TryBegin(prompt.AgentSessionId ?? Guid.Empty);
+        // A conversa primeiro, antes de qualquer gravação. Com outro prompt nela, este espera a vez (E6) sem tocar em nada.
+        try
+        {
+            lease = await prompts.WaitAsync(
+                conversation,
+                () => execution.EmitAsync(
+                    RemoteEventKind.StepStarted,
+                    QueuedText,
+                    "agent",
+                    JsonSerializer.SerializeToElement(new { agentSessionId = conversation, canContinue = true }),
+                    CancellationToken.None),
+                cancellationToken);
+        }
+        catch (DomainException exception)
+        {
+            return RemoteOperationResult.Failure(RemoteErrorCodes.PolicyRefused, exception.Message);
+        }
 
         if (lease is null)
         {
-            return RemoteOperationResult.Failure(RemoteErrorCodes.PolicyRefused, HeadlessAgentPlanner.BusyMessage);
+            return RemoteOperationResult.Failure(RemoteErrorCodes.PolicyRefused, StoppedWhileQueued);
         }
+
+        using var _ = lease;
 
         var (sessionId, target) = await TargetAsync(execution.Request, leased: true, cancellationToken);
         await runner.RunAsync<HeadlessSessionStore, bool>(

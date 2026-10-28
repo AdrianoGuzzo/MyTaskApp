@@ -147,8 +147,10 @@ as conversas abertas de qualquer tela: do celular, deste desktop ou de outro.
 - **A linha do tempo** junta os prompts da conversa, em ordem: "Você: …" (o
   prompt, com senhas mascaradas), as respostas, as ferramentas, as aprovações
   e como cada prompt terminou.
-- **O próximo prompt e o parar** saem da conversa aberta. Enquanto o Claude
-  responde, o próximo prompt espera: só um por vez em cada conversa.
+- **O próximo prompt e o parar** saem da conversa aberta. Mandado com o Claude
+  respondendo, o prompt entra na fila da conversa ("Na fila: …") e roda logo
+  depois da resposta atual. Cabe um esperando por vez; parar a conversa
+  dispensa o que esperava.
 - **Fechar a janela não perde a conversa.** Ao abrir *Controlar* de novo, o
   ambiente retoma a conversa que espera o próximo prompt. "Nova conversa" e
   "Parar" a deixam de lado.

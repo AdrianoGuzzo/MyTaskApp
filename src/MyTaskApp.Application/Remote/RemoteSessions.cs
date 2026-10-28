@@ -370,8 +370,13 @@ public static class RemoteSessionTexts
         };
     }
 
-    /// <summary>Mais um prompt: só na conversa que espera o próximo. Com o agente parado, o pedido espera na fila.</summary>
-    public static bool CanPrompt(RemoteAgentSessionView session) => session.Status == RemoteAgentSessionStatus.Idle;
+    /// <summary>
+    /// Mais um prompt: na conversa que espera o próximo e, com o Claude
+    /// respondendo, na fila dela (E6). Com o agente parado, o pedido espera na
+    /// fila do servidor.
+    /// </summary>
+    public static bool CanPrompt(RemoteAgentSessionView session) =>
+        session.Status is RemoteAgentSessionStatus.Idle or RemoteAgentSessionStatus.Running or RemoteAgentSessionStatus.Starting;
 
     public static bool CanStop(RemoteAgentSessionView session) =>
         session.Status is not (RemoteAgentSessionStatus.Stopped or RemoteAgentSessionStatus.Failed);

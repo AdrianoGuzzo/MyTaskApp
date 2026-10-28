@@ -466,7 +466,7 @@ public class RemoteControlViewModelTests
 
         _runner.Enqueue<GetRemoteSessionTimelineHandler>(Timeline(answering, ["Você: Rode tudo"], live: true));
         sessions.Selected = sessions.Items[1];
-        sessions.CanPrompt.Should().BeFalse("respondendo, o próximo prompt espera");
+        sessions.CanPrompt.Should().BeTrue("respondendo, o próximo prompt entra na fila da conversa (ADR-095)");
         await sessions.StopCommand.ExecuteAsync(null);
         _runner.Invoked.Count(type => type == typeof(SendRemoteOperationHandler)).Should().Be(2);
     }

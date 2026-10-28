@@ -135,7 +135,9 @@ public sealed class RemoteSessionsTests
         list.Items[0].State.Should().StartWith("Sem notícias do agente desde").And.EndWith("o estado é desconhecido");
         list.Items[1].State.Should().Be("Esperando o próximo prompt");
         list.Items[1].CanPrompt.Should().BeTrue();
-        list.Items[0].CanPrompt.Should().BeFalse();
+        list.Items[0].CanPrompt.Should().BeTrue("com o Claude respondendo, o próximo espera a vez (E6)");
+        RemoteSessionTexts.CanPrompt(known with { Status = RemoteAgentSessionStatus.Stopped }).Should().BeFalse();
+        RemoteSessionTexts.CanPrompt(known with { Status = RemoteAgentSessionStatus.Failed }).Should().BeFalse();
         _server.ListedDevice.Should().Be(device);
     }
 

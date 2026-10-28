@@ -340,8 +340,54 @@ public sealed class AgentSessionExecutorsTests : IAsyncDisposable
     }
 
     /// <summary>Dois prompts na mesma conversa ao mesmo tempo: um roda, o outro é recusado sem tocar nela.</summary>
+    /// <summary>
+    /// A fila da conversa (E6): o prompt que chega com o Claude respondendo
+    /// espera a vez sem tocar na conversa, diz que está na fila, e roda logo
+    /// depois do primeiro. Mais um, com a fila cheia, é recusado.
+    /// </summary>
     [Fact]
-    public async Task TwoPromptsAtOnce_TheSecondIsRefused_WithoutTouchingTheConversation()
+    public async Task APromptWhileClaudeAnswers_WaitsItsTurn_AndRunsRightAfter()
+    {
+        _runner.Script(FakeHeadlessProvider.Done());
+        await Start.ExecuteAsync(Execution(StartRequest("read", "Leia o README")), Ct);
+        var session = _sessions.Sessions.Single();
+
+        var running = new TaskCompletionSource();
+        var release = new TaskCompletionSource();
+        _runner.Script(
+            async () =>
+            {
+                running.SetResult();
+                await release.Task;
+            },
+            FakeHeadlessProvider.Done());
+        _runner.Script(FakeHeadlessProvider.Done());
+        var first = PromptRequest(session.Id, "Rode os testes");
+        var firstRun = Prompt.ExecuteAsync(Execution(first), Ct);
+        await running.Task.WaitAsync(TimeSpan.FromSeconds(10), Ct);
+
+        var second = PromptRequest(session.Id, "E o lint?");
+        (await Prompt.CheckAsync(second, Ct)).Should().BeNull("na fila, não recusado");
+        var secondRun = Prompt.ExecuteAsync(Execution(second), Ct);
+        await WaitUntilAsync(IsQueued);
+
+        session.RemoteOperationId.Should().Be(first.OperationId, "o segundo ainda não tocou na conversa");
+        var third = PromptRequest(session.Id, "E a documentação?");
+        (await Prompt.CheckAsync(third, Ct))!.Summary.Should().Be(HeadlessAgentPlanner.QueueFullMessage);
+        var refused = await Prompt.ExecuteAsync(Execution(third), Ct);
+        refused.Summary.Should().Be(HeadlessAgentPlanner.QueueFullMessage);
+
+        release.SetResult();
+        (await firstRun.WaitAsync(TimeSpan.FromSeconds(10), Ct)).Succeeded.Should().BeTrue();
+        (await secondRun.WaitAsync(TimeSpan.FromSeconds(10), Ct)).Succeeded.Should().BeTrue();
+
+        _runner.Prompts.Should().Equal("Leia o README", "Rode os testes", "E o lint?");
+        session.RemoteOperationId.Should().Be(second.OperationId);
+    }
+
+    /// <summary>Parar a conversa encerra o prompt que roda e dispensa o que esperava a vez.</summary>
+    [Fact]
+    public async Task StoppingTheConversation_DismissesThePromptWaitingItsTurn()
     {
         _runner.Script(FakeHeadlessProvider.Done());
         await Start.ExecuteAsync(Execution(StartRequest("read", "Leia o README")), Ct);
@@ -353,22 +399,58 @@ public sealed class AgentSessionExecutorsTests : IAsyncDisposable
             running.SetResult();
             await Task.Delay(Timeout.Infinite, _runner.Token);
         });
-        var first = PromptRequest(session.Id, "Rode os testes");
-        var prompt = Prompt.ExecuteAsync(Execution(first), Ct);
+        var firstRun = Prompt.ExecuteAsync(Execution(PromptRequest(session.Id, "Rode os testes")), Ct);
         await running.Task.WaitAsync(TimeSpan.FromSeconds(10), Ct);
-
-        var second = PromptRequest(session.Id, "E o lint?");
-        (await Prompt.CheckAsync(second, Ct))!.Summary.Should().Be(HeadlessAgentPlanner.BusyMessage);
-        var refused = await Prompt.ExecuteAsync(Execution(second), Ct);
-
-        refused.Succeeded.Should().BeFalse();
-        refused.Code.Should().Be(RemoteErrorCodes.PolicyRefused);
-        refused.Summary.Should().Be(HeadlessAgentPlanner.BusyMessage);
-        session.RemoteOperationId.Should().Be(first.OperationId, "o segundo não chegou a gravar nada");
-        _runner.Prompts.Should().Equal("Leia o README", "Rode os testes");
+        var secondRun = Prompt.ExecuteAsync(Execution(PromptRequest(session.Id, "E o lint?")), Ct);
+        await WaitUntilAsync(IsQueued);
 
         await Stop.ExecuteAsync(Execution(StopRequest(session.Id)), Ct);
-        await prompt.WaitAsync(TimeSpan.FromSeconds(10), Ct);
+
+        var dismissed = await secondRun.WaitAsync(TimeSpan.FromSeconds(10), Ct);
+        dismissed.Succeeded.Should().BeFalse();
+        dismissed.Summary.Should().Be(AgentPromptExecutor.StoppedWhileQueued);
+        await firstRun.WaitAsync(TimeSpan.FromSeconds(10), Ct);
+        _runner.Prompts.Should().Equal("Leia o README", "Rode os testes");
+    }
+
+    /// <summary>Quem desiste na fila (o pedido cancelado) sai dela, e a vez segue para os outros.</summary>
+    [Fact]
+    public async Task APromptCanceledInTheQueue_LeavesIt()
+    {
+        var conversations = new HeadlessConversations();
+        var sessionId = Guid.CreateVersion7();
+        var first = conversations.TryBegin(sessionId)!;
+        using var cancel = new CancellationTokenSource();
+
+        var waiting = conversations.WaitAsync(sessionId, () => Task.CompletedTask, cancel.Token);
+        conversations.WaitingFor(sessionId).Should().Be(1);
+        await cancel.CancelAsync();
+
+        await FluentActions.Awaiting(() => waiting).Should().ThrowAsync<OperationCanceledException>();
+        conversations.WaitingFor(sessionId).Should().Be(0);
+        first.Dispose();
+        conversations.IsBusy(sessionId).Should().BeFalse("ninguém esperava mais");
+        using var next = await conversations.WaitAsync(sessionId, () => Task.CompletedTask, Ct);
+        next.Should().NotBeNull();
+    }
+
+    private bool IsQueued()
+    {
+        lock (_events)
+        {
+            return _events.Any(item => item.Text == AgentPromptExecutor.QueuedText);
+        }
+    }
+
+    private static async Task WaitUntilAsync(Func<bool> condition)
+    {
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(10);
+
+        while (!condition())
+        {
+            DateTimeOffset.UtcNow.Should().BeBefore(deadline);
+            await Task.Delay(10, Ct);
+        }
     }
 
     /// <summary>A prévia do prompt no primeiro evento vai mascarada e com teto; o Claude recebe o texto inteiro.</summary>

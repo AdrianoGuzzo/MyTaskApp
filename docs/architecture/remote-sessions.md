@@ -73,8 +73,9 @@ Não passa pelo servidor.
 ### Hipóteses não confirmadas
 
 - O processo vivo (`--input-format stream-json` com `--replay-user-messages`)
-  aceitaria instrução com o Claude respondendo. Não foi testado com o Claude de
-  verdade; fica para a E6, atrás de um teste opt-in.
+  aceitaria instrução com o Claude respondendo. A E6 o deixou atrás do teste
+  opt-in `LiveProcessClaudeTests` e não o adotou (ADR-095); sem o Claude logado
+  nesta máquina, o teste ainda não rodou de verdade.
 
 ## 3. Alternativas
 
@@ -83,7 +84,7 @@ Não passa pelo servidor.
 | Opção | Interface oficial? | Prós | Contras | Decisão |
 |---|---|---|---|---|
 | **Headless, um processo por prompt (`-p`, `--resume`)** | sim | já existe, testado; aprovação pelo host de permissão; processo morre no fim | não recebe instrução no meio da resposta | **mantido** |
-| Processo vivo (`--input-format stream-json`, `--replay-user-messages`) | sim | instrução no meio; confirmação de recebimento | processo longo para vigiar; mais estado no agente | avaliar na E6 |
+| Processo vivo (`--input-format stream-json`, `--replay-user-messages`) | sim | instrução no meio; confirmação de recebimento | processo longo para vigiar; mais estado no agente | avaliado na E6, não adotado: a fila por conversa entrega na ordem ([ADR-095](decisions/095-fila-de-prompts-por-conversa.md)) |
 | Remote Control nativo | não para terceiros | a experiência pronta do Claude | só com claude.ai e o app do Claude, assinatura, interativo | não |
 | Channels | prévia | canal próprio | `--dangerously-load-development-channels`, diálogo interativo, ignorado em `-p` | não |
 | Terminal real com leitura do texto | — | o que o usuário vê | o texto não é fonte da verdade; frágil | não |
