@@ -378,6 +378,22 @@ public sealed class RemoteTests : IAsyncLifetime
         operation.Output.Should().StartWith("linha 1\n").And.EndWith("linha 10\n");
     }
 
+    /// <summary>A saída fecha com o resultado: parada na última etapa, parecia que ainda rodava.</summary>
+    [Fact]
+    public async Task TheOperationScreen_EndsWithTheResult()
+    {
+        await ReadyAsync();
+        var operationId = await SendAsync();
+        Finish(operationId, ("Criando o worktree.", RemoteEventKind.StepStarted, null), ("Pronto.", RemoteEventKind.Result, null));
+        var operation = _app.Get<RemoteOperationViewModel>();
+
+        await operation.OpenAsync(operationId, Notebook);
+        await AdvanceUntilAsync(() => operation.IsFinished, RemoteOperationViewModel.Interval);
+        operation.Close();
+
+        operation.Output.Should().Be("» Criando o worktree.\n— Pronto.\n");
+    }
+
     [Fact]
     public async Task TheSentList_ShowsTheStateFromTheServer()
     {

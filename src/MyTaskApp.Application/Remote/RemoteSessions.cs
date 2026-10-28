@@ -470,11 +470,15 @@ public static class RemoteSessionTexts
         entries.Add(entry);
     }
 
-    /// <summary>A linha de um evento na linha do tempo: o prompt de quem pediu aparece como "Você".</summary>
-    public static string? Line(RemoteOperationEvent item) =>
-        item is { Kind: RemoteEventKind.StepStarted, Data: { ValueKind: JsonValueKind.Object } data }
-        && data.TryGetProperty("prompt", out var prompt)
-        && prompt.ValueKind == JsonValueKind.String
-            ? $"Você: {prompt.GetString()}"
-            : RemoteOperationTexts.Line(item);
+    /// <summary>
+    /// A linha de um evento na linha do tempo: o prompt de quem pediu aparece
+    /// como "Você". O resultado não: a operação lida até o fim já fecha com o resumo.
+    /// </summary>
+    public static string? Line(RemoteOperationEvent item) => item switch
+    {
+        { Kind: RemoteEventKind.Result } => null,
+        { Kind: RemoteEventKind.StepStarted, Data: { ValueKind: JsonValueKind.Object } data }
+            when data.TryGetProperty("prompt", out var prompt) && prompt.ValueKind == JsonValueKind.String => $"Você: {prompt.GetString()}",
+        _ => RemoteOperationTexts.Line(item),
+    };
 }

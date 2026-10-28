@@ -179,10 +179,17 @@ public sealed class RemoteSessionsTests
     {
         var device = Guid.CreateVersion7();
         var session = View(Guid.CreateVersion7(), device, _task.Id, RemoteAgentSessionStatus.Running);
-        var first = Operation(RemoteOperationStatus.Succeeded, 2, "Respondeu em 1 turno.");
+        var first = Operation(RemoteOperationStatus.Succeeded, 3, "Respondeu em 1 turno.");
         var second = Operation(RemoteOperationStatus.Succeeded, 3, "Respondeu em 2 turnos.");
         _server.Detail = new RemoteAgentSessionDetail(session, new RemoteAgentPresence(device, Now), [first, second]);
-        Events(first.OperationId, hasMoreAfterFirstPage: false, Prompt(first.OperationId, 1, "Leia o README"), Message(first.OperationId, 2, "Li."));
+
+        // O evento do resultado, como o agente manda: o resumo sai uma vez só, no fecho.
+        Events(
+            first.OperationId,
+            hasMoreAfterFirstPage: false,
+            Prompt(first.OperationId, 1, "Leia o README"),
+            Message(first.OperationId, 2, "Li."),
+            new RemoteOperationEvent(first.OperationId, 3, Now, RemoteEventKind.Result, Text: "Respondeu em 1 turno."));
         Events(second.OperationId, hasMoreAfterFirstPage: true, Prompt(second.OperationId, 1, "E os testes?"), Message(second.OperationId, 2, "Rodando."), Message(second.OperationId, 3, "Passaram."));
         var handler = new GetRemoteSessionTimelineHandler(_server, _operations, _tasks, _time);
 

@@ -150,7 +150,11 @@ public static class RemoteOperationTexts
         return $"{profile.Name} ({source?.Name ?? "?"} → {target?.Name ?? "?"}{production})";
     }
 
-    /// <summary>A linha que o evento vira na saída; nula para os que não aparecem (estado, resultado).</summary>
+    /// <summary>
+    /// A linha que o evento vira na saída; nula para os que não aparecem
+    /// (estado). O resultado fecha a saída com o resumo: sem ele, ela parava
+    /// na última etapa começada, como se ainda rodasse.
+    /// </summary>
     public static string? Line(RemoteOperationEvent item) => item.Kind switch
     {
         RemoteEventKind.Output => item.Text,
@@ -160,6 +164,7 @@ public static class RemoteOperationTexts
         RemoteEventKind.ApprovalRequested => $"» Esperando aprovação: {item.Text}",
         RemoteEventKind.ApprovalResolved => $"» {item.Text}",
         RemoteEventKind.StepStarted when item.Text is not null => $"» {item.Text}",
+        RemoteEventKind.Result when item.Text is not null => $"— {item.Text}",
         _ => null,
     };
 

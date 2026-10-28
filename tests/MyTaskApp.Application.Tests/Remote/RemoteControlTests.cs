@@ -205,6 +205,9 @@ public sealed class RemoteControlTests
         RemoteOperationTexts.Line(new(operation, 7, Now, RemoteEventKind.ApprovalResolved, Text: "Permitido")).Should().Be("» Permitido");
         RemoteOperationTexts.Line(new(operation, 8, Now, RemoteEventKind.StepStarted, Text: "Worktree")).Should().Be("» Worktree");
         RemoteOperationTexts.Line(new(operation, 9, Now, RemoteEventKind.StepStarted)).Should().BeNull();
+        RemoteOperationTexts.Line(new(operation, 10, Now, RemoteEventKind.Result, Text: "Worktree criado: feature/x em App · api, a partir de master."))
+            .Should().Be("— Worktree criado: feature/x em App · api, a partir de master.", "a saída fecha com o resultado, e não na última etapa");
+        RemoteOperationTexts.Line(new(operation, 11, Now, RemoteEventKind.Result)).Should().BeNull();
     }
 
     /// <summary>Cada estado tem a frase dele, nas duas telas; nenhum cai no nome do enum.</summary>
