@@ -1,6 +1,6 @@
 # Fase 3 — A conversa do Claude como uma sessão só: roteiro
 
-> **Estado:** E1 a E4 feitas; E5 a E9 planejadas. O desenho, a auditoria e a
+> **Estado:** E1 a E5 feitas; E6 a E9 planejadas. O desenho, a auditoria e a
 > comparação das alternativas estão em
 > [`../architecture/remote-sessions.md`](../architecture/remote-sessions.md).
 > As decisões estão nos ADR-091 a 094 do [índice](../architecture/README.md).
@@ -24,7 +24,7 @@
 | E2 | as conversas da máquina, com a linha do tempo, no celular e em outro desktop; agente parado visível | E1 | ✔ |
 | E3 | a saída e as aprovações na hora, pelo hub | E2 | ✔ |
 | E4 | responder a pergunta do Claude de longe | E1 | ✔ |
-| E5 | começar no computador e continuar no celular | E2 | planejada |
+| E5 | começar no computador e continuar no celular | E2 | ✔ |
 | E6 | instrução com o Claude respondendo | E2 | planejada |
 | E7 | linha do tempo em cartões no celular | E2 | planejada |
 | E8 | push com o app fechado | E3 | planejada |
@@ -221,14 +221,25 @@ a resposta.
 
 **Arquivos:**
 
-- `AdmitRemoteOperation` (confiar na chave do próprio dispositivo);
-- o card da tarefa ("Abrir Claude gerenciado");
-- o modelo de ameaças.
+- `RemoteTrust` (os pareados mais a própria chave), na admissão e nas
+  respostas de aprovação do `RemoteOperationDispatcher`;
+- o card da tarefa: "Abrir Claude gerenciado" (`RemotePrepareViewModel`,
+  `TaskDevelopmentsViewModel`), que abre *Controlar* desta máquina no
+  ambiente da tarefa;
+- o modelo de ameaças (RS-09 e R-11).
+
+**Migrations:** nenhuma. O servidor já aceitava um pedido para o próprio
+dispositivo; quem recusava era o agente.
 
 **Testes:**
 
-- o próprio dispositivo é admitido, e outro sem pareamento não é;
-- a conversa aberta no desktop aparece no celular (ponta a ponta).
+- `AdmitRemoteOperationTests`: a própria máquina é admitida e roda como
+  "este computador"; o id dela com outra chave, ou a chave dela dizendo ser
+  outro, não; nada sem aceitar controle; a resposta dela vale como aprovação;
+- `RemotePrepareViewModelTests`: o botão abre *Controlar* desta máquina no
+  ambiente da tarefa, avisa quando o ambiente ainda não chegou ao agente, e
+  some sem aceitar controle;
+- ponta a ponta: `AConversationStartedOnTheDesktop_IsContinuedFromThePhone`.
 
 **Aceite:** começar no computador e mandar o próximo prompt do celular.
 

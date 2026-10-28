@@ -24,6 +24,10 @@
   *☰ → Sons do Claude Code…*.
 - **Abrir Claude Code** também fica no menu `⋯` da linha, sem precisar abrir a
   tarefa.
+- **Abrir Claude gerenciado**, com esta máquina aceitando controle remoto, roda
+  a conversa pelo agente daqui, sem terminal, para continuar do celular ou de
+  outro computador ([controle remoto](../remote.md#as-conversas-do-claude),
+  ADR-092).
 
 A **Consulta Inteligente**, que abre o Claude Code só lendo, sem os parâmetros
 acima, tem guia próprio: [`../consulta-inteligente.md`](../consulta-inteligente.md).

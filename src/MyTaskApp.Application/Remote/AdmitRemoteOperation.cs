@@ -30,6 +30,36 @@ public abstract record RemoteAdmission
 public sealed record AdmitRemoteOperation(SignedEnvelope Envelope, int Running);
 
 /// <summary>
+/// Em quem o agente confia (ADR-087 e ADR-092): os controladores pareados e
+/// esta própria instalação, pelo mesmo <c>DeviceId</c> e pela chave do cofre,
+/// a mesma que o servidor tem no registro. É o que deixa o desktop pedir ao
+/// agente da própria máquina a "sessão gerenciada", que o celular continua.
+/// </summary>
+/// <remarks>
+/// A própria instalação não é um pareamento: não fica no banco, não aparece em
+/// Máquinas e não se revoga. Deixa de valer quando a máquina para de aceitar
+/// controle (o item 1 da admissão) ou quando a chave do cofre muda. Quem tem a
+/// chave já roda tudo nesta máquina como este usuário: confiar nela não abre
+/// porta nova.
+/// </remarks>
+public sealed class RemoteTrust(ITrustedControllerRepository trusted, IDeviceIdentity identity, IDeviceSigner signer)
+{
+    /// <summary>O nome com que esta instalação aparece na auditoria ("Remoto: este computador").</summary>
+    public const string OwnNickname = "este computador";
+
+    public async Task<IReadOnlyList<TrustedController>> ListAsync(CancellationToken cancellationToken = default)
+    {
+        var key = await signer.GetPublicKeyAsync(cancellationToken);
+        var paired = await trusted.ListAllActiveAsync(cancellationToken);
+
+        // O "pareamento" da própria é o próprio dispositivo: nunca o de um pedido de pareamento de verdade.
+        var own = TrustedController.Approve(identity.DeviceId, OwnNickname, key.Fingerprint, key.SubjectPublicKeyInfo, identity.DeviceId, DateTimeOffset.UnixEpoch);
+
+        return [.. paired.Where(controller => controller.Fingerprint != key.Fingerprint), own];
+    }
+}
+
+/// <summary>
 /// A validação local da autorização (seção 4.4 da arquitetura, ADR-087), na
 /// ordem, e a primeira que falha é o motivo. O servidor confere quase tudo
 /// isso também, mas quem decide é o agente: o servidor não tem como fabricar
@@ -42,7 +72,7 @@ public sealed record AdmitRemoteOperation(SignedEnvelope Envelope, int Running);
 /// </remarks>
 public sealed class AdmitRemoteOperationHandler(
     IRemoteSettingsStore settings,
-    ITrustedControllerRepository trusted,
+    RemoteTrust trust,
     IDeviceIdentity identity,
     ISyncLocalStore sync,
     IRemoteOperationJournal journal,
@@ -64,13 +94,13 @@ public sealed class AdmitRemoteOperationHandler(
             return new RemoteAdmission.Refused(RemoteErrorCodes.RemoteDisabled, null);
         }
 
-        // 2. Assinado por um controlador que esta máquina aprovou e não revogou.
+        // 2. Assinado por um controlador que esta máquina aprovou e não revogou, ou por ela mesma (ADR-092).
         if (!RemoteJws.TryParse(command.Envelope, out var parts) || parts.Type != RemoteJws.OperationType)
         {
             return new RemoteAdmission.Refused(RemoteErrorCodes.UntrustedSignature, null);
         }
 
-        var controller = (await trusted.ListAllActiveAsync(cancellationToken))
+        var controller = (await trust.ListAsync(cancellationToken))
             .FirstOrDefault(candidate => candidate.Fingerprint == parts.KeyFingerprint);
 
         if (controller is null

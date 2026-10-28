@@ -241,6 +241,7 @@ public static class DependencyInjection
 
         // A fila de operações, do lado do agente (T-14, T-15): a validação local,
         // o despachante, o laço e o que esta versão sabe rodar (ADR-088).
+        services.AddScoped<RemoteTrust>();
         services.AddScoped<AdmitRemoteOperationHandler>();
         services.AddScoped<GetPendingApprovalsHandler>();
         services.AddScoped<AnswerApprovalHandler>();

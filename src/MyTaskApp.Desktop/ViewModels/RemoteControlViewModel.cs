@@ -192,6 +192,9 @@ public sealed partial class RemoteControlViewModel : ObservableObject
     private int _ticks;
     private bool _ticking;
 
+    /// <summary>O ambiente pedido na abertura, escolhido quando a lista chega.</summary>
+    private Guid? _preferred;
+
     public RemoteControlViewModel(IUseCaseRunner runner, ILogger<RemoteControlViewModel> logger, IRemoteWatch? watch = null)
     {
         _runner = runner;
@@ -285,11 +288,18 @@ public sealed partial class RemoteControlViewModel : ObservableObject
         : null;
 
     /// <summary>A janela abre com a máquina escolhida na lista.</summary>
-    public async Task OpenAsync(MachineView machine, CancellationToken cancellationToken)
+    /// <param name="developmentId">O ambiente que já abre escolhido: o da tarefa, no "Abrir Claude gerenciado" (ADR-092).</param>
+    public async Task OpenAsync(MachineView machine, CancellationToken cancellationToken, Guid? developmentId = null)
     {
         Machine = machine;
+        _preferred = developmentId;
         OnPropertyChanged(nameof(Title));
         await LoadAsync(cancellationToken);
+
+        if (developmentId is { } id && Environments.Count > 0 && SelectedEnvironment?.View.DevelopmentId != id)
+        {
+            StatusMessage = "O ambiente desta tarefa ainda não chegou ao agente. Escolha outro, ou espere um instante e atualize.";
+        }
     }
 
     [RelayCommand]
@@ -311,7 +321,7 @@ public sealed partial class RemoteControlViewModel : ObservableObject
                 (handler, token) => handler.HandleAsync(new GetRemoteControl(machine.DeviceId), token),
                 cancellationToken);
 
-            var selected = SelectedEnvironment?.View.DevelopmentId;
+            var selected = SelectedEnvironment?.View.DevelopmentId ?? _preferred;
             var profile = SelectedProfile?.Id;
             AgentProfiles.Clear();
 

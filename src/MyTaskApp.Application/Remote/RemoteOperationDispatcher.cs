@@ -435,8 +435,9 @@ public sealed class RemoteOperationDispatcher(
                     : await remote.RequestApprovalAsync(request, cancellationToken);
                 posted = true;
 
-                var trusted = await runner.RunAsync<ITrustedControllerRepository, IReadOnlyList<Domain.Remote.TrustedController>>(
-                    (repository, token) => repository.ListAllActiveAsync(token),
+                // Quem pode responder: os pareados e, na sessão gerenciada (ADR-092), o desktop desta máquina.
+                var trusted = await runner.RunAsync<RemoteTrust, IReadOnlyList<Domain.Remote.TrustedController>>(
+                    (trust, token) => trust.ListAsync(token),
                     cancellationToken);
 
                 if (RemoteApprovalVerifier.Verify(request, view, trusted) is { } result)

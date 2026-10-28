@@ -103,6 +103,58 @@ public sealed partial class RemoteOperationsEndToEndTests
         watch.IsConnected.Should().BeFalse("sem tela aberta, a conexão cai");
     }
 
+    /// <summary>
+    /// A sessão gerenciada (ADR-092), do computador para o celular: o desktop
+    /// do notebook pede ao próprio agente, que admite pela chave da máquina;
+    /// o celular vê a conversa e manda o próximo prompt, que o agente também
+    /// admite.
+    /// </summary>
+    [Fact]
+    public async Task AConversationStartedOnTheDesktop_IsContinuedFromThePhone()
+    {
+        var (notebook, phone, phoneKey) = await PairedAsync();
+        using var _ = phoneKey;
+        var (taskId, developmentId) = await ReadyEnvironmentAsync(notebook);
+        var conversation = await HeadlessConversationAsync(notebook, taskId, developmentId);
+
+        var mine = await notebook.UseCaseAsync<SendRemoteOperationHandler, RemoteOperationView>(
+            (handler, cancel) => handler.HandleAsync(
+                new SendRemoteOperation(
+                    notebook.Device.DeviceId,
+                    RemoteOperationKinds.AgentPrompt,
+                    JsonSerializer.SerializeToElement(new PromptRequest(conversation, "Rode os testes."), RemoteJson.Options),
+                    taskId),
+                cancel));
+
+        var admitted = (await AdmitAsync(notebook, mine.OperationId)).Should().BeOfType<RemoteAdmission.Admitted>().Subject;
+        admitted.Entry.ControllerNickname.Should().Be(RemoteTrust.OwnNickname);
+        await AnswerAsync(notebook, mine.OperationId, conversation, "Rode os testes.", "Passaram os 12.");
+        await notebook.Services.GetRequiredService<RemoteSessionPublisher>().PublishAsync(Ct);
+
+        // O celular: a conversa da máquina, com o prompt que o desktop mandou.
+        var list = await SendAsync<RemoteAgentSessionList>(phone, HttpMethod.Get, RemoteRoutes.SessionsQuery(notebook.Device.DeviceId, false, null), null);
+        list.Sessions.Should().ContainSingle(session => session.SessionId == conversation);
+        var detail = await SendAsync<RemoteAgentSessionDetail>(phone, HttpMethod.Get, RemoteRoutes.Session(conversation), null);
+        detail.Operations.Select(operation => operation.OperationId).Should().Equal(mine.OperationId);
+
+        var next = await RequestAsync(
+            notebook, phone, phoneKey, RemoteOperationKinds.AgentPrompt,
+            JsonSerializer.SerializeToElement(new PromptRequest(conversation, "E o build?"), RemoteJson.Options), taskId);
+
+        (await AdmitAsync(notebook, next.OperationId)).Should().BeOfType<RemoteAdmission.Admitted>();
+    }
+
+    /// <summary>O agente do notebook confere o pedido que está na fila dele, como faz a cada busca.</summary>
+    private static async Task<RemoteAdmission> AdmitAsync(SyncedDesktop notebook, Guid operationId)
+    {
+        var queued = await notebook.Services.GetRequiredService<IRemoteOperationsApi>().ListAgentOperationsAsync(Ct);
+        var envelope = queued.Single(operation => RemoteJws.TryParse(operation.Request, out var parts)
+            && JsonSerializer.Deserialize<RemoteOperationRequest>(parts.Payload, RemoteJson.Options)!.OperationId == operationId).Request;
+
+        return await notebook.UseCaseAsync<AdmitRemoteOperationHandler, RemoteAdmission>(
+            (handler, cancel) => handler.HandleAsync(new AdmitRemoteOperation(envelope, 0), cancel));
+    }
+
     private static async Task WaitForAsync(Func<bool> condition)
     {
         var deadline = DateTimeOffset.UtcNow.AddSeconds(30);

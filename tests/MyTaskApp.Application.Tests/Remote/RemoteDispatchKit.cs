@@ -39,6 +39,8 @@ internal sealed class RemoteDispatchKit : IAsyncDisposable
             .AddSingleton<IRemoteSettingsStore>(Settings)
             .AddSingleton<ITrustedControllerRepository>(Trusted)
             .AddSingleton<IDeviceIdentity>(Identity)
+            .AddSingleton<IDeviceSigner>(Signer)
+            .AddScoped<RemoteTrust>()
             .AddSingleton(Sync)
             .AddSingleton<IRemoteOperationJournal>(Journal)
             .AddSingleton<IRemoteEntityProbe>(Entities)
@@ -73,6 +75,9 @@ internal sealed class RemoteDispatchKit : IAsyncDisposable
     public FakeRemoteSettingsStore Settings { get; } = new();
 
     public FakeTrustedControllerRepository Trusted { get; } = new();
+
+    /// <summary>A chave desta máquina, a do cofre: o que ela mesma assina é admitido (ADR-092).</summary>
+    public FakeDeviceSigner Signer { get; } = new();
 
     public FakeDeviceIdentity Identity { get; } = new();
 
@@ -168,6 +173,7 @@ internal sealed class RemoteDispatchKit : IAsyncDisposable
         await Dispatcher.StopAsync(TimeSpan.FromSeconds(5));
         await _services.DisposeAsync();
         Phone.Dispose();
+        Signer.Dispose();
     }
 }
 

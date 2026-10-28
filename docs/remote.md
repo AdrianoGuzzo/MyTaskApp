@@ -175,6 +175,15 @@ O estado diz quem sabe o quê:
 agente, que roda os pedidos, aparece à parte: "agente parado desde…" quer dizer
 que os pedidos esperam na fila até ele voltar.
 
+**Começar no computador e continuar no celular.** Na aba *Desenvolvimento* da
+tarefa, **Abrir Claude gerenciado** (ao lado do terminal) abre *Controlar*
+desta própria máquina, já no ambiente da tarefa. A conversa roda pelo agente
+daqui, sem terminal, com os mesmos perfis e aprovações de longe, e aparece no
+celular e nos outros computadores para continuar. O botão só aparece com esta
+máquina aceitando controle; o pedido é assinado com a chave dela, sem
+pareamento consigo mesma (ADR-092). **Iniciar Claude Code**, no terminal,
+segue como sempre e não aparece de longe.
+
 Um servidor de antes das conversas mostra "O servidor ainda não guarda as
 conversas do Claude. Atualize o servidor." O resto do controle remoto
 funciona igual.

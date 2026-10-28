@@ -64,6 +64,15 @@ public sealed partial class RemotePrepareViewModel(
     [ObservableProperty]
     private bool _isAvailable;
 
+    /// <summary>
+    /// Esta máquina aceita controle: o agente dela pode rodar a sessão
+    /// gerenciada (ADR-092), e o "Abrir Claude gerenciado" aparece.
+    /// </summary>
+    [ObservableProperty]
+    private bool _canManage;
+
+    private MachineView? _here;
+
     [ObservableProperty]
     private bool _isOpen;
 
@@ -117,6 +126,8 @@ public sealed partial class RemotePrepareViewModel(
         _isReadOnly = isReadOnly;
         IsOpen = false;
         IsAvailable = false;
+        CanManage = false;
+        _here = null;
     }
 
     /// <summary>Quem está ligado agora. Sem o remoto pronto, ou sem ninguém, o botão some.</summary>
@@ -125,6 +136,7 @@ public sealed partial class RemotePrepareViewModel(
         if (_isReadOnly || !account.IsAvailable)
         {
             IsAvailable = false;
+            CanManage = false;
             return;
         }
 
@@ -147,12 +159,34 @@ public sealed partial class RemotePrepareViewModel(
 
             SelectedMachine = Machines.FirstOrDefault(machine => machine.View.DeviceId == selected) ?? (IsOpen ? Machines.FirstOrDefault() : null);
             IsAvailable = Machines.Count > 0;
+            _here = view.Availability == RemoteAvailability.Ready && view.Settings.AcceptControl
+                ? view.Machines.FirstOrDefault(machine => machine.IsThis && machine.AcceptsControl)
+                : null;
+            CanManage = _here is not null;
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             logger.LogInformation(exception, "RemotePrepareMachinesUnavailable");
             IsAvailable = false;
+            CanManage = false;
         }
+    }
+
+    /// <summary>
+    /// "Abrir Claude gerenciado" (ADR-092): a tela "Operação" desta própria
+    /// máquina, no ambiente da tarefa. A conversa roda pelo agente daqui, sem
+    /// terminal, e aparece no celular e nos outros computadores.
+    /// </summary>
+    public async Task OpenManagedAsync(Guid developmentId)
+    {
+        if (_here is not { } here)
+        {
+            return;
+        }
+
+        var opened = control();
+        ControlOpened?.Invoke(this, opened);
+        await opened.OpenAsync(here, CancellationToken.None, developmentId);
     }
 
     [RelayCommand]

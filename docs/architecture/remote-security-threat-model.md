@@ -124,6 +124,9 @@ flowchart LR
 - **RS-09** Toda operação e resposta de aprovação é um JWS ES256 conferido
   pelo agente contra `TrustedControllers`. O servidor confere também, mas não
   decide sozinho. O cancelamento não é assinado (R-08): só para, nunca começa.
+  Desde a fase 3 (ADR-092), o agente confia também na própria instalação: o
+  mesmo `DeviceId` e a chave do cofre. É o que deixa o desktop pedir a sessão
+  gerenciada ao agente da mesma máquina (R-11).
 - **RS-10** "Aceitar controle remoto" é ligado **só localmente**, vem
   desligado e não sincroniza.
 
@@ -252,6 +255,7 @@ O que muda é **quem confirma**: em vez do diálogo da tela, uma
 | R-07 | Disponibilidade depende do servidor do usuário | é o desenho do ADR-078 | nada: sem servidor, nada remoto, e o local segue inteiro |
 | R-08 | O cancelamento não é assinado: um servidor comprometido pode parar uma operação | parar é sempre o lado seguro (a etapa crítica termina antes, 4.7), e assinar o cancelamento pediria o destravamento no celular para parar algo | `CancelRequest` assinado, se parar de propósito virar um dano |
 | R-09 | Uma máquina sem tela não pareia | o código é confirmado na janela Máquinas | o `pair` no CLI do agente, lendo o código no terminal |
+| R-11 | A própria instalação pede e aprova sem pareamento (ADR-092) | quem lê a chave do cofre já roda tudo nesta máquina como o usuário; o servidor sozinho não tem a chave | desligar "aceitar controle" corta também a própria; a origem aparece como "Remoto: este computador" na auditoria |
 | R-10 | O log de acesso do proxy guarda a query do hub | o proxy é do usuário | a nota no `sync-server.md` (o filtro do Caddy); os apps já mandam o token no cabeçalho |
 
 ## 8. Verificação (T-36)
@@ -270,7 +274,7 @@ consegue provar.
 | RS-06 | `RemoteOperationTests.ARevokedMachine_IsNeitherATargetNorAnAgent`, `RemotePairingTests.AControllerRevokedBeforeTheApproval_CannotBePaired` (a chave do revogado não vale), `RemoteMachinesTests.AnExecutor_ForgetsTheControllersRevokedOnTheAccount_OrWithAnotherKey`, `RemoteOperationsEndToEndTests.Chaos_ARevokedMachine_StopsWhatRuns_AndStopsAccepting` | — |
 | RS-07 | `RemoteScopeTests`, `RemoteHubTests.WithoutTheRemoteScopeOrAToken_TheHubRefuses` | — |
 | RS-08 | `ConfirmPairingHandlerTests` (código errado, chave trocada), `RemotePairingTests` (mesmo código dos dois lados, expirado dá 410) | o CLI sem tela (R-09) |
-| RS-09 | `AdmitRemoteOperationTests` (chave não pareada, bytes mexidos), `RemoteOperationTests.ASignatureThatIsNotTheCallersActiveKey_IsRefused`, `RemoteApprovalsTests` | o cancelamento (R-08) |
+| RS-09 | `AdmitRemoteOperationTests` (chave não pareada, bytes mexidos; a própria instalação só com o id e a chave dela), `RemoteOperationTests.ASignatureThatIsNotTheCallersActiveKey_IsRefused`, `RemoteApprovalsTests` | o cancelamento (R-08) |
 | RS-10 | `AdmitRemoteOperationTests`, `ConfirmPairingHandlerTests` (desligado, nada entra) | vem desligado e fica fora do `SyncRegistry` (`RemoteExecutionSettings`, seção 2.4 da arquitetura) |
 | RS-11 | `RemoteOperationTests.TheSameEnvelopeTwice_IsTheSameOperation_AndAnotherRequestWithTheSameId_IsRefused`, `RemoteOperationJournalTests`, `Chaos_DuplicatedRequestsAndEvents_RunAndCountOnce` | — |
 | RS-12 | `RemoteJwsTests`, `AdmitRemoteOperationTests` (outro alvo, outra conta), `RemoteOperationTests` (`NotAfter` acima de 24 h) | — |
