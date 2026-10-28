@@ -75,7 +75,8 @@ com a impressão digital da chave.
 | **Falar com o Claude** | *Controlar → Claude Code* | o perfil escolhido entre os de lá; o prompt, a conversa e as ferramentas, ao vivo |
 | **Apagar o worktree** | *Controlar → Apagar o worktree lá* | sempre pede aprovação; recusa com uma sessão do Claude aberta nele. A branch fica |
 
-A saída chega enquanto roda. **Cancelar** para o que estiver rodando lá,
+A saída chega enquanto roda e termina com o resultado ("— Worktree criado: …").
+**Cancelar** para o que estiver rodando lá,
 matando a árvore de processos.
 
 ### O que libera um comando ou uma conexão
