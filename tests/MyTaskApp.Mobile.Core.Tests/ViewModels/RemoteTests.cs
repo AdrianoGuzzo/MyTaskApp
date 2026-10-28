@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
+using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Remote;
 using MyTaskApp.Application.Sync;
 using MyTaskApp.Mobile.Core.Composition;
@@ -35,6 +36,7 @@ public sealed class RemoteTests : IAsyncLifetime
             services.AddSingleton(provider => new FakeRemoteServer(provider.GetRequiredService<TimeProvider>()));
             services.AddSingleton<IRemoteApi>(provider => provider.GetRequiredService<FakeRemoteServer>());
             services.AddSingleton<IRemoteOperationsApi>(provider => provider.GetRequiredService<FakeRemoteServer>());
+            services.AddSingleton<IRemoteSessionsApi>(provider => provider.GetRequiredService<FakeRemoteServer>());
         });
 
         await using (var scope = _app.Services.CreateAsyncScope())
@@ -166,6 +168,76 @@ public sealed class RemoteTests : IAsyncLifetime
         Server.Responses.Should().BeEmpty();
     }
 
+    /// <summary>"Permitir nesta conversa" só aparece quando o agente diz o que fica permitido, e vai assinado na resposta.</summary>
+    [Fact]
+    public async Task AllowingForTheConversation_GoesInTheSignedAnswer_OnlyWhenTheAgentOffersIt()
+    {
+        var remote = await ReadyAsync();
+        Server.Ask(Guid.CreateVersion7(), Notebook, ApprovalKind.ToolUse, "O Claude quer usar Bash: dotnet test", details: new { canRemember = true, rememberAs = "Bash: dotnet test" });
+        Server.Ask(Guid.CreateVersion7(), Notebook, ApprovalKind.ToolUse, "O Claude quer usar Bash: ls | wc", details: new { canRemember = false });
+        await _app.Get<ApprovalWatcher>().RefreshAsync(TestContext.Current.CancellationToken);
+
+        var offered = remote.Approvals.Single(line => line.Summary.EndsWith("dotnet test", StringComparison.Ordinal));
+        var compound = remote.Approvals.Single(line => line.Summary.EndsWith("wc", StringComparison.Ordinal));
+        offered.CanRemember.Should().BeTrue();
+        offered.RememberLabel.Should().Be("Até o fim da conversa, sem perguntar de novo: Bash: dotnet test");
+        compound.CanRemember.Should().BeFalse();
+
+        await remote.AllowForConversationAsync(offered);
+        await remote.AllowForConversationAsync(compound);
+
+        Server.Responses.Select(response => response.RememberForThisSession).Should().Equal(true, false);
+    }
+
+    /// <summary>
+    /// A pergunta do Claude (ADR-093): "Responder" abre as opções, e a
+    /// escolhida, ou a escrita em "Outra resposta…", vai assinada.
+    /// </summary>
+    [Theory]
+    [InlineData(1, null, "Docker")]
+    [InlineData(2, "  Postgres do CI  ", "Postgres do CI")]
+    public async Task TheQuestionOfClaude_IsAnsweredWithAChoice_OrWithWhatIsWritten(int choice, string? written, string expected)
+    {
+        var remote = await ReadyAsync();
+        Server.Ask(Guid.CreateVersion7(), Notebook, ApprovalKind.ToolUse, "O Claude pergunta: Qual banco?", details: new
+        {
+            kind = "question",
+            canRemember = false,
+            questions = new object[] { new { question = "Qual banco?", multiSelect = false, options = new object[] { new { label = "Local", description = "O SQLite" }, new { label = "Docker" } } } },
+        });
+        await _app.Get<ApprovalWatcher>().RefreshAsync(TestContext.Current.CancellationToken);
+
+        var line = remote.Approvals.Should().ContainSingle().Subject;
+        (line.IsQuestion, line.AllowLabel, line.DenyLabel, line.Title).Should().Be((true, "Responder", "Deixar o Claude decidir", "O Claude pergunta"));
+        line.QuestionText.Should().Be("Qual banco? (Local · Docker)");
+
+        _app.Dialogs.ChoiceAnswer = choice;
+        _app.Dialogs.PromptAnswer = written;
+        await remote.AllowAsync(line);
+
+        _app.Dialogs.LastChoices.Should().Equal("Local — O SQLite", "Docker", "Outra resposta…");
+        var response = Server.Responses.Should().ContainSingle().Subject;
+        response.Decision.Should().Be(ApprovalDecision.Allow);
+        HeadlessQuestions.ReadAnswers(response.TypedConfirmation, 1).Should().Equal(expected);
+    }
+
+    [Fact]
+    public async Task GivingUpOnTheQuestion_SendsNothing()
+    {
+        var remote = await ReadyAsync();
+        Server.Ask(Guid.CreateVersion7(), Notebook, ApprovalKind.ToolUse, "O Claude pergunta: Qual banco?", details: new
+        {
+            kind = "question",
+            questions = new object[] { new { question = "Qual banco?", options = new object[] { new { label = "Local" }, new { label = "Docker" } } } },
+        });
+        await _app.Get<ApprovalWatcher>().RefreshAsync(TestContext.Current.CancellationToken);
+
+        _app.Dialogs.ChoiceAnswer = null;
+        await remote.AllowAsync(remote.Approvals.Single());
+
+        Server.Responses.Should().BeEmpty();
+    }
+
     [Fact]
     public async Task CriticalProduction_AsksForTheName_AndAWrongNameAnswersNothing()
     {
@@ -289,6 +361,23 @@ public sealed class RemoteTests : IAsyncLifetime
         Server.Requests[^1].Payload.Deserialize<AgentStopRequest>(RemoteJson.Options).Should().Be(new AgentStopRequest(conversation));
     }
 
+    /// <summary>A saída passou das páginas de uma leitura e o estado já é final: a tela lê até a última linha.</summary>
+    [Fact]
+    public async Task TheOperationScreen_ReadsTheLastEventsAfterTheEnd()
+    {
+        await ReadyAsync();
+        var operationId = await SendAsync();
+        Server.EventPageSize = 1;
+        Finish(operationId, [.. Enumerable.Range(1, 10).Select(index => ((string?)$"linha {index}", RemoteEventKind.Output, (Guid?)null))]);
+        var operation = _app.Get<RemoteOperationViewModel>();
+
+        await operation.OpenAsync(operationId, Notebook);
+        await AdvanceUntilAsync(() => operation.Output.Contains("linha 10", StringComparison.Ordinal), RemoteOperationViewModel.Interval);
+        operation.Close();
+
+        operation.Output.Should().StartWith("linha 1\n").And.EndWith("linha 10\n");
+    }
+
     [Fact]
     public async Task TheSentList_ShowsTheStateFromTheServer()
     {
@@ -339,6 +428,127 @@ public sealed class RemoteTests : IAsyncLifetime
         };
     }
 
+    /// <summary>
+    /// A aba lista as conversas das máquinas, de qualquer tela que as abriu, e
+    /// diz quando o agente de lá parou: ligada não é rodando os pedidos.
+    /// </summary>
+    [Fact]
+    public async Task TheTab_ListsTheConversations_AndSaysWhenTheAgentThereStopped()
+    {
+        var session = Session(RemoteAgentSessionStatus.Idle);
+        Server.AgentSeenAt[Notebook] = MobileHarness.Now.AddHours(-1);
+        var remote = await ReadyAsync();
+
+        await remote.LoadAsync();
+
+        remote.Machines.Should().ContainSingle().Which.Detail.Should().StartWith("ligada, agente parado desde");
+        var line = remote.Sessions.Should().ContainSingle().Subject;
+        line.Title.Should().Be("Tarefa que ainda não chegou aqui");
+        line.Detail.Should().Be("Notebook · Esperando o próximo prompt");
+
+        await remote.OpenSessionCommand.ExecuteAsync(line);
+        _app.Navigator.Last.Should().Be($"session/{session.SessionId}");
+    }
+
+    [Fact]
+    public async Task AnOldServer_SaysToUpdateIt_AndTheMachinesStillShow()
+    {
+        Server.WithoutSessions = true;
+        var remote = await ReadyAsync();
+
+        await remote.LoadAsync();
+
+        remote.SessionsProblem.Should().Be(RemoteSessionTexts.ServerTooOld);
+        remote.Machines.Should().ContainSingle().Which.Detail.Should().StartWith("ligada");
+        remote.Problem.Should().BeNull();
+    }
+
+    /// <summary>
+    /// A tela da conversa mostra os prompts de todas as telas e manda o
+    /// próximo nela mesma, sem trocar de tela: a linha do tempo pega a operação nova.
+    /// </summary>
+    [Fact]
+    public async Task TheConversationScreen_ShowsEveryPrompt_AndTheNextOneStaysInIt()
+    {
+        var remote = await ReadyAsync();
+        var first = await SendAsync();
+        var session = Session(RemoteAgentSessionStatus.Idle);
+        Server.Link(session.SessionId, first);
+        Server.Events[first].Add(new RemoteOperationEvent(
+            first, 1, MobileHarness.Now, RemoteEventKind.StepStarted, Text: "Claude em feature/x · perfil Padrão.",
+            Data: JsonSerializer.SerializeToElement(new { agentSessionId = session.SessionId, canContinue = true, prompt = "Olá" })));
+        Finish(first, ("Oi! Em que posso ajudar?", RemoteEventKind.AgentMessage, null));
+        var visits = _app.Navigator.Visits.Count;
+        var screen = _app.Get<RemoteSessionViewModel>();
+
+        await screen.OpenAsync(session.SessionId, Notebook);
+
+        screen.Output.Should().Be("Você: Olá\nClaude: Oi! Em que posso ajudar?\n— Pronto.\n");
+        screen.Cards.Select(card => (card.Kind, card.Title, card.Text)).Should().Equal(
+            (RemoteTimelineKind.Prompt, "Você", "Olá"),
+            (RemoteTimelineKind.Claude, "Claude", "Oi! Em que posso ajudar?"),
+            (RemoteTimelineKind.Outcome, "Terminou bem", "Pronto."));
+        screen.Cards[0].IsPrompt.Should().BeTrue();
+        screen.CanPrompt.Should().BeTrue();
+
+        _app.Dialogs.PromptAnswer = "Agora os testes";
+        await screen.ContinueCommand.ExecuteAsync(null);
+        screen.Close();
+
+        var asked = Server.Requests[^1];
+        asked.Kind.Should().Be(RemoteOperationKinds.AgentPrompt);
+        asked.Payload.Deserialize<PromptRequest>(RemoteJson.Options)!.AgentSessionId.Should().Be(session.SessionId);
+        Server.SessionOperations[session.SessionId].Should().HaveCount(2, "o prompt entra na conversa pelo payload");
+        _app.Navigator.Visits.Should().HaveCount(visits, "o prompt fica na tela da conversa");
+        remote.Recent.Should().BeEmpty("a lista só relê ao abrir a aba");
+    }
+
+    /// <summary>
+    /// Com o hub ligado (ADR-094), o prompt mandado de outra tela aparece na
+    /// conversa no aviso, sem esperar o relógio, e a aprovação nova também.
+    /// </summary>
+    [Fact]
+    public async Task WithTheHub_APromptFromAnotherScreen_AndANewApproval_ShowUpOnTheNotice()
+    {
+        var remote = await ReadyAsync();
+        _app.Watch.IsConnected = true;
+        var first = await SendAsync();
+        var session = Session(RemoteAgentSessionStatus.Idle);
+        Server.Link(session.SessionId, first);
+        Finish(first, ("Oi!", RemoteEventKind.AgentMessage, null));
+        var screen = _app.Get<RemoteSessionViewModel>();
+        await screen.OpenAsync(session.SessionId, Notebook);
+        screen.Output.Should().Contain("Claude: Oi!");
+
+        // O desktop mandou o próximo prompt; o celular só sabe pelo aviso da conversa.
+        var second = await SendAsync();
+        Server.Link(session.SessionId, second);
+        Finish(second, ("Os testes passaram.", RemoteEventKind.AgentMessage, null));
+        _app.Watch.Notify(RemoteNoticeKind.Session, session.SessionId);
+
+        await EventuallyAsync(() => screen.Output.Contains("Claude: Os testes passaram.", StringComparison.Ordinal));
+        screen.Close();
+
+        var watcher = _app.Get<ApprovalWatcher>();
+        watcher.Start();
+        await EventuallyAsync(() => _app.Watch.Watchers > 0);
+        Server.Ask(Guid.CreateVersion7(), Notebook, ApprovalKind.ToolUse, "Bash: npm test", lifetime: TimeSpan.FromMinutes(1));
+        _app.Watch.Notify(RemoteNoticeKind.Approval, Guid.CreateVersion7());
+
+        await EventuallyAsync(() => remote.Approvals.Count == 1);
+        watcher.Stop();
+        await EventuallyAsync(() => _app.Watch.Watchers == 0);
+    }
+
+    private RemoteAgentSessionView Session(RemoteAgentSessionStatus status)
+    {
+        var session = new RemoteAgentSessionView(
+            Guid.CreateVersion7(), Notebook, 1, Guid.CreateVersion7(), Guid.CreateVersion7(), "padrao", null, status,
+            RemoteAgentActivity.WaitingReview, null, null, MobileHarness.Now, null, MobileHarness.Now, MobileHarness.Now);
+        Server.Sessions.Add(session);
+        return session;
+    }
+
     private async Task<RemoteViewModel> ReadyAsync()
     {
         var remote = _app.Get<RemoteViewModel>();
@@ -373,7 +583,7 @@ public sealed class RemoteTests : IAsyncLifetime
             list.Add(new RemoteOperationEvent(operationId, list.Count + 1, MobileHarness.Now, kind, Text: text, Data: data));
         }
 
-        Server.Operations[operationId] = Server.Operations[operationId] with { Status = RemoteOperationStatus.Succeeded, ResultSummary = "Pronto." };
+        Server.Operations[operationId] = Server.Operations[operationId] with { Status = RemoteOperationStatus.Succeeded, ResultSummary = "Pronto.", LastContiguousSeq = list.Count };
     }
 
     /// <summary>Avança o relógio de pouco em pouco até a tela mostrar; devolve quanto tempo passou.</summary>

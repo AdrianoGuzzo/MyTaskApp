@@ -1,4 +1,6 @@
+using System.Text.Json;
 using MyTaskApp.Application.Remote;
+using MyTaskApp.Application.Tests.Fakes;
 using MyTaskApp.Remote.Contracts;
 
 namespace MyTaskApp.Application.Tests.Remote;
@@ -125,6 +127,20 @@ public sealed class AdmitRemoteOperationTests
         Assert.Equal(RemoteErrorCodes.AlreadyExpired, Assert.IsType<RemoteAdmission.Refused>(admission).Code);
     }
 
+    /// <summary>O relógio de quem pediu adiantado: o pedido parece criado no futuro aqui.</summary>
+    [Fact]
+    public async Task RefusesARequestCreatedAheadOfThisClock()
+    {
+        await using var kit = new RemoteDispatchKit();
+        kit.Trust(kit.Phone);
+        var ahead = kit.Time.GetUtcNow() + RemoteLimits.MaxClockSkew + TimeSpan.FromMinutes(1);
+        var envelope = kit.Phone.Sign(kit.Request() with { CreatedAt = ahead, NotAfter = ahead + RemoteLimits.DefaultAcceptanceWindow });
+
+        var admission = await kit.AdmitAsync(envelope);
+
+        Assert.Equal(RemoteErrorCodes.ClockSkew, Assert.IsType<RemoteAdmission.Refused>(admission).Code);
+    }
+
     [Fact]
     public async Task ASecondDeliveryOfTheSameRequestIsWhatTheJournalSays()
     {
@@ -226,4 +242,86 @@ public sealed class AdmitRemoteOperationTests
         kit.Time.Advance(TimeSpan.FromHours(1) + TimeSpan.FromSeconds(1));
         Assert.IsType<RemoteAdmission.Admitted>(await kit.AdmitAsync(kit.Phone.Sign(kit.Request())));
     }
+
+    /// <summary>
+    /// A sessão gerenciada (ADR-092): o pedido que o desktop desta máquina
+    /// assina com a chave do cofre é admitido sem pareamento, e roda com a
+    /// origem "este computador".
+    /// </summary>
+    [Fact]
+    public async Task ThisMachineItself_IsTrusted_ByItsOwnKeyAndId()
+    {
+        await using var kit = new RemoteDispatchKit();
+
+        var sent = await new SendRemoteOperationHandler(kit.Server, kit.Signer, kit.Identity, kit.Sync, kit.Time).HandleAsync(
+            new SendRemoteOperation(
+                kit.Identity.DeviceId,
+                RemoteOperationKinds.EnvironmentInspect,
+                JsonSerializer.SerializeToElement(new EnvironmentInspectionRequest(), RemoteJson.Options)),
+            Ct);
+        await kit.Dispatcher.PollAsync(Ct);
+
+        Assert.Equal(RemoteOperationStatus.Succeeded, await kit.WaitFinishedAsync(sent.OperationId));
+        Assert.Equal("Remoto: este computador", kit.Executor.SeenOrigin);
+        Assert.Empty(kit.Trusted.All);
+    }
+
+    /// <summary>A exceção é estreita: o id desta máquina com outra chave, ou a chave dela dizendo ser outro, não passam.</summary>
+    [Fact]
+    public async Task ThisMachineId_WithAnotherKey_OrItsKey_ClaimingAnotherId_IsRefused()
+    {
+        await using var kit = new RemoteDispatchKit();
+        using var impostor = new Controller("Impostor");
+
+        var forged = await kit.AdmitAsync(impostor.Sign(kit.Request(request => request with { RequestedByDeviceId = kit.Identity.DeviceId })));
+
+        Assert.Equal(RemoteErrorCodes.UntrustedSignature, Assert.IsType<RemoteAdmission.Refused>(forged).Code);
+
+        var own = await new SendRemoteOperationHandler(kit.Server, kit.Signer, new FakeDeviceIdentity(), kit.Sync, kit.Time).HandleAsync(
+            new SendRemoteOperation(
+                kit.Identity.DeviceId,
+                RemoteOperationKinds.EnvironmentInspect,
+                JsonSerializer.SerializeToElement(new EnvironmentInspectionRequest(), RemoteJson.Options)),
+            Ct);
+        var claiming = await kit.AdmitAsync(kit.Server.Operations[own.OperationId].Envelope);
+
+        Assert.Equal(RemoteErrorCodes.UntrustedSignature, Assert.IsType<RemoteAdmission.Refused>(claiming).Code);
+    }
+
+    [Fact]
+    public async Task ThisMachineItself_IsRefused_WhenItDoesNotAcceptControl()
+    {
+        await using var kit = new RemoteDispatchKit();
+        kit.Settings.Settings = new RemoteSettings(true, false);
+
+        var sent = await new SendRemoteOperationHandler(kit.Server, kit.Signer, kit.Identity, kit.Sync, kit.Time).HandleAsync(
+            new SendRemoteOperation(
+                kit.Identity.DeviceId,
+                RemoteOperationKinds.EnvironmentInspect,
+                JsonSerializer.SerializeToElement(new EnvironmentInspectionRequest(), RemoteJson.Options)),
+            Ct);
+
+        Assert.Equal(RemoteErrorCodes.RemoteDisabled, Assert.IsType<RemoteAdmission.Refused>(await kit.AdmitAsync(kit.Server.Operations[sent.OperationId].Envelope)).Code);
+    }
+
+    /// <summary>Quem está na frente da máquina responde as perguntas do Claude gerenciado pelo desktop dela.</summary>
+    [Fact]
+    public async Task TheAnswerOfThisMachineItself_IsOneTheAgentAccepts()
+    {
+        await using var kit = new RemoteDispatchKit();
+        var now = kit.Time.GetUtcNow();
+        var operationId = Guid.CreateVersion7();
+        kit.Server.Enqueue(operationId, new SignedEnvelope("x.y.z"));
+        var asked = (await kit.Server.RequestApprovalAsync(ApprovalHash.Seal(new ApprovalRequest(
+            Guid.CreateVersion7(), operationId, ApprovalKind.ToolUse, "O Claude quer usar Bash: dotnet test",
+            JsonSerializer.SerializeToElement(new { }), null, now.AddMinutes(10), string.Empty)), Ct)).Request;
+
+        var answered = await new AnswerApprovalHandler(kit.Server, kit.Signer, kit.Time).HandleAsync(new AnswerApproval(asked.ApprovalId, ApprovalDecision.Allow), Ct);
+        var trusted = await new RemoteTrust(kit.Trusted, kit.Identity, kit.Signer).ListAsync(Ct);
+
+        Assert.Equal(RemoteApprovalOutcome.Allowed, RemoteApprovalVerifier.Verify(asked, answered, trusted)!.Outcome);
+        Assert.Equal(RemoteApprovalOutcome.Invalid, RemoteApprovalVerifier.Verify(asked, answered, kit.Trusted.All)!.Outcome);
+    }
+
+    private static CancellationToken Ct => TestContext.Current.CancellationToken;
 }

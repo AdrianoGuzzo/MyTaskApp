@@ -60,7 +60,34 @@ public sealed class ApprovalClaudeTests : IAsyncDisposable
         result.IsError.Should().BeFalse(result.Text);
     }
 
-    private async Task<IReadOnlyList<string>> RunAsync(string prompt, AgentToolProfile profile, ToolPermissionDecision decision)
+    /// <summary>
+    /// A pergunta do Claude chega ao MCP de aprovação como uma ferramenta, e a
+    /// resposta vai em <c>updatedInput.answers</c>, pelo texto da pergunta
+    /// (ADR-093). O Claude segue com a opção escolhida.
+    /// </summary>
+    [Fact]
+    public async Task TheQuestionOfClaude_ArrivesAtTheApprovalMcp_AndTheAnswerGoesOnInTheUpdatedInput()
+    {
+        var lines = await RunAsync(
+            "Use a ferramenta AskUserQuestion para me perguntar qual cor eu prefiro, com as opções Azul e Verde. "
+            + "Depois responda só com o nome da cor que eu escolhi, em maiúsculas.",
+            AgentToolProfiles.Read,
+            request => request.ToolName == "AskUserQuestion"
+                ? ToolPermissionDecision.Allow(HeadlessQuestions.Answer(request.Input, question => question.Options[^1].Label))
+                : ToolPermissionDecision.Deny("Negado pelo teste."));
+        var provider = _host.Services.GetRequiredService<IHeadlessAgentProvider>();
+        var result = lines.SelectMany(provider.ReadEvents).OfType<HeadlessResult>().Single();
+        Assert.SkipWhen(result.TerminalReason == "api_error", "O Claude precisa estar logado (claude auth login).");
+
+        _asked.Should().Contain(request => request.ToolName == "AskUserQuestion");
+        result.IsError.Should().BeFalse(result.Text);
+        result.Text.Should().Contain("VERDE");
+    }
+
+    private Task<IReadOnlyList<string>> RunAsync(string prompt, AgentToolProfile profile, ToolPermissionDecision decision) =>
+        RunAsync(prompt, profile, _ => decision);
+
+    private async Task<IReadOnlyList<string>> RunAsync(string prompt, AgentToolProfile profile, Func<ToolPermissionRequest, ToolPermissionDecision> decide)
     {
         Assert.SkipUnless(Environment.GetEnvironmentVariable(Variable) == "1", $"Defina {Variable}=1 para rodar o Claude Code de verdade.");
 
@@ -72,7 +99,7 @@ public sealed class ApprovalClaudeTests : IAsyncDisposable
             (request, _) =>
             {
                 _asked.Add(request);
-                return Task.FromResult(decision);
+                return Task.FromResult(decide(request));
             },
             Ct);
 

@@ -8,19 +8,23 @@ namespace MyTaskApp.Mobile.Core.Remote;
 
 /// <summary>
 /// As aprovações em aberto da conta, com o app na frente (E7): a lista é
-/// relida a cada <see cref="Interval"/>, e uma nova aparece em até 2 s. A
-/// vencida sai da lista na hora, mesmo sem o servidor dizer: lá, ela vale
-/// negar. Em segundo plano não lê nada; não há push na v1.
+/// relida a cada <see cref="Interval"/>, e uma nova aparece em até 2 s; com o
+/// hub ligado, na hora do aviso (ADR-094). A vencida sai da lista na hora,
+/// mesmo sem o servidor dizer: lá, ela vale negar. Em segundo plano, quem
+/// olha é a verificação periódica do sistema.
 /// </summary>
 public sealed class ApprovalWatcher(
     IUseCaseRunner runner,
     ISyncAccount account,
     TimeProvider timeProvider,
-    ILogger<ApprovalWatcher> logger) : IDisposable
+    ILogger<ApprovalWatcher> logger,
+    IRemoteWatch? watch = null) : IDisposable
 {
     public static readonly TimeSpan Interval = TimeSpan.FromSeconds(1.5);
 
     private readonly Lock _gate = new();
+
+    private readonly RemotePace _pace = new(watch ?? new NoRemoteWatch(), timeProvider, notice => notice.Kind == RemoteNoticeKind.Approval);
 
     private IReadOnlyList<ApprovalView> _all = [];
 
@@ -54,6 +58,8 @@ public sealed class ApprovalWatcher(
             _loop?.Dispose();
             _loop = null;
         }
+
+        _ = _pace.DisposeAsync().AsTask();
     }
 
     /// <summary>Uma leitura agora: ao abrir a aba, e depois de responder.</summary>
@@ -85,12 +91,21 @@ public sealed class ApprovalWatcher(
 
     private async Task RunAsync(CancellationToken cancellationToken)
     {
+        try
+        {
+            await _pace.StartAsync(cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
         while (!cancellationToken.IsCancellationRequested)
         {
             try
             {
                 await RefreshAsync(cancellationToken);
-                await Task.Delay(Interval, timeProvider, cancellationToken);
+                await _pace.WaitAsync(Interval, cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {

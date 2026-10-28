@@ -36,6 +36,7 @@ public sealed class RemoteOperationDispatcher(
     IUseCaseRunner runner,
     ISyncTrigger sync,
     IRemoteHub hub,
+    IEnumerable<IRemoteStartupRecovery> recoveries,
     TimeProvider timeProvider,
     ILogger<RemoteOperationDispatcher> logger)
 {
@@ -80,9 +81,15 @@ public sealed class RemoteOperationDispatcher(
     /// Ao subir (4.5): o que rodava quando o agente caiu não tem como
     /// continuar a saída de onde parou, e vira <see cref="RemoteOperationStatus.Interrupted"/>,
     /// com a etapa. A aceita que não chegou a rodar fica: a próxima busca a começa.
+    /// Antes, cada <see cref="IRemoteStartupRecovery"/> arruma o seu estado local.
     /// </summary>
     public async Task RecoverAsync(CancellationToken cancellationToken)
     {
+        foreach (var recovery in recoveries)
+        {
+            await recovery.RecoverAsync(cancellationToken);
+        }
+
         var unfinished = await JournalAsync((journal, token) => journal.ListUnfinishedAsync(token), cancellationToken);
 
         foreach (var entry in unfinished.Where(entry =>
@@ -428,8 +435,9 @@ public sealed class RemoteOperationDispatcher(
                     : await remote.RequestApprovalAsync(request, cancellationToken);
                 posted = true;
 
-                var trusted = await runner.RunAsync<ITrustedControllerRepository, IReadOnlyList<Domain.Remote.TrustedController>>(
-                    (repository, token) => repository.ListAllActiveAsync(token),
+                // Quem pode responder: os pareados e, na sessão gerenciada (ADR-092), o desktop desta máquina.
+                var trusted = await runner.RunAsync<RemoteTrust, IReadOnlyList<Domain.Remote.TrustedController>>(
+                    (trust, token) => trust.ListAsync(token),
                     cancellationToken);
 
                 if (RemoteApprovalVerifier.Verify(request, view, trusted) is { } result)
@@ -762,4 +770,13 @@ public sealed class RemoteOperationDispatcher(
 
         public Task Completion { get; set; } = Task.CompletedTask;
     }
+}
+
+/// <summary>
+/// O que o agente arruma ao subir, antes de buscar a fila: o estado local que
+/// ficou pela metade quando ele caiu (a conversa do Claude que dizia "respondendo").
+/// </summary>
+public interface IRemoteStartupRecovery
+{
+    Task RecoverAsync(CancellationToken cancellationToken);
 }

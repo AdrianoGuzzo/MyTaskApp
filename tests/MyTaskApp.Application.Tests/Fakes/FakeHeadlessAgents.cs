@@ -21,6 +21,13 @@ internal sealed class FakeHeadlessProvider : IHeadlessAgentProvider
 
     public static string Tool(string name, string summary) => Line(new HeadlessToolUse(Guid.NewGuid().ToString(), name, summary));
 
+    /// <summary>O uso de uma ferramenta e o resultado dele, com o mesmo id.</summary>
+    public static (string Use, string Result) ToolWithResult(string name, string summary, string result, bool isError = false)
+    {
+        var id = Guid.NewGuid().ToString();
+        return (Line(new HeadlessToolUse(id, name, summary)), Line(new HeadlessToolResult(id, isError, result)));
+    }
+
     public static string Done(int turns = 1, decimal? cost = null, IReadOnlyList<string>? denied = null) =>
         Line(new HeadlessResult(false, "success", "ok", turns, cost, denied ?? [], "completed"));
 

@@ -3,14 +3,14 @@
 | | |
 |---|---|
 | **Status** | Aceito |
-| **Implementação** | Parcial |
+| **Implementação** | Implementado |
 | **Categoria** | remoto |
 | **Registrado** | 2026-10-24, commit `36eb99c` (primeiro commit em que o ADR aparece) |
 | **Palavras-chave** | MyTaskApp.Agent, ScopedUseCaseRunner, WAL, ProcessLeases, named pipe, systemd --user, DatabaseInitializer |
 | **Relações** | relacionado: [ADR-049](049-instalador-fecha-o-app-aberto.md), [ADR-059](059-servidor-mcp-local-loopback.md), [ADR-061](061-sincronizacao-outbox-mescla-por-campo.md), [ADR-063](063-indicador-sincronizacao-no-cabecalho.md), [ADR-066](066-comandos-globais-locais-por-padrao.md), [ADR-084](084-orquestracao-remota-coordenador-e-agente.md), [ADR-086](086-operacao-remota-registro-diario-e-signalr.md), [ADR-090](090-copia-de-banco-remota-com-aprovacao.md) |
 | **Código** | `src/MyTaskApp.Infrastructure/Persistence/DatabaseInitializer.cs`, `src/MyTaskApp.Application/Abstractions/ScopedUseCaseRunner.cs`, `src/MyTaskApp.Agent/AgentHost.cs`, `src/MyTaskApp.Infrastructure/Processes/SqliteProcessLeases.cs`, `src/MyTaskApp.Infrastructure/Processes/PipeLocalPeerChannel.cs` |
 
-**Estado:** aceito (fase 2), implementado quase todo: o SQLite garantido em WAL (T-07), os leases entre processos com o ciclo do sync e o refresh do token sob eles (T-08), o `ScopedUseCaseRunner` único (T-09), o agente `MyTaskApp.Agent` no logon, o canal local com o desktop e o gate de banco entre processos (T-31). Falta o item 3: um processo mais velho que o esquema recusar subir.
+**Estado:** aceito (fase 2), implementado quase todo: o SQLite garantido em WAL (T-07), os leases entre processos com o ciclo do sync e o refresh do token sob eles (T-08), o `ScopedUseCaseRunner` único (T-09), o agente `MyTaskApp.Agent` no logon, o canal local com o desktop e o gate de banco entre processos (T-31). O item 3 veio na fase 3 (E9): um processo mais velho que o esquema recusa subir (`DatabaseInitializer`, "DatabaseNewerThanApp").
 
 **Contexto:** a máquina executora precisa atender pedidos com o desktop
 fechado. O que o agente usa só existe nela: o caminho do repositório

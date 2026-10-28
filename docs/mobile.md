@@ -588,7 +588,8 @@ dotnet test tests/MyTaskApp.Server.IntegrationTests --filter "PhoneSyncTests"   
 
 - **Sem sincronização em segundo plano;** sem push. Abrir o app, puxar para
   atualizar ou a rede voltar disparam um ciclo.
-- **Sem lembretes nem notificações** no celular.
+- **Sem lembretes** no celular. A única notificação é a do controle remoto, no
+  Android (ADR-096).
 - **Fora do celular:** cronômetro, post-its e Jira ficam no desktop. Os dados
   deles sincronizam, mas não aparecem. Comandos e ambientes de desenvolvimento
   rodam nos computadores; o celular só os pede, pela aba Remoto.
@@ -620,13 +621,24 @@ quem executa é o computador, com as regras dele. O guia é o
   ES256 gerada aqui e guardada no Keystore/Keychain. Não é a sincronização:
   passa pelas rotas `/api/v1/remote`, com o escopo `remote`, e cada pedido é
   assinado.
-- **A aba** mostra os computadores que aceitam controle, o código do
-  pareamento (digitado lá, na janela Máquinas), as aprovações pendentes (lidas
-  a cada 1,5 s com o app aberto; a nova avisa e conta no título da aba) e os
-  pedidos feitos daqui.
+- **A aba** mostra:
+  - os computadores que aceitam controle, com o agente à parte ("ligada,
+    agente parado desde…" quando os pedidos esperam na fila);
+  - o código do pareamento (digitado lá, na janela Máquinas);
+  - as aprovações pendentes, com o app aberto: na hora, pelo hub (ADR-094),
+    ou a cada 1,5 s sem ele. A nova avisa e conta no título da aba;
+  - as **conversas do Claude** das máquinas, as 10 mais recentes, de qualquer
+    tela que as abriu (ADR-091);
+  - os pedidos feitos daqui.
 - **A máquina** lista os worktrees de lá: rodar um comando liberado, abrir o
   Claude, apagar o worktree. **A operação** mostra o estado, a saída ao vivo,
-  as perguntas dela, cancelar, mandar mais um prompt e parar o Claude. Na
+  as perguntas dela, cancelar, mandar mais um prompt e parar o Claude. **A
+  conversa** (rota `session`) mostra a linha do tempo de todos os prompts dela
+  em cartões: o prompt ("Você"), o texto do Claude, a ferramenta que ele usou,
+  a saída dos comandos dele (os testes, o build), cada aprovação com a resposta
+  e como o prompt terminou. Também mostra as perguntas, o próximo prompt (fica
+  na mesma tela) e o parar. Os handlers
+  são os mesmos da janela *Controlar* do desktop. Na
   tarefa, **"Preparar em…"** escolhe o computador, o repositório, a cópia do
   banco e o Claude.
 - **Destravar antes de assinar:** todo pedido e toda resposta pedem a
@@ -634,5 +646,13 @@ quem executa é o computador, com as regras dele. O guia é o
   a tela de confirmação do bloqueio no 9 e anteriores, `LAContext` no iOS).
   Destravado, vale 30 s, e tranca ao ir para segundo plano. Sem bloqueio de
   tela, o celular não assina.
-- **Sem push:** as aprovações só chegam com o app aberto. Uma pergunta sem
-  resposta em 10 minutos é negada.
+- **Com o app fechado (Android, ADR-096):** com o remoto ligado, o sistema
+  verifica de tempos em tempos (a cada 15 minutos no mínimo, só com rede) e
+  avisa a aprovação nova e a conversa em que o Claude respondeu ou parou com
+  erro. Cada uma avisa uma vez, e o que a aba já mostrou não avisa. Na tela
+  bloqueada, o aviso diz só "Novidade no controle remoto"; o toque abre a aba
+  Remoto. A permissão de notificar (Android 13+) é pedida uma vez, ao abrir a
+  aba com o remoto pronto.
+- **Sem push na hora:** uma pergunta sem resposta em 10 minutos é negada, e a
+  verificação pode vir depois disso. No iOS, as aprovações só chegam com o app
+  aberto.

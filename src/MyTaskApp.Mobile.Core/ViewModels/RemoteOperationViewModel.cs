@@ -15,7 +15,8 @@ namespace MyTaskApp.Mobile.Core.ViewModels;
 /// <summary>
 /// Uma operação pedida de longe, ao vivo (E7): o estado, a saída e as
 /// aprovações dela, relidos a cada <see cref="Interval"/> enquanto a tela está
-/// aberta. Com uma conversa do Claude aberta, manda mais um prompt ou para.
+/// aberta, ou na hora do aviso do hub (ADR-094). Com uma conversa do Claude
+/// aberta, manda mais um prompt ou para.
 /// </summary>
 public sealed partial class RemoteOperationViewModel : MobileViewModel, IDisposable
 {
@@ -34,7 +35,7 @@ public sealed partial class RemoteOperationViewModel : MobileViewModel, IDisposa
 
     private readonly IUiDispatcher _dispatcher;
 
-    private readonly TimeProvider _time;
+    private readonly RemotePace _pace;
 
     private readonly StringBuilder _lines = new();
 
@@ -43,6 +44,9 @@ public sealed partial class RemoteOperationViewModel : MobileViewModel, IDisposa
     private CancellationTokenSource? _loop;
 
     private long _after;
+
+    /// <summary>Terminou e a saída foi lida até o fim: o laço pode parar.</summary>
+    private volatile bool _drained;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsFinished), nameof(CanCancel))]
@@ -69,7 +73,8 @@ public sealed partial class RemoteOperationViewModel : MobileViewModel, IDisposa
         IUiDispatcher dispatcher,
         IDialogService dialogs,
         TimeProvider time,
-        ILogger<RemoteOperationViewModel> logger)
+        ILogger<RemoteOperationViewModel> logger,
+        IRemoteWatch? watch = null)
         : base(dialogs, logger)
     {
         _runner = runner;
@@ -77,7 +82,7 @@ public sealed partial class RemoteOperationViewModel : MobileViewModel, IDisposa
         _watcher = watcher;
         _answers = answers;
         _dispatcher = dispatcher;
-        _time = time;
+        _pace = new RemotePace(watch ?? new NoRemoteWatch(), time, notice => notice.Id == OperationId);
         _watcher.Changed += OnApprovalsChanged;
     }
 
@@ -104,6 +109,7 @@ public sealed partial class RemoteOperationViewModel : MobileViewModel, IDisposa
             OperationId = operationId;
             DeviceId = deviceId;
             _after = 0;
+            _drained = false;
             _events.Clear();
             _lines.Clear();
             Output = string.Empty;
@@ -117,12 +123,13 @@ public sealed partial class RemoteOperationViewModel : MobileViewModel, IDisposa
         Start();
     }
 
-    /// <summary>A tela saiu: para de ler.</summary>
+    /// <summary>A tela saiu: para de ler, e a conexão do hub cai se nenhuma outra tela a usa.</summary>
     public void Close()
     {
         _loop?.Cancel();
         _loop?.Dispose();
         _loop = null;
+        _ = _pace.DisposeAsync().AsTask();
     }
 
     [RelayCommand]
@@ -172,6 +179,10 @@ public sealed partial class RemoteOperationViewModel : MobileViewModel, IDisposa
     [RelayCommand]
     public Task DenyAsync(ApprovalLine? line) => AnswerAsync(line, allow: false);
 
+    /// <summary>Permite e deixa o agente lembrar o mesmo pedido até o fim da conversa.</summary>
+    [RelayCommand]
+    public Task AllowForConversationAsync(ApprovalLine? line) => AnswerAsync(line, allow: true, remember: true);
+
     public void Dispose()
     {
         _watcher.Changed -= OnApprovalsChanged;
@@ -180,7 +191,7 @@ public sealed partial class RemoteOperationViewModel : MobileViewModel, IDisposa
 
     private void Start()
     {
-        if (_loop is not null || IsFinished)
+        if (_loop is not null || _drained)
         {
             return;
         }
@@ -193,9 +204,12 @@ public sealed partial class RemoteOperationViewModel : MobileViewModel, IDisposa
     {
         try
         {
-            while (!cancellationToken.IsCancellationRequested && !IsFinished)
+            await _pace.StartAsync(cancellationToken);
+
+            // Até drenar, não até o estado final: o "terminou" pode chegar com saída ainda por ler.
+            while (!cancellationToken.IsCancellationRequested && !_drained)
             {
-                await Task.Delay(Interval, _time, cancellationToken);
+                await _pace.WaitAsync(Interval, cancellationToken);
                 await PollAsync(cancellationToken);
             }
         }
@@ -233,6 +247,7 @@ public sealed partial class RemoteOperationViewModel : MobileViewModel, IDisposa
         }
 
         _after = progress.After;
+        _drained = progress.IsFinished;
         _events.AddRange(progress.Events);
 
         foreach (var item in progress.Events)
@@ -261,9 +276,9 @@ public sealed partial class RemoteOperationViewModel : MobileViewModel, IDisposa
             : null;
     }
 
-    private async Task AnswerAsync(ApprovalLine? line, bool allow)
+    private async Task AnswerAsync(ApprovalLine? line, bool allow, bool remember = false)
     {
-        if (line is not null && await TryAsync(() => _answers.AnswerAsync(line.View, allow), "MobileRemoteAnswerFailed"))
+        if (line is not null && await TryAsync(() => _answers.AnswerAsync(line.View, allow, remember), "MobileRemoteAnswerFailed"))
         {
             ShowApprovals();
         }

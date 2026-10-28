@@ -31,12 +31,16 @@ internal sealed class RemoteDispatchKit : IAsyncDisposable
     {
         Sync.ReadAsync(Arg.Any<CancellationToken>())
             .Returns(_ => SyncLocalState.Unlinked with { State = SyncLinkState.Linked, IsEnabled = true, WorkspaceId = LinkedWorkspace });
+        SessionsApi.ReportSessionsAsync(default!, default)
+            .ReturnsForAnyArgs(call => new RemoteAgentSessionAck([.. (call.Arg<RemoteAgentSessionBatch>()?.Sessions ?? []).Select(report => new RemoteAgentSessionVersion(report.SessionId, report.Version))]));
 
         _services = new ServiceCollection()
             .AddSingleton<TimeProvider>(Time)
             .AddSingleton<IRemoteSettingsStore>(Settings)
             .AddSingleton<ITrustedControllerRepository>(Trusted)
             .AddSingleton<IDeviceIdentity>(Identity)
+            .AddSingleton<IDeviceSigner>(Signer)
+            .AddScoped<RemoteTrust>()
             .AddSingleton(Sync)
             .AddSingleton<IRemoteOperationJournal>(Journal)
             .AddSingleton<IRemoteEntityProbe>(Entities)
@@ -54,6 +58,10 @@ internal sealed class RemoteDispatchKit : IAsyncDisposable
             .AddSingleton<RemoteOperationDispatcher>()
             .AddSingleton<IRemoteHub>(Hub)
             .AddSingleton<ILogger<RemoteOperationScheduler>>(NullLogger<RemoteOperationScheduler>.Instance)
+            .AddSingleton(SessionsApi)
+            .AddSingleton<IAgentSessionRepository>(AgentSessions)
+            .AddSingleton<ILogger<RemoteSessionPublisher>>(NullLogger<RemoteSessionPublisher>.Instance)
+            .AddSingleton<RemoteSessionPublisher>()
             .AddSingleton<RemoteOperationScheduler>()
             .BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
 
@@ -67,6 +75,9 @@ internal sealed class RemoteDispatchKit : IAsyncDisposable
     public FakeRemoteSettingsStore Settings { get; } = new();
 
     public FakeTrustedControllerRepository Trusted { get; } = new();
+
+    /// <summary>A chave desta máquina, a do cofre: o que ela mesma assina é admitido (ADR-092).</summary>
+    public FakeDeviceSigner Signer { get; } = new();
 
     public FakeDeviceIdentity Identity { get; } = new();
 
@@ -91,6 +102,11 @@ internal sealed class RemoteDispatchKit : IAsyncDisposable
     public Controller Phone { get; } = new("Pixel 8");
 
     public FakeRemoteHub Hub { get; } = new();
+
+    /// <summary>O relato das conversas do Claude (ADR-091), que o laço manda a cada volta.</summary>
+    public IRemoteSessionsApi SessionsApi { get; } = Substitute.For<IRemoteSessionsApi>();
+
+    public FakeAgentSessionRepository AgentSessions { get; } = new();
 
     public RemoteOperationScheduler Scheduler => _services.GetRequiredService<RemoteOperationScheduler>();
 
@@ -157,6 +173,7 @@ internal sealed class RemoteDispatchKit : IAsyncDisposable
         await Dispatcher.StopAsync(TimeSpan.FromSeconds(5));
         await _services.DisposeAsync();
         Phone.Dispose();
+        Signer.Dispose();
     }
 }
 

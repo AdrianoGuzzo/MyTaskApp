@@ -100,6 +100,42 @@ public sealed class HeadlessAgentRunnerTests : IDisposable
         IsAlive(processId!.Value).Should().BeFalse();
     }
 
+    /// <summary>A sessão não gravou o processo (parada nesse meio-tempo): ninguém o pararia depois, então ele morre aqui.</summary>
+    [Fact]
+    public async Task WhenRecordingTheStartFails_TheProcessEnds()
+    {
+        var launch = OperatingSystem.IsWindows()
+            ? new HeadlessAgentLaunch(Path.Combine(Environment.SystemDirectory, "PING.EXE"), ["-n", "60", "127.0.0.1"], _folder, new Dictionary<string, string>(), [])
+            : new HeadlessAgentLaunch("/bin/sleep", ["60"], _folder, new Dictionary<string, string>(), []);
+        int? processId = null;
+
+        await FluentActions.Awaiting(() => Runner().RunAsync(
+                launch,
+                string.Empty,
+                (id, _) =>
+                {
+                    processId = id;
+                    throw new InvalidOperationException("A conversa foi parada.");
+                },
+                _ => Task.CompletedTask,
+                Ct))
+            .Should().ThrowAsync<InvalidOperationException>();
+
+        IsAlive(processId!.Value).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task AlreadyCanceled_DoesNotStartTheProcess()
+    {
+        var launch = new HeadlessAgentLaunch(Path.Combine(_folder, "nao-existe.exe"), [], _folder, new Dictionary<string, string>(), []);
+        using var cancel = new CancellationTokenSource();
+        await cancel.CancelAsync();
+
+        var result = await Runner().RunAsync(launch, string.Empty, (_, _) => throw new InvalidOperationException("Não deveria abrir."), _ => Task.CompletedTask, cancel.Token);
+
+        result.Canceled.Should().BeTrue();
+    }
+
     private static bool IsAlive(int processId)
     {
         try

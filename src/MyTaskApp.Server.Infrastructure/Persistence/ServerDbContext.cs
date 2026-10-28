@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using MyTaskApp.Remote.Contracts;
 
 namespace MyTaskApp.Server.Infrastructure.Persistence;
 
@@ -31,6 +32,8 @@ public sealed class ServerDbContext(DbContextOptions<ServerDbContext> options)
     internal DbSet<RemoteOperationEventRow> RemoteOperationEvents => Set<RemoteOperationEventRow>();
 
     internal DbSet<RemoteApprovalRow> RemoteApprovals => Set<RemoteApprovalRow>();
+
+    internal DbSet<RemoteAgentSessionRow> RemoteAgentSessions => Set<RemoteAgentSessionRow>();
 
     internal DbSet<AgentCatalogRow> AgentCatalogs => Set<AgentCatalogRow>();
 
@@ -131,7 +134,25 @@ public sealed class ServerDbContext(DbContextOptions<ServerDbContext> options)
             operation.HasIndex(row => new { row.UserId, row.ReceivedAt });
             operation.HasIndex(row => new { row.UserId, row.TargetDeviceId, row.Status });
             operation.HasIndex(row => new { row.Status, row.NotAfter });
+
+            // As operações de uma conversa do Claude, na linha do tempo dela (ADR-091).
+            operation.HasIndex(row => new { row.UserId, row.AgentSessionId, row.ReceivedAt });
             operation.HasOne<ApplicationUser>().WithMany().HasForeignKey(row => row.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<RemoteAgentSessionRow>(session =>
+        {
+            session.ToTable("RemoteAgentSessions");
+            session.HasKey(row => new { row.UserId, row.SessionId });
+            session.Property(row => row.ProfileId).HasMaxLength(64);
+            session.Property(row => row.Model).HasMaxLength(64);
+            session.Property(row => row.ActivityMessage).HasMaxLength(RemoteLimits.MaxSessionActivityLength);
+
+            // A lista da conta (as mais recentes), as de uma máquina, e a retenção.
+            session.HasIndex(row => new { row.UserId, row.UpdatedAt });
+            session.HasIndex(row => new { row.UserId, row.DeviceId, row.Status });
+            session.HasIndex(row => row.ReportedAt);
+            session.HasOne<ApplicationUser>().WithMany().HasForeignKey(row => row.UserId).OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<RemoteOperationEventRow>(item =>

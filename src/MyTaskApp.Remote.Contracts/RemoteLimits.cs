@@ -18,6 +18,9 @@ public static class RemoteLimits
     /// </summary>
     public static readonly TimeSpan MaxAcceptanceWindow = TimeSpan.FromHours(24);
 
+    /// <summary>Quanto o relógio de quem pede pode estar adiantado em relação ao de quem confere.</summary>
+    public static readonly TimeSpan MaxClockSkew = TimeSpan.FromMinutes(5);
+
     /// <summary>Quanto o agente lembra os ids já vistos: mais que qualquer <see cref="MaxAcceptanceWindow"/>.</summary>
     public static readonly TimeSpan ReplayWindow = TimeSpan.FromDays(30);
 
@@ -69,4 +72,19 @@ public static class RemoteLimits
 
     /// <summary>O resumo de uma aprovação, como a tela mostra.</summary>
     public const int MaxApprovalSummaryLength = 500;
+
+    /// <summary>Conversas por lote de relato do agente (ADR-091).</summary>
+    public const int MaxSessionsPerBatch = 50;
+
+    /// <summary>As operações de uma conversa que a linha do tempo traz: as mais recentes.</summary>
+    public const int MaxSessionOperations = 100;
+
+    /// <summary>As conversas que a lista da conta traz, no máximo.</summary>
+    public const int MaxSessionListSize = 200;
+
+    /// <summary>O começo do prompt que vai no primeiro evento dele, para a linha do tempo mostrar "Você: …".</summary>
+    public const int MaxPromptPreviewLength = 1500;
+
+    /// <summary>O texto da atividade de uma conversa.</summary>
+    public const int MaxSessionActivityLength = 200;
 }

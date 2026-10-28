@@ -42,6 +42,13 @@ public sealed partial class TaskDevelopmentsViewModel(
     /// <summary>Preparar o worktree desta tarefa em outra máquina, com o app dela fechado.</summary>
     public RemotePrepareViewModel? RemotePrepare { get; } = remotePrepare;
 
+    /// <summary>"Abrir Claude gerenciado" (ADR-092) no ambiente que está na frente.</summary>
+    [RelayCommand]
+    public Task OpenManagedAsync() =>
+        Selected?.DevelopmentId is { } developmentId && RemotePrepare is { } prepare
+            ? prepare.OpenManagedAsync(developmentId)
+            : Task.CompletedTask;
+
     /// <summary>A janela fechou: cada ambiente para o que só servia para mostrar algo nela.</summary>
     public void Detach()
     {

@@ -103,6 +103,7 @@ public class ApplicationRegistrationTests
             .AddSingleton<MyTaskApp.Application.Remote.ITrustedControllerRepository>(new FakeTrustedControllerRepository())
             .AddSingleton<MyTaskApp.Application.Remote.IRemoteSettingsStore>(new FakeRemoteSettingsStore())
             .AddSingleton<MyTaskApp.Application.Remote.IRemoteOperationsApi>(new Remote.FakeOperationQueue())
+            .AddSingleton(Substitute.For<MyTaskApp.Application.Remote.IRemoteSessionsApi>())
             .AddSingleton<MyTaskApp.Application.Remote.IRemoteCatalogQuery>(new Remote.FakeCatalogQuery())
             .AddSingleton<MyTaskApp.Application.Remote.IRemoteOperationJournal>(new Remote.InMemoryRemoteJournal())
             .AddSingleton<MyTaskApp.Application.Remote.IRemoteEntityProbe>(new Remote.FakeEntityProbe())
@@ -212,6 +213,9 @@ public class ApplicationRegistrationTests
     [InlineData(typeof(MyTaskApp.Application.Development.ProvisionEnvironmentHandler))]
     [InlineData(typeof(MyTaskApp.Application.Remote.GetRemoteControlHandler))]
     [InlineData(typeof(MyTaskApp.Application.Remote.GetRemoteOperationProgressHandler))]
+    [InlineData(typeof(MyTaskApp.Application.Remote.ListRemoteSessionsHandler))]
+    [InlineData(typeof(MyTaskApp.Application.Remote.GetRemoteSessionTimelineHandler))]
+    [InlineData(typeof(MyTaskApp.Application.Remote.RemoteSessionPublisher))]
     [InlineData(typeof(MyTaskApp.Application.Remote.CancelRemoteOperationHandler))]
     [InlineData(typeof(MyTaskApp.Application.Remote.RemoteCommandPlanner))]
     [InlineData(typeof(MyTaskApp.Application.Remote.RecordRemoteOperationHandler))]

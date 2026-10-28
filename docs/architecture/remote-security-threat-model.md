@@ -124,6 +124,9 @@ flowchart LR
 - **RS-09** Toda operação e resposta de aprovação é um JWS ES256 conferido
   pelo agente contra `TrustedControllers`. O servidor confere também, mas não
   decide sozinho. O cancelamento não é assinado (R-08): só para, nunca começa.
+  Desde a fase 3 (ADR-092), o agente confia também na própria instalação: o
+  mesmo `DeviceId` e a chave do cofre. É o que deixa o desktop pedir a sessão
+  gerenciada ao agente da mesma máquina (R-11).
 - **RS-10** "Aceitar controle remoto" é ligado **só localmente**, vem
   desligado e não sincroniza.
 
@@ -197,14 +200,20 @@ flowchart LR
 - **RS-29** Toda saída passa por `SensitiveText.Mask` antes do diário e do
   servidor; a saída sai do diário quando o servidor confirma; o servidor guarda
   no máximo 10 000 eventos de até 8 KiB por operação (acima, a saída é
-  confirmada e descartada, e o fim nunca se perde) e 30 dias.
+  confirmada e descartada, e o fim nunca se perde) e 30 dias. Desde a fase 3
+  (E9), a operação terminada há 30 dias sai inteira, com as aprovações, e o
+  pedido de pareamento vencido também. Do Claude sem
+  terminal, desde a fase 3 (E7), vai também a saída dos comandos dele (Bash e
+  PowerShell), mascarada e cortada; o resultado das outras ferramentas (o
+  conteúdo de um arquivo lido, uma busca) não sai da máquina.
 
 ### Limites
 
 - **RS-30** Rate limit `remote` por conta (separado de `sync`, ADR-069) e por
   dispositivo controlador.
 - **RS-31** Por executor: 3 operações simultâneas e 120 por hora de cada
-  controlador, no agente; 20 abertas, no servidor. As "pesadas" têm a trava
+  controlador, no agente; 20 abertas, no servidor, contadas e gravadas sob uma
+  trava por máquina (fase 3, E9). As "pesadas" têm a trava
   delas: uma operação de banco por vez no computador (o gate e o lease entre
   processos) e um Claude por worktree.
 - **RS-32** Timeout por operação e morte da árvore de processos, inclusive
@@ -218,6 +227,10 @@ flowchart LR
   revogado desligado.
 - **RS-35** A tela de aprovação mostra o pedido inteiro (ferramenta, comando
   completo, diretório), não só um resumo.
+- **RS-37** O aviso com o app fechado (ADR-096) só lê: responder continua
+  pedindo a tela e o destravamento. O resumo do pedido fica escondido na tela
+  bloqueada (`VisibilityPrivate`, com uma versão pública sem conteúdo), e o
+  toque só abre a aba Remoto, a única rota que a tela de entrada aceita.
 
 ### Auditoria
 
@@ -250,8 +263,9 @@ O que muda é **quem confirma**: em vez do diálogo da tela, uma
 | R-05 | Celular desbloqueado nas mãos de outro | a chave está no aparelho | biometria antes de assinar; revogação rápida |
 | R-06 | O agente roda com a sessão do usuário aberta | DPAPI e libsecret são do usuário | cofre de máquina, se um dia rodar sem logon |
 | R-07 | Disponibilidade depende do servidor do usuário | é o desenho do ADR-078 | nada: sem servidor, nada remoto, e o local segue inteiro |
-| R-08 | O cancelamento não é assinado: um servidor comprometido pode parar uma operação | parar é sempre o lado seguro (a etapa crítica termina antes, 4.7), e assinar o cancelamento pediria o destravamento no celular para parar algo | `CancelRequest` assinado, se parar de propósito virar um dano |
+| R-08 | O cancelamento não é assinado: um servidor comprometido pode parar uma operação | parar é sempre o lado seguro (a etapa crítica termina antes, 4.7), e assinar o cancelamento pediria o destravamento no celular para parar algo. Reavaliado na fase 3 (E9) e mantido: o mesmo servidor já pode segurar ou descartar qualquer pedido, então a assinatura não tira dele nada que ele não tenha | `CancelRequest` assinado, se parar de propósito virar um dano |
 | R-09 | Uma máquina sem tela não pareia | o código é confirmado na janela Máquinas | o `pair` no CLI do agente, lendo o código no terminal |
+| R-11 | A própria instalação pede e aprova sem pareamento (ADR-092) | quem lê a chave do cofre já roda tudo nesta máquina como o usuário; o servidor sozinho não tem a chave | desligar "aceitar controle" corta também a própria; a origem aparece como "Remoto: este computador" na auditoria |
 | R-10 | O log de acesso do proxy guarda a query do hub | o proxy é do usuário | a nota no `sync-server.md` (o filtro do Caddy); os apps já mandam o token no cabeçalho |
 
 ## 8. Verificação (T-36)
@@ -270,7 +284,7 @@ consegue provar.
 | RS-06 | `RemoteOperationTests.ARevokedMachine_IsNeitherATargetNorAnAgent`, `RemotePairingTests.AControllerRevokedBeforeTheApproval_CannotBePaired` (a chave do revogado não vale), `RemoteMachinesTests.AnExecutor_ForgetsTheControllersRevokedOnTheAccount_OrWithAnotherKey`, `RemoteOperationsEndToEndTests.Chaos_ARevokedMachine_StopsWhatRuns_AndStopsAccepting` | — |
 | RS-07 | `RemoteScopeTests`, `RemoteHubTests.WithoutTheRemoteScopeOrAToken_TheHubRefuses` | — |
 | RS-08 | `ConfirmPairingHandlerTests` (código errado, chave trocada), `RemotePairingTests` (mesmo código dos dois lados, expirado dá 410) | o CLI sem tela (R-09) |
-| RS-09 | `AdmitRemoteOperationTests` (chave não pareada, bytes mexidos), `RemoteOperationTests.ASignatureThatIsNotTheCallersActiveKey_IsRefused`, `RemoteApprovalsTests` | o cancelamento (R-08) |
+| RS-09 | `AdmitRemoteOperationTests` (chave não pareada, bytes mexidos; a própria instalação só com o id e a chave dela), `RemoteOperationTests.ASignatureThatIsNotTheCallersActiveKey_IsRefused`, `RemoteApprovalsTests` | o cancelamento (R-08) |
 | RS-10 | `AdmitRemoteOperationTests`, `ConfirmPairingHandlerTests` (desligado, nada entra) | vem desligado e fica fora do `SyncRegistry` (`RemoteExecutionSettings`, seção 2.4 da arquitetura) |
 | RS-11 | `RemoteOperationTests.TheSameEnvelopeTwice_IsTheSameOperation_AndAnotherRequestWithTheSameId_IsRefused`, `RemoteOperationJournalTests`, `Chaos_DuplicatedRequestsAndEvents_RunAndCountOnce` | — |
 | RS-12 | `RemoteJwsTests`, `AdmitRemoteOperationTests` (outro alvo, outra conta), `RemoteOperationTests` (`NotAfter` acima de 24 h) | — |
@@ -299,3 +313,4 @@ consegue provar.
 | RS-34 | `RemoteDeviceTests`, `RemoteOperationTests.ARevokedMachine_IsNeitherATargetNorAnAgent` (revoga com o alvo parado) | — |
 | RS-35 | `AgentSessionExecutorsTests` (o comando inteiro no resumo), `RemoteTests` do celular | — |
 | RS-36 | `RemoteOperationAuditTests` ("Remoto: Pixel 8"), `DatabaseCopyExecutorTests` (`ConfirmedBy`), `RemoteOperationTests` (o servidor guarda os bytes assinados) | a operação sem tarefa fica no diário do agente e no servidor, não no `ITaskAuditLog` |
+| RS-37 | `RemoteBackgroundCheckTests` do celular (só lê, avisa uma vez, nada com a tela na frente) | a notificação escondida na tela bloqueada e a rota do toque: só num aparelho Android |

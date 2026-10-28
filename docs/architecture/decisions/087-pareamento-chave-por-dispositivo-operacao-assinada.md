@@ -7,7 +7,7 @@
 | **Categoria** | remoto |
 | **Registrado** | 2026-10-24, commit `36eb99c` (primeiro commit em que o ADR aparece) |
 | **Palavras-chave** | DeviceKeyStore, device-key, ES256, PairingCode, ConfirmPairingHandler, TrustedControllers, escopo remote, janela Máquinas |
-| **Relações** | relacionado: [ADR-061](061-sincronizacao-outbox-mescla-por-campo.md), [ADR-069](069-rate-limit-por-conta.md), [ADR-084](084-orquestracao-remota-coordenador-e-agente.md) |
+| **Relações** | exceção aberta por: [ADR-092](092-sessao-gerenciada-a-partir-do-desktop.md) (a própria instalação); relacionado: [ADR-061](061-sincronizacao-outbox-mescla-por-campo.md), [ADR-069](069-rate-limit-por-conta.md), [ADR-084](084-orquestracao-remota-coordenador-e-agente.md) |
 | **Código** | `src/MyTaskApp.Infrastructure/Remote/DeviceKeyStore.cs`, `src/MyTaskApp.Application/Remote/RemotePairing.cs`, `src/MyTaskApp.Remote.Contracts/Pairings.cs`, `src/MyTaskApp.Desktop/Views/MachinesWindow.axaml`, `src/MyTaskApp.Application/Remote/AdmitRemoteOperation.cs` |
 
 **Estado:** aceito (fase 2), implementado: a chave por dispositivo, o escopo `remote`, o pareamento com código digitado no executor, os `TrustedControllers`, a operação e a aprovação assinadas, e o controlador revogado na conta esquecido pelos executores (T-36). Falta o pareamento pelo CLI do agente, numa máquina sem tela (R-09 do modelo de ameaças); o cancelamento não é assinado (R-08).

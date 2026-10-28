@@ -12,6 +12,9 @@ public static class RemoteErrorCodes
     public const string InvalidPayload = "invalid_payload";
     public const string AlreadyExpired = "already_expired";
     public const string WindowTooLong = "window_too_long";
+
+    /// <summary>O pedido diz ter sido criado adiante do relógio de quem confere: o relógio de quem pediu está adiantado.</summary>
+    public const string ClockSkew = "clock_skew";
     public const string WrongTarget = "wrong_target";
     public const string UntrustedSignature = "untrusted_signature";
     public const string AlreadySeen = "already_seen";

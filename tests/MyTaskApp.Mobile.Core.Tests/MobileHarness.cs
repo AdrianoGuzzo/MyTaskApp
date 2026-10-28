@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Devices;
+using MyTaskApp.Application.Remote;
 using MyTaskApp.Application.Sync;
 using MyTaskApp.Application.Tasks;
 using MyTaskApp.Domain.Deadlines;
@@ -54,6 +55,13 @@ internal sealed class MobileHarness : IAsyncDisposable
 
     public FakeUnlock Unlock => (FakeUnlock)Services.GetRequiredService<IDeviceUnlock>();
 
+    public RecordingNotifier Notifier => (RecordingNotifier)Services.GetRequiredService<ILocalNotifier>();
+
+    public RecordingBackgroundChecks BackgroundChecks => (RecordingBackgroundChecks)Services.GetRequiredService<IBackgroundChecks>();
+
+    /// <summary>O hub de mentira (ADR-094): desligado, até o teste ligar.</summary>
+    public FakeRemoteWatch Watch => (FakeRemoteWatch)Services.GetRequiredService<IRemoteWatch>();
+
     public IUseCaseRunner Runner => Services.GetRequiredService<IUseCaseRunner>();
 
     /// <param name="serverUrl">O servidor salvo na tela (ADR-078); <c>null</c> = celular sem servidor.</param>
@@ -90,9 +98,12 @@ internal sealed class MobileHarness : IAsyncDisposable
             .AddSingleton<IThemeService, RecordingThemes>()
             .AddSingleton<IWebAuthenticatorPort, FakeBrowser>()
             .AddSingleton<IDeviceUnlock, FakeUnlock>()
+            .AddSingleton<ILocalNotifier, RecordingNotifier>()
+            .AddSingleton<IBackgroundChecks, RecordingBackgroundChecks>()
             .AddSingleton(secrets ?? new MemorySecretStore())
             .AddSingleton<IPreferenceStore>(preferences)
-            .AddMobileCore(new MobileHostOptions { DataDirectory = folder, DeviceName = "Pixel de teste", SuggestedServerUrl = suggestedServerUrl });
+            .AddMobileCore(new MobileHostOptions { DataDirectory = folder, DeviceName = "Pixel de teste", SuggestedServerUrl = suggestedServerUrl })
+            .AddSingleton<IRemoteWatch, FakeRemoteWatch>();
 
         configure?.Invoke(services);
 

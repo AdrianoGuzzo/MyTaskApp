@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Remote;
 using MyTaskApp.Application.Sync;
 using MyTaskApp.Domain;
@@ -60,10 +61,83 @@ public sealed class RemoteEnvironmentItem(RemoteEnvironmentView view)
     };
 }
 
+/// <summary>Uma opção de uma pergunta do Claude, marcável.</summary>
+public sealed partial class RemoteQuestionOption(RemoteQuestionItem question, HeadlessQuestionOption option) : ObservableObject
+{
+    public string Label => option.Label;
+
+    public string? Description => option.Description;
+
+    public bool HasDescription => option.Description is not null;
+
+    [ObservableProperty]
+    private bool _isChosen;
+
+    partial void OnIsChosenChanged(bool value)
+    {
+        if (value)
+        {
+            question.Chose(this);
+        }
+    }
+}
+
+/// <summary>Uma pergunta do Claude (ADR-093): as opções e, se nenhuma serve, a resposta escrita.</summary>
+public sealed partial class RemoteQuestionItem : ObservableObject
+{
+    public RemoteQuestionItem(HeadlessQuestion question)
+    {
+        Question = question;
+        Options = [.. question.Options.Select(option => new RemoteQuestionOption(this, option))];
+    }
+
+    public HeadlessQuestion Question { get; }
+
+    public string Text => Question.Header is { } header ? $"{header}: {Question.Text}" : Question.Text;
+
+    public string Hint => Question.MultiSelect ? "Marque uma ou mais, ou escreva." : "Marque uma, ou escreva.";
+
+    public IReadOnlyList<RemoteQuestionOption> Options { get; }
+
+    [ObservableProperty]
+    private string _written = string.Empty;
+
+    /// <summary>A resposta: a escrita, se houver; senão as opções marcadas. Nulo: sem resposta.</summary>
+    public string? Answer => Written.Trim() is { Length: > 0 } written
+        ? written
+        : Options.Where(option => option.IsChosen).Select(option => option.Label).ToList() is { Count: > 0 } labels
+            ? HeadlessQuestions.Join(labels)
+            : null;
+
+    /// <summary>Numa pergunta de uma opção só, marcar uma desmarca as outras.</summary>
+    internal void Chose(RemoteQuestionOption chosen)
+    {
+        if (Question.MultiSelect)
+        {
+            return;
+        }
+
+        foreach (var option in Options.Where(option => option != chosen))
+        {
+            option.IsChosen = false;
+        }
+    }
+}
+
 /// <summary>Uma aprovação à espera, de qualquer máquina da conta.</summary>
 public sealed partial class RemoteApprovalItem(ApprovalView view, string machine) : ObservableObject
 {
     public ApprovalView View { get; } = view;
+
+    /// <summary>As perguntas, quando o Claude pergunta (ADR-093); vazio nas outras aprovações.</summary>
+    public IReadOnlyList<RemoteQuestionItem> Questions { get; } =
+        [.. (RemoteApprovalTexts.Questions(view.Request) ?? []).Select(question => new RemoteQuestionItem(question))];
+
+    public bool IsQuestion => Questions.Count > 0;
+
+    public string AllowLabel => RemoteApprovalTexts.AllowLabel(View.Request);
+
+    public string DenyLabel => RemoteApprovalTexts.DenyLabel(View.Request);
 
     public string Summary => View.Request.Summary;
 
@@ -72,6 +146,11 @@ public sealed partial class RemoteApprovalItem(ApprovalView view, string machine
     public string? Hint => View.Request.TypedConfirmationHint is { } hint ? $"Para permitir, digite: {hint}" : null;
 
     public bool NeedsTyping => View.Request.TypedConfirmationHint is not null;
+
+    /// <summary>"Permitir nesta conversa": só quando o agente diz o que ficaria permitido.</summary>
+    public bool CanRemember => RemoteApprovalTexts.CanRemember(View.Request);
+
+    public string? RememberLabel => RemoteApprovalTexts.RememberLabel(View.Request);
 
     [ObservableProperty]
     private string _typedConfirmation = string.Empty;
@@ -91,24 +170,46 @@ public sealed partial class RemoteControlViewModel : ObservableObject
     /// <summary>As aprovações não mudam a cada meio segundo: a lista é relida a cada tantas voltas do relógio.</summary>
     internal const int ApprovalTicks = 6;
 
+    /// <summary>Com o hub ligado, o relógio só cobre o aviso perdido: uma leitura a cada tantas voltas (5 s).</summary>
+    internal const int LiveTicks = 10;
+
     private readonly IUseCaseRunner _runner;
     private readonly ILogger<RemoteControlViewModel> _logger;
+    private readonly RemotePace _pace;
     private readonly StringBuilder _lines = new();
 
     /// <summary>A conversa de cada ambiente (pelo id do ambiente), lida dos eventos das operações do Claude.</summary>
     private readonly Dictionary<Guid, Guid> _conversations = [];
 
+    /// <summary>As conversas paradas ou trocadas por outra nesta janela: não voltam pela lista do servidor.</summary>
+    private readonly HashSet<Guid> _dismissed = [];
+
     private long _after;
+
+    /// <summary>A operação acompanhada terminou e a saída dela foi lida até o fim.</summary>
+    private bool _drained;
+
     private int _ticks;
     private bool _ticking;
 
-    public RemoteControlViewModel(IUseCaseRunner runner, ILogger<RemoteControlViewModel> logger)
+    /// <summary>O ambiente pedido na abertura, escolhido quando a lista chega.</summary>
+    private Guid? _preferred;
+
+    public RemoteControlViewModel(IUseCaseRunner runner, ILogger<RemoteControlViewModel> logger, IRemoteWatch? watch = null)
     {
         _runner = runner;
         _logger = logger;
+        _pace = new RemotePace(watch ?? new NoRemoteWatch(), TimeProvider.System);
+        Sessions = new RemoteSessionsViewModel(runner, logger);
+
+        // A lista relida pelo relógio pode trazer (ou levar) a conversa que espera no ambiente.
+        Sessions.Items.CollectionChanged += (_, _) => NotifyConversation();
     }
 
     public MachineView? Machine { get; private set; }
+
+    /// <summary>As conversas do Claude da máquina, lidas do servidor (ADR-091).</summary>
+    public RemoteSessionsViewModel Sessions { get; }
 
     public string Title => Machine is { } machine ? $"Controlar {machine.Nickname}" : "Controlar";
 
@@ -158,8 +259,14 @@ public sealed partial class RemoteControlViewModel : ObservableObject
 
     public bool HasAgentProfiles => AgentProfiles.Count > 0;
 
-    /// <summary>A conversa do Claude aberta neste ambiente por esta tela: o próximo prompt vai nela.</summary>
-    public Guid? Conversation => SelectedEnvironment is { } environment && _conversations.TryGetValue(environment.View.DevelopmentId, out var id) ? id : null;
+    /// <summary>
+    /// A conversa do Claude deste ambiente: a aberta por esta tela ou, sem ela,
+    /// a que espera o próximo prompt no servidor. Fechar e abrir a janela
+    /// (ou vir de outra tela) continua a mesma conversa.
+    /// </summary>
+    public Guid? Conversation => SelectedEnvironment is not { } environment
+        ? null
+        : _conversations.TryGetValue(environment.View.DevelopmentId, out var id) ? id : Sessions.WaitingIn(environment.View.DevelopmentId, _dismissed);
 
     public bool HasConversation => Conversation is not null;
 
@@ -181,11 +288,18 @@ public sealed partial class RemoteControlViewModel : ObservableObject
         : null;
 
     /// <summary>A janela abre com a máquina escolhida na lista.</summary>
-    public async Task OpenAsync(MachineView machine, CancellationToken cancellationToken)
+    /// <param name="developmentId">O ambiente que já abre escolhido: o da tarefa, no "Abrir Claude gerenciado" (ADR-092).</param>
+    public async Task OpenAsync(MachineView machine, CancellationToken cancellationToken, Guid? developmentId = null)
     {
         Machine = machine;
+        _preferred = developmentId;
         OnPropertyChanged(nameof(Title));
         await LoadAsync(cancellationToken);
+
+        if (developmentId is { } id && Environments.Count > 0 && SelectedEnvironment?.View.DevelopmentId != id)
+        {
+            StatusMessage = "O ambiente desta tarefa ainda não chegou ao agente. Escolha outro, ou espere um instante e atualize.";
+        }
     }
 
     [RelayCommand]
@@ -198,13 +312,16 @@ public sealed partial class RemoteControlViewModel : ObservableObject
 
         ErrorMessage = null;
 
+        // Os avisos do hub (ADR-094) enquanto a janela está aberta; sem hub, o relógio lê como antes.
+        await _pace.StartAsync(cancellationToken);
+
         try
         {
             var view = await _runner.RunAsync<GetRemoteControlHandler, RemoteControlView>(
                 (handler, token) => handler.HandleAsync(new GetRemoteControl(machine.DeviceId), token),
                 cancellationToken);
 
-            var selected = SelectedEnvironment?.View.DevelopmentId;
+            var selected = SelectedEnvironment?.View.DevelopmentId ?? _preferred;
             var profile = SelectedProfile?.Id;
             AgentProfiles.Clear();
 
@@ -243,6 +360,8 @@ public sealed partial class RemoteControlViewModel : ObservableObject
         OnPropertyChanged(nameof(HasEnvironments));
         OnPropertyChanged(nameof(HasNoEnvironments));
         OnPropertyChanged(nameof(HasAgentProfiles));
+        await Sessions.LoadAsync(machine.DeviceId, cancellationToken);
+        NotifyConversation();
         await LoadApprovalsAsync(cancellationToken);
     }
 
@@ -302,6 +421,11 @@ public sealed partial class RemoteControlViewModel : ObservableObject
 
     [RelayCommand]
     public Task DenyAsync(RemoteApprovalItem approval) => AnswerAsync(approval, ApprovalDecision.Deny);
+
+    /// <summary>Permite e deixa o agente lembrar o mesmo pedido até o fim da conversa.</summary>
+    [RelayCommand]
+    public Task AllowForConversationAsync(RemoteApprovalItem approval) =>
+        AnswerAsync(approval, ApprovalDecision.Allow, remember: approval.CanRemember);
 
     /// <summary>
     /// O prompt ao Claude de lá: abre a conversa do ambiente, ou continua a que
@@ -371,6 +495,9 @@ public sealed partial class RemoteControlViewModel : ObservableObject
         }
     }
 
+    /// <summary>A janela fechou: a conexão do hub cai se nenhuma outra tela a usa. A operação continua lá.</summary>
+    public ValueTask CloseAsync() => _pace.DisposeAsync();
+
     /// <summary>O próximo prompt abre outra conversa; a de antes fica lá, sem processo entre um prompt e outro.</summary>
     [RelayCommand]
     public void NewConversation()
@@ -385,6 +512,7 @@ public sealed partial class RemoteControlViewModel : ObservableObject
     public void Watch(RemoteOperationView operation, string title)
     {
         _after = 0;
+        _drained = false;
         _lines.Clear();
         Output = string.Empty;
         OperationTitle = title;
@@ -400,7 +528,9 @@ public sealed partial class RemoteControlViewModel : ObservableObject
 
     /// <summary>
     /// O relógio da janela, a cada meio segundo: os eventos novos da operação
-    /// em andamento e, de tempos em tempos, as aprovações.
+    /// em andamento e, de tempos em tempos, as aprovações. Com o hub ligado
+    /// (ADR-094), lê o que o aviso disse que mudou, e o resto a cada
+    /// <see cref="LiveTicks"/> voltas.
     /// </summary>
     public async Task TickAsync(CancellationToken cancellationToken)
     {
@@ -413,15 +543,25 @@ public sealed partial class RemoteControlViewModel : ObservableObject
 
         try
         {
-            if (IsRunning)
+            var noticed = _pace.TakeNotices();
+            var listening = _pace.IsListening;
+            var fallback = ++_ticks % LiveTicks == 0;
+            var everything = noticed.Contains(RemoteNoticeKind.Reconnected);
+
+            // Até drenar, não até o estado final: o "terminou" pode chegar com saída ainda por ler.
+            if (Operation is not null && !_drained
+                && (!listening || fallback || everything || noticed.Contains(RemoteNoticeKind.Events)
+                    || noticed.Contains(RemoteNoticeKind.Operation) || noticed.Contains(RemoteNoticeKind.Approval)))
             {
                 await ReadProgressAsync(cancellationToken);
             }
 
-            if (++_ticks % ApprovalTicks == 0)
+            if (everything || noticed.Contains(RemoteNoticeKind.Approval) || (listening ? fallback : _ticks % ApprovalTicks == 0))
             {
                 await LoadApprovalsAsync(cancellationToken);
             }
+
+            await Sessions.TickAsync(_ticks, noticed, listening, cancellationToken);
         }
         finally
         {
@@ -477,6 +617,7 @@ public sealed partial class RemoteControlViewModel : ObservableObject
             Append(progress.Events);
             RememberConversation(progress.Operation, progress.Events);
             _after = progress.After;
+            _drained = progress.IsFinished;
             Operation = progress.Operation;
 
             if (progress.Operation.Status == RemoteOperationStatus.WaitingApproval)
@@ -539,6 +680,7 @@ public sealed partial class RemoteControlViewModel : ObservableObject
                 if (data.TryGetProperty("canContinue", out var canContinue) && canContinue.ValueKind == JsonValueKind.False)
                 {
                     _conversations.Remove(environment.View.DevelopmentId);
+                    _dismissed.Add(conversation);
                 }
                 else
                 {
@@ -552,6 +694,11 @@ public sealed partial class RemoteControlViewModel : ObservableObject
 
     private void Forget(Guid developmentId)
     {
+        if (Conversation is { } current)
+        {
+            _dismissed.Add(current);
+        }
+
         _conversations.Remove(developmentId);
         NotifyConversation();
     }
@@ -572,16 +719,13 @@ public sealed partial class RemoteControlViewModel : ObservableObject
                 (handler, token) => handler.HandleAsync(new GetPendingApprovals(), token),
                 cancellationToken);
 
-            // O que a pessoa digitou pela metade sobrevive ao relógio.
-            var typed = Approvals.ToDictionary(item => item.View.Request.ApprovalId, item => item.TypedConfirmation);
+            // O que a pessoa digitou ou marcou pela metade sobrevive ao relógio: a mesma aprovação é o mesmo item.
+            var shown = Approvals.ToDictionary(item => item.View.Request.ApprovalId);
             Approvals.Clear();
 
             foreach (var view in pending.Where(view => view.State == ApprovalState.Pending))
             {
-                Approvals.Add(new RemoteApprovalItem(view, MachineName(view.TargetDeviceId))
-                {
-                    TypedConfirmation = typed.GetValueOrDefault(view.Request.ApprovalId, string.Empty),
-                });
+                Approvals.Add(shown.GetValueOrDefault(view.Request.ApprovalId) ?? new RemoteApprovalItem(view, MachineName(view.TargetDeviceId)));
             }
         }
         catch (Exception exception) when (exception is DomainException or SyncApiException)
@@ -592,7 +736,7 @@ public sealed partial class RemoteControlViewModel : ObservableObject
         OnPropertyChanged(nameof(HasApprovals));
     }
 
-    private async Task AnswerAsync(RemoteApprovalItem approval, ApprovalDecision decision)
+    private async Task AnswerAsync(RemoteApprovalItem approval, ApprovalDecision decision, bool remember = false)
     {
         ErrorMessage = null;
 
@@ -604,14 +748,32 @@ public sealed partial class RemoteControlViewModel : ObservableObject
             return;
         }
 
+        // A pergunta do Claude: responder é permitir com uma resposta para cada pergunta.
+        var answers = decision == ApprovalDecision.Allow && approval.IsQuestion
+            ? approval.Questions.Select(question => question.Answer).ToList()
+            : null;
+
+        if (answers is not null && answers.Any(answer => answer is null))
+        {
+            ErrorMessage = "Marque uma opção, ou escreva a resposta, em cada pergunta.";
+            return;
+        }
+
         try
         {
             await _runner.RunAsync<AnswerApprovalHandler, ApprovalView>(
                 (handler, token) => handler.HandleAsync(
-                    new AnswerApproval(approval.View.Request.ApprovalId, decision, approval.NeedsTyping ? approval.TypedConfirmation.Trim() : null),
+                    new AnswerApproval(
+                        approval.View.Request.ApprovalId,
+                        decision,
+                        approval.NeedsTyping ? approval.TypedConfirmation.Trim() : null,
+                        remember,
+                        answers?.Select(answer => answer!).ToList()),
                     token),
                 CancellationToken.None);
-            StatusMessage = decision == ApprovalDecision.Allow ? "Permitido." : "Negado.";
+            StatusMessage = approval.IsQuestion
+                ? decision == ApprovalDecision.Allow ? "Respondido." : "O Claude decide sozinho."
+                : decision != ApprovalDecision.Allow ? "Negado." : remember ? "Permitido nesta conversa." : "Permitido.";
         }
         catch (Exception exception) when (exception is DomainException or SyncApiException)
         {

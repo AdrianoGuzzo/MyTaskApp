@@ -2742,6 +2742,16 @@
                           Content="{Binding StartLabel}"
                           IsVisible="{Binding ShowStart}"
                           Command="{Binding StartCommand}" />
+                  <!--
+                    A sessão gerenciada (ADR-092): o agente desta máquina roda o
+                    Claude sem terminal, e a conversa continua do celular ou de
+                    outro computador. O terminal acima segue como sempre.
+                  -->
+                  <Button x:Name="OpenManagedAgentButton"
+                          Content="Abrir Claude gerenciado"
+                          ToolTip.Tip="A conversa roda pelo agente desta máquina, sem terminal: dá para continuar do celular ou de outro computador."
+                          IsVisible="{Binding #Root.((vm:TaskNotesViewModel)DataContext).Developments.RemotePrepare.CanManage, FallbackValue=False}"
+                          Command="{Binding #Root.((vm:TaskNotesViewModel)DataContext).Developments.OpenManagedCommand}" />
                 </WrapPanel>
 
                 <TextBlock Classes="hint"

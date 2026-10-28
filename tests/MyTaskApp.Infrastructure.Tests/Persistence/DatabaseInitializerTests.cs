@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using MyTaskApp.Application;
+using MyTaskApp.Domain;
 using MyTaskApp.Infrastructure.Persistence;
 
 namespace MyTaskApp.Infrastructure.Tests.Persistence;
@@ -77,6 +78,26 @@ public sealed class DatabaseInitializerTests : IAsyncDisposable
         await connection.OpenAsync(Ct);
 
         (await ScalarAsync(connection, "PRAGMA journal_mode;")).Should().Be("wal");
+    }
+
+    /// <summary>
+    /// Um processo mais velho que o esquema não sobe (ADR-085, item 3): o banco
+    /// tem uma migration que ele não conhece, e ele recusa sem tocar em nada.
+    /// </summary>
+    [Fact]
+    public async Task AnAppOlderThanTheSchema_RefusesToOpenIt()
+    {
+        await InitializeAsync(Process());
+
+        await using (var connection = OwnConnection())
+        {
+            await connection.OpenAsync(Ct);
+            await ScalarAsync(connection, "INSERT INTO \"__EFMigrationsHistory\" (\"MigrationId\", \"ProductVersion\") VALUES ('29991231000000_FromANewerVersion', '99.0.0');");
+        }
+
+        var older = async () => await InitializeAsync(Process());
+
+        (await older.Should().ThrowAsync<DomainException>()).WithMessage(DatabaseInitializer.NewerSchemaMessage);
     }
 
     /// <summary>O desktop e o agente sobem juntos: o EF trava a migration, e ela roda uma vez.</summary>

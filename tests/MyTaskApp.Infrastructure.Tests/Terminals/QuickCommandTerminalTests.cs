@@ -57,11 +57,20 @@ public class QuickCommandTerminalTests
     [Fact]
     public void Linux_PassesTheLineAsOneArgumentToSh()
     {
-        var launch = ShellCommandPlanner.ForTerminal(isWindows: false, "npm run dev", keepOpen: true, _ => null, "/");
+        var launch = ShellCommandPlanner.ForTerminal(isWindows: false, "npm run dev", keepOpen: false, _ => null, "/");
 
         launch.FileName.Should().Be("/bin/sh");
         launch.RawArguments.Should().BeNull();
         launch.Arguments.Should().Equal("-c", "npm run dev");
+    }
+
+    /// <summary>Manter aberta, no Linux: depois do comando, o shell da pessoa toma a janela.</summary>
+    [Fact]
+    public void Linux_KeepingTheWindowOpen_EndsInTheUsersShell()
+    {
+        var launch = ShellCommandPlanner.ForTerminal(isWindows: false, "npm run dev", keepOpen: true, _ => null, "/");
+
+        launch.Arguments.Should().Equal("-c", "npm run dev\nexec \"${SHELL:-/bin/sh}\"");
     }
 
     [Fact]

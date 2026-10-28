@@ -97,6 +97,8 @@ internal sealed class ShellNavigator : INavigator
 
     public const string Prepare = "prepare";
 
+    public const string Session = "session";
+
     public Task OpenTaskAsync(Guid taskId) => GoAsync($"{Task}?id={taskId:D}");
 
     public Task NewTaskAsync() => GoAsync(TaskForm);
@@ -126,6 +128,8 @@ internal sealed class ShellNavigator : INavigator
     public Task OpenRemotePrepareAsync(Guid taskId) => GoAsync($"{Prepare}?id={taskId:D}");
 
     public Task OpenOperationAsync(Guid operationId, Guid deviceId) => GoAsync($"{Operation}?id={operationId:D}&device={deviceId:D}");
+
+    public Task OpenSessionAsync(Guid sessionId, Guid deviceId) => GoAsync($"{Session}?id={sessionId:D}&device={deviceId:D}");
 
     public Task BackAsync() => GoAsync("..");
 

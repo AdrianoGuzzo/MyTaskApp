@@ -37,6 +37,10 @@ public static class MauiProgram
         KeyboardMappings.Apply();
 #elif ANDROID
         builder.ConfigureMauiHandlers(handlers => handlers.AddHandler<Shell, ThemedShellRenderer>());
+
+        // O aviso com o app fechado (ADR-096); no iOS, a Mobile.Core fica com as que não fazem nada.
+        builder.Services.AddSingleton<ILocalNotifier, AndroidNotifier>();
+        builder.Services.AddSingleton<IBackgroundChecks, AndroidBackgroundChecks>();
 #endif
 
         builder.Services.AddSingleton<ISecretStore, MauiSecretStore>();
@@ -71,6 +75,7 @@ public static class MauiProgram
         builder.Services.AddTransient<SyncServerPage>();
         builder.Services.AddTransient<RemoteMachinePage>();
         builder.Services.AddTransient<RemoteOperationPage>();
+        builder.Services.AddTransient<RemoteSessionPage>();
         builder.Services.AddTransient<RemotePreparePage>();
 
         return builder.Build();

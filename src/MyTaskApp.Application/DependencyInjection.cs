@@ -241,16 +241,23 @@ public static class DependencyInjection
 
         // A fila de operações, do lado do agente (T-14, T-15): a validação local,
         // o despachante, o laço e o que esta versão sabe rodar (ADR-088).
+        services.AddScoped<RemoteTrust>();
         services.AddScoped<AdmitRemoteOperationHandler>();
         services.AddScoped<GetPendingApprovalsHandler>();
         services.AddScoped<AnswerApprovalHandler>();
         services.AddScoped<SendRemoteOperationHandler>();
         services.AddScoped<GetRemoteControlHandler>();
         services.AddScoped<GetRemoteOperationProgressHandler>();
+
+        // As conversas do Claude no servidor (ADR-091): o agente relata, as duas telas de controle leem.
+        services.AddScoped<ListRemoteSessionsHandler>();
+        services.AddScoped<GetRemoteSessionTimelineHandler>();
+        services.TryAddSingleton<RemoteSessionPublisher>();
         services.AddScoped<CancelRemoteOperationHandler>();
         services.TryAddSingleton(RemoteDispatchLimits.Default);
         services.TryAddSingleton<RemoteOperationDispatcher>();
         services.TryAddSingleton<IRemoteHub, NoRemoteHub>();
+        services.TryAddSingleton<IRemoteWatch, NoRemoteWatch>();
         services.TryAddSingleton<RemoteOperationScheduler>();
         services.TryAddSingleton<RemoteCatalogPublisher>();
 
@@ -272,6 +279,7 @@ public static class DependencyInjection
         services.TryAddSingleton(HeadlessAgentLimits.Default);
         services.TryAddSingleton<HeadlessConversations>();
         services.TryAddSingleton<HeadlessPromptRunner>();
+        services.AddSingleton<IRemoteStartupRecovery, HeadlessSessionRecovery>();
         services.AddScoped<HeadlessAgentPlanner>();
         services.AddScoped<HeadlessSessionStore>();
 

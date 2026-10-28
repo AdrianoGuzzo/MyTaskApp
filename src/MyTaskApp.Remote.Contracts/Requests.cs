@@ -80,7 +80,10 @@ public sealed record PromptRequest(
     int? MaxTurns = null,
     decimal? MaxBudgetUsd = null);
 
-/// <summary><c>agent.stop</c>: encerra o processo; a conversa fica.</summary>
+/// <summary>
+/// <c>agent.stop</c>: encerra o processo, se houver, e a conversa não recebe
+/// mais prompts (fica parada). Para só interromper o prompt, cancele a operação dele.
+/// </summary>
 public sealed record AgentStopRequest(Guid AgentSessionId);
 
 /// <summary>

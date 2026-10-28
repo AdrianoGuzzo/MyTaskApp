@@ -337,6 +337,39 @@ public sealed class AgentSession
     }
 
     /// <summary>
+    /// O prompt sem terminal acabou: o que o Claude estava fazendo no fim e o
+    /// fim do processo. Se uma reconciliação viu o processo sair antes e já
+    /// fechou a sessão, o "como acabou" ainda é gravado, porque só quem leu a
+    /// saída sabe. A conversa parada a pedido não muda.
+    /// </summary>
+    public void EndHeadlessPrompt(AgentActivity activity, string? message, DateTimeOffset at)
+    {
+        if (!IsHeadless)
+        {
+            throw new DomainException("Só a sessão sem terminal termina um prompt.");
+        }
+
+        if (Status == AgentSessionStatus.Stopped || !Enum.IsDefined(activity))
+        {
+            return;
+        }
+
+        if (IsActive)
+        {
+            RecordActivity(activity, message, at);
+            MarkExited(at);
+            return;
+        }
+
+        if (Status == AgentSessionStatus.Exited)
+        {
+            Activity = activity;
+            ActivityMessage = Truncate(message, MaxActivityMessageLength);
+            ActivityChangedAt = at;
+        }
+    }
+
+    /// <summary>
     /// Parada a pedido (<c>agent.stop</c>), com ou sem prompt rodando: a
     /// conversa não recebe mais nada. Idempotente.
     /// </summary>

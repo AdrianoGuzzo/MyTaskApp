@@ -33,6 +33,9 @@ internal sealed class EfRemotePairingStore(ServerDbContext context) : IRemotePai
             ? ToModel(row)
             : null;
 
+    public Task<int> PurgeAsync(DateTimeOffset expiredBefore, CancellationToken cancellationToken) =>
+        context.RemotePairings.Where(row => row.ExpiresAt < expiredBefore).ExecuteDeleteAsync(cancellationToken);
+
     public Task<int> CountOpenAsync(Guid userId, DateTimeOffset now, CancellationToken cancellationToken) =>
         context.RemotePairings.CountAsync(row => row.UserId == userId && row.ApprovedAt == null && row.ExpiresAt > now, cancellationToken);
 

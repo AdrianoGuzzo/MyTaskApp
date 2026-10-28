@@ -21,6 +21,22 @@ public sealed class RemotePairingUseCases(
     TimeProvider timeProvider,
     ILogger<RemotePairingUseCases> logger)
 {
+    /// <summary>
+    /// A varredura (fase 3, E9): o pedido de pareamento só serve enquanto não
+    /// vence. A confiança fica nos <c>TrustedControllers</c> do executor, não aqui.
+    /// </summary>
+    public async Task<int> SweepAsync(TimeSpan retention, CancellationToken cancellationToken)
+    {
+        var purged = await pairings.PurgeAsync(timeProvider.GetUtcNow() - retention, cancellationToken);
+
+        if (purged > 0)
+        {
+            logger.LogInformation("RemotePairingsSwept {Purged}", purged);
+        }
+
+        return purged;
+    }
+
     /// <summary>O controlador do token pede para controlar <see cref="PairingRequest.ExecutorDeviceId"/>.</summary>
     public async Task<PairingInfo> CreateAsync(SyncCaller caller, PairingRequest request, CancellationToken cancellationToken)
     {
@@ -213,4 +229,7 @@ public interface IRemotePairingStore
     Task<IReadOnlyList<PairingRecord>> ListOpenForExecutorAsync(Guid userId, Guid executorDeviceId, DateTimeOffset now, CancellationToken cancellationToken);
 
     Task ApproveAsync(Guid userId, Guid pairingId, DateTimeOffset at, CancellationToken cancellationToken);
+
+    /// <summary>Os vencidos antes de <paramref name="expiredBefore"/>, aprovados ou não; quantos saíram.</summary>
+    Task<int> PurgeAsync(DateTimeOffset expiredBefore, CancellationToken cancellationToken);
 }

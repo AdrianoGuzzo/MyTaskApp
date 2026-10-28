@@ -52,6 +52,7 @@ public class RemotePrepareViewModelTests
             },
             []);
         _runner.ResultsByHandler[typeof(GetPendingApprovalsHandler)] = (IReadOnlyList<ApprovalView>)[];
+        _runner.ResultsByHandler[typeof(ListRemoteSessionsHandler)] = new RemoteSessionList([]);
         _runner.ResultsByHandler[typeof(SendRemoteOperationHandler)] = new RemoteOperationView(
             Guid.CreateVersion7(), Guid.CreateVersion7(), Notebook.DeviceId, Guid.CreateVersion7(), RemoteOperationKinds.WorktreeProvision, TaskId,
             RemoteOperationStatus.Queued, Now, Now.AddMinutes(5), Now, null, null, null, 0);
@@ -230,6 +231,59 @@ public class RemotePrepareViewModelTests
         }
 
         condition().Should().BeTrue();
+    }
+
+    /// <summary>
+    /// "Abrir Claude gerenciado" (ADR-092): com esta máquina aceitando
+    /// controle, abre a tela "Operação" dela mesma, já no ambiente da tarefa.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task OpeningManaged_OpensThisMachine_InTheEnvironmentOfTheTask()
+    {
+        var other = new RemoteEnvironmentView(Guid.CreateVersion7(), Guid.CreateVersion7(), "Outra", "feature/outra", []);
+        var mine = new RemoteEnvironmentView(TaskId, Guid.CreateVersion7(), "Esta", "feature/esta", []);
+        _runner.ResultsByHandler[typeof(GetRemoteControlHandler)] = new RemoteControlView(
+            new AgentCatalog("h", [], [], [], [new CatalogAgentProfile("read", "Ler", "Só lê o repositório.")]),
+            [other, mine]);
+        var viewModel = ViewModel();
+        await viewModel.RefreshAsync(Ct);
+
+        viewModel.CanManage.Should().BeTrue();
+        await viewModel.OpenManagedAsync(mine.DevelopmentId);
+
+        var control = _opened.Should().ContainSingle().Subject;
+        control.Machine.Should().Be(This);
+        control.SelectedEnvironment!.View.Should().Be(mine);
+        control.StatusMessage.Should().BeNull();
+    }
+
+    [AvaloniaFact]
+    public async Task OpeningManaged_WithAnEnvironmentTheAgentHasNotPublished_SaysSo()
+    {
+        var viewModel = ViewModel();
+        _runner.ResultsByHandler[typeof(GetRemoteControlHandler)] = new RemoteControlView(
+            new AgentCatalog("h", [], [], [], []),
+            [new RemoteEnvironmentView(Guid.CreateVersion7(), Guid.CreateVersion7(), "Outra", null, [])]);
+        await viewModel.RefreshAsync(Ct);
+
+        await viewModel.OpenManagedAsync(Guid.CreateVersion7());
+
+        _opened.Single().StatusMessage.Should().StartWith("O ambiente desta tarefa ainda não chegou ao agente");
+    }
+
+    [AvaloniaFact]
+    public async Task WithoutAcceptingControlHere_TheManagedButtonDoesNotShow()
+    {
+        _runner.ResultsByHandler[typeof(GetMachinesHandler)] = new MachinesView(
+            new RemoteSettings(true, false), RemoteAvailability.Ready, null, [This with { AcceptsControl = false }, Notebook], [], []);
+        var viewModel = ViewModel();
+
+        await viewModel.RefreshAsync(Ct);
+
+        viewModel.CanManage.Should().BeFalse();
+        viewModel.IsAvailable.Should().BeTrue("o Preparar em… para o notebook continua");
+        await viewModel.OpenManagedAsync(Guid.CreateVersion7());
+        _opened.Should().BeEmpty();
     }
 
     private static MachinesView Machines(params MachineView[] machines) =>

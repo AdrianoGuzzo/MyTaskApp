@@ -106,6 +106,29 @@ internal sealed class SignalRRemoteHub(
 
     private HubConnection Build(Uri hub)
     {
+        var connection = RemoteHubConnection.Build(hub, authenticator, transport);
+        connection.On<Guid>(RemoteHubMessages.OperationAvailable, id => OperationAvailable?.Invoke(id));
+        connection.On<Guid>(RemoteHubMessages.CancelRequested, id => CancelRequested?.Invoke(id));
+        connection.On<Guid, Guid>(RemoteHubMessages.ApprovalResolved, (approvalId, _) => ApprovalResolved?.Invoke(approvalId));
+
+        // Religou: pode ter perdido avisos no meio; uma busca agora acha o que chegou.
+        connection.Reconnected += _ =>
+        {
+            logger.LogInformation("RemoteHubReconnected");
+            OperationAvailable?.Invoke(Guid.Empty);
+            return Task.CompletedTask;
+        };
+
+        return connection;
+    }
+
+}
+
+/// <summary>A conexão com o hub, igual para o agente e para as telas de controle.</summary>
+internal static class RemoteHubConnection
+{
+    public static HubConnection Build(Uri hub, ISyncAuthenticator authenticator, RemoteHubTransport? transport)
+    {
         var connection = new HubConnectionBuilder()
             .WithUrl(hub, options =>
             {
@@ -123,18 +146,6 @@ internal sealed class SignalRRemoteHub(
             .Build();
 
         connection.KeepAliveInterval = TimeSpan.FromSeconds(15);
-        connection.On<Guid>(RemoteHubMessages.OperationAvailable, id => OperationAvailable?.Invoke(id));
-        connection.On<Guid>(RemoteHubMessages.CancelRequested, id => CancelRequested?.Invoke(id));
-        connection.On<Guid, Guid>(RemoteHubMessages.ApprovalResolved, (approvalId, _) => ApprovalResolved?.Invoke(approvalId));
-
-        // Religou: pode ter perdido avisos no meio; uma busca agora acha o que chegou.
-        connection.Reconnected += _ =>
-        {
-            logger.LogInformation("RemoteHubReconnected");
-            OperationAvailable?.Invoke(Guid.Empty);
-            return Task.CompletedTask;
-        };
-
         return connection;
     }
 

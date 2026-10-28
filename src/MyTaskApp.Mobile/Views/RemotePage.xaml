@@ -52,16 +52,21 @@
                                 <VerticalStackLayout Spacing="4">
                                     <Label Text="{Binding Title}" FontAttributes="Bold" />
                                     <Label Text="{Binding Summary}" LineBreakMode="WordWrap" />
+                                    <Label Text="{Binding QuestionText}" LineBreakMode="WordWrap" IsVisible="{Binding IsQuestion}" />
                                     <Label Text="{Binding Detail}" Style="{StaticResource Muted}" />
                                     <HorizontalStackLayout Spacing="8" Margin="0,4,0,0">
-                                        <Button Text="Permitir"
+                                        <Button Text="{Binding AllowLabel}"
                                                 Command="{Binding Source={RelativeSource AncestorType={x:Type vm:RemoteViewModel}}, x:DataType=vm:RemoteViewModel, Path=AllowCommand}"
                                                 CommandParameter="{Binding .}" />
-                                        <Button Text="Negar"
+                                        <Button Text="{Binding DenyLabel}"
                                                 Style="{StaticResource Destructive}"
                                                 Command="{Binding Source={RelativeSource AncestorType={x:Type vm:RemoteViewModel}}, x:DataType=vm:RemoteViewModel, Path=DenyCommand}"
                                                 CommandParameter="{Binding .}" />
                                     </HorizontalStackLayout>
+                                    <Label Text="{Binding RememberLabel}" Style="{StaticResource Muted}" LineBreakMode="WordWrap" IsVisible="{Binding CanRemember}" />
+                                    <Button Text="Permitir nesta conversa" HorizontalOptions="Start" IsVisible="{Binding CanRemember}"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:RemoteViewModel}}, x:DataType=vm:RemoteViewModel, Path=AllowForConversationCommand}"
+                                            CommandParameter="{Binding .}" />
                                 </VerticalStackLayout>
                             </Border>
                         </DataTemplate>
@@ -90,6 +95,28 @@
                                     </HorizontalStackLayout>
                                 </VerticalStackLayout>
                             </Border>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </VerticalStackLayout>
+
+                <!-- As conversas do Claude das máquinas, de qualquer tela que as abriu (ADR-091). -->
+                <Label Text="Conversas do Claude" Style="{StaticResource Section}" IsVisible="{Binding HasSessions}" />
+                <Label Text="{Binding SessionsProblem}" Style="{StaticResource Muted}" LineBreakMode="WordWrap"
+                       IsVisible="{Binding SessionsProblem, Converter={StaticResource HasValue}}" />
+                <VerticalStackLayout BindableLayout.ItemsSource="{Binding Sessions}" Spacing="4">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="vm:SessionLine">
+                            <Grid ColumnDefinitions="*,Auto" Padding="0,6">
+                                <Grid.GestureRecognizers>
+                                    <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type vm:RemoteViewModel}}, x:DataType=vm:RemoteViewModel, Path=OpenSessionCommand}"
+                                                          CommandParameter="{Binding .}" />
+                                </Grid.GestureRecognizers>
+                                <VerticalStackLayout>
+                                    <Label Text="{Binding Title}" />
+                                    <Label Text="{Binding Detail}" Style="{StaticResource Muted}" />
+                                </VerticalStackLayout>
+                                <Label Grid.Column="1" Text="›" Style="{StaticResource Muted}" VerticalOptions="Center" />
+                            </Grid>
                         </DataTemplate>
                     </BindableLayout.ItemTemplate>
                 </VerticalStackLayout>

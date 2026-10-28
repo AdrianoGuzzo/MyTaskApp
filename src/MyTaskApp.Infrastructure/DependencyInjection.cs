@@ -50,6 +50,7 @@ using MyTaskApp.Infrastructure.Sync.Capture;
 using MyTaskApp.Infrastructure.Sync.Http;
 using MyTaskApp.Infrastructure.Storage;
 using MyTaskApp.Infrastructure.Terminals;
+using MyTaskApp.Infrastructure.Terminals.Linux;
 using MyTaskApp.Infrastructure.Terminals.Windows;
 
 namespace MyTaskApp.Infrastructure;
@@ -263,6 +264,13 @@ public static class DependencyInjection
         {
             AddWindowsTerminal(services);
         }
+        else if (OperatingSystem.IsLinux())
+        {
+            // A janela abre (fase 3, E9); achar, focar e piscar a janela ainda não.
+            services.AddSingleton<ITerminalLauncher>(
+                provider => new LinuxTerminalLauncher(provider.GetRequiredService<ILogger<LinuxTerminalLauncher>>()));
+            services.AddSingleton<ITerminalWindowManager, UnsupportedTerminalWindowManager>();
+        }
         else
         {
             services.AddSingleton<ITerminalLauncher, UnsupportedTerminalLauncher>();
@@ -382,9 +390,13 @@ public static class DependencyInjection
         services.AddSingleton<RemoteApiClient>();
         services.AddSingleton<IRemoteApi>(provider => provider.GetRequiredService<RemoteApiClient>());
         services.AddSingleton<IRemoteOperationsApi>(provider => provider.GetRequiredService<RemoteApiClient>());
+        services.AddSingleton<IRemoteSessionsApi>(provider => provider.GetRequiredService<RemoteApiClient>());
 
         // A campainha do servidor (T-15): só o agente liga, pelo RemoteOperationScheduler.
         services.AddSingleton<IRemoteHub, SignalRRemoteHub>();
+
+        // Os avisos da conta para as telas de controle (ADR-094): ligam só com uma tela aberta.
+        services.AddSingleton<IRemoteWatch, SignalRRemoteWatch>();
         services.AddSingleton<ISyncServerAddress, SyncServerAddress>();
         services.AddSingleton<ISyncServerProbe, SyncServerProbe>();
     }

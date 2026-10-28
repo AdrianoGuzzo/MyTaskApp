@@ -107,11 +107,17 @@ public static class MobileServices
         services.AddSingleton<IDeviceSigner>(provider => provider.GetRequiredService<UnlockedDeviceSigner>());
         services.AddSingleton<ApprovalWatcher>();
         services.AddSingleton<ApprovalAnswers>();
+
+        // Com o app fechado (ADR-096): a casca do Android troca as duas portas; o iOS fica sem.
+        services.TryAddSingleton<ILocalNotifier, NoLocalNotifier>();
+        services.TryAddSingleton<IBackgroundChecks, NoBackgroundChecks>();
+        services.AddSingleton<RemoteBackgroundCheck>();
         services.AddSingleton<SentOperations>();
         services.AddSingleton<RemoteSender>();
         services.AddSingleton<RemoteViewModel>();
         services.AddTransient<RemoteMachineViewModel>();
         services.AddTransient<RemoteOperationViewModel>();
+        services.AddTransient<RemoteSessionViewModel>();
         services.AddTransient<RemotePrepareViewModel>();
 
         return services;

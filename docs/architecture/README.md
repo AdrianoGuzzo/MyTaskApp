@@ -44,7 +44,7 @@ Números dos ADRs; o link está na linha do índice abaixo.
 - **mobile** (app do celular): 067, 075, 076, 079
 - **distribuicao** (instalador, versionamento, release, instância única, iniciar com o sistema): 018, 019, 023, 044, 049
 - **testes** (estratégia e ferramentas de teste): 006
-- **remoto** (orquestração remota (fase 2)): 084, 085, 086, 087, 088, 089, 090
+- **remoto** (orquestração remota (fases 2 e 3)): 084, 085, 086, 087, 088, 089, 090, 091, 092, 093, 094, 095, 096
 
 ## Índice
 
@@ -134,12 +134,18 @@ Números dos ADRs; o link está na linha do índice abaixo.
 | [ADR-082](decisions/082-script-depois-da-copia.md) | Script depois da cópia: SQL do usuário no destino, no fim, numa transação | Aceito | Implementado | banco-de-dados | PostCopyScript, PostCopyScriptText, IPostgresScriptRunner, NpgsqlScriptRunner, Executar SQL |
 | [ADR-083](decisions/083-diagnostico-instalar-e-banco-docker.md) | Diagnóstico que ensina a instalar tudo, e um banco local no Docker sempre ligado | Aceito | Implementado | banco-de-dados | ToolInstallGuide, InstallStep, IDockerInspector, DockerInspector, LocalPostgresContainer |
 | [ADR-084](decisions/084-orquestracao-remota-coordenador-e-agente.md) | Orquestração remota: o servidor do usuário coordena, e cada máquina tem um agente que só disca para fora | Aceito | Implementado | remoto | MyTaskApp.Remote.Contracts, controlador, coordenador, agente, conexão só de saída |
-| [ADR-085](decisions/085-agente-sem-tela-sobre-o-mesmo-sqlite.md) | O agente: um processo sem tela, do usuário, sobre o mesmo SQLite | Aceito | Parcial | remoto | MyTaskApp.Agent, ScopedUseCaseRunner, WAL, ProcessLeases, named pipe |
+| [ADR-085](decisions/085-agente-sem-tela-sobre-o-mesmo-sqlite.md) | O agente: um processo sem tela, do usuário, sobre o mesmo SQLite | Aceito | Implementado | remoto | MyTaskApp.Agent, ScopedUseCaseRunner, WAL, ProcessLeases, named pipe |
 | [ADR-086](decisions/086-operacao-remota-registro-diario-e-signalr.md) | Operação remota: registro no PostgreSQL, diário no agente, SignalR só como campainha | Aceito | Implementado | remoto | RemoteOperations, RemoteOperationEvents, RemoteOperationJournal, RemoteOperationStatus, Seq |
 | [ADR-087](decisions/087-pareamento-chave-por-dispositivo-operacao-assinada.md) | Confiança: pareamento na máquina executora, chave por dispositivo e operação assinada | Aceito | Parcial | remoto | DeviceKeyStore, device-key, ES256, PairingCode, ConfirmPairingHandler |
 | [ADR-088](decisions/088-catalogo-fechado-de-operacoes-remotas.md) | Catálogo fechado de operações: nenhum texto de shell vem de fora | Aceito | Implementado | remoto | catálogo de operações, RemoteAllowed, command.run, RequiresConfirmation, RunQuickCommand.Confirmed |
 | [ADR-089](decisions/089-claude-code-remoto-headless-com-aprovacao.md) | Claude Code remoto: headless, perfil escolhido no executor e aprovação humana | Aceito | Implementado | remoto | IHeadlessAgentProvider, claude -p, stream-json, --restricted, --permission-prompt-tool |
 | [ADR-090](decisions/090-copia-de-banco-remota-com-aprovacao.md) | Cópia de banco de longe: as mesmas barreiras, e produção com aprovação digitada | Aceito | Implementado | remoto | database.copy, DatabaseCopyRequest, ApprovalKind.ProductionDatabase, TypedConfirmation, CriticalProduction |
+| [ADR-091](decisions/091-conversa-do-claude-como-sessao-no-servidor.md) | A conversa do Claude como sessão no servidor, relatada pelo agente | Aceito | Implementado | remoto | RemoteAgentSessions, RemoteSessionPublisher, AgentSeenAt, SessionChanged, linha do tempo |
+| [ADR-092](decisions/092-sessao-gerenciada-a-partir-do-desktop.md) | Sessão gerenciada a partir do desktop: o agente da própria máquina roda o Claude | Aceito | Implementado | remoto | sessão gerenciada, Abrir Claude gerenciado, desktop para celular |
+| [ADR-093](decisions/093-pergunta-do-claude-respondida-de-longe.md) | A pergunta do Claude (AskUserQuestion) respondida de longe | Aceito | Implementado | remoto | AskUserQuestion, updatedInput, answers, permission-prompt-tool |
+| [ADR-094](decisions/094-controladores-ouvem-o-hub.md) | Os controladores ouvem o hub, com a leitura por tempo como reserva | Aceito | Implementado | remoto | SignalR, EventsAppended, SessionChanged, polling, reconexão |
+| [ADR-095](decisions/095-fila-de-prompts-por-conversa.md) | A instrução com o Claude respondendo espera a vez na fila da conversa | Aceito | Implementado | remoto | fila por conversa, MaxWaiting, processo vivo, stream-json, replay-user-messages |
+| [ADR-096](decisions/096-verificacao-periodica-no-celular.md) | Com o app fechado, o celular verifica o controle remoto de tempos em tempos e avisa | Aceito | Implementado | remoto | verificação periódica, JobScheduler, notificação local, POST_NOTIFICATIONS, push, FCM |
 
 ## Novo ADR
 

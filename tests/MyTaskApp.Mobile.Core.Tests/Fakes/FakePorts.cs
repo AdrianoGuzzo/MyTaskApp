@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using MyTaskApp.Application.Remote;
 using MyTaskApp.Infrastructure.Secrets;
 using MyTaskApp.Mobile.Core.Ports;
 using MyTaskApp.Mobile.Core.Presentation;
@@ -40,6 +41,8 @@ internal sealed class RecordingNavigator : INavigator
 
     public Task OpenOperationAsync(Guid operationId, Guid deviceId) => Record($"operation/{operationId}");
 
+    public Task OpenSessionAsync(Guid sessionId, Guid deviceId) => Record($"session/{sessionId}");
+
     public Task BackAsync() => Record("back");
 
     private Task Record(string visit)
@@ -61,6 +64,32 @@ internal sealed class FakeUnlock : IDeviceUnlock
         Asked++;
         return Task.FromResult(Answer);
     }
+}
+
+/// <summary>As notificações do sistema (ADR-096): guarda as que saíram e conta os pedidos de permissão.</summary>
+internal sealed class RecordingNotifier : ILocalNotifier
+{
+    public List<LocalNotice> Shown { get; } = [];
+
+    public int PermissionRequests { get; private set; }
+
+    public bool Granted { get; set; } = true;
+
+    public Task<bool> RequestPermissionAsync()
+    {
+        PermissionRequests++;
+        return Task.FromResult(Granted);
+    }
+
+    public void Show(LocalNotice notice) => Shown.Add(notice);
+}
+
+/// <summary>O agendamento do sistema (ADR-096): guarda cada ligar e desligar.</summary>
+internal sealed class RecordingBackgroundChecks : IBackgroundChecks
+{
+    public List<bool> Applied { get; } = [];
+
+    public void Apply(bool enabled) => Applied.Add(enabled);
 }
 
 /// <summary>Responde às perguntas com o que o teste mandou, e guarda o que foi dito.</summary>
@@ -199,4 +228,28 @@ internal sealed class MemorySecretStore : ISecretStore
         Secrets.TryRemove(name, out _);
         return Task.CompletedTask;
     }
+}
+
+/// <summary>O hub de mentira (ADR-094): o teste diz se está ligado e manda os avisos.</summary>
+internal sealed class FakeRemoteWatch : IRemoteWatch
+{
+    public event Action<RemoteNotice>? Noticed;
+
+    public bool IsConnected { get; set; }
+
+    public int Watchers { get; private set; }
+
+    public Task StartAsync(CancellationToken cancellationToken)
+    {
+        Watchers++;
+        return Task.CompletedTask;
+    }
+
+    public Task StopAsync(CancellationToken cancellationToken)
+    {
+        Watchers--;
+        return Task.CompletedTask;
+    }
+
+    public void Notify(RemoteNoticeKind kind, Guid id) => Noticed?.Invoke(new RemoteNotice(kind, id));
 }

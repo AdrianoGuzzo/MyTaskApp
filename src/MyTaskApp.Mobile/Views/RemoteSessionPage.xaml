@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:MyTaskApp.Mobile.Core.ViewModels;assembly=MyTaskApp.Mobile.Core"
+             xmlns:remote="clr-namespace:MyTaskApp.Mobile.Core.Remote;assembly=MyTaskApp.Mobile.Core"
+             x:Class="MyTaskApp.Mobile.Views.RemoteSessionPage"
+             x:DataType="vm:RemoteSessionViewModel"
+             Title="Conversa">
+
+    <!-- Uma conversa do Claude (ADR-091): todos os prompts, de qualquer tela que os mandou. -->
+    <ScrollView>
+        <VerticalStackLayout Padding="16" Spacing="8">
+
+            <Label Text="{Binding Title}" Style="{StaticResource Title}" LineBreakMode="WordWrap" />
+            <Label Text="{Binding Status}" Style="{StaticResource Muted}" LineBreakMode="WordWrap" />
+
+            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Approvals}" Spacing="8">
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="remote:ApprovalLine">
+                        <Border Style="{StaticResource Card}">
+                            <VerticalStackLayout Spacing="4">
+                                <Label Text="{Binding Title}" FontAttributes="Bold" />
+                                <Label Text="{Binding Summary}" LineBreakMode="WordWrap" />
+                                <Label Text="{Binding QuestionText}" LineBreakMode="WordWrap" IsVisible="{Binding IsQuestion}" />
+                                <Label Text="{Binding Detail}" Style="{StaticResource Muted}" />
+                                <HorizontalStackLayout Spacing="8" Margin="0,4,0,0">
+                                    <Button Text="{Binding AllowLabel}"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:RemoteSessionViewModel}}, x:DataType=vm:RemoteSessionViewModel, Path=AllowCommand}"
+                                            CommandParameter="{Binding .}" />
+                                    <Button Text="{Binding DenyLabel}"
+                                            Style="{StaticResource Destructive}"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:RemoteSessionViewModel}}, x:DataType=vm:RemoteSessionViewModel, Path=DenyCommand}"
+                                            CommandParameter="{Binding .}" />
+                                </HorizontalStackLayout>
+                                <Label Text="{Binding RememberLabel}" Style="{StaticResource Muted}" LineBreakMode="WordWrap" IsVisible="{Binding CanRemember}" />
+                                <Button Text="Permitir nesta conversa" HorizontalOptions="Start" IsVisible="{Binding CanRemember}"
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:RemoteSessionViewModel}}, x:DataType=vm:RemoteSessionViewModel, Path=AllowForConversationCommand}"
+                                        CommandParameter="{Binding .}" />
+                            </VerticalStackLayout>
+                        </Border>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
+
+            <FlexLayout Wrap="Wrap" JustifyContent="Start">
+                <Button Text="Mais um prompt" Command="{Binding ContinueCommand}" IsVisible="{Binding CanPrompt}" Margin="0,0,8,8" />
+                <Button Text="Parar o Claude" Style="{StaticResource Secondary}" Command="{Binding StopCommand}" IsVisible="{Binding CanStop}" Margin="0,0,8,8" />
+            </FlexLayout>
+
+            <!-- A linha do tempo em cartões (E7): um por prompt, texto, ferramenta, saída e aprovação. -->
+            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Cards}" Spacing="6">
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="vm:TimelineCard">
+                        <Border Style="{StaticResource Card}">
+                            <VerticalStackLayout Spacing="2">
+                                <Label Text="{Binding Title}" Style="{StaticResource Muted}" FontAttributes="Bold" />
+                                <Label Text="{Binding Text}" LineBreakMode="WordWrap" IsVisible="{Binding IsProse}">
+                                    <Label.Triggers>
+                                        <DataTrigger TargetType="Label" Binding="{Binding IsPrompt}" Value="True">
+                                            <Setter Property="FontAttributes" Value="Bold" />
+                                        </DataTrigger>
+                                    </Label.Triggers>
+                                </Label>
+                                <Label Text="{Binding Text}" FontFamily="monospace" FontSize="12" LineBreakMode="CharacterWrap" IsVisible="{Binding IsOutput}" />
+                                <Label Text="{Binding Detail}" Style="{StaticResource Muted}" LineBreakMode="WordWrap" IsVisible="{Binding HasDetail}" />
+                            </VerticalStackLayout>
+                        </Border>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

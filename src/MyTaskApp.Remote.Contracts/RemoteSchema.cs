@@ -56,6 +56,38 @@ public static class RemoteRoutes
     /// <summary><c>GET</c>: o que o agente da máquina do token tem a fazer.</summary>
     public const string AgentOperations = Prefix + "/agent/operations";
 
+    /// <summary><c>PUT</c>: o agente da máquina do token relata as conversas dele (ADR-091); o lote vazio é o sinal de vida.</summary>
+    public const string AgentSessions = Prefix + "/agent/sessions";
+
+    /// <summary><c>GET</c> (<c>?deviceId=&amp;openOnly=&amp;limit=</c>): as conversas da conta e os agentes delas.</summary>
+    public const string Sessions = Prefix + "/sessions";
+
+    /// <summary><c>GET</c>: uma conversa e as operações dela.</summary>
+    public static string Session(Guid sessionId) => $"{Sessions}/{sessionId:D}";
+
+    /// <summary>A lista filtrada; sem filtro, todas as da conta.</summary>
+    public static string SessionsQuery(Guid? deviceId, bool openOnly, int? limit)
+    {
+        var query = new List<string>();
+
+        if (deviceId is { } device)
+        {
+            query.Add($"deviceId={device:D}");
+        }
+
+        if (openOnly)
+        {
+            query.Add("openOnly=true");
+        }
+
+        if (limit is { } size)
+        {
+            query.Add(string.Create(System.Globalization.CultureInfo.InvariantCulture, $"limit={size}"));
+        }
+
+        return query.Count == 0 ? Sessions : $"{Sessions}?{string.Join('&', query)}";
+    }
+
     /// <summary><c>GET</c>: as aprovações em aberto da conta.</summary>
     public const string Approvals = Prefix + "/approvals";
 
@@ -97,4 +129,7 @@ public static class RemoteHubMessages
 
     /// <summary>Para a conta: (pairingId).</summary>
     public const string PairingApproved = "PairingApproved";
+
+    /// <summary>Para a conta: (sessionId, version). Uma conversa do Claude mudou (ADR-091).</summary>
+    public const string SessionChanged = "SessionChanged";
 }

@@ -105,7 +105,7 @@ public sealed class RemoteControlTests
     }
 
     [Fact]
-    public async Task TheProgressReadsEveryNewEvent_AndTheStatusAfterThem()
+    public async Task TheProgressReadsTheStatusFirst_ThenEveryEventUpToIt()
     {
         var id = Guid.CreateVersion7();
         var calls = new List<string>();
@@ -130,7 +130,43 @@ public sealed class RemoteControlTests
         progress.Events.Select(item => item.Seq).Should().Equal([3, 4, 5], "o repetido não volta duas vezes");
         progress.After.Should().Be(5);
         progress.IsFinished.Should().BeTrue();
-        calls.Should().Equal(["events", "events", "status"]);
+        progress.HasMore.Should().BeFalse();
+        calls.Should().Equal(["status", "events", "events"], "o agente manda a saída antes do estado final: lido antes, o \"terminou\" já tem toda ela atrás");
+    }
+
+    /// <summary>
+    /// A saída despejou mais que as páginas de uma leitura: o estado já é final,
+    /// mas quem acompanha ainda não pode parar, senão perde o fim.
+    /// </summary>
+    [Fact]
+    public async Task AFinalStatusWithMorePages_IsNotFinishedUntilTheLastPage()
+    {
+        var id = Guid.CreateVersion7();
+        _remote.GetAsync(id, Arg.Any<CancellationToken>()).Returns(View(id, RemoteOperationStatus.Succeeded));
+        _remote.ListEventsAsync(id, Arg.Any<long>(), null, Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                var after = call.ArgAt<long>(1);
+                return new RemoteEventPage([Event(id, after + 1)], after + 1, HasMore: after + 1 < 10);
+            });
+        var handler = new GetRemoteOperationProgressHandler(_remote);
+
+        var first = await handler.HandleAsync(new GetRemoteOperationProgress(id, 0), Ct);
+        first.Events.Should().HaveCount(GetRemoteOperationProgressHandler.MaxPages);
+        first.HasMore.Should().BeTrue();
+        first.IsFinished.Should().BeFalse("sobraram eventos no servidor");
+
+        var after = first.After;
+        RemoteOperationProgress last;
+
+        do
+        {
+            last = await handler.HandleAsync(new GetRemoteOperationProgress(id, after), Ct);
+            after = last.After;
+        }
+        while (!last.IsFinished);
+
+        after.Should().Be(10, "a última linha chega antes do fim");
     }
 
     private static RemoteOperationEvent Event(Guid id, long seq) =>

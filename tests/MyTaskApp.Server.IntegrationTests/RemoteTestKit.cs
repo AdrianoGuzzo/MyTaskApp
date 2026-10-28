@@ -200,6 +200,7 @@ internal sealed class HubInbox : IAsyncDisposable
 
         connection.On<Guid, RemoteOperationStatus>(RemoteHubMessages.OperationChanged, (id, status) => _received.Enqueue((RemoteHubMessages.OperationChanged, [id, status])));
         connection.On<Guid, long>(RemoteHubMessages.EventsAppended, (id, seq) => _received.Enqueue((RemoteHubMessages.EventsAppended, [id, seq])));
+        connection.On<Guid, long>(RemoteHubMessages.SessionChanged, (id, version) => _received.Enqueue((RemoteHubMessages.SessionChanged, [id, version])));
         connection.Closed += _ =>
         {
             _closed.TrySetResult();

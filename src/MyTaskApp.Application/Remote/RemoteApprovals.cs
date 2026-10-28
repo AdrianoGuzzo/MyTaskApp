@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Sync;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.Remote;
@@ -30,10 +31,15 @@ public enum RemoteApprovalOutcome
 }
 
 /// <summary>Como terminou. Só <see cref="RemoteApprovalOutcome.Allowed"/> deixa seguir.</summary>
+/// <param name="Answers">
+/// As respostas assinadas a uma pergunta do Claude (ADR-093), como vieram, no
+/// campo da confirmação digitada; nulo quando o pedido pedia um nome digitado.
+/// </param>
 public sealed record RemoteApprovalResult(
     RemoteApprovalOutcome Outcome,
     string? ControllerNickname = null,
-    bool RememberForThisSession = false)
+    bool RememberForThisSession = false,
+    string? Answers = null)
 {
     public bool IsAllowed => Outcome == RemoteApprovalOutcome.Allowed;
 
@@ -100,7 +106,11 @@ public static class RemoteApprovalVerifier
             return new RemoteApprovalResult(RemoteApprovalOutcome.Invalid, controller.Nickname);
         }
 
-        return new RemoteApprovalResult(RemoteApprovalOutcome.Allowed, controller.Nickname, response.RememberForThisSession);
+        return new RemoteApprovalResult(
+            RemoteApprovalOutcome.Allowed,
+            controller.Nickname,
+            response.RememberForThisSession,
+            asked.TypedConfirmationHint is null ? response.TypedConfirmation : null);
     }
 }
 
@@ -115,7 +125,13 @@ public sealed class GetPendingApprovalsHandler(IRemoteOperationsApi remote)
 }
 
 /// <param name="TypedConfirmation">O que a pessoa digitou, quando o pedido pede.</param>
-public sealed record AnswerApproval(Guid ApprovalId, ApprovalDecision Decision, string? TypedConfirmation = null, bool RememberForThisSession = false);
+/// <param name="Answers">As respostas a uma pergunta do Claude, uma por pergunta, na ordem (ADR-093).</param>
+public sealed record AnswerApproval(
+    Guid ApprovalId,
+    ApprovalDecision Decision,
+    string? TypedConfirmation = null,
+    bool RememberForThisSession = false,
+    IReadOnlyList<string>? Answers = null);
 
 /// <summary>
 /// Esta máquina, como controladora, responde a uma aprovação assinando com a
@@ -145,7 +161,9 @@ public sealed class AnswerApprovalHandler(IRemoteOperationsApi remote, IDeviceSi
             view.Request.OperationId,
             view.Request.RequestHash,
             command.Decision,
-            command.Decision == ApprovalDecision.Allow ? command.TypedConfirmation : null,
+            command.Decision != ApprovalDecision.Allow ? null
+                : command.Answers is { } answers ? HeadlessQuestions.Sign(answers)
+                : command.TypedConfirmation,
             command.Decision == ApprovalDecision.Allow && command.RememberForThisSession,
             timeProvider.GetUtcNow());
 

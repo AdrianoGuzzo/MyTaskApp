@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MyTaskApp.Application.Devices;
 using MyTaskApp.Application.Sync;
+using MyTaskApp.Domain;
 using MyTaskApp.Infrastructure.Sync;
 using MyTaskApp.Infrastructure.Sync.Capture;
 using MyTaskApp.Infrastructure.Sync.Persistence;
@@ -29,6 +30,7 @@ internal sealed class DatabaseInitializer(
         }
 
         await UseWriteAheadLogAsync(cancellationToken);
+        await RefuseNewerSchemaAsync(cancellationToken);
 
         // Dois processos migrando ao mesmo tempo esperam um ao outro: o próprio
         // EF trava a migration no SQLite (tabela __EFMigrationsLock).
@@ -48,6 +50,28 @@ internal sealed class DatabaseInitializer(
 
         logger.LogInformation("DatabaseReady {DatabasePath} {SyncLinked}", path, linked);
     }
+
+    /// <summary>
+    /// Um processo mais velho que o esquema não sobe (ADR-085, item 3): o
+    /// desktop novo migrou o banco, e um agente ou um desktop de antes gravaria
+    /// sem conhecer as tabelas novas. Quem sabe menos que o banco não toca nele.
+    /// </summary>
+    private async Task RefuseNewerSchemaAsync(CancellationToken cancellationToken)
+    {
+        var known = context.Database.GetMigrations().ToHashSet(StringComparer.Ordinal);
+        var unknown = (await context.Database.GetAppliedMigrationsAsync(cancellationToken))
+            .Where(migration => !known.Contains(migration))
+            .ToList();
+
+        if (unknown.Count > 0)
+        {
+            logger.LogError("DatabaseNewerThanApp {UnknownMigrations}", string.Join(", ", unknown));
+            throw new DomainException(NewerSchemaMessage);
+        }
+    }
+
+    public const string NewerSchemaMessage =
+        "Este banco foi atualizado por uma versão mais nova do MyTaskApp. Atualize o app e o agente antes de abrir.";
 
     /// <summary>
     /// O banco em WAL, para dois processos no mesmo arquivo: o desktop e, na

@@ -25,7 +25,7 @@ banco estão no [guia do servidor MCP](mcp-server.md#consulta-inteligente).
 | Para | Precisa de |
 |---|---|
 | Qualquer consulta | O [Claude Code](https://docs.claude.com/claude-code) instalado e com login feito. Sem ele, a aba mostra como instalar |
-| Abrir o terminal | Windows. No Linux o app ainda não abre terminal (a mesma limitação da aba Desenvolvimento) |
+| Abrir o terminal | Windows, ou Linux com gnome-terminal, konsole, xfce4-terminal ou xterm |
 | Ler o código | Uma etiqueta com projetos (*☰ → Etiquetas…*), ou um ambiente pronto da tarefa (aba Desenvolvimento) |
 | Ler o banco | Uma cópia local num PostgreSQL de Desenvolvimento ou Teste, e o [servidor MCP](mcp-server.md) ligado. Produção nunca é consultada |
 
@@ -200,7 +200,7 @@ A resposta diz `truncated` quando faltou algo.
 
 ## Limitações
 
-- **Só Windows** abre o terminal. No Linux a aba mostra o motivo.
+- **Terminal:** no Linux, só os que ficam abertos enquanto o Claude roda (gnome-terminal, konsole, xfce4-terminal, xterm). Sem nenhum deles, a aba mostra o motivo. O macOS não abre.
 - **Só PostgreSQL.** Outros bancos não têm cópia nem consulta.
 - **A cópia pode ter dados reais.** A consulta mostra o que está na cópia; a
   anonimização é escolha da cópia (o seletor oferece os perfis).

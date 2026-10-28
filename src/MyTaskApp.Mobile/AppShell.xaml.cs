@@ -28,6 +28,7 @@ public partial class AppShell
         Routing.RegisterRoute(ShellNavigator.Machine, typeof(RemoteMachinePage));
         Routing.RegisterRoute(ShellNavigator.Operation, typeof(RemoteOperationPage));
         Routing.RegisterRoute(ShellNavigator.Prepare, typeof(RemotePreparePage));
+        Routing.RegisterRoute(ShellNavigator.Session, typeof(RemoteSessionPage));
     }
 
     private void OnRemoteChanged(object? sender, PropertyChangedEventArgs e)

@@ -18,6 +18,7 @@ public sealed class RemoteOperationUseCases(
     IWorkspaceAccess workspaces,
     IRemoteDeviceStore remote,
     IRemoteOperationStore operations,
+    IRemoteApprovalStore approvals,
     IRemoteNotifier notifier,
     TimeProvider timeProvider,
     ILogger<RemoteOperationUseCases> logger)
@@ -64,7 +65,12 @@ public sealed class RemoteOperationUseCases(
 
         if (RemoteOperationRules.Problems(request, now) is [var problem, ..])
         {
-            throw new SyncServerException(problem, 400, "O pedido não segue as regras da orquestração.");
+            throw new SyncServerException(
+                problem,
+                400,
+                problem == RemoteErrorCodes.ClockSkew
+                    ? "O relógio deste aparelho está adiantado em relação ao servidor. Acerte a hora."
+                    : "O pedido não segue as regras da orquestração.");
         }
 
         if (await workspaces.RoleOfAsync(caller.UserId, request.WorkspaceId, cancellationToken) is null)
@@ -73,14 +79,6 @@ public sealed class RemoteOperationUseCases(
         }
 
         await EnsureExecutorAsync(caller.UserId, request.TargetDeviceId, cancellationToken);
-
-        if (await operations.CountOpenForTargetAsync(caller.UserId, request.TargetDeviceId, now, cancellationToken) >= RemoteLimits.MaxOpenOperationsPerExecutor)
-        {
-            throw new SyncServerException(
-                RemoteErrorCodes.TooManyOperations,
-                409,
-                $"Essa máquina já tem {RemoteLimits.MaxOpenOperationsPerExecutor} pedidos sem terminar. Espere ou cancele algum.");
-        }
 
         var operation = new RemoteOperationRecord
         {
@@ -98,15 +96,24 @@ public sealed class RemoteOperationUseCases(
             UpdatedAt = now,
             Request = envelope.Jws,
             RequestHash = hash,
+            AgentSessionId = SessionOf(request),
         };
 
-        if (!await operations.TryAddAsync(operation, cancellationToken))
+        // O teto conta e grava de uma vez (fase 3, E9): dois pedidos juntos não passam dele.
+        switch (await operations.TryAddAsync(operation, RemoteLimits.MaxOpenOperationsPerExecutor, cancellationToken))
         {
-            // Dois envios juntos do mesmo pedido: vale o que gravou primeiro. Sem
-            // ele nesta conta, o id é de outra, e não serve aqui.
-            return await operations.FindAsync(caller.UserId, request.OperationId, cancellationToken) is { } raced
-                ? SameOrConflict(raced, hash)
-                : throw IdempotencyKeyReuse();
+            case RemoteAddOutcome.Full:
+                throw new SyncServerException(
+                    RemoteErrorCodes.TooManyOperations,
+                    409,
+                    $"Essa máquina já tem {RemoteLimits.MaxOpenOperationsPerExecutor} pedidos sem terminar. Espere ou cancele algum.");
+
+            case RemoteAddOutcome.Duplicate:
+                // Dois envios juntos do mesmo pedido: vale o que gravou primeiro. Sem
+                // ele nesta conta, o id é de outra, e não serve aqui.
+                return await operations.FindAsync(caller.UserId, request.OperationId, cancellationToken) is { } raced
+                    ? SameOrConflict(raced, hash)
+                    : throw IdempotencyKeyReuse();
         }
 
         logger.LogInformation(
@@ -203,6 +210,11 @@ public sealed class RemoteOperationUseCases(
                     caller.UserId, operationId, operation.Status, update.Status);
 
                 await ChangedAsync(caller.UserId, operationId, update.Status);
+
+                if (RemoteOperationLifecycle.IsFinal(update.Status))
+                {
+                    await CloseApprovalsAsync(caller.UserId, operationId, cancellationToken);
+                }
 
                 return ToView(await FindAsync(caller, operationId, cancellationToken));
             }
@@ -305,18 +317,24 @@ public sealed class RemoteOperationUseCases(
 
     /// <summary>
     /// A varredura: entregue sem aceite a tempo volta para a fila, vencida sem
-    /// aceite expira, e os eventos mais velhos que <paramref name="eventRetention"/> saem.
+    /// aceite expira, e os eventos mais velhos que <paramref name="retention"/> saem.
+    /// A operação terminada há mais que isso sai também, com as aprovações e os
+    /// eventos dela (fase 3, E9). O pedido dela já venceu: reenviado, é recusado
+    /// pelo <c>NotAfter</c>, e não volta como novo.
     /// </summary>
-    public async Task<RemoteSweepResult> SweepAsync(TimeSpan eventRetention, CancellationToken cancellationToken)
+    public async Task<RemoteSweepResult> SweepAsync(TimeSpan retention, CancellationToken cancellationToken)
     {
         var now = timeProvider.GetUtcNow();
         var expired = await operations.ExpireAsync(now, cancellationToken);
         var requeued = await operations.RequeueAsync(now - RemoteLimits.DispatchTimeout, now, cancellationToken);
-        var pruned = await operations.PruneEventsAsync(now - eventRetention, cancellationToken);
+        var pruned = await operations.PruneEventsAsync(now - retention, cancellationToken);
+        var purged = await operations.PurgeAsync(now - retention, cancellationToken);
 
-        if (expired.Count > 0 || requeued.Count > 0 || pruned > 0)
+        if (expired.Count > 0 || requeued.Count > 0 || pruned > 0 || purged > 0)
         {
-            logger.LogInformation("RemoteOperationsSwept {Expired} {Requeued} {PrunedEvents}", expired.Count, requeued.Count, pruned);
+            logger.LogInformation(
+                "RemoteOperationsSwept {Expired} {Requeued} {PrunedEvents} {PurgedOperations}",
+                expired.Count, requeued.Count, pruned, purged);
         }
 
         foreach (var operation in expired)
@@ -330,7 +348,7 @@ public sealed class RemoteOperationUseCases(
             await ChangedAsync(operation.UserId, operation.OperationId, RemoteOperationStatus.Queued);
         }
 
-        return new RemoteSweepResult(expired, requeued, pruned);
+        return new RemoteSweepResult(expired, requeued, pruned) { PurgedOperations = purged };
     }
 
     /// <summary>
@@ -386,12 +404,42 @@ public sealed class RemoteOperationUseCases(
         operation.ResultSummary,
         operation.LastContiguousSeq);
 
+    /// <summary>
+    /// A conversa do Claude que o pedido continua ou para (ADR-091). O
+    /// <c>agent.start</c> ainda não tem: o relato do agente liga depois.
+    /// </summary>
+    internal static Guid? SessionOf(RemoteOperationRequest request) => request.Kind switch
+    {
+        RemoteOperationKinds.AgentPrompt => RemoteOperationRules.PayloadOf<PromptRequest>(request).AgentSessionId,
+        RemoteOperationKinds.AgentStop => RemoteOperationRules.PayloadOf<AgentStopRequest>(request).AgentSessionId,
+        _ => null,
+    };
+
     /// <summary>SHA-256 dos bytes do envelope, em hexadecimal: o "mesmo pedido" da idempotência.</summary>
     internal static string HashOf(SignedEnvelope envelope) =>
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(envelope.Jws)));
 
     private Task ChangedAsync(Guid userId, Guid operationId, RemoteOperationStatus status) =>
         notifier.ToAccountAsync(userId, RemoteHubMessages.OperationChanged, operationId, status);
+
+    /// <summary>
+    /// A operação terminou com perguntas abertas (cancelada esperando uma
+    /// aprovação, por exemplo): elas fecham como vencidas, e quem as mostra é avisado.
+    /// </summary>
+    private async Task CloseApprovalsAsync(Guid userId, Guid operationId, CancellationToken cancellationToken)
+    {
+        var closed = await approvals.CloseForOperationAsync(userId, operationId, cancellationToken);
+
+        foreach (var approval in closed)
+        {
+            await notifier.ToAccountAsync(userId, RemoteHubMessages.ApprovalResolved, approval.Request.ApprovalId, operationId);
+        }
+
+        if (closed.Count > 0)
+        {
+            logger.LogInformation("RemoteApprovalsClosedWithOperation {UserId} {OperationId} {Count}", userId, operationId, closed.Count);
+        }
+    }
 
     private async Task<RemoteOperationRecord> FindAsync(SyncCaller caller, Guid operationId, CancellationToken cancellationToken) =>
         await operations.FindAsync(caller.UserId, operationId, cancellationToken) ?? throw SyncServerException.NotFound();
@@ -437,7 +485,23 @@ public sealed class RemoteOperationUseCases(
 public sealed record RemoteSweepResult(
     IReadOnlyList<RemoteOperationRecord> Expired,
     IReadOnlyList<RemoteOperationRecord> Requeued,
-    int PrunedEvents);
+    int PrunedEvents)
+{
+    /// <summary>As terminadas há mais que a retenção, que saíram com as aprovações e os eventos.</summary>
+    public int PurgedOperations { get; init; }
+}
+
+/// <summary>Como terminou a gravação de um pedido novo.</summary>
+public enum RemoteAddOutcome
+{
+    Added,
+
+    /// <summary>O id já existe, nesta conta ou em outra.</summary>
+    Duplicate,
+
+    /// <summary>A máquina já tem o teto de pedidos sem terminar.</summary>
+    Full,
+}
 
 /// <summary>Uma operação guardada, com o envelope como o controlador mandou.</summary>
 public sealed class RemoteOperationRecord
@@ -483,12 +547,19 @@ public sealed class RemoteOperationRecord
 
     /// <summary>SHA-256 do JWS, em hexadecimal.</summary>
     public required string RequestHash { get; init; }
+
+    /// <summary>A conversa do Claude da operação (ADR-091), quando há.</summary>
+    public Guid? AgentSessionId { get; init; }
 }
 
 public interface IRemoteOperationStore
 {
-    /// <summary>Falso se o id já existe, nesta conta ou em outra.</summary>
-    Task<bool> TryAddAsync(RemoteOperationRecord operation, CancellationToken cancellationToken);
+    /// <summary>
+    /// Grava se o id é novo e a máquina tem menos que <paramref name="maxOpen"/>
+    /// pedidos sem terminar, contando e gravando de uma vez: dois pedidos
+    /// juntos não passam do teto.
+    /// </summary>
+    Task<RemoteAddOutcome> TryAddAsync(RemoteOperationRecord operation, int maxOpen, CancellationToken cancellationToken);
 
     Task<RemoteOperationRecord?> FindAsync(Guid userId, Guid operationId, CancellationToken cancellationToken);
 
@@ -496,9 +567,6 @@ public interface IRemoteOperationStore
 
     /// <summary>A fila não vencida da máquina passa a entregue; devolve os ids que passaram.</summary>
     Task<IReadOnlyList<Guid>> DispatchQueuedAsync(Guid userId, Guid targetDeviceId, DateTimeOffset at, CancellationToken cancellationToken);
-
-    /// <summary>As da fila e as entregues ainda no prazo, mais as aceitas, as rodando e as esperando aprovação da máquina.</summary>
-    Task<int> CountOpenForTargetAsync(Guid userId, Guid targetDeviceId, DateTimeOffset now, CancellationToken cancellationToken);
 
     /// <summary>As entregues e não vencidas, as aceitas, as rodando e as esperando aprovação da máquina, das mais velhas às mais novas.</summary>
     Task<IReadOnlyList<RemoteOperationRecord>> ListActiveForTargetAsync(Guid userId, Guid targetDeviceId, DateTimeOffset now, CancellationToken cancellationToken);
@@ -539,6 +607,18 @@ public interface IRemoteOperationStore
     /// <summary>As entregues antes de <paramref name="dispatchedBefore"/> e sem aceite voltam para a fila.</summary>
     Task<IReadOnlyList<RemoteOperationRecord>> RequeueAsync(DateTimeOffset dispatchedBefore, DateTimeOffset now, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// As terminadas antes de <paramref name="before"/> e com o pedido vencido
+    /// antes disso; os eventos e as aprovações saem junto, em cascata.
+    /// </summary>
+    Task<int> PurgeAsync(DateTimeOffset before, CancellationToken cancellationToken);
+
     /// <summary>Apaga os eventos recebidos antes de <paramref name="receivedBefore"/>.</summary>
     Task<int> PruneEventsAsync(DateTimeOffset receivedBefore, CancellationToken cancellationToken);
+
+    /// <summary>Liga a operação da máquina <paramref name="targetDeviceId"/> à conversa, se ainda não tem uma.</summary>
+    Task LinkSessionAsync(Guid userId, Guid targetDeviceId, Guid operationId, Guid sessionId, CancellationToken cancellationToken);
+
+    /// <summary>As <paramref name="limit"/> operações mais recentes da conversa pedidas à máquina dela, da mais antiga à mais nova.</summary>
+    Task<IReadOnlyList<RemoteOperationRecord>> ListForSessionAsync(Guid userId, Guid targetDeviceId, Guid sessionId, int limit, CancellationToken cancellationToken);
 }

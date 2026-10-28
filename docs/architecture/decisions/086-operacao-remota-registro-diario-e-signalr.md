@@ -7,7 +7,7 @@
 | **Categoria** | remoto |
 | **Registrado** | 2026-10-24, commit `36eb99c` (primeiro commit em que o ADR aparece) |
 | **Palavras-chave** | RemoteOperations, RemoteOperationEvents, RemoteOperationJournal, RemoteOperationStatus, Seq, NotAfter, /hubs/remote, SignalR |
-| **Relações** | relacionado: [ADR-061](061-sincronizacao-outbox-mescla-por-campo.md), [ADR-084](084-orquestracao-remota-coordenador-e-agente.md), [ADR-085](085-agente-sem-tela-sobre-o-mesmo-sqlite.md) |
+| **Relações** | revisto por: [ADR-091](091-conversa-do-claude-como-sessao-no-servidor.md), [ADR-094](094-controladores-ouvem-o-hub.md); relacionado: [ADR-061](061-sincronizacao-outbox-mescla-por-campo.md), [ADR-084](084-orquestracao-remota-coordenador-e-agente.md), [ADR-085](085-agente-sem-tela-sobre-o-mesmo-sqlite.md) |
 | **Código** | `src/MyTaskApp.Remote.Contracts/Operations.cs`, `src/MyTaskApp.Remote.Contracts/RemoteOperationLifecycle.cs`, `src/MyTaskApp.Remote.Contracts/Events.cs`, `src/MyTaskApp.Remote.Contracts/RemoteLimits.cs`, `src/MyTaskApp.Application/Remote/RemoteOperationDispatcher.cs`, `src/MyTaskApp.Application/Remote/RemoteOperationScheduler.cs`, `src/MyTaskApp.Server.Application/RemoteOperations.cs` |
 
 **Estado:** aceito (fase 2), implementado: o registro no PostgreSQL com os eventos numerados, o diário do agente, o hub como campainha e a busca de 30 s sem ele. Os casos de falha têm teste ponta a ponta (T-35); o servidor entrega os eventos só até o primeiro buraco.

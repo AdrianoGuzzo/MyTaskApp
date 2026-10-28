@@ -50,6 +50,15 @@ internal sealed class FakeAgentSessionRepository : IAgentSessionRepository
     public Task<IReadOnlyList<AgentSession>> ListActiveAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<AgentSession>>([.. _sessions.Where(session => session.IsActive)]);
 
+    public Task<IReadOnlyList<AgentSession>> ListHeadlessAsync(DateTimeOffset since, int limit, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<AgentSession>>(
+        [
+            .. _sessions
+                .Where(session => session.IsHeadless && (session.IsActive || session.StartedAt >= since || session.PromptStartedAt >= since))
+                .OrderByDescending(session => session.StartedAt)
+                .Take(limit),
+        ]);
+
     public Task<IReadOnlyList<AgentSession>> ListConsultationsForTaskAsync(
         Guid taskId,
         int limit,

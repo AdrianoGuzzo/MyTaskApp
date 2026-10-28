@@ -75,6 +75,28 @@ public sealed class RemoteOperationRulesTests
     }
 
     /// <summary>
+    /// Criado "no futuro", o pedido esticaria o prazo além das 24 h a partir de
+    /// agora e passaria da janela de replay: é o relógio de quem pediu adiantado.
+    /// </summary>
+    [Fact]
+    public void ACreatedAtBeyondTheClockSkew_IsRefused()
+    {
+        var future = Now + RemoteLimits.MaxClockSkew + TimeSpan.FromSeconds(1);
+
+        RemoteOperationRules.Problems(Request() with { CreatedAt = future, NotAfter = future + RemoteLimits.DefaultAcceptanceWindow }, Now)
+            .Should().Equal(RemoteErrorCodes.ClockSkew);
+    }
+
+    [Fact]
+    public void ACreatedAtWithinTheClockSkew_IsAccepted()
+    {
+        var ahead = Now + RemoteLimits.MaxClockSkew;
+
+        RemoteOperationRules.Problems(Request() with { CreatedAt = ahead, NotAfter = ahead + RemoteLimits.DefaultAcceptanceWindow }, Now)
+            .Should().BeEmpty();
+    }
+
+    /// <summary>
     /// O JSON vira execução, então é estrito: campo obrigatório ausente,
     /// <c>null</c> fora do lugar, campo desconhecido, tipo errado e algo que
     /// não é objeto são todos recusados.

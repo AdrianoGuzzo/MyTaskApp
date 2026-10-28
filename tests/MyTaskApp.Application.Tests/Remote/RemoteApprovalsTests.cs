@@ -269,6 +269,29 @@ public sealed class RemoteApprovalsTests
         Assert.DoesNotContain(tampered, (await new GetPendingApprovalsHandler(server).HandleAsync(new GetPendingApprovals(), Ct)).Select(view => view.Request));
     }
 
+    /// <summary>As respostas a uma pergunta do Claude (ADR-093) vão assinadas e chegam ao agente como foram.</summary>
+    [Fact]
+    public async Task TheAnswersToAQuestion_AreSigned_AndReachTheAgent()
+    {
+        var now = new DateTimeOffset(2026, 10, 24, 12, 0, 0, TimeSpan.Zero);
+        var time = new FakeTimeProvider(now);
+        using var signer = new FakeDeviceSigner();
+        var server = new FakeOperationQueue();
+        var operationId = Guid.CreateVersion7();
+        server.Enqueue(operationId, new SignedEnvelope("x.y.z"));
+        var asked = (await server.RequestApprovalAsync(ApprovalHash.Seal(new ApprovalRequest(
+            Guid.CreateVersion7(), operationId, ApprovalKind.ToolUse, "O Claude pergunta: Qual banco?",
+            JsonSerializer.SerializeToElement(new { kind = "question" }), null, now.AddMinutes(10), string.Empty)), Ct)).Request;
+
+        var answered = await new AnswerApprovalHandler(server, signer, time).HandleAsync(
+            new AnswerApproval(asked.ApprovalId, ApprovalDecision.Allow, Answers: ["Docker"]), Ct);
+
+        var me = TrustedController.Approve(Guid.CreateVersion7(), "Desktop", signer.PublicKey.Fingerprint, signer.PublicKey.SubjectPublicKeyInfo, Guid.CreateVersion7(), now);
+        var result = RemoteApprovalVerifier.Verify(asked, answered, [me])!;
+        Assert.Equal(RemoteApprovalOutcome.Allowed, result.Outcome);
+        Assert.Equal(["Docker"], MyTaskApp.Application.Agents.HeadlessQuestions.ReadAnswers(result.Answers, 1)!);
+    }
+
     /// <summary>Esta máquina como controladora: o pedido que ela assina é um que o agente de lá admite e roda.</summary>
     [Fact]
     public async Task TheOperationThisMachineSendsIsOneTheOtherAgentRuns()

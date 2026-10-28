@@ -18,8 +18,31 @@ internal sealed class EfRemoteOperationStore(ServerDbContext context) : IRemoteO
         (int)RemoteOperationStatus.Accepted, (int)RemoteOperationStatus.Running, (int)RemoteOperationStatus.WaitingApproval,
     ];
 
-    public async Task<bool> TryAddAsync(RemoteOperationRecord operation, CancellationToken cancellationToken)
+    private static readonly int[] Final =
+    [
+        .. Enum.GetValues<RemoteOperationStatus>().Where(RemoteOperationLifecycle.IsFinal).Select(status => (int)status),
+    ];
+
+    public async Task<RemoteAddOutcome> TryAddAsync(RemoteOperationRecord operation, int maxOpen, CancellationToken cancellationToken)
     {
+        await using var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
+
+        // Uma trava por máquina, até o fim da transação: o segundo pedido junto
+        // espera o primeiro gravar e conta com ele.
+        var key = $"remote-open:{operation.UserId:N}:{operation.TargetDeviceId:N}";
+        await context.Database.ExecuteSqlAsync($"SELECT pg_advisory_xact_lock(hashtextextended({key}, 0))", cancellationToken);
+
+        // O reenvio do mesmo pedido com a máquina cheia é o mesmo pedido, não um a mais.
+        if (await context.RemoteOperations.AnyAsync(row => row.OperationId == operation.OperationId, cancellationToken))
+        {
+            return RemoteAddOutcome.Duplicate;
+        }
+
+        if (await CountOpenAsync(operation.UserId, operation.TargetDeviceId, operation.ReceivedAt, cancellationToken) >= maxOpen)
+        {
+            return RemoteAddOutcome.Full;
+        }
+
         context.RemoteOperations.Add(new RemoteOperationRow
         {
             OperationId = operation.OperationId,
@@ -38,17 +61,20 @@ internal sealed class EfRemoteOperationStore(ServerDbContext context) : IRemoteO
             UpdatedAt = operation.UpdatedAt,
             Request = operation.Request,
             RequestHash = operation.RequestHash,
+            AgentSessionId = operation.AgentSessionId,
         });
 
         try
         {
             await context.SaveChangesAsync(cancellationToken);
-            return true;
+            await transaction.CommitAsync(cancellationToken);
+            return RemoteAddOutcome.Added;
         }
         catch (DbUpdateException exception) when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
         {
+            // O mesmo id por outra conta, que não passa pela mesma trava.
             context.ChangeTracker.Clear();
-            return false;
+            return RemoteAddOutcome.Duplicate;
         }
     }
 
@@ -95,7 +121,8 @@ internal sealed class EfRemoteOperationStore(ServerDbContext context) : IRemoteO
         return ids;
     }
 
-    public Task<int> CountOpenForTargetAsync(Guid userId, Guid targetDeviceId, DateTimeOffset now, CancellationToken cancellationToken) =>
+    /// <summary>As da fila e as entregues ainda no prazo, mais as aceitas, as rodando e as esperando aprovação da máquina.</summary>
+    private Task<int> CountOpenAsync(Guid userId, Guid targetDeviceId, DateTimeOffset now, CancellationToken cancellationToken) =>
         context.RemoteOperations
             .Where(row => row.UserId == userId && row.TargetDeviceId == targetDeviceId)
             .Where(row => ((row.Status == (int)RemoteOperationStatus.Queued || row.Status == (int)RemoteOperationStatus.Dispatched) && row.NotAfter > now)
@@ -285,8 +312,29 @@ internal sealed class EfRemoteOperationStore(ServerDbContext context) : IRemoteO
         return [.. stale.Select(row => ToModel(row, RemoteOperationStatus.Queued))];
     }
 
+    public Task<int> PurgeAsync(DateTimeOffset before, CancellationToken cancellationToken) =>
+        context.RemoteOperations
+            .Where(row => Final.Contains(row.Status) && row.UpdatedAt < before && row.NotAfter < before)
+            .ExecuteDeleteAsync(cancellationToken);
+
     public Task<int> PruneEventsAsync(DateTimeOffset receivedBefore, CancellationToken cancellationToken) =>
         context.RemoteOperationEvents.Where(row => row.ReceivedAt < receivedBefore).ExecuteDeleteAsync(cancellationToken);
+
+    public Task LinkSessionAsync(Guid userId, Guid targetDeviceId, Guid operationId, Guid sessionId, CancellationToken cancellationToken) =>
+        context.RemoteOperations
+            .Where(row => row.UserId == userId && row.OperationId == operationId && row.TargetDeviceId == targetDeviceId && row.AgentSessionId == null)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(row => row.AgentSessionId, sessionId), cancellationToken);
+
+    public async Task<IReadOnlyList<RemoteOperationRecord>> ListForSessionAsync(Guid userId, Guid targetDeviceId, Guid sessionId, int limit, CancellationToken cancellationToken) =>
+        [
+            .. (await context.RemoteOperations.AsNoTracking()
+                    .Where(row => row.UserId == userId && row.TargetDeviceId == targetDeviceId && row.AgentSessionId == sessionId)
+                    .OrderByDescending(row => row.ReceivedAt)
+                    .Take(limit)
+                    .ToListAsync(cancellationToken))
+                .OrderBy(row => row.ReceivedAt)
+                .Select(ToModel),
+        ];
 
     private static RemoteOperationRecord ToModel(RemoteOperationRow row) => ToModel(row, (RemoteOperationStatus)row.Status);
 
@@ -311,5 +359,6 @@ internal sealed class EfRemoteOperationStore(ServerDbContext context) : IRemoteO
         LastContiguousSeq = row.LastContiguousSeq,
         Request = row.Request,
         RequestHash = row.RequestHash,
+        AgentSessionId = row.AgentSessionId,
     };
 }
