@@ -132,4 +132,15 @@ public sealed partial class ActivityHistoryViewModel(IUseCaseRunner runner, ILog
 
     [RelayCommand]
     public void Close() => CloseRequested?.Invoke();
+
+    /// <summary>Pede o relatório de horas completo (ADR-097), por dia, mês e ano.</summary>
+    public event Action? ReportRequested;
+
+    /// <summary>"Ver relatório completo": fecha o painel e abre a janela do relatório.</summary>
+    [RelayCommand]
+    public void OpenReport()
+    {
+        CloseRequested?.Invoke();
+        ReportRequested?.Invoke();
+    }
 }

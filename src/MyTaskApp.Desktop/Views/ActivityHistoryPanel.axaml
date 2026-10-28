@@ -54,6 +54,24 @@
       <Setter Property="Background" Value="{DynamicResource WidgetSurfaceHoverBrush}" />
     </Style>
 
+    <!-- "Ver relatório completo": um link, e não mais uma linha do histórico. -->
+    <Style Selector="Button.historyLink">
+      <Setter Property="Padding" Value="6,2" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetAccentTextBrush}" />
+    </Style>
+
+    <Style Selector="Button.historyLink /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+
+    <Style Selector="Button.historyLink:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource WidgetSurfaceHoverBrush}" />
+    </Style>
+
     <Style Selector="TextBlock.historyTitle">
       <Setter Property="FontSize" Value="12" />
       <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
@@ -132,9 +150,19 @@
             BorderThickness="0,1,0,0"
             Margin="0,6,0,0"
             Padding="6,6,0,0">
-      <TextBlock x:Name="SummaryText"
-                 Classes="metric"
-                 Text="{Binding Summary}" />
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock x:Name="SummaryText"
+                   Classes="metric"
+                   VerticalAlignment="Center"
+                   Text="{Binding Summary}" />
+        <!-- Os 7 dias são o relance; o histórico inteiro, por dia, mês e ano, mora no relatório (ADR-097). -->
+        <Button Grid.Column="1"
+                x:Name="ReportLink"
+                Classes="historyLink"
+                Content="Ver relatório completo"
+                ToolTip.Tip="Horas por dia, mês e ano (Ctrl+Shift+H)"
+                Command="{Binding OpenReportCommand}" />
+      </Grid>
     </Border>
 
     <TextBlock DockPanel.Dock="Bottom"

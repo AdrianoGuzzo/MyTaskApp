@@ -336,6 +336,7 @@ public class ApplicationRegistrationTests
     [InlineData(typeof(CreateDetailedTaskHandler))]
     [InlineData(typeof(GetTaskStatisticsHandler))]
     [InlineData(typeof(TimeReportHandlers))]
+    [InlineData(typeof(GetHoursHistoryHandler))]
     [InlineData(typeof(GetMcpServerSettingsHandler))]
     [InlineData(typeof(UpdateMcpServerSettingsHandler))]
     [InlineData(typeof(GetMcpAccessTokenHandler))]

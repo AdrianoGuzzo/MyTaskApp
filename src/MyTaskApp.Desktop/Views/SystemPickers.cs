@@ -13,6 +13,8 @@ internal static class SystemPickers
 {
     public const string FailureMessage = "Não foi possível abrir a janela de escolha do sistema. O detalhe está no log.";
 
+    public const string WriteFailureMessage = "Não foi possível gravar o arquivo. O detalhe está no log.";
+
     /// <returns>O caminho local escolhido, ou <c>null</c> se ninguém escolheu ou se o seletor falhou.</returns>
     public static async Task<string?> PickFolderAsync(IStorageProvider storage, string title, Action<string> showError)
     {
@@ -47,6 +49,57 @@ internal static class SystemPickers
         {
             Log.Error(exception, "SystemPickerFailed {Title}", options.Title);
             showError(FailureMessage);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Pergunta onde salvar e grava o texto em UTF-8 com BOM — sem ele, o Excel
+    /// abre o CSV com os acentos trocados (ADR-097).
+    /// </summary>
+    /// <returns>O nome do arquivo gravado, ou <c>null</c> se ninguém escolheu ou se algo falhou.</returns>
+    public static async Task<string?> SaveTextFileAsync(
+        IStorageProvider storage,
+        FilePickerSaveOptions options,
+        string content,
+        Action<string> showError)
+    {
+        IStorageFile? file;
+
+        try
+        {
+            file = await storage.SaveFilePickerAsync(options);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            Log.Error(exception, "SystemPickerFailed {Title}", options.Title);
+            showError(FailureMessage);
+            return null;
+        }
+
+        if (file is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            await using var stream = await file.OpenWriteAsync();
+
+            if (stream.CanSeek)
+            {
+                stream.SetLength(0);
+            }
+
+            await using var writer = new StreamWriter(stream, new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+            await writer.WriteAsync(content);
+
+            return file.Name;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            Log.Error(exception, "SaveFileFailed {Name}", file.Name);
+            showError(WriteFailureMessage);
             return null;
         }
     }

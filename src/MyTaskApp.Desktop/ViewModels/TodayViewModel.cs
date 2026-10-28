@@ -415,6 +415,7 @@ public sealed partial class TodayViewModel(
             Devices.Refresh();
             Show(board!);
             AnnounceArrivals(board!);
+            BoardLoaded?.Invoke();
 
             // Sem await: o Git é lento perto do banco, e a lista não espera por
             // ele — as cores chegam quando ele responder.
@@ -629,6 +630,18 @@ public sealed partial class TodayViewModel(
 
     [RelayCommand]
     public void OpenMachines() => MachinesRequested?.Invoke();
+
+    /// <summary>Pede a janela "Relatório de horas": por dia, mês e ano (ADR-097).</summary>
+    public event Action? HoursReportRequested;
+
+    [RelayCommand]
+    public void OpenHoursReport() => HoursReportRequested?.Invoke();
+
+    /// <summary>
+    /// A lista acabou de recarregar — depois de qualquer mudança, daqui ou de
+    /// fora, e no refresh periódico. O relatório de horas aberto acompanha.
+    /// </summary>
+    public event Action? BoardLoaded;
 
     /// <summary>
     /// A bolinha da sincronização no cabeçalho (ADR-063). Atribuída pelo app

@@ -1,0 +1,620 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
+        xmlns:reports="using:MyTaskApp.Desktop.Reports"
+        xmlns:time="using:MyTaskApp.Application.TimeTracking"
+        x:Class="MyTaskApp.Desktop.Views.HoursReportWindow"
+        x:DataType="vm:HoursReportViewModel"
+        x:Name="Root"
+        Title="Relatório de horas"
+        Width="1080"
+        Height="720"
+        MinWidth="860"
+        MinHeight="560"
+        WindowStartupLocation="CenterOwner">
+
+  <!--
+    Relatório de horas (ADR-097): as horas lançadas por dia, mês ou ano. De
+    cima para baixo, do geral para o detalhe: os indicadores do período, o
+    gráfico (ou a tabela) e, ao lado, em que tarefas as horas foram. Escolher
+    um bloco muda a leitura e as tarefas; o duplo clique desce um nível.
+  -->
+
+  <Window.KeyBindings>
+    <KeyBinding Gesture="F5" Command="{Binding LoadCommand}" />
+    <KeyBinding Gesture="PageUp" Command="{Binding PreviousCommand}" />
+    <KeyBinding Gesture="PageDown" Command="{Binding NextCommand}" />
+  </Window.KeyBindings>
+
+  <Window.Styles>
+
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="{DynamicResource WidgetSurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetStrokeSoftBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetCardRadius}" />
+      <Setter Property="Padding" Value="14,12" />
+    </Style>
+
+    <Style Selector="TextBlock.caption">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.kpi">
+      <Setter Property="FontSize" Value="24" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.detail">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextMidBrush}" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <Style Selector="TextBlock.sectionTitle">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.columnHead">
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="LetterSpacing" Value="0.6" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+    </Style>
+
+    <!-- Os segmentos (Dia | Mês | Ano, Gráfico | Tabela), como os modos da anotação. -->
+    <Style Selector="Button.mode">
+      <Setter Property="Height" Value="28" />
+      <Setter Property="Padding" Value="12,0" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextMidBrush}" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Button.mode /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetPillRadius}" />
+    </Style>
+
+    <Style Selector="Button.mode:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource WidgetSurfaceHoverBrush}" />
+    </Style>
+
+    <Style Selector="Button.mode:pointerover">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+    </Style>
+
+    <Style Selector="Button.mode.active /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource WidgetAccentSoftBrush}" />
+    </Style>
+
+    <Style Selector="Button.mode.active">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <!-- A trilha "Anos › 2026 › outubro": cada passo é um link. -->
+    <Style Selector="Button.crumb">
+      <Setter Property="Padding" Value="2,0" />
+      <Setter Property="FontSize" Value="11.5" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetAccentTextBrush}" />
+    </Style>
+
+    <Style Selector="Button.crumb /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="Button.crumb:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource WidgetSurfaceHoverBrush}" />
+    </Style>
+
+    <!-- ‹ e ›: o período anterior e o próximo. -->
+    <Style Selector="Button.step">
+      <Setter Property="Width" Value="28" />
+      <Setter Property="Height" Value="28" />
+      <Setter Property="Padding" Value="0,0,0,3" />
+      <Setter Property="FontSize" Value="20" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextMidBrush}" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="Button.step /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="Button.step:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource WidgetSurfaceHoverBrush}" />
+    </Style>
+
+    <Style Selector="Button.step:disabled">
+      <Setter Property="Opacity" Value="0.35" />
+    </Style>
+
+    <!-- Sem carga, a barra some sem tirar o lugar dela: a tela não pula. -->
+    <Style Selector="ProgressBar.idle">
+      <Setter Property="Opacity" Value="0" />
+    </Style>
+
+    <Style Selector="ListBox.hoursTable">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Padding" Value="0" />
+    </Style>
+
+    <Style Selector="ListBox.hoursTable ListBoxItem">
+      <Setter Property="Padding" Value="8,5" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetPillRadius}" />
+    </Style>
+
+    <Style Selector="ListBox.hoursTable ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource WidgetSurfaceHoverBrush}" />
+    </Style>
+
+    <Style Selector="ListBox.hoursTable ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource WidgetAccentSoftBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.cell">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <Style Selector="TextBlock.number">
+      <Setter Property="HorizontalAlignment" Value="Right" />
+      <Setter Property="FontFeatures" Value="+tnum" />
+    </Style>
+
+    <Style Selector="Border.legend">
+      <Setter Property="Width" Value="10" />
+      <Setter Property="Height" Value="10" />
+      <Setter Property="CornerRadius" Value="2" />
+      <Setter Property="Background" Value="{DynamicResource WidgetAccentBrush}" />
+    </Style>
+
+  </Window.Styles>
+
+  <DockPanel Margin="18,14,18,16">
+
+    <!-- ========================= CABEÇALHO ========================= -->
+    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,10">
+
+      <StackPanel Grid.Column="0" Spacing="2">
+        <TextBlock Text="Relatório de horas" FontSize="18" FontWeight="SemiBold" />
+        <ItemsControl x:Name="CrumbList" ItemsSource="{Binding Crumbs}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <StackPanel Orientation="Horizontal" Spacing="2" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:HoursCrumb">
+              <StackPanel Orientation="Horizontal" Spacing="2">
+                <TextBlock Classes="caption" Text="›" VerticalAlignment="Center" IsVisible="{Binding !IsFirst}" />
+                <Button Classes="crumb"
+                        Content="{Binding Label}"
+                        IsVisible="{Binding !IsCurrent}"
+                        Command="{Binding #Root.((vm:HoursReportViewModel)DataContext).SetScaleCommand}"
+                        CommandParameter="{Binding Scale}" />
+                <TextBlock Text="{Binding Label}"
+                           FontSize="11.5"
+                           Padding="2,0"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource WidgetTextMidBrush}"
+                           IsVisible="{Binding IsCurrent}" />
+              </StackPanel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+
+        <StackPanel Orientation="Horizontal"
+                    Spacing="6"
+                    IsVisible="{Binding Devices.IsAvailable, FallbackValue=False}">
+          <TextBlock Classes="caption" Text="Computador" VerticalAlignment="Center" />
+          <ComboBox x:Name="DeviceBox"
+                    FontSize="12"
+                    MinHeight="28"
+                    ItemsSource="{Binding Devices.Views}"
+                    SelectedItem="{Binding Devices.Selected}">
+            <ComboBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:DeviceOption">
+                <TextBlock Text="{Binding Label}" />
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+        </StackPanel>
+
+        <ComboBox x:Name="TagBox"
+                  FontSize="12"
+                  MinHeight="28"
+                  MinWidth="170"
+                  ToolTip.Tip="Só as horas das tarefas com esta etiqueta"
+                  ItemsSource="{Binding Tags}"
+                  SelectedItem="{Binding SelectedTag}">
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:TagFilterOption">
+              <TextBlock Text="{Binding Name}" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+
+        <Button x:Name="ExportButton"
+                Content="Exportar CSV"
+                ToolTip.Tip="Salva a tabela deste período num arquivo que o Excel abre"
+                Command="{Binding ExportCsvCommand}" />
+      </StackPanel>
+    </Grid>
+
+    <!-- ========================= NAVEGAÇÃO ========================= -->
+    <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,6">
+
+      <Border Grid.Column="0"
+              Padding="3"
+              CornerRadius="{StaticResource WidgetPillRadius}"
+              Background="{DynamicResource WidgetSurfaceBrush}"
+              BorderBrush="{DynamicResource WidgetStrokeSoftBrush}"
+              BorderThickness="1">
+        <StackPanel Orientation="Horizontal" Spacing="1">
+          <Button x:Name="DayScaleButton"
+                  Classes="mode"
+                  Classes.active="{Binding IsDayScale}"
+                  Content="Dia"
+                  ToolTip.Tip="Os dias de um mês"
+                  Command="{Binding SetScaleCommand}"
+                  CommandParameter="{x:Static time:HoursScale.Day}" />
+          <Button x:Name="MonthScaleButton"
+                  Classes="mode"
+                  Classes.active="{Binding IsMonthScale}"
+                  Content="Mês"
+                  ToolTip.Tip="Os meses de um ano, com o mapa de calor dos dias"
+                  Command="{Binding SetScaleCommand}"
+                  CommandParameter="{x:Static time:HoursScale.Month}" />
+          <Button x:Name="YearScaleButton"
+                  Classes="mode"
+                  Classes.active="{Binding IsYearScale}"
+                  Content="Ano"
+                  ToolTip.Tip="Todos os anos"
+                  Command="{Binding SetScaleCommand}"
+                  CommandParameter="{x:Static time:HoursScale.Year}" />
+        </StackPanel>
+      </Border>
+
+      <StackPanel Grid.Column="1"
+                  Orientation="Horizontal"
+                  Spacing="4"
+                  Margin="14,0,0,0"
+                  VerticalAlignment="Center">
+        <Button x:Name="PreviousButton"
+                Classes="step"
+                Content="‹"
+                ToolTip.Tip="Período anterior (PageUp)"
+                Command="{Binding PreviousCommand}" />
+        <TextBlock x:Name="PeriodTitleText"
+                   Text="{Binding PeriodTitle}"
+                   FontSize="15"
+                   FontWeight="SemiBold"
+                   MinWidth="150"
+                   TextAlignment="Center"
+                   VerticalAlignment="Center" />
+        <Button x:Name="NextButton"
+                Classes="step"
+                Content="›"
+                ToolTip.Tip="Próximo período (PageDown)"
+                Command="{Binding NextCommand}" />
+        <Button x:Name="TodayButton"
+                Content="Hoje"
+                Margin="6,0,0,0"
+                IsVisible="{Binding !IsYearScale}"
+                ToolTip.Tip="Voltar para o período de hoje"
+                Command="{Binding TodayCommand}" />
+      </StackPanel>
+
+      <Border Grid.Column="2"
+              Padding="3"
+              CornerRadius="{StaticResource WidgetPillRadius}"
+              Background="{DynamicResource WidgetSurfaceBrush}"
+              BorderBrush="{DynamicResource WidgetStrokeSoftBrush}"
+              BorderThickness="1">
+        <StackPanel Orientation="Horizontal" Spacing="1">
+          <Button x:Name="ChartViewButton"
+                  Classes="mode"
+                  Classes.active="{Binding IsChart}"
+                  Content="Gráfico"
+                  Command="{Binding SetViewCommand}"
+                  CommandParameter="{x:Static vm:HoursReportView.Chart}" />
+          <Button x:Name="TableViewButton"
+                  Classes="mode"
+                  Classes.active="{Binding IsTable}"
+                  Content="Tabela"
+                  Command="{Binding SetViewCommand}"
+                  CommandParameter="{x:Static vm:HoursReportView.Table}" />
+        </StackPanel>
+      </Border>
+    </Grid>
+
+    <!-- Carregando: a barra fina, sem tirar o conteúdo anterior da tela. -->
+    <ProgressBar DockPanel.Dock="Top"
+                 x:Name="LoadingBar"
+                 Classes="slim"
+                 Classes.idle="{Binding !IsLoading}"
+                 IsIndeterminate="{Binding IsLoading}"
+                 Margin="0,0,0,8" />
+
+    <TextBlock DockPanel.Dock="Top"
+               x:Name="ErrorText"
+               Text="{Binding ErrorMessage}"
+               FontSize="12"
+               TextWrapping="Wrap"
+               Margin="0,0,0,8"
+               Foreground="{DynamicResource WidgetDangerBrush}"
+               IsVisible="{Binding ErrorMessage, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+    <!-- ========================= INDICADORES ========================= -->
+    <UniformGrid DockPanel.Dock="Top" Columns="4" Margin="0,0,0,12">
+
+      <Border Classes="card" Margin="0,0,6,0">
+        <StackPanel Spacing="2">
+          <TextBlock Classes="caption" Text="Total no período" />
+          <TextBlock x:Name="TotalText" Classes="kpi" Text="{Binding TotalText}" />
+          <TextBlock x:Name="ComparisonText"
+                     Classes="detail"
+                     Text="{Binding ComparisonText}"
+                     ToolTip.Tip="{Binding ComparisonDetail}" />
+        </StackPanel>
+      </Border>
+
+      <Border Classes="card" Margin="6,0">
+        <StackPanel Spacing="2">
+          <TextBlock Classes="caption" Text="Média por dia trabalhado" />
+          <TextBlock x:Name="AverageText" Classes="kpi" Text="{Binding AverageText}" />
+          <TextBlock Classes="detail" Text="Só os dias com horas entram na conta" />
+        </StackPanel>
+      </Border>
+
+      <Border Classes="card" Margin="6,0">
+        <StackPanel Spacing="2">
+          <TextBlock Classes="caption" Text="Dias trabalhados" />
+          <TextBlock x:Name="ActiveDaysText" Classes="kpi" Text="{Binding ActiveDaysText}" />
+          <TextBlock Classes="detail" Text="Dos dias que já passaram no período" />
+        </StackPanel>
+      </Border>
+
+      <Border Classes="card" Margin="6,0,0,0">
+        <StackPanel Spacing="2">
+          <TextBlock Classes="caption" Text="{Binding BestCaption}" />
+          <TextBlock x:Name="BestText" Classes="kpi" Text="{Binding BestText}" />
+          <TextBlock Classes="detail" Text="{Binding BestDetail}" />
+        </StackPanel>
+      </Border>
+    </UniformGrid>
+
+    <!-- ========================= CORPO ========================= -->
+    <Grid ColumnDefinitions="*,300" ColumnSpacing="12">
+
+      <Border Grid.Column="0" Classes="card" Padding="14,12,14,10">
+        <DockPanel>
+
+          <!-- O ano de relance: só na escala de meses. -->
+          <StackPanel DockPanel.Dock="Top"
+                      x:Name="HeatmapPanel"
+                      Spacing="6"
+                      Margin="0,0,0,12"
+                      IsVisible="{Binding IsHeatmapVisible}">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Classes="sectionTitle" Text="Dia a dia" />
+              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
+                <TextBlock Classes="caption" Text="Menos" Margin="0,0,3,0" />
+                <Border Classes="legend" Background="{DynamicResource WidgetSurfaceHoverBrush}" />
+                <Border Classes="legend" Opacity="0.3" />
+                <Border Classes="legend" Opacity="0.5" />
+                <Border Classes="legend" Opacity="0.75" />
+                <Border Classes="legend" />
+                <TextBlock Classes="caption" Text="Mais" Margin="3,0,0,0" />
+              </StackPanel>
+            </Grid>
+            <reports:HoursHeatmap x:Name="Heatmap"
+                                  Days="{Binding HeatmapDays}"
+                                  DayCommand="{Binding OpenDayCommand}"
+                                  EmptyBrush="{DynamicResource WidgetSurfaceHoverBrush}"
+                                  LevelBrush="{DynamicResource WidgetAccentBrush}"
+                                  TextBrush="{DynamicResource WidgetTextLowBrush}"
+                                  TodayBrush="{DynamicResource WidgetTextHighBrush}"
+                                  TipBackgroundBrush="{DynamicResource WidgetCanvasBrush}"
+                                  TipBorderBrush="{DynamicResource WidgetStrokeBrush}"
+                                  TipTextBrush="{DynamicResource WidgetTextHighBrush}"
+                                  FocusBrush="{DynamicResource WidgetAccentBrush}"
+                                  AutomationProperties.Name="Mapa de calor do ano: um quadrado por dia. Clique num dia para ver o mês dele." />
+          </StackPanel>
+
+          <!-- A leitura: o bloco sob o mouse, senão o escolhido, senão o período. -->
+          <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,6">
+            <TextBlock x:Name="ReadoutText"
+                       Text="{Binding Readout}"
+                       FontSize="12.5"
+                       FontWeight="SemiBold"
+                       TextTrimming="CharacterEllipsis"
+                       Foreground="{DynamicResource WidgetTextHighBrush}" />
+            <TextBlock Grid.Column="1"
+                       Classes="caption"
+                       Text="Duplo clique desce um nível"
+                       IsVisible="{Binding !IsDayScale}"
+                       VerticalAlignment="Center" />
+          </Grid>
+
+          <TextBlock DockPanel.Dock="Bottom"
+                     Classes="caption"
+                     Margin="0,6,0,0"
+                     Text="{Binding RunningNote}"
+                     IsVisible="{Binding RunningNote, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+          <Panel>
+
+            <reports:HoursBarChart x:Name="Chart"
+                                   IsVisible="{Binding IsChart}"
+                                   Items="{Binding Buckets}"
+                                   Average="{Binding Average}"
+                                   SelectedIndex="{Binding SelectedIndex}"
+                                   HoveredIndex="{Binding HoveredIndex, Mode=OneWayToSource}"
+                                   ActivateCommand="{Binding DrillCommand}"
+                                   BarBrush="{DynamicResource WidgetAccentBrush}"
+                                   BarHoverBrush="{DynamicResource WidgetAccentHoverBrush}"
+                                   SelectedBarBrush="{DynamicResource WidgetAccentBrush}"
+                                   GridBrush="{DynamicResource WidgetStrokeSoftBrush}"
+                                   AxisTextBrush="{DynamicResource WidgetTextLowBrush}"
+                                   CurrentTextBrush="{DynamicResource WidgetAccentTextBrush}"
+                                   AverageBrush="{DynamicResource WidgetTextMidBrush}"
+                                   WeekendBrush="{DynamicResource WidgetCanvasBrush}"
+                                   TipBackgroundBrush="{DynamicResource WidgetCanvasBrush}"
+                                   TipBorderBrush="{DynamicResource WidgetStrokeBrush}"
+                                   TipTextBrush="{DynamicResource WidgetTextHighBrush}"
+                                   FocusBrush="{DynamicResource WidgetAccentBrush}"
+                                   AutomationProperties.Name="Gráfico de horas. Setas escolhem o bloco, Enter desce um nível; a tabela tem os mesmos números."
+                                   AutomationProperties.HelpText="{Binding Readout}" />
+
+            <!-- A tabela: as mesmas horas, com a mesma escolha do gráfico. -->
+            <DockPanel x:Name="TablePanel" IsVisible="{Binding IsTable}">
+
+              <Grid DockPanel.Dock="Top" ColumnDefinitions="*,200,80,100,84" Margin="8,0,22,4">
+                <TextBlock Grid.Column="0" Classes="columnHead" Text="PERÍODO" />
+                <TextBlock Grid.Column="1" Classes="columnHead" Text="HORAS" />
+                <TextBlock Grid.Column="2" Classes="columnHead" Text="DIAS" HorizontalAlignment="Right" />
+                <TextBlock Grid.Column="3" Classes="columnHead" Text="LANÇAMENTOS" HorizontalAlignment="Right" />
+                <TextBlock Grid.Column="4" Classes="columnHead" Text="% DO TOTAL" HorizontalAlignment="Right" />
+              </Grid>
+
+              <Border DockPanel.Dock="Bottom"
+                      BorderBrush="{DynamicResource WidgetStrokeSoftBrush}"
+                      BorderThickness="0,1,0,0"
+                      Padding="8,6,22,0">
+                <Grid ColumnDefinitions="*,200,80,100,84">
+                  <TextBlock Grid.Column="0" Classes="cell" Text="Total" FontWeight="SemiBold" />
+                  <TextBlock Grid.Column="1" Classes="cell" x:Name="TableTotalText" Text="{Binding TotalText}" FontWeight="SemiBold" />
+                  <TextBlock Grid.Column="2" Classes="cell number" Text="{Binding TotalDaysText}" />
+                  <TextBlock Grid.Column="3" Classes="cell number" Text="{Binding TotalEntriesText}" />
+                  <TextBlock Grid.Column="4" Classes="cell number" Text="100%" />
+                </Grid>
+              </Border>
+
+              <ListBox x:Name="HoursTable"
+                       Classes="hoursTable"
+                       ItemsSource="{Binding Rows}"
+                       SelectedIndex="{Binding SelectedIndex}"
+                       DoubleTapped="OnTableDoubleTapped">
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:HoursReportRow">
+                    <Grid ColumnDefinitions="*,200,80,100,84" Margin="0,0,14,0" Classes.muted="{Binding IsMuted}">
+                      <Grid.Styles>
+                        <Style Selector="Grid.muted">
+                          <Setter Property="Opacity" Value="0.45" />
+                        </Style>
+                      </Grid.Styles>
+                      <TextBlock Grid.Column="0" Classes="cell" Text="{Binding Label}" />
+                      <Grid Grid.Column="1" ColumnDefinitions="110,*" ColumnSpacing="8">
+                        <ProgressBar Grid.Column="0"
+                                     Classes="slim"
+                                     Minimum="0"
+                                     Maximum="1"
+                                     MinWidth="0"
+                                     Value="{Binding Ratio}"
+                                     VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="1" Classes="cell" Text="{Binding Duration}" />
+                      </Grid>
+                      <TextBlock Grid.Column="2" Classes="cell number" Text="{Binding Days}" />
+                      <TextBlock Grid.Column="3" Classes="cell number" Text="{Binding Entries}" />
+                      <TextBlock Grid.Column="4" Classes="cell number" Text="{Binding Share}" />
+                    </Grid>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+            </DockPanel>
+
+            <!-- Sem horas no período: diz o que fazer, em vez de um gráfico vazio. -->
+            <StackPanel x:Name="EmptyState"
+                        IsVisible="{Binding IsEmpty}"
+                        IsHitTestVisible="False"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Spacing="4">
+              <TextBlock Text="{Binding EmptyMessage}"
+                         FontSize="14"
+                         FontWeight="SemiBold"
+                         HorizontalAlignment="Center"
+                         Foreground="{DynamicResource WidgetTextMidBrush}" />
+              <TextBlock Classes="caption"
+                         HorizontalAlignment="Center"
+                         Text="As horas entram pelo cronômetro (▶) da tarefa ou por + Adicionar tempo, na aba Tempo." />
+            </StackPanel>
+          </Panel>
+        </DockPanel>
+      </Border>
+
+      <!-- ========================= HORAS POR TAREFA ========================= -->
+      <Border Grid.Column="1" Classes="card">
+        <DockPanel>
+          <TextBlock DockPanel.Dock="Top"
+                     x:Name="TaskPanelTitleText"
+                     Classes="sectionTitle"
+                     Text="{Binding TaskPanelTitle}"
+                     TextWrapping="Wrap"
+                     Margin="0,0,0,10" />
+
+          <TextBlock DockPanel.Dock="Bottom"
+                     x:Name="StatusText"
+                     Classes="caption"
+                     TextWrapping="Wrap"
+                     Margin="0,8,0,0"
+                     Text="{Binding StatusMessage}"
+                     IsVisible="{Binding StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+          <Panel>
+            <TextBlock Classes="caption"
+                       Text="Nenhuma hora neste período."
+                       IsVisible="{Binding HasNoTaskRows}" />
+
+            <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+              <ItemsControl x:Name="TaskList" ItemsSource="{Binding TaskRows}" Margin="0,0,10,0">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:TaskHoursRow">
+                    <StackPanel Spacing="4" Margin="0,0,0,10" ToolTip.Tip="{Binding Title}">
+                      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <TextBlock Grid.Column="0" Classes="cell" Text="{Binding Title}" />
+                        <TextBlock Grid.Column="1" Classes="cell number" Text="{Binding Duration}" FontWeight="SemiBold" />
+                      </Grid>
+                      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <ProgressBar Grid.Column="0"
+                                     Classes="slim"
+                                     Minimum="0"
+                                     Maximum="1"
+                                     MinWidth="0"
+                                     Value="{Binding Ratio}"
+                                     VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="1" Classes="caption" Text="{Binding Share}" MinWidth="34" TextAlignment="Right" />
+                      </Grid>
+                    </StackPanel>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+          </Panel>
+        </DockPanel>
+      </Border>
+    </Grid>
+  </DockPanel>
+</Window>

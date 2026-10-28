@@ -7,7 +7,7 @@
 | **Categoria** | ciclo-de-vida |
 | **Registrado** | 2026-10-07, commit `9291c7c` (primeiro commit em que o ADR aparece) |
 | **Palavras-chave** | ActivityHistoryBuilder, ActivityHistoryQuery, GetActivityHistory, histórico, últimos 7 dias, flyout, GetBoardTask |
-| **Relações** | relacionado: [ADR-020](020-ciclo-de-vida-estado-derivado.md), [ADR-041](041-temas-sete-paletas-e-automatico.md), [ADR-046](046-fonte-de-icones-embutida.md), [ADR-052](052-tempo-trabalhado-por-periodo.md), [ADR-062](062-lista-por-computador-onde-aparece.md) |
+| **Relações** | revisto por: [ADR-097](097-relatorio-de-horas-dia-mes-ano.md) (relatório de horas por dia, mês e ano); relacionado: [ADR-020](020-ciclo-de-vida-estado-derivado.md), [ADR-041](041-temas-sete-paletas-e-automatico.md), [ADR-046](046-fonte-de-icones-embutida.md), [ADR-052](052-tempo-trabalhado-por-periodo.md), [ADR-062](062-lista-por-computador-onde-aparece.md) |
 | **Código** | `src/MyTaskApp.Domain/Planning/ActivityHistory.cs`, `src/MyTaskApp.Application/History/GetActivityHistory.cs`, `src/MyTaskApp.Infrastructure/Persistence/Queries/ActivityHistoryQuery.cs`, `src/MyTaskApp.Desktop/ViewModels/ActivityHistoryViewModel.cs` |
 
 **Contexto:** com o tempo trabalhado gravado (ADR-052), faltava responder de

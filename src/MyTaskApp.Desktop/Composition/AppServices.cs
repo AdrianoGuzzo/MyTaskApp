@@ -195,6 +195,10 @@ internal static class AppServices
             .AddTransient<RemotePrepareViewModel>()
             .AddSingleton<MachinesWindow>()
 
+            // O relatório de horas (ADR-097): janela única, como as outras do menu.
+            .AddSingleton<HoursReportViewModel>()
+            .AddSingleton<HoursReportWindow>()
+
             // A bolinha do cabeçalho (ADR-063): uma só, como o agendador que ela escuta.
             .AddSingleton<SyncIndicatorViewModel>()
 

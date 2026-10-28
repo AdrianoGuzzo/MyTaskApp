@@ -19,7 +19,7 @@ no topo (ou use `rg -n "^#" <arquivo>`).
 |---|---|
 | Checklist do dia: captura, seções, ordem | [`features/checklist.md`](features/checklist.md) |
 | Lembretes e prazos | [`features/lembretes-e-prazos.md`](features/lembretes-e-prazos.md) |
-| Cronômetro, horas e histórico de 7 dias | [`features/tempo-e-historico.md`](features/tempo-e-historico.md) |
+| Cronômetro, horas, histórico de 7 dias e relatório de horas | [`features/tempo-e-historico.md`](features/tempo-e-historico.md) |
 | Post-its | [`features/post-its.md`](features/post-its.md) |
 | Janela, HUD, bandeja, temas, instância única | [`features/janela-e-temas.md`](features/janela-e-temas.md) |
 | Anotações, etiquetas, diretórios, arquivo e lixeira | [`features/anotacoes-etiquetas-ciclo-de-vida.md`](features/anotacoes-etiquetas-ciclo-de-vida.md) |

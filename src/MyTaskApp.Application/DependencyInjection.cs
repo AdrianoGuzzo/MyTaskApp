@@ -249,7 +249,7 @@ public static class DependencyInjection
         services.AddScoped<GetRemoteControlHandler>();
         services.AddScoped<GetRemoteOperationProgressHandler>();
 
-        // As conversas do Claude no servidor (ADR-091): o agente relata, as duas telas de controle leem.
+        // As conversas do Claude no servidor (ADR-097): o agente relata, as duas telas de controle leem.
         services.AddScoped<ListRemoteSessionsHandler>();
         services.AddScoped<GetRemoteSessionTimelineHandler>();
         services.TryAddSingleton<RemoteSessionPublisher>();
@@ -392,6 +392,9 @@ public static class DependencyInjection
         services.AddScoped<DeleteTimeEntryHandler>();
         services.AddScoped<GetTaskTimeLogHandler>();
         services.AddScoped<TimeReportHandlers>();
+
+        // O relatório de horas por dia, mês e ano (ADR-097): só leitura, agregado na hora.
+        services.AddScoped<GetHoursHistoryHandler>();
 
         // O histórico dos últimos dias (ADR-053): só leitura, sobre o que já está gravado.
         services.AddScoped<GetActivityHistoryHandler>();
