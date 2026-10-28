@@ -91,6 +91,12 @@ internal sealed class HeadlessAgentRunner(ILogger<HeadlessAgentRunner> logger) :
             startInfo.Environment[name] = value;
         }
 
+        // Parado antes de abrir: nem abre.
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return new HeadlessRunResult(-1, string.Empty, Canceled: true);
+        }
+
         using var process = new Process { StartInfo = startInfo };
 
         try
@@ -104,7 +110,16 @@ internal sealed class HeadlessAgentRunner(ILogger<HeadlessAgentRunner> logger) :
                 exception);
         }
 
-        await started(process.Id, new DateTimeOffset(process.StartTime.ToUniversalTime(), TimeSpan.Zero));
+        try
+        {
+            await started(process.Id, new DateTimeOffset(process.StartTime.ToUniversalTime(), TimeSpan.Zero));
+        }
+        catch
+        {
+            // Sem a sessão gravada, ninguém conseguiria parar este processo depois.
+            Kill(process);
+            throw;
+        }
 
         var error = new CapturedOutput(MaxErrorChars);
         var readError = ProcessOutputPump.PumpAsync(process.StandardError, error, isError: true, output: null);
@@ -118,6 +133,10 @@ internal sealed class HeadlessAgentRunner(ILogger<HeadlessAgentRunner> logger) :
         {
             // Saiu antes de ler (versão que recusa um flag, login vencido): o stderr diz o porquê.
             logger.LogWarning(exception, "HeadlessAgentStdinClosed");
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Parado enquanto escrevia: a espera logo abaixo vê o cancelamento e encerra a árvore.
         }
 
         var readOutput = ReadLinesAsync(process.StandardOutput, line);

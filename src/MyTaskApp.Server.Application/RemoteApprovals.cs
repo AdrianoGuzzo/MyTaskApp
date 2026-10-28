@@ -136,6 +136,18 @@ public sealed class RemoteApprovalUseCases(
             return Answered(approval, envelope, now);
         }
 
+        // A operação acabou (cancelada, falhou) com a pergunta ainda aberta: não há mais quem espere a resposta.
+        if (await operations.FindAsync(caller.UserId, approval.Request.OperationId, cancellationToken) is { } operation
+            && RemoteOperationLifecycle.IsFinal(operation.Status))
+        {
+            foreach (var closed in await approvals.CloseForOperationAsync(caller.UserId, operation.OperationId, cancellationToken))
+            {
+                await ResolvedAsync(closed);
+            }
+
+            throw new SyncServerException(RemoteErrorCodes.ApprovalExpired, 410, "A operação já terminou: a aprovação não vale mais.");
+        }
+
         if (approval.Request.ExpiresAt <= now)
         {
             if (await approvals.ExpireAsync(approvalId, now, cancellationToken))
@@ -288,4 +300,10 @@ public interface IRemoteApprovalStore
 
     /// <summary>Todas as pendentes vencidas viram <see cref="ApprovalState.Expired"/>; devolve quais.</summary>
     Task<IReadOnlyList<ApprovalRecord>> ExpireDueAsync(DateTimeOffset now, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// As pendentes de uma operação que terminou viram <see cref="ApprovalState.Expired"/>
+    /// (para o agente, negar); devolve quais.
+    /// </summary>
+    Task<IReadOnlyList<ApprovalRecord>> CloseForOperationAsync(Guid userId, Guid operationId, CancellationToken cancellationToken);
 }

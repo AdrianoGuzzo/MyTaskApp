@@ -247,6 +247,11 @@ public static class DependencyInjection
         services.AddScoped<SendRemoteOperationHandler>();
         services.AddScoped<GetRemoteControlHandler>();
         services.AddScoped<GetRemoteOperationProgressHandler>();
+
+        // As conversas do Claude no servidor (ADR-091): o agente relata, as duas telas de controle leem.
+        services.AddScoped<ListRemoteSessionsHandler>();
+        services.AddScoped<GetRemoteSessionTimelineHandler>();
+        services.TryAddSingleton<RemoteSessionPublisher>();
         services.AddScoped<CancelRemoteOperationHandler>();
         services.TryAddSingleton(RemoteDispatchLimits.Default);
         services.TryAddSingleton<RemoteOperationDispatcher>();
@@ -272,6 +277,7 @@ public static class DependencyInjection
         services.TryAddSingleton(HeadlessAgentLimits.Default);
         services.TryAddSingleton<HeadlessConversations>();
         services.TryAddSingleton<HeadlessPromptRunner>();
+        services.AddSingleton<IRemoteStartupRecovery, HeadlessSessionRecovery>();
         services.AddScoped<HeadlessAgentPlanner>();
         services.AddScoped<HeadlessSessionStore>();
 

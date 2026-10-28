@@ -73,6 +73,11 @@ public sealed partial class RemoteApprovalItem(ApprovalView view, string machine
 
     public bool NeedsTyping => View.Request.TypedConfirmationHint is not null;
 
+    /// <summary>"Permitir nesta conversa": só quando o agente diz o que ficaria permitido.</summary>
+    public bool CanRemember => RemoteApprovalTexts.CanRemember(View.Request);
+
+    public string? RememberLabel => RemoteApprovalTexts.RememberLabel(View.Request);
+
     [ObservableProperty]
     private string _typedConfirmation = string.Empty;
 }
@@ -98,7 +103,14 @@ public sealed partial class RemoteControlViewModel : ObservableObject
     /// <summary>A conversa de cada ambiente (pelo id do ambiente), lida dos eventos das operações do Claude.</summary>
     private readonly Dictionary<Guid, Guid> _conversations = [];
 
+    /// <summary>As conversas paradas ou trocadas por outra nesta janela: não voltam pela lista do servidor.</summary>
+    private readonly HashSet<Guid> _dismissed = [];
+
     private long _after;
+
+    /// <summary>A operação acompanhada terminou e a saída dela foi lida até o fim.</summary>
+    private bool _drained;
+
     private int _ticks;
     private bool _ticking;
 
@@ -106,9 +118,16 @@ public sealed partial class RemoteControlViewModel : ObservableObject
     {
         _runner = runner;
         _logger = logger;
+        Sessions = new RemoteSessionsViewModel(runner, logger);
+
+        // A lista relida pelo relógio pode trazer (ou levar) a conversa que espera no ambiente.
+        Sessions.Items.CollectionChanged += (_, _) => NotifyConversation();
     }
 
     public MachineView? Machine { get; private set; }
+
+    /// <summary>As conversas do Claude da máquina, lidas do servidor (ADR-091).</summary>
+    public RemoteSessionsViewModel Sessions { get; }
 
     public string Title => Machine is { } machine ? $"Controlar {machine.Nickname}" : "Controlar";
 
@@ -158,8 +177,14 @@ public sealed partial class RemoteControlViewModel : ObservableObject
 
     public bool HasAgentProfiles => AgentProfiles.Count > 0;
 
-    /// <summary>A conversa do Claude aberta neste ambiente por esta tela: o próximo prompt vai nela.</summary>
-    public Guid? Conversation => SelectedEnvironment is { } environment && _conversations.TryGetValue(environment.View.DevelopmentId, out var id) ? id : null;
+    /// <summary>
+    /// A conversa do Claude deste ambiente: a aberta por esta tela ou, sem ela,
+    /// a que espera o próximo prompt no servidor. Fechar e abrir a janela
+    /// (ou vir de outra tela) continua a mesma conversa.
+    /// </summary>
+    public Guid? Conversation => SelectedEnvironment is not { } environment
+        ? null
+        : _conversations.TryGetValue(environment.View.DevelopmentId, out var id) ? id : Sessions.WaitingIn(environment.View.DevelopmentId, _dismissed);
 
     public bool HasConversation => Conversation is not null;
 
@@ -243,6 +268,8 @@ public sealed partial class RemoteControlViewModel : ObservableObject
         OnPropertyChanged(nameof(HasEnvironments));
         OnPropertyChanged(nameof(HasNoEnvironments));
         OnPropertyChanged(nameof(HasAgentProfiles));
+        await Sessions.LoadAsync(machine.DeviceId, cancellationToken);
+        NotifyConversation();
         await LoadApprovalsAsync(cancellationToken);
     }
 
@@ -302,6 +329,11 @@ public sealed partial class RemoteControlViewModel : ObservableObject
 
     [RelayCommand]
     public Task DenyAsync(RemoteApprovalItem approval) => AnswerAsync(approval, ApprovalDecision.Deny);
+
+    /// <summary>Permite e deixa o agente lembrar o mesmo pedido até o fim da conversa.</summary>
+    [RelayCommand]
+    public Task AllowForConversationAsync(RemoteApprovalItem approval) =>
+        AnswerAsync(approval, ApprovalDecision.Allow, remember: approval.CanRemember);
 
     /// <summary>
     /// O prompt ao Claude de lá: abre a conversa do ambiente, ou continua a que
@@ -385,6 +417,7 @@ public sealed partial class RemoteControlViewModel : ObservableObject
     public void Watch(RemoteOperationView operation, string title)
     {
         _after = 0;
+        _drained = false;
         _lines.Clear();
         Output = string.Empty;
         OperationTitle = title;
@@ -413,7 +446,8 @@ public sealed partial class RemoteControlViewModel : ObservableObject
 
         try
         {
-            if (IsRunning)
+            // Até drenar, não até o estado final: o "terminou" pode chegar com saída ainda por ler.
+            if (Operation is not null && !_drained)
             {
                 await ReadProgressAsync(cancellationToken);
             }
@@ -422,6 +456,8 @@ public sealed partial class RemoteControlViewModel : ObservableObject
             {
                 await LoadApprovalsAsync(cancellationToken);
             }
+
+            await Sessions.TickAsync(_ticks, cancellationToken);
         }
         finally
         {
@@ -477,6 +513,7 @@ public sealed partial class RemoteControlViewModel : ObservableObject
             Append(progress.Events);
             RememberConversation(progress.Operation, progress.Events);
             _after = progress.After;
+            _drained = progress.IsFinished;
             Operation = progress.Operation;
 
             if (progress.Operation.Status == RemoteOperationStatus.WaitingApproval)
@@ -539,6 +576,7 @@ public sealed partial class RemoteControlViewModel : ObservableObject
                 if (data.TryGetProperty("canContinue", out var canContinue) && canContinue.ValueKind == JsonValueKind.False)
                 {
                     _conversations.Remove(environment.View.DevelopmentId);
+                    _dismissed.Add(conversation);
                 }
                 else
                 {
@@ -552,6 +590,11 @@ public sealed partial class RemoteControlViewModel : ObservableObject
 
     private void Forget(Guid developmentId)
     {
+        if (Conversation is { } current)
+        {
+            _dismissed.Add(current);
+        }
+
         _conversations.Remove(developmentId);
         NotifyConversation();
     }
@@ -592,7 +635,7 @@ public sealed partial class RemoteControlViewModel : ObservableObject
         OnPropertyChanged(nameof(HasApprovals));
     }
 
-    private async Task AnswerAsync(RemoteApprovalItem approval, ApprovalDecision decision)
+    private async Task AnswerAsync(RemoteApprovalItem approval, ApprovalDecision decision, bool remember = false)
     {
         ErrorMessage = null;
 
@@ -608,10 +651,10 @@ public sealed partial class RemoteControlViewModel : ObservableObject
         {
             await _runner.RunAsync<AnswerApprovalHandler, ApprovalView>(
                 (handler, token) => handler.HandleAsync(
-                    new AnswerApproval(approval.View.Request.ApprovalId, decision, approval.NeedsTyping ? approval.TypedConfirmation.Trim() : null),
+                    new AnswerApproval(approval.View.Request.ApprovalId, decision, approval.NeedsTyping ? approval.TypedConfirmation.Trim() : null, remember),
                     token),
                 CancellationToken.None);
-            StatusMessage = decision == ApprovalDecision.Allow ? "Permitido." : "Negado.";
+            StatusMessage = decision != ApprovalDecision.Allow ? "Negado." : remember ? "Permitido nesta conversa." : "Permitido.";
         }
         catch (Exception exception) when (exception is DomainException or SyncApiException)
         {

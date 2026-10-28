@@ -11,6 +11,11 @@ public sealed record ApprovalLine(ApprovalView View, string Title, string Detail
     public string Summary => View.Request.Summary;
 
     public bool NeedsTyping => View.Request.TypedConfirmationHint is not null;
+
+    /// <summary>"Permitir nesta conversa": só quando o agente diz o que ficaria permitido.</summary>
+    public bool CanRemember => RemoteApprovalTexts.CanRemember(View.Request);
+
+    public string? RememberLabel => RemoteApprovalTexts.RememberLabel(View.Request);
 }
 
 /// <summary>
@@ -29,7 +34,8 @@ public sealed class ApprovalAnswers(IUseCaseRunner runner, IDialogService dialog
     }
 
     /// <summary><c>false</c>: a pessoa desistiu ou digitou outro nome; nada foi respondido.</summary>
-    public async Task<bool> AnswerAsync(ApprovalView view, bool allow)
+    /// <param name="remember">Permitir também o mesmo pedido até o fim da conversa, se o agente disse que pode.</param>
+    public async Task<bool> AnswerAsync(ApprovalView view, bool allow, bool remember = false)
     {
         string? typed = null;
 
@@ -55,7 +61,11 @@ public sealed class ApprovalAnswers(IUseCaseRunner runner, IDialogService dialog
 
         await runner.RunAsync<AnswerApprovalHandler, ApprovalView>(
             (handler, token) => handler.HandleAsync(
-                new AnswerApproval(view.Request.ApprovalId, allow ? ApprovalDecision.Allow : ApprovalDecision.Deny, typed),
+                new AnswerApproval(
+                    view.Request.ApprovalId,
+                    allow ? ApprovalDecision.Allow : ApprovalDecision.Deny,
+                    typed,
+                    allow && remember && RemoteApprovalTexts.CanRemember(view.Request)),
                 token));
         await watcher.RefreshAsync();
         return true;

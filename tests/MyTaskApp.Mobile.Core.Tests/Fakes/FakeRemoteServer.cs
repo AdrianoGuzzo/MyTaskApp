@@ -8,9 +8,11 @@ namespace MyTaskApp.Mobile.Core.Tests.Fakes;
 /// <summary>
 /// O servidor da orquestração em memória, do lado do controlador: guarda o
 /// registro do celular e, nos pedidos e nas respostas, confere a assinatura
-/// com a chave registrada, como o de verdade.
+/// com a chave registrada, como o de verdade. As conversas do Claude
+/// (ADR-091) são as que o teste põe, e o prompt e o parar entram nelas pelo
+/// payload, como no servidor.
 /// </summary>
-internal sealed class FakeRemoteServer(TimeProvider time) : IRemoteApi, IRemoteOperationsApi
+internal sealed class FakeRemoteServer(TimeProvider time) : IRemoteApi, IRemoteOperationsApi, IRemoteSessionsApi
 {
     public const string Nonce = "bm9uY2U";
 
@@ -30,10 +32,24 @@ internal sealed class FakeRemoteServer(TimeProvider time) : IRemoteApi, IRemoteO
 
     public Dictionary<Guid, List<RemoteOperationEvent>> Events { get; } = [];
 
+    /// <summary>Eventos por página, como o servidor de verdade limita.</summary>
+    public int EventPageSize { get; set; } = RemoteLimits.MaxEventPageSize;
+
     public Dictionary<Guid, ApprovalView> Approvals { get; } = [];
 
     /// <summary>As respostas que chegaram, já conferidas.</summary>
     public List<ApprovalResponse> Responses { get; } = [];
+
+    public List<RemoteAgentSessionView> Sessions { get; } = [];
+
+    /// <summary>O último relato do agente de cada máquina.</summary>
+    public Dictionary<Guid, DateTimeOffset?> AgentSeenAt { get; } = [];
+
+    /// <summary>As operações de cada conversa, na ordem em que chegaram.</summary>
+    public Dictionary<Guid, List<Guid>> SessionOperations { get; } = [];
+
+    /// <summary>Um servidor de antes das conversas: as rotas não existem.</summary>
+    public bool WithoutSessions { get; set; }
 
     private DevicePublicKey Key => Registrations.LastOrDefault()?.Key
         ?? throw new SyncApiException(SyncFailureKind.Unauthorized, "O dispositivo não se registrou.", "device_unknown");
@@ -91,8 +107,60 @@ internal sealed class FakeRemoteServer(TimeProvider time) : IRemoteApi, IRemoteO
             RemoteOperationStatus.Queued, payload.CreatedAt, payload.NotAfter, payload.CreatedAt, null, null, null, 0);
         Operations[view.OperationId] = view;
         Events[view.OperationId] = [];
+
+        if (SessionOf(payload) is { } sessionId)
+        {
+            Link(sessionId, view.OperationId);
+        }
+
         return Task.FromResult(view);
     }
+
+    public void Link(Guid sessionId, Guid operationId)
+    {
+        if (!SessionOperations.TryGetValue(sessionId, out var operations))
+        {
+            SessionOperations[sessionId] = operations = [];
+        }
+
+        operations.Add(operationId);
+    }
+
+    public Task<RemoteAgentSessionAck> ReportSessionsAsync(RemoteAgentSessionBatch batch, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("O celular não relata conversas.");
+
+    public Task<RemoteAgentSessionList> ListSessionsAsync(Guid? deviceId, bool openOnly, int? limit, CancellationToken cancellationToken)
+    {
+        if (WithoutSessions)
+        {
+            throw new SyncApiException(SyncFailureKind.NotFound, "Não encontrado no servidor.");
+        }
+
+        var agents = Devices.Where(device => device.Roles.HasFlag(DeviceRoles.Executor))
+            .Select(device => new RemoteAgentPresence(device.DeviceId, AgentSeenAt.GetValueOrDefault(device.DeviceId)));
+
+        return Task.FromResult(new RemoteAgentSessionList(
+            [.. agents],
+            [.. Sessions.Where(session => deviceId is null || session.DeviceId == deviceId).OrderByDescending(session => session.UpdatedAt)]));
+    }
+
+    public Task<RemoteAgentSessionDetail> GetSessionAsync(Guid sessionId, CancellationToken cancellationToken)
+    {
+        var session = Sessions.SingleOrDefault(item => item.SessionId == sessionId)
+            ?? throw new SyncApiException(SyncFailureKind.NotFound, "Não existe.", "session_not_found");
+
+        return Task.FromResult(new RemoteAgentSessionDetail(
+            session,
+            new RemoteAgentPresence(session.DeviceId, AgentSeenAt.GetValueOrDefault(session.DeviceId)),
+            [.. SessionOperations.GetValueOrDefault(sessionId, []).Select(id => Operations[id])]));
+    }
+
+    private static Guid? SessionOf(RemoteOperationRequest request) => request.Kind switch
+    {
+        RemoteOperationKinds.AgentPrompt => request.Payload.Deserialize<PromptRequest>(RemoteJson.Options)?.AgentSessionId,
+        RemoteOperationKinds.AgentStop => request.Payload.Deserialize<AgentStopRequest>(RemoteJson.Options)?.AgentSessionId,
+        _ => null,
+    };
 
     public Task<RemoteOperationView> GetAsync(Guid operationId, CancellationToken cancellationToken) =>
         Operations.TryGetValue(operationId, out var view)
@@ -102,7 +170,8 @@ internal sealed class FakeRemoteServer(TimeProvider time) : IRemoteApi, IRemoteO
     public Task<RemoteEventPage> ListEventsAsync(Guid operationId, long after, int? limit, CancellationToken cancellationToken)
     {
         var events = Events.GetValueOrDefault(operationId) ?? [];
-        return Task.FromResult(new RemoteEventPage([.. events.Where(item => item.Seq > after)], events.Count == 0 ? 0 : events[^1].Seq, false));
+        var newer = events.Where(item => item.Seq > after).ToList();
+        return Task.FromResult(new RemoteEventPage([.. newer.Take(EventPageSize)], events.Count == 0 ? 0 : events[^1].Seq, newer.Count > EventPageSize));
     }
 
     public Task<RemoteOperationView> CancelAsync(Guid operationId, CancellationToken cancellationToken)
@@ -142,10 +211,17 @@ internal sealed class FakeRemoteServer(TimeProvider time) : IRemoteApi, IRemoteO
     }
 
     /// <summary>A máquina de lá pede uma aprovação, selada como o agente sela.</summary>
-    public ApprovalView Ask(Guid operationId, Guid executor, ApprovalKind kind, string summary, string? typed = null, TimeSpan? lifetime = null)
+    public ApprovalView Ask(
+        Guid operationId,
+        Guid executor,
+        ApprovalKind kind,
+        string summary,
+        string? typed = null,
+        TimeSpan? lifetime = null,
+        object? details = null)
     {
         var request = ApprovalHash.Seal(new ApprovalRequest(
-            Guid.CreateVersion7(), operationId, kind, summary, JsonSerializer.SerializeToElement(new { }), typed,
+            Guid.CreateVersion7(), operationId, kind, summary, JsonSerializer.SerializeToElement(details ?? new { }), typed,
             time.GetUtcNow() + (lifetime ?? RemoteLimits.DefaultApprovalLifetime), string.Empty));
         var view = new ApprovalView(request, executor, ApprovalState.Pending, null, null, null);
         Approvals[request.ApprovalId] = view;

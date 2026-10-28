@@ -38,6 +38,7 @@ internal sealed class EfRemoteOperationStore(ServerDbContext context) : IRemoteO
             UpdatedAt = operation.UpdatedAt,
             Request = operation.Request,
             RequestHash = operation.RequestHash,
+            AgentSessionId = operation.AgentSessionId,
         });
 
         try
@@ -288,6 +289,22 @@ internal sealed class EfRemoteOperationStore(ServerDbContext context) : IRemoteO
     public Task<int> PruneEventsAsync(DateTimeOffset receivedBefore, CancellationToken cancellationToken) =>
         context.RemoteOperationEvents.Where(row => row.ReceivedAt < receivedBefore).ExecuteDeleteAsync(cancellationToken);
 
+    public Task LinkSessionAsync(Guid userId, Guid targetDeviceId, Guid operationId, Guid sessionId, CancellationToken cancellationToken) =>
+        context.RemoteOperations
+            .Where(row => row.UserId == userId && row.OperationId == operationId && row.TargetDeviceId == targetDeviceId && row.AgentSessionId == null)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(row => row.AgentSessionId, sessionId), cancellationToken);
+
+    public async Task<IReadOnlyList<RemoteOperationRecord>> ListForSessionAsync(Guid userId, Guid targetDeviceId, Guid sessionId, int limit, CancellationToken cancellationToken) =>
+        [
+            .. (await context.RemoteOperations.AsNoTracking()
+                    .Where(row => row.UserId == userId && row.TargetDeviceId == targetDeviceId && row.AgentSessionId == sessionId)
+                    .OrderByDescending(row => row.ReceivedAt)
+                    .Take(limit)
+                    .ToListAsync(cancellationToken))
+                .OrderBy(row => row.ReceivedAt)
+                .Select(ToModel),
+        ];
+
     private static RemoteOperationRecord ToModel(RemoteOperationRow row) => ToModel(row, (RemoteOperationStatus)row.Status);
 
     private static RemoteOperationRecord ToModel(RemoteOperationRow row, RemoteOperationStatus status) => new()
@@ -311,5 +328,6 @@ internal sealed class EfRemoteOperationStore(ServerDbContext context) : IRemoteO
         LastContiguousSeq = row.LastContiguousSeq,
         Request = row.Request,
         RequestHash = row.RequestHash,
+        AgentSessionId = row.AgentSessionId,
     };
 }

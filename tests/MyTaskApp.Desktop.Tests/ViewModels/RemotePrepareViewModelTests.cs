@@ -52,6 +52,7 @@ public class RemotePrepareViewModelTests
             },
             []);
         _runner.ResultsByHandler[typeof(GetPendingApprovalsHandler)] = (IReadOnlyList<ApprovalView>)[];
+        _runner.ResultsByHandler[typeof(ListRemoteSessionsHandler)] = new RemoteSessionList([]);
         _runner.ResultsByHandler[typeof(SendRemoteOperationHandler)] = new RemoteOperationView(
             Guid.CreateVersion7(), Guid.CreateVersion7(), Notebook.DeviceId, Guid.CreateVersion7(), RemoteOperationKinds.WorktreeProvision, TaskId,
             RemoteOperationStatus.Queued, Now, Now.AddMinutes(5), Now, null, null, null, 0);

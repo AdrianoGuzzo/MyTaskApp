@@ -36,6 +36,9 @@ public interface INavigator
     /// <summary>Uma operação pedida de longe, ao vivo.</summary>
     Task OpenOperationAsync(Guid operationId, Guid deviceId);
 
+    /// <summary>Uma conversa do Claude de uma máquina, com a linha do tempo de todos os prompts (ADR-091).</summary>
+    Task OpenSessionAsync(Guid sessionId, Guid deviceId);
+
     Task BackAsync();
 }
 

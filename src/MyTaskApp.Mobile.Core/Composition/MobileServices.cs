@@ -112,6 +112,7 @@ public static class MobileServices
         services.AddSingleton<RemoteViewModel>();
         services.AddTransient<RemoteMachineViewModel>();
         services.AddTransient<RemoteOperationViewModel>();
+        services.AddTransient<RemoteSessionViewModel>();
         services.AddTransient<RemotePrepareViewModel>();
 
         return services;

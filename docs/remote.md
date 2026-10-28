@@ -97,9 +97,15 @@ destino.
 - **Sem resposta, é não.** A pergunta vale 10 minutos; depois, a operação falha
   com "ninguém respondeu a tempo" (ou o Claude recebe "negado" e segue).
 - **Produção crítica pede o nome digitado**, como na cópia local.
-- **"Permitir sempre nesta sessão"**, para o Claude, vale só para a mesma
-  ferramenta e o mesmo padrão, e só naquela conversa. Não existe "aprovar
-  tudo".
+- **"Permitir nesta conversa"**, para o Claude, aparece com o que fica
+  permitido ("Até o fim da conversa, sem perguntar de novo: Bash: dotnet
+  test"). No Bash e no PowerShell, vale para o **mesmo comando exato**:
+  `dotnet test` não libera `dotnet run`. Um comando composto ou com
+  redirecionamento (`&&`, `|`, `;`, `>`, `$(…)`) sempre pergunta. Nas outras
+  ferramentas, vale para a ferramenta. Só naquela conversa; não existe
+  "aprovar tudo". Um agente antigo não oferece o botão.
+- **A pergunta de uma operação que já terminou some**: não dá mais para
+  responder, e nada muda lá.
 - No celular, cada resposta (e cada pedido) pede destravar o aparelho:
   biometria ou o bloqueio da tela. Destravado, vale 30 segundos, e o app tranca
   de novo ao ir para segundo plano.
@@ -123,6 +129,43 @@ A sessão roda com `--restricted` (sem as configurações nem os hooks do
 repositório e do usuário) e nunca com `--dangerously-skip-permissions`, nem se
 o card da tarefa tiver. Cada prompt tem teto de 40 turnos e US$ 3; o pedido
 pode baixar, nunca subir. O ambiente do processo vai sem tokens nem senhas.
+
+## As conversas do Claude
+
+Cada conversa do Claude de longe fica guardada no servidor, com o estado que o
+agente de lá relata (ADR-091). Aparece em *Controlar → Conversas do Claude*, no
+desktop, e na aba **Remoto → Conversas do Claude**, no celular. Isso vale para
+as conversas abertas de qualquer tela: do celular, deste desktop ou de outro.
+
+- **A linha do tempo** junta os prompts da conversa, em ordem: "Você: …" (o
+  prompt, com senhas mascaradas), as respostas, as ferramentas, as aprovações
+  e como cada prompt terminou.
+- **O próximo prompt e o parar** saem da conversa aberta. Enquanto o Claude
+  responde, o próximo prompt espera: só um por vez em cada conversa.
+- **Fechar a janela não perde a conversa.** Ao abrir *Controlar* de novo, o
+  ambiente retoma a conversa que espera o próximo prompt. "Nova conversa" e
+  "Parar" a deixam de lado.
+- **O título é o da tarefa**, lido da sincronização de quem olha. Uma tarefa
+  que ainda não chegou aparece como "Tarefa que ainda não chegou aqui". O
+  servidor guarda só ids e estado, sem caminhos, comandos ou o texto do Claude.
+
+O estado diz quem sabe o quê:
+
+| Estado | Quer dizer |
+|---|---|
+| Abrindo o Claude, Respondendo, Esperando aprovação | o agente relatou isso há pouco |
+| Esperando o próximo prompt | o prompt anterior terminou; a conversa aceita outro |
+| O último prompt falhou; espera o próximo | o prompt anterior falhou ou o agente caiu no meio; a conversa continua |
+| Parada, Não abriu | a conversa não recebe mais prompts |
+| Sem notícias do agente desde HH:mm; o estado é desconhecido | o agente parou de relatar com a conversa rodando. Não quer dizer que terminou |
+
+**A máquina e o agente são coisas separadas.** "ligada" é o desktop de lá. O
+agente, que roda os pedidos, aparece à parte: "agente parado desde…" quer dizer
+que os pedidos esperam na fila até ele voltar.
+
+Um servidor de antes das conversas mostra "O servidor ainda não guarda as
+conversas do Claude. Atualize o servidor." O resto do controle remoto
+funciona igual.
 
 ## Revogar
 
@@ -150,7 +193,9 @@ sincronização, e o agente só volta depois de conectar a conta de novo.
 | Saída de uma operação | 10 000 eventos de até 8 KiB cada | o servidor |
 | Claude, por prompt | 40 turnos, US$ 3 | o agente |
 | Requisições do controle remoto | 300 por minuto por dispositivo (`Sync__RateLimits__RemotePerMinute`) | o servidor |
-| Guarda | eventos 30 dias no servidor; o diário do agente, 7 dias | os dois |
+| Guarda | eventos e conversas 30 dias no servidor; o diário do agente, 7 dias | os dois |
+| Conversas relatadas pelo agente | as abertas e as com prompt nos últimos 7 dias, até 200 | o agente |
+| Diferença de relógio aceita | 5 minutos; o pedido "do futuro" é recusado (`clock_skew`) | o servidor |
 
 "Online" é a máquina que falou com o servidor nos últimos 90 segundos. Sem o
 hub, o agente procura pedidos a cada 30 segundos.
@@ -159,7 +204,11 @@ hub, o agente procura pedidos a cada 30 segundos.
 
 | Sintoma | O que acontece e o que fazer |
 |---|---|
-| O pedido fica em "Na fila" | a máquina está desligada, sem rede ou com o agente parado. Ele espera até o prazo e expira; nada roda depois |
+| O pedido fica em "Na fila" | a máquina está desligada, sem rede ou com o agente parado (veja "agente parado desde…" na lista). Ele espera até o prazo e expira; nada roda depois |
+| "O Claude ainda está respondendo o prompt anterior." | só um prompt por vez em cada conversa. Espere o anterior terminar, ou pare a conversa |
+| "Há um Claude aberto no terminal deste worktree." | feche o Claude do terminal na outra máquina antes de mandar o prompt de longe |
+| "O agente parou no meio do prompt." | o agente caiu enquanto o Claude respondia. Ao voltar, a conversa aceita o próximo prompt |
+| `clock_skew` | o relógio deste aparelho está adiantado. Acerte a hora |
 | "O agente parou" (Interrompido) | o agente caiu no meio. Ele não repete sozinho: peça de novo (o "Preparar em…" reaproveita o worktree já criado) |
 | A saída para de chegar | a rede caiu de um dos lados. O que roda lá continua, a saída fica guardada e chega inteira quando a rede volta |
 | "ninguém respondeu a tempo" | a pergunta venceu. Peça de novo |

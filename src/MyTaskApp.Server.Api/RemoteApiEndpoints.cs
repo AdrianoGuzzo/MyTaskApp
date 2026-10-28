@@ -59,6 +59,16 @@ internal static class RemoteApiEndpoints
         remote.MapGet("/agent/operations", async (ClaimsPrincipal user, RemoteOperationUseCases useCases, CancellationToken cancellationToken) =>
             Json(await useCases.AgentOperationsAsync(SyncApiEndpoints.Caller(user), cancellationToken)));
 
+        // As conversas do Claude (ADR-091): o agente relata as dele, e a conta lê a lista e a linha do tempo.
+        remote.MapPut("/agent/sessions", async (HttpRequest request, ClaimsPrincipal user, RemoteAgentSessionUseCases useCases, CancellationToken cancellationToken) =>
+            Json(await useCases.ReportAsync(SyncApiEndpoints.Caller(user), await ReadAsync<RemoteAgentSessionBatch>(request, cancellationToken), cancellationToken)));
+
+        remote.MapGet("/sessions", async (Guid? deviceId, bool? openOnly, int? limit, ClaimsPrincipal user, RemoteAgentSessionUseCases useCases, CancellationToken cancellationToken) =>
+            Json(await useCases.ListAsync(SyncApiEndpoints.Caller(user), deviceId, openOnly ?? false, limit, cancellationToken)));
+
+        remote.MapGet("/sessions/{sessionId:guid}", async (Guid sessionId, ClaimsPrincipal user, RemoteAgentSessionUseCases useCases, CancellationToken cancellationToken) =>
+            Json(await useCases.GetAsync(SyncApiEndpoints.Caller(user), sessionId, cancellationToken)));
+
         remote.MapPost("/operations/{operationId:guid}/status", async (Guid operationId, HttpRequest request, ClaimsPrincipal user, RemoteOperationUseCases useCases, CancellationToken cancellationToken) =>
             Json(await useCases.UpdateStatusAsync(SyncApiEndpoints.Caller(user), operationId, await ReadAsync<OperationStatusUpdate>(request, cancellationToken), cancellationToken)));
 

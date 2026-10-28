@@ -96,6 +96,12 @@ internal sealed class DeviceCapabilitiesRow
     public string Capabilities { get; set; } = "{}";
 
     public DateTimeOffset LastHeartbeatAt { get; set; }
+
+    /// <summary>
+    /// O último relato do agente (ADR-091), que o desktop da mesma instalação
+    /// não renova: a máquina pode estar ligada com o agente parado.
+    /// </summary>
+    public DateTimeOffset? AgentSeenAt { get; set; }
 }
 
 /// <summary>
@@ -174,6 +180,50 @@ internal sealed class RemoteOperationRow
     public required string Request { get; set; }
 
     public required string RequestHash { get; set; }
+
+    /// <summary>A conversa do Claude a que esta operação pertence (ADR-091), quando há.</summary>
+    public Guid? AgentSessionId { get; set; }
+}
+
+/// <summary>
+/// Uma conversa do Claude sem terminal (ADR-091): o último relato aceito do
+/// agente da máquina dela. Só ids e estado; nenhum caminho nem texto de prompt.
+/// </summary>
+internal sealed class RemoteAgentSessionRow
+{
+    public Guid UserId { get; set; }
+
+    public Guid SessionId { get; set; }
+
+    public Guid DeviceId { get; set; }
+
+    public long Version { get; set; }
+
+    public Guid TaskId { get; set; }
+
+    public Guid? DevelopmentId { get; set; }
+
+    public required string ProfileId { get; set; }
+
+    public string? Model { get; set; }
+
+    public int Status { get; set; }
+
+    public int Activity { get; set; }
+
+    public string? ActivityMessage { get; set; }
+
+    public Guid? CurrentOperationId { get; set; }
+
+    public DateTimeOffset StartedAt { get; set; }
+
+    public DateTimeOffset? EndedAt { get; set; }
+
+    /// <summary>A hora do agente.</summary>
+    public DateTimeOffset UpdatedAt { get; set; }
+
+    /// <summary>A hora do servidor: a retenção conta daqui.</summary>
+    public DateTimeOffset ReportedAt { get; set; }
 }
 
 /// <summary>Um evento de uma operação, por <c>(OperationId, Seq)</c>: o repetido não entra de novo.</summary>

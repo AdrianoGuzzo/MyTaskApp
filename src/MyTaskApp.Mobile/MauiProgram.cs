@@ -71,6 +71,7 @@ public static class MauiProgram
         builder.Services.AddTransient<SyncServerPage>();
         builder.Services.AddTransient<RemoteMachinePage>();
         builder.Services.AddTransient<RemoteOperationPage>();
+        builder.Services.AddTransient<RemoteSessionPage>();
         builder.Services.AddTransient<RemotePreparePage>();
 
         return builder.Build();

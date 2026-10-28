@@ -620,13 +620,21 @@ quem executa é o computador, com as regras dele. O guia é o
   ES256 gerada aqui e guardada no Keystore/Keychain. Não é a sincronização:
   passa pelas rotas `/api/v1/remote`, com o escopo `remote`, e cada pedido é
   assinado.
-- **A aba** mostra os computadores que aceitam controle, o código do
-  pareamento (digitado lá, na janela Máquinas), as aprovações pendentes (lidas
-  a cada 1,5 s com o app aberto; a nova avisa e conta no título da aba) e os
-  pedidos feitos daqui.
+- **A aba** mostra:
+  - os computadores que aceitam controle, com o agente à parte ("ligada,
+    agente parado desde…" quando os pedidos esperam na fila);
+  - o código do pareamento (digitado lá, na janela Máquinas);
+  - as aprovações pendentes, lidas a cada 1,5 s com o app aberto (a nova
+    avisa e conta no título da aba);
+  - as **conversas do Claude** das máquinas, as 10 mais recentes, de qualquer
+    tela que as abriu (ADR-091);
+  - os pedidos feitos daqui.
 - **A máquina** lista os worktrees de lá: rodar um comando liberado, abrir o
   Claude, apagar o worktree. **A operação** mostra o estado, a saída ao vivo,
-  as perguntas dela, cancelar, mandar mais um prompt e parar o Claude. Na
+  as perguntas dela, cancelar, mandar mais um prompt e parar o Claude. **A
+  conversa** (rota `session`) mostra a linha do tempo de todos os prompts dela,
+  as perguntas, o próximo prompt (fica na mesma tela) e o parar. Os handlers
+  são os mesmos da janela *Controlar* do desktop. Na
   tarefa, **"Preparar em…"** escolhe o computador, o repositório, a cópia do
   banco e o Claude.
 - **Destravar antes de assinar:** todo pedido e toda resposta pedem a

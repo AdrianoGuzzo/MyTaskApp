@@ -24,9 +24,17 @@ public sealed record MachineLine(MachineView View, string Detail)
 /// <summary>Um pedido feito daqui, com o estado de agora.</summary>
 public sealed record SentLine(SentOperation Operation, string Status);
 
+/// <summary>Uma conversa do Claude numa máquina da conta, aberta daqui ou de outra tela (ADR-091).</summary>
+public sealed record SessionLine(RemoteSessionItem Item, string Machine)
+{
+    public string Title => Item.Title;
+
+    public string Detail => Item.Branch is { } branch ? $"{Machine} · {branch} · {Item.State}" : $"{Machine} · {Item.State}";
+}
+
 /// <summary>
-/// A aba Remoto (E7): as aprovações esperando, as máquinas da conta e os
-/// pedidos feitos deste celular. Ligar o remoto aqui faz do celular só um
+/// A aba Remoto (E7): as aprovações esperando, as máquinas da conta, as
+/// conversas do Claude delas e os pedidos feitos deste celular. Ligar o remoto aqui faz do celular só um
 /// controlador: ele pede e aprova, e não executa nada.
 /// </summary>
 /// <remarks>
@@ -37,6 +45,9 @@ public sealed partial class RemoteViewModel : MobileViewModel, IDisposable
 {
     /// <summary>De quanto em quanto tempo a tela pergunta se o código já foi digitado lá.</summary>
     public static readonly TimeSpan PairingPoll = TimeSpan.FromSeconds(2);
+
+    /// <summary>As conversas na aba: as mais recentes; a máquina tem as outras.</summary>
+    public const int MaxSessions = 10;
 
     private readonly IUseCaseRunner _runner;
 
@@ -78,6 +89,10 @@ public sealed partial class RemoteViewModel : MobileViewModel, IDisposable
     [ObservableProperty]
     private string? _pairingStatus;
 
+    /// <summary>O servidor não guarda conversas (é anterior a isso): o aviso no lugar da lista.</summary>
+    [ObservableProperty]
+    private string? _sessionsProblem;
+
     public RemoteViewModel(
         IUseCaseRunner runner,
         ISyncAccount account,
@@ -107,6 +122,10 @@ public sealed partial class RemoteViewModel : MobileViewModel, IDisposable
     public ObservableCollection<MachineLine> Machines { get; } = [];
 
     public ObservableCollection<SentLine> Recent { get; } = [];
+
+    public ObservableCollection<SessionLine> Sessions { get; } = [];
+
+    public bool HasSessions => Sessions.Count > 0;
 
     public bool IsAvailable => _account.IsAvailable;
 
@@ -157,11 +176,13 @@ public sealed partial class RemoteViewModel : MobileViewModel, IDisposable
             foreach (var machine in view.Machines.Where(machine => !machine.IsThis))
             {
                 _names[machine.DeviceId] = machine.Nickname;
+            }
 
-                if (machine.AcceptsControl)
-                {
-                    Machines.Add(new MachineLine(machine, Detail(machine)));
-                }
+            var sessions = IsReady ? await LoadSessionsAsync() : null;
+
+            foreach (var machine in view.Machines.Where(machine => !machine.IsThis && machine.AcceptsControl))
+            {
+                Machines.Add(new MachineLine(machine, Detail(machine, sessions?.AgentOf(machine.DeviceId))));
             }
 
             OnPropertyChanged(nameof(HasMachines));
@@ -236,6 +257,10 @@ public sealed partial class RemoteViewModel : MobileViewModel, IDisposable
         machine is null ? Task.CompletedTask : _navigator.OpenMachineAsync(machine.View.DeviceId);
 
     [RelayCommand]
+    public Task OpenSessionAsync(SessionLine? line) =>
+        line is null ? Task.CompletedTask : _navigator.OpenSessionAsync(line.Item.Session.SessionId, line.Item.Session.DeviceId);
+
+    [RelayCommand]
     public Task OpenOperationAsync(SentLine? line) =>
         line is null ? Task.CompletedTask : _navigator.OpenOperationAsync(line.Operation.OperationId, line.Operation.DeviceId);
 
@@ -245,6 +270,10 @@ public sealed partial class RemoteViewModel : MobileViewModel, IDisposable
     [RelayCommand]
     public Task DenyAsync(ApprovalLine? line) => AnswerAsync(line, allow: false);
 
+    /// <summary>Permite e deixa o agente lembrar o mesmo pedido até o fim da conversa.</summary>
+    [RelayCommand]
+    public Task AllowForConversationAsync(ApprovalLine? line) => AnswerAsync(line, allow: true, remember: true);
+
     public void Dispose()
     {
         _watcher.Changed -= OnApprovalsChanged;
@@ -252,9 +281,9 @@ public sealed partial class RemoteViewModel : MobileViewModel, IDisposable
         _pairing?.Dispose();
     }
 
-    private async Task AnswerAsync(ApprovalLine? line, bool allow)
+    private async Task AnswerAsync(ApprovalLine? line, bool allow, bool remember = false)
     {
-        if (line is not null && await TryAsync(() => _answers.AnswerAsync(line.View, allow), "MobileRemoteAnswerFailed"))
+        if (line is not null && await TryAsync(() => _answers.AnswerAsync(line.View, allow, remember), "MobileRemoteAnswerFailed"))
         {
             ShowApprovals();
         }
@@ -294,6 +323,34 @@ public sealed partial class RemoteViewModel : MobileViewModel, IDisposable
             Logger.LogWarning(exception, "MobileRemotePairingStatusFailed");
             _dispatcher.Post(() => PairingStatus = "Não foi possível saber se o código foi digitado. Feche e tente de novo.");
         }
+    }
+
+    /// <summary>As conversas mais recentes das máquinas da conta; o estado de cada agente vem junto.</summary>
+    private async Task<RemoteSessionList?> LoadSessionsAsync()
+    {
+        RemoteSessionList? list = null;
+
+        try
+        {
+            list = await _runner.RunAsync<ListRemoteSessionsHandler, RemoteSessionList>(
+                (handler, token) => handler.HandleAsync(new ListRemoteSessions(), token));
+            SessionsProblem = list.Unavailable;
+        }
+        catch (SyncApiException exception)
+        {
+            Logger.LogInformation("MobileRemoteSessionsUnavailable {Kind}", exception.Kind);
+            SessionsProblem = "Sem notícias do servidor agora";
+        }
+
+        Sessions.Clear();
+
+        foreach (var item in list?.Items.Take(MaxSessions) ?? [])
+        {
+            Sessions.Add(new SessionLine(item, _names.GetValueOrDefault(item.Session.DeviceId, "Outra máquina")));
+        }
+
+        OnPropertyChanged(nameof(HasSessions));
+        return list;
     }
 
     private async Task LoadRecentAsync()
@@ -356,11 +413,17 @@ public sealed partial class RemoteViewModel : MobileViewModel, IDisposable
         }
     }
 
-    private string Detail(MachineView machine)
+    /// <summary>
+    /// "ligada" é o desktop de lá; o agente, que é quem roda os pedidos, vem à
+    /// parte quando relata (<paramref name="agent"/>): ligada com o agente parado
+    /// não é ligada para os pedidos.
+    /// </summary>
+    private string Detail(MachineView machine, string? agent)
     {
         var seen = machine.IsOnline
             ? "ligada"
             : machine.LastSeenAt is { } at ? "vista " + Labels.Ago(at, _time) : "nunca ligada";
+        seen = agent is null ? seen : $"{seen}, {agent}";
 
         return machine.Tools.Count == 0 ? seen : $"{seen} · {string.Join(", ", machine.Tools)}";
     }

@@ -21,6 +21,12 @@ public interface IAgentSessionRepository
     /// <summary>Todas as que ainda podem ter processo vivo (Starting/Running).</summary>
     Task<IReadOnlyList<AgentSession>> ListActiveAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// As conversas sem terminal (ADR-089) ativas ou com prompt desde
+    /// <paramref name="since"/>, as mais novas primeiro: o que o agente relata ao servidor (ADR-091).
+    /// </summary>
+    Task<IReadOnlyList<AgentSession>> ListHeadlessAsync(DateTimeOffset since, int limit, CancellationToken cancellationToken = default);
+
     /// <summary>As Consultas Inteligentes da tarefa (ADR-081), da mais nova à mais antiga.</summary>
     Task<IReadOnlyList<AgentSession>> ListConsultationsForTaskAsync(
         Guid taskId,

@@ -274,6 +274,7 @@ public class MachinesViewModelTests
     {
         _runner.ResultsByHandler[typeof(GetRemoteControlHandler)] = new RemoteControlView(new AgentCatalog("h", [], [], [], []), []);
         _runner.ResultsByHandler[typeof(GetPendingApprovalsHandler)] = (IReadOnlyList<ApprovalView>)[];
+        _runner.ResultsByHandler[typeof(ListRemoteSessionsHandler)] = new RemoteSessionList([]);
         var viewModel = ViewModel();
         await viewModel.LoadAsync(Ct);
         RemoteControlViewModel? opened = null;

@@ -44,7 +44,7 @@ Números dos ADRs; o link está na linha do índice abaixo.
 - **mobile** (app do celular): 067, 075, 076, 079
 - **distribuicao** (instalador, versionamento, release, instância única, iniciar com o sistema): 018, 019, 023, 044, 049
 - **testes** (estratégia e ferramentas de teste): 006
-- **remoto** (orquestração remota (fase 2)): 084, 085, 086, 087, 088, 089, 090
+- **remoto** (orquestração remota (fases 2 e 3)): 084, 085, 086, 087, 088, 089, 090, 091, 092, 093, 094
 
 ## Índice
 
@@ -140,6 +140,10 @@ Números dos ADRs; o link está na linha do índice abaixo.
 | [ADR-088](decisions/088-catalogo-fechado-de-operacoes-remotas.md) | Catálogo fechado de operações: nenhum texto de shell vem de fora | Aceito | Implementado | remoto | catálogo de operações, RemoteAllowed, command.run, RequiresConfirmation, RunQuickCommand.Confirmed |
 | [ADR-089](decisions/089-claude-code-remoto-headless-com-aprovacao.md) | Claude Code remoto: headless, perfil escolhido no executor e aprovação humana | Aceito | Implementado | remoto | IHeadlessAgentProvider, claude -p, stream-json, --restricted, --permission-prompt-tool |
 | [ADR-090](decisions/090-copia-de-banco-remota-com-aprovacao.md) | Cópia de banco de longe: as mesmas barreiras, e produção com aprovação digitada | Aceito | Implementado | remoto | database.copy, DatabaseCopyRequest, ApprovalKind.ProductionDatabase, TypedConfirmation, CriticalProduction |
+| [ADR-091](decisions/091-conversa-do-claude-como-sessao-no-servidor.md) | A conversa do Claude como sessão no servidor, relatada pelo agente | Aceito | Implementado | remoto | RemoteAgentSessions, RemoteSessionPublisher, AgentSeenAt, SessionChanged, linha do tempo |
+| [ADR-092](decisions/092-sessao-gerenciada-a-partir-do-desktop.md) | Sessão gerenciada a partir do desktop: o agente da própria máquina roda o Claude | Proposto | Planejado | remoto | sessão gerenciada, Abrir Claude gerenciado, desktop para celular |
+| [ADR-093](decisions/093-pergunta-do-claude-respondida-de-longe.md) | A pergunta do Claude (AskUserQuestion) respondida de longe | Proposto | Planejado | remoto | AskUserQuestion, updatedInput, answers, permission-prompt-tool |
+| [ADR-094](decisions/094-controladores-ouvem-o-hub.md) | Os controladores ouvem o hub, com a leitura por tempo como reserva | Proposto | Planejado | remoto | SignalR, EventsAppended, SessionChanged, polling, reconexão |
 
 ## Novo ADR
 

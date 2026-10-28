@@ -322,6 +322,9 @@ namespace MyTaskApp.Server.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("DeviceId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTimeOffset?>("AgentSeenAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Capabilities")
                         .IsRequired()
                         .HasColumnType("jsonb");
@@ -445,6 +448,71 @@ namespace MyTaskApp.Server.Infrastructure.Persistence.Migrations
                     b.ToTable("ProcessedOperations", (string)null);
                 });
 
+            modelBuilder.Entity("MyTaskApp.Server.Infrastructure.Persistence.RemoteAgentSessionRow", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Activity")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ActivityMessage")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid?>("CurrentOperationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("DevelopmentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("DeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("EndedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Model")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ProfileId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset>("ReportedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TaskId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("UserId", "SessionId");
+
+                    b.HasIndex("ReportedAt");
+
+                    b.HasIndex("UserId", "UpdatedAt");
+
+                    b.HasIndex("UserId", "DeviceId", "Status");
+
+                    b.ToTable("RemoteAgentSessions", (string)null);
+                });
+
             modelBuilder.Entity("MyTaskApp.Server.Infrastructure.Persistence.RemoteApprovalRow", b =>
                 {
                     b.Property<Guid>("ApprovalId")
@@ -547,6 +615,9 @@ namespace MyTaskApp.Server.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("AgentSessionId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTimeOffset?>("CancelRequestedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -617,6 +688,8 @@ namespace MyTaskApp.Server.Infrastructure.Persistence.Migrations
                     b.HasIndex("Status", "NotAfter");
 
                     b.HasIndex("UserId", "ReceivedAt");
+
+                    b.HasIndex("UserId", "AgentSessionId", "ReceivedAt");
 
                     b.HasIndex("UserId", "TargetDeviceId", "Status");
 
@@ -1116,6 +1189,15 @@ namespace MyTaskApp.Server.Infrastructure.Persistence.Migrations
                 });
 
             modelBuilder.Entity("MyTaskApp.Server.Infrastructure.Persistence.DeviceRow", b =>
+                {
+                    b.HasOne("MyTaskApp.Server.Infrastructure.Persistence.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MyTaskApp.Server.Infrastructure.Persistence.RemoteAgentSessionRow", b =>
                 {
                     b.HasOne("MyTaskApp.Server.Infrastructure.Persistence.ApplicationUser", null)
                         .WithMany()

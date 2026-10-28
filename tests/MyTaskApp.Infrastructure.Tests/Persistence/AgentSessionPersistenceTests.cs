@@ -109,6 +109,39 @@ public class AgentSessionPersistenceTests
         (stored.HeadlessProfileId, stored.Model, stored.Effort).Should().Be(("edit-test", "opus", "high"));
     }
 
+    /// <summary>
+    /// O que o agente relata ao servidor (ADR-091): só as sem terminal, as
+    /// abertas ou com prompt no prazo, mesmo a conversa velha que recebeu um
+    /// prompt novo.
+    /// </summary>
+    [Fact]
+    public async Task TheHeadlessList_BringsTheRecentConversations_AndNeverTheTerminalOnes()
+    {
+        await using var db = await new TempSqliteDatabase().MigrateAsync(Ct);
+        var task = await SeedTaskAsync(db);
+        var since = Now.AddDays(-7);
+        var forgotten = Headless(task, Now.AddDays(-20));
+        forgotten.MarkExited(Now.AddDays(-20));
+        var revived = Headless(task, Now.AddDays(-15));
+        revived.MarkExited(Now.AddDays(-15));
+        revived.ContinueWith(Guid.CreateVersion7(), Now.AddDays(-1));
+        revived.MarkExited(Now.AddDays(-1));
+        var recent = Headless(task, Now.AddDays(-2));
+        recent.MarkStopped(Now.AddDays(-2));
+        var terminal = Running(task, 300);
+
+        await AddAsync(db, forgotten, revived, recent, terminal);
+
+        await using var read = db.CreateContext();
+        var repository = new AgentSessionRepository(read);
+
+        (await repository.ListHeadlessAsync(since, 10, Ct)).Select(session => session.Id).Should().Equal(recent.Id, revived.Id);
+        (await repository.ListHeadlessAsync(since, 1, Ct)).Select(session => session.Id).Should().Equal(recent.Id);
+    }
+
+    private static AgentSession Headless(TaskItem task, DateTimeOffset at) => AgentSession.CreateHeadless(
+        task.Id, task.Developments[0].Id, "claude-code", Claude, Worktree, Guid.CreateVersion7(), Guid.CreateVersion7(), "edit", null, null, at);
+
     [Fact]
     public async Task TheLatestSession_IsTheOneShown_AndOnlyActivesAreListed()
     {

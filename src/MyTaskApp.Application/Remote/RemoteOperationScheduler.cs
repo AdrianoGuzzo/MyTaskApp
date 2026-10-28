@@ -80,7 +80,8 @@ public sealed class RemoteOperationScheduler(
     IUseCaseRunner runner,
     IDeviceIdentity identity,
     TimeProvider timeProvider,
-    ILogger<RemoteOperationScheduler> logger) : IAsyncDisposable, IDisposable
+    ILogger<RemoteOperationScheduler> logger,
+    RemoteSessionPublisher? sessions = null) : IAsyncDisposable, IDisposable
 {
     /// <summary>O código que a sincronização mostra quando o banco veio de outro computador.</summary>
     public const string DeviceChangedCode = "device_changed";
@@ -188,6 +189,7 @@ public sealed class RemoteOperationScheduler(
             }
 
             await dispatcher.PollAsync(cancellationToken);
+            await PublishSessionsAsync(cancellationToken);
         }
         catch (SyncApiException exception) when (exception.Kind == SyncFailureKind.DeviceRevoked)
         {
@@ -196,6 +198,27 @@ public sealed class RemoteOperationScheduler(
             await dispatcher.StopAsync(ShutdownGrace);
             await runner.RunAsync<ISyncLocalStore>((store, token) => store.SetStateAsync(SyncLinkState.DeviceRevoked, token), cancellationToken);
             await hub.DisconnectAsync(cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// O relato das conversas do Claude (ADR-091), que é também o sinal de vida
+    /// do agente. Falhar aqui não atrapalha a fila: a próxima volta relata.
+    /// </summary>
+    private async Task PublishSessionsAsync(CancellationToken cancellationToken)
+    {
+        if (sessions is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await sessions.PublishAsync(cancellationToken);
+        }
+        catch (SyncApiException exception) when (exception.Kind != SyncFailureKind.DeviceRevoked)
+        {
+            logger.LogWarning("RemoteSessionsReportFailed {Kind} {Code}", exception.Kind, exception.Code);
         }
     }
 

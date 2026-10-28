@@ -37,6 +37,7 @@ public class RemoteControlViewModelTests
         _runner.ResultsByHandler[typeof(GetRemoteControlHandler)] = new RemoteControlView(new AgentCatalog("h", [], [Tests], [], [Read, EditAndTest]), [Environment]);
         _runner.ResultsByHandler[typeof(GetPendingApprovalsHandler)] = (IReadOnlyList<ApprovalView>)[];
         _runner.ResultsByHandler[typeof(SendRemoteOperationHandler)] = Operation(RemoteOperationStatus.Queued);
+        _runner.ResultsByHandler[typeof(ListRemoteSessionsHandler)] = new RemoteSessionList([]);
     }
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
@@ -132,6 +133,31 @@ public class RemoteControlViewModelTests
         var reads = _runner.Invoked.Count(type => type == typeof(GetRemoteOperationProgressHandler));
         await viewModel.TickAsync(Ct);
         _runner.Invoked.Count(type => type == typeof(GetRemoteOperationProgressHandler)).Should().Be(reads, "terminada, não pergunta mais");
+    }
+
+    /// <summary>O "terminou" chegou com saída ainda no servidor: a janela lê até o fim antes de parar.</summary>
+    [AvaloniaFact]
+    public async Task AFinishedOperationWithEventsLeft_KeepsReadingUntilDrained()
+    {
+        var viewModel = ViewModel();
+        await viewModel.OpenAsync(Notebook, Ct);
+        var command = viewModel.SelectedEnvironment!.Commands[0];
+        command.Parameters[0].Value = "Api";
+        await viewModel.RunCommand.ExecuteAsync(command);
+
+        _runner.Enqueue<GetRemoteOperationProgressHandler>(
+            new RemoteOperationProgress(Operation(RemoteOperationStatus.Succeeded), [Event(1, RemoteEventKind.Output, "Compilando")], 1, HasMore: true),
+            new RemoteOperationProgress(Operation(RemoteOperationStatus.Succeeded), [Event(2, RemoteEventKind.Output, "Aprovado: 12")], 2));
+
+        await viewModel.TickAsync(Ct);
+        viewModel.IsRunning.Should().BeFalse();
+
+        await viewModel.TickAsync(Ct);
+        viewModel.Output.Should().Be("Compilando\nAprovado: 12\n", "a última linha chega mesmo depois do estado final");
+
+        var reads = _runner.Invoked.Count(type => type == typeof(GetRemoteOperationProgressHandler));
+        await viewModel.TickAsync(Ct);
+        _runner.Invoked.Count(type => type == typeof(GetRemoteOperationProgressHandler)).Should().Be(reads, "drenada, não pergunta mais");
     }
 
     [AvaloniaFact]
@@ -288,17 +314,137 @@ public class RemoteControlViewModelTests
     private static RemoteOperationEvent Event(long seq, RemoteEventKind kind, string text, System.Text.Json.JsonElement? data = null) =>
         new(OperationId, seq, Now, kind, "stdout", Text: text, Data: data);
 
+    /// <summary>"Permitir nesta conversa": só com a oferta do agente, mostrando o que fica permitido.</summary>
+    [AvaloniaFact]
+    public async Task AllowingForTheConversation_ShowsWhatItCovers_AndOnlyWhenTheAgentOffersIt()
+    {
+        var offered = Approval(ApprovalKind.ToolUse, "O Claude quer usar Bash: dotnet test", new { canRemember = true, rememberAs = "Bash: dotnet test" });
+        var old = Approval(ApprovalKind.ToolUse, "O Claude quer usar Edit: README.md", new { tool = "Edit" });
+        _runner.ResultsByHandler[typeof(GetPendingApprovalsHandler)] = (IReadOnlyList<ApprovalView>)[offered, old];
+        _runner.ResultsByHandler[typeof(AnswerApprovalHandler)] = offered;
+        var viewModel = ViewModel();
+        await viewModel.OpenAsync(Notebook, Ct);
+
+        viewModel.Approvals[0].CanRemember.Should().BeTrue();
+        viewModel.Approvals[0].RememberLabel.Should().Be("Até o fim da conversa, sem perguntar de novo: Bash: dotnet test");
+        viewModel.Approvals[1].CanRemember.Should().BeFalse("o agente antigo não oferece");
+
+        await viewModel.AllowForConversationCommand.ExecuteAsync(viewModel.Approvals[0]);
+
+        _runner.Invoked.Should().Contain(typeof(AnswerApprovalHandler));
+        viewModel.StatusMessage.Should().Be("Permitido nesta conversa.");
+    }
+
+    /// <summary>
+    /// As conversas da máquina vêm do servidor: a lista com o estado, a linha
+    /// do tempo da escolhida, o próximo prompt e o parar, os mesmos handlers do
+    /// celular.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task TheConversations_AreListedWithTheirState_AndTheChosenOneShowsItsTimeline()
+    {
+        var waiting = Session(RemoteAgentSessionStatus.Idle, "Esperando o próximo prompt");
+        var answering = Session(RemoteAgentSessionStatus.Running, "Respondendo");
+        _runner.ResultsByHandler[typeof(ListRemoteSessionsHandler)] = new RemoteSessionList([waiting, answering]);
+        _runner.Enqueue<GetRemoteSessionTimelineHandler>(
+            Timeline(waiting, ["Você: Leia o README", "Claude: Li.", "— Respondeu em 1 turno."], live: false),
+            Timeline(waiting, [], live: false));
+        var viewModel = ViewModel();
+        await viewModel.OpenAsync(Notebook, Ct);
+
+        var sessions = viewModel.Sessions;
+        sessions.Items.Select(line => line.Details).Should().Equal("feature/ECO-12 · Esperando o próximo prompt", "feature/ECO-12 · Respondendo");
+        sessions.HasSelection.Should().BeFalse();
+
+        sessions.Selected = sessions.Items[0];
+        await WaitForAsync(() => sessions.Timeline.Length > 0);
+
+        sessions.Timeline.Should().Be("Você: Leia o README\nClaude: Li.\n— Respondeu em 1 turno.\n");
+        sessions.CanPrompt.Should().BeTrue();
+        sessions.CanStop.Should().BeTrue();
+
+        sessions.Prompt = "E os testes?";
+        await sessions.SendPromptCommand.ExecuteAsync(null);
+        sessions.Prompt.Should().BeEmpty();
+        _runner.Invoked.Should().Contain(typeof(SendRemoteOperationHandler));
+
+        _runner.Enqueue<GetRemoteSessionTimelineHandler>(Timeline(answering, ["Você: Rode tudo"], live: true));
+        sessions.Selected = sessions.Items[1];
+        sessions.CanPrompt.Should().BeFalse("respondendo, o próximo prompt espera");
+        await sessions.StopCommand.ExecuteAsync(null);
+        _runner.Invoked.Count(type => type == typeof(SendRemoteOperationHandler)).Should().Be(2);
+    }
+
+    /// <summary>Fechar e abrir a janela não perde a conversa: ela vem do servidor.</summary>
+    [AvaloniaFact]
+    public async Task AConversationWaitingInTheEnvironment_IsResumed_UntilANewOneIsAskedFor()
+    {
+        var waiting = Session(RemoteAgentSessionStatus.Idle, "Esperando o próximo prompt");
+        _runner.ResultsByHandler[typeof(ListRemoteSessionsHandler)] = new RemoteSessionList([waiting]);
+        var viewModel = ViewModel();
+
+        await viewModel.OpenAsync(Notebook, Ct);
+
+        viewModel.Conversation.Should().Be(waiting.Session.SessionId);
+        viewModel.PromptButtonText.Should().Be("Mandar na conversa");
+
+        viewModel.NewConversation();
+        viewModel.Conversation.Should().BeNull("a conversa deixada de lado não volta pela lista");
+        await viewModel.LoadCommand.ExecuteAsync(null);
+        viewModel.Conversation.Should().BeNull();
+    }
+
+    [AvaloniaFact]
+    public async Task AnOldServer_SaysToUpdateIt_AndTheRestOfTheWindowWorks()
+    {
+        _runner.ResultsByHandler[typeof(ListRemoteSessionsHandler)] = new RemoteSessionList([], RemoteSessionTexts.ServerTooOld);
+        var viewModel = ViewModel();
+
+        await viewModel.OpenAsync(Notebook, Ct);
+
+        viewModel.Sessions.Message.Should().Be(RemoteSessionTexts.ServerTooOld);
+        viewModel.Sessions.HasItems.Should().BeFalse();
+        viewModel.Environments.Should().ContainSingle();
+        viewModel.ErrorMessage.Should().BeNull();
+    }
+
+    private static RemoteSessionItem Session(RemoteAgentSessionStatus status, string state) => new(
+        new RemoteAgentSessionView(
+            Guid.CreateVersion7(), Notebook.DeviceId, 1, Environment.TaskId, Environment.DevelopmentId, "edit-test", null,
+            status, RemoteAgentActivity.Working, null, null, Now, null, Now, Now),
+        new RemoteAgentPresence(Notebook.DeviceId, Now),
+        Environment.TaskTitle!,
+        Environment.Branch,
+        state);
+
+    private static RemoteSessionTimeline Timeline(RemoteSessionItem session, IReadOnlyList<string> lines, bool live) => new(
+        session,
+        [Operation(live ? RemoteOperationStatus.Running : RemoteOperationStatus.Succeeded, kind: RemoteOperationKinds.AgentStart)],
+        lines,
+        live ? RemoteSessionCursor.Start : new RemoteSessionCursor(new Dictionary<Guid, long>(), new HashSet<Guid> { OperationId }));
+
+    private static async Task WaitForAsync(Func<bool> condition)
+    {
+        for (var attempt = 0; attempt < 100 && !condition(); attempt++)
+        {
+            await Task.Delay(10, Ct);
+        }
+    }
+
     private static System.Text.Json.JsonElement Conversation(Guid id, bool canContinue) =>
         System.Text.Json.JsonSerializer.SerializeToElement(new { agentSessionId = id, canContinue });
 
     private static ApprovalView Approval(string? hint) =>
+        Approval(ApprovalKind.ProductionDatabase, "Copiar o banco de produção bd_producao", new { }, hint);
+
+    private static ApprovalView Approval(ApprovalKind kind, string summary, object details, string? hint = null) =>
         new(
             new ApprovalRequest(
                 Guid.CreateVersion7(),
                 OperationId,
-                ApprovalKind.ProductionDatabase,
-                "Copiar o banco de produção bd_producao",
-                System.Text.Json.JsonSerializer.SerializeToElement(new { }),
+                kind,
+                summary,
+                System.Text.Json.JsonSerializer.SerializeToElement(details),
                 hint,
                 Now.AddMinutes(5),
                 new string('a', 64)),

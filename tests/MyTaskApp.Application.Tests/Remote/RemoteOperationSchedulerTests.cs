@@ -242,6 +242,42 @@ public sealed class RemoteOperationSchedulerTests
         await kit.Sync.Received().RecordErrorAsync(RemoteOperationScheduler.DeviceChangedCode, Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
+    /// <summary>
+    /// A cada volta com "Aceitar controle" ligado, o agente relata as conversas
+    /// do Claude; sem nada mudado, o lote vazio é o sinal de vida dele (ADR-091).
+    /// O relato que falha não atrapalha a fila.
+    /// </summary>
+    [Fact]
+    public async Task EachTurn_ReportsTheConversations_AndAFailedReportDoesNotStopTheQueue()
+    {
+        await using var kit = new RemoteDispatchKit();
+        kit.Trust(kit.Phone);
+        kit.Scheduler.Start();
+        await TicksAsync(kit, 1);
+
+        await kit.SessionsApi.Received(1).ReportSessionsAsync(Arg.Is<RemoteAgentSessionBatch>(batch => batch.Sessions.Count == 0), Arg.Any<CancellationToken>());
+
+        kit.SessionsApi.ReportSessionsAsync(default!, TestContext.Current.CancellationToken)
+            .ReturnsForAnyArgs<RemoteAgentSessionAck>(_ => throw new SyncApiException(SyncFailureKind.Transient, "Sem rede."));
+        var request = kit.Request();
+        kit.Queue(request);
+        kit.Hub.Ring(request.OperationId);
+
+        Assert.Equal(RemoteOperationStatus.Succeeded, await kit.WaitFinishedAsync(request.OperationId));
+    }
+
+    [Fact]
+    public async Task WithoutAcceptingControl_NothingIsReported()
+    {
+        await using var kit = new RemoteDispatchKit();
+        kit.Settings.Settings = new RemoteSettings(true, false);
+
+        kit.Scheduler.Start();
+        await TicksAsync(kit, 1);
+
+        await kit.SessionsApi.DidNotReceiveWithAnyArgs().ReportSessionsAsync(default!, TestContext.Current.CancellationToken);
+    }
+
     private static async Task TicksAsync(RemoteDispatchKit kit, int count)
     {
         var deadline = DateTime.UtcNow.AddSeconds(10);

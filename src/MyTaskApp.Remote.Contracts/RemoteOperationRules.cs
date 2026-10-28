@@ -39,6 +39,13 @@ public static class RemoteOperationRules
             problems.Add(RemoteErrorCodes.WindowTooLong);
         }
 
+        // Sem este teto, um pedido "criado no futuro" esticaria o NotAfter além
+        // das 24 h, e a janela de replay deixaria de cobrir o prazo de aceite.
+        if (request.CreatedAt > now + RemoteLimits.MaxClockSkew)
+        {
+            problems.Add(RemoteErrorCodes.ClockSkew);
+        }
+
         return problems;
     }
 

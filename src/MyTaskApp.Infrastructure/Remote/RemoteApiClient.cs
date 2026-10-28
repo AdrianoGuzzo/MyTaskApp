@@ -10,7 +10,7 @@ namespace MyTaskApp.Infrastructure.Remote;
 /// sync: o token que vale é o do dispositivo, com o escopo <c>remote</c>. O JSON
 /// é o do <see cref="RemoteJson"/>, o estrito do contrato remoto.
 /// </summary>
-internal sealed class RemoteApiClient(SyncHttp http, ISyncAuthenticator authenticator) : IRemoteApi, IRemoteOperationsApi
+internal sealed class RemoteApiClient(SyncHttp http, ISyncAuthenticator authenticator) : IRemoteApi, IRemoteOperationsApi, IRemoteSessionsApi
 {
     public Task<RemoteDeviceInfo> RegisterAsync(DeviceRegistration registration, CancellationToken cancellationToken) =>
         CallAsync<RemoteDeviceInfo>(HttpMethod.Put, RemoteRoutes.CurrentDevice, registration, cancellationToken);
@@ -72,6 +72,15 @@ internal sealed class RemoteApiClient(SyncHttp http, ISyncAuthenticator authenti
 
     public Task<ApprovalView> RespondApprovalAsync(Guid approvalId, SignedEnvelope response, CancellationToken cancellationToken) =>
         CallAsync<ApprovalView>(HttpMethod.Post, RemoteRoutes.ApprovalResponse(approvalId), response, cancellationToken);
+
+    public Task<RemoteAgentSessionAck> ReportSessionsAsync(RemoteAgentSessionBatch batch, CancellationToken cancellationToken) =>
+        CallAsync<RemoteAgentSessionAck>(HttpMethod.Put, RemoteRoutes.AgentSessions, batch, cancellationToken);
+
+    public Task<RemoteAgentSessionList> ListSessionsAsync(Guid? deviceId, bool openOnly, int? limit, CancellationToken cancellationToken) =>
+        CallAsync<RemoteAgentSessionList>(HttpMethod.Get, RemoteRoutes.SessionsQuery(deviceId, openOnly, limit), null, cancellationToken);
+
+    public Task<RemoteAgentSessionDetail> GetSessionAsync(Guid sessionId, CancellationToken cancellationToken) =>
+        CallAsync<RemoteAgentSessionDetail>(HttpMethod.Get, RemoteRoutes.Session(sessionId), null, cancellationToken);
 
     private async Task<T> CallAsync<T>(HttpMethod method, string path, object? body, CancellationToken cancellationToken)
     {

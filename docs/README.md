@@ -41,7 +41,7 @@ mova sem atualizar essas referências (`rg -n "docs/<arquivo>"`).
 | [`sync.md`](sync.md) | Sincronização: a tela, o que sincroniza, onde cada tarefa aparece, conflitos, limitações |
 | [`sync-server.md`](sync-server.md) | Servidor de sincronização: OAuth do Google, configuração, certificados, migrations, implantação, testes |
 | [`mobile.md`](mobile.md) | App do celular: arquitetura, login, ambiente, Android, iOS, a aba Remoto, testes, limitações |
-| [`remote.md`](remote.md) | Controle remoto: ligar, parear, o que dá para pedir, aprovar, os perfis do Claude, revogar, limites, solução de problemas |
+| [`remote.md`](remote.md) | Controle remoto: ligar, parear, o que dá para pedir, aprovar, os perfis do Claude, as conversas do Claude, revogar, limites, solução de problemas |
 | [`release-process.md`](release-process.md) | Conventional Commits, SemVer, CI, pipeline de release, hotfix, assinatura |
 | [`../installer/README.md`](../installer/README.md) | Instaladores Windows e Linux, parâmetros, atualização, teste de fumaça |
 | [`../installer/macos/README.md`](../installer/macos/README.md) | Roteiro do empacotamento macOS (não implementado) |
@@ -61,6 +61,18 @@ subir (ADR-085).
 | [`architecture/remote-orchestration.md`](architecture/remote-orchestration.md) | Desenho técnico: inventário, arquitetura, contratos, ciclo de vida, resiliência |
 | [`architecture/remote-security-threat-model.md`](architecture/remote-security-threat-model.md) | Ameaças (STRIDE), requisitos de segurança RS-xx e o teste (ou o risco aceito) de cada um |
 | [`roadmap/phase-2-remote-orchestration.md`](roadmap/phase-2-remote-orchestration.md) | Entregas, critérios de aceitação e tarefas (as feitas marcadas com ✔); os critérios abertos são as conferências com várias máquinas |
+
+## Fase 3: a conversa do Claude como uma sessão só
+
+Começar o Claude numa máquina e continuar a mesma conversa de outra, do celular
+ou de outro computador. Feitas a E1 (os defeitos da fase 2) e a E2 (a conversa
+guardada no servidor, com a linha do tempo, e o agente separado do desktop na
+presença). As outras entregas estão no roteiro (ADR-091 a ADR-094).
+
+| Documento | Conteúdo |
+|---|---|
+| [`architecture/remote-sessions.md`](architecture/remote-sessions.md) | Auditoria do fluxo da fase 2, alternativas (headless, processo vivo, Remote Control, Channels, hub), arquitetura-alvo e onde mora cada estado |
+| [`roadmap/phase-3-remote-sessions.md`](roadmap/phase-3-remote-sessions.md) | Entregas E1 a E9: problema, arquivos, migrations, testes, aceite e dependências |
 
 ## Histórico (não descreve o estado atual)
 

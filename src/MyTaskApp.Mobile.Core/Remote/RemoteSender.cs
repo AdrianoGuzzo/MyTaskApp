@@ -9,7 +9,9 @@ namespace MyTaskApp.Mobile.Core.Remote;
 /// <summary>
 /// Manda um pedido daqui e abre a tela da operação: assina (com o
 /// destravamento), põe na fila, lembra na lista "Pedidos" e sobe o sync, para a
-/// tarefa do pedido chegar lá antes de a outra máquina começar.
+/// tarefa do pedido chegar lá antes de a outra máquina começar. Da tela de
+/// uma conversa, o pedido fica nela (<c>open: false</c>): a linha do tempo já
+/// mostra a operação nova.
 /// </summary>
 public sealed class RemoteSender(
     IUseCaseRunner runner,
@@ -18,7 +20,7 @@ public sealed class RemoteSender(
     INavigator navigator,
     TimeProvider timeProvider)
 {
-    public async Task<RemoteOperationView> SendAsync(SendRemoteOperation request, string title)
+    public async Task<RemoteOperationView> SendAsync(SendRemoteOperation request, string title, bool open = true)
     {
         account.SyncNow();
 
@@ -26,7 +28,11 @@ public sealed class RemoteSender(
             (handler, token) => handler.HandleAsync(request, token));
 
         sent.Add(new SentOperation(operation.OperationId, request.TargetDeviceId, title, timeProvider.GetUtcNow()));
-        await navigator.OpenOperationAsync(operation.OperationId, request.TargetDeviceId);
+        if (open)
+        {
+            await navigator.OpenOperationAsync(operation.OperationId, request.TargetDeviceId);
+        }
+
         return operation;
     }
 }

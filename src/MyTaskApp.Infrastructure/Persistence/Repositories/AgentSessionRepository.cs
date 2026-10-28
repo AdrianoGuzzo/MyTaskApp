@@ -45,6 +45,18 @@ internal sealed class AgentSessionRepository(MyTaskAppDbContext context) : IAgen
                 || session.Status == AgentSessionStatus.Running)
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<AgentSession>> ListHeadlessAsync(DateTimeOffset since, int limit, CancellationToken cancellationToken = default) =>
+        await context.AgentSessions
+            .Where(session => session.Mode == AgentSessionMode.Headless
+                && (session.Status == AgentSessionStatus.Starting
+                    || session.Status == AgentSessionStatus.Running
+                    || session.StartedAt >= since
+                    || (session.PromptStartedAt != null && session.PromptStartedAt >= since)))
+            .OrderByDescending(session => session.StartedAt)
+            .ThenByDescending(session => session.Id)
+            .Take(limit)
+            .ToListAsync(cancellationToken);
+
     public async Task<IReadOnlyList<AgentSession>> ListConsultationsForTaskAsync(
         Guid taskId,
         int limit,

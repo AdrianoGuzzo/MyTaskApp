@@ -130,6 +130,8 @@ public sealed class RemoteOperationTests(PostgresFixture postgres) : IAsyncLifet
             .Should().Be((HttpStatusCode.BadRequest, RemoteErrorCodes.AlreadyExpired));
         (await Create(Inspection(workspace, phone, notebook) with { NotAfter = now.AddDays(2) }))
             .Should().Be((HttpStatusCode.BadRequest, RemoteErrorCodes.WindowTooLong));
+        (await Create(Inspection(workspace, phone, notebook) with { CreatedAt = now.AddMinutes(10), NotAfter = now.AddMinutes(20) }))
+            .Should().Be((HttpStatusCode.BadRequest, RemoteErrorCodes.ClockSkew));
         (await Create(Inspection(strangerWorkspace, phone, notebook)))
             .Should().Be((HttpStatusCode.Forbidden, RemoteErrorCodes.WrongWorkspace));
         (await Create(Inspection(workspace, phone, otherPhone)))

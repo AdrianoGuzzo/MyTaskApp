@@ -18,6 +18,7 @@ public sealed class RemoteOperationUseCases(
     IWorkspaceAccess workspaces,
     IRemoteDeviceStore remote,
     IRemoteOperationStore operations,
+    IRemoteApprovalStore approvals,
     IRemoteNotifier notifier,
     TimeProvider timeProvider,
     ILogger<RemoteOperationUseCases> logger)
@@ -64,7 +65,12 @@ public sealed class RemoteOperationUseCases(
 
         if (RemoteOperationRules.Problems(request, now) is [var problem, ..])
         {
-            throw new SyncServerException(problem, 400, "O pedido não segue as regras da orquestração.");
+            throw new SyncServerException(
+                problem,
+                400,
+                problem == RemoteErrorCodes.ClockSkew
+                    ? "O relógio deste aparelho está adiantado em relação ao servidor. Acerte a hora."
+                    : "O pedido não segue as regras da orquestração.");
         }
 
         if (await workspaces.RoleOfAsync(caller.UserId, request.WorkspaceId, cancellationToken) is null)
@@ -98,6 +104,7 @@ public sealed class RemoteOperationUseCases(
             UpdatedAt = now,
             Request = envelope.Jws,
             RequestHash = hash,
+            AgentSessionId = SessionOf(request),
         };
 
         if (!await operations.TryAddAsync(operation, cancellationToken))
@@ -203,6 +210,11 @@ public sealed class RemoteOperationUseCases(
                     caller.UserId, operationId, operation.Status, update.Status);
 
                 await ChangedAsync(caller.UserId, operationId, update.Status);
+
+                if (RemoteOperationLifecycle.IsFinal(update.Status))
+                {
+                    await CloseApprovalsAsync(caller.UserId, operationId, cancellationToken);
+                }
 
                 return ToView(await FindAsync(caller, operationId, cancellationToken));
             }
@@ -386,12 +398,42 @@ public sealed class RemoteOperationUseCases(
         operation.ResultSummary,
         operation.LastContiguousSeq);
 
+    /// <summary>
+    /// A conversa do Claude que o pedido continua ou para (ADR-091). O
+    /// <c>agent.start</c> ainda não tem: o relato do agente liga depois.
+    /// </summary>
+    internal static Guid? SessionOf(RemoteOperationRequest request) => request.Kind switch
+    {
+        RemoteOperationKinds.AgentPrompt => RemoteOperationRules.PayloadOf<PromptRequest>(request).AgentSessionId,
+        RemoteOperationKinds.AgentStop => RemoteOperationRules.PayloadOf<AgentStopRequest>(request).AgentSessionId,
+        _ => null,
+    };
+
     /// <summary>SHA-256 dos bytes do envelope, em hexadecimal: o "mesmo pedido" da idempotência.</summary>
     internal static string HashOf(SignedEnvelope envelope) =>
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(envelope.Jws)));
 
     private Task ChangedAsync(Guid userId, Guid operationId, RemoteOperationStatus status) =>
         notifier.ToAccountAsync(userId, RemoteHubMessages.OperationChanged, operationId, status);
+
+    /// <summary>
+    /// A operação terminou com perguntas abertas (cancelada esperando uma
+    /// aprovação, por exemplo): elas fecham como vencidas, e quem as mostra é avisado.
+    /// </summary>
+    private async Task CloseApprovalsAsync(Guid userId, Guid operationId, CancellationToken cancellationToken)
+    {
+        var closed = await approvals.CloseForOperationAsync(userId, operationId, cancellationToken);
+
+        foreach (var approval in closed)
+        {
+            await notifier.ToAccountAsync(userId, RemoteHubMessages.ApprovalResolved, approval.Request.ApprovalId, operationId);
+        }
+
+        if (closed.Count > 0)
+        {
+            logger.LogInformation("RemoteApprovalsClosedWithOperation {UserId} {OperationId} {Count}", userId, operationId, closed.Count);
+        }
+    }
 
     private async Task<RemoteOperationRecord> FindAsync(SyncCaller caller, Guid operationId, CancellationToken cancellationToken) =>
         await operations.FindAsync(caller.UserId, operationId, cancellationToken) ?? throw SyncServerException.NotFound();
@@ -483,6 +525,9 @@ public sealed class RemoteOperationRecord
 
     /// <summary>SHA-256 do JWS, em hexadecimal.</summary>
     public required string RequestHash { get; init; }
+
+    /// <summary>A conversa do Claude da operação (ADR-091), quando há.</summary>
+    public Guid? AgentSessionId { get; init; }
 }
 
 public interface IRemoteOperationStore
@@ -541,4 +586,10 @@ public interface IRemoteOperationStore
 
     /// <summary>Apaga os eventos recebidos antes de <paramref name="receivedBefore"/>.</summary>
     Task<int> PruneEventsAsync(DateTimeOffset receivedBefore, CancellationToken cancellationToken);
+
+    /// <summary>Liga a operação da máquina <paramref name="targetDeviceId"/> à conversa, se ainda não tem uma.</summary>
+    Task LinkSessionAsync(Guid userId, Guid targetDeviceId, Guid operationId, Guid sessionId, CancellationToken cancellationToken);
+
+    /// <summary>As <paramref name="limit"/> operações mais recentes da conversa pedidas à máquina dela, da mais antiga à mais nova.</summary>
+    Task<IReadOnlyList<RemoteOperationRecord>> ListForSessionAsync(Guid userId, Guid targetDeviceId, Guid sessionId, int limit, CancellationToken cancellationToken);
 }

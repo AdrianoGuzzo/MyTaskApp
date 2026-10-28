@@ -125,6 +125,20 @@ public sealed class AdmitRemoteOperationTests
         Assert.Equal(RemoteErrorCodes.AlreadyExpired, Assert.IsType<RemoteAdmission.Refused>(admission).Code);
     }
 
+    /// <summary>O relógio de quem pediu adiantado: o pedido parece criado no futuro aqui.</summary>
+    [Fact]
+    public async Task RefusesARequestCreatedAheadOfThisClock()
+    {
+        await using var kit = new RemoteDispatchKit();
+        kit.Trust(kit.Phone);
+        var ahead = kit.Time.GetUtcNow() + RemoteLimits.MaxClockSkew + TimeSpan.FromMinutes(1);
+        var envelope = kit.Phone.Sign(kit.Request() with { CreatedAt = ahead, NotAfter = ahead + RemoteLimits.DefaultAcceptanceWindow });
+
+        var admission = await kit.AdmitAsync(envelope);
+
+        Assert.Equal(RemoteErrorCodes.ClockSkew, Assert.IsType<RemoteAdmission.Refused>(admission).Code);
+    }
+
     [Fact]
     public async Task ASecondDeliveryOfTheSameRequestIsWhatTheJournalSays()
     {

@@ -44,6 +44,9 @@ public sealed partial class RemoteOperationViewModel : MobileViewModel, IDisposa
 
     private long _after;
 
+    /// <summary>Terminou e a saída foi lida até o fim: o laço pode parar.</summary>
+    private volatile bool _drained;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsFinished), nameof(CanCancel))]
     private RemoteOperationView? _operation;
@@ -104,6 +107,7 @@ public sealed partial class RemoteOperationViewModel : MobileViewModel, IDisposa
             OperationId = operationId;
             DeviceId = deviceId;
             _after = 0;
+            _drained = false;
             _events.Clear();
             _lines.Clear();
             Output = string.Empty;
@@ -172,6 +176,10 @@ public sealed partial class RemoteOperationViewModel : MobileViewModel, IDisposa
     [RelayCommand]
     public Task DenyAsync(ApprovalLine? line) => AnswerAsync(line, allow: false);
 
+    /// <summary>Permite e deixa o agente lembrar o mesmo pedido até o fim da conversa.</summary>
+    [RelayCommand]
+    public Task AllowForConversationAsync(ApprovalLine? line) => AnswerAsync(line, allow: true, remember: true);
+
     public void Dispose()
     {
         _watcher.Changed -= OnApprovalsChanged;
@@ -180,7 +188,7 @@ public sealed partial class RemoteOperationViewModel : MobileViewModel, IDisposa
 
     private void Start()
     {
-        if (_loop is not null || IsFinished)
+        if (_loop is not null || _drained)
         {
             return;
         }
@@ -193,7 +201,8 @@ public sealed partial class RemoteOperationViewModel : MobileViewModel, IDisposa
     {
         try
         {
-            while (!cancellationToken.IsCancellationRequested && !IsFinished)
+            // Até drenar, não até o estado final: o "terminou" pode chegar com saída ainda por ler.
+            while (!cancellationToken.IsCancellationRequested && !_drained)
             {
                 await Task.Delay(Interval, _time, cancellationToken);
                 await PollAsync(cancellationToken);
@@ -233,6 +242,7 @@ public sealed partial class RemoteOperationViewModel : MobileViewModel, IDisposa
         }
 
         _after = progress.After;
+        _drained = progress.IsFinished;
         _events.AddRange(progress.Events);
 
         foreach (var item in progress.Events)
@@ -261,9 +271,9 @@ public sealed partial class RemoteOperationViewModel : MobileViewModel, IDisposa
             : null;
     }
 
-    private async Task AnswerAsync(ApprovalLine? line, bool allow)
+    private async Task AnswerAsync(ApprovalLine? line, bool allow, bool remember = false)
     {
-        if (line is not null && await TryAsync(() => _answers.AnswerAsync(line.View, allow), "MobileRemoteAnswerFailed"))
+        if (line is not null && await TryAsync(() => _answers.AnswerAsync(line.View, allow, remember), "MobileRemoteAnswerFailed"))
         {
             ShowApprovals();
         }

@@ -382,6 +382,7 @@ public static class DependencyInjection
         services.AddSingleton<RemoteApiClient>();
         services.AddSingleton<IRemoteApi>(provider => provider.GetRequiredService<RemoteApiClient>());
         services.AddSingleton<IRemoteOperationsApi>(provider => provider.GetRequiredService<RemoteApiClient>());
+        services.AddSingleton<IRemoteSessionsApi>(provider => provider.GetRequiredService<RemoteApiClient>());
 
         // A campainha do servidor (T-15): só o agente liga, pelo RemoteOperationScheduler.
         services.AddSingleton<IRemoteHub, SignalRRemoteHub>();

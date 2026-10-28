@@ -23,6 +23,7 @@ public static class DependencyInjection
         services.AddScoped<IRemoteOperationStore, EfRemoteOperationStore>();
         services.AddScoped<IRemoteApprovalStore, EfRemoteApprovalStore>();
         services.AddScoped<IRemoteCatalogStore, EfRemoteCatalogStore>();
+        services.AddScoped<IRemoteAgentSessionStore, EfRemoteAgentSessionStore>();
         services.AddScoped<WorkspaceProvisioner>();
 
         return services;

@@ -67,6 +67,8 @@ public sealed class AgentSessionExecutorsTests : IAsyncDisposable
             .AddSingleton<AgentStartExecutor>()
             .AddSingleton<AgentPromptExecutor>()
             .AddSingleton<AgentStopExecutor>()
+            .AddSingleton<ILogger<HeadlessSessionRecovery>>(NullLogger<HeadlessSessionRecovery>.Instance)
+            .AddSingleton<HeadlessSessionRecovery>()
             .BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
     }
 
@@ -107,6 +109,7 @@ public sealed class AgentSessionExecutorsTests : IAsyncDisposable
         result.Data!.Value.GetProperty("agentSessionId").GetGuid().Should().Be(session.Id, "é por ele que vem o próximo prompt");
         result.Data!.Value.GetProperty("canContinue").GetBoolean().Should().BeTrue();
         _events[0].Data!.Value.GetProperty("agentSessionId").GetGuid().Should().Be(session.Id, "para parar o primeiro prompt no meio");
+        _events[0].Data!.Value.GetProperty("prompt").GetString().Should().Be("Revise a validação", "a linha do tempo da conversa mostra quem pediu o quê");
 
         var asked = _claude.Requests.Should().ContainSingle().Subject;
         asked.WorkingDirectory.Should().Be(Worktree);
@@ -181,21 +184,33 @@ public sealed class AgentSessionExecutorsTests : IAsyncDisposable
         decision.Message.Should().StartWith("Ninguém respondeu a tempo");
     }
 
+    /// <summary>
+    /// "Permitir nesta conversa" lembra o comando exato: o mesmo passa sem
+    /// perguntar, outro (mesmo parecido) pergunta, e o composto nem oferece.
+    /// </summary>
     [Fact]
-    public async Task AllowingForThisSession_IsNotAskedAgainInTheConversation()
+    public async Task AllowingForThisConversation_RemembersTheExactCommand_NotTheTool()
     {
         var decisions = new List<ToolPermissionDecision>();
         _runner.Script(
             async () => decisions.Add(await _gateway.AskAsync("Bash", """{"command":"git push"}""")),
-            async () => decisions.Add(await _gateway.AskAsync("Bash", """{"command":"git push --tags"}""")),
+            async () => decisions.Add(await _gateway.AskAsync("Bash", """{"command":"git  push"}""")),
+            async () => decisions.Add(await _gateway.AskAsync("Bash", """{"command":"git push --force"}""")),
+            async () => decisions.Add(await _gateway.AskAsync("Bash", """{"command":"git push && rm -rf ."}""")),
             FakeHeadlessProvider.Done());
 
         await Start.ExecuteAsync(
             Execution(StartRequest("edit", "Publique"), _ => new RemoteApprovalResult(RemoteApprovalOutcome.Allowed, "adria", RememberForThisSession: true)),
             Ct);
 
-        decisions.Should().AllSatisfy(item => item.IsAllowed.Should().BeTrue());
-        _asks.Should().ContainSingle();
+        decisions.Should().HaveCount(4).And.AllSatisfy(item => item.IsAllowed.Should().BeTrue());
+        _asks.Select(ask => ask.Summary).Should().Equal(
+            "O Claude quer usar Bash: git push",
+            "O Claude quer usar Bash: git push --force",
+            "O Claude quer usar Bash: git push && rm -rf .");
+        _asks[0].Details.GetProperty("canRemember").GetBoolean().Should().BeTrue();
+        _asks[0].Details.GetProperty("rememberAs").GetString().Should().Be("Bash: git push");
+        _asks[2].Details.GetProperty("canRemember").GetBoolean().Should().BeFalse("o composto é sempre perguntado");
     }
 
     [Fact]
@@ -268,6 +283,154 @@ public sealed class AgentSessionExecutorsTests : IAsyncDisposable
 
         _processes.Exit(4242);
         (await Start.CheckAsync(StartRequest("read", "oi"), Ct)).Should().BeNull("o processo que sumiu não segura o worktree");
+    }
+
+    /// <summary>Dois prompts na mesma conversa ao mesmo tempo: um roda, o outro é recusado sem tocar nela.</summary>
+    [Fact]
+    public async Task TwoPromptsAtOnce_TheSecondIsRefused_WithoutTouchingTheConversation()
+    {
+        _runner.Script(FakeHeadlessProvider.Done());
+        await Start.ExecuteAsync(Execution(StartRequest("read", "Leia o README")), Ct);
+        var session = _sessions.Sessions.Single();
+
+        var running = new TaskCompletionSource();
+        _runner.Script(async () =>
+        {
+            running.SetResult();
+            await Task.Delay(Timeout.Infinite, _runner.Token);
+        });
+        var first = PromptRequest(session.Id, "Rode os testes");
+        var prompt = Prompt.ExecuteAsync(Execution(first), Ct);
+        await running.Task.WaitAsync(TimeSpan.FromSeconds(10), Ct);
+
+        var second = PromptRequest(session.Id, "E o lint?");
+        (await Prompt.CheckAsync(second, Ct))!.Summary.Should().Be(HeadlessAgentPlanner.BusyMessage);
+        var refused = await Prompt.ExecuteAsync(Execution(second), Ct);
+
+        refused.Succeeded.Should().BeFalse();
+        refused.Code.Should().Be(RemoteErrorCodes.PolicyRefused);
+        refused.Summary.Should().Be(HeadlessAgentPlanner.BusyMessage);
+        session.RemoteOperationId.Should().Be(first.OperationId, "o segundo não chegou a gravar nada");
+        _runner.Prompts.Should().Equal("Leia o README", "Rode os testes");
+
+        await Stop.ExecuteAsync(Execution(StopRequest(session.Id)), Ct);
+        await prompt.WaitAsync(TimeSpan.FromSeconds(10), Ct);
+    }
+
+    /// <summary>A prévia do prompt no primeiro evento vai mascarada e com teto; o Claude recebe o texto inteiro.</summary>
+    [Fact]
+    public async Task ThePromptPreview_IsMaskedAndClipped_ButClaudeGetsTheWholePrompt()
+    {
+        _runner.Script(FakeHeadlessProvider.Done(turns: 1, cost: 0m));
+        var text = "Conecte com password=hunter2 e " + new string('x', RemoteLimits.MaxPromptPreviewLength);
+
+        await Start.ExecuteAsync(Execution(StartRequest("edit", text)), Ct);
+
+        var preview = _events[0].Data!.Value.GetProperty("prompt").GetString();
+        preview.Should().NotContain("hunter2").And.HaveLength(RemoteLimits.MaxPromptPreviewLength).And.EndWith("…");
+        _runner.Prompts.Should().Equal(text);
+    }
+
+    /// <summary>O <c>agent.stop</c> que chega antes de o processo abrir: o processo nem abre.</summary>
+    [Fact]
+    public async Task AStopBeforeTheProcessOpens_DoesNotOpenIt()
+    {
+        var request = StartRequest("edit", "Refatore tudo");
+        _services.GetRequiredService<IUnitOfWork>()
+            .When(unit => unit.SaveChangesAsync(Arg.Any<CancellationToken>()))
+            .Do(_ =>
+            {
+                // A conversa acabou de ser gravada, e o agent.stop chega antes do processo.
+                if (_sessions.Sessions.SingleOrDefault() is { Status: AgentSessionStatus.Starting } session)
+                {
+                    session.MarkStopped(Now);
+                }
+            });
+
+        var result = await Start.ExecuteAsync(Execution(request), Ct);
+
+        result.Succeeded.Should().BeFalse();
+        result.Summary.Should().Be("O Claude foi parado.");
+        _runner.Prompts.Should().BeEmpty();
+        _sessions.Sessions.Single().Status.Should().Be(AgentSessionStatus.Stopped);
+    }
+
+    /// <summary>
+    /// O agente caiu no meio de um prompt: a sessão ficou "rodando" com um
+    /// processo que não existe mais. O próximo prompt confere, fecha e segue.
+    /// </summary>
+    [Fact]
+    public async Task AConversationLeftRunningByACrashedAgent_TakesTheNextPrompt()
+    {
+        var session = AgentSession.CreateHeadless(
+            _task.Id, DevelopmentId, "claude-code", @"C:\claude.exe", Worktree, Guid.CreateVersion7(), Guid.CreateVersion7(), "read", null, null, Now);
+        session.MarkRunning(4242, Now);
+        _sessions.Seed(session);
+        _processes.Run(4242, Now);
+
+        (await Prompt.CheckAsync(PromptRequest(session.Id, "oi"), Ct))!.Summary.Should().Be(
+            HeadlessAgentPlanner.BusyMessage, "o processo ainda existe: é outro Claude nesta conversa");
+
+        _processes.Exit(4242);
+        _runner.Script(FakeHeadlessProvider.Done());
+        var next = PromptRequest(session.Id, "Continue de onde parou");
+        (await Prompt.CheckAsync(next, Ct)).Should().BeNull();
+        var result = await Prompt.ExecuteAsync(Execution(next), Ct);
+
+        result.Succeeded.Should().BeTrue(result.Summary);
+        session.RemoteOperationId.Should().Be(next.OperationId);
+        session.Status.Should().Be(AgentSessionStatus.Exited);
+        _claude.Requests.Single().Resume.Should().BeTrue();
+    }
+
+    /// <summary>Ao subir o agente, a conversa presa volta a receber prompts; a que nem abriu o Claude falha; a viva fica.</summary>
+    [Fact]
+    public async Task OnStartup_ConversationsLeftRunning_AreClosed()
+    {
+        var midPrompt = Headless(Now);
+        midPrompt.MarkRunning(4242, Now);
+        var neverOpened = Headless(Now);
+        var alive = Headless(Now);
+        alive.MarkRunning(5151, Now);
+        _processes.Run(5151, Now);
+        _sessions.Seed(midPrompt);
+        _sessions.Seed(neverOpened);
+        _sessions.Seed(alive);
+
+        await _services.GetRequiredService<HeadlessSessionRecovery>().RecoverAsync(Ct);
+
+        midPrompt.Status.Should().Be(AgentSessionStatus.Exited);
+        midPrompt.Activity.Should().Be(AgentActivity.Failed);
+        midPrompt.ActivityMessage.Should().Be("O agente parou no meio do prompt.");
+        midPrompt.CanContinue.Should().BeTrue();
+        neverOpened.Status.Should().Be(AgentSessionStatus.Failed);
+        alive.Status.Should().Be(AgentSessionStatus.Running);
+
+        AgentSession Headless(DateTimeOffset at) => AgentSession.CreateHeadless(
+            _task.Id, DevelopmentId, "claude-code", @"C:\claude.exe", Worktree, Guid.CreateVersion7(), Guid.CreateVersion7(), "read", null, null, at);
+    }
+
+    /// <summary>O Claude do card aberto no terminal do mesmo worktree: o prompt é recusado com o que fazer, e não vira erro de banco.</summary>
+    [Fact]
+    public async Task AClaudeOpenInTheTerminalOfTheWorktree_RefusesThePrompt()
+    {
+        _runner.Script(FakeHeadlessProvider.Done());
+        await Start.ExecuteAsync(Execution(StartRequest("read", "Leia o README")), Ct);
+        var session = _sessions.Sessions.Single();
+        var terminal = AgentSession.Create(_task.Id, DevelopmentId, "claude-code", @"C:\claude.exe", Worktree, Now.AddMinutes(5));
+        terminal.MarkRunning(5555, Now.AddMinutes(5));
+        _sessions.Seed(terminal);
+        _processes.Run(5555, Now.AddMinutes(5));
+
+        (await Prompt.CheckAsync(PromptRequest(session.Id, "E agora?"), Ct))!.Summary.Should().Be(HeadlessAgentPlanner.TerminalOpenMessage);
+        var refused = await FluentActions.Awaiting(() => Prompt.ExecuteAsync(Execution(PromptRequest(session.Id, "E agora?")), Ct))
+            .Should().ThrowAsync<DomainException>();
+        refused.WithMessage(HeadlessAgentPlanner.TerminalOpenMessage);
+        session.Status.Should().Be(AgentSessionStatus.Exited, "a conversa não foi tocada");
+
+        _processes.Exit(5555);
+        _runner.Script(FakeHeadlessProvider.Done());
+        (await Prompt.ExecuteAsync(Execution(PromptRequest(session.Id, "E agora?")), Ct)).Succeeded.Should().BeTrue("o terminal fechou");
     }
 
     private RemoteOperationRequest StartRequest(string profile, string text, int? maxTurns = null, string? model = null) =>

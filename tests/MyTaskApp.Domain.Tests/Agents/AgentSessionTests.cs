@@ -372,6 +372,37 @@ public class AgentSessionTests
         FluentActions.Invoking(() => NewSession().MarkStopped(Now)).Should().Throw<DomainException>().WithMessage("*no próprio terminal*");
     }
 
+    /// <summary>O fim do prompt grava como acabou, mesmo depois de a reconciliação ter fechado a sessão; a parada fica.</summary>
+    [Fact]
+    public void EndingAPrompt_RecordsHowItEnded_EvenIfTheSessionWasAlreadyClosed()
+    {
+        var running = NewHeadless();
+        running.MarkRunning(4242, Now);
+        running.EndHeadlessPrompt(AgentActivity.WaitingReview, "Pronto", Now.AddMinutes(2));
+        running.Status.Should().Be(AgentSessionStatus.Exited);
+        running.EndedAt.Should().Be(Now.AddMinutes(2));
+        running.Activity.Should().Be(AgentActivity.WaitingReview);
+        running.ActivityMessage.Should().Be("Pronto");
+        running.CanContinue.Should().BeTrue();
+
+        var reconciled = NewHeadless();
+        reconciled.MarkRunning(4242, Now);
+        reconciled.MarkExited(Now.AddMinutes(1));
+        reconciled.EndHeadlessPrompt(AgentActivity.Failed, "Erro no Claude", Now.AddMinutes(2));
+        reconciled.EndedAt.Should().Be(Now.AddMinutes(1), "o processo saiu quando a reconciliação viu");
+        reconciled.Activity.Should().Be(AgentActivity.Failed, "só quem leu a saída sabe como acabou");
+        reconciled.ActivityMessage.Should().Be("Erro no Claude");
+
+        var stopped = NewHeadless();
+        stopped.MarkRunning(4242, Now);
+        stopped.MarkStopped(Now.AddMinutes(1));
+        stopped.EndHeadlessPrompt(AgentActivity.WaitingReview, "Pronto", Now.AddMinutes(2));
+        stopped.Status.Should().Be(AgentSessionStatus.Stopped);
+        stopped.Activity.Should().NotBe(AgentActivity.WaitingReview);
+
+        FluentActions.Invoking(() => NewSession().EndHeadlessPrompt(AgentActivity.WaitingReview, null, Now)).Should().Throw<DomainException>();
+    }
+
     [Fact]
     public void AHeadlessSession_NeedsTheConversationAndTheOperation() =>
         FluentActions.Invoking(() => AgentSession.CreateHeadless(TaskId, DevelopmentId, "claude-code", Claude, Worktree, Guid.Empty, FirstOperation, "edit", null, null, Now))

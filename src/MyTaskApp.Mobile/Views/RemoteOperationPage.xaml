@@ -30,6 +30,10 @@
                                             Command="{Binding Source={RelativeSource AncestorType={x:Type vm:RemoteOperationViewModel}}, x:DataType=vm:RemoteOperationViewModel, Path=DenyCommand}"
                                             CommandParameter="{Binding .}" />
                                 </HorizontalStackLayout>
+                                <Label Text="{Binding RememberLabel}" Style="{StaticResource Muted}" LineBreakMode="WordWrap" IsVisible="{Binding CanRemember}" />
+                                <Button Text="Permitir nesta conversa" HorizontalOptions="Start" IsVisible="{Binding CanRemember}"
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:RemoteOperationViewModel}}, x:DataType=vm:RemoteOperationViewModel, Path=AllowForConversationCommand}"
+                                        CommandParameter="{Binding .}" />
                             </VerticalStackLayout>
                         </Border>
                     </DataTemplate>

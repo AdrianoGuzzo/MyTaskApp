@@ -12,6 +12,9 @@ internal sealed class EfRemoteApprovalStore(ServerDbContext context) : IRemoteAp
     /// <summary>Quantas a varredura expira por passada; o resto fica para a próxima.</summary>
     private const int MaxSweepBatch = 500;
 
+    private static readonly int[] FinalStatuses =
+        [.. Enum.GetValues<RemoteOperationStatus>().Where(RemoteOperationLifecycle.IsFinal).Select(status => (int)status)];
+
     public async Task<bool> TryAddAsync(ApprovalRecord approval, CancellationToken cancellationToken)
     {
         var request = approval.Request;
@@ -48,14 +51,45 @@ internal sealed class EfRemoteApprovalStore(ServerDbContext context) : IRemoteAp
             ? ToModel(row)
             : null;
 
-    public async Task<IReadOnlyList<ApprovalRecord>> ListPendingAsync(Guid userId, DateTimeOffset now, CancellationToken cancellationToken) =>
+    /// <summary>
+    /// A operação já terminada fica de fora: uma aprovação dela não decide mais
+    /// nada, mesmo uma pendente gravada antes de o servidor fechá-las no fim.
+    /// </summary>
+    public async Task<IReadOnlyList<ApprovalRecord>> ListPendingAsync(Guid userId, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        var final = FinalStatuses;
+
+        return
         [
             .. (await context.RemoteApprovals.AsNoTracking()
                     .Where(row => row.UserId == userId && row.State == (int)ApprovalState.Pending && row.ExpiresAt > now)
+                    .Where(row => context.RemoteOperations.Any(operation =>
+                        operation.UserId == row.UserId && operation.OperationId == row.OperationId && !final.Contains(operation.Status)))
                     .OrderBy(row => row.CreatedAt)
                     .ToListAsync(cancellationToken))
                 .Select(ToModel),
         ];
+    }
+
+    public async Task<IReadOnlyList<ApprovalRecord>> CloseForOperationAsync(Guid userId, Guid operationId, CancellationToken cancellationToken)
+    {
+        var pending = await context.RemoteApprovals.AsNoTracking()
+            .Where(row => row.UserId == userId && row.OperationId == operationId && row.State == (int)ApprovalState.Pending)
+            .ToListAsync(cancellationToken);
+
+        if (pending.Count == 0)
+        {
+            return [];
+        }
+
+        var ids = pending.Select(row => row.ApprovalId).ToList();
+
+        await context.RemoteApprovals
+            .Where(row => ids.Contains(row.ApprovalId) && row.State == (int)ApprovalState.Pending)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(row => row.State, (int)ApprovalState.Expired), cancellationToken);
+
+        return [.. pending.Select(row => ToModel(row, ApprovalState.Expired))];
+    }
 
     /// <summary>Só a primeira resposta grava: o <c>WHERE</c> no estado pendente é o uso único.</summary>
     public async Task<bool> TryAnswerAsync(

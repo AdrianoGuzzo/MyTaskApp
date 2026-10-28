@@ -21,7 +21,24 @@ public static class AgentSessionReconciler
     /// Encerra a sessão se o processo dela não existe mais. Devolve <c>true</c>
     /// quando mudou algo — quem chamou grava.
     /// </summary>
-    public static bool EndIfGone(AgentSession session, IAgentProcessTracker processes, DateTimeOffset now)
+    /// <param name="startingGrace">
+    /// A folga da sessão ainda sem PID; nula é <see cref="StartingGrace"/>. Zero
+    /// só para quem sabe que ninguém está abrindo o processo agora (o agente,
+    /// com a conversa nas mãos).
+    /// </param>
+    public static bool EndIfGone(AgentSession session, IAgentProcessTracker processes, DateTimeOffset now, TimeSpan? startingGrace = null)
+    {
+        if (!IsGone(session, processes, now, startingGrace))
+        {
+            return false;
+        }
+
+        session.MarkExited(now);
+        return true;
+    }
+
+    /// <summary>A sessão diz estar ativa, mas o processo dela não existe mais (ou nunca chegou a abrir, passada a folga).</summary>
+    public static bool IsGone(AgentSession session, IAgentProcessTracker processes, DateTimeOffset now, TimeSpan? startingGrace = null)
     {
         if (!session.IsActive)
         {
@@ -30,17 +47,9 @@ public static class AgentSessionReconciler
 
         if (session is { ProcessId: { } processId, ProcessStartedAt: { } processStartedAt })
         {
-            if (processes.IsAlive(processId, processStartedAt))
-            {
-                return false;
-            }
-        }
-        else if (now - (session.PromptStartedAt ?? session.StartedAt) < StartingGrace)
-        {
-            return false;
+            return !processes.IsAlive(processId, processStartedAt);
         }
 
-        session.MarkExited(now);
-        return true;
+        return now - (session.PromptStartedAt ?? session.StartedAt) >= (startingGrace ?? StartingGrace);
     }
 }

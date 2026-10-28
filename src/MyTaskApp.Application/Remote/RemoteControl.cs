@@ -189,14 +189,19 @@ public static class RemoteOperationTexts
 public sealed record GetRemoteOperationProgress(Guid OperationId, long After);
 
 /// <param name="After">O último evento lido: a próxima leitura parte dele.</param>
-public sealed record RemoteOperationProgress(RemoteOperationView Operation, IReadOnlyList<RemoteOperationEvent> Events, long After)
+/// <param name="HasMore">Ficaram eventos no servidor para a próxima leitura.</param>
+public sealed record RemoteOperationProgress(RemoteOperationView Operation, IReadOnlyList<RemoteOperationEvent> Events, long After, bool HasMore = false)
 {
-    public bool IsFinished => RemoteOperationLifecycle.IsFinal(Operation.Status);
+    /// <summary>Terminou e não há mais nada a ler: quem acompanha pode parar.</summary>
+    public bool IsFinished => RemoteOperationLifecycle.IsFinal(Operation.Status) && !HasMore;
 }
 
 /// <summary>
-/// O estado e os eventos novos de uma operação. Lê o estado depois dos
-/// eventos: o "terminou" nunca chega antes da última linha de saída.
+/// O estado e os eventos novos de uma operação. Lê o estado antes dos
+/// eventos: o agente manda toda a saída antes do estado final, então o
+/// "terminou" lido aqui já tem atrás de si todos os eventos que a leitura
+/// seguinte pega. Lido depois, ele poderia chegar com as últimas linhas ainda
+/// fora da página.
 /// </summary>
 public sealed class GetRemoteOperationProgressHandler(IRemoteOperationsApi remote)
 {
@@ -205,23 +210,25 @@ public sealed class GetRemoteOperationProgressHandler(IRemoteOperationsApi remot
 
     public async Task<RemoteOperationProgress> HandleAsync(GetRemoteOperationProgress query, CancellationToken cancellationToken = default)
     {
+        var operation = await remote.GetAsync(query.OperationId, cancellationToken);
         var events = new List<RemoteOperationEvent>();
         var after = query.After;
+        var hasMore = false;
 
         for (var page = 0; page < MaxPages; page++)
         {
             var batch = await remote.ListEventsAsync(query.OperationId, after, null, cancellationToken);
             events.AddRange(batch.Events.Where(item => item.Seq > after).OrderBy(item => item.Seq));
             after = events.Count > 0 ? events[^1].Seq : after;
+            hasMore = batch.HasMore;
 
-            if (!batch.HasMore)
+            if (!hasMore)
             {
                 break;
             }
         }
 
-        var operation = await remote.GetAsync(query.OperationId, cancellationToken);
-        return new RemoteOperationProgress(operation, events, after);
+        return new RemoteOperationProgress(operation, events, after, hasMore);
     }
 }
 

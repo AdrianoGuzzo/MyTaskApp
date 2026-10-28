@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using MyTaskApp.Remote.Contracts;
 using MyTaskApp.Server.Application;
@@ -167,6 +168,47 @@ public sealed class RemoteApprovalTests(PostgresFixture postgres) : IAsyncLifeti
 
         (await ErrorAsync(phone.Session, HttpMethod.Post, RemoteRoutes.ApprovalResponse(swept.ApprovalId), Answer(phone, swept, ApprovalDecision.Allow)))
             .Should().Be((HttpStatusCode.Gone, RemoteErrorCodes.ApprovalExpired));
+    }
+
+    /// <summary>
+    /// A operação terminou (aqui, cancelada) com a pergunta aberta: ela fecha
+    /// como vencida, sai da lista de todos e não aceita mais resposta.
+    /// </summary>
+    [Fact]
+    public async Task WhenTheOperationEnds_ItsPendingApprovalCloses_IsNotListed_AndCannotBeAnswered()
+    {
+        var (phone, notebook, operationId) = await RunningAsync();
+        var request = Request(operationId);
+        await AskAsync(notebook, request);
+        await using var controller = await _kit.ListenAsync(phone.Session);
+
+        await MoveAsync(notebook, operationId, RemoteOperationStatus.Canceled);
+
+        await controller.ExpectAsync(RemoteHubMessages.ApprovalResolved, request.ApprovalId, operationId);
+        (await GetAsync<List<ApprovalView>>(phone.Session, RemoteRoutes.Approvals)).Should().BeEmpty();
+        (await GetAsync<ApprovalView>(notebook.Session, RemoteRoutes.Approval(request.ApprovalId))).State.Should().Be(ApprovalState.Expired);
+        (await ErrorAsync(phone.Session, HttpMethod.Post, RemoteRoutes.ApprovalResponse(request.ApprovalId), Answer(phone, request, ApprovalDecision.Allow)))
+            .Should().Be((HttpStatusCode.Gone, RemoteErrorCodes.ApprovalExpired));
+    }
+
+    /// <summary>Uma pendente gravada antes desta versão, de operação já terminada, não aparece nem é respondida.</summary>
+    [Fact]
+    public async Task AStaleApprovalOfAFinishedOperation_IsNotListed_AndAnsweringItClosesIt()
+    {
+        var (phone, notebook, operationId) = await RunningAsync();
+        var request = Request(operationId);
+        await AskAsync(notebook, request);
+        await _kit.WithDatabaseAsync(async context =>
+        {
+            var operation = await context.RemoteOperations.SingleAsync(row => row.OperationId == operationId, Ct);
+            operation.Status = (int)RemoteOperationStatus.Failed;
+            await context.SaveChangesAsync(Ct);
+        });
+
+        (await GetAsync<List<ApprovalView>>(phone.Session, RemoteRoutes.Approvals)).Should().BeEmpty();
+        (await ErrorAsync(phone.Session, HttpMethod.Post, RemoteRoutes.ApprovalResponse(request.ApprovalId), Answer(phone, request, ApprovalDecision.Allow)))
+            .Should().Be((HttpStatusCode.Gone, RemoteErrorCodes.ApprovalExpired));
+        (await GetAsync<ApprovalView>(notebook.Session, RemoteRoutes.Approval(request.ApprovalId))).State.Should().Be(ApprovalState.Expired);
     }
 
     [Fact]
