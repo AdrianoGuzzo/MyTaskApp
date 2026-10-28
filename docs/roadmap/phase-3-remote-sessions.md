@@ -1,6 +1,6 @@
 # Fase 3 — A conversa do Claude como uma sessão só: roteiro
 
-> **Estado:** E1 a E6 feitas; E7 a E9 planejadas. O desenho, a auditoria e a
+> **Estado:** E1 a E7 feitas; E8 e E9 planejadas. O desenho, a auditoria e a
 > comparação das alternativas estão em
 > [`../architecture/remote-sessions.md`](../architecture/remote-sessions.md).
 > As decisões estão nos ADR-091 a 094 do [índice](../architecture/README.md).
@@ -26,7 +26,7 @@
 | E4 | responder a pergunta do Claude de longe | E1 | ✔ |
 | E5 | começar no computador e continuar no celular | E2 | ✔ |
 | E6 | instrução com o Claude respondendo | E2 | ✔ |
-| E7 | linha do tempo em cartões no celular | E2 | planejada |
+| E7 | linha do tempo em cartões no celular | E2 | ✔ |
 | E8 | push com o app fechado | E3 | planejada |
 | E9 | robustez: cancelamento assinado, retenção, Linux | — | planejada |
 
@@ -277,6 +277,28 @@ na ordem.
 
 Cartões por tipo de evento, os `Details` da aprovação e o resultado das
 ferramentas (hoje o resultado de sucesso é descartado).
+
+**Feito:**
+
+- `RemoteSessionTimeline.Entries`: a mesma leitura das linhas, em entradas
+  tipadas (`RemoteTimelineKind`: prompt, Claude, ferramenta, saída, aprovação,
+  andamento, aviso, fim). A resposta da aprovação completa o cartão do pedido.
+  As linhas continuam para a janela do desktop.
+- O agente manda a saída de sucesso dos comandos do Claude (Bash, PowerShell)
+  como `StepCompleted`, com `tool` e `toolUseId` no `Data`; o controlador
+  antigo não mostra esse evento. O resultado das outras ferramentas fica na
+  máquina (RS-29).
+- Celular: `TimelineCard` e a página da conversa em cartões, até 300.
+
+**Migrations:** nenhuma; o fio não muda (chaves novas no `Data`).
+
+**Testes:** `AgentSessionExecutorsTests` (a saída do comando vai mascarada; o
+arquivo lido não), `RemoteSessionsTests` (as entradas e a aprovação num cartão
+só), `RemoteTests` do celular (os cartões).
+
+**Ficou de fora:** os `Details` completos da aprovação já respondida. O cartão
+mostra o resumo, que já traz o comando inteiro (RS-35); a pendente segue no
+cartão de aprovação, com tudo.
 
 ## E8 — Push
 

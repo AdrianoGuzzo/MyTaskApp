@@ -632,8 +632,11 @@ quem executa é o computador, com as regras dele. O guia é o
 - **A máquina** lista os worktrees de lá: rodar um comando liberado, abrir o
   Claude, apagar o worktree. **A operação** mostra o estado, a saída ao vivo,
   as perguntas dela, cancelar, mandar mais um prompt e parar o Claude. **A
-  conversa** (rota `session`) mostra a linha do tempo de todos os prompts dela,
-  as perguntas, o próximo prompt (fica na mesma tela) e o parar. Os handlers
+  conversa** (rota `session`) mostra a linha do tempo de todos os prompts dela
+  em cartões: o prompt ("Você"), o texto do Claude, a ferramenta que ele usou,
+  a saída dos comandos dele (os testes, o build), cada aprovação com a resposta
+  e como o prompt terminou. Também mostra as perguntas, o próximo prompt (fica
+  na mesma tela) e o parar. Os handlers
   são os mesmos da janela *Controlar* do desktop. Na
   tarefa, **"Preparar em…"** escolhe o computador, o repositório, a cópia do
   banco e o Claude.

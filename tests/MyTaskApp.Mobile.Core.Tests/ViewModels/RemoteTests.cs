@@ -484,6 +484,11 @@ public sealed class RemoteTests : IAsyncLifetime
         await screen.OpenAsync(session.SessionId, Notebook);
 
         screen.Output.Should().Be("Você: Olá\nClaude: Oi! Em que posso ajudar?\n— Pronto.\n");
+        screen.Cards.Select(card => (card.Kind, card.Title, card.Text)).Should().Equal(
+            (RemoteTimelineKind.Prompt, "Você", "Olá"),
+            (RemoteTimelineKind.Claude, "Claude", "Oi! Em que posso ajudar?"),
+            (RemoteTimelineKind.Outcome, "Terminou bem", "Pronto."));
+        screen.Cards[0].IsPrompt.Should().BeTrue();
         screen.CanPrompt.Should().BeTrue();
 
         _app.Dialogs.PromptAnswer = "Agora os testes";

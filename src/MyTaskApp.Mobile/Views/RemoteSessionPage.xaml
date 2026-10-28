@@ -47,9 +47,27 @@
                 <Button Text="Parar o Claude" Style="{StaticResource Secondary}" Command="{Binding StopCommand}" IsVisible="{Binding CanStop}" Margin="0,0,8,8" />
             </FlexLayout>
 
-            <Border Style="{StaticResource Card}" IsVisible="{Binding Output, Converter={StaticResource HasValue}}">
-                <Label Text="{Binding Output}" FontFamily="monospace" FontSize="12" LineBreakMode="CharacterWrap" />
-            </Border>
+            <!-- A linha do tempo em cartões (E7): um por prompt, texto, ferramenta, saída e aprovação. -->
+            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Cards}" Spacing="6">
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="vm:TimelineCard">
+                        <Border Style="{StaticResource Card}">
+                            <VerticalStackLayout Spacing="2">
+                                <Label Text="{Binding Title}" Style="{StaticResource Muted}" FontAttributes="Bold" />
+                                <Label Text="{Binding Text}" LineBreakMode="WordWrap" IsVisible="{Binding IsProse}">
+                                    <Label.Triggers>
+                                        <DataTrigger TargetType="Label" Binding="{Binding IsPrompt}" Value="True">
+                                            <Setter Property="FontAttributes" Value="Bold" />
+                                        </DataTrigger>
+                                    </Label.Triggers>
+                                </Label>
+                                <Label Text="{Binding Text}" FontFamily="monospace" FontSize="12" LineBreakMode="CharacterWrap" IsVisible="{Binding IsOutput}" />
+                                <Label Text="{Binding Detail}" Style="{StaticResource Muted}" LineBreakMode="WordWrap" IsVisible="{Binding HasDetail}" />
+                            </VerticalStackLayout>
+                        </Border>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
 
         </VerticalStackLayout>
     </ScrollView>

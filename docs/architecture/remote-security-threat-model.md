@@ -200,7 +200,10 @@ flowchart LR
 - **RS-29** Toda saída passa por `SensitiveText.Mask` antes do diário e do
   servidor; a saída sai do diário quando o servidor confirma; o servidor guarda
   no máximo 10 000 eventos de até 8 KiB por operação (acima, a saída é
-  confirmada e descartada, e o fim nunca se perde) e 30 dias.
+  confirmada e descartada, e o fim nunca se perde) e 30 dias. Do Claude sem
+  terminal, desde a fase 3 (E7), vai também a saída dos comandos dele (Bash e
+  PowerShell), mascarada e cortada; o resultado das outras ferramentas (o
+  conteúdo de um arquivo lido, uma busca) não sai da máquina.
 
 ### Limites
 

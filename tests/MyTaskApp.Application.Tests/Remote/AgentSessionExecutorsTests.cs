@@ -185,6 +185,27 @@ public sealed class AgentSessionExecutorsTests : IAsyncDisposable
     }
 
     /// <summary>
+    /// A saída dos comandos do Claude vai para a linha do tempo (E7), mascarada;
+    /// o resultado das outras ferramentas (o arquivo lido) fica na máquina.
+    /// </summary>
+    [Fact]
+    public async Task TheOutputOfACommand_GoesToTheTimeline_ButWhatAFileHolds_DoesNot()
+    {
+        var test = FakeHeadlessProvider.ToolWithResult("Bash", "dotnet test", "Aprovados: 12. DB_PASSWORD=hunter2");
+        var read = FakeHeadlessProvider.ToolWithResult("Read", "src/Program.cs", "class Program { }");
+        _runner.Script(test.Use, test.Result, read.Use, read.Result, FakeHeadlessProvider.Done());
+
+        await Start.ExecuteAsync(Execution(StartRequest("read", "Rode os testes")), Ct);
+
+        var outputs = _events.Where(item => item.Kind == RemoteEventKind.StepCompleted).ToList();
+        var output = outputs.Should().ContainSingle().Subject;
+        output.Text.Should().StartWith("Aprovados: 12.").And.NotContain("hunter2");
+        output.Data!.Value.GetProperty("tool").GetString().Should().Be("Bash");
+        _events.Should().NotContain(item => item.Text != null && item.Text.Contains("class Program", StringComparison.Ordinal));
+        RemoteSessionTexts.Entry(output)!.Should().Be(new RemoteTimelineEntry(RemoteTimelineKind.Output, "Saída de Bash", output.Text!));
+    }
+
+    /// <summary>
     /// A pergunta do Claude (ADR-093) vai a quem pediu com as opções, e a
     /// resposta assinada volta ao Claude na entrada, pelo texto da pergunta.
     /// </summary>

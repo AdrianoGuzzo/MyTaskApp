@@ -13,6 +13,37 @@ using MyTaskApp.Remote.Contracts;
 namespace MyTaskApp.Mobile.Core.ViewModels;
 
 /// <summary>
+/// Um cartão da linha do tempo da conversa (E7): o prompt, o texto do Claude,
+/// a ferramenta, a saída de um comando, a aprovação. A resposta de uma
+/// aprovação completa o cartão do pedido.
+/// </summary>
+public sealed partial class TimelineCard(RemoteTimelineEntry entry) : ObservableObject
+{
+    public RemoteTimelineKind Kind { get; } = entry.Kind;
+
+    public string Title { get; } = entry.Title;
+
+    public string Text { get; } = entry.Text;
+
+    /// <summary>O id da aprovação, para a resposta achar o pedido.</summary>
+    public string? Key { get; } = entry.Key;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasDetail))]
+    private string? _detail = entry.Detail;
+
+    public bool HasDetail => !string.IsNullOrEmpty(Detail);
+
+    /// <summary>A saída de um comando vai em fonte de largura fixa.</summary>
+    public bool IsOutput => Kind == RemoteTimelineKind.Output;
+
+    public bool IsProse => !IsOutput;
+
+    /// <summary>O prompt de quem pediu, destacado do resto.</summary>
+    public bool IsPrompt => Kind == RemoteTimelineKind.Prompt;
+}
+
+/// <summary>
 /// Uma conversa do Claude de uma máquina (ADR-091): a linha do tempo de todos
 /// os prompts, de qualquer tela que os mandou, as aprovações dela, o próximo
 /// prompt e o parar. Os mesmos handlers da janela Controlar do desktop.
@@ -20,6 +51,9 @@ namespace MyTaskApp.Mobile.Core.ViewModels;
 public sealed partial class RemoteSessionViewModel : MobileViewModel, IDisposable
 {
     public static readonly TimeSpan Interval = TimeSpan.FromSeconds(1.5);
+
+    /// <summary>Quantos cartões a tela guarda; os mais antigos saem.</summary>
+    public const int MaxCards = 300;
 
     private readonly IUseCaseRunner _runner;
 
@@ -87,6 +121,9 @@ public sealed partial class RemoteSessionViewModel : MobileViewModel, IDisposabl
 
     public ObservableCollection<ApprovalLine> Approvals { get; } = [];
 
+    /// <summary>A linha do tempo em cartões (E7), do mais antigo ao mais novo.</summary>
+    public ObservableCollection<TimelineCard> Cards { get; } = [];
+
     public bool HasApprovals => Approvals.Count > 0;
 
     public bool CanPrompt => Session?.CanPrompt == true;
@@ -105,6 +142,7 @@ public sealed partial class RemoteSessionViewModel : MobileViewModel, IDisposabl
             _known = new HashSet<Guid>();
             _lines.Clear();
             Output = string.Empty;
+            Cards.Clear();
             Session = null;
             Title = "Conversa";
             Status = "Carregando…";
@@ -274,6 +312,22 @@ public sealed partial class RemoteSessionViewModel : MobileViewModel, IDisposabl
         if (timeline.Lines.Count > 0)
         {
             Output = _lines.ToString();
+        }
+
+        foreach (var entry in timeline.Entries)
+        {
+            if (entry is { Kind: RemoteTimelineKind.Approval, Key: { } key } && Cards.LastOrDefault(card => card.Key == key) is { } asked)
+            {
+                asked.Detail = entry.Detail;
+                continue;
+            }
+
+            Cards.Add(new TimelineCard(entry));
+        }
+
+        while (Cards.Count > MaxCards)
+        {
+            Cards.RemoveAt(0);
         }
 
         _operations.UnionWith(timeline.Operations.Select(operation => operation.OperationId));

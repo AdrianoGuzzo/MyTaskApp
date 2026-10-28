@@ -663,6 +663,9 @@ public sealed class HeadlessPromptRunner(
         var activity = AgentActivity.Working;
         HeadlessResult? result = null;
 
+        // O nome de cada ferramenta pelo id do uso: o resultado só traz o id.
+        var tools = new Dictionary<string, string>(StringComparer.Ordinal);
+
         async Task SetActivityAsync(AgentActivity next, string? message)
         {
             if (next == activity)
@@ -743,16 +746,28 @@ public sealed class HeadlessPromptRunner(
 
                             case HeadlessToolUse use:
                                 await SetActivityAsync(AgentActivity.Working, null);
+                                tools[use.ToolUseId] = use.Name;
                                 await execution.EmitAsync(
                                     RemoteEventKind.ToolUse,
                                     Clip(SensitiveText.Mask($"{use.Name}: {use.Summary}")),
                                     "agent",
-                                    JsonSerializer.SerializeToElement(new Dictionary<string, string> { ["tool"] = use.Name }, RemoteJson.Options),
+                                    JsonSerializer.SerializeToElement(new Dictionary<string, string> { ["tool"] = use.Name, ["toolUseId"] = use.ToolUseId }, RemoteJson.Options),
                                     CancellationToken.None);
                                 break;
 
                             case HeadlessToolResult { IsError: true } failed:
                                 await execution.EmitAsync(RemoteEventKind.Warning, Clip(SensitiveText.Mask(failed.Summary)), "agent", cancellationToken: CancellationToken.None);
+                                break;
+
+                            // A saída dos comandos (os testes, o build) vai para a linha do tempo (E7). A dos
+                            // outros (o conteúdo dos arquivos lidos) fica aqui: o servidor não precisa do código.
+                            case HeadlessToolResult done when tools.GetValueOrDefault(done.ToolUseId) is { } tool && HeadlessTimeline.ShowsOutput(tool):
+                                await execution.EmitAsync(
+                                    RemoteEventKind.StepCompleted,
+                                    Clip(SensitiveText.Mask(done.Summary)),
+                                    "agent",
+                                    JsonSerializer.SerializeToElement(new Dictionary<string, string> { ["tool"] = tool, ["toolUseId"] = done.ToolUseId }, RemoteJson.Options),
+                                    CancellationToken.None);
                                 break;
 
                             case HeadlessResult end:
@@ -950,6 +965,16 @@ public sealed class HeadlessPromptRunner(
 
     private static string Clip(string text) =>
         text.Length <= RemoteLimits.MaxEventTextLength ? text : $"{text[..(RemoteLimits.MaxEventTextLength - 1)]}…";
+}
+
+/// <summary>O que do Claude sem terminal vai para a linha do tempo da conversa (E7).</summary>
+public static class HeadlessTimeline
+{
+    /// <summary>
+    /// A saída da ferramenta aparece quando é a de um comando: os testes, o
+    /// build. O resultado das outras (o arquivo lido, a busca) fica na máquina.
+    /// </summary>
+    public static bool ShowsOutput(string tool) => tool is "Bash" or "PowerShell";
 }
 
 /// <summary><c>agent.start</c>: abre uma conversa do Claude no worktree e manda o primeiro prompt.</summary>

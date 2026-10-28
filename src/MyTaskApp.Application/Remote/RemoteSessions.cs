@@ -247,9 +247,44 @@ public sealed record RemoteSessionCursor(IReadOnlyDictionary<Guid, long> After, 
 /// <summary>A conversa e o que chegou na linha do tempo dela desde <paramref name="Cursor"/>.</summary>
 public sealed record GetRemoteSessionTimeline(Guid SessionId, RemoteSessionCursor Cursor);
 
+/// <summary>O tipo de cartão de uma entrada da linha do tempo (E7).</summary>
+public enum RemoteTimelineKind
+{
+    /// <summary>O prompt de quem pediu.</summary>
+    Prompt,
+
+    /// <summary>O texto do Claude.</summary>
+    Claude,
+
+    /// <summary>A ferramenta que o Claude usou.</summary>
+    Tool,
+
+    /// <summary>A saída de um comando: do Claude (Bash, PowerShell) ou de um <c>command.run</c>.</summary>
+    Output,
+
+    /// <summary>Um pedido de aprovação e, quando chega, a resposta.</summary>
+    Approval,
+
+    /// <summary>O andamento: o Claude abrindo, o prompt na fila.</summary>
+    Notice,
+
+    /// <summary>O que deu errado no meio, sem parar o prompt.</summary>
+    Problem,
+
+    /// <summary>Como o prompt terminou.</summary>
+    Outcome,
+}
+
+/// <summary>Uma entrada da linha do tempo, para virar cartão (E7).</summary>
+/// <param name="Key">O id da aprovação: a resposta completa o cartão do pedido, em vez de abrir outro.</param>
+public sealed record RemoteTimelineEntry(RemoteTimelineKind Kind, string Title, string Text, string? Detail = null, string? Key = null);
+
 /// <param name="Lines">As linhas novas, na ordem das operações e dos eventos.</param>
 public sealed record RemoteSessionTimeline(RemoteSessionItem Session, IReadOnlyList<RemoteOperationView> Operations, IReadOnlyList<string> Lines, RemoteSessionCursor Cursor)
 {
+    /// <summary>As mesmas novidades de <see cref="Lines"/>, como entradas para cartões (E7).</summary>
+    public IReadOnlyList<RemoteTimelineEntry> Entries { get; init; } = [];
+
     /// <summary>Uma operação ainda pode trazer linhas: quem acompanha continua lendo.</summary>
     public bool IsLive => Operations.Any(operation => !Cursor.Done.Contains(operation.OperationId));
 }
@@ -268,6 +303,7 @@ public sealed class GetRemoteSessionTimelineHandler(IRemoteSessionsApi sessions,
         var after = new Dictionary<Guid, long>(query.Cursor.After);
         var done = new HashSet<Guid>(query.Cursor.Done);
         var lines = new List<string>();
+        var entries = new List<RemoteTimelineEntry>();
 
         foreach (var operation in detail.Operations)
         {
@@ -290,6 +326,11 @@ public sealed class GetRemoteSessionTimelineHandler(IRemoteSessionsApi sessions,
                         lines.Add(line);
                     }
 
+                    if (RemoteSessionTexts.Entry(item) is { } entry)
+                    {
+                        RemoteSessionTexts.Merge(entries, entry);
+                    }
+
                     cursor = item.Seq;
                 }
 
@@ -307,12 +348,16 @@ public sealed class GetRemoteSessionTimelineHandler(IRemoteSessionsApi sessions,
             {
                 done.Add(operation.OperationId);
                 lines.Add($"— {operation.ResultSummary ?? RemoteOperationTexts.Status(operation)}");
+                entries.Add(new RemoteTimelineEntry(
+                    RemoteTimelineKind.Outcome,
+                    RemoteOperationTexts.Status(operation),
+                    operation.ResultSummary ?? RemoteOperationTexts.Status(operation)));
             }
         }
 
         var session = await ListRemoteSessionsHandler.ItemAsync(tasks, detail.Session, detail.Agent, timeProvider, cancellationToken);
 
-        return new RemoteSessionTimeline(session,detail.Operations, lines, new RemoteSessionCursor(after, done));
+        return new RemoteSessionTimeline(session, detail.Operations, lines, new RemoteSessionCursor(after, done)) { Entries = entries };
     }
 }
 
@@ -380,6 +425,50 @@ public static class RemoteSessionTexts
 
     public static bool CanStop(RemoteAgentSessionView session) =>
         session.Status is not (RemoteAgentSessionStatus.Stopped or RemoteAgentSessionStatus.Failed);
+
+    /// <summary>
+    /// A entrada de um evento, para o cartão (E7); nula para os que não
+    /// aparecem (estado, resultado). O prompt de quem pediu é "Você".
+    /// </summary>
+    public static RemoteTimelineEntry? Entry(RemoteOperationEvent item)
+    {
+        var data = item.Data is { ValueKind: JsonValueKind.Object } value ? value : (JsonElement?)null;
+
+        string? Field(string name) =>
+            data is { } found && found.TryGetProperty(name, out var field) && field.ValueKind == JsonValueKind.String ? field.GetString() : null;
+
+        return item.Kind switch
+        {
+            RemoteEventKind.StepStarted when Field("prompt") is { } prompt => new(RemoteTimelineKind.Prompt, "Você", prompt),
+            RemoteEventKind.StepStarted when item.Text is { } text => new(RemoteTimelineKind.Notice, "Andamento", text),
+            RemoteEventKind.AgentMessage when item.Text is { } text => new(RemoteTimelineKind.Claude, "Claude", text),
+            RemoteEventKind.ToolUse when item.Text is { } text => Field("tool") is { } tool
+                ? new(RemoteTimelineKind.Tool, $"Usou {tool}", text.StartsWith($"{tool}: ", StringComparison.Ordinal) ? text[(tool.Length + 2)..] : text)
+                : new(RemoteTimelineKind.Tool, "Usou uma ferramenta", text),
+            RemoteEventKind.StepCompleted when item.Text is { } text && Field("toolUseId") is not null =>
+                new(RemoteTimelineKind.Output, $"Saída de {Field("tool") ?? "comando"}", text),
+            RemoteEventKind.Output when item.Text is { } text => new(RemoteTimelineKind.Output, "Saída", text),
+            RemoteEventKind.Warning when item.Text is { } text => new(RemoteTimelineKind.Problem, "Aviso", text),
+            RemoteEventKind.ApprovalRequested when item.Text is { } text =>
+                new(RemoteTimelineKind.Approval, "Pediu aprovação", text, "Esperando a resposta.", Field("approvalId")),
+            RemoteEventKind.ApprovalResolved when item.Text is { } text =>
+                new(RemoteTimelineKind.Approval, "Aprovação", text, text, Field("approvalId")),
+            _ => null,
+        };
+    }
+
+    /// <summary>A resposta de uma aprovação completa o cartão do pedido; o resto entra no fim.</summary>
+    public static void Merge(IList<RemoteTimelineEntry> entries, RemoteTimelineEntry entry)
+    {
+        if (entry is { Kind: RemoteTimelineKind.Approval, Key: { } key }
+            && entries.Select((existing, index) => (existing, index)).LastOrDefault(pair => pair.existing.Key == key) is ({ } asked, var at))
+        {
+            entries[at] = asked with { Detail = entry.Detail };
+            return;
+        }
+
+        entries.Add(entry);
+    }
 
     /// <summary>A linha de um evento na linha do tempo: o prompt de quem pediu aparece como "Você".</summary>
     public static string? Line(RemoteOperationEvent item) =>

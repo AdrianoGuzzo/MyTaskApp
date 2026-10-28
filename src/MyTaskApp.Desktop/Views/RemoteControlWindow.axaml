@@ -109,7 +109,7 @@
                               </DataTemplate>
                             </ItemsControl.ItemTemplate>
                           </ItemsControl>
-                          <TextBox Width="420" HorizontalAlignment="Left" MaxLength="500" Watermark="Ou escreva a resposta" Text="{Binding Written}" />
+                          <TextBox Width="420" HorizontalAlignment="Left" MaxLength="500" PlaceholderText="Ou escreva a resposta" Text="{Binding Written}" />
                         </StackPanel>
                       </DataTemplate>
                     </ItemsControl.ItemTemplate>

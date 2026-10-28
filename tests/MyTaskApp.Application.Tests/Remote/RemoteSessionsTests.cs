@@ -198,6 +198,46 @@ public sealed class RemoteSessionsTests
         again.Lines.Should().BeEmpty("o que já foi lido até o fim não é lido de novo");
     }
 
+    /// <summary>
+    /// Os cartões do celular (E7): um por prompt, texto, ferramenta, saída e
+    /// aprovação, e a resposta da aprovação completa o cartão do pedido.
+    /// </summary>
+    [Fact]
+    public async Task TheTimeline_AlsoComesAsCards_AndTheAnswerCompletesTheApprovalCard()
+    {
+        var device = Guid.CreateVersion7();
+        var session = View(Guid.CreateVersion7(), device, _task.Id, RemoteAgentSessionStatus.Idle);
+        var prompt = Operation(RemoteOperationStatus.Succeeded, 6, "Respondeu em 1 turno.");
+        var approvalId = Guid.CreateVersion7().ToString("D");
+        var at = Now;
+        _server.Detail = new RemoteAgentSessionDetail(session, new RemoteAgentPresence(device, Now), [prompt]);
+        Events(
+            prompt.OperationId,
+            hasMoreAfterFirstPage: false,
+            Prompt(prompt.OperationId, 1, "Rode os testes"),
+            new RemoteOperationEvent(prompt.OperationId, 2, at, RemoteEventKind.ToolUse, "agent", Text: "Bash: dotnet test",
+                Data: JsonSerializer.SerializeToElement(new { tool = "Bash", toolUseId = "t1" })),
+            new RemoteOperationEvent(prompt.OperationId, 3, at, RemoteEventKind.ApprovalRequested, Text: "O Claude quer usar Bash: dotnet test",
+                Data: JsonSerializer.SerializeToElement(new { approvalId, value = "ToolUse" })),
+            new RemoteOperationEvent(prompt.OperationId, 4, at, RemoteEventKind.ApprovalResolved, Text: "Permitido por Pixel 8.",
+                Data: JsonSerializer.SerializeToElement(new { approvalId, value = "Allowed" })),
+            new RemoteOperationEvent(prompt.OperationId, 5, at, RemoteEventKind.StepCompleted, "agent", Text: "Aprovados: 12.",
+                Data: JsonSerializer.SerializeToElement(new { tool = "Bash", toolUseId = "t1" })),
+            Message(prompt.OperationId, 6, "Passaram os 12."));
+
+        var timeline = await new GetRemoteSessionTimelineHandler(_server, _operations, _tasks, _time)
+            .HandleAsync(new GetRemoteSessionTimeline(session.SessionId, RemoteSessionCursor.Start), Ct);
+
+        timeline.Entries.Should().Equal(
+            new RemoteTimelineEntry(RemoteTimelineKind.Prompt, "Você", "Rode os testes"),
+            new RemoteTimelineEntry(RemoteTimelineKind.Tool, "Usou Bash", "dotnet test"),
+            new RemoteTimelineEntry(RemoteTimelineKind.Approval, "Pediu aprovação", "O Claude quer usar Bash: dotnet test", "Permitido por Pixel 8.", approvalId),
+            new RemoteTimelineEntry(RemoteTimelineKind.Output, "Saída de Bash", "Aprovados: 12."),
+            new RemoteTimelineEntry(RemoteTimelineKind.Claude, "Claude", "Passaram os 12."),
+            new RemoteTimelineEntry(RemoteTimelineKind.Outcome, "Terminou bem", "Respondeu em 1 turno."));
+        timeline.Lines.Should().NotContain(line => line.Contains("Aprovados", StringComparison.Ordinal), "a janela do desktop segue em linhas, como antes");
+    }
+
     private RemoteSessionPublisher Publisher()
     {
         var services = new ServiceCollection()
