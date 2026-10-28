@@ -2,17 +2,23 @@
 
 | | |
 |---|---|
-| **Status** | Proposto |
-| **Implementação** | Planejado |
+| **Status** | Aceito |
+| **Implementação** | Implementado |
 | **Categoria** | remoto |
 | **Registrado** | 2026-10-28 |
 | **Palavras-chave** | SignalR, EventsAppended, OperationChanged, ApprovalRequested, SessionChanged, polling, backoff, reconexão |
 | **Relações** | revisa: [ADR-086](086-operacao-remota-registro-diario-e-signalr.md); relacionado: [ADR-091](091-conversa-do-claude-como-sessao-no-servidor.md) |
-| **Código** | (planejado) `src/MyTaskApp.Infrastructure/Remote/SignalRRemoteHub.cs`, `src/MyTaskApp.Desktop/ViewModels/RemoteControlViewModel.cs`, `src/MyTaskApp.Mobile.Core/ViewModels/RemoteSessionViewModel.cs` |
+| **Código** | `src/MyTaskApp.Application/Remote/RemoteWatch.cs`, `src/MyTaskApp.Infrastructure/Remote/SignalRRemoteWatch.cs`, `src/MyTaskApp.Desktop/ViewModels/RemoteControlViewModel.cs`, `src/MyTaskApp.Mobile.Core/ViewModels/RemoteSessionViewModel.cs` |
 
-**Estado:** proposto (fase 3, E3). Nada implementado. O servidor já manda os
-avisos (`EventsAppended`, `OperationChanged`, `ApprovalRequested`, e, desde o
-ADR-091, `SessionChanged`); só o agente ouve o hub.
+**Estado:** implementado (fase 3, E3).
+
+- A porta `IRemoteWatch` entrega os avisos da conta.
+- O `RemotePace` decide quando cada tela lê.
+- A `SignalRRemoteWatch` divide com a campainha do agente a montagem da
+  conexão. Ela fica de pé enquanto houver uma tela remota aberta.
+
+Usam a escuta, no desktop, a janela *Controlar* e, no celular, a tela da
+operação, a da conversa e a lista de aprovações.
 
 **Contexto:** o desktop e o celular leem por tempo, de 0,5 s a 1,5 s com a tela
 aberta. Isso gasta requisição com a tela parada e atrasa o que chega entre
@@ -24,9 +30,10 @@ duas leituras. O hub já é a campainha do agente (ADR-086).
    aviso dispara a leitura do que mudou, pelos mesmos handlers de hoje.
 2. O hub continua só campainha: o aviso não traz dado, só o id. Quem lê é o
    REST, com o cursor de cada operação.
-3. Sem o hub (proxy que barra, rede ruim), a leitura por tempo continua, com
-   recuo até 5 s. Na reconexão, a leitura parte do cursor guardado: nada se
-   perde.
+3. Com o hub ligado, a leitura por tempo vira reserva, a cada 5 s, para o
+   aviso que se perdeu. Sem o hub (proxy que barra, rede ruim), a leitura por
+   tempo continua no intervalo de cada tela, como antes. Na reconexão, um
+   aviso "religou" faz reler tudo do cursor guardado: nada se perde.
 
 **Por quê:** o SignalR já está no projeto e no servidor. Não há tecnologia
 nova, e o REST continua a fonte da verdade.

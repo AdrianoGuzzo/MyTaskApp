@@ -40,6 +40,7 @@ public sealed partial class RemoteControlWindow : Window
         if (DataContext is RemoteControlViewModel viewModel)
         {
             viewModel.PropertyChanged -= FollowOutput;
+            _ = viewModel.CloseAsync().AsTask();
         }
 
         base.OnClosed(e);

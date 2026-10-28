@@ -386,6 +386,9 @@ public static class DependencyInjection
 
         // A campainha do servidor (T-15): só o agente liga, pelo RemoteOperationScheduler.
         services.AddSingleton<IRemoteHub, SignalRRemoteHub>();
+
+        // Os avisos da conta para as telas de controle (ADR-094): ligam só com uma tela aberta.
+        services.AddSingleton<IRemoteWatch, SignalRRemoteWatch>();
         services.AddSingleton<ISyncServerAddress, SyncServerAddress>();
         services.AddSingleton<ISyncServerProbe, SyncServerProbe>();
     }

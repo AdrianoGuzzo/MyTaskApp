@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using MyTaskApp.Application.Remote;
 using MyTaskApp.Infrastructure.Secrets;
 using MyTaskApp.Mobile.Core.Ports;
 using MyTaskApp.Mobile.Core.Presentation;
@@ -201,4 +202,28 @@ internal sealed class MemorySecretStore : ISecretStore
         Secrets.TryRemove(name, out _);
         return Task.CompletedTask;
     }
+}
+
+/// <summary>O hub de mentira (ADR-094): o teste diz se está ligado e manda os avisos.</summary>
+internal sealed class FakeRemoteWatch : IRemoteWatch
+{
+    public event Action<RemoteNotice>? Noticed;
+
+    public bool IsConnected { get; set; }
+
+    public int Watchers { get; private set; }
+
+    public Task StartAsync(CancellationToken cancellationToken)
+    {
+        Watchers++;
+        return Task.CompletedTask;
+    }
+
+    public Task StopAsync(CancellationToken cancellationToken)
+    {
+        Watchers--;
+        return Task.CompletedTask;
+    }
+
+    public void Notify(RemoteNoticeKind kind, Guid id) => Noticed?.Invoke(new RemoteNotice(kind, id));
 }

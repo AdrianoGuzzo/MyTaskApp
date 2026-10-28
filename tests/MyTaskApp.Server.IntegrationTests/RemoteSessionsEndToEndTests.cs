@@ -1,8 +1,12 @@
 using System.Text.Json;
+using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Remote;
+using MyTaskApp.Application.Sync;
 using MyTaskApp.Domain.Agents;
+using MyTaskApp.Infrastructure.Remote;
 using MyTaskApp.Remote.Contracts;
 
 namespace MyTaskApp.Server.IntegrationTests;
@@ -55,6 +59,59 @@ public sealed partial class RemoteOperationsEndToEndTests
         timeline.Operations.Select(operation => operation.OperationId).Should().Equal(prompt.OperationId);
         timeline.Lines.Should().Equal("Você: E os testes?", "Claude: Passaram os 12.", "— Respondeu.");
         timeline.IsLive.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// O outro desktop ouve o hub (ADR-094): a saída do prompt e a mudança da
+    /// conversa chegam como aviso, pelo mesmo cliente do agente, e a tela lê
+    /// pelo REST do cursor dela.
+    /// </summary>
+    [Fact]
+    public async Task AnotherDesktop_HearsTheOutputAndTheConversationChange_ThroughTheHub()
+    {
+        var (notebook, phone, phoneKey) = await PairedAsync();
+        using var _ = phoneKey;
+        var (taskId, developmentId) = await ReadyEnvironmentAsync(notebook);
+        var conversation = await HeadlessConversationAsync(notebook, taskId, developmentId);
+
+        var office = await SyncedDesktop.CreateAsync(_api, "Escritório", Ct);
+        _desktops.Add(office);
+        await office.UseCaseAsync<UpdateRemoteSettingsHandler, RemoteSettings>(
+            (handler, cancel) => handler.HandleAsync(new UpdateRemoteSettings(Enabled: true, AcceptControl: false), cancel));
+        await office.ConnectAsync("ana", Ct);
+
+        var notices = new System.Collections.Concurrent.ConcurrentQueue<RemoteNotice>();
+        await using var watch = new SignalRRemoteWatch(
+            office.Services.GetRequiredService<ISyncAuthenticator>(),
+            NullLogger<SignalRRemoteWatch>.Instance,
+            new RemoteHubTransport(() => _api.Server.CreateHandler(), HttpTransportType.LongPolling));
+        watch.Noticed += notices.Enqueue;
+        await watch.StartAsync(Ct);
+        watch.IsConnected.Should().BeTrue();
+
+        var prompt = await RequestAsync(
+            notebook, phone, phoneKey, RemoteOperationKinds.AgentPrompt,
+            JsonSerializer.SerializeToElement(new PromptRequest(conversation, "E os testes?"), RemoteJson.Options), taskId);
+        await AnswerAsync(notebook, prompt.OperationId, conversation, "E os testes?", "Passaram os 12.");
+        await notebook.Services.GetRequiredService<RemoteSessionPublisher>().PublishAsync(Ct);
+
+        await WaitForAsync(() => notices.Contains(new RemoteNotice(RemoteNoticeKind.Session, conversation)));
+        notices.Should().Contain(new RemoteNotice(RemoteNoticeKind.Events, prompt.OperationId));
+        notices.Should().Contain(new RemoteNotice(RemoteNoticeKind.Operation, prompt.OperationId));
+
+        await watch.StopAsync(Ct);
+        watch.IsConnected.Should().BeFalse("sem tela aberta, a conexão cai");
+    }
+
+    private static async Task WaitForAsync(Func<bool> condition)
+    {
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(30);
+
+        while (!condition())
+        {
+            DateTimeOffset.UtcNow.Should().BeBefore(deadline, "o aviso não chegou");
+            await Task.Delay(50, Ct);
+        }
     }
 
     /// <summary>Uma conversa sem terminal do notebook, esperando o próximo prompt.</summary>

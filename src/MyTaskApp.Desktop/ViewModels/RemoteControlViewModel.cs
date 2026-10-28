@@ -96,8 +96,12 @@ public sealed partial class RemoteControlViewModel : ObservableObject
     /// <summary>As aprovações não mudam a cada meio segundo: a lista é relida a cada tantas voltas do relógio.</summary>
     internal const int ApprovalTicks = 6;
 
+    /// <summary>Com o hub ligado, o relógio só cobre o aviso perdido: uma leitura a cada tantas voltas (5 s).</summary>
+    internal const int LiveTicks = 10;
+
     private readonly IUseCaseRunner _runner;
     private readonly ILogger<RemoteControlViewModel> _logger;
+    private readonly RemotePace _pace;
     private readonly StringBuilder _lines = new();
 
     /// <summary>A conversa de cada ambiente (pelo id do ambiente), lida dos eventos das operações do Claude.</summary>
@@ -114,10 +118,11 @@ public sealed partial class RemoteControlViewModel : ObservableObject
     private int _ticks;
     private bool _ticking;
 
-    public RemoteControlViewModel(IUseCaseRunner runner, ILogger<RemoteControlViewModel> logger)
+    public RemoteControlViewModel(IUseCaseRunner runner, ILogger<RemoteControlViewModel> logger, IRemoteWatch? watch = null)
     {
         _runner = runner;
         _logger = logger;
+        _pace = new RemotePace(watch ?? new NoRemoteWatch(), TimeProvider.System);
         Sessions = new RemoteSessionsViewModel(runner, logger);
 
         // A lista relida pelo relógio pode trazer (ou levar) a conversa que espera no ambiente.
@@ -222,6 +227,9 @@ public sealed partial class RemoteControlViewModel : ObservableObject
         }
 
         ErrorMessage = null;
+
+        // Os avisos do hub (ADR-094) enquanto a janela está aberta; sem hub, o relógio lê como antes.
+        await _pace.StartAsync(cancellationToken);
 
         try
         {
@@ -403,6 +411,9 @@ public sealed partial class RemoteControlViewModel : ObservableObject
         }
     }
 
+    /// <summary>A janela fechou: a conexão do hub cai se nenhuma outra tela a usa. A operação continua lá.</summary>
+    public ValueTask CloseAsync() => _pace.DisposeAsync();
+
     /// <summary>O próximo prompt abre outra conversa; a de antes fica lá, sem processo entre um prompt e outro.</summary>
     [RelayCommand]
     public void NewConversation()
@@ -433,7 +444,9 @@ public sealed partial class RemoteControlViewModel : ObservableObject
 
     /// <summary>
     /// O relógio da janela, a cada meio segundo: os eventos novos da operação
-    /// em andamento e, de tempos em tempos, as aprovações.
+    /// em andamento e, de tempos em tempos, as aprovações. Com o hub ligado
+    /// (ADR-094), lê o que o aviso disse que mudou, e o resto a cada
+    /// <see cref="LiveTicks"/> voltas.
     /// </summary>
     public async Task TickAsync(CancellationToken cancellationToken)
     {
@@ -446,18 +459,25 @@ public sealed partial class RemoteControlViewModel : ObservableObject
 
         try
         {
+            var noticed = _pace.TakeNotices();
+            var listening = _pace.IsListening;
+            var fallback = ++_ticks % LiveTicks == 0;
+            var everything = noticed.Contains(RemoteNoticeKind.Reconnected);
+
             // Até drenar, não até o estado final: o "terminou" pode chegar com saída ainda por ler.
-            if (Operation is not null && !_drained)
+            if (Operation is not null && !_drained
+                && (!listening || fallback || everything || noticed.Contains(RemoteNoticeKind.Events)
+                    || noticed.Contains(RemoteNoticeKind.Operation) || noticed.Contains(RemoteNoticeKind.Approval)))
             {
                 await ReadProgressAsync(cancellationToken);
             }
 
-            if (++_ticks % ApprovalTicks == 0)
+            if (everything || noticed.Contains(RemoteNoticeKind.Approval) || (listening ? fallback : _ticks % ApprovalTicks == 0))
             {
                 await LoadApprovalsAsync(cancellationToken);
             }
 
-            await Sessions.TickAsync(_ticks, cancellationToken);
+            await Sessions.TickAsync(_ticks, noticed, listening, cancellationToken);
         }
         finally
         {

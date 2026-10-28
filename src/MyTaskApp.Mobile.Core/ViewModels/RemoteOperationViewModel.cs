@@ -15,7 +15,8 @@ namespace MyTaskApp.Mobile.Core.ViewModels;
 /// <summary>
 /// Uma operação pedida de longe, ao vivo (E7): o estado, a saída e as
 /// aprovações dela, relidos a cada <see cref="Interval"/> enquanto a tela está
-/// aberta. Com uma conversa do Claude aberta, manda mais um prompt ou para.
+/// aberta, ou na hora do aviso do hub (ADR-094). Com uma conversa do Claude
+/// aberta, manda mais um prompt ou para.
 /// </summary>
 public sealed partial class RemoteOperationViewModel : MobileViewModel, IDisposable
 {
@@ -34,7 +35,7 @@ public sealed partial class RemoteOperationViewModel : MobileViewModel, IDisposa
 
     private readonly IUiDispatcher _dispatcher;
 
-    private readonly TimeProvider _time;
+    private readonly RemotePace _pace;
 
     private readonly StringBuilder _lines = new();
 
@@ -72,7 +73,8 @@ public sealed partial class RemoteOperationViewModel : MobileViewModel, IDisposa
         IUiDispatcher dispatcher,
         IDialogService dialogs,
         TimeProvider time,
-        ILogger<RemoteOperationViewModel> logger)
+        ILogger<RemoteOperationViewModel> logger,
+        IRemoteWatch? watch = null)
         : base(dialogs, logger)
     {
         _runner = runner;
@@ -80,7 +82,7 @@ public sealed partial class RemoteOperationViewModel : MobileViewModel, IDisposa
         _watcher = watcher;
         _answers = answers;
         _dispatcher = dispatcher;
-        _time = time;
+        _pace = new RemotePace(watch ?? new NoRemoteWatch(), time, notice => notice.Id == OperationId);
         _watcher.Changed += OnApprovalsChanged;
     }
 
@@ -121,12 +123,13 @@ public sealed partial class RemoteOperationViewModel : MobileViewModel, IDisposa
         Start();
     }
 
-    /// <summary>A tela saiu: para de ler.</summary>
+    /// <summary>A tela saiu: para de ler, e a conexão do hub cai se nenhuma outra tela a usa.</summary>
     public void Close()
     {
         _loop?.Cancel();
         _loop?.Dispose();
         _loop = null;
+        _ = _pace.DisposeAsync().AsTask();
     }
 
     [RelayCommand]
@@ -201,10 +204,12 @@ public sealed partial class RemoteOperationViewModel : MobileViewModel, IDisposa
     {
         try
         {
+            await _pace.StartAsync(cancellationToken);
+
             // Até drenar, não até o estado final: o "terminou" pode chegar com saída ainda por ler.
             while (!cancellationToken.IsCancellationRequested && !_drained)
             {
-                await Task.Delay(Interval, _time, cancellationToken);
+                await _pace.WaitAsync(Interval, cancellationToken);
                 await PollAsync(cancellationToken);
             }
         }

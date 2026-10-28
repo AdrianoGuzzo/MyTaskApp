@@ -143,7 +143,7 @@ Números dos ADRs; o link está na linha do índice abaixo.
 | [ADR-091](decisions/091-conversa-do-claude-como-sessao-no-servidor.md) | A conversa do Claude como sessão no servidor, relatada pelo agente | Aceito | Implementado | remoto | RemoteAgentSessions, RemoteSessionPublisher, AgentSeenAt, SessionChanged, linha do tempo |
 | [ADR-092](decisions/092-sessao-gerenciada-a-partir-do-desktop.md) | Sessão gerenciada a partir do desktop: o agente da própria máquina roda o Claude | Proposto | Planejado | remoto | sessão gerenciada, Abrir Claude gerenciado, desktop para celular |
 | [ADR-093](decisions/093-pergunta-do-claude-respondida-de-longe.md) | A pergunta do Claude (AskUserQuestion) respondida de longe | Proposto | Planejado | remoto | AskUserQuestion, updatedInput, answers, permission-prompt-tool |
-| [ADR-094](decisions/094-controladores-ouvem-o-hub.md) | Os controladores ouvem o hub, com a leitura por tempo como reserva | Proposto | Planejado | remoto | SignalR, EventsAppended, SessionChanged, polling, reconexão |
+| [ADR-094](decisions/094-controladores-ouvem-o-hub.md) | Os controladores ouvem o hub, com a leitura por tempo como reserva | Aceito | Implementado | remoto | SignalR, EventsAppended, SessionChanged, polling, reconexão |
 
 ## Novo ADR
 

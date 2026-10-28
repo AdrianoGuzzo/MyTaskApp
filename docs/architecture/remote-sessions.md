@@ -62,7 +62,8 @@ Não passa pelo servidor.
   tempo da conversa. Resolvido na E2 ([ADR-091](decisions/091-conversa-do-claude-como-sessao-no-servidor.md)).
 - **A presença enganava.** O desktop mandava o mesmo sinal de vida do agente.
   Resolvido na E2 (`AgentSeenAt`).
-- **Controladores só por tempo.** Ninguém ouve o hub (E3, [ADR-094](decisions/094-controladores-ouvem-o-hub.md)).
+- **Controladores só por tempo.** Ninguém ouvia o hub. Resolvido na E3
+  ([ADR-094](decisions/094-controladores-ouvem-o-hub.md)).
 - **A pergunta do Claude sem resposta de longe** (E4, [ADR-093](decisions/093-pergunta-do-claude-respondida-de-longe.md)).
 - **A sessão do desktop invisível de longe** (E5, [ADR-092](decisions/092-sessao-gerenciada-a-partir-do-desktop.md)).
 - **Sem push no celular** (E8).

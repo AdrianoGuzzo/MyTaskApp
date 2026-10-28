@@ -31,11 +31,14 @@ public sealed partial class RemoteSessionViewModel : MobileViewModel, IDisposabl
 
     private readonly IUiDispatcher _dispatcher;
 
-    private readonly TimeProvider _time;
+    private readonly RemotePace _pace;
 
     private readonly StringBuilder _lines = new();
 
     private readonly HashSet<Guid> _operations = [];
+
+    /// <summary>As operações da conversa, para o aviso do hub, que chega de outra thread.</summary>
+    private volatile IReadOnlySet<Guid> _known = new HashSet<Guid>();
 
     private RemoteSessionCursor _cursor = RemoteSessionCursor.Start;
 
@@ -65,7 +68,8 @@ public sealed partial class RemoteSessionViewModel : MobileViewModel, IDisposabl
         IUiDispatcher dispatcher,
         IDialogService dialogs,
         TimeProvider time,
-        ILogger<RemoteSessionViewModel> logger)
+        ILogger<RemoteSessionViewModel> logger,
+        IRemoteWatch? watch = null)
         : base(dialogs, logger)
     {
         _runner = runner;
@@ -73,7 +77,7 @@ public sealed partial class RemoteSessionViewModel : MobileViewModel, IDisposabl
         _watcher = watcher;
         _answers = answers;
         _dispatcher = dispatcher;
-        _time = time;
+        _pace = new RemotePace(watch ?? new NoRemoteWatch(), time, Concerns);
         _watcher.Changed += OnApprovalsChanged;
     }
 
@@ -98,6 +102,7 @@ public sealed partial class RemoteSessionViewModel : MobileViewModel, IDisposabl
             DeviceId = deviceId;
             _cursor = RemoteSessionCursor.Start;
             _operations.Clear();
+            _known = new HashSet<Guid>();
             _lines.Clear();
             Output = string.Empty;
             Session = null;
@@ -111,12 +116,13 @@ public sealed partial class RemoteSessionViewModel : MobileViewModel, IDisposabl
         Start();
     }
 
-    /// <summary>A tela saiu: para de ler.</summary>
+    /// <summary>A tela saiu: para de ler, e a conexão do hub cai se nenhuma outra tela a usa.</summary>
     public void Close()
     {
         _loop?.Cancel();
         _loop?.Dispose();
         _loop = null;
+        _ = _pace.DisposeAsync().AsTask();
     }
 
     [RelayCommand]
@@ -187,10 +193,12 @@ public sealed partial class RemoteSessionViewModel : MobileViewModel, IDisposabl
     {
         try
         {
-            // Parada a conversa e lido tudo, a leitura descansa; um prompt novo daqui a acorda.
+            await _pace.StartAsync(cancellationToken);
+
+            // Parada a conversa e lido tudo, a leitura descansa; um prompt novo, daqui ou de outra tela, a acorda.
             while (!cancellationToken.IsCancellationRequested)
             {
-                await Task.Delay(Interval, _time, cancellationToken);
+                await _pace.WaitAsync(Interval, cancellationToken);
 
                 if (_live)
                 {
@@ -201,6 +209,23 @@ public sealed partial class RemoteSessionViewModel : MobileViewModel, IDisposabl
         catch (OperationCanceledException)
         {
         }
+    }
+
+    /// <summary>
+    /// O aviso é desta conversa: ela mudou, ou uma operação dela andou. A
+    /// conversa que descansava volta a ser lida: o prompt pode ter vindo de
+    /// outra tela (ADR-094).
+    /// </summary>
+    private bool Concerns(RemoteNotice notice)
+    {
+        var concerns = notice.Kind == RemoteNoticeKind.Session ? notice.Id == SessionId : _known.Contains(notice.Id);
+
+        if (concerns)
+        {
+            _live = true;
+        }
+
+        return concerns;
     }
 
     private async Task PollAsync(CancellationToken cancellationToken)
@@ -252,6 +277,7 @@ public sealed partial class RemoteSessionViewModel : MobileViewModel, IDisposabl
         }
 
         _operations.UnionWith(timeline.Operations.Select(operation => operation.OperationId));
+        _known = new HashSet<Guid>(_operations);
         Session = timeline.Session;
         Title = timeline.Session.Title;
         Status = timeline.Session.Branch is { } branch ? $"{branch} · {timeline.Session.State}" : timeline.Session.State;

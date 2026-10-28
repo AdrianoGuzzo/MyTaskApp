@@ -1,6 +1,6 @@
 # Fase 3 — A conversa do Claude como uma sessão só: roteiro
 
-> **Estado:** E1 e E2 feitas; E3 a E9 planejadas. O desenho, a auditoria e a
+> **Estado:** E1 a E3 feitas; E4 a E9 planejadas. O desenho, a auditoria e a
 > comparação das alternativas estão em
 > [`../architecture/remote-sessions.md`](../architecture/remote-sessions.md).
 > As decisões estão nos ADR-091 a 094 do [índice](../architecture/README.md).
@@ -22,7 +22,7 @@
 |---|---|---|---|
 | E1 | os defeitos da fase 2 corrigidos; "Permitir nesta conversa" nos dois controladores | — | ✔ |
 | E2 | as conversas da máquina, com a linha do tempo, no celular e em outro desktop; agente parado visível | E1 | ✔ |
-| E3 | a saída e as aprovações na hora, pelo hub | E2 | planejada |
+| E3 | a saída e as aprovações na hora, pelo hub | E2 | ✔ |
 | E4 | responder a pergunta do Claude de longe | E1 | planejada |
 | E5 | começar no computador e continuar no celular | E2 | planejada |
 | E6 | instrução com o Claude respondendo | E2 | planejada |
@@ -145,27 +145,42 @@ ADR-091).
 - O estado na lista atrasa até uma volta do agente.
 - A linha do tempo de uma conversa longa lê uma página por operação.
 
-## E3 — Tempo real nos controladores ([ADR-094](../architecture/decisions/094-controladores-ouvem-o-hub.md))
+## E3 — Tempo real nos controladores ✔ ([ADR-094](../architecture/decisions/094-controladores-ouvem-o-hub.md))
 
 **Problema:** os controladores leem por tempo; o hub só toca o agente.
 
 **Arquivos:**
 
-- `Infrastructure/Remote/SignalRRemoteHub` (os avisos dos controladores);
-- `RemoteControlViewModel` e `RemoteSessionsViewModel`;
-- `RemoteOperationViewModel` e `RemoteSessionViewModel`;
-- `ApprovalWatcher`.
+- `Application/Remote/RemoteWatch.cs`: `IRemoteWatch`, `RemoteNotice`,
+  `RemotePace`.
+- `Infrastructure/Remote/SignalRRemoteWatch`; `RemoteHubConnection`, dividida
+  com a campainha do agente.
+- Desktop: `RemoteControlViewModel` e `RemoteSessionsViewModel`; a janela
+  solta o hub ao fechar.
+- Celular: `RemoteOperationViewModel`, `RemoteSessionViewModel` e
+  `ApprovalWatcher`.
+
+**Migrations:** nenhuma.
 
 **Testes:**
 
-- `RemoteHubTests`: os avisos chegam ao controlador;
-- testes de tela com um hub de mentira: o aviso dispara a leitura; sem hub, a
-  leitura por tempo recua até 5 s; na reconexão, a leitura parte do cursor.
+- `RemotePaceTests`:
+  - o aviso acorda;
+  - o relógio vira reserva de 5 s;
+  - o aviso de outra coisa não acorda, e o "religou" sempre acorda;
+  - cada tela segura a conexão.
+- `RemoteControlViewModelTests`: a saída lida no aviso e a cada 5 s sem ele.
+- `RemoteTests` (celular): o prompt de outra tela e a aprovação nova aparecem
+  no aviso, sem o relógio andar.
+- Ponta a ponta: `AnotherDesktop_HearsTheOutputAndTheConversationChange_ThroughTheHub`,
+  com a escuta de verdade contra o servidor.
 
-**Aceite:** a saída aparece em menos de 1 s com a tela aberta, e nada se perde
-com o hub caindo no meio.
+**Aceite:** a saída aparece em menos de 1 s com a tela aberta (o relógio do
+desktop é de 0,5 s; o celular acorda no aviso). Nada se perde com o hub
+caindo no meio: na volta, tudo é relido do cursor.
 
-**Riscos:** uma conexão a mais por controlador aberto.
+**Riscos:** uma conexão a mais por controlador aberto; o desktop e o agente da
+mesma máquina abrem uma cada.
 
 ## E4 — A pergunta do Claude ([ADR-093](../architecture/decisions/093-pergunta-do-claude-respondida-de-longe.md))
 

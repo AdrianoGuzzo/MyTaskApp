@@ -135,6 +135,41 @@ public class RemoteControlViewModelTests
         _runner.Invoked.Count(type => type == typeof(GetRemoteOperationProgressHandler)).Should().Be(reads, "terminada, não pergunta mais");
     }
 
+    /// <summary>
+    /// Com o hub ligado (ADR-094), a saída é lida no aviso, e o relógio de meio
+    /// segundo só cobre o aviso perdido, a cada 5 s. Fechar a janela solta o hub.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task WithTheHub_TheOutputIsReadOnTheNotice_AndTheClockOnlyEveryFiveSeconds()
+    {
+        var watch = new FakeRemoteWatch { IsConnected = true };
+        var viewModel = new RemoteControlViewModel(_runner, NullLogger<RemoteControlViewModel>.Instance, watch);
+        await viewModel.OpenAsync(Notebook, Ct);
+        watch.Watchers.Should().Be(1);
+        var command = viewModel.SelectedEnvironment!.Commands[0];
+        command.Parameters[0].Value = "Api";
+        await viewModel.RunCommand.ExecuteAsync(command);
+        _runner.ResultsByHandler[typeof(GetRemoteOperationProgressHandler)] = new RemoteOperationProgress(Operation(RemoteOperationStatus.Running), [], 0);
+        int Reads() => _runner.Invoked.Count(type => type == typeof(GetRemoteOperationProgressHandler));
+
+        await viewModel.TickAsync(Ct);
+        Reads().Should().Be(0, "sem aviso, a volta de meio segundo não lê");
+
+        watch.Notify(RemoteNoticeKind.Events, OperationId);
+        await viewModel.TickAsync(Ct);
+        Reads().Should().Be(1);
+
+        for (var tick = 0; tick < RemoteControlViewModel.LiveTicks; tick++)
+        {
+            await viewModel.TickAsync(Ct);
+        }
+
+        Reads().Should().Be(2, "o relógio cobre o aviso perdido");
+
+        await viewModel.CloseAsync();
+        watch.Watchers.Should().Be(0);
+    }
+
     /// <summary>O "terminou" chegou com saída ainda no servidor: a janela lê até o fim antes de parar.</summary>
     [AvaloniaFact]
     public async Task AFinishedOperationWithEventsLeft_KeepsReadingUntilDrained()
@@ -453,4 +488,28 @@ public class RemoteControlViewModelTests
             null,
             null,
             null);
+}
+
+/// <summary>O hub de mentira: o teste diz se está ligado e manda os avisos.</summary>
+internal sealed class FakeRemoteWatch : IRemoteWatch
+{
+    public event Action<RemoteNotice>? Noticed;
+
+    public bool IsConnected { get; set; }
+
+    public int Watchers { get; private set; }
+
+    public Task StartAsync(CancellationToken cancellationToken)
+    {
+        Watchers++;
+        return Task.CompletedTask;
+    }
+
+    public Task StopAsync(CancellationToken cancellationToken)
+    {
+        Watchers--;
+        return Task.CompletedTask;
+    }
+
+    public void Notify(RemoteNoticeKind kind, Guid id) => Noticed?.Invoke(new RemoteNotice(kind, id));
 }

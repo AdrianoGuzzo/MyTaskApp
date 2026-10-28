@@ -256,6 +256,7 @@ public static class DependencyInjection
         services.TryAddSingleton(RemoteDispatchLimits.Default);
         services.TryAddSingleton<RemoteOperationDispatcher>();
         services.TryAddSingleton<IRemoteHub, NoRemoteHub>();
+        services.TryAddSingleton<IRemoteWatch, NoRemoteWatch>();
         services.TryAddSingleton<RemoteOperationScheduler>();
         services.TryAddSingleton<RemoteCatalogPublisher>();
 

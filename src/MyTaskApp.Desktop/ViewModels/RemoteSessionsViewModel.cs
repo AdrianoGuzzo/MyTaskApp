@@ -143,15 +143,26 @@ public sealed partial class RemoteSessionsViewModel : ObservableObject
         OnPropertyChanged(nameof(HasItems));
     }
 
-    /// <summary>A volta do relógio da janela: a linha do tempo da conversa viva e, de tempos em tempos, a lista.</summary>
-    public async Task TickAsync(int tick, CancellationToken cancellationToken)
+    /// <summary>
+    /// A volta do relógio da janela: a linha do tempo da conversa viva e, de
+    /// tempos em tempos, a lista. Com o hub ligado (<paramref name="listening"/>),
+    /// o aviso da conversa ou da saída faz ler na hora, e o relógio só cobre o
+    /// aviso perdido (ADR-094). Uma conversa parada volta a ser lida quando um
+    /// aviso diz que ela mudou: o prompt pode ter vindo de outra tela.
+    /// </summary>
+    public async Task TickAsync(int tick, IReadOnlySet<RemoteNoticeKind> noticed, bool listening, CancellationToken cancellationToken)
     {
-        if (Selected is not null && _live && tick % TimelineTicks == 0)
+        var everything = noticed.Contains(RemoteNoticeKind.Reconnected);
+        var changed = everything || noticed.Contains(RemoteNoticeKind.Session);
+        var output = changed || noticed.Contains(RemoteNoticeKind.Events) || noticed.Contains(RemoteNoticeKind.Operation);
+        var fallback = tick % RemoteControlViewModel.LiveTicks == 0;
+
+        if (Selected is not null && (_live || changed) && (output || (listening ? fallback : tick % TimelineTicks == 0)))
         {
             await ReadTimelineAsync(cancellationToken);
         }
 
-        if (DeviceId is { } deviceId && ++_ticks % ListTicks == 0)
+        if (DeviceId is { } deviceId && (++_ticks % ListTicks == 0 || changed))
         {
             await LoadAsync(deviceId, cancellationToken);
         }

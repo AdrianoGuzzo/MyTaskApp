@@ -149,6 +149,11 @@ as conversas abertas de qualquer tela: do celular, deste desktop ou de outro.
   que ainda não chegou aparece como "Tarefa que ainda não chegou aqui". O
   servidor guarda só ids e estado, sem caminhos, comandos ou o texto do Claude.
 
+**Ao vivo.** Com uma tela de controle aberta, o desktop e o celular ouvem o
+hub do servidor. A saída, as aprovações e o prompt mandado de outra tela
+aparecem na hora (ADR-094). Se um proxy barra o hub, as telas leem por tempo,
+como antes, e nada se perde.
+
 O estado diz quem sabe o quê:
 
 | Estado | Quer dizer |

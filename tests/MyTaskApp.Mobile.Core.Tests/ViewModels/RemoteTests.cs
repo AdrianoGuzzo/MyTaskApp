@@ -448,6 +448,43 @@ public sealed class RemoteTests : IAsyncLifetime
         remote.Recent.Should().BeEmpty("a lista só relê ao abrir a aba");
     }
 
+    /// <summary>
+    /// Com o hub ligado (ADR-094), o prompt mandado de outra tela aparece na
+    /// conversa no aviso, sem esperar o relógio, e a aprovação nova também.
+    /// </summary>
+    [Fact]
+    public async Task WithTheHub_APromptFromAnotherScreen_AndANewApproval_ShowUpOnTheNotice()
+    {
+        var remote = await ReadyAsync();
+        _app.Watch.IsConnected = true;
+        var first = await SendAsync();
+        var session = Session(RemoteAgentSessionStatus.Idle);
+        Server.Link(session.SessionId, first);
+        Finish(first, ("Oi!", RemoteEventKind.AgentMessage, null));
+        var screen = _app.Get<RemoteSessionViewModel>();
+        await screen.OpenAsync(session.SessionId, Notebook);
+        screen.Output.Should().Contain("Claude: Oi!");
+
+        // O desktop mandou o próximo prompt; o celular só sabe pelo aviso da conversa.
+        var second = await SendAsync();
+        Server.Link(session.SessionId, second);
+        Finish(second, ("Os testes passaram.", RemoteEventKind.AgentMessage, null));
+        _app.Watch.Notify(RemoteNoticeKind.Session, session.SessionId);
+
+        await EventuallyAsync(() => screen.Output.Contains("Claude: Os testes passaram.", StringComparison.Ordinal));
+        screen.Close();
+
+        var watcher = _app.Get<ApprovalWatcher>();
+        watcher.Start();
+        await EventuallyAsync(() => _app.Watch.Watchers > 0);
+        Server.Ask(Guid.CreateVersion7(), Notebook, ApprovalKind.ToolUse, "Bash: npm test", lifetime: TimeSpan.FromMinutes(1));
+        _app.Watch.Notify(RemoteNoticeKind.Approval, Guid.CreateVersion7());
+
+        await EventuallyAsync(() => remote.Approvals.Count == 1);
+        watcher.Stop();
+        await EventuallyAsync(() => _app.Watch.Watchers == 0);
+    }
+
     private RemoteAgentSessionView Session(RemoteAgentSessionStatus status)
     {
         var session = new RemoteAgentSessionView(

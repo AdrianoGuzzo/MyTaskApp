@@ -624,8 +624,8 @@ quem executa é o computador, com as regras dele. O guia é o
   - os computadores que aceitam controle, com o agente à parte ("ligada,
     agente parado desde…" quando os pedidos esperam na fila);
   - o código do pareamento (digitado lá, na janela Máquinas);
-  - as aprovações pendentes, lidas a cada 1,5 s com o app aberto (a nova
-    avisa e conta no título da aba);
+  - as aprovações pendentes, com o app aberto: na hora, pelo hub (ADR-094),
+    ou a cada 1,5 s sem ele. A nova avisa e conta no título da aba;
   - as **conversas do Claude** das máquinas, as 10 mais recentes, de qualquer
     tela que as abriu (ADR-091);
   - os pedidos feitos daqui.
