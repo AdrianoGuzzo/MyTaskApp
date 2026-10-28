@@ -66,6 +66,32 @@ internal sealed class FakeUnlock : IDeviceUnlock
     }
 }
 
+/// <summary>As notificações do sistema (ADR-096): guarda as que saíram e conta os pedidos de permissão.</summary>
+internal sealed class RecordingNotifier : ILocalNotifier
+{
+    public List<LocalNotice> Shown { get; } = [];
+
+    public int PermissionRequests { get; private set; }
+
+    public bool Granted { get; set; } = true;
+
+    public Task<bool> RequestPermissionAsync()
+    {
+        PermissionRequests++;
+        return Task.FromResult(Granted);
+    }
+
+    public void Show(LocalNotice notice) => Shown.Add(notice);
+}
+
+/// <summary>O agendamento do sistema (ADR-096): guarda cada ligar e desligar.</summary>
+internal sealed class RecordingBackgroundChecks : IBackgroundChecks
+{
+    public List<bool> Applied { get; } = [];
+
+    public void Apply(bool enabled) => Applied.Add(enabled);
+}
+
 /// <summary>Responde às perguntas com o que o teste mandou, e guarda o que foi dito.</summary>
 internal sealed class ScriptedDialogs : IDialogService
 {

@@ -51,6 +51,8 @@ public sealed partial class RemoteViewModel : MobileViewModel, IDisposable
 
     private readonly IUseCaseRunner _runner;
 
+    private readonly RemoteBackgroundCheck _background;
+
     private readonly ISyncAccount _account;
 
     private readonly ApprovalWatcher _watcher;
@@ -103,9 +105,11 @@ public sealed partial class RemoteViewModel : MobileViewModel, IDisposable
         IUiDispatcher dispatcher,
         IDialogService dialogs,
         TimeProvider time,
-        ILogger<RemoteViewModel> logger)
+        ILogger<RemoteViewModel> logger,
+        RemoteBackgroundCheck background)
         : base(dialogs, logger)
     {
+        _background = background;
         _runner = runner;
         _account = account;
         _watcher = watcher;
@@ -187,6 +191,13 @@ public sealed partial class RemoteViewModel : MobileViewModel, IDisposable
 
             OnPropertyChanged(nameof(HasMachines));
             OnPropertyChanged(nameof(HasNoMachines));
+
+            if (IsReady)
+            {
+                // O aviso com o app fechado (ADR-096): a permissão é pedida aqui, com a tela.
+                await _background.RequestPermissionAsync();
+            }
+
             await _watcher.RefreshAsync();
             ShowApprovals();
             await LoadRecentAsync();
@@ -211,6 +222,7 @@ public sealed partial class RemoteViewModel : MobileViewModel, IDisposable
                     (handler, token) => handler.HandleAsync(new UpdateRemoteSettings(Enabled: true, AcceptControl: false), token)),
                 "MobileRemoteEnableFailed"))
         {
+            await TryAsync(() => _background.ApplyAsync(), "MobileRemoteBackgroundApplyFailed");
             await LoadAsync();
         }
     }

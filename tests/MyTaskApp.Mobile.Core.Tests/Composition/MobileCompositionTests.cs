@@ -8,6 +8,7 @@ using MyTaskApp.Application.Tags;
 using MyTaskApp.Application.Tasks;
 using MyTaskApp.Infrastructure.Sync.Http;
 using MyTaskApp.Mobile.Core.Composition;
+using MyTaskApp.Mobile.Core.Ports;
 using MyTaskApp.Mobile.Core.Presentation;
 using MyTaskApp.Mobile.Core.ViewModels;
 using MyTaskApp.Sync.Contracts;
@@ -112,12 +113,26 @@ public sealed class MobileCompositionTests : IAsyncLifetime
         start.Should().BeSameAs(lifecycle.StartAsync(), "abrir de novo não migra duas vezes");
         await start;
         await WaitUntilAsync(() => Volatile.Read(ref cycles) >= 1);
+        lifecycle.IsAwake.Should().BeTrue();
+        lifecycle.PrepareAsync().IsCompletedSuccessfully.Should().BeTrue("a verificação do sistema reaproveita o banco já pronto");
+        _app.BackgroundChecks.Applied.Should().Equal([false], "com o remoto desligado, o sistema não verifica nada (ADR-096)");
 
         await lifecycle.SleepAsync();
+        lifecycle.IsAwake.Should().BeFalse("em segundo plano, a verificação avisa");
         lifecycle.Resume();
         await WaitUntilAsync(() => Volatile.Read(ref cycles) >= 2);
 
         await lifecycle.SleepAsync();
+    }
+
+    /// <summary>Sem a casca do Android (o iOS, ADR-096), nada avisa nem agenda: as portas que não fazem nada.</summary>
+    [Fact]
+    public void WithoutTheAndroidShell_NothingNotifiesNorSchedules()
+    {
+        var services = new ServiceCollection().AddMobileCore(new MobileHostOptions { DataDirectory = _app.Folder });
+
+        services.Single(service => service.ServiceType == typeof(ILocalNotifier)).ImplementationType.Should().Be<NoLocalNotifier>();
+        services.Single(service => service.ServiceType == typeof(IBackgroundChecks)).ImplementationType.Should().Be<NoBackgroundChecks>();
     }
 
     private static async Task WaitUntilAsync(Func<bool> condition)

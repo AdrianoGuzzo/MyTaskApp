@@ -7,7 +7,7 @@
 | **Categoria** | remoto |
 | **Registrado** | 2026-10-28 |
 | **Palavras-chave** | SignalR, EventsAppended, OperationChanged, ApprovalRequested, SessionChanged, polling, backoff, reconexão |
-| **Relações** | revisa: [ADR-086](086-operacao-remota-registro-diario-e-signalr.md); relacionado: [ADR-091](091-conversa-do-claude-como-sessao-no-servidor.md) |
+| **Relações** | revisa: [ADR-086](086-operacao-remota-registro-diario-e-signalr.md); relacionado: [ADR-091](091-conversa-do-claude-como-sessao-no-servidor.md), [ADR-096](096-verificacao-periodica-no-celular.md) (com o app fechado) |
 | **Código** | `src/MyTaskApp.Application/Remote/RemoteWatch.cs`, `src/MyTaskApp.Infrastructure/Remote/SignalRRemoteWatch.cs`, `src/MyTaskApp.Desktop/ViewModels/RemoteControlViewModel.cs`, `src/MyTaskApp.Mobile.Core/ViewModels/RemoteSessionViewModel.cs` |
 
 **Estado:** implementado (fase 3, E3).

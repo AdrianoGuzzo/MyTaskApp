@@ -1,6 +1,6 @@
 # Fase 3 — A conversa do Claude como uma sessão só: roteiro
 
-> **Estado:** E1 a E7 feitas; E8 e E9 planejadas. O desenho, a auditoria e a
+> **Estado:** E1 a E8 feitas; E9 planejada. O desenho, a auditoria e a
 > comparação das alternativas estão em
 > [`../architecture/remote-sessions.md`](../architecture/remote-sessions.md).
 > As decisões estão nos ADR-091 a 094 do [índice](../architecture/README.md).
@@ -27,7 +27,7 @@
 | E5 | começar no computador e continuar no celular | E2 | ✔ |
 | E6 | instrução com o Claude respondendo | E2 | ✔ |
 | E7 | linha do tempo em cartões no celular | E2 | ✔ |
-| E8 | push com o app fechado | E3 | planejada |
+| E8 | aviso com o app fechado (verificação periódica) | E3 | ✔ |
 | E9 | robustez: cancelamento assinado, retenção, Linux | — | planejada |
 
 ---
@@ -303,6 +303,30 @@ cartão de aprovação, com tudo.
 ## E8 — Push
 
 Um ADR entre FCM e push próprio; a aprovação com o app fechado.
+
+**Feito** (ADR-096, verificação periódica no lugar do push):
+
+- `RemoteBackgroundCheck` (Mobile.Core): uma volta lê as aprovações em aberto
+  e as conversas com os handlers da aba Remoto, avisa a aprovação nova e a
+  conversa que respondeu ou falhou, uma vez cada, e guarda o que já avisou
+  nas preferências. Com a tela na frente, só anota.
+- Portas `ILocalNotifier` e `IBackgroundChecks`, com as que não fazem nada no
+  iOS e nos testes. `MobileLifecycle.PrepareAsync` prepara o banco sem ligar a
+  sincronização.
+- Android: `RemoteCheckJob` no `JobScheduler` (15 minutos, com rede,
+  persistido), o canal "Controle remoto", o aviso escondido na tela
+  bloqueada e o toque abrindo a aba Remoto. A aba liga o agendamento ao ligar
+  o remoto e pede a permissão de notificar.
+
+**Migrations:** nenhuma; o fio não muda.
+
+**Testes:** `RemoteBackgroundCheckTests` (avisa uma vez, a vencida não, nada
+com a tela na frente, a conversa respondida e a que falhou, a primeira volta
+só anota, o prompt inteiro entre duas voltas), `MobileCompositionTests` (o
+agendamento segue o remoto; sem a casca, nada avisa).
+
+**Não verificado:** num aparelho ou emulador Android (o job, a notificação, a
+permissão e o toque). O APK monta sem avisos.
 
 ## E9 — Robustez
 

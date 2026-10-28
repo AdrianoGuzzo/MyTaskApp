@@ -588,7 +588,8 @@ dotnet test tests/MyTaskApp.Server.IntegrationTests --filter "PhoneSyncTests"   
 
 - **Sem sincronização em segundo plano;** sem push. Abrir o app, puxar para
   atualizar ou a rede voltar disparam um ciclo.
-- **Sem lembretes nem notificações** no celular.
+- **Sem lembretes** no celular. A única notificação é a do controle remoto, no
+  Android (ADR-096).
 - **Fora do celular:** cronômetro, post-its e Jira ficam no desktop. Os dados
   deles sincronizam, mas não aparecem. Comandos e ambientes de desenvolvimento
   rodam nos computadores; o celular só os pede, pela aba Remoto.
@@ -645,5 +646,13 @@ quem executa é o computador, com as regras dele. O guia é o
   a tela de confirmação do bloqueio no 9 e anteriores, `LAContext` no iOS).
   Destravado, vale 30 s, e tranca ao ir para segundo plano. Sem bloqueio de
   tela, o celular não assina.
-- **Sem push:** as aprovações só chegam com o app aberto. Uma pergunta sem
-  resposta em 10 minutos é negada.
+- **Com o app fechado (Android, ADR-096):** com o remoto ligado, o sistema
+  verifica de tempos em tempos (a cada 15 minutos no mínimo, só com rede) e
+  avisa a aprovação nova e a conversa em que o Claude respondeu ou parou com
+  erro. Cada uma avisa uma vez, e o que a aba já mostrou não avisa. Na tela
+  bloqueada, o aviso diz só "Novidade no controle remoto"; o toque abre a aba
+  Remoto. A permissão de notificar (Android 13+) é pedida uma vez, ao abrir a
+  aba com o remoto pronto.
+- **Sem push na hora:** uma pergunta sem resposta em 10 minutos é negada, e a
+  verificação pode vir depois disso. No iOS, as aprovações só chegam com o app
+  aberto.

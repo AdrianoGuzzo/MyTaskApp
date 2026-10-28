@@ -115,3 +115,49 @@ public interface IDeviceUnlock
 {
     Task<UnlockResult> UnlockAsync(string reason, CancellationToken cancellationToken);
 }
+
+/// <summary>Um aviso do sistema, para quando o app não está na frente (ADR-096).</summary>
+/// <param name="Tag">O aviso com a mesma etiqueta substitui o anterior, em vez de empilhar.</param>
+/// <param name="Text">Pode trazer o resumo do pedido: a casca o esconde na tela bloqueada.</param>
+public sealed record LocalNotice(string Tag, string Title, string Text);
+
+/// <summary>
+/// As notificações do sistema (ADR-096): no Android, um canal do app e a
+/// permissão do Android 13+. O iOS não avisa com o app fechado, e a casca de
+/// lá fica com a que não faz nada.
+/// </summary>
+public interface ILocalNotifier
+{
+    /// <summary>Pede a permissão, uma vez só; <c>false</c> = a pessoa negou ou o sistema não avisa.</summary>
+    Task<bool> RequestPermissionAsync();
+
+    void Show(LocalNotice notice);
+}
+
+/// <summary>
+/// A verificação periódica do sistema (ADR-096): o <c>JobScheduler</c> no
+/// Android, a cada 15 minutos no mínimo, com rede. Ligada só com o controle
+/// remoto ligado; o iOS não tem.
+/// </summary>
+public interface IBackgroundChecks
+{
+    void Apply(bool enabled);
+}
+
+/// <summary>Sem notificações (iOS e testes).</summary>
+public sealed class NoLocalNotifier : ILocalNotifier
+{
+    public Task<bool> RequestPermissionAsync() => Task.FromResult(false);
+
+    public void Show(LocalNotice notice)
+    {
+    }
+}
+
+/// <summary>Sem verificação em segundo plano (iOS e testes).</summary>
+public sealed class NoBackgroundChecks : IBackgroundChecks
+{
+    public void Apply(bool enabled)
+    {
+    }
+}

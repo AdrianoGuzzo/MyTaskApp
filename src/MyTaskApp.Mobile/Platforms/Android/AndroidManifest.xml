@@ -17,6 +17,13 @@
 	<uses-permission android:name="android.permission.INTERNET" />
 	<!-- O destravamento antes de assinar um pedido ou uma aprovação de longe (E7). -->
 	<uses-permission android:name="android.permission.USE_BIOMETRIC" />
+	<!--
+		A verificação periódica do controle remoto com o app fechado (ADR-096): o
+		aviso (Android 13+ pede a permissão na tela) e o agendamento que volta
+		depois de reiniciar o celular.
+	-->
+	<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+	<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
 	<!-- O login abre no Custom Tabs do navegador do sistema (WebAuthenticator). -->
 	<queries>

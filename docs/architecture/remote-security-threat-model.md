@@ -224,6 +224,10 @@ flowchart LR
   revogado desligado.
 - **RS-35** A tela de aprovação mostra o pedido inteiro (ferramenta, comando
   completo, diretório), não só um resumo.
+- **RS-37** O aviso com o app fechado (ADR-096) só lê: responder continua
+  pedindo a tela e o destravamento. O resumo do pedido fica escondido na tela
+  bloqueada (`VisibilityPrivate`, com uma versão pública sem conteúdo), e o
+  toque só abre a aba Remoto, a única rota que a tela de entrada aceita.
 
 ### Auditoria
 
@@ -306,3 +310,4 @@ consegue provar.
 | RS-34 | `RemoteDeviceTests`, `RemoteOperationTests.ARevokedMachine_IsNeitherATargetNorAnAgent` (revoga com o alvo parado) | — |
 | RS-35 | `AgentSessionExecutorsTests` (o comando inteiro no resumo), `RemoteTests` do celular | — |
 | RS-36 | `RemoteOperationAuditTests` ("Remoto: Pixel 8"), `DatabaseCopyExecutorTests` (`ConfirmedBy`), `RemoteOperationTests` (o servidor guarda os bytes assinados) | a operação sem tarefa fica no diário do agente e no servidor, não no `ITaskAuditLog` |
+| RS-37 | `RemoteBackgroundCheckTests` do celular (só lê, avisa uma vez, nada com a tela na frente) | a notificação escondida na tela bloqueada e a rota do toque: só num aparelho Android |
