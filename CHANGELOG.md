@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.28.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.27.0...v1.28.0) (2026-10-28)
+
+
+### Added
+
+* **remoto:** a conversa do Claude como uma sessão só entre celular e computadores (fase 3) ([#167](https://github.com/AdrianoGuzzo/MyTaskApp/issues/167)) ([1fbc4d6](https://github.com/AdrianoGuzzo/MyTaskApp/commit/1fbc4d67c692c909573b45cfb3c4ee565cf25ddc))
+* **tempo:** lançar horas pelo menu ⋯ da tarefa ([#165](https://github.com/AdrianoGuzzo/MyTaskApp/issues/165)) ([e85f755](https://github.com/AdrianoGuzzo/MyTaskApp/commit/e85f755a38d6724f89b7e27e1a6cd988046d8920))
+
 ## [1.27.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.26.0...v1.27.0) (2026-10-27)
 
 
