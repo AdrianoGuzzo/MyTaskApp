@@ -490,6 +490,89 @@ public class RemoteControlViewModelTests
         viewModel.Conversation.Should().BeNull();
     }
 
+    /// <summary>
+    /// Sem confirmação, o pedido parecia ter sumido: a tela diz que mandou, e
+    /// depois onde a conversa abriu e onde continuar.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task OpeningAConversationThere_SaysItWasSent_AndThenWhereItOpened()
+    {
+        var conversation = Guid.CreateVersion7();
+        var viewModel = ViewModel();
+        await viewModel.OpenAsync(Notebook, Ct);
+        _runner.ResultsByHandler[typeof(SendRemoteOperationHandler)] = Operation(RemoteOperationStatus.Queued, kind: RemoteOperationKinds.AgentStart);
+        viewModel.AgentPrompt = "Leia o README";
+
+        await viewModel.SendPromptCommand.ExecuteAsync(null);
+
+        viewModel.ConversationNotice.Should().Be("Pedido enviado a Notebook. A conversa abre quando o agente de lá pegar o pedido.");
+
+        _runner.Enqueue<GetRemoteOperationProgressHandler>(
+            new RemoteOperationProgress(
+                Operation(RemoteOperationStatus.Running, kind: RemoteOperationKinds.AgentStart),
+                [Event(1, RemoteEventKind.StepStarted, "Claude…", Conversation(conversation, true))],
+                1));
+        await viewModel.TickAsync(Ct);
+
+        viewModel.ConversationNotice.Should().StartWith("Conversa aberta em Notebook · Validar antimicrobianos (feature/ECO-12).");
+        viewModel.HasConversationNotice.Should().BeTrue();
+
+        viewModel.NewConversation();
+        viewModel.HasConversationNotice.Should().BeFalse();
+    }
+
+    [AvaloniaFact]
+    public async Task AConversationThatNeverOpened_DropsTheSentNotice()
+    {
+        var viewModel = ViewModel();
+        await viewModel.OpenAsync(Notebook, Ct);
+        _runner.ResultsByHandler[typeof(SendRemoteOperationHandler)] = Operation(RemoteOperationStatus.Queued, kind: RemoteOperationKinds.AgentStart);
+        viewModel.AgentPrompt = "Leia o README";
+        await viewModel.SendPromptCommand.ExecuteAsync(null);
+
+        _runner.Enqueue<GetRemoteOperationProgressHandler>(
+            new RemoteOperationProgress(Operation(RemoteOperationStatus.Expired, kind: RemoteOperationKinds.AgentStart), [], 0));
+        await viewModel.TickAsync(Ct);
+
+        viewModel.ConversationNotice.Should().BeNull();
+    }
+
+    /// <summary>"Na fila" sozinho não explicava nada: com o agente de lá parado, a tela diz.</summary>
+    [AvaloniaFact]
+    public async Task AQueuedRequest_SaysTheAgentThereIsStopped()
+    {
+        _runner.ResultsByHandler[typeof(ListRemoteSessionsHandler)] = new RemoteSessionList(
+            [],
+            null,
+            new Dictionary<Guid, string> { [Notebook.DeviceId] = "agente parado desde 28/10 09:12: os pedidos esperam na fila" })
+        {
+            StoppedAgents = new HashSet<Guid> { Notebook.DeviceId },
+        };
+        var viewModel = ViewModel();
+        await viewModel.OpenAsync(Notebook, Ct);
+
+        await viewModel.InspectCommand.ExecuteAsync(null);
+
+        viewModel.OperationState.Should().Be(
+            "Na fila, esperando a outra máquina — Notebook: agente parado desde 28/10 09:12: os pedidos esperam na fila");
+    }
+
+    /// <summary>O "Abrir conversa" do card e do aviso abre já na conversa, mesmo com o Claude respondendo.</summary>
+    [AvaloniaFact]
+    public async Task OpeningOnAConversation_ChoosesIt_AndThePromptGoesInIt()
+    {
+        var answering = Session(RemoteAgentSessionStatus.Running, "Respondendo");
+        _runner.ResultsByHandler[typeof(ListRemoteSessionsHandler)] = new RemoteSessionList([answering]);
+        _runner.ResultsByHandler[typeof(GetRemoteSessionTimelineHandler)] = Timeline(answering, ["Você: Rode tudo"], live: true);
+        var viewModel = ViewModel();
+
+        await viewModel.OpenAsync(Notebook, Ct, Environment.DevelopmentId, answering.Session.SessionId);
+
+        viewModel.Sessions.Selected!.SessionId.Should().Be(answering.Session.SessionId);
+        viewModel.Conversation.Should().Be(answering.Session.SessionId);
+        viewModel.PromptButtonText.Should().Be("Mandar na conversa");
+    }
+
     [AvaloniaFact]
     public async Task AnOldServer_SaysToUpdateIt_AndTheRestOfTheWindowWorks()
     {

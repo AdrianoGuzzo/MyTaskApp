@@ -193,6 +193,10 @@ internal static class AppServices
             .AddTransient<Func<RemoteControlViewModel>>(provider =>
                 () => provider.GetRequiredService<RemoteControlViewModel>())
             .AddTransient<RemotePrepareViewModel>()
+            .AddSingleton<ManagedConversationOpener>()
+            .AddTransient<RemoteConversationsViewModel>()
+            .AddTransient<Func<RemoteConversationsViewModel>>(provider =>
+                () => provider.GetRequiredService<RemoteConversationsViewModel>())
             .AddSingleton<MachinesWindow>()
 
             // O relatório de horas (ADR-097): janela única, como as outras do menu.

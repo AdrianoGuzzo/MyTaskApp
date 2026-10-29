@@ -176,7 +176,12 @@ public sealed record AgentAttention(
     /// O prazo da tarefa, quando está perto (ADR-050, §26); <c>null</c> = sem
     /// prazo, ou com folga.
     /// </summary>
-    string? DeadlineLabel = null);
+    string? DeadlineLabel = null,
+    /// <summary>
+    /// O aviso é de que alguém abriu de longe uma conversa sem terminal aqui
+    /// (ADR-092): o apelido de quem abriu. O botão leva à conversa, não a um terminal.
+    /// </summary>
+    string? OpenedBy = null);
 
 /// <summary>
 /// Põe na tela o aviso de que um agente precisa do usuário (ADR-037). A

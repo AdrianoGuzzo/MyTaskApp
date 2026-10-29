@@ -135,6 +135,14 @@
         </StackPanel>
       </Border>
 
+      <!--
+        A confirmação de que a conversa do Claude nasceu lá, e onde continuar:
+        sem ela, o pedido parecia ter sumido.
+      -->
+      <Border x:Name="ConversationNoticeCard" Classes="card" IsVisible="{Binding HasConversationNotice}">
+        <TextBlock x:Name="ConversationNoticeText" TextWrapping="Wrap" Text="{Binding ConversationNotice}" />
+      </Border>
+
       <!-- ============================ OPERAÇÃO ============================ -->
       <Border x:Name="OperationCard" Classes="card" IsVisible="{Binding HasOperation}">
         <StackPanel Spacing="8">

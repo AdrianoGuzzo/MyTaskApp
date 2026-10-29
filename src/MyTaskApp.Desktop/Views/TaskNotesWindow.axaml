@@ -2521,11 +2521,11 @@
                 <!-- Em execução / finalizado: o que liga a tarefa ao terminal. -->
                 <StackPanel Spacing="10" IsVisible="{Binding HasSession}">
                   <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto" ColumnSpacing="16" RowSpacing="4">
-                    <TextBlock Grid.Row="0" Grid.Column="0" Classes="fieldLabel" Text="Processo" IsVisible="{Binding IsRunning}" />
+                    <TextBlock Grid.Row="0" Grid.Column="0" Classes="fieldLabel" Text="Processo" IsVisible="{Binding ShowProcess}" />
                     <SelectableTextBlock Grid.Row="0" Grid.Column="1"
                                          x:Name="AgentProcess"
                                          Classes="code"
-                                         IsVisible="{Binding IsRunning}"
+                                         IsVisible="{Binding ShowProcess}"
                                          Text="{Binding ProcessText, FallbackValue=''}" />
                     <TextBlock Grid.Row="1" Grid.Column="0" Classes="fieldLabel" Text="Início" IsVisible="{Binding IsRunning}" />
                     <TextBlock Grid.Row="1" Grid.Column="1" Classes="body" IsVisible="{Binding IsRunning}" Text="{Binding StartedText, FallbackValue=''}" />
@@ -2545,6 +2545,13 @@
                              TextWrapping="Wrap"
                              Text="{Binding MonitoringText}"
                              IsVisible="{Binding MonitoringText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+                  <!-- A conversa sem terminal (ADR-092): de onde veio, para não rodar escondida. -->
+                  <TextBlock x:Name="AgentOrigin"
+                             Classes="hint"
+                             TextWrapping="Wrap"
+                             Text="{Binding OriginText}"
+                             IsVisible="{Binding OriginText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                 </StackPanel>
 
                 <TextBlock Classes="hint"
@@ -2735,8 +2742,14 @@
                   <Button Classes="accent"
                           x:Name="FocusAgentButton"
                           Content="Abrir terminal do agente"
-                          IsVisible="{Binding IsRunning}"
+                          IsVisible="{Binding ShowFocus}"
                           Command="{Binding FocusCommand}" />
+                  <Button Classes="accent"
+                          x:Name="OpenAgentConversationButton"
+                          Content="Abrir conversa"
+                          ToolTip.Tip="A conversa sem terminal: a linha do tempo, o próximo prompt e as aprovações, os mesmos de quem a abriu de longe."
+                          IsVisible="{Binding ShowOpenConversation}"
+                          Command="{Binding OpenConversationCommand}" />
                   <Button Classes.accent="{Binding !IsRunning}"
                           x:Name="StartAgentButton"
                           Content="{Binding StartLabel}"

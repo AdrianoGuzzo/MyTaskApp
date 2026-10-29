@@ -1,0 +1,105 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
+        x:Class="MyTaskApp.Desktop.Views.RemoteConversationsWindow"
+        x:DataType="vm:RemoteConversationsViewModel"
+        Title="Conversas do Claude"
+        Width="760"
+        Height="680"
+        MinWidth="520"
+        MinHeight="420"
+        WindowStartupLocation="CenterOwner">
+
+  <!--
+    As conversas do Claude de todas as máquinas da conta (ADR-091), como a aba
+    Remoto do celular: a aberta aqui, no celular ou em outro computador. O
+    próximo prompt e o parar vão para a máquina de cada conversa.
+  -->
+
+  <Window.Styles>
+
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="{DynamicResource WidgetSurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource WidgetStrokeSoftBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetCardRadius}" />
+      <Setter Property="Padding" Value="14,12" />
+    </Style>
+
+    <Style Selector="TextBlock.meta">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style Selector="TextBlock.caution">
+      <Setter Property="Foreground" Value="{DynamicResource WidgetCautionBrush}" />
+    </Style>
+
+    <Style Selector="TextBox.output">
+      <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, monospace" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="IsReadOnly" Value="True" />
+      <Setter Property="TextWrapping" Value="NoWrap" />
+      <Setter Property="AcceptsReturn" Value="True" />
+    </Style>
+
+  </Window.Styles>
+
+  <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+    <StackPanel Margin="16,14" Spacing="12">
+
+      <StackPanel Spacing="4">
+        <TextBlock Text="Conversas do Claude" FontSize="18" FontWeight="SemiBold" />
+        <TextBlock Classes="meta"
+                   Text="As conversas sem terminal de todas as máquinas da conta. Escolha uma para ver a linha do tempo e mandar o próximo prompt: ele roda na máquina da conversa." />
+        <TextBlock x:Name="ConversationsMessage" Classes="meta caution" Text="{Binding Message}"
+                   IsVisible="{Binding Message, Converter={x:Static ObjectConverters.IsNotNull}}" />
+      </StackPanel>
+
+      <Border x:Name="ConversationsCard" Classes="card" DataContext="{Binding Sessions}">
+        <StackPanel Spacing="8">
+          <TextBlock x:Name="ConversationsSessionsMessage" Classes="meta caution" Text="{Binding Message}"
+                     IsVisible="{Binding Message, Converter={x:Static ObjectConverters.IsNotNull}}" />
+          <TextBlock Classes="meta" Text="Nenhuma conversa do Claude nos últimos dias."
+                     IsVisible="{Binding !HasItems}" />
+          <ListBox x:Name="ConversationList" MaxHeight="220" IsVisible="{Binding HasItems}"
+                   ItemsSource="{Binding Items}" SelectedItem="{Binding Selected}">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:RemoteSessionLine">
+                <StackPanel Spacing="1">
+                  <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Classes="meta" Text="{Binding Details}" />
+                </StackPanel>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+          <StackPanel Spacing="6" IsVisible="{Binding HasSelection}">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+              <TextBlock x:Name="ConversationState" VerticalAlignment="Center" TextWrapping="Wrap" Text="{Binding SelectedState}" />
+              <Button Grid.Column="1" x:Name="StopConversationButton" Content="Parar a conversa"
+                      ToolTip.Tip="Encerra a resposta em andamento lá. A conversa não recebe mais prompts."
+                      IsVisible="{Binding CanStop}"
+                      Command="{Binding StopCommand}" />
+            </Grid>
+            <TextBox x:Name="ConversationTimelineBox" Classes="output" Height="300" Text="{Binding Timeline}" />
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" IsVisible="{Binding CanPrompt}">
+              <TextBox x:Name="ConversationPromptBox"
+                       AcceptsReturn="True"
+                       TextWrapping="Wrap"
+                       MinHeight="48"
+                       PlaceholderText="O próximo prompt nesta conversa"
+                       Text="{Binding Prompt}" />
+              <Button Grid.Column="1" x:Name="ConversationSendButton" Classes="accent" VerticalAlignment="Bottom"
+                      Content="Mandar"
+                      IsEnabled="{Binding !IsBusy}"
+                      Command="{Binding SendPromptCommand}" />
+            </Grid>
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+    </StackPanel>
+  </ScrollViewer>
+
+</Window>

@@ -54,6 +54,7 @@ public sealed partial class MachinesViewModel : ObservableObject
     private readonly IConfirmationDialog _confirmation;
     private readonly TimeProvider _timeProvider;
     private readonly Func<RemoteControlViewModel> _control;
+    private readonly Func<RemoteConversationsViewModel>? _conversations;
     private readonly ILogger<MachinesViewModel> _logger;
 
     private CancellationTokenSource? _authorization;
@@ -68,7 +69,8 @@ public sealed partial class MachinesViewModel : ObservableObject
         IConfirmationDialog confirmation,
         TimeProvider timeProvider,
         Func<RemoteControlViewModel> control,
-        ILogger<MachinesViewModel> logger)
+        ILogger<MachinesViewModel> logger,
+        Func<RemoteConversationsViewModel>? conversations = null)
     {
         _runner = runner;
         _account = account;
@@ -77,8 +79,12 @@ public sealed partial class MachinesViewModel : ObservableObject
         _confirmation = confirmation;
         _timeProvider = timeProvider;
         _control = control;
+        _conversations = conversations;
         _logger = logger;
     }
+
+    /// <summary>A janela "Conversas do Claude", de todas as máquinas, abre com este ViewModel.</summary>
+    public event EventHandler<RemoteConversationsViewModel>? ConversationsOpened;
 
     /// <summary>A pessoa escolheu controlar uma máquina: a janela abre a tela "Operação" com este ViewModel.</summary>
     public event EventHandler<RemoteControlViewModel>? ControlOpened;
@@ -352,6 +358,20 @@ public sealed partial class MachinesViewModel : ObservableObject
         var control = _control();
         ControlOpened?.Invoke(this, control);
         await control.OpenAsync(machine.View, CancellationToken.None);
+    }
+
+    /// <summary>As conversas do Claude de todas as máquinas da conta, sem escolher uma antes.</summary>
+    [RelayCommand]
+    public async Task OpenConversationsAsync()
+    {
+        if (_conversations is null)
+        {
+            return;
+        }
+
+        var conversations = _conversations();
+        ConversationsOpened?.Invoke(this, conversations);
+        await conversations.OpenAsync(CancellationToken.None);
     }
 
     [RelayCommand]

@@ -38,6 +38,8 @@ public sealed class AgentSessionExecutorsTests : IAsyncDisposable
     private readonly TaskItem _task = TaskItem.Create("Implementar validação de antimicrobianos", Now);
     private readonly List<RemoteOperationEvent> _events = [];
     private readonly List<RemoteApprovalAsk> _asks = [];
+    private readonly List<DataArea> _changes = [];
+    private readonly DataChangeNotifier _notifier = new();
     private readonly ServiceProvider _services;
 
     public AgentSessionExecutorsTests()
@@ -46,6 +48,7 @@ public sealed class AgentSessionExecutorsTests : IAsyncDisposable
         _task.MarkDevelopmentReady(_task.Developments[0].Id, Now);
         _tasks.Seed(_task);
         _disk.Existing.Add(Worktree);
+        _notifier.Changed += _changes.Add;
 
         _services = new ServiceCollection()
             .AddSingleton<TimeProvider>(_time)
@@ -54,6 +57,7 @@ public sealed class AgentSessionExecutorsTests : IAsyncDisposable
             .AddSingleton<IAgentProcessTracker>(_processes)
             .AddSingleton<IDirectoryProbe>(_disk)
             .AddSingleton(Substitute.For<IUnitOfWork>())
+            .AddSingleton<IDataChangeNotifier>(_notifier)
             .AddSingleton<IHeadlessAgentProvider>(_claude)
             .AddSingleton<IHeadlessAgentRunner>(_runner)
             .AddSingleton<IHeadlessApprovalGateway>(_gateway)
@@ -128,6 +132,31 @@ public sealed class AgentSessionExecutorsTests : IAsyncDisposable
                 (RemoteEventKind.ToolUse, "Read: src/Validacao.cs"),
                 (RemoteEventKind.AgentMessage, "Os testes cobrem o caso."));
         _gateway.Open.Should().Be(0, "o canal de aprovação fecha com o prompt");
+    }
+
+    /// <summary>
+    /// O agente grava no mesmo banco do desktop: cada gravação avisa, para o
+    /// card da tarefa e o aviso "aberto de…" aparecerem sem reabrir a janela.
+    /// </summary>
+    [Fact]
+    public async Task AConversationOpenedFromAnotherMachine_KeepsWhoOpenedIt_AndWarnsTheDesktop()
+    {
+        _runner.Script(FakeHeadlessProvider.Done());
+
+        await Start.ExecuteAsync(Execution(StartRequest("read", "Leia o README")), Ct);
+
+        _sessions.Sessions.Single().RemoteOrigin.Should().Be("Pixel 8");
+        _changes.Should().Contain(DataArea.AgentSessions).And.HaveCountGreaterThanOrEqualTo(2, "ao abrir e ao terminar o prompt");
+    }
+
+    [Fact]
+    public async Task AConversationOpenedFromThisComputer_HasNoOrigin()
+    {
+        _runner.Script(FakeHeadlessProvider.Done());
+
+        await Start.ExecuteAsync(Execution(StartRequest("read", "Leia o README"), controller: RemoteTrust.OwnNickname), Ct);
+
+        _sessions.Sessions.Single().RemoteOrigin.Should().BeNull("o \"Abrir Claude gerenciado\" daqui não precisa de aviso");
     }
 
     [Fact]
@@ -611,10 +640,10 @@ public sealed class AgentSessionExecutorsTests : IAsyncDisposable
         Now,
         Now.AddMinutes(10));
 
-    private RemoteExecution Execution(RemoteOperationRequest request, Func<RemoteApprovalAsk, RemoteApprovalResult>? approve = null) =>
+    private RemoteExecution Execution(RemoteOperationRequest request, Func<RemoteApprovalAsk, RemoteApprovalResult>? approve = null, string controller = "Pixel 8") =>
         new(
             request,
-            "Pixel 8",
+            controller,
             (item, _) =>
             {
                 lock (_events)

@@ -108,7 +108,7 @@
 
       <StackPanel Orientation="Horizontal" Spacing="7">
         <Button x:Name="AgentAlertOpenTerminal"
-                Content="Abrir terminal"
+                Content="{Binding OpenLabel}"
                 Classes="accent"
                 Command="{Binding OpenTerminalCommand}" />
         <Button x:Name="AgentAlertDismiss"

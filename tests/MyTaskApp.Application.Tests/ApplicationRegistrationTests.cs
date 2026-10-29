@@ -209,6 +209,7 @@ public class ApplicationRegistrationTests
     [InlineData(typeof(MyTaskApp.Application.Remote.HeadlessAgentPlanner))]
     [InlineData(typeof(MyTaskApp.Application.Remote.RemoteDatabaseCopyPlanner))]
     [InlineData(typeof(MyTaskApp.Application.Remote.HeadlessSessionStore))]
+    [InlineData(typeof(GetRemotelyOpenedSessionsHandler))]
     [InlineData(typeof(MyTaskApp.Application.Remote.RemoteProvisionPlanner))]
     [InlineData(typeof(MyTaskApp.Application.Development.ProvisionEnvironmentHandler))]
     [InlineData(typeof(MyTaskApp.Application.Remote.GetRemoteControlHandler))]

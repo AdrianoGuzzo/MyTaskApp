@@ -289,7 +289,7 @@ public sealed class PipeLocalPeerChannel(
             }
 
             // Só as áreas que existem: o resto do número é descartado.
-            const DataArea all = DataArea.Tasks | DataArea.Time | DataArea.Tags | DataArea.StickyNotes | DataArea.Databases;
+            const DataArea all = DataArea.Tasks | DataArea.Time | DataArea.Tags | DataArea.StickyNotes | DataArea.Databases | DataArea.AgentSessions;
             return message with { Areas = message.Areas & all };
         }
         catch (JsonException)

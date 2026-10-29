@@ -153,6 +153,66 @@ public class AgentSessionViewModelTests
     }
 
     [Fact]
+    public async Task AConversationOpenedFromAnotherMachine_SaysWhereItCameFrom_AndOpensTheConversation_NotATerminal()
+    {
+        _runner.ResultsByHandler[typeof(GetTaskAgentSessionHandler)] =
+            Session(AgentSessionStatus.Running) with { Mode = AgentSessionMode.Headless, RemoteOrigin = "Notebook" };
+        var viewModel = Create();
+
+        await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
+
+        viewModel.State.Should().Be(AgentPanelState.Running);
+        viewModel.IsManaged.Should().BeTrue();
+        viewModel.OriginText.Should().StartWith("Aberto de Notebook pelo controle remoto.");
+        viewModel.ShowFocus.Should().BeFalse();
+        viewModel.ShowProcess.Should().BeFalse();
+        viewModel.ShowOpenConversation.Should().BeTrue();
+        viewModel.MonitoringText.Should().BeNull();
+        viewModel.FocusCommand.CanExecute(null).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task AConversationBetweenPrompts_WaitsForTheNextOne_InsteadOfLookingFinished()
+    {
+        _runner.ResultsByHandler[typeof(GetTaskAgentSessionHandler)] =
+            Session(AgentSessionStatus.Exited, ended: Started.AddMinutes(3)) with { Mode = AgentSessionMode.Headless };
+        _runner.ResultsByHandler[typeof(DetectAgentCliHandler)] = Installed();
+        var viewModel = Create();
+
+        await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
+
+        viewModel.State.Should().Be(AgentPanelState.Finished);
+        viewModel.StatusText.Should().Be("◐ Conversa aberta — espera o próximo prompt");
+        viewModel.OriginText.Should().StartWith("Claude gerenciado: roda sem terminal");
+        viewModel.ShowOpenConversation.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task AStoppedConversation_SaysSo()
+    {
+        _runner.ResultsByHandler[typeof(GetTaskAgentSessionHandler)] =
+            Session(AgentSessionStatus.Stopped, ended: Started.AddMinutes(3)) with { Mode = AgentSessionMode.Headless };
+        _runner.ResultsByHandler[typeof(DetectAgentCliHandler)] = Installed();
+        var viewModel = Create();
+
+        await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
+
+        viewModel.StatusText.Should().Be("○ Conversa parada");
+    }
+
+    [Fact]
+    public async Task WithoutTheOpener_TheConversationButton_DoesNothing()
+    {
+        _runner.ResultsByHandler[typeof(GetTaskAgentSessionHandler)] =
+            Session(AgentSessionStatus.Running) with { Mode = AgentSessionMode.Headless };
+        var viewModel = Create();
+
+        await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
+
+        viewModel.OpenConversationCommand.CanExecute(null).Should().BeFalse();
+    }
+
+    [Fact]
     public async Task WithoutTheAgentInstalled_ShowsTheGuide_AndNoStartButton()
     {
         _runner.Enqueue<GetTaskAgentSessionHandler>([null]);

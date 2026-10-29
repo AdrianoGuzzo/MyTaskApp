@@ -92,6 +92,7 @@ internal sealed class AgentSessionConfiguration : IEntityTypeConfiguration<Agent
         builder.Property(session => session.HeadlessProfileId).HasMaxLength(AgentSession.MaxChoiceLength);
         builder.Property(session => session.Model).HasMaxLength(AgentSession.MaxChoiceLength);
         builder.Property(session => session.Effort).HasMaxLength(AgentSession.MaxChoiceLength);
+        builder.Property(session => session.RemoteOrigin).HasMaxLength(AgentSession.MaxRemoteOriginLength);
 
         builder.Property(session => session.ProcessStartedAt)
             .HasConversion(UtcInstantConverter.Instance);

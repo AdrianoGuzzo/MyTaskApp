@@ -10,6 +10,12 @@ public enum DataArea
     Tags = 4,
     StickyNotes = 8,
     Databases = 16,
+
+    /// <summary>
+    /// As sessões de agente: o agente sem tela abriu, continuou ou encerrou uma
+    /// conversa do Claude (ADR-089), e o card da tarefa mostra na hora.
+    /// </summary>
+    AgentSessions = 32,
 }
 
 /// <summary>

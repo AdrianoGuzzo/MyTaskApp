@@ -16,11 +16,24 @@ namespace MyTaskApp.Desktop.ViewModels;
 /// <remarks>
 /// Diferente do lembrete, fechar não "atende" nada: o agente continua
 /// esperando no terminal, e o aviso some sozinho quando ele volta a trabalhar.
+/// <para>
+/// Também avisa que alguém abriu de longe um Claude nesta máquina (ADR-092):
+/// a conversa roda sem terminal, e o botão leva a ela.
+/// </para>
 /// </remarks>
+/// <param name="conversations">Abre a conversa sem terminal; nulo nos testes que não falam dela.</param>
 public sealed partial class AgentAlertViewModel(
     IUseCaseRunner runner,
-    ILogger<AgentAlertViewModel> logger) : ObservableObject
+    ILogger<AgentAlertViewModel> logger,
+    ManagedConversationOpener? conversations = null) : ObservableObject
 {
+    /// <summary>A conversa sem terminal aberta de longe: o botão abre a conversa.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(OpenLabel))]
+    private bool _isRemoteConversation;
+
+    public string OpenLabel => IsRemoteConversation ? "Abrir conversa" : "Abrir terminal";
+
     [ObservableProperty]
     private string _heading = string.Empty;
 
@@ -63,12 +76,17 @@ public sealed partial class AgentAlertViewModel(
         SessionId = attention.SessionId;
         TaskId = attention.TaskId;
         DevelopmentId = attention.DevelopmentId;
-        Heading = HeadingFor(attention.AgentName, attention.Activity);
+        IsRemoteConversation = attention.OpenedBy is not null;
+        Heading = attention.OpenedBy is { } origin
+            ? $"{attention.AgentName} · aberto de {origin}"
+            : HeadingFor(attention.AgentName, attention.Activity);
         Title = attention.TaskTitle;
         Context = attention.RepositoryName is { } repository
             ? attention.Branch is { } branch ? $"{repository} · {branch}" : repository
             : null;
-        MessageText = Excerpt(attention.Message);
+        MessageText = attention.OpenedBy is not null
+            ? "Roda sem terminal, pelo agente desta máquina. Acompanhe e responda pela conversa, daqui ou de lá."
+            : Excerpt(attention.Message);
         TimeLabel = attention.At.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture);
         IsQuestion = attention.Activity is AgentActivity.WaitingForUser;
         IsFailure = attention.Activity is AgentActivity.Failed;
@@ -109,6 +127,12 @@ public sealed partial class AgentAlertViewModel(
     {
         ErrorMessage = null;
 
+        if (IsRemoteConversation)
+        {
+            await OpenConversationAsync();
+            return;
+        }
+
         try
         {
             var result = await runner.RunAsync<FocusAgentSessionHandler, AgentFocusResult>(
@@ -142,4 +166,28 @@ public sealed partial class AgentAlertViewModel(
 
     [RelayCommand]
     public void Dismiss() => Closed?.Invoke(this);
+
+    private async Task OpenConversationAsync()
+    {
+        if (conversations is null || DevelopmentId is not { } developmentId)
+        {
+            ErrorMessage = "Abra a conversa pela aba Desenvolvimento da tarefa.";
+            return;
+        }
+
+        try
+        {
+            ErrorMessage = await conversations.OpenAsync(developmentId, SessionId, CancellationToken.None);
+
+            if (ErrorMessage is null)
+            {
+                Closed?.Invoke(this);
+            }
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "AgentAlertConversationFailed {TaskId} {SessionId}", TaskId, SessionId);
+            ErrorMessage = "Não foi possível abrir a conversa.";
+        }
+    }
 }

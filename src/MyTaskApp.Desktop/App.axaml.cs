@@ -402,6 +402,36 @@ public sealed partial class App : Avalonia.Application
         // ela, o agente abre sem acompanhamento. Os Claude que ficaram abertos
         // com o app fechado voltam a ser ouvidos a partir daqui.
         services.GetRequiredService<IAgentEventEndpoint>().Start();
+
+        // A conversa sem terminal (ADR-092): o agente grava no mesmo banco e
+        // avisa pelo canal local. O selo da lista e o card da tarefa mudam na
+        // hora, e a conversa aberta de longe ganha um aviso no canto.
+        services.GetRequiredService<IDataChangeNotifier>().Changed += areas =>
+        {
+            if (areas.HasFlag(DataArea.AgentSessions))
+            {
+                OnUiThread(() => RefreshAgents(todayViewModel));
+            }
+        };
+
+        services.GetRequiredService<ManagedConversationOpener>().ControlOpened +=
+            (_, control) => new RemoteControlWindow(control).Show();
+
+        services.GetRequiredService<RemoteSessionAnnouncer>().Start();
+    }
+
+    /// <summary>O quadro e o card do agente das janelas de tarefa abertas, relidos.</summary>
+    private void RefreshAgents(TodayViewModel todayViewModel)
+    {
+        _ = todayViewModel.LoadAsync(CancellationToken.None);
+
+        foreach (var notes in _notes.Values)
+        {
+            if (notes.DataContext is TaskNotesViewModel viewModel)
+            {
+                _ = viewModel.Developments.RefreshAgentsAsync();
+            }
+        }
     }
 
     /// <summary>

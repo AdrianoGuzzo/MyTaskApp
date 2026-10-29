@@ -64,7 +64,9 @@ public sealed partial class TodayViewModel(
     // "Lançar horas" no menu da linha (ADR-052): a hora de parede do usuário e
     // o diálogo do período. Sem eles, o menu não lança nada.
     IUserClock? userClock = null,
-    ITimeEntryEditor? timeEntryEditor = null) : ObservableObject, IDisposable
+    ITimeEntryEditor? timeEntryEditor = null,
+    // O selo da conversa sem terminal (ADR-092) abre a conversa, não um terminal.
+    ManagedConversationOpener? conversations = null) : ObservableObject, IDisposable
 {
     /// <summary>
     /// O rótulo "aguardando há N minutos" envelhece sozinho, então o quadro
@@ -935,6 +937,17 @@ public sealed partial class TodayViewModel(
 
         if (!reached || result!.Focused)
         {
+            return;
+        }
+
+        // A conversa sem terminal (ADR-092) não tem janela: o selo leva à conversa.
+        if (result.Session.IsHeadless && conversations is not null && developmentId is { } managedIn)
+        {
+            if (await conversations.OpenAsync(managedIn, result.Session.SessionId, CancellationToken.None) is { } problem)
+            {
+                ErrorMessage = problem;
+            }
+
             return;
         }
 
