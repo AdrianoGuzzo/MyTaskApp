@@ -407,4 +407,38 @@ public class AgentSessionTests
     public void AHeadlessSession_NeedsTheConversationAndTheOperation() =>
         FluentActions.Invoking(() => AgentSession.CreateHeadless(TaskId, DevelopmentId, "claude-code", Claude, Worktree, Guid.Empty, FirstOperation, "edit", null, null, Now))
             .Should().Throw<DomainException>();
+
+    [Fact]
+    public void ATerminalSession_IsTheInteractiveClaude_InTheAgentsTerminal()
+    {
+        var session = AgentSession.CreateTerminal(TaskId, DevelopmentId, "claude-code", Claude, Worktree, Conversation.ToString(), Now, "  Notebook ");
+
+        session.Mode.Should().Be(AgentSessionMode.Terminal);
+        session.IsAgentTerminal.Should().BeTrue();
+        session.IsHeadless.Should().BeFalse();
+        session.Kind.Should().Be(AgentSessionKind.Development);
+        session.ExternalSessionId.Should().Be(Conversation.ToString(), "o --session-id nasce com a sessão");
+        session.RemoteOrigin.Should().Be("Notebook");
+        session.Status.Should().Be(AgentSessionStatus.Starting);
+        session.CanContinue.Should().BeFalse("prompt de longe vai pelo terminal, não por um processo novo");
+    }
+
+    [Fact]
+    public void ATerminalSession_RunsAndEndsWithItsProcess_AndKeepsTheLatestConversation()
+    {
+        var session = AgentSession.CreateTerminal(TaskId, DevelopmentId, "claude-code", Claude, Worktree, "primeira", Now);
+        session.MarkRunning(4242, Now);
+
+        session.RecordExternalSession("depois-do-clear");
+        session.MarkExited(Now.AddMinutes(5));
+
+        session.ExternalSessionId.Should().Be("depois-do-clear", "retomar continua a conversa mais recente");
+        session.Status.Should().Be(AgentSessionStatus.Exited);
+        FluentActions.Invoking(() => session.MarkStopped(Now)).Should().Throw<DomainException>("quem encerra é o processo, que o agente encerra");
+    }
+
+    [Fact]
+    public void ATerminalSession_NeedsTheConversation() =>
+        FluentActions.Invoking(() => AgentSession.CreateTerminal(TaskId, DevelopmentId, "claude-code", Claude, Worktree, " ", Now))
+            .Should().Throw<DomainException>();
 }

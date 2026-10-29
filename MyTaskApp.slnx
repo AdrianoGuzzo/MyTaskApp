@@ -19,6 +19,7 @@
     <Project Path="tests/MyTaskApp.Application.Tests/MyTaskApp.Application.Tests.csproj" />
     <Project Path="tests/MyTaskApp.Desktop.Tests/MyTaskApp.Desktop.Tests.csproj" />
     <Project Path="tests/MyTaskApp.Domain.Tests/MyTaskApp.Domain.Tests.csproj" />
+    <Project Path="tests/MyTaskApp.FakeClaude/MyTaskApp.FakeClaude.csproj" />
     <Project Path="tests/MyTaskApp.Infrastructure.Tests/MyTaskApp.Infrastructure.Tests.csproj" />
     <Project Path="tests/MyTaskApp.Mcp.Tests/MyTaskApp.Mcp.Tests.csproj" />
     <Project Path="tests/MyTaskApp.Mobile.Core.Tests/MyTaskApp.Mobile.Core.Tests.csproj" />

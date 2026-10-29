@@ -1,0 +1,62 @@
+[?9001h[?1004h[?25l[2J[m[H]0;claude[?25h[?2004h[?2031h[?1004h[?25l[>0q[?u]7501;?[38;2;255;193;7m
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[1m[3;2HAccessing[1Cworkspace:[m[1m[5;2HC:\Users\user\AppData\Local\Temp\mtapp-spike-b6109dbd[22m[7;2HQuick[1Csafety[1Ccheck:[1CIs[1Cthis[1Ca[1Cproject[1Cyou[1Ccreated[1Cor[1Cone[1Cyou[1Ctrust?[1C(Like[1Cyour[1Cown[1Ccode,[1Ca[1Cwell-known[1Copen[1Csource[8;2Hproject,[1Cor[1Cwork[1Cfrom[1Cyour[1Cteam).[1CIf[1Cnot,[1Ctake[1Ca[1Cmoment[1Cto[1Creview[1Cwhat's[1Cin[1Cthis[1Cfolder[1Cfirst.[10;2HClaude[1CCode'll[1Cbe[1Cable[1Cto[1Cread,[1Cedit,[1Cand[1Cexecute[1Cfiles[1Chere.[38;2;153;153;153m[12;2HSecurity[1Cguide[38;2;177;185;249m[14;2H❯[1CNo,[1Cexit[m[15;4HYes,[1CI[1Ctrust[1Cthis[1Cfolder[38;2;153;153;153m[17;2HEnter[1Cto[1Cconfirm[1C·[1CEsc[1Cto[1Ccancel[?2004h[m[14;2H [1CNo, exit[38;2;177;185;249m[15;2H❯[1CYes, I trust this folder[>4m[?2031l[?2004l[m[H[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K[120C[?2004h[?2031h[?1004h]0;✳ Claude Code[?1049h[2J[?1000h[?1002h[?1003h[?1006h[H[K[38;2;215;119;87m
+ ▐[48;2;0;0;0m▛███▛█[m   [1mClaude Code[22m [38;2;153;153;153mv2.1.312[K[38;2;215;119;87m
+▝▜[48;2;0;0;0m█████[49m█▀  [38;2;153;153;153mHaiku 5.5 · API Usage Billing[K[38;2;215;119;87m
+ ▝▝   ▝▝   [38;2;153;153;153m~\AppData\Local\Temp\mtapp-spike-b6109dbd[K[m
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[100X[38;2;153;153;153m[100C◐ medium · /effort  [38;2;136;136;136m
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[m❯ [2mTry "write a test for <filepath>"[22m[K[38;2;136;136;136m
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[m  [38;2;255;193;7m⚠ Transcript saving is off — inherited CLAUDE_CODE_CHILD_SESSION marker [38;2;153;153;153m· restart with CLAUDE_CODE_FORCE_SESSION_PE…  [m
+  [38;2;153;153;153m-- INSERT -- [38;2;255;193;7m⏵⏵ auto mode on [38;2;153;153;153m(shift+tab to cycle)[K[27;3H[?25h[m[?25l[38;2;215;119;87m[16;1H                 ⢀⣿⣧⣄     [38;2;153;153;153m[90C[-][38;2;215;119;87m
+              ⣀⣤⣶⣿⣿⣿⣿⣿⣆⡆  
+     ⢀⣀⣀⣤⣤⣤⣼⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿  
+   ⣰⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡎ 
+  ⢰⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠁ 
+⢀⣴⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣧ 
+⣼⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡆
+⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠟⠉⢿⣿⣿⣧[1m[2COlá, Ana! Bora codar?[38;2;153;153;153m[22m
+↓ 8 more[27;3H[?25h[>0q[m[?25l[16;1H[K
+[K
+[K
+[K
+[K
+[K
+[K[38;2;215;119;87m[1m
+(O-O) Olá, Ana! Bora codar?[m[22X[38;2;153;153;153m[85C[-]
+O[1Cnerd [1Cstá pronto. Manda a primeira tarefa.[27;3H[?25h[m

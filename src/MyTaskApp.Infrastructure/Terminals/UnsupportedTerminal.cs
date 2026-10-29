@@ -1,4 +1,6 @@
 using MyTaskApp.Application.Agents;
+using MyTaskApp.Application.Terminals;
+using MyTaskApp.Domain;
 
 namespace MyTaskApp.Infrastructure.Terminals;
 
@@ -26,4 +28,14 @@ internal sealed class UnsupportedTerminalWindowManager : ITerminalWindowManager
     public Task<bool> FlashAsync(int processId) => Task.FromResult(false);
 
     public Task StopFlashingAsync(int processId) => Task.CompletedTask;
+}
+
+/// <summary>Sem pseudoterminal (hoje, o macOS): o terminal do agente diz "ainda não" (ADR-098).</summary>
+internal sealed class UnsupportedPseudoTerminalFactory : IPseudoTerminalFactory
+{
+    public PseudoTerminalSupport Support { get; } = PseudoTerminalSupport.Unsupported(
+        "este sistema",
+        "O terminal do agente ainda não é suportado neste sistema. Use o terminal direto.");
+
+    public IPseudoTerminal Start(PseudoTerminalStart start) => throw new DomainException(Support.Reason!);
 }

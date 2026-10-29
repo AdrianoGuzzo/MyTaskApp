@@ -1,0 +1,2 @@
+# Saidas gravadas de terminal (ADR-098): bytes VT exatos, sem conversao de fim de linha.
+*.vt -text

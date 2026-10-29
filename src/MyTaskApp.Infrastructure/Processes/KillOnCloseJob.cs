@@ -78,11 +78,31 @@ public sealed partial class KillOnCloseJob : IDisposable
         return true;
     }
 
-    public void Assign(Process process)
+    public void Assign(Process process) => Assign(process.Handle);
+
+    /// <summary>
+    /// Põe no job um processo pelo handle: o do terminal do agente (ADR-098)
+    /// entra ainda suspenso, antes de abrir qualquer neto.
+    /// </summary>
+    public void Assign(nint processHandle)
     {
         ObjectDisposedException.ThrowIf(_handle == 0, this);
 
-        if (!AssignProcessToJobObject(_handle, process.Handle))
+        if (!AssignProcessToJobObject(_handle, processHandle))
+        {
+            throw new Win32Exception(Marshal.GetLastPInvokeError());
+        }
+    }
+
+    /// <summary>
+    /// Encerra à força tudo o que está no job, e só isso: o encerramento forçado
+    /// de uma sessão de terminal não alcança processo de fora dela (ADR-098).
+    /// </summary>
+    public void Terminate(uint exitCode)
+    {
+        ObjectDisposedException.ThrowIf(_handle == 0, this);
+
+        if (!TerminateJobObject(_handle, exitCode))
         {
             throw new Win32Exception(Marshal.GetLastPInvokeError());
         }
@@ -117,6 +137,10 @@ public sealed partial class KillOnCloseJob : IDisposable
     [LibraryImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool AssignProcessToJobObject(nint job, nint process);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool TerminateJobObject(nint job, uint exitCode);
 
     [LibraryImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]

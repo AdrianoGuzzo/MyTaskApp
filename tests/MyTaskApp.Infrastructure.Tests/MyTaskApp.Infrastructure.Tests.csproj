@@ -2,6 +2,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\MyTaskApp.Infrastructure\MyTaskApp.Infrastructure.csproj" />
+    <!-- O Claude de mentira que roda no pseudoterminal (ADR-098). -->
+    <ProjectReference Include="..\MyTaskApp.FakeClaude\MyTaskApp.FakeClaude.csproj" />
   </ItemGroup>
 
   <ItemGroup>

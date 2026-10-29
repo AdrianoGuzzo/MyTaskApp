@@ -41,6 +41,14 @@ public enum AgentSessionMode
     /// <see cref="AgentSessionStatus.Exited"/>, pronta para continuar.
     /// </summary>
     Headless = 1,
+
+    /// <summary>
+    /// No terminal do agente (ADR-098): o Claude interativo de sempre, num
+    /// pseudoterminal que o agente da máquina hospeda. A mesma sessão aparece
+    /// na janela de terminal da máquina, no app e, se a máquina aceitar, de
+    /// longe (ADR-099). Vive enquanto o agente vive.
+    /// </summary>
+    Terminal = 2,
 }
 
 /// <summary>
@@ -147,6 +155,9 @@ public sealed class AgentSession
     public AgentSessionMode Mode { get; private set; }
 
     public bool IsHeadless => Mode == AgentSessionMode.Headless;
+
+    /// <summary>No pseudoterminal do agente (ADR-098): quem tem o processo é o agente, não o desktop.</summary>
+    public bool IsAgentTerminal => Mode == AgentSessionMode.Terminal;
 
     /// <summary>
     /// A operação remota do prompt atual, ou do último (ADR-089): é por ela que
@@ -272,6 +283,30 @@ public sealed class AgentSession
             Required(command, MaxPathLength, "Informe o comando da sessão."),
             Required(workingDirectory, MaxPathLength, "Informe a pasta da sessão."),
             startedAt);
+    }
+
+    /// <summary>
+    /// O Claude interativo no terminal do agente (ADR-098). O id da conversa
+    /// nasce aqui (<c>--session-id</c>), ou é o de uma conversa anterior que se
+    /// retoma (<c>--resume</c>): é por ele que "Retomar" continua o histórico
+    /// depois que o agente reiniciou.
+    /// </summary>
+    /// <param name="remoteOrigin">O apelido do controlador que pediu de longe; <c>null</c> = desta máquina.</param>
+    public static AgentSession CreateTerminal(
+        Guid taskItemId,
+        Guid taskDevelopmentId,
+        string providerId,
+        string command,
+        string workingDirectory,
+        string conversationId,
+        DateTimeOffset startedAt,
+        string? remoteOrigin = null)
+    {
+        var session = Create(taskItemId, taskDevelopmentId, providerId, command, workingDirectory, startedAt);
+        session.Mode = AgentSessionMode.Terminal;
+        session.ExternalSessionId = Required(conversationId, MaxExternalSessionIdLength, "Informe a conversa da sessão.");
+        session.RemoteOrigin = Truncate(remoteOrigin, MaxRemoteOriginLength);
+        return session;
     }
 
     /// <summary>

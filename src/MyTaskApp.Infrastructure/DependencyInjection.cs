@@ -27,6 +27,7 @@ using MyTaskApp.Application.StickyNotes;
 using MyTaskApp.Application.Sync;
 using MyTaskApp.Application.Tags;
 using MyTaskApp.Application.Tasks;
+using MyTaskApp.Application.Terminals;
 using MyTaskApp.Application.TimeTracking;
 using MyTaskApp.Domain.DatabaseOperations;
 using MyTaskApp.Infrastructure.Agents;
@@ -270,11 +271,13 @@ public static class DependencyInjection
             services.AddSingleton<ITerminalLauncher>(
                 provider => new LinuxTerminalLauncher(provider.GetRequiredService<ILogger<LinuxTerminalLauncher>>()));
             services.AddSingleton<ITerminalWindowManager, UnsupportedTerminalWindowManager>();
+            AddLinuxPseudoTerminal(services);
         }
         else
         {
             services.AddSingleton<ITerminalLauncher, UnsupportedTerminalLauncher>();
             services.AddSingleton<ITerminalWindowManager, UnsupportedTerminalWindowManager>();
+            services.AddSingleton<IPseudoTerminalFactory, UnsupportedPseudoTerminalFactory>();
         }
 
         return services;
@@ -503,5 +506,14 @@ public static class DependencyInjection
             provider => new WindowsTerminalLauncher(
                 provider.GetRequiredService<ILogger<WindowsTerminalLauncher>>()));
         services.AddSingleton<ITerminalWindowManager, WindowsTerminalWindowManager>();
+
+        // O terminal do agente (ADR-098): o pseudoconsole do próprio Windows.
+        services.AddSingleton<IPseudoTerminalFactory>(
+            provider => new ConPtyTerminalFactory(provider.GetRequiredService<ILogger<ConPtyTerminal>>()));
     }
+
+    [SupportedOSPlatform("linux")]
+    private static void AddLinuxPseudoTerminal(IServiceCollection services) =>
+        services.AddSingleton<IPseudoTerminalFactory>(
+            provider => new UnixPtyTerminalFactory(provider.GetRequiredService<ILogger<UnixPtyTerminal>>()));
 }
