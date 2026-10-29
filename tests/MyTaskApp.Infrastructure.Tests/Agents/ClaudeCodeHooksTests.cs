@@ -45,6 +45,30 @@ public sealed class ClaudeCodeHooksTests : IDisposable
     // --- O arquivo de hooks ------------------------------------------------
 
     [Fact]
+    public void TheTerminalFile_AlsoObservesPermissionRequests_AndOnlyIt()
+    {
+        var standard = JsonNode.Parse(ClaudeCodeHooks.SettingsJson(Endpoint))!["hooks"]!.AsObject();
+        var terminal = JsonNode.Parse(ClaudeCodeHooks.SettingsJson(Endpoint, observePermissions: true))!["hooks"]!.AsObject();
+
+        standard.ContainsKey("PermissionRequest").Should().BeFalse("o terminal direto continua como era");
+        terminal["PermissionRequest"]![0]!["matcher"]!.GetValue<string>().Should().Be("*");
+        terminal.Count.Should().Be(standard.Count + 1);
+    }
+
+    [Fact]
+    public void TheDefaultPermissionMode_FollowsClaudesPrecedence()
+    {
+        Write(Path.Combine(Home, ".claude", "settings.json"), """{"permissions":{"defaultMode":"bypassPermissions"}}""");
+        Write(Path.Combine(Worktree, ".claude", "settings.json"), """{"permissions":{"defaultMode":"acceptEdits"}}""");
+
+        Hooks().DefaultPermissionMode(Worktree).Should().Be("acceptEdits", "o projeto vale mais que o usuário");
+        Hooks().DefaultPermissionMode(Path.Combine(_root, "outra")).Should().Be("bypassPermissions");
+
+        Write(Managed, """{"permissions":{"defaultMode":"default"}}""");
+        Hooks().DefaultPermissionMode(Worktree).Should().Be("default", "a política gerenciada vale mais que tudo");
+    }
+
+    [Fact]
     public void TheSettingsFile_HasOnlyHooks_EachAnHttpCallToTheLocalPort()
     {
         var settings = JsonNode.Parse(ClaudeCodeHooks.SettingsJson(Endpoint))!.AsObject();
@@ -232,6 +256,31 @@ public sealed class ClaudeCodeHooksTests : IDisposable
     {
         Translate("""{"hook_event_name":"StopFailure","error_type":"overloaded"}""")!.Message
             .Should().Be("A API do Claude está sobrecarregada.");
+    }
+
+    /// <summary>O Claude 2.1.312 manda o tipo do erro em <c>error</c> (conferido com o de verdade).</summary>
+    [Fact]
+    public void AFailure_FromTheCurrentClaude_IsDescribedToo()
+    {
+        Translate("""{"hook_event_name":"StopFailure","error":"authentication_failed"}""")!.Message
+            .Should().Be("O Claude não conseguiu se autenticar.");
+    }
+
+    [Fact]
+    public void APermissionRequest_SaysWhatTheToolWillDo_InOneShortLine()
+    {
+        var bash = Translate("""
+            {"hook_event_name":"PermissionRequest","tool_name":"Bash","permission_mode":"default",
+             "tool_input":{"command":"npm test\n  --watch","description":"Roda os testes"}}
+            """)!;
+        var unknown = Translate("""{"hook_event_name":"PermissionRequest","tool_name":"mcp__x__y","tool_input":{"a":1}}""")!;
+        var huge = Translate("""{"hook_event_name":"PermissionRequest","tool_name":"Write","tool_input":{"file_path":""" + "\"" + new string('a', 900) + "\"}}")!;
+
+        bash.Type.Should().Be(AgentEventType.NeedsUserInput);
+        bash.Message.Should().Be("Bash: npm test   --watch");
+        bash.Metadata!["permission_mode"].Should().Be("default");
+        unknown.Message.Should().Be("O Claude pede permissão para usar mcp__x__y.");
+        huge.Message!.Length.Should().BeLessThan(320);
     }
 
     /// <summary>

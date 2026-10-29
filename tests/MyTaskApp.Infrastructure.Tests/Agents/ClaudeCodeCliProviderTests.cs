@@ -233,6 +233,66 @@ public class ClaudeCodeCliProviderTests : IDisposable
         File.ReadAllText(settingsFile).Should().Contain("http://127.0.0.1:47831/api/claude/events");
     }
 
+    // --- Terminal do agente (ADR-098) ---------------------------------------
+
+    [Fact]
+    public void InTheAgentsTerminal_TheConversationHasAnId_AndTheHooksAreTheAgents()
+    {
+        var agentMonitoring = Monitoring with { Endpoint = new Uri("http://127.0.0.1:51234/api/claude/events") };
+
+        var launch = Provider(_ => false).CreateLaunch(
+            new AgentCliStartContext(
+                Guid.NewGuid(), Worktree, ["--model", "opus"], null, false, agentMonitoring, new AgentCliTerminal("c0ffee00-0000-4000-8000-000000000001", Resume: false)),
+            new CliDetectionResult { IsInstalled = true, ExecutablePath = Native });
+
+        var settingsFile = Path.Combine(_state, ClaudeCodeHooks.TerminalSettingsFileName);
+
+        launch.Arguments.Should().Equal("--settings", settingsFile, "--session-id", "c0ffee00-0000-4000-8000-000000000001", "--model", "opus");
+        File.ReadAllText(settingsFile).Should().Contain("51234").And.Contain("PermissionRequest");
+        File.Exists(Path.Combine(_state, ClaudeCodeHooks.SettingsFileName)).Should().BeFalse("o arquivo do desktop, com a porta dele, não muda");
+        launch.RemovedVariables.Should().Contain("CLAUDECODE").And.Contain("CLAUDE_CODE_SESSION_ID");
+    }
+
+    [Fact]
+    public void InTheAgentsTerminal_ResumingUsesResume_BeforeThePrompt()
+    {
+        var launch = Provider(_ => false).CreateLaunch(
+            new AgentCliStartContext(
+                Guid.NewGuid(), Worktree, [], "continue", true, null, new AgentCliTerminal("c0ffee00-0000-4000-8000-000000000001", Resume: true)),
+            new CliDetectionResult { IsInstalled = true, ExecutablePath = Native });
+
+        launch.Arguments.Should().Equal("--resume", "c0ffee00-0000-4000-8000-000000000001", "continue");
+    }
+
+    [Fact]
+    public void TheDirectTerminal_KeepsTheInheritedEnvironment()
+    {
+        Launch(Native, prompt: null, runDirectly: false).RemovedVariables.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData(new[] { "--dangerously-skip-permissions" }, true)]
+    [InlineData(new[] { "--allow-dangerously-skip-permissions" }, true)]
+    [InlineData(new[] { "--permission-mode", "bypassPermissions" }, true)]
+    [InlineData(new[] { "--permission-mode=bypassPermissions" }, true)]
+    [InlineData(new[] { "--permission-mode", "plan" }, false)]
+    [InlineData(new[] { "--model", "opus" }, false)]
+    [InlineData(new string[0], false)]
+    public void TheBypass_IsSeenInTheArguments(string[] arguments, bool expected)
+    {
+        Provider(_ => false).BypassesPermissions(arguments, Worktree).Should().Be(expected);
+    }
+
+    [Fact]
+    public void TheBypass_IsSeenInTheProjectSettingsToo()
+    {
+        var worktree = Path.Combine(_state, "wt");
+        Directory.CreateDirectory(Path.Combine(worktree, ".claude"));
+        File.WriteAllText(Path.Combine(worktree, ".claude", "settings.local.json"), """{"permissions":{"defaultMode":"bypassPermissions"}}""");
+
+        Provider(_ => false).BypassesPermissions([], worktree).Should().BeTrue();
+    }
+
     [Fact]
     public void WithoutMonitoring_NoHooksAndNoEnvironment()
     {

@@ -288,9 +288,13 @@ public sealed class PipeLocalPeerChannel(
                 return null;
             }
 
-            // Só as áreas que existem: o resto do número é descartado.
+            // Só as áreas que existem: o resto do número é descartado. A sessão só no recado de atenção.
             const DataArea all = DataArea.Tasks | DataArea.Time | DataArea.Tags | DataArea.StickyNotes | DataArea.Databases | DataArea.AgentSessions;
-            return message with { Areas = message.Areas & all };
+            return message with
+            {
+                Areas = message.Areas & all,
+                SessionId = message.Kind == LocalPeerMessageKinds.AgentAttention ? message.SessionId : null,
+            };
         }
         catch (JsonException)
         {

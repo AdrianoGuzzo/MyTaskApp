@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Terminals;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.Agents;
 using MyTaskApp.Domain.Tasks;
@@ -115,6 +116,15 @@ public sealed class GetTaskAgentSessionHandler(
 /// <c>null</c> usa o salvo.
 /// </param>
 /// <param name="Effort">O nível de esforço, como <paramref name="Model"/>.</param>
+/// <param name="Hosting">
+/// Onde roda (ADR-098). Fora do <see cref="AgentHosting.Direct"/>, este caso
+/// de uso roda no MyTaskApp Agent, que hospeda o terminal.
+/// </param>
+/// <param name="ResumeConversation">
+/// No terminal do agente: retomar esta conversa do Claude (<c>--resume</c>)
+/// em vez de abrir uma nova. Só quando a pessoa pede.
+/// </param>
+/// <param name="RemoteOrigin">O apelido do controlador que pediu de longe (ADR-099).</param>
 public sealed record StartAgentSession(
     Guid TaskId,
     Guid DevelopmentId,
@@ -124,7 +134,10 @@ public sealed record StartAgentSession(
     bool RunDirectly = false,
     bool? Monitor = null,
     string? Model = null,
-    string? Effort = null);
+    string? Effort = null,
+    AgentHosting Hosting = AgentHosting.Direct,
+    string? ResumeConversation = null,
+    string? RemoteOrigin = null);
 
 /// <summary>
 /// O fluxo da ADR-030: worktree pronto → agente instalado → sessão gravada como
@@ -155,6 +168,7 @@ public sealed class StartAgentSessionHandler(
     IDirectoryProbe directories,
     IAgentSettingsStore settings,
     IAgentEventEndpoint events,
+    ITerminalSessions terminals,
     TimeProvider timeProvider,
     ILogger<StartAgentSessionHandler> logger)
 {
@@ -163,6 +177,13 @@ public sealed class StartAgentSessionHandler(
         CancellationToken cancellationToken = default)
     {
         var provider = providers.Get(command.ProviderId);
+        var hosted = command.Hosting != AgentHosting.Direct;
+
+        if (hosted)
+        {
+            EnsureCanHost(command);
+        }
+
         var task = await tasks.GetByIdAsync(command.TaskId, cancellationToken);
 
         var development = task.GetDevelopment(command.DevelopmentId);
@@ -201,25 +222,39 @@ public sealed class StartAgentSessionHandler(
         task.SetDevelopmentAgentPrompt(development.Id, command.Prompt);
 
         // A sessão nasce antes do comando: o id dela vai no ambiente do processo.
-        var session = AgentSession.Create(
-            task.Id,
-            development.Id,
-            provider.Id,
-            detection.ExecutablePath,
-            development.WorktreePath,
-            timeProvider.GetUtcNow());
+        var session = hosted
+            ? AgentSession.CreateTerminal(
+                task.Id,
+                development.Id,
+                provider.Id,
+                detection.ExecutablePath,
+                development.WorktreePath,
+                command.ResumeConversation ?? Guid.NewGuid().ToString(),
+                timeProvider.GetUtcNow(),
+                command.RemoteOrigin)
+            : AgentSession.Create(
+                task.Id,
+                development.Id,
+                provider.Id,
+                detection.ExecutablePath,
+                development.WorktreePath,
+                timeProvider.GetUtcNow());
 
         var (monitoring, monitoringNote) = await PrepareMonitoringAsync(
             provider, session, development, command.Monitor, cancellationToken);
+
+        IReadOnlyList<string> arguments =
+            [.. AgentArguments.Parse(argumentsText), .. model.Option.Arguments, .. effort.Option.Arguments];
 
         var launch = provider.CreateLaunch(
             new AgentCliStartContext(
                 task.Id,
                 development.WorktreePath,
-                [.. AgentArguments.Parse(argumentsText), .. model.Option.Arguments, .. effort.Option.Arguments],
+                arguments,
                 development.AgentPrompt,
                 command.RunDirectly,
-                monitoring),
+                monitoring,
+                hosted ? new AgentCliTerminal(session.ExternalSessionId!, command.ResumeConversation is not null) : null),
             detection);
 
         await sessions.AddAsync(session, cancellationToken);
@@ -229,7 +264,18 @@ public sealed class StartAgentSessionHandler(
 
         try
         {
-            result = await launcher.LaunchAsync(launch, cancellationToken);
+            result = hosted
+                ? await terminals.LaunchAsync(
+                    launch,
+                    new TerminalSessionInfo(
+                        session.Id,
+                        task.Id,
+                        development.Id,
+                        development.WorktreePath,
+                        session.IsMonitored,
+                        provider.BypassesPermissions(arguments, development.WorktreePath)),
+                    cancellationToken)
+                : await launcher.LaunchAsync(launch, cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -268,7 +314,7 @@ public sealed class StartAgentSessionHandler(
         }
 
         logger.LogInformation(
-            "AgentSessionStarted {TaskId} {SessionId} {ProviderId} {ProcessId} {Status} {WorkingDirectory} {Arguments} {Model} {Effort} {Monitored}",
+            "AgentSessionStarted {TaskId} {SessionId} {ProviderId} {ProcessId} {Status} {WorkingDirectory} {Arguments} {Model} {Effort} {Monitored} {Hosting}",
             task.Id,
             session.Id,
             provider.Id,
@@ -278,9 +324,38 @@ public sealed class StartAgentSessionHandler(
             argumentsText,
             model.Option.Value,
             effort.Option.Value,
-            session.IsMonitored);
+            session.IsMonitored,
+            command.Hosting);
 
         return AgentSessionView.From(session, providers) with { MonitoringNote = monitoringNote };
+    }
+
+    /// <summary>
+    /// O terminal do agente só abre onde há quem o hospede, e num sistema com
+    /// pseudoterminal (ADR-098). A conversa a retomar é um id do Claude, e
+    /// nada além disso vira argumento.
+    /// </summary>
+    private void EnsureCanHost(StartAgentSession command)
+    {
+        if (!Enum.IsDefined(command.Hosting))
+        {
+            throw new DomainException("Modo de abertura desconhecido.");
+        }
+
+        if (!terminals.IsHost)
+        {
+            throw new DomainException("O terminal do agente abre pelo MyTaskApp Agent desta máquina.");
+        }
+
+        if (!terminals.Support.IsSupported)
+        {
+            throw new DomainException(terminals.Support.Reason ?? "O terminal do agente não é suportado neste sistema.");
+        }
+
+        if (command.ResumeConversation is { } conversation && !Guid.TryParse(conversation, out _))
+        {
+            throw new DomainException("A conversa a retomar não é válida.");
+        }
     }
 
     /// <summary>

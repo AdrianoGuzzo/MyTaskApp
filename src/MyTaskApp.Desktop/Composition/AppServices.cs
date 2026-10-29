@@ -4,6 +4,7 @@ using MyTaskApp.Application;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Deadlines;
+using MyTaskApp.Application.LocalPeers;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Application.Sounds;
 using MyTaskApp.Desktop.Reminders;
@@ -260,6 +261,9 @@ internal static class AppServices
             // O agente deste computador (ADR-085) escuta; o desktop conecta
             // quando ele está rodando, e segue sozinho quando não está.
             .AddLocalPeer(configuration, LocalPeerRole.Connect)
+
+            // O terminal do agente (ADR-098) avisa pelo mesmo canal quando chamar a pessoa.
+            .AddSingleton<LocalPeerAttentionRelay>()
             .AddAgentAutostart()
             .AddApplication(configuration)
             .AddInfrastructure(configuration)

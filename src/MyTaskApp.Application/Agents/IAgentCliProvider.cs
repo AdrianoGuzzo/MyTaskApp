@@ -64,6 +64,13 @@ public interface IAgentCliProvider
     /// a configuração do usuário os desliga. <c>null</c> = consegue.
     /// </summary>
     string? MonitoringUnavailableReason(string workingDirectory, Uri endpoint);
+
+    /// <summary>
+    /// O agente vai abrir sem pedir aprovação para nada (ADR-099): pelos
+    /// parâmetros ou pela configuração dele na pasta. Só informa — o app nunca
+    /// muda os parâmetros por causa disso.
+    /// </summary>
+    bool BypassesPermissions(IReadOnlyList<string> arguments, string workingDirectory) => false;
 }
 
 /// <summary>O agente está instalado? Onde, e em qual versão?</summary>
@@ -95,13 +102,21 @@ public sealed record CliDetectionResult
 /// Para onde o agente manda os avisos e o que ele recebe no ambiente para se
 /// identificar; <c>null</c> = abrir sem acompanhamento (ADR-037).
 /// </param>
+/// <param name="Terminal">
+/// No terminal do agente (ADR-098): a conversa com id conhecido, nova ou
+/// retomada. <c>null</c> = o terminal direto de sempre.
+/// </param>
 public sealed record AgentCliStartContext(
     Guid TaskId,
     string WorkingDirectory,
     IReadOnlyList<string> Arguments,
     string? Prompt = null,
     bool RunDirectly = false,
-    AgentMonitoring? Monitoring = null);
+    AgentMonitoring? Monitoring = null,
+    AgentCliTerminal? Terminal = null);
+
+/// <summary>A conversa do terminal do agente: <c>--session-id</c> na nova, <c>--resume</c> na retomada.</summary>
+public sealed record AgentCliTerminal(string ConversationId, bool Resume);
 
 /// <summary>
 /// Uma escolha de lista do card (modelo, esforço): o valor gravado, o nome para

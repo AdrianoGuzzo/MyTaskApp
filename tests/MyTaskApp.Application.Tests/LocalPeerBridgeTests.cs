@@ -1,7 +1,9 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.LocalPeers;
 using MyTaskApp.Application.Sync;
+using MyTaskApp.Application.Terminals;
 using NSubstitute;
 
 namespace MyTaskApp.Application.Tests;
@@ -103,6 +105,48 @@ public sealed class LocalPeerBridgeTests : IAsyncDisposable
 
         _channel.Sent.Should().BeEmpty();
         _channel.Disposed.Should().BeTrue();
+    }
+
+    /// <summary>O terminal do agente (ADR-098): a atividade dele vira um recado só com a sessão.</summary>
+    [Fact]
+    public void InTheAgent_ATerminalsActivity_GoesToTheDesktop()
+    {
+        var terminals = Substitute.For<ITerminalSessions>();
+        var sessionId = Guid.NewGuid();
+        using var forwarder = new LocalPeerAttentionForwarder(terminals, _channel, NullLogger<LocalPeerAttentionForwarder>.Instance);
+        forwarder.Start();
+
+        terminals.ActivityChanged += Raise.Event<EventHandler<Guid>>(terminals, sessionId);
+
+        _channel.Sent.Should().Equal(new LocalPeerMessage(LocalPeerMessageKinds.AgentAttention, SessionId: sessionId));
+    }
+
+    [Fact]
+    public void WithoutTheDesktop_TheActivityStaysInTheAgent()
+    {
+        var terminals = Substitute.For<ITerminalSessions>();
+        using var forwarder = new LocalPeerAttentionForwarder(terminals, _channel, NullLogger<LocalPeerAttentionForwarder>.Instance);
+        forwarder.Start();
+        _channel.IsConnected = false;
+
+        terminals.ActivityChanged += Raise.Event<EventHandler<Guid>>(terminals, Guid.NewGuid());
+
+        _channel.Sent.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task InTheDesktop_TheAttentionNote_RunsTheAttentionHere()
+    {
+        var runner = Substitute.For<IUseCaseRunner>();
+        using var relay = new LocalPeerAttentionRelay(_channel, runner, NullLogger<LocalPeerAttentionRelay>.Instance);
+        relay.Start();
+
+        _channel.Receive(new LocalPeerMessage(LocalPeerMessageKinds.AgentAttention, SessionId: Guid.NewGuid()));
+        _channel.Receive(new LocalPeerMessage(LocalPeerMessageKinds.AgentAttention));
+        _channel.Receive(new LocalPeerMessage(LocalPeerMessageKinds.DataChanged, DataArea.Tasks));
+
+        await runner.Received(1).RunAsync(Arg.Any<Func<ShowAgentAttentionHandler, CancellationToken, Task>>(), Arg.Any<CancellationToken>());
+        _channel.Sent.Should().BeEmpty("o recado não volta");
     }
 
     private static async Task<bool> WaitAsync(SyncTrigger trigger)

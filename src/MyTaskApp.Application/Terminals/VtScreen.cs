@@ -212,7 +212,8 @@ public sealed class VtScreen
     /// tela: o histórico, a tela principal, a alternativa se estiver nela, o
     /// cursor e os modos. É o "retrato" que vai para quem conecta no meio.
     /// </summary>
-    public byte[] Snapshot()
+    /// <param name="scrollback">Quantas linhas do histórico, das mais recentes: de longe vai menos.</param>
+    public byte[] Snapshot(int scrollback = int.MaxValue)
     {
         var output = new StringBuilder();
 
@@ -220,7 +221,7 @@ public sealed class VtScreen
         output.Append("\u001bc\u001b[?1049l\u001b[0m\u001b[H\u001b[2J\u001b[3J");
 
         var lines = new List<TerminalCell[]>(_scrollback.Count + Size.Rows);
-        lines.AddRange(_scrollback);
+        lines.AddRange(_scrollback.Skip(Math.Max(0, _scrollback.Count - Math.Max(0, scrollback))));
         lines.AddRange(_main);
 
         for (var i = 0; i < lines.Count; i++)

@@ -51,6 +51,9 @@ internal static class AgentComposition
         // O agente abre o canal local; o desktop, quando abre, conecta nele (T-11).
         services.AddLocalPeer(configuration, LocalPeerRole.Listen);
 
+        // O terminal do agente (ADR-098): só aqui há quem hospede.
+        services.AddAgentTerminalHosting(configuration);
+
         services.AddApplication(configuration);
         services.AddInfrastructure(configuration);
 

@@ -1,12 +1,15 @@
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Sync;
+using MyTaskApp.Application.Terminals;
 
 namespace MyTaskApp.Application.LocalPeers;
 
 /// <summary>Um aviso entre o desktop e o agente deste computador (ADR-085). Nada de execução por aqui.</summary>
 /// <param name="Areas">Em <see cref="LocalPeerMessageKinds.DataChanged"/>, o que recarregar.</param>
-public sealed record LocalPeerMessage(string Kind, DataArea Areas = DataArea.None);
+/// <param name="SessionId">Em <see cref="LocalPeerMessageKinds.AgentAttention"/>, a sessão a olhar.</param>
+public sealed record LocalPeerMessage(string Kind, DataArea Areas = DataArea.None, Guid? SessionId = null);
 
 public static class LocalPeerMessageKinds
 {
@@ -19,7 +22,111 @@ public static class LocalPeerMessageKinds
     /// <summary>A pessoa pediu "Sincronizar agora" no outro processo.</summary>
     public const string SyncNow = "syncNow";
 
-    public static bool IsKnown(string? kind) => kind is DataChanged or SyncWanted or SyncNow;
+    /// <summary>
+    /// O agente: uma sessão do terminal dele mudou de atividade (ADR-098).
+    /// Quem tem tela lê o estado no banco e decide se chama a pessoa.
+    /// </summary>
+    public const string AgentAttention = "agentAttention";
+
+    public static bool IsKnown(string? kind) => kind is DataChanged or SyncWanted or SyncNow or AgentAttention;
+}
+
+/// <summary>
+/// No agente, que não tem tela (ADR-098): a atividade de um terminal dele
+/// vira um recado ao desktop, que mostra o aviso, toca o som e pisca a
+/// janela certa. Sem desktop aberto, ninguém é chamado.
+/// </summary>
+public sealed class LocalPeerAttentionForwarder(ITerminalSessions terminals, ILocalPeerChannel channel, ILogger<LocalPeerAttentionForwarder> logger) : IDisposable
+{
+    private bool _started;
+
+    public void Start()
+    {
+        if (_started)
+        {
+            return;
+        }
+
+        _started = true;
+        terminals.ActivityChanged += OnActivityChanged;
+    }
+
+    public void Dispose()
+    {
+        if (_started)
+        {
+            terminals.ActivityChanged -= OnActivityChanged;
+        }
+    }
+
+    private void OnActivityChanged(object? sender, Guid sessionId) => _ = SendAsync(sessionId);
+
+    private async Task SendAsync(Guid sessionId)
+    {
+        if (!channel.IsConnected)
+        {
+            return;
+        }
+
+        try
+        {
+            await channel.SendAsync(new LocalPeerMessage(LocalPeerMessageKinds.AgentAttention, SessionId: sessionId), CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            logger.LogDebug(exception, "LocalPeerAttentionFailed {SessionId}", sessionId);
+        }
+    }
+}
+
+/// <summary>
+/// No desktop: o recado de atenção do agente vira o aviso desta tela
+/// (<see cref="ShowAgentAttention"/>).
+/// </summary>
+public sealed class LocalPeerAttentionRelay(ILocalPeerChannel channel, IUseCaseRunner runner, ILogger<LocalPeerAttentionRelay> logger) : IDisposable
+{
+    private bool _started;
+
+    public void Start()
+    {
+        if (_started)
+        {
+            return;
+        }
+
+        _started = true;
+        channel.Received += OnReceived;
+    }
+
+    public void Dispose()
+    {
+        if (_started)
+        {
+            channel.Received -= OnReceived;
+        }
+    }
+
+    private void OnReceived(LocalPeerMessage message)
+    {
+        if (message is { Kind: LocalPeerMessageKinds.AgentAttention, SessionId: { } sessionId })
+        {
+            _ = ShowAsync(sessionId);
+        }
+    }
+
+    private async Task ShowAsync(Guid sessionId)
+    {
+        try
+        {
+            await runner.RunAsync<ShowAgentAttentionHandler>(
+                (handler, token) => handler.HandleAsync(new ShowAgentAttention(sessionId), token),
+                CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "AgentAttentionRelayFailed {SessionId}", sessionId);
+        }
+    }
 }
 
 /// <summary>

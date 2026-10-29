@@ -488,6 +488,7 @@ public sealed partial class App : Avalonia.Application
 
         // Com o agente rodando (ADR-085), o que um grava o outro mostra, e quem tem o lease sincroniza.
         services.GetRequiredService<LocalPeerBridge>().Start();
+        services.GetRequiredService<LocalPeerAttentionRelay>().Start();
 
         // Aceitando controle, o agente fica no logon e, se tiver caído, sobe de novo agora.
         _ = services.GetRequiredService<IUseCaseRunner>().RunAsync<ApplyAgentAutostartHandler>(
@@ -979,6 +980,7 @@ public sealed partial class App : Avalonia.Application
         // Um push no meio para; o outbox guarda, e o próximo início reenvia com os mesmos ids (ADR-061).
         services.GetRequiredService<SyncScheduler>().Dispose();
         services.GetRequiredService<RemotePresenceScheduler>().Dispose();
+        services.GetRequiredService<LocalPeerAttentionRelay>().Dispose();
         _ = services.GetRequiredService<LocalPeerBridge>().DisposeAsync().AsTask();
         services.GetRequiredService<AgentSessionMonitor>().Dispose();
         services.GetRequiredService<CommandExecutionMonitor>().Dispose();

@@ -1,10 +1,14 @@
 using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Configuration;
 using MyTaskApp.Application.LocalPeers;
 using MyTaskApp.Application.Sync;
+using MyTaskApp.Application.Terminals;
 using MyTaskApp.Infrastructure.Processes;
+using MyTaskApp.Infrastructure.Terminals;
 
 namespace MyTaskApp.Agent.Tests;
 
@@ -27,6 +31,26 @@ public sealed class AgentTests
 
         services.GetRequiredService<AgentHost>().Should().NotBeNull();
         services.GetRequiredService<IProcessLeases>().Should().NotBeNull();
+    }
+
+    /// <summary>
+    /// O terminal do agente (ADR-098): só o agente hospeda, com a porta de
+    /// hooks própria (a 47831 é do desktop) e o canal local da janela.
+    /// </summary>
+    [Fact]
+    public async Task TheAgent_HostsTheTerminals_WithItsOwnHooksPort()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), $"mytaskapp-agent-{Guid.NewGuid():N}");
+
+        await using var services = AgentTestHost.Compose(folder)
+            .BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
+
+        services.GetRequiredService<ITerminalSessions>().Should().BeSameAs(services.GetRequiredService<TerminalSessionRegistry>());
+        services.GetRequiredService<ITerminalSessions>().IsHost.Should().BeTrue();
+        services.GetRequiredService<IOptions<ApplicationOptions>>().Value.AgentEventsPort.Should().Be(0);
+        services.GetRequiredService<TerminalPipeListener>().PipeName
+            .Should().Be(TerminalPipe.NameFor(Path.Combine(folder, "mytaskapp.db")));
+        services.GetRequiredService<LocalPeerAttentionForwarder>().Should().NotBeNull();
     }
 
     /// <summary>Sem tela (ADR-085): o agente é a Application e a Infrastructure, e nada das cascas.</summary>

@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
+using MyTaskApp.Application.Terminals;
 using MyTaskApp.Desktop.ViewModels;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.Agents;
@@ -570,6 +571,7 @@ public class AgentSessionViewModelTests
             directories,
             Substitute.For<IAgentSettingsStore>(),
             Substitute.For<IAgentEventEndpoint>(),
+            NoTerminalSessions.Instance,
             TimeProvider.System,
             NullLogger<StartAgentSessionHandler>.Instance);
     }

@@ -26,6 +26,7 @@ using MyTaskApp.Application.Sync;
 using MyTaskApp.Application.StickyNotes;
 using MyTaskApp.Application.Tags;
 using MyTaskApp.Application.Tasks;
+using MyTaskApp.Application.Terminals;
 using MyTaskApp.Application.TimeTracking;
 using MyTaskApp.Domain.DatabaseOperations;
 using MyTaskApp.Remote.Contracts;
@@ -211,6 +212,11 @@ public static class DependencyInjection
         // chamada, ele ganha do objeto nulo.
         services.AddScoped<RecordAgentEventHandler>();
         services.TryAddSingleton<IAgentAttentionPresenter, NoAgentAttentionPresenter>();
+
+        // O terminal do agente (ADR-098): só o MyTaskApp Agent hospeda, e registra antes.
+        services.TryAddSingleton<ITerminalSessions>(NoTerminalSessions.Instance);
+        services.TryAddSingleton<IAgentTerminalWindows>(NoAgentTerminalWindows.Instance);
+        services.AddScoped<ShowAgentAttentionHandler>();
 
         // O aviso de que alguém abriu de longe um Claude aqui (ADR-092). Só o desktop o liga.
         services.AddScoped<GetRemotelyOpenedSessionsHandler>();

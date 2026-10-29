@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
+using MyTaskApp.Application.Configuration;
 using MyTaskApp.Application.Consultations;
 using MyTaskApp.Application.Deadlines;
 using MyTaskApp.Application.DatabaseOperations;
@@ -460,6 +461,43 @@ public static class DependencyInjection
 
         return services;
     }
+
+    /// <summary>
+    /// O terminal do agente (ADR-098): só o MyTaskApp Agent chama, antes da
+    /// Application. As sessões hospedadas, a porta de hooks própria (qualquer
+    /// livre: a 47831 continua do desktop, com as sessões diretas), o canal
+    /// local e a atividade que atravessa para o desktop chamar a pessoa.
+    /// </summary>
+    public static IServiceCollection AddAgentTerminalHosting(this IServiceCollection services, IConfiguration configuration)
+    {
+        var databaseOptions =
+            configuration.GetSection(DatabaseOptions.SectionName).Get<DatabaseOptions>()
+            ?? new DatabaseOptions();
+
+        services.AddSingleton<TerminalSessionRegistry>();
+        services.TryAddSingleton<ITerminalSessions>(provider => provider.GetRequiredService<TerminalSessionRegistry>());
+        services.AddSingleton<LocalPeerAttentionForwarder>();
+
+        // Antes da Application, que registra as opções com TryAdd: o agente ouve numa porta livre.
+        var applicationOptions =
+            configuration.GetSection(ApplicationOptions.SectionName).Get<ApplicationOptions>()
+            ?? new ApplicationOptions();
+        applicationOptions.AgentEventsPort = 0;
+        services.TryAddSingleton(Options.Create(applicationOptions));
+
+        services.AddSingleton<LocalTerminalServer>();
+        services.AddSingleton(provider => new TerminalPipeListener(
+            TerminalPipe.NameFor(databaseOptions.ResolveFullPath()),
+            provider.GetRequiredService<LocalTerminalServer>(),
+            provider.GetRequiredService<ILogger<TerminalPipeListener>>()));
+
+        return services;
+    }
+
+    /// <summary>O nome do canal local do terminal desta instalação, para quem conecta (o desktop).</summary>
+    public static string TerminalPipeName(IConfiguration configuration) =>
+        TerminalPipe.NameFor(
+            (configuration.GetSection(DatabaseOptions.SectionName).Get<DatabaseOptions>() ?? new DatabaseOptions()).ResolveFullPath());
 
     /// <summary>
     /// O agente no logon desta conta (ADR-085), a partir da pasta do app: só o

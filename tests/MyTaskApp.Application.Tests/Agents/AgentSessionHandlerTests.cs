@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using MyTaskApp.Application.Agents;
+using MyTaskApp.Application.Terminals;
 using MyTaskApp.Application.Tests.Fakes;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.Agents;
@@ -34,6 +35,7 @@ public class AgentSessionHandlerTests
     private readonly RecordingAgentAttentionPresenter _presenter = new();
     private readonly AgentCliProviders _providers;
     private readonly TaskItem _task;
+    private ITerminalSessions _terminals = NoTerminalSessions.Instance;
 
     public AgentSessionHandlerTests()
     {
@@ -66,6 +68,7 @@ public class AgentSessionHandlerTests
             _disk,
             _settings,
             _events,
+            _terminals,
             _time,
             NullLogger<StartAgentSessionHandler>.Instance);
 
@@ -851,5 +854,169 @@ public class AgentSessionHandlerTests
         await End().HandleAsync(new EndAgentSession(session.Id), Ct);
 
         _presenter.Dismissed.Should().Equal(session.Id);
+    }
+
+    // --- Terminal do agente (ADR-098) ----------------------------------------
+
+    [Fact]
+    public async Task InTheAgentsTerminal_TheSameStart_RunsInAPseudoTerminal_WithAKnownConversation()
+    {
+        Ready();
+        var terminals = new FakeTerminalSessions(_processes, Now);
+        _terminals = terminals;
+        _settings.Arguments["claude-code"] = "--model opus";
+
+        var view = await Start().HandleAsync(
+            new StartAgentSession(_task.Id, _task.Developments[0].Id, Hosting: AgentHosting.AgentWindow, RemoteOrigin: "Notebook"),
+            Ct);
+
+        view.Status.Should().Be(AgentSessionStatus.Running);
+        view.Mode.Should().Be(AgentSessionMode.Terminal);
+        view.RemoteOrigin.Should().Be("Notebook");
+        _launcher.Launched.Should().BeEmpty("o terminal direto não abre");
+        var (options, info) = terminals.Launched.Should().ContainSingle().Subject;
+        options.Executable.Should().Be(FakeAgentCliProvider.Executable);
+        info.SessionId.Should().Be(view.SessionId);
+        info.Monitored.Should().BeTrue();
+        _claude.LastContext!.Terminal.Should().Be(new AgentCliTerminal(_sessions.Sessions.Single().ExternalSessionId!, Resume: false));
+        Guid.TryParse(_claude.LastContext.Terminal!.ConversationId, out _).Should().BeTrue();
+        _claude.LastContext.Arguments.Should().Equal("--model", "opus");
+    }
+
+    [Fact]
+    public async Task InTheAgentsTerminal_ResumingContinuesTheGivenConversation()
+    {
+        Ready();
+        _terminals = new FakeTerminalSessions(_processes, Now);
+        var conversation = Guid.NewGuid().ToString();
+
+        await Start().HandleAsync(
+            new StartAgentSession(_task.Id, _task.Developments[0].Id, Hosting: AgentHosting.AgentEmbedded, ResumeConversation: conversation),
+            Ct);
+
+        _claude.LastContext!.Terminal.Should().Be(new AgentCliTerminal(conversation, Resume: true));
+    }
+
+    [Theory]
+    [InlineData("--dangerously-skip-permissions")]
+    [InlineData("x; rm -rf /")]
+    public async Task InTheAgentsTerminal_AConversationThatIsNotAnId_IsRefused(string conversation)
+    {
+        Ready();
+        _terminals = new FakeTerminalSessions(_processes, Now);
+
+        var start = () => Start().HandleAsync(
+            new StartAgentSession(_task.Id, _task.Developments[0].Id, Hosting: AgentHosting.AgentWindow, ResumeConversation: conversation),
+            Ct);
+
+        await start.Should().ThrowAsync<DomainException>().WithMessage("*não é válida*");
+        _sessions.Sessions.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task OutsideTheAgent_TheAgentsTerminal_IsRefused_AndDirectStaysTheDefault()
+    {
+        Ready();
+
+        var hosted = () => Start().HandleAsync(new StartAgentSession(_task.Id, _task.Developments[0].Id, Hosting: AgentHosting.AgentWindow), Ct);
+
+        await hosted.Should().ThrowAsync<DomainException>().WithMessage("*MyTaskApp Agent*");
+        new StartAgentSession(_task.Id, _task.Developments[0].Id).Hosting.Should().Be(AgentHosting.Direct);
+
+        var direct = await StartAsync();
+        direct.Mode.Should().Be(AgentSessionMode.Interactive);
+        _claude.LastContext!.Terminal.Should().BeNull("o terminal direto continua como era");
+    }
+
+    [Fact]
+    public async Task WithoutAPseudoTerminal_TheAgentsTerminal_SaysWhy()
+    {
+        Ready();
+        _terminals = new FakeTerminalSessions(_processes, Now) { Unsupported = "Sem pseudoterminal aqui." };
+
+        var start = () => Start().HandleAsync(new StartAgentSession(_task.Id, _task.Developments[0].Id, Hosting: AgentHosting.AgentWindow), Ct);
+
+        await start.Should().ThrowAsync<DomainException>().WithMessage("Sem pseudoterminal aqui.");
+    }
+
+    [Fact]
+    public async Task WhenThePseudoTerminalFails_TheSessionFails_WithTheReason()
+    {
+        Ready();
+        _terminals = new FakeTerminalSessions(_processes, Now) { FailWith = "Este agente já tem 8 terminais abertos." };
+
+        var view = await Start().HandleAsync(new StartAgentSession(_task.Id, _task.Developments[0].Id, Hosting: AgentHosting.AgentWindow), Ct);
+
+        view.Status.Should().Be(AgentSessionStatus.Failed);
+        view.FailureReason.Should().Contain("8 terminais");
+    }
+
+    [Fact]
+    public async Task TheBypass_IsDetected_AndNeverChanged()
+    {
+        Ready();
+        var terminals = new FakeTerminalSessions(_processes, Now);
+        _terminals = terminals;
+        _claude.Bypasses = true;
+
+        await Start().HandleAsync(
+            new StartAgentSession(_task.Id, _task.Developments[0].Id, Arguments: "--dangerously-skip-permissions", Hosting: AgentHosting.AgentWindow),
+            Ct);
+
+        terminals.Launched.Single().Info.PermissionsBypassed.Should().BeTrue();
+        _claude.LastContext!.Arguments.Should().Equal("--dangerously-skip-permissions");
+    }
+
+    /// <summary>O agente hospedando: abre "pseudoterminais" que só ficam vivos no tracker.</summary>
+    private sealed class FakeTerminalSessions(FakeAgentProcessTracker processes, DateTimeOffset now) : ITerminalSessions
+    {
+        public List<(TerminalLaunchOptions Options, TerminalSessionInfo Info)> Launched { get; } = [];
+
+        public string? Unsupported { get; init; }
+
+        public string? FailWith { get; init; }
+
+        public bool IsHost => true;
+
+        public PseudoTerminalSupport Support => Unsupported is null
+            ? new PseudoTerminalSupport(true, "teste", null)
+            : PseudoTerminalSupport.Unsupported("teste", Unsupported);
+
+        public event EventHandler? Changed
+        {
+            add { }
+            remove { }
+        }
+
+        public TerminalSessionHost? Find(Guid sessionId) => null;
+
+        public IReadOnlyList<TerminalSessionHost> List() => [];
+
+        public Task<TerminalLaunchResult> LaunchAsync(TerminalLaunchOptions options, TerminalSessionInfo info, CancellationToken cancellationToken = default)
+        {
+            Launched.Add((options, info));
+
+            if (FailWith is not null)
+            {
+                return Task.FromResult(TerminalLaunchResult.Failed(FailWith));
+            }
+
+            processes.Run(30001, now);
+            return Task.FromResult(new TerminalLaunchResult { Started = true, ProcessId = 30001, ProcessStartedAt = now });
+        }
+
+        public event EventHandler<Guid>? ActivityChanged
+        {
+            add { }
+            remove { }
+        }
+
+        public void NotifyActivity(Guid sessionId)
+        {
+        }
+
+        public void Observe(AgentEvent agentEvent)
+        {
+        }
     }
 }

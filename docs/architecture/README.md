@@ -44,7 +44,7 @@ Números dos ADRs; o link está na linha do índice abaixo.
 - **mobile** (app do celular): 067, 075, 076, 079
 - **distribuicao** (instalador, versionamento, release, instância única, iniciar com o sistema): 018, 019, 023, 044, 049
 - **testes** (estratégia e ferramentas de teste): 006
-- **remoto** (orquestração remota (fases 2 e 3)): 084, 085, 086, 087, 088, 089, 090, 091, 092, 093, 094, 095, 096
+- **remoto** (orquestração remota (fases 2 e 3)): 084, 085, 086, 087, 088, 089, 090, 091, 092, 093, 094, 095, 096, 098, 099
 
 ## Índice
 
@@ -147,6 +147,8 @@ Números dos ADRs; o link está na linha do índice abaixo.
 | [ADR-095](decisions/095-fila-de-prompts-por-conversa.md) | A instrução com o Claude respondendo espera a vez na fila da conversa | Aceito | Implementado | remoto | fila por conversa, MaxWaiting, processo vivo, stream-json, replay-user-messages |
 | [ADR-096](decisions/096-verificacao-periodica-no-celular.md) | Com o app fechado, o celular verifica o controle remoto de tempos em tempos e avisa | Aceito | Implementado | remoto | verificação periódica, JobScheduler, notificação local, POST_NOTIFICATIONS, push, FCM |
 | [ADR-097](decisions/097-relatorio-de-horas-dia-mes-ano.md) | Relatório de horas: dia, mês e ano numa janela própria, agregado na hora | Aceito | Implementado | ciclo-de-vida | GetHoursHistory, LocalDayGrid, HoursReportWindow, HoursBarChart, HoursHeatmap, relatório de horas, CSV |
+| [ADR-098](decisions/098-terminal-do-agente-em-pseudoterminal.md) | O Claude interativo roda num pseudoterminal hospedado pelo agente, e as telas são vistas da mesma sessão | Aceito | Parcial | remoto | ConPTY, openpty, VtScreen, TerminalSessionHost, AgentHosting, MyTaskApp.TerminalAttach, lease de entrada, PermissionRequest |
+| [ADR-099](decisions/099-terminal-remoto-do-claude.md) | O terminal do agente seguido e controlado de outra máquina, com entrada assinada | Aceito | Planejado | remoto | terminal.attach, relay do hub, entrada assinada, chave efêmera, Aceitar terminal remoto, bypass com aviso |
 
 ## Novo ADR
 

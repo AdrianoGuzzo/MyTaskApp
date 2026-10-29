@@ -7,7 +7,7 @@
 | **Categoria** | remoto |
 | **Registrado** | 2026-10-28 |
 | **Palavras-chave** | sessão gerenciada, Abrir Claude gerenciado, executor confia na própria chave, desktop para celular, AgentSessionMode.Headless |
-| **Relações** | relacionado: [ADR-030](030-sessoes-claude-code-por-tarefa.md), [ADR-037](037-acompanhar-claude-code-pelos-hooks.md), [ADR-087](087-pareamento-chave-por-dispositivo-operacao-assinada.md), [ADR-089](089-claude-code-remoto-headless-com-aprovacao.md), [ADR-091](091-conversa-do-claude-como-sessao-no-servidor.md) |
+| **Relações** | relacionado: [ADR-098](098-terminal-do-agente-em-pseudoterminal.md) (o Claude interativo no agente), [ADR-030](030-sessoes-claude-code-por-tarefa.md), [ADR-037](037-acompanhar-claude-code-pelos-hooks.md), [ADR-087](087-pareamento-chave-por-dispositivo-operacao-assinada.md), [ADR-089](089-claude-code-remoto-headless-com-aprovacao.md), [ADR-091](091-conversa-do-claude-como-sessao-no-servidor.md) |
 | **Código** | `src/MyTaskApp.Application/Remote/AdmitRemoteOperation.cs` (`RemoteTrust`), `src/MyTaskApp.Application/Remote/RemoteOperationDispatcher.cs`, `src/MyTaskApp.Desktop/ViewModels/RemotePrepareViewModel.cs`, `src/MyTaskApp.Desktop/ViewModels/TaskDevelopmentsViewModel.cs` |
 
 **Estado:** implementado (fase 3, E5). A decisão de seguir por aqui é do

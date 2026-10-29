@@ -31,12 +31,17 @@ public interface ITerminalLauncher
 /// o cmd não entende o <c>\"</c> com que o .NET escaparia as aspas do usuário.
 /// Exclui <see cref="Arguments"/>.
 /// </param>
+/// <param name="RemovedVariables">
+/// Variáveis herdadas que o programa não pode ver (ADR-098): as que fariam um
+/// Claude achar que roda dentro de outro. Só o terminal do agente as tira.
+/// </param>
 public sealed record TerminalLaunchOptions(
     string Executable,
     IReadOnlyList<string> Arguments,
     string WorkingDirectory,
     IReadOnlyDictionary<string, string>? Environment = null,
-    string? RawArguments = null);
+    string? RawArguments = null,
+    IReadOnlyList<string>? RemovedVariables = null);
 
 public sealed record TerminalLaunchResult
 {
