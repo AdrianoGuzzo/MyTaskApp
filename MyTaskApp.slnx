@@ -6,6 +6,7 @@
     <Project Path="src/MyTaskApp.Domain/MyTaskApp.Domain.csproj" />
     <Project Path="src/MyTaskApp.Infrastructure/MyTaskApp.Infrastructure.csproj" />
     <Project Path="src/MyTaskApp.Mcp/MyTaskApp.Mcp.csproj" />
+    <Project Path="src/MyTaskApp.TerminalAttach/MyTaskApp.TerminalAttach.csproj" />
   </Folder>
   <Folder Name="/mobile/">
     <Project Path="src/MyTaskApp.Mobile.Core/MyTaskApp.Mobile.Core.csproj" />

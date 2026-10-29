@@ -230,6 +230,15 @@ jobs:
           -p:PublishTrimmed=false
           -o artifacts/publish/${{ matrix.rid }}
 
+      # A janela nativa do terminal do agente (ADR-098), também na mesma pasta.
+      - name: Publicar a janela do terminal ${{ matrix.rid }}
+        run: >
+          dotnet publish src/MyTaskApp.TerminalAttach/MyTaskApp.TerminalAttach.csproj
+          -c Release -r ${{ matrix.rid }}
+          --self-contained true
+          -p:PublishTrimmed=false
+          -o artifacts/publish/${{ matrix.rid }}
+
       - name: Publicar ${{ matrix.rid }}
         run: >
           dotnet publish src/MyTaskApp.Desktop/MyTaskApp.Desktop.csproj
@@ -245,6 +254,8 @@ jobs:
         run: |
           test -f "${{ matrix.binary }}" || { echo "binário ausente"; exit 1; }
           test -f "${{ matrix.agent }}" || { echo "agente ausente — o controle remoto com o app fechado não funcionaria"; exit 1; }
+          ls artifacts/publish/${{ matrix.rid }}/MyTaskApp.TerminalAttach* >/dev/null 2>&1 \
+            || { echo "janela do terminal ausente — o terminal do agente não abriria em janela"; exit 1; }
           test -f "artifacts/publish/${{ matrix.rid }}/appsettings.json" \
             || { echo "appsettings.json ausente — o app não iniciaria"; exit 1; }
 

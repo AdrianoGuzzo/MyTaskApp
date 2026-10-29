@@ -4,6 +4,8 @@
     <ProjectReference Include="..\..\src\MyTaskApp.Infrastructure\MyTaskApp.Infrastructure.csproj" />
     <!-- O Claude de mentira que roda no pseudoterminal (ADR-098). -->
     <ProjectReference Include="..\MyTaskApp.FakeClaude\MyTaskApp.FakeClaude.csproj" />
+    <!-- A janela nativa do terminal do agente, no laço completo (ADR-098). -->
+    <ProjectReference Include="..\..\src\MyTaskApp.TerminalAttach\MyTaskApp.TerminalAttach.csproj" />
   </ItemGroup>
 
   <ItemGroup>
