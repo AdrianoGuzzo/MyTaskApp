@@ -91,6 +91,10 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("RemoteOperationId")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("RemoteOrigin")
+                        .HasMaxLength(60)
+                        .HasColumnType("TEXT");
+
                     b.Property<long>("StartedAt")
                         .HasColumnType("INTEGER");
 

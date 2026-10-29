@@ -12,15 +12,18 @@ using MyTaskApp.Remote.Contracts;
 namespace MyTaskApp.Desktop.ViewModels;
 
 /// <summary>Uma conversa na lista: a tarefa, a branch e o estado, nas palavras de <see cref="RemoteSessionTexts"/>.</summary>
-public sealed class RemoteSessionLine(RemoteSessionItem item)
+/// <param name="machine">A máquina onde roda, na lista de todas as máquinas; <c>null</c> na de uma só.</param>
+public sealed class RemoteSessionLine(RemoteSessionItem item, string? machine = null)
 {
     public RemoteSessionItem Item { get; } = item;
 
     public Guid SessionId => Item.Session.SessionId;
 
+    public string? Machine { get; } = machine;
+
     public string Title => Item.Title;
 
-    public string Details => Item.Branch is { } branch ? $"{branch} · {Item.State}" : Item.State;
+    public string Details => string.Join(" · ", new[] { Machine, Item.Branch, Item.State }.Where(part => part is not null));
 }
 
 /// <summary>
@@ -45,6 +48,14 @@ public sealed partial class RemoteSessionsViewModel : ObservableObject
     private RemoteSessionCursor _cursor = RemoteSessionCursor.Start;
     private bool _live;
 
+    /// <summary>Na lista de todas as máquinas: o apelido de cada uma, para a linha dizer onde a conversa roda.</summary>
+    private IReadOnlyDictionary<Guid, string>? _machines;
+
+    /// <summary>A conversa a escolher assim que a lista a trouxer: a que esta tela acabou de abrir.</summary>
+    private Guid? _toChoose;
+
+    private bool _loaded;
+
     /// <summary>Trocando a linha da conversa escolhida pela relida: não é outra escolha.</summary>
     private bool _refreshing;
     private int _ticks;
@@ -55,9 +66,14 @@ public sealed partial class RemoteSessionsViewModel : ObservableObject
         _logger = logger;
     }
 
+    /// <summary>A máquina da lista; <c>null</c> é a lista de todas (<see cref="LoadAllAsync"/>).</summary>
     public Guid? DeviceId { get; private set; }
 
     public ObservableCollection<RemoteSessionLine> Items { get; } = [];
+
+    /// <summary>O agente da máquina relatou antes e parou: os pedidos esperam na fila do servidor.</summary>
+    [ObservableProperty]
+    private bool _isAgentStopped;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSelection), nameof(CanPrompt), nameof(CanStop), nameof(SelectedState))]
@@ -97,12 +113,62 @@ public sealed partial class RemoteSessionsViewModel : ObservableObject
     public Guid? WaitingIn(Guid developmentId, IReadOnlySet<Guid> except) =>
         Items.FirstOrDefault(line => line.Item.Session.DevelopmentId == developmentId && line.Item.CanPrompt && !except.Contains(line.SessionId))?.SessionId;
 
-    public async Task LoadAsync(Guid deviceId, CancellationToken cancellationToken)
+    public Task LoadAsync(Guid deviceId, CancellationToken cancellationToken)
     {
         DeviceId = deviceId;
+        _machines = null;
+        return ReloadAsync(cancellationToken);
+    }
 
+    /// <summary>
+    /// As conversas de todas as máquinas da conta, como a aba Remoto do
+    /// celular: a janela "Conversas do Claude" do desktop. O prompt e o parar
+    /// vão para a máquina de cada conversa.
+    /// </summary>
+    public Task LoadAllAsync(IReadOnlyDictionary<Guid, string> machines, CancellationToken cancellationToken)
+    {
+        DeviceId = null;
+        _machines = machines;
+        return ReloadAsync(cancellationToken);
+    }
+
+    /// <summary>Escolhe a conversa, se a lista a tem; devolve a linha escolhida.</summary>
+    public RemoteSessionLine? Choose(Guid sessionId)
+    {
+        if (Items.FirstOrDefault(line => line.SessionId == sessionId) is not { } line)
+        {
+            return null;
+        }
+
+        Selected = line;
+        return line;
+    }
+
+    /// <summary>
+    /// A conversa que esta tela acabou de abrir: o agente relata a cada volta,
+    /// então ela entra na lista um pouco depois. Escolhida na hora se já está;
+    /// senão, quando a lista a trouxer.
+    /// </summary>
+    public async Task ChooseWhenListedAsync(Guid sessionId, CancellationToken cancellationToken)
+    {
+        if (Selected?.SessionId == sessionId)
+        {
+            return;
+        }
+
+        _toChoose = sessionId;
+
+        if (_loaded)
+        {
+            await ReloadAsync(cancellationToken);
+        }
+    }
+
+    private async Task ReloadAsync(CancellationToken cancellationToken)
+    {
         try
         {
+            var deviceId = DeviceId;
             var list = await _runner.RunAsync<ListRemoteSessionsHandler, RemoteSessionList>(
                 (handler, token) => handler.HandleAsync(new ListRemoteSessions(deviceId), token),
                 cancellationToken);
@@ -112,19 +178,26 @@ public sealed partial class RemoteSessionsViewModel : ObservableObject
 
             foreach (var item in list.Items)
             {
-                Items.Add(new RemoteSessionLine(item));
+                Items.Add(new RemoteSessionLine(item, _machines is null ? null : _machines.GetValueOrDefault(item.Session.DeviceId, "Outra máquina")));
             }
 
+            _loaded = true;
             Message = list.Unavailable;
-            AgentState = list.AgentOf(deviceId);
+            AgentState = deviceId is { } device ? list.AgentOf(device) : null;
+            IsAgentStopped = deviceId is { } stopped && list.IsAgentStopped(stopped);
             var again = Items.FirstOrDefault(line => line.SessionId == selected);
 
-            if (again is not null)
+            if (_toChoose is { } wanted && Items.FirstOrDefault(line => line.SessionId == wanted) is { } chosen)
+            {
+                _toChoose = null;
+                Selected = chosen;
+            }
+            else if (again is not null)
             {
                 // A mesma conversa, relida: troca a linha sem recomeçar a linha do tempo.
                 Refresh(again);
             }
-            else if (again is null)
+            else
             {
                 Selected = null;
             }
@@ -162,9 +235,9 @@ public sealed partial class RemoteSessionsViewModel : ObservableObject
             await ReadTimelineAsync(cancellationToken);
         }
 
-        if (DeviceId is { } deviceId && (++_ticks % ListTicks == 0 || changed))
+        if (_loaded && (++_ticks % ListTicks == 0 || changed))
         {
-            await LoadAsync(deviceId, cancellationToken);
+            await ReloadAsync(cancellationToken);
         }
     }
 
@@ -189,12 +262,12 @@ public sealed partial class RemoteSessionsViewModel : ObservableObject
     [RelayCommand]
     public async Task SendPromptAsync()
     {
-        if (DeviceId is not { } deviceId || Selected is not { } line || string.IsNullOrWhiteSpace(Prompt))
+        if (Selected is not { } line || string.IsNullOrWhiteSpace(Prompt))
         {
             return;
         }
 
-        if (await SendAsync(RemoteRequests.PromptAgent(deviceId, line.Item.Session.TaskId, line.SessionId, Prompt)))
+        if (await SendAsync(RemoteRequests.PromptAgent(line.Item.Session.DeviceId, line.Item.Session.TaskId, line.SessionId, Prompt)))
         {
             Prompt = string.Empty;
         }
@@ -203,9 +276,9 @@ public sealed partial class RemoteSessionsViewModel : ObservableObject
     [RelayCommand]
     public async Task StopAsync()
     {
-        if (DeviceId is { } deviceId && Selected is { } line)
+        if (Selected is { } line)
         {
-            await SendAsync(RemoteRequests.StopAgent(deviceId, line.Item.Session.TaskId, line.SessionId));
+            await SendAsync(RemoteRequests.StopAgent(line.Item.Session.DeviceId, line.Item.Session.TaskId, line.SessionId));
         }
     }
 
@@ -282,7 +355,7 @@ public sealed partial class RemoteSessionsViewModel : ObservableObject
 
             if (index >= 0)
             {
-                var fresh = new RemoteSessionLine(timeline.Session);
+                var fresh = new RemoteSessionLine(timeline.Session, line.Machine);
                 Items[index] = fresh;
                 Refresh(fresh);
             }

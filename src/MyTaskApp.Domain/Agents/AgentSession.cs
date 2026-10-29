@@ -112,6 +112,9 @@ public sealed class AgentSession
 
     public const int MaxChoiceLength = 32;
 
+    /// <summary>O apelido do controlador, o mesmo teto do pareamento.</summary>
+    public const int MaxRemoteOriginLength = 60;
+
     /// <summary>SHA-256 em hexadecimal.</summary>
     public const int HookTokenHashLength = 64;
 
@@ -168,6 +171,13 @@ public sealed class AgentSession
     public string? Model { get; private set; }
 
     public string? Effort { get; private set; }
+
+    /// <summary>
+    /// Quem abriu a conversa sem terminal: o apelido do controlador que mandou
+    /// o primeiro prompt ("Notebook", "Celular"). É o que o card desta máquina
+    /// mostra, para a conversa aberta de longe não rodar escondida.
+    /// </summary>
+    public string? RemoteOrigin { get; private set; }
 
     /// <summary>A sessão sem terminal pode receber mais um prompt: o último acabou e ninguém a parou.</summary>
     public bool CanContinue => IsHeadless && Status == AgentSessionStatus.Exited;
@@ -280,7 +290,8 @@ public sealed class AgentSession
         string profileId,
         string? model,
         string? effort,
-        DateTimeOffset startedAt)
+        DateTimeOffset startedAt,
+        string? remoteOrigin = null)
     {
         if (conversationId == Guid.Empty || remoteOperationId == Guid.Empty)
         {
@@ -292,6 +303,7 @@ public sealed class AgentSession
         session.HeadlessProfileId = Required(profileId, MaxChoiceLength, "Informe o perfil da sessão.");
         session.Model = Truncate(model, MaxChoiceLength);
         session.Effort = Truncate(effort, MaxChoiceLength);
+        session.RemoteOrigin = Truncate(remoteOrigin, MaxRemoteOriginLength);
         session.ExternalSessionId = conversationId.ToString();
         session.RemoteOperationId = remoteOperationId;
         session.PromptStartedAt = startedAt;

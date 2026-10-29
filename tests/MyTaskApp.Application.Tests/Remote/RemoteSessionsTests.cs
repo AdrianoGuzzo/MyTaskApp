@@ -141,6 +141,25 @@ public sealed class RemoteSessionsTests
         _server.ListedDevice.Should().Be(device);
     }
 
+    /// <summary>Só o agente que relatou e parou deixa o pedido esperando; o que nunca relatou é outra conversa.</summary>
+    [Fact]
+    public async Task TheList_MarksTheAgentsThatStopped()
+    {
+        var stopped = Guid.CreateVersion7();
+        var online = Guid.CreateVersion7();
+        var never = Guid.CreateVersion7();
+        _server.List = new RemoteAgentSessionList(
+            [new RemoteAgentPresence(stopped, Now.AddHours(-2)), new RemoteAgentPresence(online, Now), new RemoteAgentPresence(never, null)],
+            []);
+
+        var list = await new ListRemoteSessionsHandler(_server, _tasks, _time).HandleAsync(new ListRemoteSessions(), Ct);
+
+        list.IsAgentStopped(stopped).Should().BeTrue();
+        list.IsAgentStopped(online).Should().BeFalse();
+        list.IsAgentStopped(never).Should().BeFalse();
+        list.AgentOf(stopped).Should().StartWith("agente parado");
+    }
+
     [Fact]
     public async Task AnOldServer_SaysToUpdateIt()
     {

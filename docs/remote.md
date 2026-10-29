@@ -144,6 +144,30 @@ Cada conversa do Claude de longe fica guardada no servidor, com o estado que o
 agente de lá relata (ADR-091). Aparece em *Controlar → Conversas do Claude*, no
 desktop, e na aba **Remoto → Conversas do Claude**, no celular. Isso vale para
 as conversas abertas de qualquer tela: do celular, deste desktop ou de outro.
+*Máquinas → Conversas do Claude* junta as de todas as máquinas numa janela só,
+com o nome da máquina em cada linha. O próximo prompt e o parar vão para a
+máquina da conversa, sem escolher a máquina antes.
+
+**Quem abre sabe que abriu.** Logo depois de "Abrir conversa", *Controlar*
+mostra "Pedido enviado a X". Quando o agente de lá pega o pedido, a faixa
+passa a "Conversa aberta em X · tarefa (branch)", e a conversa já fica
+escolhida na lista. Um pedido que expira sem abrir conversa apaga a faixa, e o
+cartão da operação diz o porquê. Com o agente de lá parado, "Na fila" vem com
+"X: agente parado desde…".
+
+**A máquina onde a conversa roda também mostra.** A conversa aberta de longe
+roda pelo agente, sem terminal, mas não fica escondida:
+
+- **o aviso no canto** "Claude Code · aberto de Y" aparece assim que o agente
+  grava a conversa, com o botão **Abrir conversa**;
+- **o card da tarefa**, na aba *Desenvolvimento*, mostra "Aberto de Y pelo
+  controle remoto", o estado ("Respondendo", "Conversa aberta — espera o
+  próximo prompt", "Conversa parada") e **Abrir conversa**, no lugar do
+  "Abrir terminal". O selo da linha leva à conversa.
+
+**Abrir conversa** abre *Controlar* desta própria máquina já na conversa,
+para continuar daqui o que foi começado no celular ou em outro computador. Só
+funciona com esta máquina aceitando controle (ADR-092).
 
 - **A linha do tempo** junta os prompts da conversa, em ordem: "Você: …" (o
   prompt, com senhas mascaradas), as respostas, as ferramentas, as aprovações
@@ -228,7 +252,9 @@ hub, o agente procura pedidos a cada 30 segundos.
 
 | Sintoma | O que acontece e o que fazer |
 |---|---|
-| O pedido fica em "Na fila" | a máquina está desligada, sem rede ou com o agente parado (veja "agente parado desde…" na lista). Ele espera até o prazo e expira; nada roda depois |
+| O pedido fica em "Na fila" | a máquina está desligada, sem rede ou com o agente parado (o cartão da operação diz "X: agente parado desde…"). Ele espera até o prazo e expira; nada roda depois |
+| A conversa abriu de longe, mas não aparece no outro computador | o card e o aviso dependem do desktop de lá aberto. Abra o MyTaskApp lá: o card mostra a conversa, e *Máquinas → Conversas do Claude* a lista daqui mesmo |
+| "Abrir conversa" diz que esta máquina não aceita controle | ligue *Máquinas → Aceitar ser controlado*. A conversa continua no celular e nos outros computadores enquanto isso |
 | "O Claude ainda está respondendo o prompt anterior." | só um prompt por vez em cada conversa. Espere o anterior terminar, ou pare a conversa |
 | "Há um Claude aberto no terminal deste worktree." | feche o Claude do terminal na outra máquina antes de mandar o prompt de longe |
 | "O agente parou no meio do prompt." | o agente caiu enquanto o Claude respondia. Ao voltar, a conversa aceita o próximo prompt |

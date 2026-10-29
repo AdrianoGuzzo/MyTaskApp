@@ -45,12 +45,20 @@ public enum AgentPanelState
 /// Filho do <see cref="TaskDevelopmentViewModel"/>, e não parte dele: aquele já
 /// cuida do worktree, e o agente só existe depois que o worktree está pronto.
 /// Nada de processo aqui — tudo passa por casos de uso.
+/// <para>
+/// A sessão pode ser a conversa sem terminal que o agente desta máquina roda
+/// (ADR-089, ADR-092), aberta de longe ou pelo "Abrir Claude gerenciado". Ela
+/// não tem janela: o card diz de onde veio e leva à conversa, em vez de
+/// procurar um terminal que não existe.
+/// </para>
 /// </remarks>
+/// <param name="conversations">Abre a conversa sem terminal; nulo nos testes que não falam dela.</param>
 public sealed partial class AgentSessionViewModel(
     IUseCaseRunner runner,
     IClipboardWriter clipboard,
     IShellLauncher shell,
-    ILogger<AgentSessionViewModel> logger) : ObservableObject
+    ILogger<AgentSessionViewModel> logger,
+    ManagedConversationOpener? conversations = null) : ObservableObject
 {
     private Guid _taskId;
 
@@ -72,8 +80,9 @@ public sealed partial class AgentSessionViewModel(
     [NotifyPropertyChangedFor(
         nameof(IsChecking), nameof(IsNotInstalled), nameof(IsIdle), nameof(IsStarting), nameof(IsRunning),
         nameof(IsFinished), nameof(IsFailed), nameof(HasSession), nameof(ShowStart), nameof(StatusText),
-        nameof(NeedsAttention), nameof(ActivityText), nameof(MonitoringText), nameof(IsRunningQuietly), nameof(ShowsWarning))]
-    [NotifyCanExecuteChangedFor(nameof(StartCommand), nameof(FocusCommand))]
+        nameof(NeedsAttention), nameof(ActivityText), nameof(MonitoringText), nameof(IsRunningQuietly), nameof(ShowsWarning),
+        nameof(OriginText), nameof(ShowProcess), nameof(ShowFocus), nameof(ShowOpenConversation))]
+    [NotifyCanExecuteChangedFor(nameof(StartCommand), nameof(FocusCommand), nameof(OpenConversationCommand))]
     private AgentPanelState _state = AgentPanelState.Checking;
 
     /// <summary>Tarefa concluída não abre agente novo; o que está aberto continua alcançável.</summary>
@@ -123,7 +132,9 @@ public sealed partial class AgentSessionViewModel(
     [NotifyPropertyChangedFor(
         nameof(AgentName), nameof(StartLabel), nameof(ProcessText), nameof(StartedText), nameof(RangeText),
         nameof(WorkingDirectory), nameof(FailureReason), nameof(HasSession), nameof(StatusText),
-        nameof(NeedsAttention), nameof(ActivityText), nameof(MonitoringText), nameof(IsRunningQuietly), nameof(ShowsWarning))]
+        nameof(NeedsAttention), nameof(ActivityText), nameof(MonitoringText), nameof(IsRunningQuietly), nameof(ShowsWarning),
+        nameof(IsManaged), nameof(OriginText), nameof(ShowProcess), nameof(ShowFocus), nameof(ShowOpenConversation))]
+    [NotifyCanExecuteChangedFor(nameof(FocusCommand), nameof(OpenConversationCommand))]
     private AgentSessionView? _session;
 
     /// <summary>
@@ -134,7 +145,7 @@ public sealed partial class AgentSessionViewModel(
     private bool _monitor = true;
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(StartCommand), nameof(FocusCommand))]
+    [NotifyCanExecuteChangedFor(nameof(StartCommand), nameof(FocusCommand), nameof(OpenConversationCommand))]
     private bool _isBusy;
 
     /// <summary>Um recado curto: "Não foi possível localizar a janela…".</summary>
@@ -204,6 +215,8 @@ public sealed partial class AgentSessionViewModel(
         AgentPanelState.Checking => $"Verificando o {AgentName}…",
         AgentPanelState.Starting => $"Abrindo o {AgentName}…",
         AgentPanelState.Running => RunningText(Session?.Activity ?? AgentActivity.Unknown),
+        AgentPanelState.Finished when Session is { CanContinue: true } => "◐ Conversa aberta — espera o próximo prompt",
+        AgentPanelState.Finished when Session is { IsHeadless: true, Status: AgentSessionStatus.Stopped } => "○ Conversa parada",
         AgentPanelState.Finished => "○ Finalizado",
         AgentPanelState.Failed => "✗ O terminal não abriu",
         AgentPanelState.NotInstalled => NotFoundText,
@@ -239,11 +252,29 @@ public sealed partial class AgentSessionViewModel(
         : null;
 
     /// <summary>Com o agente aberto: se ele avisa o app, ou por que não.</summary>
-    public string? MonitoringText => State is AgentPanelState.Running && Session is { } session
+    public string? MonitoringText => State is AgentPanelState.Running && Session is { IsHeadless: false } session
         ? session.IsMonitored
             ? "O MyTaskApp avisa quando o agente precisar de você ou terminar."
             : "Sem acompanhamento: esta sessão não avisa o MyTaskApp."
         : null;
+
+    /// <summary>A conversa sem terminal, rodada pelo agente desta máquina (ADR-089, ADR-092).</summary>
+    public bool IsManaged => Session?.IsHeadless == true;
+
+    /// <summary>De onde veio a conversa sem terminal: sem isso, a aberta de longe rodava escondida aqui.</summary>
+    public string? OriginText => IsManaged && HasSession
+        ? Session!.RemoteOrigin is { } origin
+            ? $"Aberto de {origin} pelo controle remoto. Roda sem terminal, pelo agente desta máquina: acompanhe e responda pela conversa, daqui ou de lá."
+            : "Claude gerenciado: roda sem terminal, pelo agente desta máquina. Acompanhe e responda pela conversa, daqui, do celular ou de outro computador."
+        : null;
+
+    /// <summary>O processo de cada prompt sem terminal troca a cada prompt: não diz nada a quem olha.</summary>
+    public bool ShowProcess => IsRunning && !IsManaged;
+
+    public bool ShowFocus => IsRunning && !IsManaged;
+
+    /// <summary>"Abrir conversa": a sessão sem terminal enquanto ainda recebe prompts, ou para ler como terminou.</summary>
+    public bool ShowOpenConversation => IsManaged && HasSession;
 
     public bool IsChecking => State is AgentPanelState.Checking;
 
@@ -266,7 +297,9 @@ public sealed partial class AgentSessionViewModel(
 
     public bool CanStart => !IsBusy && ShowStart;
 
-    public bool CanFocus => !IsBusy && State is AgentPanelState.Running;
+    public bool CanFocus => !IsBusy && State is AgentPanelState.Running && !IsManaged;
+
+    public bool CanOpenConversation => !IsBusy && ShowOpenConversation && conversations is not null;
 
     /// <summary>
     /// O ambiente do card (ADR-031): cada repositório da tarefa tem o seu agente.
@@ -427,6 +460,37 @@ public sealed partial class AgentSessionViewModel(
         {
             logger.LogError(exception, "AgentSessionFocusFailed {TaskId}", _taskId);
             Message = "Não foi possível trazer o terminal para a frente.";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    /// <summary>
+    /// Abre a conversa sem terminal desta sessão (ADR-092): a tela
+    /// <i>Controlar</i> desta máquina, já nela — o mesmo prompt, a mesma linha
+    /// do tempo e as aprovações de quem a abriu de longe.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanOpenConversation))]
+    public async Task OpenConversationAsync()
+    {
+        if (conversations is null || Session is not { } session)
+        {
+            return;
+        }
+
+        IsBusy = true;
+        Message = null;
+
+        try
+        {
+            Message = await conversations.OpenAsync(_developmentId, session.SessionId, CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "AgentConversationOpenFailed {TaskId}", _taskId);
+            Message = "Não foi possível abrir a conversa.";
         }
         finally
         {

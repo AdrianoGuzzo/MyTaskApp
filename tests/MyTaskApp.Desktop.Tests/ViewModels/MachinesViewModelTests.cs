@@ -286,6 +286,57 @@ public class MachinesViewModelTests
         _runner.Invoked.Should().Contain(typeof(GetRemoteControlHandler));
     }
 
+    /// <summary>"Conversas do Claude": as de todas as máquinas, com o nome de cada uma na linha.</summary>
+    [AvaloniaFact]
+    public async Task TheConversations_OfEveryMachine_OpenWithTheMachineName()
+    {
+        var session = new RemoteSessionItem(
+            new RemoteAgentSessionView(
+                Guid.CreateVersion7(), Notebook, 1, Guid.CreateVersion7(), Guid.CreateVersion7(), "read", null,
+                RemoteAgentSessionStatus.Idle, RemoteAgentActivity.Working, null, null, Now, null, Now, Now),
+            new RemoteAgentPresence(Notebook, Now),
+            "Validar antimicrobianos",
+            "feature/ECO-12",
+            "Esperando o próximo prompt");
+        _runner.ResultsByHandler[typeof(ListRemoteSessionsHandler)] = new RemoteSessionList([session]);
+        var viewModel = new MachinesViewModel(
+            _runner,
+            _account,
+            new RemotePresenceScheduler(_runner, TimeProvider.System, NullLogger<RemotePresenceScheduler>.Instance),
+            _shell,
+            _confirmation,
+            new FakeTimeProvider(Now),
+            () => new RemoteControlViewModel(_runner, NullLogger<RemoteControlViewModel>.Instance),
+            NullLogger<MachinesViewModel>.Instance,
+            () => new RemoteConversationsViewModel(_runner, NullLogger<RemoteConversationsViewModel>.Instance));
+        await viewModel.LoadAsync(Ct);
+        RemoteConversationsViewModel? opened = null;
+        viewModel.ConversationsOpened += (_, conversations) => opened = conversations;
+
+        await viewModel.OpenConversationsCommand.ExecuteAsync(null);
+
+        opened!.Sessions.Items.Should().ContainSingle()
+            .Which.Details.Should().Be("Notebook · feature/ECO-12 · Esperando o próximo prompt");
+
+        var window = new RemoteConversationsWindow(opened);
+        window.Show();
+        window.Title.Should().Be("Conversas do Claude");
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public async Task WithoutTheConversationsWindow_TheButtonDoesNothing()
+    {
+        var viewModel = ViewModel();
+        await viewModel.LoadAsync(Ct);
+        var opened = false;
+        viewModel.ConversationsOpened += (_, _) => opened = true;
+
+        await viewModel.OpenConversationsCommand.ExecuteAsync(null);
+
+        opened.Should().BeFalse();
+    }
+
     private static async Task Settled()
     {
         for (var turn = 0; turn < 5; turn++)

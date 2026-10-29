@@ -85,6 +85,7 @@ public sealed class PrepareEverythingTests : IAsyncDisposable
             .AddSingleton<RemoteDatabaseCopy>()
             .AddSingleton<IAgentSessionRepository>(new FakeAgentSessionRepository())
             .AddSingleton<IAgentProcessTracker>(new FakeAgentProcessTracker())
+            .AddSingleton<IDataChangeNotifier>(new DataChangeNotifier())
             .AddSingleton<IHeadlessAgentProvider>(_claude)
             .AddSingleton<IHeadlessAgentRunner>(_agent)
             .AddSingleton<IHeadlessApprovalGateway>(new FakeApprovalGateway())

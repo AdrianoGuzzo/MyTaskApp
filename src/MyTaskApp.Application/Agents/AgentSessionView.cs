@@ -23,6 +23,20 @@ public sealed record AgentSessionView(
     public bool IsActive => Status is AgentSessionStatus.Starting or AgentSessionStatus.Running;
 
     /// <summary>
+    /// A conversa sem terminal, rodada pelo agente desta máquina (ADR-089,
+    /// ADR-092): não tem janela para trazer à frente; abre-se a conversa.
+    /// </summary>
+    public AgentSessionMode Mode { get; init; }
+
+    public bool IsHeadless => Mode == AgentSessionMode.Headless;
+
+    /// <summary>O apelido de quem abriu a conversa de longe; <c>null</c> no terminal e na aberta daqui.</summary>
+    public string? RemoteOrigin { get; init; }
+
+    /// <summary>A conversa sem terminal espera o próximo prompt: o último acabou e ninguém a parou.</summary>
+    public bool CanContinue => IsHeadless && Status == AgentSessionStatus.Exited;
+
+    /// <summary>
     /// Por que a sessão que acabou de abrir ficou sem acompanhamento (ADR-037).
     /// Só na resposta do "Iniciar": não é gravado.
     /// </summary>
@@ -44,7 +58,11 @@ public sealed record AgentSessionView(
             session.IsMonitored,
             session.Activity,
             session.ActivityMessage,
-            session.ActivityChangedAt);
+            session.ActivityChangedAt)
+        {
+            Mode = session.Mode,
+            RemoteOrigin = session.RemoteOrigin,
+        };
 }
 
 /// <summary>

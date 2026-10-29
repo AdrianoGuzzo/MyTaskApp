@@ -480,7 +480,8 @@ public sealed class FocusAgentSessionHandler(
             watcher.NotifyChanged(session.TaskItemId);
         }
 
-        if (session is not { Status: AgentSessionStatus.Running, ProcessId: { } processId })
+        // A conversa sem terminal (ADR-089) não tem janela: quem chama abre a conversa.
+        if (session is not { Status: AgentSessionStatus.Running, ProcessId: { } processId } || session.IsHeadless)
         {
             return new AgentFocusResult(AgentSessionView.From(session, providers), false);
         }

@@ -28,6 +28,9 @@
   a conversa pelo agente daqui, sem terminal, para continuar do celular ou de
   outro computador ([controle remoto](../remote.md#as-conversas-do-claude),
   ADR-092).
+- **A conversa aberta de longe** aparece no card como "Claude gerenciado",
+  sem PID nem "Abrir terminal". O card diz de onde veio, mostra o estado e
+  oferece **Abrir conversa** ([controle remoto](../remote.md#as-conversas-do-claude)).
 
 A **Consulta Inteligente**, que abre o Claude Code só lendo, sem os parâmetros
 acima, tem guia próprio: [`../consulta-inteligente.md`](../consulta-inteligente.md).

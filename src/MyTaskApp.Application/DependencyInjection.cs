@@ -212,6 +212,10 @@ public static class DependencyInjection
         services.AddScoped<RecordAgentEventHandler>();
         services.TryAddSingleton<IAgentAttentionPresenter, NoAgentAttentionPresenter>();
 
+        // O aviso de que alguém abriu de longe um Claude aqui (ADR-092). Só o desktop o liga.
+        services.AddScoped<GetRemotelyOpenedSessionsHandler>();
+        services.TryAddSingleton<RemoteSessionAnnouncer>();
+
         // A Consulta Inteligente (ADR-081): o agente só lendo as pastas e o
         // banco escolhidos. O banco e o preparo do usuário de leitura vêm da
         // Infrastructure; o endereço do MCP, do projeto do MCP — sem ele, a

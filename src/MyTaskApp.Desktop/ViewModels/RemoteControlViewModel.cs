@@ -184,6 +184,12 @@ public sealed partial class RemoteControlViewModel : ObservableObject
     /// <summary>As conversas paradas ou trocadas por outra nesta janela: não voltam pela lista do servidor.</summary>
     private readonly HashSet<Guid> _dismissed = [];
 
+    /// <summary>
+    /// O ambiente de cada pedido do Claude mandado por esta tela: o evento traz
+    /// só a conversa, e a tarefa pode ter mais de um ambiente (ADR-031).
+    /// </summary>
+    private readonly Dictionary<Guid, Guid> _sentIn = [];
+
     private long _after;
 
     /// <summary>A operação acompanhada terminou e a saída dela foi lida até o fim.</summary>
@@ -204,6 +210,15 @@ public sealed partial class RemoteControlViewModel : ObservableObject
 
         // A lista relida pelo relógio pode trazer (ou levar) a conversa que espera no ambiente.
         Sessions.Items.CollectionChanged += (_, _) => NotifyConversation();
+
+        // "agente parado desde…" também explica o pedido que está na fila.
+        Sessions.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName == nameof(RemoteSessionsViewModel.AgentState))
+            {
+                OnPropertyChanged(nameof(OperationState));
+            }
+        };
     }
 
     public MachineView? Machine { get; private set; }
@@ -249,6 +264,16 @@ public sealed partial class RemoteControlViewModel : ObservableObject
     [ObservableProperty]
     private string? _statusMessage;
 
+    /// <summary>
+    /// A confirmação de que a conversa abriu lá: "Conversa aberta em X · tarefa".
+    /// Sem ela, o pedido parecia ter sumido.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasConversationNotice))]
+    private string? _conversationNotice;
+
+    public bool HasConversationNotice => ConversationNotice is not null;
+
     public bool HasEnvironments => Environments.Count > 0;
 
     public bool HasNoEnvironments => !HasEnvironments;
@@ -284,12 +309,15 @@ public sealed partial class RemoteControlViewModel : ObservableObject
     public string? OperationState => Operation is { } operation
         ? operation.ResultSummary is { Length: > 0 } summary && RemoteOperationLifecycle.IsFinal(operation.Status)
             ? $"{StatusText(operation)} — {summary}"
-            : StatusText(operation)
+            : operation.Status == RemoteOperationStatus.Queued && StoppedAgent() is { } stopped
+                ? $"{StatusText(operation)} — {stopped}"
+                : StatusText(operation)
         : null;
 
     /// <summary>A janela abre com a máquina escolhida na lista.</summary>
     /// <param name="developmentId">O ambiente que já abre escolhido: o da tarefa, no "Abrir Claude gerenciado" (ADR-092).</param>
-    public async Task OpenAsync(MachineView machine, CancellationToken cancellationToken, Guid? developmentId = null)
+    /// <param name="sessionId">A conversa que já abre escolhida: o "Abrir conversa" do card e do aviso.</param>
+    public async Task OpenAsync(MachineView machine, CancellationToken cancellationToken, Guid? developmentId = null, Guid? sessionId = null)
     {
         Machine = machine;
         _preferred = developmentId;
@@ -299,6 +327,13 @@ public sealed partial class RemoteControlViewModel : ObservableObject
         if (developmentId is { } id && Environments.Count > 0 && SelectedEnvironment?.View.DevelopmentId != id)
         {
             StatusMessage = "O ambiente desta tarefa ainda não chegou ao agente. Escolha outro, ou espere um instante e atualize.";
+        }
+
+        if (sessionId is { } session
+            && Sessions.Choose(session) is { Item: { CanPrompt: true, Session.DevelopmentId: { } development } })
+        {
+            _conversations[development] = session;
+            NotifyConversation();
         }
     }
 
@@ -464,6 +499,15 @@ public sealed partial class RemoteControlViewModel : ObservableObject
         if (await SendAsync(request, $"Claude em {machine.Nickname} · {environment.Title}"))
         {
             AgentPrompt = string.Empty;
+
+            if (Operation is { } sent)
+            {
+                _sentIn[sent.OperationId] = environment.View.DevelopmentId;
+            }
+
+            ConversationNotice = request.Kind == RemoteOperationKinds.AgentStart
+                ? $"Pedido enviado a {machine.Nickname}. A conversa abre quando o agente de lá pegar o pedido."
+                : null;
         }
     }
 
@@ -506,6 +550,8 @@ public sealed partial class RemoteControlViewModel : ObservableObject
         {
             Forget(environment.View.DevelopmentId);
         }
+
+        ConversationNotice = null;
     }
 
     /// <summary>Acompanha uma operação já pedida (o "Preparar em…" da aba Desenvolvimento): a saída começa do zero.</summary>
@@ -620,6 +666,14 @@ public sealed partial class RemoteControlViewModel : ObservableObject
             _drained = progress.IsFinished;
             Operation = progress.Operation;
 
+            // A conversa não chegou a abrir (recusado, expirou, falhou): o "pedido enviado" não vale mais.
+            if (progress.IsFinished
+                && progress.Operation is { Kind: RemoteOperationKinds.AgentStart, Status: not RemoteOperationStatus.Succeeded }
+                && Conversation is null)
+            {
+                ConversationNotice = null;
+            }
+
             if (progress.Operation.Status == RemoteOperationStatus.WaitingApproval)
             {
                 await LoadApprovalsAsync(cancellationToken);
@@ -666,7 +720,7 @@ public sealed partial class RemoteControlViewModel : ObservableObject
     private void RememberConversation(RemoteOperationView operation, IReadOnlyList<RemoteOperationEvent> events)
     {
         if (operation.Kind is not (RemoteOperationKinds.AgentStart or RemoteOperationKinds.AgentPrompt)
-            || Environments.FirstOrDefault(item => item.View.TaskId == operation.TaskId) is not { } environment)
+            || EnvironmentOf(operation) is not { } environment)
         {
             return;
         }
@@ -684,13 +738,41 @@ public sealed partial class RemoteControlViewModel : ObservableObject
                 }
                 else
                 {
+                    var opened = operation.Kind == RemoteOperationKinds.AgentStart
+                        && _conversations.GetValueOrDefault(environment.View.DevelopmentId) != conversation;
                     _conversations[environment.View.DevelopmentId] = conversation;
+
+                    if (opened)
+                    {
+                        ConversationNotice = OpenedNotice(environment);
+                        _ = Sessions.ChooseWhenListedAsync(conversation, CancellationToken.None);
+                    }
                 }
             }
         }
 
         NotifyConversation();
     }
+
+    /// <summary>"Conversa aberta em X · tarefa (branch)": confirma que nasceu lá, e onde continuar.</summary>
+    internal string OpenedNotice(RemoteEnvironmentItem environment)
+    {
+        var place = environment.View.Branch is { } branch ? $"{environment.Title} ({branch})" : environment.Title;
+        return $"Conversa aberta em {Machine?.Nickname ?? "outra máquina"} · {place}. "
+            + "Ela aparece em Conversas do Claude no celular e nos outros computadores, e no card da tarefa de lá.";
+    }
+
+    /// <summary>O ambiente do pedido: o que esta tela mandou ou, para o que veio de outra, o da tarefa.</summary>
+    private RemoteEnvironmentItem? EnvironmentOf(RemoteOperationView operation) =>
+        _sentIn.TryGetValue(operation.OperationId, out var developmentId)
+            ? Environments.FirstOrDefault(item => item.View.DevelopmentId == developmentId)
+            : Environments.FirstOrDefault(item => item.View.TaskId == operation.TaskId);
+
+    /// <summary>O agente de lá está parado: o pedido na fila espera por ele.</summary>
+    private string? StoppedAgent() =>
+        Sessions.IsAgentStopped && Sessions.AgentState is { } state
+            ? $"{Machine?.Nickname ?? "a outra máquina"}: {state}"
+            : null;
 
     private void Forget(Guid developmentId)
     {

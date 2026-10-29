@@ -176,8 +176,13 @@ public sealed record RemoteSessionItem(RemoteAgentSessionView Session, RemoteAge
 /// <param name="Agents">O estado do agente de cada máquina executora (<see cref="RemoteSessionTexts.Agent"/>), separado do desktop dela.</param>
 public sealed record RemoteSessionList(IReadOnlyList<RemoteSessionItem> Items, string? Unavailable = null, IReadOnlyDictionary<Guid, string>? Agents = null)
 {
+    /// <summary>As máquinas cujo agente relatou antes e parou: os pedidos para elas esperam na fila.</summary>
+    public IReadOnlySet<Guid> StoppedAgents { get; init; } = new HashSet<Guid>();
+
     /// <summary>"agente ligado", "agente parado desde…", ou nulo quando não se sabe.</summary>
     public string? AgentOf(Guid deviceId) => Agents?.GetValueOrDefault(deviceId);
+
+    public bool IsAgentStopped(Guid deviceId) => StoppedAgents.Contains(deviceId);
 }
 
 public sealed class ListRemoteSessionsHandler(IRemoteSessionsApi remote, ITaskItemRepository tasks, TimeProvider timeProvider)
@@ -204,6 +209,7 @@ public sealed class ListRemoteSessionsHandler(IRemoteSessionsApi remote, ITaskIt
         }
 
         var states = new Dictionary<Guid, string>();
+        var stopped = new HashSet<Guid>();
 
         foreach (var agent in list.Agents)
         {
@@ -211,9 +217,14 @@ public sealed class ListRemoteSessionsHandler(IRemoteSessionsApi remote, ITaskIt
             {
                 states[agent.DeviceId] = state;
             }
+
+            if (agent.AgentSeenAt is not null && !agent.IsOnlineAt(timeProvider.GetUtcNow()))
+            {
+                stopped.Add(agent.DeviceId);
+            }
         }
 
-        return new RemoteSessionList(items, null, states);
+        return new RemoteSessionList(items, null, states) { StoppedAgents = stopped };
     }
 
     internal static async Task<RemoteSessionItem> ItemAsync(

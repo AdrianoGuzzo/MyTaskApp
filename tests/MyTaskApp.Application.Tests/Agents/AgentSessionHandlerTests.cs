@@ -627,6 +627,27 @@ public class AgentSessionHandlerTests
         _launcher.Launched.Should().BeEmpty();
     }
 
+    /// <summary>A conversa sem terminal não tem janela: a tela abre a conversa, e o handler não procura nada.</summary>
+    [Fact]
+    public async Task Focus_AConversationWithoutTerminal_ReturnsIt_WithoutLookingForAWindow()
+    {
+        var session = AgentSession.CreateHeadless(
+            _task.Id, _task.Developments[0].Id, "claude-code", FakeAgentCliProvider.Executable, Worktree,
+            Guid.CreateVersion7(), Guid.CreateVersion7(), "read", null, null, Now, "Pixel 8");
+        session.MarkRunning(15432, Now);
+        _sessions.Seed(session);
+        _processes.Run(15432, Now);
+
+        var result = await Focus().HandleAsync(new FocusAgentSession(_task.Id), Ct);
+
+        result.Focused.Should().BeFalse();
+        result.Session.IsHeadless.Should().BeTrue();
+        result.Session.Mode.Should().Be(AgentSessionMode.Headless);
+        result.Session.RemoteOrigin.Should().Be("Pixel 8");
+        _windows.Focused.Should().BeEmpty();
+        _launcher.Launched.Should().BeEmpty();
+    }
+
     [Fact]
     public async Task Focus_WhenTheProcessIsGone_EndsTheSession_AndOpensNothing()
     {

@@ -197,13 +197,27 @@ public sealed class HeadlessAgentPlanner(
 }
 
 /// <summary>As gravações da sessão sem terminal, cada uma no seu escopo: o prompt dura minutos, o escopo não.</summary>
+/// <remarks>
+/// Cada gravação avisa <see cref="DataArea.AgentSessions"/>: o agente grava no
+/// mesmo SQLite do desktop, e o aviso atravessa até ele pelo canal local
+/// (ADR-085). Sem isso, a conversa aberta de longe só aparecia no card da
+/// tarefa no próximo tique.
+/// </remarks>
 public sealed class HeadlessSessionStore(
     IAgentSessionRepository sessions,
     IAgentProcessTracker processes,
     IUnitOfWork unitOfWork,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider,
+    IDataChangeNotifier notifier)
 {
-    public async Task<Guid> OpenAsync(HeadlessTarget target, string providerId, string command, Guid operationId, CancellationToken cancellationToken)
+    /// <param name="origin">O apelido de quem pediu; <c>null</c> quando foi esta própria máquina (ADR-092).</param>
+    public async Task<Guid> OpenAsync(
+        HeadlessTarget target,
+        string providerId,
+        string command,
+        Guid operationId,
+        CancellationToken cancellationToken,
+        string? origin = null)
     {
         // De novo aqui: dois agent.start juntos passam os dois pela conferência.
         if (await sessions.FindLatestForDevelopmentAsync(target.DevelopmentId, cancellationToken) is { IsActive: true })
@@ -222,10 +236,11 @@ public sealed class HeadlessSessionStore(
             target.Profile.Id,
             target.Model,
             target.Effort,
-            timeProvider.GetUtcNow());
+            timeProvider.GetUtcNow(),
+            origin);
 
         await sessions.AddAsync(session, cancellationToken);
-        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await SaveAsync(cancellationToken);
         return session.Id;
     }
 
@@ -243,7 +258,7 @@ public sealed class HeadlessSessionStore(
         }
 
         session.ContinueWith(operationId, timeProvider.GetUtcNow());
-        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await SaveAsync(cancellationToken);
     }
 
     /// <summary>O processo abriu. Se a conversa foi parada nesse meio-tempo, fica parada: o processo é encerrado por quem parou.</summary>
@@ -290,7 +305,7 @@ public sealed class HeadlessSessionStore(
 
         if (stale.Count > 0)
         {
-            await unitOfWork.SaveChangesAsync(cancellationToken);
+            await SaveAsync(cancellationToken);
         }
 
         return stale.Count;
@@ -336,7 +351,13 @@ public sealed class HeadlessSessionStore(
         var session = await sessions.FindByIdAsync(sessionId, cancellationToken)
             ?? throw new DomainException("A conversa sumiu desta máquina.");
         change(session);
+        await SaveAsync(cancellationToken);
+    }
+
+    private async Task SaveAsync(CancellationToken cancellationToken)
+    {
         await unitOfWork.SaveChangesAsync(cancellationToken);
+        notifier.NotifyChanged(DataArea.AgentSessions);
     }
 }
 
@@ -1016,7 +1037,13 @@ public sealed class AgentStartExecutor(IUseCaseRunner runner, HeadlessPromptRunn
 
         var target = await TargetAsync(runner, execution.Request.TaskId, request, cancellationToken);
         var sessionId = await runner.RunAsync<HeadlessSessionStore, Guid>(
-            (store, token) => store.OpenAsync(target, prompts.ProviderId, detection!.ExecutablePath!, execution.Request.OperationId, token),
+            (store, token) => store.OpenAsync(
+                target,
+                prompts.ProviderId,
+                detection!.ExecutablePath!,
+                execution.Request.OperationId,
+                token,
+                execution.ControllerNickname == RemoteTrust.OwnNickname ? null : execution.ControllerNickname),
             CancellationToken.None);
 
         // A conversa acabou de nascer: ninguém mais a tem, mas um agent.stop pode chegar antes do processo.

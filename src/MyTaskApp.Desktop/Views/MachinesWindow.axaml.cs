@@ -28,6 +28,7 @@ public sealed partial class MachinesWindow : Window
     {
         DataContext = viewModel;
         viewModel.ControlOpened += (_, control) => new RemoteControlWindow(control).Show(this);
+        viewModel.ConversationsOpened += (_, conversations) => new RemoteConversationsWindow(conversations).Show(this);
     }
 
     /// <summary>
