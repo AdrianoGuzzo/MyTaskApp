@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.DatabaseOperations;
@@ -30,14 +31,14 @@ public class PostgresToolLocatorTests
         ["LOCALAPPDATA"] = @"C:\Users\u\AppData\Local",
     };
 
-    private PostgresToolLocator Locator(bool isWindows = true) => new(
+    private PostgresToolLocator Locator(bool isWindows = true, ILogger<PostgresToolLocator>? logger = null) => new(
         (name, _) => _variables.GetValueOrDefault(name),
         _files.Contains,
         directory => _directories.GetValueOrDefault(directory) ?? [],
         isWindows,
         _processes,
         new DatabaseOperationsOptions(),
-        NullLogger<PostgresToolLocator>.Instance);
+        logger ?? NullLogger<PostgresToolLocator>.Instance);
 
     private void Install(string directory, int major, params string[] tools)
     {
@@ -140,6 +141,26 @@ public class PostgresToolLocatorTests
 
         psql.Found.Should().BeTrue();
         psql.Version.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task APgAdminDumpMissingADll_IsLeftOut_AndTheLogSaysWhere()
+    {
+        // O caso real: o libpq do pgAdmin 18 pede o gssapi64.dll, que não veio junto.
+        const string broken = @"C:\Program Files\pgAdmin 4\runtime\pg_dump.exe";
+        _files.Add(broken);
+        _processes.When(request => request.FileName.Equals(broken, StringComparison.OrdinalIgnoreCase), ScriptedProcessRunner.Fail(-1073741515));
+        _directories[@"C:\Program Files\PostgreSQL"] = [@"C:\Program Files\PostgreSQL\14"];
+        Install(@"C:\Program Files\PostgreSQL\14\bin", 14, AllWindowsTools);
+        var log = new CapturingLogger<PostgresToolLocator>();
+
+        var tools = await Locator(logger: log).DetectAsync(refresh: true, Ct);
+
+        tools.Sets.Should().ContainSingle();
+        tools.Find(PostgresTool.PgDump).Path.Should().Be(@"C:\Program Files\PostgreSQL\14\bin\pg_dump.exe");
+        log.Messages.Should().Contain(message => message.Contains("PostgresToolUnusable", StringComparison.Ordinal)
+            && message.Contains(broken, StringComparison.Ordinal)
+            && message.Contains("-1073741515", StringComparison.Ordinal));
     }
 
     [Fact]

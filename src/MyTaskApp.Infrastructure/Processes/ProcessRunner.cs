@@ -129,7 +129,11 @@ internal sealed class ProcessRunner : IProcessRunner
 
         try
         {
-            process.Start();
+            // Sem janela também quando falta uma DLL: o código de saída conta (LoaderErrorDialogs).
+            using (LoaderErrorDialogs.Suppress())
+            {
+                process.Start();
+            }
         }
         catch (Win32Exception exception)
         {

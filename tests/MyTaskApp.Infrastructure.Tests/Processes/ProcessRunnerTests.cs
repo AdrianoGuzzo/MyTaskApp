@@ -165,6 +165,28 @@ public class ProcessRunnerTests
     }
 
     [Fact]
+    public async Task OnWindows_AChildThatMissesADll_FailsWithoutAWindow()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "O modo de erro do loader só existe no Windows.");
+
+        // O filho diz o modo de erro que herdou: com SEM_FAILCRITICALERRORS, a
+        // DLL faltando (o pg_dump do pgAdmin sem o gssapi64.dll) não abre janela.
+        const string script = """
+            $t = Add-Type -MemberDefinition '[DllImport("kernel32.dll")] public static extern uint GetErrorMode();' -Name ErrorMode -Namespace MyTaskAppTest -PassThru
+            $t::GetErrorMode()
+            """;
+        var encoded = Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(script));
+
+        var result = await _runner.RunAsync(
+            new ProcessRequest("powershell", ["-NoProfile", "-NonInteractive", "-EncodedCommand", encoded], TimeSpan.FromMinutes(1)),
+            Ct);
+
+        result.ExitCode.Should().Be(0, result.StandardError);
+        var inherited = uint.Parse(result.StandardOutput.Trim(), System.Globalization.CultureInfo.InvariantCulture);
+        (inherited & LoaderErrorDialogs.FailCriticalErrors).Should().Be(LoaderErrorDialogs.FailCriticalErrors);
+    }
+
+    [Fact]
     public void TheTextOfARequest_NeverShowsTheInputOrTheEnvironment()
     {
         var request = new ProcessRequest(
