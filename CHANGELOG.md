@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.29.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.28.0...v1.29.0) (2026-10-29)
+
+
+### Added
+
+* **remoto:** a conversa aberta de longe aparece onde roda, e quem abre sabe que abriu ([#171](https://github.com/AdrianoGuzzo/MyTaskApp/issues/171)) ([e7fa119](https://github.com/AdrianoGuzzo/MyTaskApp/commit/e7fa1196fc897a1d9a04c642f4d4b0d7e25a724b))
+* **tempo:** relatório de horas por dia, mês e ano ([#168](https://github.com/AdrianoGuzzo/MyTaskApp/issues/168)) ([2ae1015](https://github.com/AdrianoGuzzo/MyTaskApp/commit/2ae10158d5237c0d67af3a844353717890b8e57a))
+
+
+### Fixed
+
+* **remoto:** a saída da operação termina com o resultado ([#169](https://github.com/AdrianoGuzzo/MyTaskApp/issues/169)) ([6542f85](https://github.com/AdrianoGuzzo/MyTaskApp/commit/6542f85c49107a2a58db68fbef1682b585f5a7f1))
+
 ## [1.28.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.27.0...v1.28.0) (2026-10-28)
 
 
