@@ -2771,6 +2771,11 @@
                           Content="Abrir terminal do agente"
                           IsVisible="{Binding ShowFocus}"
                           Command="{Binding FocusCommand}" />
+                  <Button x:Name="ShowAgentInAppButton"
+                          Content="Ver no app"
+                          ToolTip.Tip="A mesma sessão do terminal do agente, numa janela do MyTaskApp. Fechar não encerra o Claude."
+                          IsVisible="{Binding ShowInApp}"
+                          Command="{Binding ShowInAppViewCommand}" />
                   <Button Classes="accent"
                           x:Name="OpenAgentConversationButton"
                           Content="Abrir conversa"

@@ -540,6 +540,42 @@ public class AgentSessionViewModelTests
             "--dangerously-skip-permissions", "--model", "opus", "--effort", "high");
     }
 
+    /// <summary>"Ver no app" (ADR-098): só a sessão do terminal do agente, e a mesma sessão.</summary>
+    [Fact]
+    public async Task TheAgentsTerminal_CanBeSeenInsideTheApp()
+    {
+        var session = Session(AgentSessionStatus.Running) with { Mode = AgentSessionMode.Terminal };
+        _runner.ResultsByHandler[typeof(GetTaskAgentSessionHandler)] = session;
+        var views = Substitute.For<IEmbeddedTerminalPresenter>();
+        views.Show(Arg.Any<Guid>(), Arg.Any<string>()).Returns(true);
+        var viewModel = new AgentSessionViewModel(_runner, _clipboard, _shell, NullLogger<AgentSessionViewModel>.Instance, terminalViews: views);
+        viewModel.Load(_taskId, Guid.CreateVersion7(), isReadOnly: false);
+        await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
+
+        viewModel.ShowInApp.Should().BeTrue();
+        viewModel.MonitoringText.Should().StartWith("Roda no terminal do agente");
+        viewModel.ShowInAppViewCommand.Execute(null);
+
+        views.Received(1).Show(session.SessionId, "Claude Code · eco-core-feature-123");
+        viewModel.Message.Should().BeNull();
+
+        views.Show(Arg.Any<Guid>(), Arg.Any<string>()).Returns(false);
+        viewModel.ShowInAppViewCommand.Execute(null);
+        viewModel.Message.Should().Contain("não abriu");
+    }
+
+    [Fact]
+    public async Task TheSystemTerminal_HasNoViewInsideTheApp()
+    {
+        _runner.ResultsByHandler[typeof(GetTaskAgentSessionHandler)] = Session(AgentSessionStatus.Running);
+        var viewModel = new AgentSessionViewModel(
+            _runner, _clipboard, _shell, NullLogger<AgentSessionViewModel>.Instance, terminalViews: Substitute.For<IEmbeddedTerminalPresenter>());
+        viewModel.Load(_taskId, Guid.CreateVersion7(), isReadOnly: false);
+        await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
+
+        viewModel.ShowInApp.Should().BeFalse("o terminal do sistema não passa pelo agente");
+    }
+
     /// <summary>"Onde abrir" (ADR-098): só onde o terminal do agente existe, e com o modo salvo escolhido.</summary>
     [Fact]
     public async Task WhereToOpen_IsOfferedOnlyWhereTheAgentsTerminalExists()
@@ -636,6 +672,7 @@ public class AgentSessionViewModelTests
             start,
             NoAgentTerminalClient.Instance,
             new AgentTerminalWindows(NoAgentTerminalClient.Instance, launcher, Substitute.For<ITerminalWindowManager>(), processes, NullLogger<AgentTerminalWindows>.Instance),
+            NoEmbeddedTerminalPresenter.Instance,
             sessions,
             tasks,
             providers,

@@ -4,7 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
-using MyTaskApp.Application.Terminals;
+using MyTaskApp.Application.Terminals;
 using MyTaskApp.Desktop.Composition;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.Agents;
@@ -54,12 +54,14 @@ public enum AgentPanelState
 /// </para>
 /// </remarks>
 /// <param name="conversations">Abre a conversa sem terminal; nulo nos testes que não falam dela.</param>
+/// <param name="terminalViews">A vista do terminal do agente dentro do app (ADR-098); nula nos testes que não falam dela.</param>
 public sealed partial class AgentSessionViewModel(
     IUseCaseRunner runner,
     IClipboardWriter clipboard,
     IShellLauncher shell,
     ILogger<AgentSessionViewModel> logger,
-    ManagedConversationOpener? conversations = null) : ObservableObject
+    ManagedConversationOpener? conversations = null,
+    IEmbeddedTerminalPresenter? terminalViews = null) : ObservableObject
 {
     private Guid _taskId;
 
@@ -85,8 +87,8 @@ public sealed partial class AgentSessionViewModel(
         nameof(IsChecking), nameof(IsNotInstalled), nameof(IsIdle), nameof(IsStarting), nameof(IsRunning),
         nameof(IsFinished), nameof(IsFailed), nameof(HasSession), nameof(ShowStart), nameof(StatusText),
         nameof(NeedsAttention), nameof(ActivityText), nameof(MonitoringText), nameof(IsRunningQuietly), nameof(ShowsWarning),
-        nameof(OriginText), nameof(ShowProcess), nameof(ShowFocus), nameof(ShowOpenConversation))]
-    [NotifyCanExecuteChangedFor(nameof(StartCommand), nameof(FocusCommand), nameof(OpenConversationCommand))]
+        nameof(OriginText), nameof(ShowProcess), nameof(ShowFocus), nameof(ShowOpenConversation), nameof(ShowInApp))]
+    [NotifyCanExecuteChangedFor(nameof(StartCommand), nameof(FocusCommand), nameof(OpenConversationCommand), nameof(ShowInAppViewCommand))]
     private AgentPanelState _state = AgentPanelState.Checking;
 
     /// <summary>Tarefa concluída não abre agente novo; o que está aberto continua alcançável.</summary>
@@ -153,8 +155,8 @@ public sealed partial class AgentSessionViewModel(
         nameof(AgentName), nameof(StartLabel), nameof(ProcessText), nameof(StartedText), nameof(RangeText),
         nameof(WorkingDirectory), nameof(FailureReason), nameof(HasSession), nameof(StatusText),
         nameof(NeedsAttention), nameof(ActivityText), nameof(MonitoringText), nameof(IsRunningQuietly), nameof(ShowsWarning),
-        nameof(IsManaged), nameof(OriginText), nameof(ShowProcess), nameof(ShowFocus), nameof(ShowOpenConversation))]
-    [NotifyCanExecuteChangedFor(nameof(FocusCommand), nameof(OpenConversationCommand))]
+        nameof(IsManaged), nameof(OriginText), nameof(ShowProcess), nameof(ShowFocus), nameof(ShowOpenConversation), nameof(ShowInApp))]
+    [NotifyCanExecuteChangedFor(nameof(FocusCommand), nameof(OpenConversationCommand), nameof(ShowInAppViewCommand))]
     private AgentSessionView? _session;
 
     /// <summary>
@@ -165,7 +167,7 @@ public sealed partial class AgentSessionViewModel(
     private bool _monitor = true;
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(StartCommand), nameof(FocusCommand), nameof(OpenConversationCommand))]
+    [NotifyCanExecuteChangedFor(nameof(StartCommand), nameof(FocusCommand), nameof(OpenConversationCommand), nameof(ShowInAppViewCommand))]
     private bool _isBusy;
 
     /// <summary>Um recado curto: "Não foi possível localizar a janela…".</summary>
@@ -297,6 +299,9 @@ public sealed partial class AgentSessionViewModel(
     /// <summary>"Abrir conversa": a sessão sem terminal enquanto ainda recebe prompts, ou para ler como terminou.</summary>
     public bool ShowOpenConversation => IsManaged && HasSession;
 
+    /// <summary>"Ver no app": a mesma sessão do terminal do agente, numa janela do MyTaskApp.</summary>
+    public bool ShowInApp => IsRunning && Session?.IsAgentTerminal == true && terminalViews is not null;
+
     public bool IsChecking => State is AgentPanelState.Checking;
 
     public bool IsNotInstalled => State is AgentPanelState.NotInstalled;
@@ -321,6 +326,19 @@ public sealed partial class AgentSessionViewModel(
     public bool CanFocus => !IsBusy && State is AgentPanelState.Running && !IsManaged;
 
     public bool CanOpenConversation => !IsBusy && ShowOpenConversation && conversations is not null;
+
+    public bool CanShowInApp => !IsBusy && ShowInApp;
+
+    [RelayCommand(CanExecute = nameof(CanShowInApp))]
+    public void ShowInAppView()
+    {
+        Message = Session is { } session && terminalViews!.Show(session.SessionId, TerminalTitle(session))
+            ? null
+            : "A vista dentro do app não abriu. \"Abrir terminal do agente\" mostra numa janela.";
+    }
+
+    private string TerminalTitle(AgentSessionView session) =>
+        AgentTerminalWindows.TitleFor(AgentName, Path.GetFileName(session.WorkingDirectory?.TrimEnd('\\', '/')));
 
     /// <summary>
     /// O ambiente do card (ADR-031): cada repositório da tarefa tem o seu agente.

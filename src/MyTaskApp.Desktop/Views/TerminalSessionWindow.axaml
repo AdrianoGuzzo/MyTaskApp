@@ -1,0 +1,95 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
+        xmlns:terminals="using:MyTaskApp.Desktop.Terminals"
+        x:Class="MyTaskApp.Desktop.Views.TerminalSessionWindow"
+        x:DataType="vm:TerminalSessionViewModel"
+        Title="{Binding Title}"
+        Width="1000"
+        Height="680"
+        MinWidth="520"
+        MinHeight="320"
+        WindowStartupLocation="CenterScreen">
+
+  <!--
+    O terminal do agente dentro do app (ADR-098): a mesma sessão que a janela
+    nativa e quem controla de longe veem. Fechar esta janela só desliga a vista;
+    o Claude segue rodando no agente. Os botões são atalhos para o que o agente
+    sabe pelo estado; o teclado vale sempre.
+  -->
+
+  <Window.Styles>
+    <Style Selector="TextBlock.meta">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style Selector="Border.banner">
+      <Setter Property="Padding" Value="10,6" />
+      <Setter Property="CornerRadius" Value="6" />
+    </Style>
+  </Window.Styles>
+
+  <DockPanel Margin="10" LastChildFill="True">
+
+    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,0,0,8">
+      <StackPanel Spacing="2">
+        <TextBlock x:Name="StatusText" Text="{Binding StatusText}" FontWeight="SemiBold" />
+        <TextBlock Classes="meta" Text="{Binding ProcessText}" IsVisible="{Binding ProcessText, Converter={x:Static ObjectConverters.IsNotNull}}" />
+      </StackPanel>
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Top">
+        <Button x:Name="InterruptButton" Content="Interromper (Esc)" Command="{Binding InterruptCommand}"
+                ToolTip.Tip="O Esc do Claude: para o que ele está fazendo, a conversa fica." />
+        <Button x:Name="StopButton" Content="Encerrar" Command="{Binding StopCommand}"
+                ToolTip.Tip="Como fechar o terminal: o Claude recebe o fim e salva a conversa." />
+        <Button x:Name="ForceStopButton" Content="Forçar o fim" Command="{Binding ForceStopCommand}" IsVisible="{Binding CanForceStop}"
+                ToolTip.Tip="Encerra na hora a árvore desta sessão, e só ela." />
+        <Button x:Name="ReconnectButton" Content="Reconectar" Command="{Binding ReconnectCommand}" IsVisible="{Binding IsDisconnected}" />
+      </StackPanel>
+    </Grid>
+
+    <Border DockPanel.Dock="Top" Classes="banner" Margin="0,0,0,6"
+            Background="{DynamicResource SystemFillColorCriticalBackgroundBrush}"
+            IsVisible="{Binding BypassWarning, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <TextBlock x:Name="BypassText" Text="{Binding BypassWarning}" TextWrapping="Wrap" />
+    </Border>
+
+    <Border DockPanel.Dock="Top" Classes="banner" Margin="0,0,0,6"
+            Background="{DynamicResource SystemFillColorCautionBackgroundBrush}"
+            IsVisible="{Binding MonitoringWarning, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <TextBlock Text="{Binding MonitoringWarning}" TextWrapping="Wrap" />
+    </Border>
+
+    <!-- O diálogo que o Claude abriu, pelo que os hooks contaram. Só a permissão tem resposta por aqui. -->
+    <Border DockPanel.Dock="Top" Classes="banner" Margin="0,0,0,6"
+            Background="{DynamicResource SystemFillColorAttentionBackgroundBrush}"
+            IsVisible="{Binding DialogText, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+        <StackPanel Spacing="2" VerticalAlignment="Center">
+          <TextBlock x:Name="DialogText" Text="{Binding DialogText}" TextWrapping="Wrap" />
+          <TextBlock Classes="meta" Text="Responda no terminal abaixo." IsVisible="{Binding !CanAnswerDialog}" />
+        </StackPanel>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" IsVisible="{Binding CanAnswerDialog}">
+          <Button x:Name="AllowButton" Classes="accent" Content="Permitir" Command="{Binding AllowCommand}" />
+          <Button x:Name="DenyButton" Content="Negar" Command="{Binding DenyCommand}" />
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <StackPanel DockPanel.Dock="Top" Spacing="2" Margin="0,0,0,6">
+      <TextBlock x:Name="MessageText" Classes="meta" Text="{Binding Message}" IsVisible="{Binding Message, Converter={x:Static ObjectConverters.IsNotNull}}" />
+      <TextBlock Classes="meta" Text="{Binding LeaseText}" IsVisible="{Binding LeaseText, Converter={x:Static ObjectConverters.IsNotNull}}" />
+      <TextBlock Classes="meta" Text="{Binding OthersText}" IsVisible="{Binding OthersText, Converter={x:Static ObjectConverters.IsNotNull}}" />
+    </StackPanel>
+
+    <TextBlock DockPanel.Dock="Bottom" Classes="meta" Margin="0,6,0,0"
+               Text="Arraste para selecionar; Ctrl+C com seleção copia. Ctrl+Shift+V cola. A roda e Shift+PageUp rolam o histórico." />
+
+    <Border CornerRadius="4" ClipToBounds="True" Background="#1E1E1E" Padding="4">
+      <terminals:TerminalView x:Name="Terminal"
+                              Screen="{Binding Screen}"
+                              Version="{Binding Version}"
+                              IsReadOnly="{Binding IsReadOnly}" />
+    </Border>
+  </DockPanel>
+</Window>

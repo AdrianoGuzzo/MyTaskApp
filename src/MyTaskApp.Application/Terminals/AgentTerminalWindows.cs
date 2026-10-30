@@ -19,7 +19,7 @@ public interface IAgentTerminalClient
     Task<TerminalStartResult> StartAsync(TerminalStartRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>Segue a sessão pelo canal local (a vista dentro do app).</summary>
-    Task<LocalTerminalChannel> AttachAsync(Guid sessionId, TerminalClientKind kind, string label, TerminalSize? size, CancellationToken cancellationToken = default);
+    Task<ITerminalChannel> AttachAsync(Guid sessionId, TerminalClientKind kind, string label, TerminalSize? size, CancellationToken cancellationToken = default);
 
     /// <summary>O programa da janela nativa para a sessão, pronto para o <see cref="ITerminalLauncher"/>.</summary>
     TerminalLaunchOptions WindowFor(Guid sessionId, string title);
@@ -37,10 +37,28 @@ public sealed class NoAgentTerminalClient : IAgentTerminalClient
     public Task<TerminalStartResult> StartAsync(TerminalStartRequest request, CancellationToken cancellationToken = default) =>
         Task.FromResult(new TerminalStartResult(false, null, Support.Reason, null));
 
-    public Task<LocalTerminalChannel> AttachAsync(Guid sessionId, TerminalClientKind kind, string label, TerminalSize? size, CancellationToken cancellationToken = default) =>
+    public Task<ITerminalChannel> AttachAsync(Guid sessionId, TerminalClientKind kind, string label, TerminalSize? size, CancellationToken cancellationToken = default) =>
         throw new DomainException(Support.Reason!);
 
     public TerminalLaunchOptions WindowFor(Guid sessionId, string title) => throw new DomainException(Support.Reason!);
+}
+
+/// <summary>
+/// A vista do terminal do agente dentro do app (ADR-098): o desktop abre uma
+/// janela do próprio MyTaskApp ligada à sessão. Quem não tem tela não mostra.
+/// </summary>
+public interface IEmbeddedTerminalPresenter
+{
+    /// <summary>Mostra a vista da sessão, ou traz para a frente a que já está aberta. <c>false</c> quando não há onde mostrar.</summary>
+    bool Show(Guid sessionId, string title);
+}
+
+/// <summary>O agente, o celular, os testes: nenhuma vista dentro do app.</summary>
+public sealed class NoEmbeddedTerminalPresenter : IEmbeddedTerminalPresenter
+{
+    public static readonly NoEmbeddedTerminalPresenter Instance = new();
+
+    public bool Show(Guid sessionId, string title) => false;
 }
 
 /// <summary>
@@ -159,6 +177,7 @@ public sealed class OpenAgentSessionHandler(
     StartAgentSessionHandler direct,
     IAgentTerminalClient agent,
     AgentTerminalWindows terminalWindows,
+    IEmbeddedTerminalPresenter embedded,
     IAgentSessionRepository sessions,
     ITaskItemRepository tasks,
     IAgentCliProviders providers,
@@ -208,20 +227,23 @@ public sealed class OpenAgentSessionHandler(
         logger.LogInformation("AgentTerminalOpened {TaskId} {SessionId} {Hosting}", start.TaskId, sessionId, hosting);
 
         var note = result.MonitoringNote;
+        var title = AgentTerminalWindows.TitleFor(provider.Name, (await tasks.FindByIdAsync(start.TaskId, cancellationToken))?.Title);
 
         if (hosting == AgentHosting.AgentWindow)
         {
-            var task = await tasks.FindByIdAsync(start.TaskId, cancellationToken);
-
             try
             {
-                await terminalWindows.ShowAsync(sessionId, AgentTerminalWindows.TitleFor(provider.Name, task?.Title), cancellationToken);
+                await terminalWindows.ShowAsync(sessionId, title, cancellationToken);
             }
             catch (DomainException exception)
             {
                 // A sessão já roda no agente: o card mostra, e "Abrir terminal" tenta a janela de novo.
                 note = $"{exception.Message} O {provider.Name} segue rodando no agente.";
             }
+        }
+        else if (hosting == AgentHosting.AgentEmbedded && !embedded.Show(sessionId, title))
+        {
+            note = $"A vista dentro do app não abriu. O {provider.Name} segue rodando no agente: \"Abrir terminal\" mostra numa janela.";
         }
 
         return AgentSessionView.From(session, providers) with { MonitoringNote = note };

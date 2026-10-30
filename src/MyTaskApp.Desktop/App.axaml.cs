@@ -18,6 +18,7 @@ using MyTaskApp.Desktop.Composition;
 using MyTaskApp.Desktop.Reminders;
 using MyTaskApp.Desktop.SpellChecking;
 using MyTaskApp.Desktop.StickyNotes;
+using MyTaskApp.Desktop.Terminals;
 using MyTaskApp.Desktop.Theming;
 using MyTaskApp.Desktop.ViewModels;
 using MyTaskApp.Desktop.Views;
@@ -416,6 +417,15 @@ public sealed partial class App : Avalonia.Application
 
         services.GetRequiredService<ManagedConversationOpener>().ControlOpened +=
             (_, control) => new RemoteControlWindow(control).Show();
+
+        // O terminal do agente dentro do app (ADR-098): fechar a janela só desliga a vista.
+        var terminalViews = services.GetRequiredService<EmbeddedTerminalWindows>();
+        terminalViews.Opened += (_, view) =>
+        {
+            var window = new TerminalSessionWindow(view);
+            window.Closed += (_, _) => _ = terminalViews.ClosedAsync(view);
+            window.Show();
+        };
 
         services.GetRequiredService<RemoteSessionAnnouncer>().Start();
     }

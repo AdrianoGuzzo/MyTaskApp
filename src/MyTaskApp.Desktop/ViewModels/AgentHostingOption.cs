@@ -13,5 +13,9 @@ public sealed record AgentHostingOption(AgentHosting Value, string Label, string
             AgentHosting.AgentWindow,
             "Terminal do agente, em janela",
             "Roda no MyTaskApp Agent: fechar a janela não encerra o Claude, e \"Abrir terminal\" mostra de novo."),
+        new(
+            AgentHosting.AgentEmbedded,
+            "Terminal do agente, dentro do app",
+            "Roda no MyTaskApp Agent e aparece numa janela do MyTaskApp: fechar não encerra o Claude, e \"Ver no app\" mostra de novo."),
     ];
 }

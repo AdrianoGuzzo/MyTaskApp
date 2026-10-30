@@ -228,7 +228,7 @@ public sealed partial class LocalTerminalServer(
 /// O lado de quem olha no canal local do terminal (ADR-098): a janela nativa
 /// e o app desta máquina. O retrato chega em pedaços e sai daqui inteiro.
 /// </summary>
-public sealed class LocalTerminalChannel : IAsyncDisposable
+public sealed class LocalTerminalChannel : ITerminalChannel
 {
     private readonly TerminalFrameStream _frames;
 

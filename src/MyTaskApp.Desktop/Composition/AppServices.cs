@@ -7,9 +7,11 @@ using MyTaskApp.Application.Deadlines;
 using MyTaskApp.Application.LocalPeers;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Application.Sounds;
+using MyTaskApp.Application.Terminals;
 using MyTaskApp.Desktop.Reminders;
 using MyTaskApp.Desktop.SpellChecking;
 using MyTaskApp.Desktop.StickyNotes;
+using MyTaskApp.Desktop.Terminals;
 using MyTaskApp.Desktop.ViewModels;
 using MyTaskApp.Desktop.Views;
 using MyTaskApp.Desktop.Widget;
@@ -264,6 +266,8 @@ internal static class AppServices
 
             // O terminal do agente (ADR-098): o canal até ele, e o aviso pelo mesmo canal quando chamar a pessoa.
             .AddAgentTerminalClient(configuration)
+            .AddSingleton<EmbeddedTerminalWindows>()
+            .AddSingleton<IEmbeddedTerminalPresenter>(provider => provider.GetRequiredService<EmbeddedTerminalWindows>())
             .AddSingleton<LocalPeerAttentionRelay>()
             .AddAgentAutostart()
             .AddApplication(configuration)

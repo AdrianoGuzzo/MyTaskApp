@@ -54,7 +54,7 @@ public sealed partial class LocalAgentTerminalClient(
         }
     }
 
-    public async Task<LocalTerminalChannel> AttachAsync(Guid sessionId, TerminalClientKind kind, string label, TerminalSize? size, CancellationToken cancellationToken = default)
+    public async Task<ITerminalChannel> AttachAsync(Guid sessionId, TerminalClientKind kind, string label, TerminalSize? size, CancellationToken cancellationToken = default)
     {
         var stream = await ConnectAsync(cancellationToken).ConfigureAwait(false);
         return await LocalTerminalChannel.AttachAsync(stream, sessionId, kind, label, size, cancellationToken).ConfigureAwait(false);

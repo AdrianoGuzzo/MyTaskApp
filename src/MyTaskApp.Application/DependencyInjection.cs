@@ -217,6 +217,7 @@ public static class DependencyInjection
         services.TryAddSingleton<ITerminalSessions>(NoTerminalSessions.Instance);
         services.TryAddSingleton<IAgentTerminalClient>(NoAgentTerminalClient.Instance);
         services.TryAddSingleton<AgentTerminalWindows>();
+        services.TryAddSingleton<IEmbeddedTerminalPresenter>(NoEmbeddedTerminalPresenter.Instance);
         services.TryAddSingleton<IAgentTerminalWindows>(provider => provider.GetRequiredService<AgentTerminalWindows>());
         services.AddScoped<OpenAgentSessionHandler>();
         services.AddScoped<ShowAgentAttentionHandler>();

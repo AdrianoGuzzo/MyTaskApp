@@ -38,6 +38,7 @@ public class AgentSessionHandlerTests
     private ITerminalSessions _terminals = NoTerminalSessions.Instance;
     private readonly FakeAgentTerminalClient _agentTerminal = new();
     private readonly AgentTerminalWindows _terminalWindows;
+    private readonly FakeEmbeddedTerminalPresenter _embedded = new();
 
     public AgentSessionHandlerTests()
     {
@@ -82,7 +83,7 @@ public class AgentSessionHandlerTests
         new(_sessions, _tasks, _providers, _processes, _windows, _terminalWindows, _tasks, _watcher, _time, NullLogger<FocusAgentSessionHandler>.Instance);
 
     private OpenAgentSessionHandler Open() =>
-        new(Start(), _agentTerminal, _terminalWindows, _sessions, _tasks, _providers, _settings, _tasks, NullLogger<OpenAgentSessionHandler>.Instance);
+        new(Start(), _agentTerminal, _terminalWindows, _embedded, _sessions, _tasks, _providers, _settings, _tasks, NullLogger<OpenAgentSessionHandler>.Instance);
 
     private EndAgentSessionHandler End() =>
         new(_sessions, _tasks, _watcher, _presenter, _time, NullLogger<EndAgentSessionHandler>.Instance);
@@ -1028,6 +1029,21 @@ public class AgentSessionHandlerTests
 
         _launcher.Launched.Should().BeEmpty();
         _agentTerminal.Started.Single().Hosting.Should().Be(AgentHosting.AgentEmbedded);
+        _embedded.Shown.Should().ContainSingle().Which.SessionId.Should().Be(session.Id, "a vista do app segue a mesma sessão");
+    }
+
+    [Fact]
+    public async Task Open_InsideTheApp_WithoutWhereToShow_SaysTheSessionRunsAnyway()
+    {
+        Ready();
+        var session = HostedSession();
+        _agentTerminal.Result = new TerminalStartResult(true, session.Id, null, null);
+        _embedded.Available = false;
+
+        var view = await Open().HandleAsync(new OpenAgentSession(new StartAgentSession(_task.Id, _task.Developments[0].Id), AgentHosting.AgentEmbedded), Ct);
+
+        view.MonitoringNote.Should().Contain("segue rodando no agente");
+        _launcher.Launched.Should().BeEmpty("a janela nativa só abre quando a pessoa pede");
     }
 
     [Fact]

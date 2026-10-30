@@ -19,7 +19,7 @@ internal sealed class FakeAgentTerminalClient : IAgentTerminalClient
         return Task.FromResult(Result);
     }
 
-    public Task<LocalTerminalChannel> AttachAsync(Guid sessionId, TerminalClientKind kind, string label, TerminalSize? size, CancellationToken cancellationToken = default) =>
+    public Task<ITerminalChannel> AttachAsync(Guid sessionId, TerminalClientKind kind, string label, TerminalSize? size, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException();
 
     public TerminalLaunchOptions WindowFor(Guid sessionId, string title) =>
