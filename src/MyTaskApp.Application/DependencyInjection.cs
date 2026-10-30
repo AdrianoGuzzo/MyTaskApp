@@ -215,7 +215,10 @@ public static class DependencyInjection
 
         // O terminal do agente (ADR-098): só o MyTaskApp Agent hospeda, e registra antes.
         services.TryAddSingleton<ITerminalSessions>(NoTerminalSessions.Instance);
-        services.TryAddSingleton<IAgentTerminalWindows>(NoAgentTerminalWindows.Instance);
+        services.TryAddSingleton<IAgentTerminalClient>(NoAgentTerminalClient.Instance);
+        services.TryAddSingleton<AgentTerminalWindows>();
+        services.TryAddSingleton<IAgentTerminalWindows>(provider => provider.GetRequiredService<AgentTerminalWindows>());
+        services.AddScoped<OpenAgentSessionHandler>();
         services.AddScoped<ShowAgentAttentionHandler>();
 
         // O aviso de que alguém abriu de longe um Claude aqui (ADR-092). Só o desktop o liga.

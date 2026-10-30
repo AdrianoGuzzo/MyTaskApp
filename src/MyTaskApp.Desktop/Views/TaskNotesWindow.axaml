@@ -2728,6 +2728,33 @@
                   recebe os hooks, e só nos agentes que ele abre: nenhum arquivo
                   de configuração do usuário é alterado.
                 -->
+                <!--
+                  Onde abrir (ADR-098): o terminal do sistema, como sempre, ou
+                  o terminal do agente, que segue rodando com a janela fechada.
+                  Só aparece onde o terminal do agente existe.
+                -->
+                <StackPanel Spacing="4" x:Name="AgentHostingPanel">
+                  <StackPanel.IsVisible>
+                    <MultiBinding Converter="{x:Static BoolConverters.And}">
+                      <Binding Path="ShowStart" />
+                      <Binding Path="HasHostingChoice" />
+                    </MultiBinding>
+                  </StackPanel.IsVisible>
+                  <TextBlock Classes="fieldLabel" Text="Onde abrir" />
+                  <ComboBox x:Name="AgentHostingBox"
+                            HorizontalAlignment="Stretch"
+                            ItemsSource="{Binding HostingOptions}"
+                            SelectedItem="{Binding SelectedHosting}"
+                            IsEnabled="{Binding !IsBusy}">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate x:DataType="vm:AgentHostingOption">
+                        <TextBlock Text="{Binding Label}" />
+                      </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
+                  <TextBlock Classes="hint" TextWrapping="Wrap" Text="{Binding HostingHint}" />
+                </StackPanel>
+
                 <StackPanel Spacing="4" IsVisible="{Binding ShowStart}">
                   <CheckBox x:Name="AgentMonitorBox"
                             Content="Avisar quando o agente precisar de mim ou terminar"

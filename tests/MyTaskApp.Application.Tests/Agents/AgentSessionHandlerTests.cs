@@ -36,10 +36,13 @@ public class AgentSessionHandlerTests
     private readonly AgentCliProviders _providers;
     private readonly TaskItem _task;
     private ITerminalSessions _terminals = NoTerminalSessions.Instance;
+    private readonly FakeAgentTerminalClient _agentTerminal = new();
+    private readonly AgentTerminalWindows _terminalWindows;
 
     public AgentSessionHandlerTests()
     {
         _launcher = new FakeTerminalLauncher(_processes, Now);
+        _terminalWindows = new AgentTerminalWindows(_agentTerminal, _launcher, _windows, _processes, NullLogger<AgentTerminalWindows>.Instance);
         _providers = new AgentCliProviders([_claude]);
         _task = TaskItem.Create("Implementar autenticação", Now);
         _tasks.Seed(_task);
@@ -76,7 +79,10 @@ public class AgentSessionHandlerTests
         new(_sessions, _tasks, _providers, _processes, _watcher, _time);
 
     private FocusAgentSessionHandler Focus() =>
-        new(_sessions, _tasks, _providers, _processes, _windows, _watcher, _time, NullLogger<FocusAgentSessionHandler>.Instance);
+        new(_sessions, _tasks, _providers, _processes, _windows, _terminalWindows, _tasks, _watcher, _time, NullLogger<FocusAgentSessionHandler>.Instance);
+
+    private OpenAgentSessionHandler Open() =>
+        new(Start(), _agentTerminal, _terminalWindows, _sessions, _tasks, _providers, _settings, _tasks, NullLogger<OpenAgentSessionHandler>.Instance);
 
     private EndAgentSessionHandler End() =>
         new(_sessions, _tasks, _watcher, _presenter, _time, NullLogger<EndAgentSessionHandler>.Instance);
@@ -108,7 +114,7 @@ public class AgentSessionHandlerTests
     [Fact]
     public async Task Detect_Installed_BringsPathAndVersion_AndNoGuide()
     {
-        var status = await new DetectAgentCliHandler(_providers, _settings).HandleAsync(new DetectAgentCli(), Ct);
+        var status = await new DetectAgentCliHandler(_providers, _settings, _agentTerminal).HandleAsync(new DetectAgentCli(), Ct);
 
         status.Name.Should().Be("Claude Code");
         status.Command.Should().Be("claude");
@@ -123,7 +129,7 @@ public class AgentSessionHandlerTests
     {
         _claude.Installed = false;
 
-        var status = await new DetectAgentCliHandler(_providers, _settings).HandleAsync(new DetectAgentCli(), Ct);
+        var status = await new DetectAgentCliHandler(_providers, _settings, _agentTerminal).HandleAsync(new DetectAgentCli(), Ct);
 
         status.Detection.IsInstalled.Should().BeFalse();
         status.InstallGuide.Should().Be(FakeAgentCliProvider.WindowsGuide);
@@ -132,14 +138,14 @@ public class AgentSessionHandlerTests
     [Fact]
     public async Task AnUnknownAgent_IsRefused()
     {
-        await FluentActions.Awaiting(() => new DetectAgentCliHandler(_providers, _settings).HandleAsync(new DetectAgentCli("gemini"), Ct))
+        await FluentActions.Awaiting(() => new DetectAgentCliHandler(_providers, _settings, _agentTerminal).HandleAsync(new DetectAgentCli("gemini"), Ct))
             .Should().ThrowAsync<DomainException>();
     }
 
     [Fact]
     public async Task Detect_BringsTheDefaultArguments_WhileNothingWasSaved()
     {
-        var status = await new DetectAgentCliHandler(_providers, _settings).HandleAsync(new DetectAgentCli(), Ct);
+        var status = await new DetectAgentCliHandler(_providers, _settings, _agentTerminal).HandleAsync(new DetectAgentCli(), Ct);
 
         status.Arguments.Should().Be("--dangerously-skip-permissions");
     }
@@ -149,7 +155,7 @@ public class AgentSessionHandlerTests
     {
         _settings.Arguments["claude-code"] = "";
 
-        var status = await new DetectAgentCliHandler(_providers, _settings).HandleAsync(new DetectAgentCli(), Ct);
+        var status = await new DetectAgentCliHandler(_providers, _settings, _agentTerminal).HandleAsync(new DetectAgentCli(), Ct);
 
         status.Arguments.Should().BeEmpty();
     }
@@ -239,7 +245,7 @@ public class AgentSessionHandlerTests
     [Fact]
     public async Task Detect_BringsTheOptions_AndTheAgentDefault_WhileNothingWasChosen()
     {
-        var status = await new DetectAgentCliHandler(_providers, _settings).HandleAsync(new DetectAgentCli(), Ct);
+        var status = await new DetectAgentCliHandler(_providers, _settings, _agentTerminal).HandleAsync(new DetectAgentCli(), Ct);
 
         status.Models.Select(option => option.Value).Should().Equal("opus", "sonnet");
         status.Efforts.Select(option => option.Value).Should().Equal("low", "high");
@@ -253,7 +259,7 @@ public class AgentSessionHandlerTests
         _settings.Models["claude-code"] = "opus";
         _settings.Efforts["claude-code"] = "ultra";
 
-        var status = await new DetectAgentCliHandler(_providers, _settings).HandleAsync(new DetectAgentCli(), Ct);
+        var status = await new DetectAgentCliHandler(_providers, _settings, _agentTerminal).HandleAsync(new DetectAgentCli(), Ct);
 
         status.Model.Should().Be("opus");
         status.Effort.Should().BeEmpty();
@@ -838,11 +844,11 @@ public class AgentSessionHandlerTests
     [Fact]
     public async Task Detect_BringsTheMonitoringChoice_OnByDefault()
     {
-        var status = await new DetectAgentCliHandler(_providers, _settings).HandleAsync(new DetectAgentCli(), Ct);
+        var status = await new DetectAgentCliHandler(_providers, _settings, _agentTerminal).HandleAsync(new DetectAgentCli(), Ct);
         status.Monitor.Should().BeTrue();
 
         _settings.Monitoring["claude-code"] = false;
-        status = await new DetectAgentCliHandler(_providers, _settings).HandleAsync(new DetectAgentCli(), Ct);
+        status = await new DetectAgentCliHandler(_providers, _settings, _agentTerminal).HandleAsync(new DetectAgentCli(), Ct);
         status.Monitor.Should().BeFalse();
     }
 
@@ -965,6 +971,149 @@ public class AgentSessionHandlerTests
 
         terminals.Launched.Single().Info.PermissionsBypassed.Should().BeTrue();
         _claude.LastContext!.Arguments.Should().Equal("--dangerously-skip-permissions");
+    }
+
+    /// <summary>
+    /// Sem escolha salva, "Abrir" continua o terminal direto de hoje (ADR-098):
+    /// ninguém pede nada ao agente.
+    /// </summary>
+    [Fact]
+    public async Task Open_WithoutAChoice_IsTheDirectTerminalAsBefore()
+    {
+        Ready();
+
+        var view = await Open().HandleAsync(new OpenAgentSession(new StartAgentSession(_task.Id, _task.Developments[0].Id)), Ct);
+
+        view.IsAgentTerminal.Should().BeFalse();
+        _launcher.Launched.Should().ContainSingle("o terminal direto abre aqui, como hoje");
+        _agentTerminal.Started.Should().BeEmpty();
+        _settings.Hostings.Should().BeEmpty("não escolher não grava escolha");
+    }
+
+    [Fact]
+    public async Task Open_InTheAgentsWindow_AsksTheAgent_ShowsTheWindow_AndRemembers()
+    {
+        Ready();
+        var session = HostedSession();
+        _agentTerminal.Result = new TerminalStartResult(true, session.Id, null, null);
+
+        var view = await Open().HandleAsync(
+            new OpenAgentSession(new StartAgentSession(_task.Id, _task.Developments[0].Id, Arguments: "--model opus", Prompt: "Revise"), AgentHosting.AgentWindow),
+            Ct);
+
+        view.SessionId.Should().Be(session.Id);
+        view.IsAgentTerminal.Should().BeTrue();
+        var request = _agentTerminal.Started.Should().ContainSingle().Subject;
+        request.Hosting.Should().Be(AgentHosting.AgentWindow);
+        request.Arguments.Should().Be("--model opus");
+        request.Prompt.Should().Be("Revise");
+
+        var window = _launcher.Launched.Should().ContainSingle("só a janela abre aqui; o Claude abre no agente").Subject;
+        window.Arguments.Should().Contain(session.Id.ToString()).And.Contain("Claude Code · Implementar autenticação");
+        _settings.Hostings[_claude.Id].Should().Be(AgentHosting.AgentWindow);
+
+        // A próxima abertura sem escolha usa a salva.
+        await Open().HandleAsync(new OpenAgentSession(new StartAgentSession(_task.Id, _task.Developments[0].Id)), Ct);
+        _agentTerminal.Started.Should().HaveCount(2).And.OnlyContain(started => started.Hosting == AgentHosting.AgentWindow);
+    }
+
+    [Fact]
+    public async Task Open_InsideTheApp_OpensNoWindow()
+    {
+        Ready();
+        var session = HostedSession();
+        _agentTerminal.Result = new TerminalStartResult(true, session.Id, null, null);
+
+        await Open().HandleAsync(new OpenAgentSession(new StartAgentSession(_task.Id, _task.Developments[0].Id), AgentHosting.AgentEmbedded), Ct);
+
+        _launcher.Launched.Should().BeEmpty();
+        _agentTerminal.Started.Single().Hosting.Should().Be(AgentHosting.AgentEmbedded);
+    }
+
+    [Fact]
+    public async Task Open_TheAgentsRefusal_IsTheSentenceThePersonReads()
+    {
+        Ready();
+        _agentTerminal.Result = new TerminalStartResult(false, null, "Este ambiente já tem um Claude Code aberto.", null);
+
+        var open = () => Open().HandleAsync(new OpenAgentSession(new StartAgentSession(_task.Id, _task.Developments[0].Id), AgentHosting.AgentWindow), Ct);
+
+        (await open.Should().ThrowAsync<DomainException>()).Which.Message.Should().Be("Este ambiente já tem um Claude Code aberto.");
+        _launcher.Launched.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Open_AWindowThatDoesNotOpen_LeavesTheSessionShownWithTheReason()
+    {
+        Ready();
+        var session = HostedSession();
+        _agentTerminal.Result = new TerminalStartResult(true, session.Id, null, null);
+        _launcher.FailWith = "Nenhum terminal encontrado.";
+
+        var view = await Open().HandleAsync(new OpenAgentSession(new StartAgentSession(_task.Id, _task.Developments[0].Id), AgentHosting.AgentWindow), Ct);
+
+        view.SessionId.Should().Be(session.Id);
+        view.MonitoringNote.Should().Contain("Nenhum terminal encontrado.").And.Contain("segue rodando no agente");
+    }
+
+    [Fact]
+    public async Task Focus_InTheAgentsTerminal_BringsTheWindow_OrOpensItAgainWhenClosed()
+    {
+        Ready();
+        var session = HostedSession();
+
+        (await Focus().HandleAsync(new FocusAgentSession(_task.Id, SessionId: session.Id), Ct)).Focused.Should().BeTrue();
+        var first = _launcher.Launched.Should().ContainSingle("sem janela aberta, abre uma").Subject;
+
+        (await Focus().HandleAsync(new FocusAgentSession(_task.Id, SessionId: session.Id), Ct)).Focused.Should().BeTrue();
+        _launcher.Launched.Should().ContainSingle("a janela aberta vem para a frente");
+        _windows.Focused.Should().ContainSingle();
+
+        _processes.Exit(_windows.Focused[0]);
+        await Focus().HandleAsync(new FocusAgentSession(_task.Id, SessionId: session.Id), Ct);
+        _launcher.Launched.Should().HaveCount(2, "fechada a janela, abre outra; a sessão segue a mesma");
+        first.Arguments.Should().Equal(_launcher.Launched[1].Arguments);
+    }
+
+    [Fact]
+    public async Task TheAttention_LooksAtTheWindowOfTheView_NotAtTheClaudeProcess()
+    {
+        Ready();
+        var session = HostedSession();
+
+        _terminalWindows.WindowProcessFor(session.Id).Should().BeNull("nenhuma vista mostra a sessão ainda");
+
+        await _terminalWindows.ShowAsync(session.Id, "Claude Code", Ct);
+        _terminalWindows.WindowProcessFor(session.Id).Should().NotBeNull().And.NotBe(session.ProcessId);
+
+        _processes.Exit(_terminalWindows.WindowProcessFor(session.Id)!.Value);
+        _terminalWindows.SetEmbedded(session.Id, showing: true);
+        _terminalWindows.WindowProcessFor(session.Id).Should().Be(Environment.ProcessId, "a vista embutida mora na janela do app");
+    }
+
+    [Fact]
+    public async Task Detect_SaysWhereTheAgentOpens_AndOnlyOffersTheAgentWhereItExists()
+    {
+        _settings.Hostings[_claude.Id] = AgentHosting.AgentEmbedded;
+
+        (await new DetectAgentCliHandler(_providers, _settings, _agentTerminal).HandleAsync(new DetectAgentCli(), Ct))
+            .Hosting.Should().Be(AgentHosting.AgentEmbedded);
+
+        _agentTerminal.Support = PseudoTerminalSupport.Unsupported("macOS", "Sem pseudoterminal.");
+        var status = await new DetectAgentCliHandler(_providers, _settings, _agentTerminal).HandleAsync(new DetectAgentCli(), Ct);
+
+        status.Hosting.Should().Be(AgentHosting.Direct);
+        status.HostingSupport.IsSupported.Should().BeFalse();
+    }
+
+    /// <summary>A sessão que o agente "abriu", já no banco que os dois dividem.</summary>
+    private AgentSession HostedSession()
+    {
+        var session = AgentSession.CreateTerminal(_task.Id, _task.Developments[0].Id, _claude.Id, _claude.Command, Worktree, Guid.NewGuid().ToString(), Now);
+        session.MarkRunning(4242, Now);
+        _processes.Run(4242, Now);
+        _sessions.Seed(session);
+        return session;
     }
 
     /// <summary>O agente hospedando: abre "pseudoterminais" que só ficam vivos no tracker.</summary>

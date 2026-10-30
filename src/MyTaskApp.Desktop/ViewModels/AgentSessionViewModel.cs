@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
+using MyTaskApp.Application.Terminals;
 using MyTaskApp.Desktop.Composition;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.Agents;
@@ -76,6 +77,9 @@ public sealed partial class AgentSessionViewModel(
     /// <summary>Como <see cref="_loadedArguments"/>, para a lista de esforço.</summary>
     private string _loadedEffort = string.Empty;
 
+    /// <summary>Como <see cref="_loadedArguments"/>, para "Onde abrir" (ADR-098).</summary>
+    private AgentHosting _loadedHosting = AgentHosting.Direct;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(
         nameof(IsChecking), nameof(IsNotInstalled), nameof(IsIdle), nameof(IsStarting), nameof(IsRunning),
@@ -127,6 +131,22 @@ public sealed partial class AgentSessionViewModel(
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CommandPreview))]
     private AgentCliOption? _selectedEffort;
+
+    /// <summary>
+    /// "Onde abrir" (ADR-098): o terminal direto, ou o terminal do agente. Só
+    /// aparece onde o terminal do agente existe; o usado ao iniciar vira o padrão.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasHostingChoice))]
+    private IReadOnlyList<AgentHostingOption> _hostingOptions = [];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HostingHint))]
+    private AgentHostingOption? _selectedHosting;
+
+    public bool HasHostingChoice => HostingOptions.Count > 1;
+
+    public string? HostingHint => SelectedHosting?.Hint;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(
@@ -253,9 +273,10 @@ public sealed partial class AgentSessionViewModel(
 
     /// <summary>Com o agente aberto: se ele avisa o app, ou por que não.</summary>
     public string? MonitoringText => State is AgentPanelState.Running && Session is { IsHeadless: false } session
-        ? session.IsMonitored
-            ? "O MyTaskApp avisa quando o agente precisar de você ou terminar."
-            : "Sem acompanhamento: esta sessão não avisa o MyTaskApp."
+        ? (session.IsAgentTerminal ? "Roda no terminal do agente: fechar a janela não encerra; \"Abrir terminal\" mostra de novo. " : string.Empty)
+            + (session.IsMonitored
+                ? "O MyTaskApp avisa quando o agente precisar de você ou terminar."
+                : "Sem acompanhamento: esta sessão não avisa o MyTaskApp.")
         : null;
 
     /// <summary>A conversa sem terminal, rodada pelo agente desta máquina (ADR-089, ADR-092).</summary>
@@ -371,18 +392,20 @@ public sealed partial class AgentSessionViewModel(
 
         try
         {
-            Session = await runner.RunAsync<StartAgentSessionHandler, AgentSessionView>(
+            Session = await runner.RunAsync<OpenAgentSessionHandler, AgentSessionView>(
                 (handler, token) => handler.HandleAsync(
-                    new StartAgentSession(
-                        _taskId,
-                        _developmentId,
-                        Cli?.ProviderId,
-                        ArgumentsToSend(),
-                        Prompt,
-                        RunDirectly,
-                        Cli is null ? null : Monitor,
-                        Cli is null ? null : ChosenModel,
-                        Cli is null ? null : ChosenEffort),
+                    new OpenAgentSession(
+                        new StartAgentSession(
+                            _taskId,
+                            _developmentId,
+                            Cli?.ProviderId,
+                            ArgumentsToSend(),
+                            Prompt,
+                            RunDirectly,
+                            Cli is null ? null : Monitor,
+                            Cli is null ? null : ChosenModel,
+                            Cli is null ? null : ChosenEffort),
+                        HasHostingChoice ? SelectedHosting?.Value : null),
                     token),
                 CancellationToken.None);
 
@@ -392,6 +415,7 @@ public sealed partial class AgentSessionViewModel(
                 _loadedMonitor = Monitor;
                 _loadedModel = ChosenModel;
                 _loadedEffort = ChosenEffort;
+                _loadedHosting = SelectedHosting?.Value ?? AgentHosting.Direct;
             }
 
             State = StateFor(Session);
@@ -572,6 +596,16 @@ public sealed partial class AgentSessionViewModel(
 
             EffortOptions = OptionsFor(cli.Efforts, EffortOptions);
             SelectedEffort = Pick(EffortOptions, effort);
+
+            var hosting = SelectedHosting?.Value ?? _loadedHosting;
+
+            if (hosting == _loadedHosting)
+            {
+                _loadedHosting = hosting = cli.Hosting;
+            }
+
+            HostingOptions = cli.HostingSupport.IsSupported ? AgentHostingOption.All : [];
+            SelectedHosting = HostingOptions.FirstOrDefault(option => option.Value == hosting) ?? HostingOptions.FirstOrDefault();
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {

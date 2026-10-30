@@ -19,4 +19,7 @@ internal sealed class AgentSettingsRow
 
     /// <summary><c>null</c> ou vazio = o esforço padrão do agente (ADR-040).</summary>
     public string? Effort { get; set; }
+
+    /// <summary><c>null</c> = nunca escolhido: o terminal direto (ADR-098). O <c>AgentHosting</c> como número.</summary>
+    public int? Hosting { get; set; }
 }

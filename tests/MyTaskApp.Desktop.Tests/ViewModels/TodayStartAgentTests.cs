@@ -3,6 +3,7 @@ using Avalonia.Headless.XUnit;
 using Microsoft.Extensions.Logging.Abstractions;
 using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Planning;
+using MyTaskApp.Application.Terminals;
 using MyTaskApp.Desktop.ViewModels;
 using MyTaskApp.Desktop.Views;
 using MyTaskApp.Domain;
@@ -45,12 +46,12 @@ public class TodayStartAgentTests
     [Fact]
     public async Task WithOneEnvironment_OpensTheAgentThere_AndSaysWhere()
     {
-        _runner.ResultsByHandler[typeof(StartAgentSessionHandler)] = Session(AgentSessionStatus.Running);
+        _runner.ResultsByHandler[typeof(OpenAgentSessionHandler)] = Session(AgentSessionStatus.Running);
         var viewModel = ViewModel();
 
         await viewModel.StartAgentAsync(new TaskRowViewModel(Listed([Worktree()]), false));
 
-        _runner.Invoked.Should().StartWith(typeof(StartAgentSessionHandler)).And.Contain(typeof(GetTodayBoardHandler));
+        _runner.Invoked.Should().StartWith(typeof(OpenAgentSessionHandler)).And.Contain(typeof(GetTodayBoardHandler));
         viewModel.ErrorMessage.Should().BeNull();
         viewModel.StatusMessage.Should().Be("Claude Code aberto em eco-core · feature/x.");
     }
@@ -69,13 +70,13 @@ public class TodayStartAgentTests
     [Fact]
     public async Task ChoosingAnEnvironment_OpensTheAgentInIt()
     {
-        _runner.ResultsByHandler[typeof(StartAgentSessionHandler)] = Session(AgentSessionStatus.Running);
+        _runner.ResultsByHandler[typeof(OpenAgentSessionHandler)] = Session(AgentSessionStatus.Running);
         var viewModel = ViewModel();
         var row = new TaskRowViewModel(Listed([Worktree(), Worktree("eco-api")]), false);
 
         await viewModel.StartAgentInAsync(row.WorktreeChoices[1]);
 
-        _runner.Invoked.Should().StartWith(typeof(StartAgentSessionHandler));
+        _runner.Invoked.Should().StartWith(typeof(OpenAgentSessionHandler));
         viewModel.StatusMessage.Should().Be("Claude Code aberto em eco-api · feature/x.");
     }
 
@@ -101,7 +102,7 @@ public class TodayStartAgentTests
     [Fact]
     public async Task WhenTheAgentIsNotInstalled_ShowsTheUseCaseMessage()
     {
-        _runner.FailuresByHandler[typeof(StartAgentSessionHandler)] = new DomainException("Claude Code não encontrado.");
+        _runner.FailuresByHandler[typeof(OpenAgentSessionHandler)] = new DomainException("Claude Code não encontrado.");
         var viewModel = ViewModel();
 
         await viewModel.StartAgentAsync(new TaskRowViewModel(Listed([Worktree()]), false));
@@ -113,7 +114,7 @@ public class TodayStartAgentTests
     [Fact]
     public async Task WhenSomethingUnexpectedFails_ShowsAFriendlyMessage()
     {
-        _runner.FailuresByHandler[typeof(StartAgentSessionHandler)] = new InvalidOperationException("boom");
+        _runner.FailuresByHandler[typeof(OpenAgentSessionHandler)] = new InvalidOperationException("boom");
         var viewModel = ViewModel();
 
         await viewModel.StartAgentAsync(new TaskRowViewModel(Listed([Worktree()]), false));
@@ -124,7 +125,7 @@ public class TodayStartAgentTests
     [Fact]
     public async Task WhenTheTerminalDoesNotOpen_ShowsWhy()
     {
-        _runner.ResultsByHandler[typeof(StartAgentSessionHandler)] =
+        _runner.ResultsByHandler[typeof(OpenAgentSessionHandler)] =
             Session(AgentSessionStatus.Failed, "Não foi possível abrir o terminal.");
         var viewModel = ViewModel();
 
@@ -137,7 +138,7 @@ public class TodayStartAgentTests
     [Fact]
     public async Task WhenTheAgentQuitsRightAway_SaysSo()
     {
-        _runner.ResultsByHandler[typeof(StartAgentSessionHandler)] = Session(AgentSessionStatus.Exited);
+        _runner.ResultsByHandler[typeof(OpenAgentSessionHandler)] = Session(AgentSessionStatus.Exited);
         var viewModel = ViewModel();
 
         await viewModel.StartAgentAsync(new TaskRowViewModel(Listed([Worktree()]), false));

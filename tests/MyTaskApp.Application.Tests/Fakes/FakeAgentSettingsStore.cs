@@ -1,4 +1,5 @@
 using MyTaskApp.Application.Agents;
+using MyTaskApp.Application.Terminals;
 
 namespace MyTaskApp.Application.Tests.Fakes;
 
@@ -48,6 +49,17 @@ internal sealed class FakeAgentSettingsStore : IAgentSettingsStore
     public Task SaveEffortAsync(string providerId, string effort, CancellationToken cancellationToken = default)
     {
         Efforts[providerId] = effort;
+        return Task.CompletedTask;
+    }
+
+    public Dictionary<string, AgentHosting> Hostings { get; } = [];
+
+    public Task<AgentHosting?> GetHostingAsync(string providerId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Hostings.TryGetValue(providerId, out var hosting) ? hosting : (AgentHosting?)null);
+
+    public Task SaveHostingAsync(string providerId, AgentHosting hosting, CancellationToken cancellationToken = default)
+    {
+        Hostings[providerId] = hosting;
         return Task.CompletedTask;
     }
 }

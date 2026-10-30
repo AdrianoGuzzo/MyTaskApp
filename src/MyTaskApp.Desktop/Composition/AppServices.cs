@@ -262,7 +262,8 @@ internal static class AppServices
             // quando ele está rodando, e segue sozinho quando não está.
             .AddLocalPeer(configuration, LocalPeerRole.Connect)
 
-            // O terminal do agente (ADR-098) avisa pelo mesmo canal quando chamar a pessoa.
+            // O terminal do agente (ADR-098): o canal até ele, e o aviso pelo mesmo canal quando chamar a pessoa.
+            .AddAgentTerminalClient(configuration)
             .AddSingleton<LocalPeerAttentionRelay>()
             .AddAgentAutostart()
             .AddApplication(configuration)

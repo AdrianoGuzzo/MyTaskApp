@@ -32,7 +32,7 @@ public sealed record AgentSessionWatch(Guid SessionId, Guid TaskId, int ProcessI
 /// <summary>O agente está instalado neste computador?</summary>
 public sealed record DetectAgentCli(string? ProviderId = null);
 
-public sealed class DetectAgentCliHandler(IAgentCliProviders providers, IAgentSettingsStore settings)
+public sealed class DetectAgentCliHandler(IAgentCliProviders providers, IAgentSettingsStore settings, IAgentTerminalClient agentTerminal)
 {
     public async Task<AgentCliStatus> HandleAsync(
         DetectAgentCli query,
@@ -54,6 +54,8 @@ public sealed class DetectAgentCliHandler(IAgentCliProviders providers, IAgentSe
         {
             Models = provider.Models,
             Efforts = provider.Efforts,
+            Hosting = agentTerminal.Support.IsSupported ? await settings.HostingForAsync(provider, cancellationToken) : AgentHosting.Direct,
+            HostingSupport = agentTerminal.Support,
         };
     }
 
@@ -538,6 +540,8 @@ public sealed class FocusAgentSessionHandler(
     IAgentCliProviders providers,
     IAgentProcessTracker processes,
     ITerminalWindowManager windows,
+    AgentTerminalWindows terminalWindows,
+    ITaskItemRepository tasks,
     IAgentSessionWatcher watcher,
     TimeProvider timeProvider,
     ILogger<FocusAgentSessionHandler> logger)
@@ -559,6 +563,15 @@ public sealed class FocusAgentSessionHandler(
         if (session is not { Status: AgentSessionStatus.Running, ProcessId: { } processId } || session.IsHeadless)
         {
             return new AgentFocusResult(AgentSessionView.From(session, providers), false);
+        }
+
+        // O terminal do agente (ADR-098): a janela é uma vista, e fechada abre de novo; a sessão segue no agente.
+        if (session.IsAgentTerminal)
+        {
+            var task = await tasks.FindByIdAsync(session.TaskItemId, cancellationToken);
+            var name = providers.Find(session.ProviderId)?.Name ?? session.ProviderId;
+            var shown = await terminalWindows.ShowAsync(session.Id, AgentTerminalWindows.TitleFor(name, task?.Title), cancellationToken);
+            return new AgentFocusResult(AgentSessionView.From(session, providers), shown);
         }
 
         var focused = await windows.FocusAsync(processId);

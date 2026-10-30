@@ -494,10 +494,25 @@ public static class DependencyInjection
         return services;
     }
 
-    /// <summary>O nome do canal local do terminal desta instalação, para quem conecta (o desktop).</summary>
-    public static string TerminalPipeName(IConfiguration configuration) =>
-        TerminalPipe.NameFor(
-            (configuration.GetSection(DatabaseOptions.SectionName).Get<DatabaseOptions>() ?? new DatabaseOptions()).ResolveFullPath());
+    /// <summary>
+    /// O desktop pedindo o terminal ao agente desta máquina (ADR-098), antes
+    /// da Application: o canal local pelo nome do banco, e a janela nativa e o
+    /// agente na pasta do app.
+    /// </summary>
+    public static IServiceCollection AddAgentTerminalClient(this IServiceCollection services, IConfiguration configuration)
+    {
+        var databaseOptions =
+            configuration.GetSection(DatabaseOptions.SectionName).Get<DatabaseOptions>()
+            ?? new DatabaseOptions();
+
+        services.TryAddSingleton<IAgentTerminalClient>(provider => new LocalAgentTerminalClient(
+            TerminalPipe.NameFor(databaseOptions.ResolveFullPath()),
+            AppContext.BaseDirectory,
+            provider.GetRequiredService<IPseudoTerminalFactory>(),
+            provider.GetRequiredService<ILogger<LocalAgentTerminalClient>>()));
+
+        return services;
+    }
 
     /// <summary>
     /// O agente no logon desta conta (ADR-085), a partir da pasta do app: só o

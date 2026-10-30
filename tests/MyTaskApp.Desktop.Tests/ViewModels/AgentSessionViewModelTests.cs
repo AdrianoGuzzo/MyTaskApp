@@ -234,13 +234,13 @@ public class AgentSessionViewModelTests
     {
         _runner.Enqueue<GetTaskAgentSessionHandler>([null]);
         _runner.ResultsByHandler[typeof(DetectAgentCliHandler)] = Installed();
-        _runner.ResultsByHandler[typeof(StartAgentSessionHandler)] = Session(AgentSessionStatus.Running);
+        _runner.ResultsByHandler[typeof(OpenAgentSessionHandler)] = Session(AgentSessionStatus.Running);
         var viewModel = Create();
         await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
 
         await viewModel.StartCommand.ExecuteAsync(null);
 
-        _runner.Invoked.Should().Contain(typeof(StartAgentSessionHandler));
+        _runner.Invoked.Should().Contain(typeof(OpenAgentSessionHandler));
         viewModel.State.Should().Be(AgentPanelState.Running);
         viewModel.ProcessText.Should().Be("PID 15432");
         viewModel.Message.Should().BeNull();
@@ -251,7 +251,7 @@ public class AgentSessionViewModelTests
     {
         _runner.Enqueue<GetTaskAgentSessionHandler>([null]);
         _runner.ResultsByHandler[typeof(DetectAgentCliHandler)] = Installed();
-        _runner.ResultsByHandler[typeof(StartAgentSessionHandler)] =
+        _runner.ResultsByHandler[typeof(OpenAgentSessionHandler)] =
             Session(AgentSessionStatus.Exited, ended: Started);
         var viewModel = Create();
         await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
@@ -267,7 +267,7 @@ public class AgentSessionViewModelTests
     {
         _runner.Enqueue<GetTaskAgentSessionHandler>([null]);
         _runner.ResultsByHandler[typeof(DetectAgentCliHandler)] = Installed();
-        _runner.ResultsByHandler[typeof(StartAgentSessionHandler)] =
+        _runner.ResultsByHandler[typeof(OpenAgentSessionHandler)] =
             Session(AgentSessionStatus.Failed, processId: null, ended: Started, failure: "O executável não foi encontrado.");
         var viewModel = Create();
         await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
@@ -285,7 +285,7 @@ public class AgentSessionViewModelTests
     {
         _runner.Enqueue<GetTaskAgentSessionHandler>([null]);
         _runner.Enqueue<DetectAgentCliHandler>(Installed(), Missing());
-        _runner.FailuresByHandler[typeof(StartAgentSessionHandler)] = new DomainException("Claude Code não encontrado.");
+        _runner.FailuresByHandler[typeof(OpenAgentSessionHandler)] = new DomainException("Claude Code não encontrado.");
         var viewModel = Create();
         await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
 
@@ -300,7 +300,7 @@ public class AgentSessionViewModelTests
     {
         _runner.Enqueue<GetTaskAgentSessionHandler>([null]);
         _runner.ResultsByHandler[typeof(DetectAgentCliHandler)] = Installed();
-        _runner.FailuresByHandler[typeof(StartAgentSessionHandler)] = new DomainException("A pasta do worktree não existe mais.");
+        _runner.FailuresByHandler[typeof(OpenAgentSessionHandler)] = new DomainException("A pasta do worktree não existe mais.");
         var viewModel = Create();
         await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
 
@@ -322,7 +322,7 @@ public class AgentSessionViewModelTests
         await viewModel.FocusCommand.ExecuteAsync(null);
 
         _runner.Invoked.Should().Contain(typeof(FocusAgentSessionHandler));
-        _runner.Invoked.Should().NotContain(typeof(StartAgentSessionHandler));
+        _runner.Invoked.Should().NotContain(typeof(OpenAgentSessionHandler));
         viewModel.Message.Should().BeNull();
     }
 
@@ -540,6 +540,56 @@ public class AgentSessionViewModelTests
             "--dangerously-skip-permissions", "--model", "opus", "--effort", "high");
     }
 
+    /// <summary>"Onde abrir" (ADR-098): só onde o terminal do agente existe, e com o modo salvo escolhido.</summary>
+    [Fact]
+    public async Task WhereToOpen_IsOfferedOnlyWhereTheAgentsTerminalExists()
+    {
+        _runner.Enqueue<GetTaskAgentSessionHandler>([null]);
+        _runner.ResultsByHandler[typeof(DetectAgentCliHandler)] = Installed() with
+        {
+            Hosting = AgentHosting.AgentWindow,
+            HostingSupport = new PseudoTerminalSupport(true, "Windows", null),
+        };
+        var viewModel = Create();
+        await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
+
+        viewModel.HasHostingChoice.Should().BeTrue();
+        viewModel.HostingOptions[0].Value.Should().Be(AgentHosting.Direct, "o terminal do sistema vem primeiro: é o de sempre");
+        viewModel.SelectedHosting!.Value.Should().Be(AgentHosting.AgentWindow);
+        viewModel.HostingHint.Should().Contain("fechar a janela não encerra");
+
+        _runner.Enqueue<GetTaskAgentSessionHandler>([null]);
+        _runner.ResultsByHandler[typeof(DetectAgentCliHandler)] = Installed();
+        var elsewhere = Create();
+        await elsewhere.RefreshAsync(TestContext.Current.CancellationToken);
+
+        elsewhere.HasHostingChoice.Should().BeFalse("sem terminal do agente, só há o terminal do sistema");
+    }
+
+    [Fact]
+    public async Task WithoutTheChoice_StartingIsTheSystemTerminal_AsBefore()
+    {
+        var (task, developmentId) = ReadyTask();
+        var provider = Substitute.For<IAgentCliProvider>();
+        provider.Id.Returns("claude-code");
+        provider.Name.Returns("Claude Code");
+        provider.DetectAsync(Arg.Any<CancellationToken>())
+            .Returns(new CliDetectionResult { IsInstalled = true, ExecutablePath = @"C:\claude.exe" });
+        provider.CreateLaunch(Arg.Any<AgentCliStartContext>(), Arg.Any<CliDetectionResult>())
+            .Returns(_ => throw new DomainException("parou no terminal do sistema"));
+        UseRealStart(task, provider);
+
+        _runner.Enqueue<GetTaskAgentSessionHandler>([null]);
+        _runner.ResultsByHandler[typeof(DetectAgentCliHandler)] = Installed();
+        var viewModel = new AgentSessionViewModel(_runner, _clipboard, _shell, NullLogger<AgentSessionViewModel>.Instance);
+        viewModel.Load(task.Id, developmentId, isReadOnly: false);
+        await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
+
+        await viewModel.StartCommand.ExecuteAsync(null);
+
+        viewModel.Message.Should().Be("parou no terminal do sistema", "o caminho direto de hoje montou o comando");
+    }
+
     private static (TaskItem Task, Guid DevelopmentId) ReadyTask()
     {
         var task = TaskItem.Create("Corrigir cálculo", Started);
@@ -560,20 +610,38 @@ public class AgentSessionViewModelTests
         var directories = Substitute.For<IDirectoryProbe>();
         directories.ExistsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(true);
 
-        _runner.Handlers[typeof(StartAgentSessionHandler)] = new StartAgentSessionHandler(
+        var sessions = Substitute.For<IAgentSessionRepository>();
+        var unitOfWork = Substitute.For<IUnitOfWork>();
+        var launcher = Substitute.For<ITerminalLauncher>();
+        var processes = Substitute.For<IAgentProcessTracker>();
+        var settings = Substitute.For<IAgentSettingsStore>();
+
+        var start = new StartAgentSessionHandler(
             tasks,
-            Substitute.For<IAgentSessionRepository>(),
-            Substitute.For<IUnitOfWork>(),
+            sessions,
+            unitOfWork,
             providers,
-            Substitute.For<ITerminalLauncher>(),
-            Substitute.For<IAgentProcessTracker>(),
+            launcher,
+            processes,
             Substitute.For<IAgentSessionWatcher>(),
             directories,
-            Substitute.For<IAgentSettingsStore>(),
+            settings,
             Substitute.For<IAgentEventEndpoint>(),
             NoTerminalSessions.Instance,
             TimeProvider.System,
             NullLogger<StartAgentSessionHandler>.Instance);
+
+        // O caminho único das telas (ADR-098): sem escolha salva, é o terminal direto.
+        _runner.Handlers[typeof(OpenAgentSessionHandler)] = new OpenAgentSessionHandler(
+            start,
+            NoAgentTerminalClient.Instance,
+            new AgentTerminalWindows(NoAgentTerminalClient.Instance, launcher, Substitute.For<ITerminalWindowManager>(), processes, NullLogger<AgentTerminalWindows>.Instance),
+            sessions,
+            tasks,
+            providers,
+            settings,
+            unitOfWork,
+            NullLogger<OpenAgentSessionHandler>.Instance);
     }
 
     [Fact]
