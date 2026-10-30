@@ -70,6 +70,7 @@ public sealed record TerminalClientView(Guid Id, TerminalClientKind Kind, string
 /// Aberto sem as aprovações do Claude (<c>--dangerously-skip-permissions</c>
 /// ou o modo <c>bypassPermissions</c>). Quem controla de longe vê o aviso.
 /// </param>
+/// <param name="YourClientId">Quem é a vista que recebe, entre os <paramref name="Clients"/>: só a de longe sabe.</param>
 public sealed record TerminalSessionStatus(
     Guid SessionId,
     Guid TaskId,
@@ -88,7 +89,8 @@ public sealed record TerminalSessionStatus(
     bool Monitored,
     bool PermissionsBypassed,
     string? PermissionMode,
-    DateTimeOffset? LastOutputAt)
+    DateTimeOffset? LastOutputAt,
+    Guid? YourClientId = null)
 {
     public bool IsRunning => Process == TerminalProcessState.Running;
 

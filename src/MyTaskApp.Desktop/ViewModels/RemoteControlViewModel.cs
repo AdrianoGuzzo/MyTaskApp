@@ -8,6 +8,7 @@ using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Remote;
 using MyTaskApp.Application.Sync;
+using MyTaskApp.Desktop.Terminals;
 using MyTaskApp.Domain;
 using MyTaskApp.Remote.Contracts;
 
@@ -201,12 +202,18 @@ public sealed partial class RemoteControlViewModel : ObservableObject
     /// <summary>O ambiente pedido na abertura, escolhido quando a lista chega.</summary>
     private Guid? _preferred;
 
-    public RemoteControlViewModel(IUseCaseRunner runner, ILogger<RemoteControlViewModel> logger, IRemoteWatch? watch = null)
+    /// <param name="terminals">Quem abre as vistas dos terminais de lá (ADR-099); sem ele, a lista não aparece.</param>
+    public RemoteControlViewModel(
+        IUseCaseRunner runner,
+        ILogger<RemoteControlViewModel> logger,
+        IRemoteWatch? watch = null,
+        RemoteTerminalWindows? terminals = null)
     {
         _runner = runner;
         _logger = logger;
         _pace = new RemotePace(watch ?? new NoRemoteWatch(), TimeProvider.System);
         Sessions = new RemoteSessionsViewModel(runner, logger);
+        Terminals = new RemoteTerminalsViewModel(runner, logger, terminals);
 
         // A lista relida pelo relógio pode trazer (ou levar) a conversa que espera no ambiente.
         Sessions.Items.CollectionChanged += (_, _) => NotifyConversation();
@@ -225,6 +232,9 @@ public sealed partial class RemoteControlViewModel : ObservableObject
 
     /// <summary>As conversas do Claude da máquina, lidas do servidor (ADR-091).</summary>
     public RemoteSessionsViewModel Sessions { get; }
+
+    /// <summary>Os terminais do agente de lá, com o Claude interativo (ADR-099).</summary>
+    public RemoteTerminalsViewModel Terminals { get; }
 
     public string Title => Machine is { } machine ? $"Controlar {machine.Nickname}" : "Controlar";
 
@@ -396,8 +406,26 @@ public sealed partial class RemoteControlViewModel : ObservableObject
         OnPropertyChanged(nameof(HasNoEnvironments));
         OnPropertyChanged(nameof(HasAgentProfiles));
         await Sessions.LoadAsync(machine.DeviceId, cancellationToken);
+        await Terminals.LoadAsync(machine, cancellationToken);
         NotifyConversation();
         await LoadApprovalsAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Abre o Claude no terminal do agente de lá, no ambiente escolhido. Os
+    /// parâmetros, o modelo e o texto inicial são os salvos lá: daqui vão só os ids.
+    /// </summary>
+    [RelayCommand]
+    public Task StartTerminalAsync()
+    {
+        if (Machine is not { } machine || SelectedEnvironment is not { } environment)
+        {
+            return Task.CompletedTask;
+        }
+
+        return SendAsync(
+            RemoteTerminalRequests.Start(machine.DeviceId, environment.View.TaskId, environment.View.DevelopmentId),
+            $"Abrir o Claude no terminal de {machine.Nickname} · {environment.Title}");
     }
 
     /// <summary>Pede à outra máquina para medir as ferramentas e publicar o catálogo de novo.</summary>
@@ -608,6 +636,7 @@ public sealed partial class RemoteControlViewModel : ObservableObject
             }
 
             await Sessions.TickAsync(_ticks, noticed, listening, cancellationToken);
+            await Terminals.TickAsync(noticed, listening, cancellationToken);
         }
         finally
         {

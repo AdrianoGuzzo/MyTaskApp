@@ -140,7 +140,8 @@ public static class RemoteTerminalMapping
             state.Monitored,
             state.PermissionsBypassed,
             state.PermissionMode,
-            LastOutputAt: null);
+            LastOutputAt: null,
+            state.YourViewerId);
     }
 
     public static RemoteTerminalSessionReport ToReport(TerminalSessionStatus status, DateTimeOffset updatedAt) => new(
@@ -566,6 +567,12 @@ public sealed partial class RemoteTerminalBridge : IDisposable
     /// <summary>A saída contígua que chega dentro da janela, até o teto; o que não cabe volta como próxima mensagem.</summary>
     private async Task<(TerminalOutput Batch, TerminalMessage? Next)> GatherAsync(TerminalClient client, TerminalOutput first)
     {
+        // O retrato vai sozinho: o fim dele é o deslocamento dele, e juntar saída nova mudaria isso.
+        if (first.Reset)
+        {
+            return (first, null);
+        }
+
         using var buffer = new MemoryStream();
         buffer.Write(first.Data);
         using var window = new CancellationTokenSource(BatchWindow, _time);
@@ -609,7 +616,8 @@ public sealed partial class RemoteTerminalBridge : IDisposable
                 new RemoteTerminalFrame(
                     attachId,
                     RemoteTerminalFrameKinds.Output,
-                    output.Offset + start,
+                    // Os pedaços do retrato levam o deslocamento dele; os da saída, cada um o seu.
+                    output.Reset ? output.Offset : output.Offset + start,
                     data.AsSpan(start, length).ToArray(),
                     Reset: output.Reset && start == 0,
                     More: start + length < data.Length),

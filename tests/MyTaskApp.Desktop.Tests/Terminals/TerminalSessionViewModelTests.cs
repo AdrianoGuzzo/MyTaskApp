@@ -265,12 +265,102 @@ public sealed class TerminalSessionViewModelTests : IAsyncDisposable
         viewModel.Screen!.ScreenText().Should().Be("novo");
     }
 
-    private TerminalSessionViewModel Create()
+    /// <summary>De longe (ADR-099), a vez é pedida: sem ela, a tela só mostra, e o teclado não sai.</summary>
+    [Fact]
+    public async Task FromAfar_WithoutControl_TheViewOnlyWatches_AndOffersToTakeIt()
+    {
+        var viewModel = await ConnectedAsync(TerminalClientKind.Remote);
+        var you = Guid.NewGuid();
+        var machine = new TerminalClientView(Guid.NewGuid(), TerminalClientKind.NativeWindow, "Janela", DateTimeOffset.UnixEpoch);
+        Channel.Send(new TerminalStateMessage(RemoteStatus(you, lease: null, machine)));
+        await WaitUntil(() => viewModel.Status is not null);
+
+        viewModel.IsReadOnly.Should().BeTrue();
+        viewModel.CanTakeControlNow.Should().BeTrue();
+        viewModel.LeaseText.Should().Contain("Assuma o controle");
+        viewModel.OthersText.Should().Be("Também aberto em a janela do terminal.", "a própria vista não se lista");
+        viewModel.ProcessText.Should().Be("PID 4242 · 80×24", "a pasta da outra máquina não vem");
+
+        await viewModel.TakeControlCommand.ExecuteAsync(null);
+        Drain();
+        Sent<TerminalTakeControl>().Should().ContainSingle();
+        _confirmations.Asked.Should().BeEmpty("com as aprovações do Claude, assumir não precisa de pergunta");
+    }
+
+    [Fact]
+    public async Task FromAfar_WithControl_TheKeysGo_AndItCanBeReleased()
+    {
+        var viewModel = await ConnectedAsync(TerminalClientKind.Remote);
+        var you = Guid.NewGuid();
+        Channel.Send(new TerminalStateMessage(RemoteStatus(you, new TerminalLease(you, TerminalClientKind.Remote, "Notebook", DateTimeOffset.UnixEpoch))));
+        await WaitUntil(() => viewModel.Status is not null);
+
+        viewModel.HasControl.Should().BeTrue();
+        viewModel.IsReadOnly.Should().BeFalse();
+        viewModel.CanTakeControlNow.Should().BeFalse();
+        viewModel.LeaseText.Should().StartWith("Você está com o controle");
+
+        await viewModel.ReleaseControlCommand.ExecuteAsync(null);
+        Drain();
+        Sent<TerminalReleaseControl>().Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task FromAfar_SomeoneElsesControl_IsNamed()
+    {
+        var viewModel = await ConnectedAsync(TerminalClientKind.Remote);
+        var other = new TerminalClientView(Guid.NewGuid(), TerminalClientKind.Remote, "Desktop do escritório", DateTimeOffset.UnixEpoch);
+        Channel.Send(new TerminalStateMessage(RemoteStatus(Guid.NewGuid(), new TerminalLease(other.Id, other.Kind, other.Label, other.AttachedAt), other)));
+        await WaitUntil(() => viewModel.Status is not null);
+
+        viewModel.LeaseText.Should().Be("Desktop do escritório está com o controle. Assumir passa a vez para cá.");
+        viewModel.OthersText.Should().Contain("Desktop do escritório, de longe");
+    }
+
+    /// <summary>O bypass é aceito com aviso (ADR-099): assumir pergunta antes, e "não" deixa só olhando.</summary>
+    [Fact]
+    public async Task FromAfar_TakingASessionWithoutApprovals_AsksFirst()
+    {
+        _confirmations.Answer = false;
+        var viewModel = await ConnectedAsync(TerminalClientKind.Remote);
+        Channel.Send(new TerminalStateMessage(RemoteStatus(Guid.NewGuid(), lease: null) with { PermissionsBypassed = true }));
+        await WaitUntil(() => viewModel.Status is not null);
+
+        viewModel.BypassWarning.Should().NotBeNull();
+        await viewModel.TakeControlCommand.ExecuteAsync(null);
+        Drain();
+
+        _confirmations.LastAsked!.Headline.Should().Contain("sem as aprovações");
+        Sent<TerminalTakeControl>().Should().BeEmpty();
+
+        _confirmations.Answer = true;
+        await viewModel.TakeControlCommand.ExecuteAsync(null);
+        Drain();
+        Sent<TerminalTakeControl>().Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task HereInTheApp_ThereIsNoTakingControl_TheKeysTakeIt()
+    {
+        var viewModel = await ConnectedAsync();
+        Channel.Send(new TerminalStateMessage(FakeTerminalChannel.Status()));
+        await WaitUntil(() => viewModel.Status is not null);
+
+        viewModel.IsRemote.Should().BeFalse();
+        viewModel.CanTakeControlNow.Should().BeFalse();
+        viewModel.IsReadOnly.Should().BeFalse();
+    }
+
+    private static TerminalSessionStatus RemoteStatus(Guid you, TerminalLease? lease, params TerminalClientView[] others) =>
+        FakeTerminalChannel.Status(lease: lease, clients: [new TerminalClientView(you, TerminalClientKind.Remote, "Notebook", DateTimeOffset.UnixEpoch), .. others])
+            with { WorkingDirectory = string.Empty, YourClientId = you };
+
+    private TerminalSessionViewModel Create(TerminalClientKind kind = TerminalClientKind.Embedded)
     {
         _viewModel = new TerminalSessionViewModel(
             Guid.NewGuid(),
             "Claude Code · eco",
-            TerminalClientKind.Embedded,
+            kind,
             (size, _) =>
             {
                 if (_connectFailure is { } failure)
@@ -290,9 +380,9 @@ public sealed class TerminalSessionViewModelTests : IAsyncDisposable
         return _viewModel;
     }
 
-    private async Task<TerminalSessionViewModel> ConnectedAsync()
+    private async Task<TerminalSessionViewModel> ConnectedAsync(TerminalClientKind kind = TerminalClientKind.Embedded)
     {
-        var viewModel = Create();
+        var viewModel = Create(kind);
         await viewModel.ConnectAsync();
         return viewModel;
     }

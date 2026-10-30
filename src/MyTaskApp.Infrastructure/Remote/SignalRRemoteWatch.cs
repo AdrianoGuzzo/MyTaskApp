@@ -100,6 +100,7 @@ internal sealed class SignalRRemoteWatch(
         connection.On<Guid, Guid>(RemoteHubMessages.ApprovalRequested, (_, operationId) => Notify(RemoteNoticeKind.Approval, operationId));
         connection.On<Guid, Guid>(RemoteHubMessages.ApprovalResolved, (_, operationId) => Notify(RemoteNoticeKind.Approval, operationId));
         connection.On<Guid, long>(RemoteHubMessages.SessionChanged, (id, _) => Notify(RemoteNoticeKind.Session, id));
+        connection.On<Guid>(RemoteHubMessages.TerminalsChanged, deviceId => Notify(RemoteNoticeKind.Terminals, deviceId));
 
         // Religou: os avisos do intervalo se perderam; as telas releem do cursor delas.
         connection.Reconnected += _ =>

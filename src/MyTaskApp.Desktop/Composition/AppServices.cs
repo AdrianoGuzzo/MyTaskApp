@@ -268,6 +268,9 @@ internal static class AppServices
             .AddAgentTerminalClient(configuration)
             .AddSingleton<EmbeddedTerminalWindows>()
             .AddSingleton<IEmbeddedTerminalPresenter>(provider => provider.GetRequiredService<EmbeddedTerminalWindows>())
+
+            // E os terminais de outras máquinas (ADR-099), pelo relay do servidor.
+            .AddSingleton<RemoteTerminalWindows>()
             .AddSingleton<LocalPeerAttentionRelay>()
             .AddAgentAutostart()
             .AddApplication(configuration)

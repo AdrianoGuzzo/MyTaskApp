@@ -53,7 +53,9 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsConnected), nameof(IsDisconnected), nameof(IsReadOnly), nameof(StatusText))]
-    [NotifyCanExecuteChangedFor(nameof(ReconnectCommand), nameof(InterruptCommand), nameof(AllowCommand), nameof(DenyCommand), nameof(StopCommand), nameof(ForceStopCommand))]
+    [NotifyCanExecuteChangedFor(
+        nameof(ReconnectCommand), nameof(InterruptCommand), nameof(AllowCommand), nameof(DenyCommand), nameof(StopCommand), nameof(ForceStopCommand),
+        nameof(TakeControlCommand), nameof(ReleaseControlCommand))]
     private TerminalConnection _connection = TerminalConnection.Connecting;
 
     [ObservableProperty]
@@ -66,8 +68,11 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
     [ObservableProperty]
     [NotifyPropertyChangedFor(
         nameof(IsRunning), nameof(IsReadOnly), nameof(StatusText), nameof(DialogText), nameof(CanAnswerDialog),
-        nameof(BypassWarning), nameof(MonitoringWarning), nameof(LeaseText), nameof(OthersText), nameof(ProcessText))]
-    [NotifyCanExecuteChangedFor(nameof(InterruptCommand), nameof(AllowCommand), nameof(DenyCommand), nameof(StopCommand), nameof(ForceStopCommand))]
+        nameof(BypassWarning), nameof(MonitoringWarning), nameof(LeaseText), nameof(OthersText), nameof(ProcessText),
+        nameof(HasControl), nameof(CanTakeControlNow), nameof(CanReleaseControlNow))]
+    [NotifyCanExecuteChangedFor(
+        nameof(InterruptCommand), nameof(AllowCommand), nameof(DenyCommand), nameof(StopCommand), nameof(ForceStopCommand),
+        nameof(TakeControlCommand), nameof(ReleaseControlCommand))]
     private TerminalSessionStatus? _status;
 
     /// <summary>Um recado curto do agente ou desta vista: uma recusa, o controle que voltou.</summary>
@@ -109,8 +114,21 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
 
     public bool IsRunning => Status?.IsRunning == true;
 
-    /// <summary>Sem ligação, ou a sessão terminou: a tela fica, as teclas não saem.</summary>
-    public bool IsReadOnly => !IsConnected || Status is { IsRunning: false };
+    /// <summary>
+    /// Sem ligação, ou a sessão terminou: a tela fica, as teclas não saem. De
+    /// longe, também sem a vez (ADR-099): ela é pedida, não tomada digitando.
+    /// </summary>
+    public bool IsReadOnly => !IsConnected || Status is { IsRunning: false } || (IsRemote && !HasControl);
+
+    /// <summary>A vista de quem controla de outra máquina: assume e solta a vez pelos botões.</summary>
+    public bool IsRemote => _kind == TerminalClientKind.Remote;
+
+    /// <summary>Esta vista tem a vez de digitar.</summary>
+    public bool HasControl => Status is { Lease: { } lease, YourClientId: { } you } && lease.ClientId == you;
+
+    public bool CanTakeControlNow => IsRemote && IsConnected && IsRunning && !HasControl;
+
+    public bool CanReleaseControlNow => IsRemote && IsConnected && HasControl;
 
     public bool CanForceStop => _confirmations is not null;
 
@@ -145,16 +163,25 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
         ? "Sem acompanhamento: o MyTaskApp não sabe se o Claude trabalha ou espera. Só o teclado vale."
         : null;
 
-    public string? LeaseText => Status?.Lease is { Kind: TerminalClientKind.Remote } lease
-        ? $"Controlado de longe por {lease.Label}. Digitar aqui toma o controle de volta."
-        : null;
+    public string? LeaseText => IsRemote
+        ? Status switch
+        {
+            null or { IsRunning: false } => null,
+            _ when HasControl => "Você está com o controle: o que digitar aqui vai para o Claude de lá. Quem está na máquina pode tomar de volta digitando.",
+            { Lease: { } holder } => $"{holder.Label} está com o controle. Assumir passa a vez para cá.",
+            _ => "Só olhando. Assuma o controle para digitar.",
+        }
+        : Status?.Lease is { Kind: TerminalClientKind.Remote } lease
+            ? $"Controlado de longe por {lease.Label}. Digitar aqui toma o controle de volta."
+            : null;
 
     public string? OthersText
     {
         get
         {
+            // De longe, a vista sabe quem é; as outras se reconhecem pelo tipo.
             var others = Status?.Clients
-                .Where(client => client.Kind != _kind)
+                .Where(client => Status.YourClientId is { } you ? client.Id != you : client.Kind != _kind)
                 .Select(client => client.Kind switch
                 {
                     TerminalClientKind.NativeWindow => "a janela do terminal",
@@ -169,8 +196,11 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
         }
     }
 
+    /// <summary>De longe, a pasta não vem: o caminho é da outra máquina.</summary>
     public string? ProcessText => Status is { } status
-        ? $"PID {status.ProcessId} · {status.Size.Columns}×{status.Size.Rows} · {status.WorkingDirectory}"
+        ? status.WorkingDirectory is { Length: > 0 } directory
+            ? $"PID {status.ProcessId} · {status.Size.Columns}×{status.Size.Rows} · {directory}"
+            : $"PID {status.ProcessId} · {status.Size.Columns}×{status.Size.Rows}"
         : null;
 
     /// <summary>Liga (ou religa) à sessão. Falhar não lança: a vista mostra o motivo e "Reconectar".</summary>
@@ -227,6 +257,32 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
 
     [RelayCommand(CanExecute = nameof(IsDisconnected))]
     private Task ReconnectAsync() => ConnectAsync();
+
+    /// <summary>
+    /// Pede a vez de digitar. Numa sessão sem as aprovações do Claude Code, pergunta
+    /// antes: o que for digitado roda lá sem nenhuma confirmação.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanTakeControlNow))]
+    private async Task TakeControlAsync()
+    {
+        if (Status?.PermissionsBypassed == true && _confirmations is not null)
+        {
+            var confirmed = await _confirmations.AskAsync(new ConfirmationRequest(
+                "Assumir uma sessão sem as aprovações do Claude Code?",
+                "Esta sessão foi aberta sem as aprovações: o que você pedir daqui roda na outra máquina sem perguntar antes. O MyTaskApp não muda isso.",
+                "Assumir o controle"));
+
+            if (!confirmed)
+            {
+                return;
+            }
+        }
+
+        await SendAsync(new TerminalTakeControl());
+    }
+
+    [RelayCommand(CanExecute = nameof(CanReleaseControlNow))]
+    private Task ReleaseControlAsync() => SendAsync(new TerminalReleaseControl());
 
     private bool CanInterrupt => IsConnected && Status is { IsRunning: true, Activity: AgentActivity.Working, Dialog: null };
 

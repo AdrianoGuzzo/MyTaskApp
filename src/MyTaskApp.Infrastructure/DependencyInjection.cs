@@ -405,6 +405,9 @@ public static class DependencyInjection
 
         // Os avisos da conta para as telas de controle (ADR-094): ligam só com uma tela aberta.
         services.AddSingleton<IRemoteWatch, SignalRRemoteWatch>();
+
+        // Seguir o terminal de outra máquina (ADR-099): uma conexão do hub por vista.
+        services.AddSingleton<IRemoteTerminalWires, SignalRRemoteTerminalWires>();
         services.AddSingleton<ISyncServerAddress, SyncServerAddress>();
         services.AddSingleton<ISyncServerProbe, SyncServerProbe>();
     }

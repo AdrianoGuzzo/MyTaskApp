@@ -104,7 +104,8 @@ public sealed record MachineView(
     DateTimeOffset? LastSeenAt,
     bool AcceptsControl,
     string? KeyFingerprint,
-    IReadOnlyList<string> Tools);
+    IReadOnlyList<string> Tools,
+    bool OffersTerminal = false);
 
 public sealed record TrustedControllerView(Guid Id, Guid ControllerDeviceId, string Nickname, string Fingerprint, DateTimeOffset ApprovedAt);
 
@@ -174,7 +175,8 @@ public sealed class GetMachinesHandler(
             device.LastHeartbeatAt,
             device.Roles.HasFlag(DeviceRoles.Executor),
             device.KeyFingerprint,
-            device.Capabilities is { } capabilities ? Tools(capabilities) : []);
+            device.Capabilities is { } capabilities ? Tools(capabilities) : [],
+            device.Capabilities?.Operations.Contains(RemoteOperationKinds.TerminalAttach) == true);
 
     private static List<string> Tools(DeviceCapabilities capabilities) =>
         [

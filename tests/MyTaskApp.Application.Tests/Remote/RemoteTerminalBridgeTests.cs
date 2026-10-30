@@ -239,6 +239,35 @@ public sealed class RemoteTerminalBridgeTests : IAsyncDisposable
         pieces.Zip(pieces.Skip(1)).Should().AllSatisfy(pair => pair.Second.Offset.Should().Be(pair.First.Offset + pair.First.Data!.Length));
     }
 
+    /// <summary>O retrato passa de um pedaço: só o primeiro recomeça a tela, todos levam o deslocamento dele, e só o último fecha.</summary>
+    [Fact]
+    public async Task ABigSnapshot_GoesInPieces_AllAtTheSnapshotsOffset()
+    {
+        // Cor a cada letra: o retrato da tela e do histórico passa de 32 KiB.
+        var line = string.Concat(Enumerable.Range(0, 40).Select(index => $"\u001b[3{(index % 6) + 1}m{(char)('a' + (index % 26))}")) + "\r\n";
+
+        for (var row = 0; row < 400; row++)
+        {
+            _pty.Print(line);
+        }
+
+        _pty.Print("fim\r\n");
+        var first = await OpenAsync();
+        await _link.WaitAsync(this, first, all => Text(all).Contains("fim", StringComparison.Ordinal));
+
+        var second = await OpenAsync();
+        var output = (await _link.WaitAsync(this, second, all => all.Any(frame => frame is { Kind: RemoteTerminalFrameKinds.Output, More: false })))
+            .Where(frame => frame.Kind == RemoteTerminalFrameKinds.Output)
+            .ToList();
+        var snapshot = output.Take(output.FindIndex(frame => !frame.More) + 1).ToList();
+
+        snapshot.Count.Should().BeGreaterThan(1);
+        snapshot.Select(frame => frame.Reset).Should().Equal([true, .. Enumerable.Repeat(false, snapshot.Count - 1)]);
+        snapshot.Should().AllSatisfy(frame => frame.Data!.Length.Should().BeLessThanOrEqualTo(RemoteLimits.MaxTerminalFrameData));
+        snapshot.Select(frame => frame.Offset).Distinct().Should().ContainSingle();
+        snapshot.Select(frame => frame.More).Should().Equal([.. Enumerable.Repeat(true, snapshot.Count - 1), false]);
+    }
+
     [Fact]
     public async Task AnotherSessionOrEnvironment_IsNotAConnection()
     {

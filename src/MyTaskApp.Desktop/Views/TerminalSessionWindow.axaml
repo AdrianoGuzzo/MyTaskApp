@@ -38,6 +38,12 @@
         <TextBlock Classes="meta" Text="{Binding ProcessText}" IsVisible="{Binding ProcessText, Converter={x:Static ObjectConverters.IsNotNull}}" />
       </StackPanel>
       <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Top">
+        <!-- De longe (ADR-099), a vez de digitar é pedida: sem ela, a tela só mostra. -->
+        <Button x:Name="TakeControlButton" Classes="accent" Content="Assumir o controle" Command="{Binding TakeControlCommand}"
+                IsVisible="{Binding CanTakeControlNow}"
+                ToolTip.Tip="Passa a vez de digitar para cá. Quem está na máquina pode tomar de volta digitando." />
+        <Button x:Name="ReleaseControlButton" Content="Soltar o controle" Command="{Binding ReleaseControlCommand}"
+                IsVisible="{Binding CanReleaseControlNow}" />
         <Button x:Name="InterruptButton" Content="Interromper (Esc)" Command="{Binding InterruptCommand}"
                 ToolTip.Tip="O Esc do Claude: para o que ele está fazendo, a conversa fica." />
         <Button x:Name="StopButton" Content="Encerrar" Command="{Binding StopCommand}"

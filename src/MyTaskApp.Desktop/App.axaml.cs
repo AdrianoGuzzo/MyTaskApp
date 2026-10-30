@@ -427,6 +427,15 @@ public sealed partial class App : Avalonia.Application
             window.Show();
         };
 
+        // O terminal de outra máquina (ADR-099): fechar a janela desliga a conexão; o Claude segue lá.
+        var remoteTerminals = services.GetRequiredService<RemoteTerminalWindows>();
+        remoteTerminals.Opened += (_, view) =>
+        {
+            var window = new TerminalSessionWindow(view);
+            window.Closed += (_, _) => _ = remoteTerminals.ClosedAsync(view);
+            window.Show();
+        };
+
         services.GetRequiredService<RemoteSessionAnnouncer>().Start();
     }
 
