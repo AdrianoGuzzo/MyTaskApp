@@ -119,7 +119,8 @@ public sealed class RemoteOperationRulesTests
         RemoteOperationKinds.All.Should().BeEquivalentTo(
             RemoteOperationKinds.EnvironmentInspect, RemoteOperationKinds.WorktreeProvision, RemoteOperationKinds.WorktreeRemove,
             RemoteOperationKinds.CommandRun, RemoteOperationKinds.AgentStart, RemoteOperationKinds.AgentPrompt,
-            RemoteOperationKinds.AgentStop, RemoteOperationKinds.DatabaseCopy);
+            RemoteOperationKinds.AgentStop, RemoteOperationKinds.DatabaseCopy,
+            RemoteOperationKinds.TerminalStart, RemoteOperationKinds.TerminalAttach, RemoteOperationKinds.TerminalStop);
 
         RemoteOperationKinds.All.Should().OnlyContain(kind => RemoteOperationKinds.PayloadTypeOf(kind) != null);
         RemoteOperationKinds.IsKnown(null).Should().BeFalse();

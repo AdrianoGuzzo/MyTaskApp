@@ -22,6 +22,9 @@ public static class RemoteJws
     /// <summary>Uma <see cref="ApprovalResponse"/>.</summary>
     public const string ApprovalType = "mytaskapp-approval+jws";
 
+    /// <summary>Um <see cref="RemoteTerminalInput"/>, assinado pela chave da conexão, nunca pela do aparelho (ADR-099).</summary>
+    public const string TerminalInputType = "mytaskapp-terminal-input+jws";
+
     /// <summary>Teto do envelope: o maior pedido (um prompt de 8000 caracteres) fica muito abaixo.</summary>
     public const int MaxLength = 64 * 1024;
 

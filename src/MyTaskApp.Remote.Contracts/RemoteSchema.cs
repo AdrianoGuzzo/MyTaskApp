@@ -62,6 +62,12 @@ public static class RemoteRoutes
     /// <summary><c>GET</c> (<c>?deviceId=&amp;openOnly=&amp;limit=</c>): as conversas da conta e os agentes delas.</summary>
     public const string Sessions = Prefix + "/sessions";
 
+    /// <summary>O agente relata as sessões do terminal dele (ADR-099).</summary>
+    public const string AgentTerminals = Prefix + "/agent/terminals";
+
+    /// <summary>As sessões do terminal da conta, para quem controla.</summary>
+    public const string Terminals = Prefix + "/terminals";
+
     /// <summary><c>GET</c>: uma conversa e as operações dela.</summary>
     public static string Session(Guid sessionId) => $"{Sessions}/{sessionId:D}";
 
