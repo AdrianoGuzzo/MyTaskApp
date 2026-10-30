@@ -7,13 +7,30 @@ using MyTaskApp.Sync.Contracts;
 namespace MyTaskApp.Server.Api;
 
 /// <summary>
-/// O hub da orquestração (fase 2, T-13; ADR-086): só campainha. Cada conexão
-/// entra no grupo da máquina e no da conta, e o cliente não tem método a
-/// chamar; o estado é todo do REST. A autorização é a da API remota, com o
-/// dispositivo não revogado (<see cref="ServerSetup.RemoteHubPolicy"/>).
+/// O hub da orquestração (fase 2, T-13; ADR-086): campainha. Cada conexão
+/// entra no grupo da máquina e no da conta, e o estado é todo do REST. Os
+/// únicos métodos são os do terminal remoto (ADR-099), que só repassam. A
+/// autorização é a da API remota, com o dispositivo não revogado
+/// (<see cref="ServerSetup.RemoteHubPolicy"/>).
 /// </summary>
-internal sealed class RemoteHub(RemoteConnections connections) : Hub
+internal sealed class RemoteHub(RemoteConnections connections, RemoteTerminalUseCases terminals, RemoteTerminalRelay relay) : Hub
 {
+    [HubMethodName(RemoteHubMethods.TerminalSubscribe)]
+    public Task TerminalSubscribe(Guid attachId) =>
+        RelayAsync(() => terminals.SubscribeAsync(Caller, Context.ConnectionId, attachId, Context.ConnectionAborted));
+
+    [HubMethodName(RemoteHubMethods.TerminalSend)]
+    public Task TerminalSend(Guid attachId, SignedEnvelope input) =>
+        RelayAsync(() => terminals.SendAsync(Caller, attachId, input, Context.ConnectionAborted));
+
+    [HubMethodName(RemoteHubMethods.TerminalPublish)]
+    public Task TerminalPublish(RemoteTerminalFrame frame) =>
+        RelayAsync(() => terminals.PublishAsync(Caller, Context.ConnectionId, frame, Context.ConnectionAborted));
+
+    [HubMethodName(RemoteHubMethods.TerminalClose)]
+    public Task TerminalClose(Guid attachId, string? reason) =>
+        RelayAsync(() => terminals.CloseAsync(Caller, attachId, reason, Context.ConnectionAborted));
+
     public override async Task OnConnectedAsync()
     {
         var caller = SyncApiEndpoints.Caller(Context.User!);
@@ -27,7 +44,66 @@ internal sealed class RemoteHub(RemoteConnections connections) : Hub
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
         connections.Remove(Context.ConnectionId);
+        await relay.DisconnectedAsync(Context.ConnectionId);
         await base.OnDisconnectedAsync(exception);
+    }
+
+    private SyncCaller Caller => SyncApiEndpoints.Caller(Context.User!);
+
+    /// <summary>A recusa do caso de uso chega ao cliente em palavras; o resto, como erro genérico do hub.</summary>
+    private static async Task RelayAsync(Func<Task> call)
+    {
+        try
+        {
+            await call();
+        }
+        catch (SyncServerException exception)
+        {
+            throw new HubException(exception.Message);
+        }
+    }
+}
+
+/// <summary>Uma mensagem do relay para a conexão de quem segue o terminal.</summary>
+internal sealed class HubRemoteTerminalTransport(IHubContext<RemoteHub> hub) : IRemoteTerminalTransport
+{
+    public Task ToConnectionAsync(string connectionId, string message, object?[] args, CancellationToken cancellationToken) =>
+        hub.Clients.Client(connectionId).SendCoreAsync(message, args, cancellationToken);
+}
+
+/// <summary>
+/// A cota dos métodos do hub, por conexão (ADR-099): o rate limit HTTP só
+/// conta a abertura do WebSocket, e cada lote de teclado é uma chamada.
+/// Passou de <see cref="RemoteLimits.MaxTerminalMessagesPerSecond"/> num
+/// segundo, a chamada é recusada sem chegar ao caso de uso.
+/// </summary>
+internal sealed class TerminalHubFilter(TimeProvider timeProvider) : IHubFilter
+{
+    private const string WindowKey = "terminal-window";
+
+    public ValueTask<object?> InvokeMethodAsync(HubInvocationContext invocationContext, Func<HubInvocationContext, ValueTask<object?>> next)
+    {
+        var items = invocationContext.Context.Items;
+        var now = timeProvider.GetUtcNow();
+        var window = items.TryGetValue(WindowKey, out var value) && value is CallWindow open && now - open.StartedAt < TimeSpan.FromSeconds(1)
+            ? open
+            : new CallWindow(now);
+
+        items[WindowKey] = window;
+
+        if (++window.Calls > RemoteLimits.MaxTerminalMessagesPerSecond)
+        {
+            throw new HubException("Mensagens demais para o terminal. Espere um pouco.");
+        }
+
+        return next(invocationContext);
+    }
+
+    private sealed class CallWindow(DateTimeOffset startedAt)
+    {
+        public DateTimeOffset StartedAt { get; } = startedAt;
+
+        public int Calls { get; set; }
     }
 }
 

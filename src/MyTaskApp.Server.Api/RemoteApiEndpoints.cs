@@ -69,6 +69,16 @@ internal static class RemoteApiEndpoints
         remote.MapGet("/sessions/{sessionId:guid}", async (Guid sessionId, ClaimsPrincipal user, RemoteAgentSessionUseCases useCases, CancellationToken cancellationToken) =>
             Json(await useCases.GetAsync(SyncApiEndpoints.Caller(user), sessionId, cancellationToken)));
 
+        // O terminal remoto (ADR-099): o agente relata as sessões dele, e a conta lê. A saída passa pelo hub.
+        remote.MapPut("/agent/terminals", async (HttpRequest request, ClaimsPrincipal user, RemoteTerminalUseCases useCases, CancellationToken cancellationToken) =>
+        {
+            await useCases.ReportAsync(SyncApiEndpoints.Caller(user), await ReadAsync<RemoteTerminalSessionBatch>(request, cancellationToken), cancellationToken);
+            return Results.NoContent();
+        });
+
+        remote.MapGet("/terminals", (ClaimsPrincipal user, RemoteTerminalUseCases useCases) =>
+            Json(useCases.List(SyncApiEndpoints.Caller(user))));
+
         remote.MapPost("/operations/{operationId:guid}/status", async (Guid operationId, HttpRequest request, ClaimsPrincipal user, RemoteOperationUseCases useCases, CancellationToken cancellationToken) =>
             Json(await useCases.UpdateStatusAsync(SyncApiEndpoints.Caller(user), operationId, await ReadAsync<OperationStatusUpdate>(request, cancellationToken), cancellationToken)));
 

@@ -188,7 +188,11 @@ internal sealed class HubInbox : IAsyncDisposable
     {
         _connection = connection;
 
-        foreach (var message in new[] { RemoteHubMessages.OperationAvailable, RemoteHubMessages.CancelRequested, RemoteHubMessages.PairingRequested, RemoteHubMessages.PairingApproved })
+        foreach (var message in new[]
+        {
+            RemoteHubMessages.OperationAvailable, RemoteHubMessages.CancelRequested, RemoteHubMessages.PairingRequested, RemoteHubMessages.PairingApproved,
+            RemoteHubMessages.TerminalsChanged, RemoteHubMessages.TerminalDetached, RemoteHubMessages.TerminalGap,
+        })
         {
             connection.On<Guid>(message, id => _received.Enqueue((message, [id])));
         }
@@ -201,6 +205,9 @@ internal sealed class HubInbox : IAsyncDisposable
         connection.On<Guid, RemoteOperationStatus>(RemoteHubMessages.OperationChanged, (id, status) => _received.Enqueue((RemoteHubMessages.OperationChanged, [id, status])));
         connection.On<Guid, long>(RemoteHubMessages.EventsAppended, (id, seq) => _received.Enqueue((RemoteHubMessages.EventsAppended, [id, seq])));
         connection.On<Guid, long>(RemoteHubMessages.SessionChanged, (id, version) => _received.Enqueue((RemoteHubMessages.SessionChanged, [id, version])));
+        connection.On<RemoteTerminalFrame>(RemoteHubMessages.TerminalFrame, frame => _received.Enqueue((RemoteHubMessages.TerminalFrame, [frame])));
+        connection.On<Guid, SignedEnvelope>(RemoteHubMessages.TerminalInput, (id, input) => _received.Enqueue((RemoteHubMessages.TerminalInput, [id, input])));
+        connection.On<Guid, string>(RemoteHubMessages.TerminalClosed, (id, reason) => _received.Enqueue((RemoteHubMessages.TerminalClosed, [id, reason])));
         connection.Closed += _ =>
         {
             _closed.TrySetResult();
@@ -209,6 +216,27 @@ internal sealed class HubInbox : IAsyncDisposable
     }
 
     public IReadOnlyList<(string Message, object?[] Args)> Received => [.. _received];
+
+    /// <summary>A conexão, para chamar os métodos do terminal (ADR-099).</summary>
+    public HubConnection Connection => _connection;
+
+    /// <summary>Espera até chegar o que a condição pede; devolve tudo o que chegou.</summary>
+    public async Task<IReadOnlyList<(string Message, object?[] Args)>> WaitUntilAsync(Func<IReadOnlyList<(string Message, object?[] Args)>, bool> done)
+    {
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(10);
+
+        while (!done(Received))
+        {
+            if (DateTimeOffset.UtcNow > deadline)
+            {
+                Assert.Fail($"Não chegou o esperado. Chegou: {string.Join("; ", _received.Select(item => item.Message))}");
+            }
+
+            await Task.Delay(20, TestContext.Current.CancellationToken);
+        }
+
+        return Received;
+    }
 
     /// <summary>A conexão caiu (o servidor fechou).</summary>
     public Task Closed => _closed.Task;

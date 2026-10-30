@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using MyTaskApp.Remote.Contracts;
 using MyTaskApp.Server.Application;
@@ -72,9 +73,17 @@ public static class ServerSetup
         services.AddScoped<DeviceGate>();
 
         // O hub da orquestração (ADR-086): os avisos com o mesmo JSON da API remota.
-        services.AddSignalR().AddJsonProtocol(json => RemoteJson.Configure(json.PayloadSerializerOptions));
+        // O terminal remoto (ADR-099) chama o hub: mensagem com teto e cota por conexão.
+        services.AddSignalR(hub =>
+            {
+                hub.MaximumReceiveMessageSize = RemoteLimits.MaxTerminalMessageLength;
+                hub.AddFilter<TerminalHubFilter>();
+            })
+            .AddJsonProtocol(json => RemoteJson.Configure(json.PayloadSerializerOptions));
         services.AddSingleton<RemoteConnections>();
         services.AddSingleton<IRemoteNotifier, HubRemoteNotifier>();
+        services.AddSingleton<IRemoteTerminalTransport, HubRemoteTerminalTransport>();
+        services.AddSingleton<TerminalHubFilter>();
         services.AddHostedService<PublicClientSeeder>();
         services.AddHostedService<ProcessedOperationsPruner>();
         services.AddHostedService<RemoteOperationSweeper>();

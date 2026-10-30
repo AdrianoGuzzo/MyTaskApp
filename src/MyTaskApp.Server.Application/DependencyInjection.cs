@@ -22,6 +22,12 @@ public static class DependencyInjection
         services.AddScoped<RemoteCatalogUseCases>();
         services.AddScoped<RemoteAgentSessionUseCases>();
 
+        // O terminal remoto (ADR-099): o relay e o relato das sessões vivem na memória desta instância.
+        services.TryAddSingleton<IRemoteTerminalTransport>(NullRemoteTerminalTransport.Instance);
+        services.AddSingleton<RemoteTerminalRelay>();
+        services.AddSingleton<RemoteTerminalDirectory>();
+        services.AddScoped<RemoteTerminalUseCases>();
+
         return services;
     }
 }
