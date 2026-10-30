@@ -125,6 +125,53 @@ public class MachinesViewModelTests
         _runner.Invoked.Should().Contain(typeof(RegisterThisMachineHandler), "os papéis mudaram, e o registro não espera o minuto");
     }
 
+    /// <summary>O terminal remoto (ADR-099) vale um shell daqui: pergunta antes, e ligar liga o controle junto.</summary>
+    [AvaloniaFact]
+    public async Task AcceptingTheTerminal_AsksFirst_AndTurnsControlOnWithIt()
+    {
+        var viewModel = ViewModel();
+        await viewModel.LoadAsync(Ct);
+        Show(View(new RemoteSettings(true, true, AcceptTerminal: true)));
+
+        viewModel.AcceptTerminal = true;
+        await Settled();
+
+        _confirmation.LastAsked!.Headline.Should().Contain("terminal remoto");
+        viewModel.AcceptControl.Should().BeTrue();
+        _settings.Saved.Should().Equal(new RemoteSettings(true, true, AcceptTerminal: true));
+    }
+
+    [AvaloniaFact]
+    public async Task RefusingTheTerminal_LeavesEverythingAsItWas()
+    {
+        _confirmation.Answer = false;
+        var viewModel = ViewModel();
+        await viewModel.LoadAsync(Ct);
+
+        viewModel.AcceptTerminal = true;
+        await Settled();
+
+        viewModel.AcceptTerminal.Should().BeFalse();
+        viewModel.AcceptControl.Should().BeFalse();
+        _settings.Saved.Should().BeEmpty();
+    }
+
+    [AvaloniaFact]
+    public async Task NotAcceptingControl_AlsoTurnsTheTerminalOff()
+    {
+        Show(View(new RemoteSettings(true, true, AcceptTerminal: true)));
+        var viewModel = ViewModel();
+        await viewModel.LoadAsync(Ct);
+        viewModel.AcceptTerminal.Should().BeTrue();
+        Show(View(new RemoteSettings(true, false)));
+
+        viewModel.AcceptControl = false;
+        await Settled();
+
+        viewModel.AcceptTerminal.Should().BeFalse();
+        _settings.Saved.Should().Equal(new RemoteSettings(true, false));
+    }
+
     [AvaloniaFact]
     public async Task TurningTheRemoteOff_AlsoStopsAcceptingControl()
     {

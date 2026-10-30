@@ -5,6 +5,7 @@ using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.DatabaseOperations;
 using MyTaskApp.Application.Development;
 using MyTaskApp.Application.Sync;
+using MyTaskApp.Application.Terminals;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.Remote;
 using MyTaskApp.Remote.Contracts;
@@ -17,7 +18,12 @@ namespace MyTaskApp.Application.Remote;
 /// </summary>
 /// <param name="Enabled">Usar o controle remoto: o login pede o escopo <c>remote</c> e a máquina aparece em "Máquinas".</param>
 /// <param name="AcceptControl">Aceitar ser controlada: a máquina se registra como executora e recebe pedidos de pareamento.</param>
-public sealed record RemoteSettings(bool Enabled, bool AcceptControl)
+/// <param name="AcceptTerminal">
+/// Aceitar o terminal remoto (ADR-099): o controlador pareado vê a sessão do
+/// Claude no terminal do agente e digita nela, como um shell desta máquina.
+/// Exige aceitar controle; começa desligado.
+/// </param>
+public sealed record RemoteSettings(bool Enabled, bool AcceptControl, bool AcceptTerminal = false)
 {
     public static readonly RemoteSettings Off = new(false, false);
 }
@@ -38,9 +44,9 @@ public sealed class GetRemoteSettingsHandler(IRemoteSettingsStore settings)
         settings.GetAsync(cancellationToken);
 }
 
-public sealed record UpdateRemoteSettings(bool Enabled, bool AcceptControl);
+public sealed record UpdateRemoteSettings(bool Enabled, bool AcceptControl, bool AcceptTerminal = false);
 
-/// <summary>Aceitar controle exige o remoto ligado: desligar o remoto desliga os dois.</summary>
+/// <summary>Aceitar controle exige o remoto ligado, e o terminal exige aceitar controle: desligar um desliga os de baixo.</summary>
 public sealed class UpdateRemoteSettingsHandler(
     IRemoteSettingsStore settings,
     IUnitOfWork unitOfWork,
@@ -49,12 +55,13 @@ public sealed class UpdateRemoteSettingsHandler(
 {
     public async Task<RemoteSettings> HandleAsync(UpdateRemoteSettings command, CancellationToken cancellationToken = default)
     {
-        var updated = new RemoteSettings(command.Enabled, command.Enabled && command.AcceptControl);
+        var acceptControl = command.Enabled && command.AcceptControl;
+        var updated = new RemoteSettings(command.Enabled, acceptControl, acceptControl && command.AcceptTerminal);
 
         await settings.SaveAsync(updated, cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        logger.LogInformation("RemoteSettingsUpdated {Enabled} {AcceptControl}", updated.Enabled, updated.AcceptControl);
+        logger.LogInformation("RemoteSettingsUpdated {Enabled} {AcceptControl} {AcceptTerminal}", updated.Enabled, updated.AcceptControl, updated.AcceptTerminal);
 
         // Aceitar pedidos com o desktop fechado é o agente no logon (ADR-085).
         await autostart.ApplyAsync(updated.AcceptControl, cancellationToken);
@@ -294,6 +301,17 @@ public sealed class MachineCapabilities(
 public sealed record RegisterThisMachine;
 
 /// <summary>
+/// Os tipos do terminal remoto (ADR-099) só entram no registro com a chave
+/// ligada e o terminal do agente nesta máquina: é por eles que o controlador
+/// sabe se oferece a lista de terminais.
+/// </summary>
+public static class TerminalKinds
+{
+    public static IReadOnlyList<string> Filter(IReadOnlyList<string> kinds, bool offered) =>
+        offered ? kinds : [.. kinds.Where(kind => !RemoteOperationKinds.Terminal.Contains(kind))];
+}
+
+/// <summary>
 /// Esta máquina se apresenta ao servidor: chave, papéis e ferramentas. É o
 /// sinal de vida que faz ela aparecer ligada nas outras. Com o remoto
 /// desligado, não faz nada.
@@ -308,7 +326,9 @@ public sealed class RegisterThisMachineHandler(
     ITrustedControllerRepository trusted,
     IUnitOfWork unitOfWork,
     TimeProvider timeProvider,
-    ILogger<RegisterThisMachineHandler> logger)
+    ILogger<RegisterThisMachineHandler> logger,
+    ITerminalSessions? terminals = null,
+    IAgentTerminalClient? agentTerminal = null)
 {
     public async Task<RemoteAvailability> HandleAsync(RegisterThisMachine command, CancellationToken cancellationToken = default)
     {
@@ -321,11 +341,16 @@ public sealed class RegisterThisMachineHandler(
 
         // O registro grava as capacidades inteiras, inclusive o hash do catálogo: vai o de agora.
         var catalog = current.AcceptControl ? await catalogs.CurrentAsync(cancellationToken) : null;
+        var detected = await capabilities.GetAsync(cancellationToken);
         var registration = new DeviceRegistration(
             identity.DeviceId,
             current.AcceptControl ? DeviceRoles.Controller | DeviceRoles.Executor : DeviceRoles.Controller,
             await signer.GetPublicKeyAsync(cancellationToken),
-            (await capabilities.GetAsync(cancellationToken)) with { CatalogHash = catalog?.Hash ?? string.Empty });
+            detected with
+            {
+                CatalogHash = catalog?.Hash ?? string.Empty,
+                Operations = TerminalKinds.Filter(detected.Operations, current.AcceptTerminal && HostsTerminal()),
+            });
 
         try
         {
@@ -354,6 +379,12 @@ public sealed class RegisterThisMachineHandler(
     /// servidor que mentisse, porque só se esquece, nunca se confia por ele.
     /// Uma chave nova só volta a valer com um pareamento novo.
     /// </summary>
+    /// <summary>O agente hospeda; o desktop sabe se o agente e a janela estão instalados ao lado. Os dois registram o mesmo.</summary>
+    private bool HostsTerminal() =>
+        terminals is { IsHost: true } host
+            ? host.Support.IsSupported
+            : agentTerminal?.Support.IsSupported ?? false;
+
     private async Task ForgetGoneControllersAsync(CancellationToken cancellationToken)
     {
         var active = await trusted.ListAllActiveAsync(cancellationToken);

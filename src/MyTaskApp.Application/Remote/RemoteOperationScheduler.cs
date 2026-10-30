@@ -81,7 +81,8 @@ public sealed class RemoteOperationScheduler(
     IDeviceIdentity identity,
     TimeProvider timeProvider,
     ILogger<RemoteOperationScheduler> logger,
-    RemoteSessionPublisher? sessions = null) : IAsyncDisposable, IDisposable
+    RemoteSessionPublisher? sessions = null,
+    RemoteTerminalReporter? terminals = null) : IAsyncDisposable, IDisposable
 {
     /// <summary>O código que a sincronização mostra quando o banco veio de outro computador.</summary>
     public const string DeviceChangedCode = "device_changed";
@@ -190,6 +191,7 @@ public sealed class RemoteOperationScheduler(
 
             await dispatcher.PollAsync(cancellationToken);
             await PublishSessionsAsync(cancellationToken);
+            await PublishTerminalsAsync(cancellationToken);
         }
         catch (SyncApiException exception) when (exception.Kind == SyncFailureKind.DeviceRevoked)
         {
@@ -219,6 +221,24 @@ public sealed class RemoteOperationScheduler(
         catch (SyncApiException exception) when (exception.Kind != SyncFailureKind.DeviceRevoked)
         {
             logger.LogWarning("RemoteSessionsReportFailed {Kind} {Code}", exception.Kind, exception.Code);
+        }
+    }
+
+    /// <summary>As sessões do terminal do agente (ADR-099). Como as conversas: falhar não para a fila.</summary>
+    private async Task PublishTerminalsAsync(CancellationToken cancellationToken)
+    {
+        if (terminals is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await terminals.PublishAsync(cancellationToken);
+        }
+        catch (SyncApiException exception) when (exception.Kind != SyncFailureKind.DeviceRevoked)
+        {
+            logger.LogWarning("RemoteTerminalsReportFailed {Kind} {Code}", exception.Kind, exception.Code);
         }
     }
 

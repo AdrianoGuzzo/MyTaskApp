@@ -150,7 +150,7 @@ public sealed class RemoteTerminalRelayTests(PostgresFixture postgres) : IAsyncL
 
         using (var response = await PutAsync(notebook, new RemoteTerminalSessionBatch([session])))
         {
-            response.StatusCode.Should().Be(System.Net.HttpStatusCode.NoContent);
+            response.StatusCode.Should().Be(System.Net.HttpStatusCode.OK);
         }
 
         await controller.ExpectAsync(RemoteHubMessages.TerminalsChanged, notebook.DeviceId);

@@ -299,6 +299,15 @@ public static class DependencyInjection
 
         // A cópia de banco de longe (T-32, ADR-090): o mesmo caso de uso da tela.
         services.AddSingleton<IRemoteOperationExecutor, DatabaseCopyExecutor>();
+
+        // O terminal remoto (ADR-099): só o agente hospeda; fora dele, os executores recusam.
+        services.AddSingleton<IRemoteOperationExecutor, TerminalStartExecutor>();
+        services.AddSingleton<IRemoteOperationExecutor, TerminalAttachExecutor>();
+        services.AddSingleton<IRemoteOperationExecutor, TerminalStopExecutor>();
+        services.TryAddSingleton<IRemoteTerminalLink>(NoRemoteTerminalLink.Instance);
+        services.TryAddSingleton<RemoteTerminalBridge>();
+        services.TryAddSingleton<RemoteTerminalReporter>();
+        services.AddScoped<CheckRemoteTerminalAccessHandler>();
         services.AddSingleton<RemoteDatabaseCopy>();
         services.AddScoped<RemoteDatabaseCopyPlanner>();
         services.AddScoped<RecordRemoteOperationHandler>();
@@ -311,6 +320,9 @@ public static class DependencyInjection
             RemoteOperationKinds.AgentPrompt,
             RemoteOperationKinds.AgentStop,
             RemoteOperationKinds.DatabaseCopy,
+            RemoteOperationKinds.TerminalStart,
+            RemoteOperationKinds.TerminalAttach,
+            RemoteOperationKinds.TerminalStop,
         ]));
         services.AddScoped<ConsultationLauncher>();
         services.AddScoped<ConsultationTargetResolver>();

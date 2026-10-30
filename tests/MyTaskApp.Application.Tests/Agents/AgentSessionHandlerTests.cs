@@ -890,6 +890,23 @@ public class AgentSessionHandlerTests
         _claude.LastContext.Arguments.Should().Equal("--model", "opus");
     }
 
+    /// <summary>De longe (ADR-099): abre sem prompt, e o texto salvo do ambiente fica como estava.</summary>
+    [Fact]
+    public async Task FromAfar_TheAgentsTerminal_OpensWithoutAPrompt_AndKeepsTheSavedText()
+    {
+        Ready();
+        _terminals = new FakeTerminalSessions(_processes, Now);
+        var developmentId = _task.Developments[0].Id;
+        _task.SetDevelopmentAgentPrompt(developmentId, "Implemente a tarefa");
+
+        await Start().HandleAsync(
+            new StartAgentSession(_task.Id, developmentId, Hosting: AgentHosting.AgentWindow, RemoteOrigin: "Notebook", OmitPrompt: true),
+            Ct);
+
+        _claude.LastContext!.Prompt.Should().BeNull("o texto salvo não roda sozinho quando alguém abre de longe");
+        _task.GetDevelopment(developmentId).AgentPrompt.Should().Be("Implemente a tarefa");
+    }
+
     [Fact]
     public async Task InTheAgentsTerminal_ResumingContinuesTheGivenConversation()
     {

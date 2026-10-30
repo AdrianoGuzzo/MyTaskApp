@@ -127,6 +127,7 @@ public sealed class GetTaskAgentSessionHandler(
 /// em vez de abrir uma nova. Só quando a pessoa pede.
 /// </param>
 /// <param name="RemoteOrigin">O apelido do controlador que pediu de longe (ADR-099).</param>
+/// <param name="OmitPrompt">Abre sem prompt e sem mexer no texto salvo do ambiente: o início de longe (ADR-099).</param>
 public sealed record StartAgentSession(
     Guid TaskId,
     Guid DevelopmentId,
@@ -139,7 +140,8 @@ public sealed record StartAgentSession(
     string? Effort = null,
     AgentHosting Hosting = AgentHosting.Direct,
     string? ResumeConversation = null,
-    string? RemoteOrigin = null);
+    string? RemoteOrigin = null,
+    bool OmitPrompt = false);
 
 /// <summary>
 /// O fluxo da ADR-030: worktree pronto → agente instalado → sessão gravada como
@@ -221,7 +223,10 @@ public sealed class StartAgentSessionHandler(
 
         // O texto vai junto com a sessão, no mesmo SaveChanges: reaparece no
         // "iniciar novamente" e ao reabrir a tarefa.
-        task.SetDevelopmentAgentPrompt(development.Id, command.Prompt);
+        if (!command.OmitPrompt)
+        {
+            task.SetDevelopmentAgentPrompt(development.Id, command.Prompt);
+        }
 
         // A sessão nasce antes do comando: o id dela vai no ambiente do processo.
         var session = hosted
@@ -253,7 +258,7 @@ public sealed class StartAgentSessionHandler(
                 task.Id,
                 development.WorktreePath,
                 arguments,
-                development.AgentPrompt,
+                command.OmitPrompt ? null : development.AgentPrompt,
                 command.RunDirectly,
                 monitoring,
                 hosted ? new AgentCliTerminal(session.ExternalSessionId!, command.ResumeConversation is not null) : null),

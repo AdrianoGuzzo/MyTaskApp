@@ -148,6 +148,9 @@ public sealed record RemoteTerminalSessionReport(
 /// <summary>Todas as sessões do terminal desta máquina de uma vez: a que sumiu do lote acabou.</summary>
 public sealed record RemoteTerminalSessionBatch(IReadOnlyList<RemoteTerminalSessionReport> Sessions);
 
+/// <summary>O servidor guardou o relato: quantas sessões ficaram.</summary>
+public sealed record RemoteTerminalSessionAck(int Sessions);
+
 /// <summary>Uma sessão do terminal como a conta vê: o último relato, de qual máquina e quando chegou.</summary>
 public sealed record RemoteTerminalSessionView(Guid DeviceId, RemoteTerminalSessionReport Session, DateTimeOffset ReportedAt);
 

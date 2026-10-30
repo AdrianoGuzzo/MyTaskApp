@@ -395,9 +395,13 @@ public static class DependencyInjection
         services.AddSingleton<IRemoteApi>(provider => provider.GetRequiredService<RemoteApiClient>());
         services.AddSingleton<IRemoteOperationsApi>(provider => provider.GetRequiredService<RemoteApiClient>());
         services.AddSingleton<IRemoteSessionsApi>(provider => provider.GetRequiredService<RemoteApiClient>());
+        services.AddSingleton<IRemoteTerminalsApi>(provider => provider.GetRequiredService<RemoteApiClient>());
 
         // A campainha do servidor (T-15): só o agente liga, pelo RemoteOperationScheduler.
-        services.AddSingleton<IRemoteHub, SignalRRemoteHub>();
+        // Na mesma conexão vai o terminal remoto (ADR-099), do lado da máquina alvo.
+        services.AddSingleton<SignalRRemoteHub>();
+        services.AddSingleton<IRemoteHub>(provider => provider.GetRequiredService<SignalRRemoteHub>());
+        services.AddSingleton<IRemoteTerminalLink>(provider => provider.GetRequiredService<SignalRRemoteHub>());
 
         // Os avisos da conta para as telas de controle (ADR-094): ligam só com uma tela aberta.
         services.AddSingleton<IRemoteWatch, SignalRRemoteWatch>();

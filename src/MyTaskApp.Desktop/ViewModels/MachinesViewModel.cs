@@ -103,6 +103,9 @@ public sealed partial class MachinesViewModel : ObservableObject
     private bool _acceptControl;
 
     [ObservableProperty]
+    private bool _acceptTerminal;
+
+    [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsReady), nameof(NeedsRemoteLogin), nameof(StateText), nameof(HasProblem))]
     private RemoteAvailability _availability = RemoteAvailability.Off;
 
@@ -226,6 +229,7 @@ public sealed partial class MachinesViewModel : ObservableObject
         {
             _loading = true;
             AcceptControl = false;
+            AcceptTerminal = false;
             _loading = false;
         }
 
@@ -240,8 +244,54 @@ public sealed partial class MachinesViewModel : ObservableObject
         }
     }
 
+    partial void OnAcceptTerminalChanged(bool value)
+    {
+        if (!_loading)
+        {
+            _ = AcceptTerminalAsync(value);
+        }
+    }
+
+    /// <summary>O terminal remoto vale um shell desta máquina: pede confirmação, e liga o controle junto se preciso.</summary>
+    private async Task AcceptTerminalAsync(bool value)
+    {
+        if (value)
+        {
+            var confirmed = await _confirmation.AskAsync(new ConfirmationRequest(
+                "Aceitar o terminal remoto neste computador?",
+                "Os controladores pareados poderão ver o Claude Code que roda no terminal do agente e digitar nele, como se estivessem aqui. "
+                + "Isso inclui rodar comandos no terminal. As aprovações do Claude continuam valendo, a não ser que a sessão tenha sido aberta sem elas.",
+                "Aceitar o terminal"));
+
+            if (!confirmed)
+            {
+                _loading = true;
+                AcceptTerminal = false;
+                _loading = false;
+                return;
+            }
+
+            if (!AcceptControl || !RemoteEnabled)
+            {
+                _loading = true;
+                RemoteEnabled = true;
+                AcceptControl = true;
+                _loading = false;
+            }
+        }
+
+        await SaveSettingsAsync(value ? "Os controladores pareados podem usar o terminal do agente." : "O terminal do agente não aceita mais controle de longe.");
+    }
+
     private async Task AcceptControlAsync(bool value)
     {
+        if (!value && AcceptTerminal)
+        {
+            _loading = true;
+            AcceptTerminal = false;
+            _loading = false;
+        }
+
         if (value)
         {
             var confirmed = await _confirmation.AskAsync(new ConfirmationRequest(
@@ -274,7 +324,7 @@ public sealed partial class MachinesViewModel : ObservableObject
             async () =>
             {
                 await _runner.RunAsync<UpdateRemoteSettingsHandler, RemoteSettings>(
-                    (handler, token) => handler.HandleAsync(new UpdateRemoteSettings(RemoteEnabled, AcceptControl), token),
+                    (handler, token) => handler.HandleAsync(new UpdateRemoteSettings(RemoteEnabled, AcceptControl, AcceptTerminal), token),
                     CancellationToken.None);
 
                 // Os papéis mudaram: registra agora, sem esperar o minuto do sinal de vida.
@@ -419,6 +469,7 @@ public sealed partial class MachinesViewModel : ObservableObject
         {
             RemoteEnabled = view.Settings.Enabled;
             AcceptControl = view.Settings.AcceptControl;
+            AcceptTerminal = view.Settings.AcceptTerminal;
             Problem = view.Problem;
             Availability = view.Availability;
         }

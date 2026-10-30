@@ -94,6 +94,12 @@
                         IsChecked="{Binding AcceptControl}"
                         IsEnabled="{Binding !IsBusy}" />
 
+          <ToggleSwitch x:Name="AcceptTerminalSwitch"
+                        OnContent="Aceitar o terminal remoto (ver e digitar no Claude do terminal do agente)"
+                        OffContent="Aceitar o terminal remoto (ver e digitar no Claude do terminal do agente)"
+                        IsChecked="{Binding AcceptTerminal}"
+                        IsEnabled="{Binding !IsBusy}" />
+
           <TextBlock x:Name="StateText" TextWrapping="Wrap"
                      Classes.caution="{Binding HasProblem}"
                      Text="{Binding StateText}" />

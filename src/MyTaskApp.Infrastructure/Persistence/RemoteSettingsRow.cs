@@ -13,4 +13,7 @@ internal sealed class RemoteSettingsRow
     public bool Enabled { get; set; }
 
     public bool AcceptControl { get; set; }
+
+    /// <summary>O terminal remoto (ADR-099). Coluna nova: as linhas de antes ficam desligadas.</summary>
+    public bool AcceptTerminal { get; set; }
 }

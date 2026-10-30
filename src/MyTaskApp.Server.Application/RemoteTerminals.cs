@@ -78,7 +78,7 @@ public sealed partial class RemoteTerminalUseCases(
     /// O agente da máquina relata todas as sessões do terminal dele: guardadas
     /// em memória, e a conta é avisada se algo mudou.
     /// </summary>
-    public async Task ReportAsync(SyncCaller caller, RemoteTerminalSessionBatch batch, CancellationToken cancellationToken)
+    public async Task<RemoteTerminalSessionAck> ReportAsync(SyncCaller caller, RemoteTerminalSessionBatch batch, CancellationToken cancellationToken)
     {
         Validate(batch);
 
@@ -94,6 +94,8 @@ public sealed partial class RemoteTerminalUseCases(
         {
             await notifier.ToAccountAsync(caller.UserId, RemoteHubMessages.TerminalsChanged, caller.DeviceId);
         }
+
+        return new RemoteTerminalSessionAck(batch.Sessions.Count);
     }
 
     /// <summary>As sessões do terminal da conta, das máquinas que deram notícias há pouco.</summary>

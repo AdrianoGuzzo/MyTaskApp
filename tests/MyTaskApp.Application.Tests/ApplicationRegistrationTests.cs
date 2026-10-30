@@ -104,6 +104,7 @@ public class ApplicationRegistrationTests
             .AddSingleton<MyTaskApp.Application.Remote.IRemoteSettingsStore>(new FakeRemoteSettingsStore())
             .AddSingleton<MyTaskApp.Application.Remote.IRemoteOperationsApi>(new Remote.FakeOperationQueue())
             .AddSingleton(Substitute.For<MyTaskApp.Application.Remote.IRemoteSessionsApi>())
+            .AddSingleton(Substitute.For<MyTaskApp.Application.Remote.IRemoteTerminalsApi>())
             .AddSingleton<MyTaskApp.Application.Remote.IRemoteCatalogQuery>(new Remote.FakeCatalogQuery())
             .AddSingleton<MyTaskApp.Application.Remote.IRemoteOperationJournal>(new Remote.InMemoryRemoteJournal())
             .AddSingleton<MyTaskApp.Application.Remote.IRemoteEntityProbe>(new Remote.FakeEntityProbe())

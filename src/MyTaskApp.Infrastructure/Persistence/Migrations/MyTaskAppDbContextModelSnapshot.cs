@@ -1646,6 +1646,9 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                     b.Property<bool>("AcceptControl")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("AcceptTerminal")
+                        .HasColumnType("INTEGER");
+
                     b.Property<bool>("Enabled")
                         .HasColumnType("INTEGER");
 
