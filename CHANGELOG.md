@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.29.1](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.29.0...v1.29.1) (2026-10-31)
+
+
+### Fixed
+
+* **banco:** ferramenta do PostgreSQL que não inicia não abre janela de erro ([#172](https://github.com/AdrianoGuzzo/MyTaskApp/issues/172)) ([1e958e9](https://github.com/AdrianoGuzzo/MyTaskApp/commit/1e958e902b79e8974cd41111b1b45cba32178f67))
+
 ## [1.29.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.28.0...v1.29.0) (2026-10-29)
 
 
