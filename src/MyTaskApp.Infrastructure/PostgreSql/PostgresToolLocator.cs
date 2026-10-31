@@ -153,6 +153,12 @@ internal sealed class PostgresToolLocator(
             var result = await runner.RunAsync(new ProcessRequest(path, ["--version"], options.VersionTimeout), cancellationToken);
             var text = result.StandardOutput.Trim();
             answer = result.ExitCode == 0 ? (PostgresVersion.TryParse(text), text) : (null, null);
+
+            if (result.ExitCode != 0)
+            {
+                // Ex.: o pg_dump do pgAdmin sem o gssapi64.dll sai com -1073741515 (0xC0000135) e a pasta fica de fora.
+                logger.LogWarning("PostgresToolUnusable {Path} {ExitCode}", path, result.ExitCode);
+            }
         }
         catch (ProcessStartException)
         {

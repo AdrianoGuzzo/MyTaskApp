@@ -178,6 +178,10 @@ não misturar versões:
   14 e o pgAdmin 18 instalados, uma origem 14 usa as ferramentas 14. O
   Diagnóstico de uma conexão mostra as que uma cópia dela usaria.
 
+Um `pg_dump` que nem inicia (falta uma DLL, arquitetura errada) fica de fora,
+sem abrir a janela de erro do Windows; o log registra `PostgresToolUnusable`
+com o caminho e o código de saída.
+
 ### Regras de versão
 
 | Regra | Por quê |
@@ -880,6 +884,7 @@ O número de processos paralelos (`--jobs`) é o número de núcleos, até 4.
 | "password authentication failed" no banco local | O container foi criado com outra senha. Digite a senha certa na conexão ou recrie o banco com `docker rm -f mytaskapp-postgres` + `docker volume rm mytaskapp-postgres-data` (apaga os dados). |
 | "pg_dump … é mais antigo que o servidor de origem" | Instale as ferramentas da versão do servidor (ou mais nova). |
 | `unrecognized configuration parameter "transaction_timeout"` / "pg_restore 18 não restaura no PostgreSQL 14" | Só havia ferramentas 17+ para um destino 16 ou mais antigo. Instale as ferramentas cliente da versão da origem (ex.: `winget install PostgreSQL.PostgreSQL.14`, ou só "Command Line Tools" no instalador): a cópia passa a usá-las sozinha, mesmo com o pgAdmin mais novo instalado. |
+| Janela "pg_dump.exe - Erro do sistema … `gssapi64.dll` não foi encontrado" ao abrir o app (versões antigas) | O `libpq` do runtime do pgAdmin 18 pede DLLs do Kerberos que o pgAdmin não instala, e o `pg_dump` dele nem inicia. O app agora ignora esse conjunto sem abrir a janela. Para ter as ferramentas 18 de verdade, instale as "Command Line Tools" ([Instalação](#instalação)). |
 | "Guardar credenciais com segurança precisa do secret-tool" (Linux) | `sudo apt install libsecret-tools` (ou `libsecret` no Fedora), com uma sessão gráfica e o chaveiro destravado. |
 | "… é chave (PK ou FK)" | Tire a regra da coluna de chave; mascare o dado pessoal (CPF, e-mail), não o id. |
 | "… tem índice único, e a máscara … repete valores" | Use Hash ou E-mail falso nessa coluna. |
