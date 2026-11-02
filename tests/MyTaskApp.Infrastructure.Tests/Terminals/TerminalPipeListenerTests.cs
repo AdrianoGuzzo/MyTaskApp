@@ -1,3 +1,4 @@
+using System.IO.Pipes;
 using Microsoft.Extensions.Logging.Abstractions;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Terminals;
@@ -72,12 +73,24 @@ public sealed class TerminalPipeListenerTests
         {
             var answers = await Task.WhenAll(Enumerable.Range(0, 4).Select(async _ =>
             {
-                await using var view = await LocalTerminalChannel.AttachAsync(await TerminalPipe.ConnectAsync(name, Ct), Guid.NewGuid(), TerminalClientKind.Embedded, "App", null, Ct);
+                await using var view = await LocalTerminalChannel.AttachAsync(await ConnectPatientlyAsync(name), Guid.NewGuid(), TerminalClientKind.Embedded, "App", null, Ct);
                 return await view.ReadAsync(Ct);
             }));
 
             answers.Should().AllBeOfType<TerminalRefusal>();
         }
+    }
+
+    /// <summary>
+    /// O mesmo pipe do <see cref="TerminalPipe.ConnectAsync"/>, com prazo de
+    /// teste: no runner carregado do CI, os 2 s do agente não bastam para cem
+    /// conexões. O que o teste cobra é a resposta, não a pressa.
+    /// </summary>
+    private static async Task<Stream> ConnectPatientlyAsync(string name)
+    {
+        var client = new NamedPipeClientStream(".", name, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+        await client.ConnectAsync(TimeSpan.FromSeconds(30), Ct);
+        return client;
     }
 
     /// <summary>Só a vista é exercitada aqui: nenhum caso de uso roda.</summary>
