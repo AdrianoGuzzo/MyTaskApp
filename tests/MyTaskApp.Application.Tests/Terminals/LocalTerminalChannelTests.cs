@@ -56,6 +56,7 @@ public sealed class LocalTerminalChannelTests : IAsyncDisposable
     public async Task TheNativeWindow_SeesTheScreen_AndTypesIntoTheSameSession()
     {
         _pty.Print("olá do Claude\r\n");
+        await ShownAsync("olá do Claude");
         await using var channel = await LocalTerminalChannel.AttachAsync(await ConnectAsync(), _host.SessionId, TerminalClientKind.NativeWindow, "Janela", new TerminalSize(100, 30), Ct);
 
         var first = await ReadOutputAsync(channel, "olá do Claude");
@@ -255,6 +256,28 @@ public sealed class LocalTerminalChannelTests : IAsyncDisposable
         }, CancellationToken.None));
 
         return client;
+    }
+
+    /// <summary>
+    /// Espera o host passar o texto para a tela. O <c>Print</c> só entrega ao
+    /// pseudoterminal falso; sem esperar, a janela pode chegar antes, com o
+    /// retrato vazio, e ver o texto como saída comum.
+    /// </summary>
+    private async Task ShownAsync(string text)
+    {
+        using var probe = _host.Attach(TerminalClientKind.Embedded, "Prova");
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(Ct);
+        timeout.CancelAfter(Patience);
+
+        while (await probe.ReadAsync(timeout.Token) is { } message)
+        {
+            if (message is TerminalOutput output && Encoding.UTF8.GetString(output.Data).Contains(text, StringComparison.Ordinal))
+            {
+                return;
+            }
+        }
+
+        throw new InvalidOperationException($"O host não mostrou \"{text}\".");
     }
 
     private static async Task<TerminalOutput> ReadOutputAsync(LocalTerminalChannel channel, string text)
