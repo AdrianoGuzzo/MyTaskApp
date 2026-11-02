@@ -26,6 +26,7 @@ using MyTaskApp.Application.Sync;
 using MyTaskApp.Application.StickyNotes;
 using MyTaskApp.Application.Tags;
 using MyTaskApp.Application.Tasks;
+using MyTaskApp.Application.Terminals;
 using MyTaskApp.Application.TimeTracking;
 using MyTaskApp.Domain.DatabaseOperations;
 using MyTaskApp.Remote.Contracts;
@@ -212,6 +213,15 @@ public static class DependencyInjection
         services.AddScoped<RecordAgentEventHandler>();
         services.TryAddSingleton<IAgentAttentionPresenter, NoAgentAttentionPresenter>();
 
+        // O terminal do agente (ADR-098): só o MyTaskApp Agent hospeda, e registra antes.
+        services.TryAddSingleton<ITerminalSessions>(NoTerminalSessions.Instance);
+        services.TryAddSingleton<IAgentTerminalClient>(NoAgentTerminalClient.Instance);
+        services.TryAddSingleton<AgentTerminalWindows>();
+        services.TryAddSingleton<IEmbeddedTerminalPresenter>(NoEmbeddedTerminalPresenter.Instance);
+        services.TryAddSingleton<IAgentTerminalWindows>(provider => provider.GetRequiredService<AgentTerminalWindows>());
+        services.AddScoped<OpenAgentSessionHandler>();
+        services.AddScoped<ShowAgentAttentionHandler>();
+
         // O aviso de que alguém abriu de longe um Claude aqui (ADR-092). Só o desktop o liga.
         services.AddScoped<GetRemotelyOpenedSessionsHandler>();
         services.TryAddSingleton<RemoteSessionAnnouncer>();
@@ -289,6 +299,20 @@ public static class DependencyInjection
 
         // A cópia de banco de longe (T-32, ADR-090): o mesmo caso de uso da tela.
         services.AddSingleton<IRemoteOperationExecutor, DatabaseCopyExecutor>();
+
+        // O terminal remoto (ADR-099): só o agente hospeda; fora dele, os executores recusam.
+        services.AddSingleton<IRemoteOperationExecutor, TerminalStartExecutor>();
+        services.AddSingleton<IRemoteOperationExecutor, TerminalAttachExecutor>();
+        services.AddSingleton<IRemoteOperationExecutor, TerminalStopExecutor>();
+        services.TryAddSingleton<IRemoteTerminalLink>(NoRemoteTerminalLink.Instance);
+        services.TryAddSingleton<RemoteTerminalBridge>();
+        services.TryAddSingleton<RemoteTerminalReporter>();
+        services.AddScoped<CheckRemoteTerminalAccessHandler>();
+
+        // E o lado de quem segue de longe: a lista e a conexão, pelo servidor.
+        services.TryAddSingleton<IRemoteTerminalWires>(NoRemoteTerminalWires.Instance);
+        services.TryAddSingleton<RemoteTerminalConnector>();
+        services.AddScoped<ListRemoteTerminalsHandler>();
         services.AddSingleton<RemoteDatabaseCopy>();
         services.AddScoped<RemoteDatabaseCopyPlanner>();
         services.AddScoped<RecordRemoteOperationHandler>();
@@ -301,6 +325,9 @@ public static class DependencyInjection
             RemoteOperationKinds.AgentPrompt,
             RemoteOperationKinds.AgentStop,
             RemoteOperationKinds.DatabaseCopy,
+            RemoteOperationKinds.TerminalStart,
+            RemoteOperationKinds.TerminalAttach,
+            RemoteOperationKinds.TerminalStop,
         ]));
         services.AddScoped<ConsultationLauncher>();
         services.AddScoped<ConsultationTargetResolver>();

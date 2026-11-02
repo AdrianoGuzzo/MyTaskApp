@@ -1,10 +1,9 @@
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
-using MyTaskApp.Application.Deadlines;
 using MyTaskApp.Application.Planning;
+using MyTaskApp.Application.Terminals;
 using MyTaskApp.Domain.Agents;
-using MyTaskApp.Domain.Deadlines;
 using MyTaskApp.Domain.Tasks;
 
 namespace MyTaskApp.Application.Agents;
@@ -57,11 +56,16 @@ public sealed class RecordAgentEventHandler(
     IAgentSessionWatcher watcher,
     IAgentAttentionPresenter presenter,
     ITerminalWindowManager windows,
+    ITerminalSessions terminals,
+    IAgentTerminalWindows terminalWindows,
     AgentAlertSoundPlayer sounds,
     IUserClock clock,
     TimeProvider timeProvider,
     ILogger<RecordAgentEventHandler> logger)
 {
+    private readonly AgentAttentionNotifier _attention =
+        new(tasks, providers, presenter, windows, terminalWindows, sounds, clock, timeProvider, logger);
+
     public async Task<AgentEventOutcome> HandleAsync(
         RecordAgentEvent command,
         CancellationToken cancellationToken = default)
@@ -89,9 +93,28 @@ public sealed class RecordAgentEventHandler(
             agentEvent.ExternalSessionId,
             agentEvent.Metadata);
 
+        // Os avisos do terminal do agente chegam à porta do agente, e os do
+        // terminal direto à do desktop (ADR-098): o que cair na porta errada
+        // não é deste processo.
+        if (session.IsAgentTerminal != terminals.IsHost)
+        {
+            logger.LogWarning(
+                "AgentEventWrongListener {TaskId} {AgentSessionId} {SourceEvent}",
+                session.TaskItemId,
+                session.Id,
+                agentEvent.SourceEvent);
+
+            return AgentEventOutcome.Ignored;
+        }
+
         if (!session.IsActive)
         {
             return AgentEventOutcome.Ignored;
+        }
+
+        if (session.IsAgentTerminal)
+        {
+            terminals.Observe(agentEvent);
         }
 
         WarnIfOutsideTheWorktree(session, agentEvent);
@@ -122,7 +145,15 @@ public sealed class RecordAgentEventHandler(
 
         watcher.NotifyChanged(session.TaskItemId);
 
-        await TellTheUserAsync(session, cancellationToken);
+        // O terminal do agente: quem chama a pessoa é o desktop, que tem tela e som.
+        if (session.IsAgentTerminal)
+        {
+            terminals.NotifyActivity(session.Id);
+        }
+        else
+        {
+            await _attention.TellAsync(session, cancellationToken);
+        }
 
         return AgentEventOutcome.Applied;
     }
@@ -160,81 +191,4 @@ public sealed class RecordAgentEventHandler(
 
     private static string Normalize(string path) =>
         path.Replace('\\', '/').TrimEnd('/').ToUpperInvariant();
-
-    /// <summary>
-    /// Parou esperando o usuário: aviso na tela e som, a menos que ele já esteja
-    /// no terminal. Voltou a trabalhar: o aviso que estava na tela sai.
-    /// </summary>
-    private async Task TellTheUserAsync(AgentSession session, CancellationToken cancellationToken)
-    {
-        if (!session.NeedsAttention)
-        {
-            await presenter.DismissAsync(session.Id, cancellationToken);
-
-            if (session.ProcessId is { } working)
-            {
-                await windows.StopFlashingAsync(working);
-            }
-
-            return;
-        }
-
-        if (session.ProcessId is { } processId && await windows.IsInForegroundAsync(processId))
-        {
-            logger.LogInformation(
-                "AgentAttentionSkippedTerminalInFront {TaskId} {AgentSessionId}",
-                session.TaskItemId,
-                session.Id);
-            return;
-        }
-
-        // O aviso do canto pode ser dispensado ou nem caber na pilha; o terminal
-        // piscando na barra continua dizendo onde está a pendência.
-        if (session.ProcessId is { } waiting)
-        {
-            await windows.FlashAsync(waiting);
-        }
-
-        // Um som por estado (ADR-042): dá para saber, sem olhar, se é uma
-        // pergunta ou só o fim da resposta.
-        await sounds.PlayAsync(session.Activity, cancellationToken);
-
-        var task = await tasks.FindByIdAsync(session.TaskItemId, cancellationToken);
-        var development = task?.Developments.FirstOrDefault(item => item.Id == session.TaskDevelopmentId);
-
-        await presenter.PresentAsync(
-            new AgentAttention(
-                session.Id,
-                session.TaskItemId,
-                session.TaskDevelopmentId,
-                task?.Title ?? "Tarefa",
-                providers.Find(session.ProviderId)?.Name ?? session.ProviderId,
-                session.IsConsultation ? "Consulta Inteligente" : GetTodayBoardHandler.RepositoryName(development?.RepositoryPath),
-                development?.Branch,
-                session.Activity,
-                session.ActivityMessage,
-                session.ActivityChangedAt ?? timeProvider.GetUtcNow(),
-                DeadlineLabelOf(task)),
-            cancellationToken);
-    }
-
-    /// <summary>
-    /// O agente parou esperando você <b>e</b> a entrega está perto: é isso que
-    /// torna a pendência relevante (§26). Prazo folgado não entra no aviso.
-    /// </summary>
-    private string? DeadlineLabelOf(TaskItem? task)
-    {
-        if (task?.Occurrences
-                .Where(occurrence => occurrence.Status is TaskItemStatus.Pending)
-                .Select(occurrence => occurrence.Deadline)
-                .OfType<TaskDeadline>()
-                .MinBy(deadline => (deadline.Date, deadline.Time)) is not { } deadline)
-        {
-            return null;
-        }
-
-        var view = TaskDeadlineView.Describe(deadline, clock, timeProvider.GetUtcNow());
-
-        return view.Severity >= DeadlineSeverity.Attention ? $"Prazo da tarefa: {view.Label}" : null;
-    }
 }

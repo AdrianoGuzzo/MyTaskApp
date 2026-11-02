@@ -12,10 +12,14 @@ internal sealed class RemoteSettingsStore(MyTaskAppDbContext context) : IRemoteS
             .FirstOrDefaultAsync(settings => settings.Id == RemoteSettingsRow.SingletonId, cancellationToken);
 
         // Sem linha (instalação nova, ou anterior ao remoto): desligado, sem semear (ADR-014).
-        // Aceitar controle sem o remoto ligado não existe; uma linha assim conta como desligada.
-        return row is null
-            ? RemoteSettings.Off
-            : new RemoteSettings(row.Enabled, row.Enabled && row.AcceptControl);
+        // Aceitar controle sem o remoto ligado não existe, nem o terminal sem aceitar controle; uma linha assim conta como desligada.
+        if (row is null)
+        {
+            return RemoteSettings.Off;
+        }
+
+        var acceptControl = row.Enabled && row.AcceptControl;
+        return new RemoteSettings(row.Enabled, acceptControl, acceptControl && row.AcceptTerminal);
     }
 
     public async Task SaveAsync(RemoteSettings settings, CancellationToken cancellationToken = default)
@@ -30,5 +34,6 @@ internal sealed class RemoteSettingsStore(MyTaskAppDbContext context) : IRemoteS
 
         row.Enabled = settings.Enabled;
         row.AcceptControl = settings.AcceptControl;
+        row.AcceptTerminal = settings.AcceptTerminal;
     }
 }

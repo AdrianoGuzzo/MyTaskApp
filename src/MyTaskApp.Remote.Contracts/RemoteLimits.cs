@@ -87,4 +87,28 @@ public static class RemoteLimits
 
     /// <summary>O texto da atividade de uma conversa.</summary>
     public const int MaxSessionActivityLength = 200;
+
+    /// <summary>
+    /// O maior pedaço de saída do terminal numa mensagem do relay (ADR-099). Em
+    /// base64 cabe com folga em <see cref="MaxTerminalMessageLength"/>.
+    /// </summary>
+    public const int MaxTerminalFrameData = 32 * 1024;
+
+    /// <summary>A maior mensagem que o hub aceita de um cliente: a saída, a entrada assinada.</summary>
+    public const int MaxTerminalMessageLength = 64 * 1024;
+
+    /// <summary>Teclas por lote assinado: uma colagem maior vai em vários lotes.</summary>
+    public const int MaxTerminalKeys = 16 * 1024;
+
+    /// <summary>O que o servidor segura para uma conexão lenta; acima, descarta e manda pedir o retrato.</summary>
+    public const int MaxTerminalPendingBytes = 1024 * 1024;
+
+    /// <summary>Mensagens por segundo de uma conexão do hub nos métodos do terminal.</summary>
+    public const int MaxTerminalMessagesPerSecond = 200;
+
+    /// <summary>Quanto um lote de entrada assinado vale depois de criado: mais velho, é repetição.</summary>
+    public static readonly TimeSpan TerminalInputLifetime = TimeSpan.FromMinutes(2);
+
+    /// <summary>Sessões do terminal por máquina no relato: o agente hospeda no máximo isto.</summary>
+    public const int MaxTerminalSessionsPerBatch = 16;
 }

@@ -112,6 +112,17 @@ public sealed class PipeLocalPeerChannelTests
 
     /// <summary>Duas instalações isoladas (testes, <c>MYTASKAPP_DATA_DIR</c>) nunca dividem o pipe.</summary>
     [Fact]
+    public void TheSession_TravelsOnlyInTheAttentionNote()
+    {
+        var sessionId = Guid.NewGuid();
+
+        PipeLocalPeerChannel.Parse($"{{\"kind\":\"agentAttention\",\"sessionId\":\"{sessionId}\"}}")
+            .Should().Be(new LocalPeerMessage(LocalPeerMessageKinds.AgentAttention, SessionId: sessionId));
+        PipeLocalPeerChannel.Parse($"{{\"kind\":\"syncNow\",\"sessionId\":\"{sessionId}\"}}")
+            .Should().Be(new LocalPeerMessage(LocalPeerMessageKinds.SyncNow));
+    }
+
+    [Fact]
     public void EachDatabase_HasItsOwnPipe_WithoutShowingThePath()
     {
         var one = PipeLocalPeerChannel.NameFor(Path.Combine(Path.GetTempPath(), "a", "mytaskapp.db"));

@@ -9,7 +9,9 @@ A arquitetura está em
 [`architecture/remote-orchestration.md`](architecture/remote-orchestration.md),
 as ameaças e os requisitos em
 [`architecture/remote-security-threat-model.md`](architecture/remote-security-threat-model.md),
-e as decisões nos ADR-084 a ADR-090 do [índice de ADRs](architecture/README.md).
+e as decisões nos ADR-084 a ADR-099 do [índice de ADRs](architecture/README.md).
+O terminal do Claude seguido de longe tem desenho próprio em
+[`architecture/remote-terminal.md`](architecture/remote-terminal.md).
 
 ## Antes de começar
 
@@ -215,6 +217,54 @@ Um servidor de antes das conversas mostra "O servidor ainda não guarda as
 conversas do Claude. Atualize o servidor." O resto do controle remoto
 funciona igual.
 
+## O terminal do Claude
+
+O mesmo Claude Code interativo que roda num terminal da outra máquina, com a
+tela dele ao vivo, o teclado, os diálogos e o estado (ADR-098, ADR-099). Não
+é outra conversa: é a sessão que está lá, e quem está na máquina continua
+vendo e digitando.
+
+**Na máquina que roda o Claude:**
+
+1. Em *Máquinas*, ligue **Aceitar ser controlado** e **Aceitar o terminal
+   remoto**. A segunda começa desligada, vale só nesta máquina, não
+   sincroniza e pergunta antes: quem controla o terminal tem, na prática, um
+   shell aqui (o modo `!` do Claude roda qualquer comando).
+2. No card do agente, em **Onde abrir**, escolha um dos terminais do agente
+   ("em janela" ou "dentro do app") e abra o Claude. Ele roda no
+   `MyTaskApp.Agent`: fechar a janela não encerra o Claude.
+
+**Na máquina de onde você controla**, em *Controlar* a outra:
+
+- **Terminais do Claude** lista as sessões de lá, com o estado ("Trabalhando",
+  "Esperando você", "controlado de longe"). O cartão só aparece se a outra
+  máquina aceita o terminal remoto.
+- **Seguir** abre a tela da sessão. Ela começa pelo retrato do que está lá e
+  segue ao vivo. Sem a vez, a tela só mostra.
+- **Assumir o controle** passa a vez de digitar para cá. Quem está na máquina
+  pode tomar de volta digitando; a vez vence depois de 10 minutos sem uso.
+  **Soltar o controle** devolve.
+- **Permitir** e **Negar** respondem a um pedido de permissão do Claude;
+  **Interromper (Esc)** para o que ele está fazendo, e a conversa fica. Os
+  outros diálogos se respondem no teclado.
+- **Encerrar** fecha o terminal: o Claude recebe o fim e salva a conversa.
+  **Forçar o fim** encerra na hora o Claude e o que ele abriu nesta sessão, e
+  nada mais da máquina.
+- **Fechar a janela** só desliga esta vista. O Claude segue lá; **Seguir** de
+  novo reconecta, com o retrato.
+- **Abrir no terminal de lá**, no ambiente escolhido, abre o Claude no
+  terminal do agente de lá. Os parâmetros, o modelo e o acompanhamento são os
+  salvos lá; daqui vão só os ids, e o texto inicial salvo não roda sozinho.
+
+**Sem as aprovações.** Uma sessão aberta lá com
+`--dangerously-skip-permissions` (ou o modo `bypassPermissions`) pode ser
+seguida, mas a tela mostra o aviso, e assumir pergunta antes. O MyTaskApp
+nunca muda os parâmetros de lá para facilitar o controle.
+
+**O que fica onde.** Cada ação vai assinada por uma chave só desta conexão, e
+a outra máquina confere cada uma. O servidor só repassa a tela, sem gravar. A
+lista de sessões leva ids e estado, sem a pasta de lá.
+
 ## Revogar
 
 | Para… | Faça |
@@ -244,6 +294,11 @@ sincronização, e o agente só volta depois de conectar a conta de novo.
 | Guarda | eventos, conversas, operações terminadas (com as aprovações) e pedidos de pareamento vencidos: 30 dias no servidor; o diário do agente, 7 dias | os dois |
 | Conversas relatadas pelo agente | as abertas e as com prompt nos últimos 7 dias, até 200 | o agente |
 | Diferença de relógio aceita | 5 minutos; o pedido "do futuro" é recusado (`clock_skew`) | o servidor |
+| Terminal: conexões de longe ao mesmo tempo | 8 por agente | o agente |
+| Terminal: histórico no retrato de longe | 300 linhas | o agente |
+| Terminal: tela a caminho de quem segue | 1 MiB por conexão; passou, a tela pede o retrato de novo | o servidor |
+| Terminal: mensagens | 64 KiB cada, 200 por segundo por conexão; teclado em lotes de até 16 KiB | o servidor |
+| Terminal: lote de teclado válido | 2 minutos depois de assinado | o agente |
 
 "Online" é a máquina que falou com o servidor nos últimos 90 segundos. Sem o
 hub, o agente procura pedidos a cada 30 segundos.
@@ -265,6 +320,13 @@ hub, o agente procura pedidos a cada 30 segundos.
 | `already_expired` | o relógio de uma das máquinas está adiantado. Acerte a hora (sincronização automática do sistema) |
 | O celular diz "Nada foi enviado: o celular não foi destravado." | o destravamento foi cancelado. Nada saiu do aparelho |
 | "Este banco veio de outro computador" | o banco foi copiado de outra máquina. Desconecte e conecte a conta de novo na sincronização |
+| Não aparece "Terminais do Claude" | a outra máquina não aceita o terminal remoto, ou o agente dela não tem pseudoterminal (macOS). Ligue *Máquinas → Aceitar o terminal remoto* lá |
+| "O servidor ainda não tem o terminal remoto." | atualize o servidor |
+| "Esperando o agente da outra máquina aceitar a conexão…" | o agente de lá está parado ou sem rede. O pedido espera na fila até o prazo |
+| "Assuma o controle do terminal antes de digitar." | a vez é de outra vista. Toque em **Assumir o controle** |
+| "Esta máquina não aceita o terminal remoto…" | a chave está desligada lá, ou foi desligada no meio. A conexão acabou; o Claude segue |
+| "O agente da máquina saiu do ar…" | o agente de lá parou ou perdeu a rede. A sessão vive com o agente: se ele foi parado, o Claude também |
+| "A ligação com o servidor caiu." | a vista caiu; o Claude segue lá. **Reconectar** pede outra conexão |
 
 ## Limitações
 
@@ -277,5 +339,34 @@ hub, o agente procura pedidos a cada 30 segundos.
   localmente. Use só repositórios em que você confia.
 - **O servidor vê a saída** das operações, para entregá-la a quem não estava
   conectado. É o seu servidor; ainda não há cifra ponta a ponta.
+- **O terminal do Claude** vive com o agente de lá: parar o agente encerra o
+  Claude. Ele não vai ao celular na v1, passa em claro pelo seu servidor (sem
+  gravar), supõe uma instância só do servidor e não alcança uma sessão aberta
+  no terminal do sistema ([detalhes](architecture/remote-terminal.md#6-limitações)).
 - **iOS**: as telas são as mesmas do Android, mas o build e o destravamento
   (`LAContext`) só compilam no Mac do CI.
+
+## Conferir em duas máquinas
+
+O roteiro do terminal do Claude entre dois computadores reais, depois de
+atualizar o servidor e os dois apps:
+
+1. Na executora, ligue *Aceitar ser controlado* e *Aceitar o terminal remoto*,
+   e pareie o controlador pelo código ([Parear](#parear)).
+2. Na executora, abra o Claude pelo card com **Onde abrir: Terminal do agente,
+   em janela**.
+3. No controlador, *Máquinas → Controlar → Terminais do Claude → Seguir*: a
+   tela aparece e acompanha o que é digitado lá.
+4. **Assumir o controle** e mande um prompt pelo teclado; ele aparece na janela
+   da executora.
+5. Peça algo que pede permissão; **Permitir** daqui, e confira na executora.
+6. Com o Claude trabalhando, **Interromper (Esc)**.
+7. Feche a vista no controlador, espere, e **Seguir** de novo: a tela recente e
+   o mesmo PID voltam.
+8. Pare o agente na executora: a vista diz "O agente da máquina saiu do ar",
+   e um novo "Seguir" fica esperando o agente.
+9. **Forçar o fim**: só a árvore da sessão termina (confira no gerenciador de
+   tarefas que o resto segue).
+10. Com a vista aberta e o controle assumido, desligue *Aceitar o terminal
+    remoto* na executora: a próxima tecla é recusada e a conexão acaba, e o
+    Claude segue lá.

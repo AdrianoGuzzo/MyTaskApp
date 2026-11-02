@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
+using MyTaskApp.Application.Terminals;
 using MyTaskApp.Desktop.Composition;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.Agents;
@@ -53,12 +54,14 @@ public enum AgentPanelState
 /// </para>
 /// </remarks>
 /// <param name="conversations">Abre a conversa sem terminal; nulo nos testes que não falam dela.</param>
+/// <param name="terminalViews">A vista do terminal do agente dentro do app (ADR-098); nula nos testes que não falam dela.</param>
 public sealed partial class AgentSessionViewModel(
     IUseCaseRunner runner,
     IClipboardWriter clipboard,
     IShellLauncher shell,
     ILogger<AgentSessionViewModel> logger,
-    ManagedConversationOpener? conversations = null) : ObservableObject
+    ManagedConversationOpener? conversations = null,
+    IEmbeddedTerminalPresenter? terminalViews = null) : ObservableObject
 {
     private Guid _taskId;
 
@@ -76,13 +79,16 @@ public sealed partial class AgentSessionViewModel(
     /// <summary>Como <see cref="_loadedArguments"/>, para a lista de esforço.</summary>
     private string _loadedEffort = string.Empty;
 
+    /// <summary>Como <see cref="_loadedArguments"/>, para "Onde abrir" (ADR-098).</summary>
+    private AgentHosting _loadedHosting = AgentHosting.Direct;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(
         nameof(IsChecking), nameof(IsNotInstalled), nameof(IsIdle), nameof(IsStarting), nameof(IsRunning),
         nameof(IsFinished), nameof(IsFailed), nameof(HasSession), nameof(ShowStart), nameof(StatusText),
         nameof(NeedsAttention), nameof(ActivityText), nameof(MonitoringText), nameof(IsRunningQuietly), nameof(ShowsWarning),
-        nameof(OriginText), nameof(ShowProcess), nameof(ShowFocus), nameof(ShowOpenConversation))]
-    [NotifyCanExecuteChangedFor(nameof(StartCommand), nameof(FocusCommand), nameof(OpenConversationCommand))]
+        nameof(OriginText), nameof(ShowProcess), nameof(ShowFocus), nameof(ShowOpenConversation), nameof(ShowInApp))]
+    [NotifyCanExecuteChangedFor(nameof(StartCommand), nameof(FocusCommand), nameof(OpenConversationCommand), nameof(ShowInAppViewCommand))]
     private AgentPanelState _state = AgentPanelState.Checking;
 
     /// <summary>Tarefa concluída não abre agente novo; o que está aberto continua alcançável.</summary>
@@ -128,13 +134,29 @@ public sealed partial class AgentSessionViewModel(
     [NotifyPropertyChangedFor(nameof(CommandPreview))]
     private AgentCliOption? _selectedEffort;
 
+    /// <summary>
+    /// "Onde abrir" (ADR-098): o terminal direto, ou o terminal do agente. Só
+    /// aparece onde o terminal do agente existe; o usado ao iniciar vira o padrão.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasHostingChoice))]
+    private IReadOnlyList<AgentHostingOption> _hostingOptions = [];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HostingHint))]
+    private AgentHostingOption? _selectedHosting;
+
+    public bool HasHostingChoice => HostingOptions.Count > 1;
+
+    public string? HostingHint => SelectedHosting?.Hint;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(
         nameof(AgentName), nameof(StartLabel), nameof(ProcessText), nameof(StartedText), nameof(RangeText),
         nameof(WorkingDirectory), nameof(FailureReason), nameof(HasSession), nameof(StatusText),
         nameof(NeedsAttention), nameof(ActivityText), nameof(MonitoringText), nameof(IsRunningQuietly), nameof(ShowsWarning),
-        nameof(IsManaged), nameof(OriginText), nameof(ShowProcess), nameof(ShowFocus), nameof(ShowOpenConversation))]
-    [NotifyCanExecuteChangedFor(nameof(FocusCommand), nameof(OpenConversationCommand))]
+        nameof(IsManaged), nameof(OriginText), nameof(ShowProcess), nameof(ShowFocus), nameof(ShowOpenConversation), nameof(ShowInApp))]
+    [NotifyCanExecuteChangedFor(nameof(FocusCommand), nameof(OpenConversationCommand), nameof(ShowInAppViewCommand))]
     private AgentSessionView? _session;
 
     /// <summary>
@@ -145,7 +167,7 @@ public sealed partial class AgentSessionViewModel(
     private bool _monitor = true;
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(StartCommand), nameof(FocusCommand), nameof(OpenConversationCommand))]
+    [NotifyCanExecuteChangedFor(nameof(StartCommand), nameof(FocusCommand), nameof(OpenConversationCommand), nameof(ShowInAppViewCommand))]
     private bool _isBusy;
 
     /// <summary>Um recado curto: "Não foi possível localizar a janela…".</summary>
@@ -253,9 +275,10 @@ public sealed partial class AgentSessionViewModel(
 
     /// <summary>Com o agente aberto: se ele avisa o app, ou por que não.</summary>
     public string? MonitoringText => State is AgentPanelState.Running && Session is { IsHeadless: false } session
-        ? session.IsMonitored
-            ? "O MyTaskApp avisa quando o agente precisar de você ou terminar."
-            : "Sem acompanhamento: esta sessão não avisa o MyTaskApp."
+        ? (session.IsAgentTerminal ? "Roda no terminal do agente: fechar a janela não encerra; \"Abrir terminal\" mostra de novo. " : string.Empty)
+            + (session.IsMonitored
+                ? "O MyTaskApp avisa quando o agente precisar de você ou terminar."
+                : "Sem acompanhamento: esta sessão não avisa o MyTaskApp.")
         : null;
 
     /// <summary>A conversa sem terminal, rodada pelo agente desta máquina (ADR-089, ADR-092).</summary>
@@ -275,6 +298,9 @@ public sealed partial class AgentSessionViewModel(
 
     /// <summary>"Abrir conversa": a sessão sem terminal enquanto ainda recebe prompts, ou para ler como terminou.</summary>
     public bool ShowOpenConversation => IsManaged && HasSession;
+
+    /// <summary>"Ver no app": a mesma sessão do terminal do agente, numa janela do MyTaskApp.</summary>
+    public bool ShowInApp => IsRunning && Session?.IsAgentTerminal == true && terminalViews is not null;
 
     public bool IsChecking => State is AgentPanelState.Checking;
 
@@ -300,6 +326,19 @@ public sealed partial class AgentSessionViewModel(
     public bool CanFocus => !IsBusy && State is AgentPanelState.Running && !IsManaged;
 
     public bool CanOpenConversation => !IsBusy && ShowOpenConversation && conversations is not null;
+
+    public bool CanShowInApp => !IsBusy && ShowInApp;
+
+    [RelayCommand(CanExecute = nameof(CanShowInApp))]
+    public void ShowInAppView()
+    {
+        Message = Session is { } session && terminalViews!.Show(session.SessionId, TerminalTitle(session))
+            ? null
+            : "A vista dentro do app não abriu. \"Abrir terminal do agente\" mostra numa janela.";
+    }
+
+    private string TerminalTitle(AgentSessionView session) =>
+        AgentTerminalWindows.TitleFor(AgentName, Path.GetFileName(session.WorkingDirectory?.TrimEnd('\\', '/')));
 
     /// <summary>
     /// O ambiente do card (ADR-031): cada repositório da tarefa tem o seu agente.
@@ -371,18 +410,20 @@ public sealed partial class AgentSessionViewModel(
 
         try
         {
-            Session = await runner.RunAsync<StartAgentSessionHandler, AgentSessionView>(
+            Session = await runner.RunAsync<OpenAgentSessionHandler, AgentSessionView>(
                 (handler, token) => handler.HandleAsync(
-                    new StartAgentSession(
-                        _taskId,
-                        _developmentId,
-                        Cli?.ProviderId,
-                        ArgumentsToSend(),
-                        Prompt,
-                        RunDirectly,
-                        Cli is null ? null : Monitor,
-                        Cli is null ? null : ChosenModel,
-                        Cli is null ? null : ChosenEffort),
+                    new OpenAgentSession(
+                        new StartAgentSession(
+                            _taskId,
+                            _developmentId,
+                            Cli?.ProviderId,
+                            ArgumentsToSend(),
+                            Prompt,
+                            RunDirectly,
+                            Cli is null ? null : Monitor,
+                            Cli is null ? null : ChosenModel,
+                            Cli is null ? null : ChosenEffort),
+                        HasHostingChoice ? SelectedHosting?.Value : null),
                     token),
                 CancellationToken.None);
 
@@ -392,6 +433,7 @@ public sealed partial class AgentSessionViewModel(
                 _loadedMonitor = Monitor;
                 _loadedModel = ChosenModel;
                 _loadedEffort = ChosenEffort;
+                _loadedHosting = SelectedHosting?.Value ?? AgentHosting.Direct;
             }
 
             State = StateFor(Session);
@@ -572,6 +614,16 @@ public sealed partial class AgentSessionViewModel(
 
             EffortOptions = OptionsFor(cli.Efforts, EffortOptions);
             SelectedEffort = Pick(EffortOptions, effort);
+
+            var hosting = SelectedHosting?.Value ?? _loadedHosting;
+
+            if (hosting == _loadedHosting)
+            {
+                _loadedHosting = hosting = cli.Hosting;
+            }
+
+            HostingOptions = cli.HostingSupport.IsSupported ? AgentHostingOption.All : [];
+            SelectedHosting = HostingOptions.FirstOrDefault(option => option.Value == hosting) ?? HostingOptions.FirstOrDefault();
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {

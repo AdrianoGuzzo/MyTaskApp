@@ -44,6 +44,10 @@
 #define AgentMutexName    "MyTaskApp.Agent"
 #define AgentRunValueName "MyTaskApp.Agent"
 
+; A janela nativa do terminal do agente (ADR-098). Sem mutex: uma por sessao
+; aberta, e fecha-la so desliga a vista.
+#define TerminalAttachExeName "MyTaskApp.TerminalAttach.exe"
+
 ; Onde o Windows procura o que abrir no login. Relativo a HKCU -- ver [Registry].
 #define AppRunKey      "Software\Microsoft\Windows\CurrentVersion\Run"
 
@@ -412,9 +416,9 @@ begin
   if not Listed then
   begin
     { Sem WMI, o que resta e o nome. So chega aqui com um dos mutexes tomado. }
-    Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM {#AppExeName} /IM {#AgentExeName}', '',
+    Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM {#AppExeName} /IM {#AgentExeName} /IM {#TerminalAttachExeName}', '',
       SW_HIDE, ewWaitUntilTerminated, ResultCode);
-    Log(Format('taskkill /F /IM {#AppExeName} /IM {#AgentExeName}: codigo %d', [ResultCode]));
+    Log(Format('taskkill /F /IM {#AppExeName} /IM {#AgentExeName} /IM {#TerminalAttachExeName}: codigo %d', [ResultCode]));
     Exit;
   end;
 

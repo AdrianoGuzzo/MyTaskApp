@@ -48,6 +48,25 @@ internal sealed partial class ClaudeCodeCliProvider(
 
     private static readonly TimeSpan VersionTimeout = TimeSpan.FromSeconds(10);
 
+    /// <summary>
+    /// O que um Claude põe no ambiente dos filhos dele. Herdadas, fazem o
+    /// Claude do terminal do agente achar que roda dentro de outro (sem
+    /// histórico, sem pedir confiança na pasta) — conferido no 2.1.312, num
+    /// agente aberto de dentro de um Claude.
+    /// </summary>
+    internal static readonly IReadOnlyList<string> InheritedSessionVariables =
+    [
+        "CLAUDECODE",
+        "CLAUDE_CODE_ENTRYPOINT",
+        "CLAUDE_CODE_CHILD_SESSION",
+        "CLAUDE_CODE_SESSION_ID",
+        "CLAUDE_CODE_SESSION_ATTENDED",
+        "CLAUDE_CODE_EXECPATH",
+        "CLAUDE_CODE_MESSAGING_SOCKET",
+        "CLAUDE_CODE_MESSAGING_TOKEN",
+        "CLAUDE_PID",
+    ];
+
     public string Id => ProviderId;
 
     public string Name => "Claude Code";
@@ -132,25 +151,60 @@ internal sealed partial class ClaudeCodeCliProvider(
             ?? throw new InvalidOperationException("O Claude Code não foi encontrado.");
 
         IReadOnlyList<string> monitoring = context.Monitoring is { } settings
-            ? ["--settings", hooks.EnsureSettingsFile(settings.Endpoint)]
+            ? ["--settings", hooks.EnsureSettingsFile(settings.Endpoint, terminal: context.Terminal is not null)]
             : [];
+
+        // No terminal do agente (ADR-098) a conversa tem id desde o começo:
+        // é ele que "Retomar" continua depois que o agente reinicia.
+        IReadOnlyList<string> conversation = context.Terminal switch
+        {
+            { Resume: true } terminal => ["--resume", terminal.ConversationId],
+            { } terminal => ["--session-id", terminal.ConversationId],
+            null => [],
+        };
+
+        var removed = context.Terminal is null ? null : InheritedSessionVariables;
 
         if (string.IsNullOrWhiteSpace(context.Prompt))
         {
             return new TerminalLaunchOptions(
                 executable,
-                [.. monitoring, .. context.Arguments],
+                [.. monitoring, .. conversation, .. context.Arguments],
                 context.WorkingDirectory,
-                context.Monitoring?.Environment);
+                context.Monitoring?.Environment,
+                RemovedVariables: removed);
         }
 
         var prompt = RunsThroughCmd(executable) ? ForCmd(context.Prompt) : context.Prompt;
 
         string[] arguments = context.RunDirectly
-            ? [.. monitoring, .. context.Arguments, prompt]
-            : [.. monitoring, .. context.Arguments, "--permission-mode", "plan", prompt];
+            ? [.. monitoring, .. conversation, .. context.Arguments, prompt]
+            : [.. monitoring, .. conversation, .. context.Arguments, "--permission-mode", "plan", prompt];
 
-        return new TerminalLaunchOptions(executable, arguments, context.WorkingDirectory, context.Monitoring?.Environment);
+        return new TerminalLaunchOptions(executable, arguments, context.WorkingDirectory, context.Monitoring?.Environment, RemovedVariables: removed);
+    }
+
+    /// <summary>
+    /// Sem aprovação nenhuma (ADR-099): o <c>--dangerously-skip-permissions</c>,
+    /// o modo <c>bypassPermissions</c> pelos parâmetros ou pela configuração,
+    /// e o <c>--allow-dangerously-skip-permissions</c>, que deixa a pessoa
+    /// chegar nele com Shift+Tab. Na dúvida, avisa.
+    /// </summary>
+    public bool BypassesPermissions(IReadOnlyList<string> arguments, string workingDirectory)
+    {
+        for (var i = 0; i < arguments.Count; i++)
+        {
+            var argument = arguments[i];
+
+            if (argument is "--dangerously-skip-permissions" or "--allow-dangerously-skip-permissions"
+                || argument.Equals("--permission-mode=bypassPermissions", StringComparison.Ordinal)
+                || (argument == "--permission-mode" && i + 1 < arguments.Count && arguments[i + 1] == "bypassPermissions"))
+            {
+                return true;
+            }
+        }
+
+        return hooks.DefaultPermissionMode(workingDirectory) == "bypassPermissions";
     }
 
     public string? MonitoringUnavailableReason(string workingDirectory, Uri endpoint) =>

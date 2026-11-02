@@ -4,11 +4,14 @@ using MyTaskApp.Application;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Deadlines;
+using MyTaskApp.Application.LocalPeers;
 using MyTaskApp.Application.Reminders;
 using MyTaskApp.Application.Sounds;
+using MyTaskApp.Application.Terminals;
 using MyTaskApp.Desktop.Reminders;
 using MyTaskApp.Desktop.SpellChecking;
 using MyTaskApp.Desktop.StickyNotes;
+using MyTaskApp.Desktop.Terminals;
 using MyTaskApp.Desktop.ViewModels;
 using MyTaskApp.Desktop.Views;
 using MyTaskApp.Desktop.Widget;
@@ -260,6 +263,15 @@ internal static class AppServices
             // O agente deste computador (ADR-085) escuta; o desktop conecta
             // quando ele está rodando, e segue sozinho quando não está.
             .AddLocalPeer(configuration, LocalPeerRole.Connect)
+
+            // O terminal do agente (ADR-098): o canal até ele, e o aviso pelo mesmo canal quando chamar a pessoa.
+            .AddAgentTerminalClient(configuration)
+            .AddSingleton<EmbeddedTerminalWindows>()
+            .AddSingleton<IEmbeddedTerminalPresenter>(provider => provider.GetRequiredService<EmbeddedTerminalWindows>())
+
+            // E os terminais de outras máquinas (ADR-099), pelo relay do servidor.
+            .AddSingleton<RemoteTerminalWindows>()
+            .AddSingleton<LocalPeerAttentionRelay>()
             .AddAgentAutostart()
             .AddApplication(configuration)
             .AddInfrastructure(configuration)

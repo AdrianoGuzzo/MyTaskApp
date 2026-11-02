@@ -41,6 +41,17 @@ public static class RemoteOperationKinds
     public const string AgentStop = "agent.stop";
     public const string DatabaseCopy = "database.copy";
 
+    /// <summary>Abre o Claude no terminal do agente (ADR-099).</summary>
+    public const string TerminalStart = "terminal.start";
+
+    /// <summary>Segue e controla uma sessão do terminal do agente: termina na hora e abre a conexão.</summary>
+    public const string TerminalAttach = "terminal.attach";
+
+    public const string TerminalStop = "terminal.stop";
+
+    /// <summary>Os tipos do terminal: só aparecem nas capacidades com "Aceitar terminal remoto" ligado.</summary>
+    public static IReadOnlyCollection<string> Terminal { get; } = [TerminalStart, TerminalAttach, TerminalStop];
+
     private static readonly Dictionary<string, Type> Payloads = new(StringComparer.Ordinal)
     {
         [EnvironmentInspect] = typeof(EnvironmentInspectionRequest),
@@ -51,6 +62,9 @@ public static class RemoteOperationKinds
         [AgentPrompt] = typeof(PromptRequest),
         [AgentStop] = typeof(AgentStopRequest),
         [DatabaseCopy] = typeof(DatabaseCopyRequest),
+        [TerminalStart] = typeof(RemoteTerminalStartRequest),
+        [TerminalAttach] = typeof(RemoteTerminalAttachRequest),
+        [TerminalStop] = typeof(RemoteTerminalStopRequest),
     };
 
     /// <summary>O catálogo fechado (ADR-088): o que não está aqui não existe.</summary>

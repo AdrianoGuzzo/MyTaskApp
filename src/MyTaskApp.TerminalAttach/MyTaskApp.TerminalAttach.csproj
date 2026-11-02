@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    A janela nativa do terminal do agente (ADR-098): um programa de console
+    que liga o terminal do sistema (Windows Terminal, conhost, o emulador do
+    Linux) a uma sessao hospedada pelo MyTaskApp Agent, pelo canal local.
+    Fechar a janela desliga a vista; a sessao continua no agente. Separado do
+    agente porque ele e WinExe (sem console) e tem instancia unica.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>MyTaskApp.TerminalAttach</AssemblyName>
+    <RootNamespace>MyTaskApp.TerminalAttach</RootNamespace>
+    <ApplicationIcon>..\MyTaskApp.Desktop\Assets\app.ico</ApplicationIcon>
+    <!-- O LibraryImport do modo do console gera código com ponteiros. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- So o formato do canal (Application/Terminals): nada de banco nem de Infrastructure. -->
+    <ProjectReference Include="..\MyTaskApp.Application\MyTaskApp.Application.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="MyTaskApp.Infrastructure.Tests" />
+  </ItemGroup>
+
+</Project>

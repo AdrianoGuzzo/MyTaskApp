@@ -71,6 +71,7 @@ presença). As outras entregas estão no roteiro (ADR-091 a ADR-094).
 
 | Documento | Conteúdo |
 |---|---|
+| [`architecture/remote-terminal.md`](architecture/remote-terminal.md) | Terminal do agente e terminal remoto do Claude: diagnóstico, arquitetura, fluxo, configuração, segurança e limitações (ADR-098, ADR-099) |
 | [`architecture/remote-sessions.md`](architecture/remote-sessions.md) | Auditoria do fluxo da fase 2, alternativas (headless, processo vivo, Remote Control, Channels, hub), arquitetura-alvo e onde mora cada estado |
 | [`roadmap/phase-3-remote-sessions.md`](roadmap/phase-3-remote-sessions.md) | Entregas E1 a E9: problema, arquivos, migrations, testes, aceite e dependências |
 

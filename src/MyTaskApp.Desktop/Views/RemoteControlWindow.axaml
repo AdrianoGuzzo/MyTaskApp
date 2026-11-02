@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
         xmlns:contracts="using:MyTaskApp.Remote.Contracts"
+        xmlns:remote="using:MyTaskApp.Application.Remote"
         x:Class="MyTaskApp.Desktop.Views.RemoteControlWindow"
         x:DataType="vm:RemoteControlViewModel"
         x:Name="Root"
@@ -265,8 +266,50 @@
                         Command="{Binding SendPromptCommand}" />
               </Grid>
             </StackPanel>
+
+            <!-- O Claude interativo de lá, num terminal de verdade (ADR-099): com o que está salvo lá. -->
+            <Grid x:Name="TerminalStartPanel" ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,8,0,0"
+                  IsVisible="{Binding Terminals.IsOffered}">
+              <TextBlock Classes="meta" VerticalAlignment="Center" TextWrapping="Wrap"
+                         Text="Abre o Claude Code no terminal do agente de lá, com os parâmetros e o modelo salvos lá. Depois, siga em Terminais." />
+              <Button Grid.Column="1" x:Name="StartTerminalButton" Content="Abrir no terminal de lá"
+                      IsEnabled="{Binding !IsBusy}"
+                      Command="{Binding StartTerminalCommand}" />
+            </Grid>
           </StackPanel>
         </Grid>
+      </Border>
+
+      <!--
+        ============================ TERMINAIS ============================
+        O mesmo Claude interativo que roda lá (ADR-099), num terminal do agente.
+        Seguir abre a vista: a tela ao vivo, a vez de digitar pedida por botão,
+        e fechar só desliga a vista.
+      -->
+      <Border x:Name="TerminalsCard" Classes="card" DataContext="{Binding Terminals}" IsVisible="{Binding IsOffered}">
+        <StackPanel Spacing="8">
+          <TextBlock Classes="sectionTitle" Text="Terminais do Claude" />
+          <TextBlock x:Name="TerminalsMessage" Classes="meta caution" Text="{Binding Message}"
+                     IsVisible="{Binding Message, Converter={x:Static ObjectConverters.IsNotNull}}" />
+          <TextBlock Classes="meta" Text="Nenhum Claude rodando no terminal do agente de lá." IsVisible="{Binding HasNoItems}" />
+          <ItemsControl x:Name="TerminalList" ItemsSource="{Binding Items}" IsVisible="{Binding HasItems}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="remote:RemoteTerminalItem">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,2">
+                  <StackPanel Spacing="1">
+                    <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Classes="meta" Text="{Binding State}" />
+                    <TextBlock Classes="meta caution" Text="{Binding BypassWarning}"
+                               IsVisible="{Binding BypassWarning, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                  </StackPanel>
+                  <Button Grid.Column="1" Content="Seguir" VerticalAlignment="Center"
+                          Command="{Binding $parent[ItemsControl].((vm:RemoteTerminalsViewModel)DataContext).FollowCommand}"
+                          CommandParameter="{Binding}" />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
       </Border>
 
       <!--

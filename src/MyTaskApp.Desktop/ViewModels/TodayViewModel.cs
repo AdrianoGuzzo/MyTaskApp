@@ -17,6 +17,7 @@ using MyTaskApp.Application.Reminders;
 using MyTaskApp.Application.StickyNotes;
 using MyTaskApp.Application.Tags;
 using MyTaskApp.Application.Tasks;
+using MyTaskApp.Application.Terminals;
 using MyTaskApp.Application.TimeTracking;
 using MyTaskApp.Desktop.Composition;
 using MyTaskApp.Domain;
@@ -992,8 +993,8 @@ public sealed partial class TodayViewModel(
         AgentSessionView? session = null;
 
         var started = await TryAsync(
-            async () => session = await runner.RunAsync<StartAgentSessionHandler, AgentSessionView>(
-                (handler, token) => handler.HandleAsync(new StartAgentSession(row.TaskId, worktree.DevelopmentId), token),
+            async () => session = await runner.RunAsync<OpenAgentSessionHandler, AgentSessionView>(
+                (handler, token) => handler.HandleAsync(new OpenAgentSession(new StartAgentSession(row.TaskId, worktree.DevelopmentId)), token),
                 CancellationToken.None),
             "Não foi possível abrir o Claude Code.");
 

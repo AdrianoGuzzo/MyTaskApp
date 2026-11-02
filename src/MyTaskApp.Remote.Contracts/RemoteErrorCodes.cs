@@ -45,6 +45,9 @@ public static class RemoteErrorCodes
     /// <summary>Um id do pedido não existe aqui, ou não foi liberado para uso remoto.</summary>
     public const string NotInCatalog = "not_in_catalog";
 
+    /// <summary>A máquina não aceita o terminal remoto, ou não tem o terminal do agente (ADR-099).</summary>
+    public const string TerminalNotAccepted = "terminal_not_accepted";
+
     /// <summary>A regra do caso de uso recusou (a mensagem diz qual).</summary>
     public const string PolicyRefused = "policy_refused";
 

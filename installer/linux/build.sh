@@ -20,6 +20,7 @@ repo_root="$(cd "$script_dir/../.." && pwd)"
 
 desktop_project="$repo_root/src/MyTaskApp.Desktop/MyTaskApp.Desktop.csproj"
 agent_project="$repo_root/src/MyTaskApp.Agent/MyTaskApp.Agent.csproj"
+terminal_attach_project="$repo_root/src/MyTaskApp.TerminalAttach/MyTaskApp.TerminalAttach.csproj"
 publish_dir="$repo_root/artifacts/publish/$runtime"
 stage_dir="$repo_root/artifacts/stage/$runtime"
 output_dir="$repo_root/artifacts/installer"
@@ -54,6 +55,17 @@ dotnet publish "$agent_project" \
   -o "$publish_dir" \
   --nologo
 
+# A janela nativa do terminal do agente (ADR-098): um console pequeno, so com a Application.
+dotnet publish "$terminal_attach_project" \
+  -c Release \
+  -r "$runtime" \
+  --self-contained true \
+  -p:PublishTrimmed=false \
+  -p:PublishSingleFile=false \
+  -p:DebugType=none \
+  -o "$publish_dir" \
+  --nologo
+
 # Sem trimming: EF Core e Avalonia dependem de reflexao. InvariantGlobalization
 # continua false para os ids IANA de fuso resolverem (ADR-002).
 dotnet publish "$desktop_project" \
@@ -76,6 +88,11 @@ if [ ! -f "$publish_dir/MyTaskApp.Agent" ]; then
   exit 1
 fi
 
+if [ ! -f "$publish_dir/MyTaskApp.TerminalAttach" ]; then
+  echo "Publish nao produziu $publish_dir/MyTaskApp.TerminalAttach." >&2
+  exit 1
+fi
+
 # appsettings.json e carregado com optional:false -- sem ele o app nao inicia.
 if [ ! -f "$publish_dir/appsettings.json" ]; then
   echo "Publish nao produziu appsettings.json (o app nao inicia sem ele)." >&2
@@ -88,7 +105,7 @@ rm -rf "$stage_dir"
 mkdir -p "$stage_dir/bin"
 
 cp -r "$publish_dir/." "$stage_dir/bin/"
-chmod +x "$stage_dir/bin/MyTaskApp" "$stage_dir/bin/MyTaskApp.Agent"
+chmod +x "$stage_dir/bin/MyTaskApp" "$stage_dir/bin/MyTaskApp.Agent" "$stage_dir/bin/MyTaskApp.TerminalAttach"
 
 cp "$script_dir/payload/install.sh" "$stage_dir/install.sh"
 cp "$script_dir/payload/uninstall.sh" "$stage_dir/uninstall.sh"

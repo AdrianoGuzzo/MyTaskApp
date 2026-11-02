@@ -62,6 +62,12 @@ public static class RemoteRoutes
     /// <summary><c>GET</c> (<c>?deviceId=&amp;openOnly=&amp;limit=</c>): as conversas da conta e os agentes delas.</summary>
     public const string Sessions = Prefix + "/sessions";
 
+    /// <summary>O agente relata as sessões do terminal dele (ADR-099).</summary>
+    public const string AgentTerminals = Prefix + "/agent/terminals";
+
+    /// <summary>As sessões do terminal da conta, para quem controla.</summary>
+    public const string Terminals = Prefix + "/terminals";
+
     /// <summary><c>GET</c>: uma conversa e as operações dela.</summary>
     public static string Session(Guid sessionId) => $"{Sessions}/{sessionId:D}";
 
@@ -132,4 +138,41 @@ public static class RemoteHubMessages
 
     /// <summary>Para a conta: (sessionId, version). Uma conversa do Claude mudou (ADR-091).</summary>
     public const string SessionChanged = "SessionChanged";
+
+    /// <summary>Para a conta: (deviceId). As sessões do terminal de uma máquina mudaram (ADR-099).</summary>
+    public const string TerminalsChanged = "TerminalsChanged";
+
+    /// <summary>Para a máquina alvo: (attachId, envelope). Um lote de entrada, que só o agente confere.</summary>
+    public const string TerminalInput = "TerminalInput";
+
+    /// <summary>Para a máquina alvo: (attachId). Quem seguia a conexão saiu; a sessão continua.</summary>
+    public const string TerminalDetached = "TerminalDetached";
+
+    /// <summary>Para quem segue a conexão: (frame). A saída, o estado, um aviso.</summary>
+    public const string TerminalFrame = "TerminalFrame";
+
+    /// <summary>Para quem segue a conexão: (attachId). O servidor descartou saída: peça o retrato.</summary>
+    public const string TerminalGap = "TerminalGap";
+
+    /// <summary>Para quem segue a conexão: (attachId, reason). A conexão acabou.</summary>
+    public const string TerminalClosed = "TerminalClosed";
+}
+
+/// <summary>
+/// O que o cliente chama no hub (cliente → servidor). Só o terminal remoto
+/// (ADR-099): o resto continua no REST.
+/// </summary>
+public static class RemoteHubMethods
+{
+    /// <summary>Quem pediu a conexão passa a receber a saída dela: (attachId).</summary>
+    public const string TerminalSubscribe = "TerminalSubscribe";
+
+    /// <summary>Quem pediu a conexão manda um lote assinado: (attachId, envelope).</summary>
+    public const string TerminalSend = "TerminalSend";
+
+    /// <summary>A máquina alvo manda saída e estado: (frame).</summary>
+    public const string TerminalPublish = "TerminalPublish";
+
+    /// <summary>A máquina alvo encerra a conexão: (attachId, reason).</summary>
+    public const string TerminalClose = "TerminalClose";
 }

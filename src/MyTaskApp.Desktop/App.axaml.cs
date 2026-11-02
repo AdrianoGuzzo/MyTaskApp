@@ -18,6 +18,7 @@ using MyTaskApp.Desktop.Composition;
 using MyTaskApp.Desktop.Reminders;
 using MyTaskApp.Desktop.SpellChecking;
 using MyTaskApp.Desktop.StickyNotes;
+using MyTaskApp.Desktop.Terminals;
 using MyTaskApp.Desktop.Theming;
 using MyTaskApp.Desktop.ViewModels;
 using MyTaskApp.Desktop.Views;
@@ -417,6 +418,24 @@ public sealed partial class App : Avalonia.Application
         services.GetRequiredService<ManagedConversationOpener>().ControlOpened +=
             (_, control) => new RemoteControlWindow(control).Show();
 
+        // O terminal do agente dentro do app (ADR-098): fechar a janela só desliga a vista.
+        var terminalViews = services.GetRequiredService<EmbeddedTerminalWindows>();
+        terminalViews.Opened += (_, view) =>
+        {
+            var window = new TerminalSessionWindow(view);
+            window.Closed += (_, _) => _ = terminalViews.ClosedAsync(view);
+            window.Show();
+        };
+
+        // O terminal de outra máquina (ADR-099): fechar a janela desliga a conexão; o Claude segue lá.
+        var remoteTerminals = services.GetRequiredService<RemoteTerminalWindows>();
+        remoteTerminals.Opened += (_, view) =>
+        {
+            var window = new TerminalSessionWindow(view);
+            window.Closed += (_, _) => _ = remoteTerminals.ClosedAsync(view);
+            window.Show();
+        };
+
         services.GetRequiredService<RemoteSessionAnnouncer>().Start();
     }
 
@@ -488,6 +507,7 @@ public sealed partial class App : Avalonia.Application
 
         // Com o agente rodando (ADR-085), o que um grava o outro mostra, e quem tem o lease sincroniza.
         services.GetRequiredService<LocalPeerBridge>().Start();
+        services.GetRequiredService<LocalPeerAttentionRelay>().Start();
 
         // Aceitando controle, o agente fica no logon e, se tiver caído, sobe de novo agora.
         _ = services.GetRequiredService<IUseCaseRunner>().RunAsync<ApplyAgentAutostartHandler>(
@@ -979,6 +999,7 @@ public sealed partial class App : Avalonia.Application
         // Um push no meio para; o outbox guarda, e o próximo início reenvia com os mesmos ids (ADR-061).
         services.GetRequiredService<SyncScheduler>().Dispose();
         services.GetRequiredService<RemotePresenceScheduler>().Dispose();
+        services.GetRequiredService<LocalPeerAttentionRelay>().Dispose();
         _ = services.GetRequiredService<LocalPeerBridge>().DisposeAsync().AsTask();
         services.GetRequiredService<AgentSessionMonitor>().Dispose();
         services.GetRequiredService<CommandExecutionMonitor>().Dispose();

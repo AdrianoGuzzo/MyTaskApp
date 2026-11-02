@@ -1,3 +1,5 @@
+using MyTaskApp.Application.Terminals;
+
 namespace MyTaskApp.Application.Agents;
 
 /// <summary>
@@ -40,6 +42,15 @@ public interface IAgentSettingsStore
 
     /// <summary>Só prepara a gravação, como <see cref="SaveArgumentsAsync"/>.</summary>
     Task SaveEffortAsync(string providerId, string effort, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Onde "Abrir" põe o agente (ADR-098). <c>null</c> se nunca foi
+    /// escolhido — aí vale o terminal direto. Vale só nesta máquina.
+    /// </summary>
+    Task<AgentHosting?> GetHostingAsync(string providerId, CancellationToken cancellationToken = default);
+
+    /// <summary>Só prepara a gravação, como <see cref="SaveArgumentsAsync"/>.</summary>
+    Task SaveHostingAsync(string providerId, AgentHosting hosting, CancellationToken cancellationToken = default);
 }
 
 internal static class AgentSettingsStoreExtensions
@@ -68,6 +79,15 @@ internal static class AgentSettingsStoreExtensions
         CancellationToken cancellationToken) =>
         AgentCliOption.Find(provider.Models, await settings.GetModelAsync(provider.Id, cancellationToken))?.Value
             ?? string.Empty;
+
+    /// <summary>O modo salvo, ou o terminal direto quando nada foi escolhido (ou o salvo não existe mais).</summary>
+    public static async Task<AgentHosting> HostingForAsync(
+        this IAgentSettingsStore settings,
+        IAgentCliProvider provider,
+        CancellationToken cancellationToken) =>
+        await settings.GetHostingAsync(provider.Id, cancellationToken) is { } hosting && Enum.IsDefined(hosting)
+            ? hosting
+            : AgentHosting.Direct;
 
     /// <summary>O esforço salvo, como <see cref="ModelForAsync"/>.</summary>
     public static async Task<string> EffortForAsync(

@@ -1,3 +1,4 @@
+using MyTaskApp.Application.Terminals;
 using MyTaskApp.Domain.Agents;
 
 namespace MyTaskApp.Application.Agents;
@@ -29,6 +30,9 @@ public sealed record AgentSessionView(
     public AgentSessionMode Mode { get; init; }
 
     public bool IsHeadless => Mode == AgentSessionMode.Headless;
+
+    /// <summary>O terminal do agente (ADR-098): roda no agente, e a janela é uma vista que pode fechar e voltar.</summary>
+    public bool IsAgentTerminal => Mode == AgentSessionMode.Terminal;
 
     /// <summary>O apelido de quem abriu a conversa de longe; <c>null</c> no terminal e na aberta daqui.</summary>
     public string? RemoteOrigin { get; init; }
@@ -85,6 +89,12 @@ public sealed record AgentCliStatus(
     public IReadOnlyList<AgentCliOption> Models { get; init; } = [];
 
     public IReadOnlyList<AgentCliOption> Efforts { get; init; } = [];
+
+    /// <summary>Onde "Abrir" põe o agente nesta máquina (ADR-098).</summary>
+    public AgentHosting Hosting { get; init; }
+
+    /// <summary>O terminal do agente existe aqui? Sem ele, só o terminal direto.</summary>
+    public PseudoTerminalSupport HostingSupport { get; init; } = PseudoTerminalSupport.Unsupported("este processo", "Sem terminal do agente.");
 }
 
 /// <summary>O que "Abrir terminal" conseguiu.</summary>

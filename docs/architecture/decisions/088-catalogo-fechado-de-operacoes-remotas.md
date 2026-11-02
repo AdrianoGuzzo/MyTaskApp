@@ -7,7 +7,7 @@
 | **Categoria** | remoto |
 | **Registrado** | 2026-10-24, commit `36eb99c` (primeiro commit em que o ADR aparece) |
 | **Palavras-chave** | catálogo de operações, RemoteAllowed, command.run, RequiresConfirmation, RunQuickCommand.Confirmed, UnsafeCharacter, ICommandReviewGate |
-| **Relações** | relacionado: [ADR-028](028-comandos-pos-worktree-e-globais.md), [ADR-051](051-comandos-rapidos-no-worktree.md), [ADR-066](066-comandos-globais-locais-por-padrao.md), [ADR-084](084-orquestracao-remota-coordenador-e-agente.md), [ADR-090](090-copia-de-banco-remota-com-aprovacao.md) |
+| **Relações** | revisto por: [ADR-099](099-terminal-remoto-do-claude.md) (os tipos do terminal remoto); relacionado: [ADR-028](028-comandos-pos-worktree-e-globais.md), [ADR-051](051-comandos-rapidos-no-worktree.md), [ADR-066](066-comandos-globais-locais-por-padrao.md), [ADR-084](084-orquestracao-remota-coordenador-e-agente.md), [ADR-090](090-copia-de-banco-remota-com-aprovacao.md) |
 | **Código** | `src/MyTaskApp.Remote.Contracts/Operations.cs`, `src/MyTaskApp.Remote.Contracts/Requests.cs`, `src/MyTaskApp.Remote.Contracts/Catalog.cs`, `src/MyTaskApp.Application/QuickCommands/QuickCommandHandlers.cs`, `src/MyTaskApp.Application/Remote/CommandRunExecutor.cs` |
 
 **Estado:** aceito (fase 2), implementado: o catálogo fechado (`environment.inspect`, `command.run`, `worktree.provision`, `worktree.remove`, `agent.start`, `agent.prompt`, `agent.stop` e `database.copy`), o `RemoteAllowed` só local, que cai quando o texto do comando muda, e o "pedir confirmação" que vira aprovação.

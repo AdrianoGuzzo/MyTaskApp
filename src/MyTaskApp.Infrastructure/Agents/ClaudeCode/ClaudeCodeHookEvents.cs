@@ -38,7 +38,7 @@ internal static class ClaudeCodeHookEvents
 
         var metadata = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        foreach (var key in (string[])["source", "reason", "notification_type", "tool_name", "error_type", "permission_mode"])
+        foreach (var key in (string[])["source", "reason", "notification_type", "tool_name", "error_type", "error", "permission_mode"])
         {
             if (Text(payload, key) is { } value)
             {
@@ -70,6 +70,9 @@ internal static class ClaudeCodeHookEvents
             "ExitPlanMode" => (AgentEventType.NeedsUserInput, "O plano está pronto para a sua aprovação."),
             _ => (AgentEventType.Working, null),
         },
+        // Só no terminal do agente (ADR-099): o hook observa, não decide, e
+        // traz o que a ferramenta vai fazer, para quem responde de longe.
+        "PermissionRequest" => (AgentEventType.NeedsUserInput, DescribePermission(payload)),
         "Notification" => NeedsInputNotifications.Contains(Text(payload, "notification_type") ?? string.Empty)
             ? (AgentEventType.NeedsUserInput, Text(payload, "message") ?? "O Claude precisa de você.")
             : (AgentEventType.Notification, Text(payload, "message")),
@@ -90,8 +93,32 @@ internal static class ClaudeCodeHookEvents
             ? Text(questions[0], "question")
             : null;
 
-    /// <summary>O <c>error_type</c> do <c>StopFailure</c>, em português.</summary>
-    private static string DescribeFailure(JsonElement payload) => Text(payload, "error_type") switch
+    /// <summary>
+    /// "Bash: npm test" — a ferramenta e o que ela recebe que mais diz o que vai
+    /// acontecer. Só o primeiro campo conhecido, e curto: é contexto para
+    /// decidir, não cópia do pedido.
+    /// </summary>
+    private static string DescribePermission(JsonElement payload)
+    {
+        var tool = Text(payload, "tool_name") ?? "uma ferramenta";
+        var detail = payload.TryGetProperty("tool_input", out var input)
+            ? ((string[])["command", "file_path", "path", "url", "pattern", "description"]).Select(key => Text(input, key)).FirstOrDefault(value => value is not null)
+            : null;
+
+        if (detail is null)
+        {
+            return $"O Claude pede permissão para usar {tool}.";
+        }
+
+        detail = detail.ReplaceLineEndings(" ");
+        return $"{tool}: {(detail.Length > 300 ? detail[..300] + "…" : detail)}";
+    }
+
+    /// <summary>
+    /// O tipo de erro do <c>StopFailure</c>, em português. O Claude 2.1 manda
+    /// <c>error</c>; o <c>error_type</c> é o nome antigo.
+    /// </summary>
+    private static string DescribeFailure(JsonElement payload) => (Text(payload, "error_type") ?? Text(payload, "error")) switch
     {
         "rate_limit" => "Limite de uso do Claude atingido.",
         "overloaded" => "A API do Claude está sobrecarregada.",

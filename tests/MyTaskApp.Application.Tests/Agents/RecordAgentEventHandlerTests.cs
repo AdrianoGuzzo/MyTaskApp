@@ -5,6 +5,7 @@ using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Configuration;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Sounds;
+using MyTaskApp.Application.Terminals;
 using MyTaskApp.Application.Tests.Fakes;
 using MyTaskApp.Domain.Agents;
 using MyTaskApp.Domain.Deadlines;
@@ -55,7 +56,7 @@ public class RecordAgentEventHandlerTests
         _sessions.Seed(_session);
     }
 
-    private RecordAgentEventHandler Handler() =>
+    private RecordAgentEventHandler Handler(ITerminalSessions? terminals = null) =>
         new(
             _sessions,
             _tasks,
@@ -64,6 +65,8 @@ public class RecordAgentEventHandlerTests
             _watcher,
             _presenter,
             _windows,
+            terminals ?? NoTerminalSessions.Instance,
+            NoAgentTerminalWindows.Instance,
             new AgentAlertSoundPlayer(_sounds, _library, _player, NullLogger<AgentAlertSoundPlayer>.Instance),
             new UserClock(_time, Options.Create(new ApplicationOptions { TimeZoneId = "UTC" }), NullLogger<UserClock>.Instance),
             _time,
@@ -79,6 +82,95 @@ public class RecordAgentEventHandlerTests
 
     private Task<AgentEventOutcome> SendAsync(AgentEvent agentEvent, string? token = null) =>
         Handler().HandleAsync(new RecordAgentEvent(agentEvent, token ?? _token), Ct);
+
+    /// <summary>
+    /// O terminal do agente (ADR-098): o agente grava a atividade, mostra o
+    /// diálogo na sessão e deixa o som e o aviso para o desktop.
+    /// </summary>
+    [Fact]
+    public async Task InTheAgent_ATerminalSession_RecordsAndHandsTheAttentionToTheDesktop()
+    {
+        var session = TerminalSession();
+        var terminals = new RecordingTerminalSessions(isHost: true);
+
+        var outcome = await Handler(terminals).HandleAsync(new RecordAgentEvent(Event(AgentEventType.NeedsUserInput, "Posso rodar?", session.Id), _token), Ct);
+
+        outcome.Should().Be(AgentEventOutcome.Applied);
+        session.Activity.Should().Be(AgentActivity.WaitingForUser);
+        terminals.Observed.Should().ContainSingle().Which.Type.Should().Be(AgentEventType.NeedsUserInput);
+        terminals.Notified.Should().Equal(session.Id);
+        _presenter.Presented.Should().BeEmpty("quem tem tela é o desktop");
+        _player.Played.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task InTheDesktop_ATerminalSessionsEvent_IsNotItsOwn()
+    {
+        var session = TerminalSession();
+
+        var outcome = await SendAsync(Event(AgentEventType.NeedsUserInput, "Posso rodar?", session.Id));
+
+        outcome.Should().Be(AgentEventOutcome.Ignored);
+        session.Activity.Should().NotBe(AgentActivity.WaitingForUser);
+        _presenter.Presented.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task InTheAgent_ADirectSessionsEvent_IsNotItsOwn()
+    {
+        var terminals = new RecordingTerminalSessions(isHost: true);
+
+        var outcome = await Handler(terminals).HandleAsync(new RecordAgentEvent(Event(AgentEventType.NeedsUserInput, "Redis?"), _token), Ct);
+
+        outcome.Should().Be(AgentEventOutcome.Ignored);
+        _session.Activity.Should().NotBe(AgentActivity.WaitingForUser);
+        terminals.Observed.Should().BeEmpty();
+        terminals.Notified.Should().BeEmpty();
+    }
+
+    private AgentSession TerminalSession()
+    {
+        var hash = AgentHookToken.Hash(_token);
+        var session = AgentSession.CreateTerminal(_task.Id, _task.Developments[0].Id, "claude-code", @"C:\claude.exe", Worktree, Guid.NewGuid().ToString(), Now);
+        session.EnableMonitoring(hash);
+        session.MarkRunning(ProcessId + 1, Now);
+        _sessions.Seed(session);
+        return session;
+    }
+
+    private sealed class RecordingTerminalSessions(bool isHost) : ITerminalSessions
+    {
+        public List<AgentEvent> Observed { get; } = [];
+
+        public List<Guid> Notified { get; } = [];
+
+        public bool IsHost => isHost;
+
+        public PseudoTerminalSupport Support => new(true, "teste", null);
+
+        public event EventHandler? Changed
+        {
+            add { }
+            remove { }
+        }
+
+        public event EventHandler<Guid>? ActivityChanged
+        {
+            add { }
+            remove { }
+        }
+
+        public TerminalSessionHost? Find(Guid sessionId) => null;
+
+        public IReadOnlyList<TerminalSessionHost> List() => [];
+
+        public Task<TerminalLaunchResult> LaunchAsync(TerminalLaunchOptions options, TerminalSessionInfo info, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public void Observe(AgentEvent agentEvent) => Observed.Add(agentEvent);
+
+        public void NotifyActivity(Guid sessionId) => Notified.Add(sessionId);
+    }
 
     [Fact]
     public async Task AQuestion_PutsTheSessionWaiting_AndTellsTheUser()

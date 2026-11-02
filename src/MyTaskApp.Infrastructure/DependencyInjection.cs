@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
+using MyTaskApp.Application.Configuration;
 using MyTaskApp.Application.Consultations;
 using MyTaskApp.Application.Deadlines;
 using MyTaskApp.Application.DatabaseOperations;
@@ -27,6 +28,7 @@ using MyTaskApp.Application.StickyNotes;
 using MyTaskApp.Application.Sync;
 using MyTaskApp.Application.Tags;
 using MyTaskApp.Application.Tasks;
+using MyTaskApp.Application.Terminals;
 using MyTaskApp.Application.TimeTracking;
 using MyTaskApp.Domain.DatabaseOperations;
 using MyTaskApp.Infrastructure.Agents;
@@ -270,11 +272,13 @@ public static class DependencyInjection
             services.AddSingleton<ITerminalLauncher>(
                 provider => new LinuxTerminalLauncher(provider.GetRequiredService<ILogger<LinuxTerminalLauncher>>()));
             services.AddSingleton<ITerminalWindowManager, UnsupportedTerminalWindowManager>();
+            AddLinuxPseudoTerminal(services);
         }
         else
         {
             services.AddSingleton<ITerminalLauncher, UnsupportedTerminalLauncher>();
             services.AddSingleton<ITerminalWindowManager, UnsupportedTerminalWindowManager>();
+            services.AddSingleton<IPseudoTerminalFactory, UnsupportedPseudoTerminalFactory>();
         }
 
         return services;
@@ -391,12 +395,19 @@ public static class DependencyInjection
         services.AddSingleton<IRemoteApi>(provider => provider.GetRequiredService<RemoteApiClient>());
         services.AddSingleton<IRemoteOperationsApi>(provider => provider.GetRequiredService<RemoteApiClient>());
         services.AddSingleton<IRemoteSessionsApi>(provider => provider.GetRequiredService<RemoteApiClient>());
+        services.AddSingleton<IRemoteTerminalsApi>(provider => provider.GetRequiredService<RemoteApiClient>());
 
         // A campainha do servidor (T-15): só o agente liga, pelo RemoteOperationScheduler.
-        services.AddSingleton<IRemoteHub, SignalRRemoteHub>();
+        // Na mesma conexão vai o terminal remoto (ADR-099), do lado da máquina alvo.
+        services.AddSingleton<SignalRRemoteHub>();
+        services.AddSingleton<IRemoteHub>(provider => provider.GetRequiredService<SignalRRemoteHub>());
+        services.AddSingleton<IRemoteTerminalLink>(provider => provider.GetRequiredService<SignalRRemoteHub>());
 
         // Os avisos da conta para as telas de controle (ADR-094): ligam só com uma tela aberta.
         services.AddSingleton<IRemoteWatch, SignalRRemoteWatch>();
+
+        // Seguir o terminal de outra máquina (ADR-099): uma conexão do hub por vista.
+        services.AddSingleton<IRemoteTerminalWires, SignalRRemoteTerminalWires>();
         services.AddSingleton<ISyncServerAddress, SyncServerAddress>();
         services.AddSingleton<ISyncServerProbe, SyncServerProbe>();
     }
@@ -459,6 +470,58 @@ public static class DependencyInjection
     }
 
     /// <summary>
+    /// O terminal do agente (ADR-098): só o MyTaskApp Agent chama, antes da
+    /// Application. As sessões hospedadas, a porta de hooks própria (qualquer
+    /// livre: a 47831 continua do desktop, com as sessões diretas), o canal
+    /// local e a atividade que atravessa para o desktop chamar a pessoa.
+    /// </summary>
+    public static IServiceCollection AddAgentTerminalHosting(this IServiceCollection services, IConfiguration configuration)
+    {
+        var databaseOptions =
+            configuration.GetSection(DatabaseOptions.SectionName).Get<DatabaseOptions>()
+            ?? new DatabaseOptions();
+
+        services.AddSingleton<TerminalSessionRegistry>();
+        services.TryAddSingleton<ITerminalSessions>(provider => provider.GetRequiredService<TerminalSessionRegistry>());
+        services.AddSingleton<LocalPeerAttentionForwarder>();
+
+        // Antes da Application, que registra as opções com TryAdd: o agente ouve numa porta livre.
+        var applicationOptions =
+            configuration.GetSection(ApplicationOptions.SectionName).Get<ApplicationOptions>()
+            ?? new ApplicationOptions();
+        applicationOptions.AgentEventsPort = 0;
+        services.TryAddSingleton(Options.Create(applicationOptions));
+
+        services.AddSingleton<LocalTerminalServer>();
+        services.AddSingleton(provider => new TerminalPipeListener(
+            TerminalPipe.NameFor(databaseOptions.ResolveFullPath()),
+            provider.GetRequiredService<LocalTerminalServer>(),
+            provider.GetRequiredService<ILogger<TerminalPipeListener>>()));
+
+        return services;
+    }
+
+    /// <summary>
+    /// O desktop pedindo o terminal ao agente desta máquina (ADR-098), antes
+    /// da Application: o canal local pelo nome do banco, e a janela nativa e o
+    /// agente na pasta do app.
+    /// </summary>
+    public static IServiceCollection AddAgentTerminalClient(this IServiceCollection services, IConfiguration configuration)
+    {
+        var databaseOptions =
+            configuration.GetSection(DatabaseOptions.SectionName).Get<DatabaseOptions>()
+            ?? new DatabaseOptions();
+
+        services.TryAddSingleton<IAgentTerminalClient>(provider => new LocalAgentTerminalClient(
+            TerminalPipe.NameFor(databaseOptions.ResolveFullPath()),
+            AppContext.BaseDirectory,
+            provider.GetRequiredService<IPseudoTerminalFactory>(),
+            provider.GetRequiredService<ILogger<LocalAgentTerminalClient>>()));
+
+        return services;
+    }
+
+    /// <summary>
     /// O agente no logon desta conta (ADR-085), a partir da pasta do app: só o
     /// desktop registra, porque é ele quem tem a tela que liga e desliga.
     /// </summary>
@@ -503,5 +566,14 @@ public static class DependencyInjection
             provider => new WindowsTerminalLauncher(
                 provider.GetRequiredService<ILogger<WindowsTerminalLauncher>>()));
         services.AddSingleton<ITerminalWindowManager, WindowsTerminalWindowManager>();
+
+        // O terminal do agente (ADR-098): o pseudoconsole do próprio Windows.
+        services.AddSingleton<IPseudoTerminalFactory>(
+            provider => new ConPtyTerminalFactory(provider.GetRequiredService<ILogger<ConPtyTerminal>>()));
     }
+
+    [SupportedOSPlatform("linux")]
+    private static void AddLinuxPseudoTerminal(IServiceCollection services) =>
+        services.AddSingleton<IPseudoTerminalFactory>(
+            provider => new UnixPtyTerminalFactory(provider.GetRequiredService<ILogger<UnixPtyTerminal>>()));
 }

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Um Claude Code de mentira para os testes do terminal do agente (ADR-098):
+    desenha num TTY, le o teclado cru, pergunta, pede permissao, trabalha ate o
+    Esc e manda os hooks como o de verdade. Nenhum teste depende de conta do
+    Claude por causa dele.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>false</IsTestProject>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+</Project>

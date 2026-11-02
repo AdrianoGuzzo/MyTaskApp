@@ -49,6 +49,7 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $desktopProject = Join-Path $repoRoot 'src\MyTaskApp.Desktop\MyTaskApp.Desktop.csproj'
 $agentProject = Join-Path $repoRoot 'src\MyTaskApp.Agent\MyTaskApp.Agent.csproj'
+$terminalAttachProject = Join-Path $repoRoot 'src\MyTaskApp.TerminalAttach\MyTaskApp.TerminalAttach.csproj'
 $solution = Join-Path $repoRoot 'MyTaskApp.slnx'
 $publishDir = Join-Path $repoRoot "artifacts\publish\$Runtime"
 $installerDir = Join-Path $repoRoot 'artifacts\installer'
@@ -180,6 +181,19 @@ Invoke-Checked 'dotnet publish (agente)' {
         --nologo
 }
 
+# A janela nativa do terminal do agente (ADR-098): um console pequeno, so com a Application.
+Invoke-Checked 'dotnet publish (janela do terminal)' {
+    dotnet publish $terminalAttachProject `
+        -c Release `
+        -r $Runtime `
+        --self-contained true `
+        -p:PublishTrimmed=false `
+        -p:PublishSingleFile=false `
+        -p:DebugType=none `
+        -o $publishDir `
+        --nologo
+}
+
 Invoke-Checked 'dotnet publish' {
     dotnet publish $desktopProject `
         -c Release `
@@ -197,6 +211,9 @@ if (-not (Test-Path $exe)) { throw "Publish nao produziu $exe." }
 
 $agentExe = Join-Path $publishDir 'MyTaskApp.Agent.exe'
 if (-not (Test-Path $agentExe)) { throw "Publish nao produziu $agentExe (o controle remoto com o app fechado depende dele)." }
+
+$terminalAttachExe = Join-Path $publishDir 'MyTaskApp.TerminalAttach.exe'
+if (-not (Test-Path $terminalAttachExe)) { throw "Publish nao produziu $terminalAttachExe (a janela do terminal do agente depende dele)." }
 
 # appsettings.json e carregado com optional:false -- sem ele o app morre na
 # primeira linha do Main. Melhor falhar aqui do que na maquina do usuario.

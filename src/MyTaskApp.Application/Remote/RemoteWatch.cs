@@ -17,6 +17,9 @@ public enum RemoteNoticeKind
 
     /// <summary>A conexão voltou: os avisos do intervalo se perderam, e tudo é relido.</summary>
     Reconnected,
+
+    /// <summary>As sessões do terminal de uma máquina mudaram (ADR-099); o id é o da máquina.</summary>
+    Terminals,
 }
 
 public sealed record RemoteNotice(RemoteNoticeKind Kind, Guid Id);

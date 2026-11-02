@@ -32,6 +32,35 @@ public class AgentInstallerContractTests
         }
     }
 
+    /// <summary>
+    /// A janela nativa do terminal do agente (ADR-098) vai na mesma pasta,
+    /// depois do agente e antes do desktop, e o build confere que saiu.
+    /// </summary>
+    [Fact]
+    public void BothBuildScripts_PublishTheTerminalWindow_BeforeTheDesktop()
+    {
+        foreach (var (script, agentPublish, attachPublish, desktopPublish, produced) in new[]
+        {
+            (RepositoryFiles.WindowsBuildScript, "dotnet publish $agentProject", "dotnet publish $terminalAttachProject", "dotnet publish $desktopProject", "'MyTaskApp.TerminalAttach.exe'"),
+            (RepositoryFiles.LinuxBuildScript, "dotnet publish \"$agent_project\"", "dotnet publish \"$terminal_attach_project\"", "dotnet publish \"$desktop_project\"", "$publish_dir/MyTaskApp.TerminalAttach"),
+        })
+        {
+            var text = RepositoryFiles.Read(script);
+            var agent = text.IndexOf(agentPublish, StringComparison.Ordinal);
+            var attach = text.IndexOf(attachPublish, StringComparison.Ordinal);
+            var desktop = text.IndexOf(desktopPublish, StringComparison.Ordinal);
+
+            agent.Should().BePositive($"{script} publica o agente");
+            text.Should().Contain("MyTaskApp.TerminalAttach.csproj", $"{script} publica a janela do terminal");
+            attach.Should().BeGreaterThan(agent);
+            desktop.Should().BeGreaterThan(attach, "o desktop por cima, como com o agente");
+            text.Should().Contain(produced, "e confere que a janela saiu do publish");
+        }
+
+        RepositoryFiles.Read(RepositoryFiles.LinuxInstallScript).Should().Contain("\"$install_dir/MyTaskApp.TerminalAttach\"", "o install.sh deixa a janela executável");
+        IssHas("/IM {#TerminalAttachExeName}").Should().BeTrue("uma janela aberta não segura a atualização");
+    }
+
     [Fact]
     public void TheInstaller_KnowsTheAgentByTheNamesTheCodeUses()
     {

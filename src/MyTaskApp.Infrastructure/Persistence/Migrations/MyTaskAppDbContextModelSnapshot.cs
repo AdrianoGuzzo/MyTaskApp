@@ -1380,6 +1380,9 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("TEXT");
 
+                    b.Property<int?>("Hosting")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Model")
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
@@ -1641,6 +1644,9 @@ namespace MyTaskApp.Infrastructure.Persistence.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<bool>("AcceptControl")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("AcceptTerminal")
                         .HasColumnType("INTEGER");
 
                     b.Property<bool>("Enabled")

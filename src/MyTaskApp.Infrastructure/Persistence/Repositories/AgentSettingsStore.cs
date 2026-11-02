@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using MyTaskApp.Application.Agents;
+using MyTaskApp.Application.Terminals;
 
 namespace MyTaskApp.Infrastructure.Persistence.Repositories;
 
@@ -40,6 +41,15 @@ internal sealed class AgentSettingsStore(MyTaskAppDbContext context) : IAgentSet
         string effort,
         CancellationToken cancellationToken = default) =>
         (await TrackedAsync(providerId, cancellationToken)).Effort = effort;
+
+    public async Task<AgentHosting?> GetHostingAsync(string providerId, CancellationToken cancellationToken = default) =>
+        (AgentHosting?)(await FindAsync(providerId, cancellationToken))?.Hosting;
+
+    public async Task SaveHostingAsync(
+        string providerId,
+        AgentHosting hosting,
+        CancellationToken cancellationToken = default) =>
+        (await TrackedAsync(providerId, cancellationToken)).Hosting = (int)hosting;
 
     private Task<AgentSettingsRow?> FindAsync(string providerId, CancellationToken cancellationToken) =>
         context.AgentSettings

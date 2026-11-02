@@ -296,6 +296,10 @@ internal sealed class FakeAgentCliProvider : IAgentCliProvider, IConsultationLau
 
     public string? MonitoringUnavailableReason(string workingDirectory, Uri endpoint) => MonitoringBlockedBy;
 
+    public bool Bypasses { get; set; }
+
+    public bool BypassesPermissions(IReadOnlyList<string> arguments, string workingDirectory) => Bypasses;
+
     /// <summary>Os pedidos de Consulta Inteligente (ADR-081), na ordem.</summary>
     public List<ConsultationLaunchRequest> Consultations { get; } = [];
 

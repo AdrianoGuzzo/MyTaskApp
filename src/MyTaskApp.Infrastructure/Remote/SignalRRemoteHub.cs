@@ -18,12 +18,14 @@ internal sealed record RemoteHubTransport(Func<HttpMessageHandler> Handler, Http
 /// O agente na campainha do servidor (<c>/hubs/remote</c>, seção 4.2): sai
 /// daqui (nenhuma porta aberta na máquina), com o token do dispositivo, e
 /// religa sozinho com espera crescente de 2 s até 5 min, com variação. Só
-/// avisa: o que fazer vem pela fila, assinado (ADR-086).
+/// avisa: o que fazer vem pela fila, assinado (ADR-086). Na mesma conexão vai
+/// o terminal remoto (ADR-099): a saída sai daqui, e a entrada chega aqui
+/// ainda sem conferir.
 /// </summary>
 internal sealed class SignalRRemoteHub(
     ISyncAuthenticator authenticator,
     ILogger<SignalRRemoteHub> logger,
-    RemoteHubTransport? transport = null) : IRemoteHub, IAsyncDisposable
+    RemoteHubTransport? transport = null) : IRemoteHub, IRemoteTerminalLink, IAsyncDisposable
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
 
@@ -35,7 +37,22 @@ internal sealed class SignalRRemoteHub(
 
     public event Action<Guid>? ApprovalResolved;
 
+    public event Action<Guid, SignedEnvelope>? InputReceived;
+
+    public event Action<Guid>? Detached;
+
+    public event Action? Lost;
+
     public bool IsConnected => _connection?.State == HubConnectionState.Connected;
+
+    /// <summary>Espera o servidor: quem chama sente a fila dele, e uma recusa volta como erro.</summary>
+    public Task PublishAsync(RemoteTerminalFrame frame, CancellationToken cancellationToken) =>
+        Connected().InvokeAsync(RemoteHubMethods.TerminalPublish, frame, cancellationToken);
+
+    public Task CloseAsync(Guid attachId, string reason, CancellationToken cancellationToken) =>
+        _connection is { State: HubConnectionState.Connected } connection
+            ? connection.InvokeAsync(RemoteHubMethods.TerminalClose, attachId, reason, cancellationToken)
+            : Task.CompletedTask;
 
     public async Task ConnectAsync(CancellationToken cancellationToken)
     {
@@ -85,6 +102,7 @@ internal sealed class SignalRRemoteHub(
                 await _connection.DisposeAsync();
                 _connection = null;
                 logger.LogInformation("RemoteHubDisconnected");
+                Lost?.Invoke();
             }
         }
         finally
@@ -110,6 +128,8 @@ internal sealed class SignalRRemoteHub(
         connection.On<Guid>(RemoteHubMessages.OperationAvailable, id => OperationAvailable?.Invoke(id));
         connection.On<Guid>(RemoteHubMessages.CancelRequested, id => CancelRequested?.Invoke(id));
         connection.On<Guid, Guid>(RemoteHubMessages.ApprovalResolved, (approvalId, _) => ApprovalResolved?.Invoke(approvalId));
+        connection.On<Guid, SignedEnvelope>(RemoteHubMessages.TerminalInput, (attachId, input) => InputReceived?.Invoke(attachId, input));
+        connection.On<Guid>(RemoteHubMessages.TerminalDetached, attachId => Detached?.Invoke(attachId));
 
         // Religou: pode ter perdido avisos no meio; uma busca agora acha o que chegou.
         connection.Reconnected += _ =>
@@ -119,9 +139,20 @@ internal sealed class SignalRRemoteHub(
             return Task.CompletedTask;
         };
 
+        // Religar é outra conexão para o servidor: as do terminal acabaram lá, e acabam aqui.
+        connection.Reconnecting += _ =>
+        {
+            Lost?.Invoke();
+            return Task.CompletedTask;
+        };
+
         return connection;
     }
 
+    private HubConnection Connected() =>
+        _connection is { State: HubConnectionState.Connected } connection
+            ? connection
+            : throw new InvalidOperationException("O agente não está ligado ao servidor.");
 }
 
 /// <summary>A conexão com o hub, igual para o agente e para as telas de controle.</summary>

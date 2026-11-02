@@ -1,0 +1,10 @@
+<Project>
+
+  <!--
+    O FakeClaude e um programa de console, nao um projeto de teste: pula o
+    tests/Directory.Build.props (que faria dele um executavel do xUnit sem
+    testes) e importa so o da raiz.
+  -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../../'))" />
+
+</Project>

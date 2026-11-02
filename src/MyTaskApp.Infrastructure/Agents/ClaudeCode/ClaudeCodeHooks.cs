@@ -42,6 +42,13 @@ internal sealed class ClaudeCodeHooks(
     /// <summary>Nome do arquivo — o MyTaskApp é o dono dele, e de nada além dele.</summary>
     public const string SettingsFileName = "claude-code-hooks.json";
 
+    /// <summary>
+    /// O do terminal do agente (ADR-098): outra porta, a do agente, e o
+    /// <c>PermissionRequest</c> a mais. Arquivo separado porque o desktop e o
+    /// agente gravam cada um o seu, com a sua porta.
+    /// </summary>
+    public const string TerminalSettingsFileName = "claude-code-hooks-terminal.json";
+
     /// <summary>Bem acima do que a porta local leva para responder, e curto para nunca prender o Claude.</summary>
     public const int TimeoutSeconds = 5;
 
@@ -66,6 +73,14 @@ internal sealed class ClaudeCodeHooks(
         ("SessionEnd", null),
     ];
 
+    /// <summary>
+    /// Só no terminal do agente: o pedido de permissão com a ferramenta e o
+    /// que ela recebe, para quem responde de longe saber o que aprova (ADR-099).
+    /// O hook só observa — responde <c>{}</c>, sem decisão, e o diálogo do
+    /// Claude abre como sempre.
+    /// </summary>
+    public static readonly (string Event, string? Matcher) PermissionObserver = ("PermissionRequest", "*");
+
     private static readonly string[] AllowedEnvVars =
     [
         AgentMonitoringEnvironment.HookToken,
@@ -84,6 +99,8 @@ internal sealed class ClaudeCodeHooks(
 
     public string SettingsPath => Path.Combine(settingsDirectory, SettingsFileName);
 
+    public string TerminalSettingsPath => Path.Combine(settingsDirectory, TerminalSettingsFileName);
+
     /// <summary>A pasta do app para os agentes: o arquivo de hooks e os arquivos de cada consulta (ADR-081).</summary>
     public string StateDirectory => settingsDirectory;
 
@@ -92,11 +109,12 @@ internal sealed class ClaudeCodeHooks(
     /// hooks: <c>--settings</c> sobrepõe chave por chave, então qualquer outra
     /// chave aqui passaria por cima da escolha do usuário.
     /// </summary>
-    public static string SettingsJson(Uri endpoint)
+    /// <param name="observePermissions">Acrescenta o <see cref="PermissionObserver"/> (terminal do agente).</param>
+    public static string SettingsJson(Uri endpoint, bool observePermissions = false)
     {
         var hooks = new JsonObject();
 
-        foreach (var (eventName, matcher) in Registrations)
+        foreach (var (eventName, matcher) in observePermissions ? [.. Registrations, PermissionObserver] : Registrations)
         {
             var group = new JsonObject();
 
@@ -119,10 +137,11 @@ internal sealed class ClaudeCodeHooks(
     /// Só reescreve se mudou, e troca o arquivo de uma vez: um Claude abrindo
     /// agora não pode ler um arquivo pela metade.
     /// </summary>
-    public string EnsureSettingsFile(Uri endpoint)
+    /// <param name="terminal">O arquivo do terminal do agente, com a porta dele.</param>
+    public string EnsureSettingsFile(Uri endpoint, bool terminal = false)
     {
-        var content = SettingsJson(endpoint);
-        var path = SettingsPath;
+        var content = SettingsJson(endpoint, observePermissions: terminal);
+        var path = terminal ? TerminalSettingsPath : SettingsPath;
 
         lock (_writeLock)
         {
@@ -190,6 +209,34 @@ internal sealed class ClaudeCodeHooks(
             if (BlocksUrl(settings, endpoint))
             {
                 return $"a URL {endpoint} não está em allowedHttpHookUrls ({file}).";
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// O <c>permissions.defaultMode</c> que vale na pasta, pela precedência do
+    /// Claude: local, projeto, usuário (e a política gerenciada por cima de
+    /// todos). <c>null</c> quando nenhum arquivo diz.
+    /// </summary>
+    public string? DefaultPermissionMode(string workingDirectory)
+    {
+        string[] files =
+        [
+            .. managedSettingsFiles,
+            Path.Combine(workingDirectory, ".claude", "settings.local.json"),
+            Path.Combine(workingDirectory, ".claude", "settings.json"),
+            Path.Combine(userProfile, ".claude", "settings.json"),
+        ];
+
+        foreach (var file in files)
+        {
+            if (Read(file)?["permissions"] is JsonObject permissions
+                && permissions["defaultMode"] is JsonValue mode
+                && mode.GetValueKind() == JsonValueKind.String)
+            {
+                return mode.GetValue<string>();
             }
         }
 

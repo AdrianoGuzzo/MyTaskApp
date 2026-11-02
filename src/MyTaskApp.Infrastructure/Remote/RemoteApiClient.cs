@@ -10,7 +10,7 @@ namespace MyTaskApp.Infrastructure.Remote;
 /// sync: o token que vale é o do dispositivo, com o escopo <c>remote</c>. O JSON
 /// é o do <see cref="RemoteJson"/>, o estrito do contrato remoto.
 /// </summary>
-internal sealed class RemoteApiClient(SyncHttp http, ISyncAuthenticator authenticator) : IRemoteApi, IRemoteOperationsApi, IRemoteSessionsApi
+internal sealed class RemoteApiClient(SyncHttp http, ISyncAuthenticator authenticator) : IRemoteApi, IRemoteOperationsApi, IRemoteSessionsApi, IRemoteTerminalsApi
 {
     public Task<RemoteDeviceInfo> RegisterAsync(DeviceRegistration registration, CancellationToken cancellationToken) =>
         CallAsync<RemoteDeviceInfo>(HttpMethod.Put, RemoteRoutes.CurrentDevice, registration, cancellationToken);
@@ -81,6 +81,12 @@ internal sealed class RemoteApiClient(SyncHttp http, ISyncAuthenticator authenti
 
     public Task<RemoteAgentSessionDetail> GetSessionAsync(Guid sessionId, CancellationToken cancellationToken) =>
         CallAsync<RemoteAgentSessionDetail>(HttpMethod.Get, RemoteRoutes.Session(sessionId), null, cancellationToken);
+
+    public Task<RemoteTerminalSessionAck> ReportTerminalsAsync(RemoteTerminalSessionBatch batch, CancellationToken cancellationToken) =>
+        CallAsync<RemoteTerminalSessionAck>(HttpMethod.Put, RemoteRoutes.AgentTerminals, batch, cancellationToken);
+
+    public Task<RemoteTerminalSessionList> ListTerminalsAsync(CancellationToken cancellationToken) =>
+        CallAsync<RemoteTerminalSessionList>(HttpMethod.Get, RemoteRoutes.Terminals, null, cancellationToken);
 
     private async Task<T> CallAsync<T>(HttpMethod method, string path, object? body, CancellationToken cancellationToken)
     {

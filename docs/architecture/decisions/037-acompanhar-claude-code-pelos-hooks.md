@@ -7,7 +7,7 @@
 | **Categoria** | agente-ia |
 | **Registrado** | 2026-09-26, commit `23a1665` (primeiro commit em que o ADR aparece) |
 | **Palavras-chave** | AgentEventListener, ClaudeCodeHookEvents, AgentActivity, RecordAgentEventHandler, hooks, HookTokenHash, AgentAlertWindow, 47831 |
-| **Relações** | relacionado: [ADR-030](030-sessoes-claude-code-por-tarefa.md), [ADR-031](031-varios-ambientes-por-tarefa.md), [ADR-033](033-parametros-do-agente-lembrados.md), [ADR-042](042-som-por-estado-do-claude-code.md), [ADR-059](059-servidor-mcp-local-loopback.md), [ADR-081](081-consulta-inteligente-somente-leitura.md), [ADR-089](089-claude-code-remoto-headless-com-aprovacao.md) |
+| **Relações** | revisto por: [ADR-098](098-terminal-do-agente-em-pseudoterminal.md) (os hooks do terminal do agente vão ao agente); relacionado: [ADR-030](030-sessoes-claude-code-por-tarefa.md), [ADR-031](031-varios-ambientes-por-tarefa.md), [ADR-033](033-parametros-do-agente-lembrados.md), [ADR-042](042-som-por-estado-do-claude-code.md), [ADR-059](059-servidor-mcp-local-loopback.md), [ADR-081](081-consulta-inteligente-somente-leitura.md), [ADR-089](089-claude-code-remoto-headless-com-aprovacao.md) |
 | **Código** | `src/MyTaskApp.Infrastructure/Agents/AgentEventListener.cs`, `src/MyTaskApp.Infrastructure/Agents/ClaudeCode/ClaudeCodeHookEvents.cs`, `src/MyTaskApp.Infrastructure/Agents/ClaudeCode/ClaudeCodeHooks.cs`, `src/MyTaskApp.Application/Agents/RecordAgentEvent.cs` |
 
 **Contexto:** o ADR-030 liga a tarefa ao **processo** do Claude: o app sabe se
