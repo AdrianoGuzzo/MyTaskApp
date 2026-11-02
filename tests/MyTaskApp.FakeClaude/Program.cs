@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
+using Microsoft.Win32.SafeHandles;
 
 namespace MyTaskApp.FakeClaude;
 
@@ -280,7 +281,11 @@ internal static class Program
 
     private static void ReadKeys()
     {
-        using var input = Console.OpenStandardInput();
+        // No Unix, o OpenStandardInput de um TTY passa pelo editor de linha do
+        // .NET (eco próprio, e o Esc some): lê o descritor 0 direto.
+        using var input = OperatingSystem.IsWindows()
+            ? Console.OpenStandardInput()
+            : new FileStream(new SafeFileHandle(0, ownsHandle: false), FileAccess.Read, bufferSize: 0);
         var buffer = new byte[4096];
         var decoder = new UTF8Encoding(false).GetDecoder();
         var chars = new char[8192];
@@ -442,10 +447,32 @@ internal static partial class RawInput
             return;
         }
 
-        // O stty herda o TTY como entrada e o põe cru.
-        using var stty = Process.Start(new ProcessStartInfo("stty", "raw -echo") { UseShellExecute = false });
-        stty?.WaitForExit();
+        // Direto na libc: um stty filho não serve, porque o .NET devolve o modo
+        // de linha ao TTY quando um filho termina (e sem PATH nem acha o stty).
+        var termios = Marshal.AllocHGlobal(256);
+
+        try
+        {
+            if (tcgetattr(0, termios) == 0)
+            {
+                cfmakeraw(termios);
+                _ = tcsetattr(0, 0, termios);
+            }
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(termios);
+        }
     }
+
+    [LibraryImport("libc", SetLastError = true)]
+    private static partial int tcgetattr(int fd, nint termios);
+
+    [LibraryImport("libc")]
+    private static partial void cfmakeraw(nint termios);
+
+    [LibraryImport("libc", SetLastError = true)]
+    private static partial int tcsetattr(int fd, int optionalActions, nint termios);
 
     [LibraryImport("kernel32.dll")]
     private static partial nint GetStdHandle(int handle);

@@ -130,6 +130,7 @@ jobs:
 
   # O terminal do agente no Linux (ADR-098): o mesmo contrato que o ConPTY
   # cumpre no job build, aqui com o openpty de verdade e o FakeClaude dentro.
+  # Os testes do comando rápido (ADR-051) ficam fora: são do Windows.
   terminal-linux:
     runs-on: ubuntu-latest
 
@@ -144,7 +145,7 @@ jobs:
         run: >
           dotnet test tests/MyTaskApp.Infrastructure.Tests/MyTaskApp.Infrastructure.Tests.csproj
           -c Release
-          --filter "FullyQualifiedName~Terminals"
+          --filter "FullyQualifiedName~Terminals&FullyQualifiedName!~QuickCommandTerminalTests"
           --logger "trx;LogFileName=terminal-linux.trx"
           --results-directory artifacts/terminal-linux
 

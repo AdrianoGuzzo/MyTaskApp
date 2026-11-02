@@ -174,6 +174,12 @@ internal sealed partial class UnixPtyTerminal : IPseudoTerminal
 
         try
         {
+            // No Linux, o mestre aceita a escrita mesmo sem ninguém do outro lado.
+            if (_exited.Task.IsCompleted)
+            {
+                throw new DomainException("O terminal já fechou: a entrada não foi entregue.");
+            }
+
             await Task.Run(() => _input.Write(data.Span), cancellationToken).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is IOException or ObjectDisposedException)
