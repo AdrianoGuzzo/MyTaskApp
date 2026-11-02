@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.30.2](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.30.1...v1.30.2) (2026-11-02)
+
+
+### Fixed
+
+* **terminal:** a vista do app desenha na Cascadia Mono, como o Window… ([#182](https://github.com/AdrianoGuzzo/MyTaskApp/issues/182)) ([9db92d9](https://github.com/AdrianoGuzzo/MyTaskApp/commit/9db92d9fbc753a115b98ee717fa50f78607310c4))
+
 ## [1.30.1](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.30.0...v1.30.1) (2026-11-02)
 
 
