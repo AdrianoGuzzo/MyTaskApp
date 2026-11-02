@@ -44,6 +44,13 @@ internal static class Program
             return 0;
         }
 
+        if (args is ["--error-mode"])
+        {
+            // O teste do ProcessRunner: o modo de erro do loader que o filho herdou.
+            Console.WriteLine(OperatingSystem.IsWindows() ? RawInput.ErrorMode() : 0);
+            return 0;
+        }
+
         _sessionId = ValueOf(args, "--session-id") ?? ValueOf(args, "--resume") ?? _sessionId;
         Console.OutputEncoding = new UTF8Encoding(false);
         Console.InputEncoding = new UTF8Encoding(false);
@@ -473,6 +480,11 @@ internal static partial class RawInput
 
     [LibraryImport("libc", SetLastError = true)]
     private static partial int tcsetattr(int fd, int optionalActions, nint termios);
+
+    public static uint ErrorMode() => GetErrorMode();
+
+    [LibraryImport("kernel32.dll")]
+    private static partial uint GetErrorMode();
 
     [LibraryImport("kernel32.dll")]
     private static partial nint GetStdHandle(int handle);
