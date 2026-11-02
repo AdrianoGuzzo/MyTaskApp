@@ -55,6 +55,31 @@ public sealed class TerminalPipeListenerTests
         await afterwards.Should().ThrowAsync<DomainException>("parado, o agente não atende mais");
     }
 
+    /// <summary>
+    /// Vistas que chegam juntas são todas atendidas. No Linux, sem uma instância
+    /// de reserva, quem conectava entre um aceite e o próximo levava
+    /// "connection reset".
+    /// </summary>
+    [Fact]
+    public async Task ViewsArrivingTogether_AreAllAnswered()
+    {
+        var name = $"MyTaskApp.Terminal.{Guid.NewGuid():N}";
+        var server = new LocalTerminalServer(NoTerminalSessions.Instance, new NoUseCases(), NullLogger<LocalTerminalServer>.Instance);
+        await using var listener = new TerminalPipeListener(name, server, NullLogger<TerminalPipeListener>.Instance);
+        listener.Start();
+
+        for (var round = 0; round < 25; round++)
+        {
+            var answers = await Task.WhenAll(Enumerable.Range(0, 4).Select(async _ =>
+            {
+                await using var view = await LocalTerminalChannel.AttachAsync(await TerminalPipe.ConnectAsync(name, Ct), Guid.NewGuid(), TerminalClientKind.Embedded, "App", null, Ct);
+                return await view.ReadAsync(Ct);
+            }));
+
+            answers.Should().AllBeOfType<TerminalRefusal>();
+        }
+    }
+
     /// <summary>Só a vista é exercitada aqui: nenhum caso de uso roda.</summary>
     private sealed class NoUseCases : IUseCaseRunner
     {
