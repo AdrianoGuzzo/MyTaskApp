@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.30.1](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.30.0...v1.30.1) (2026-11-02)
+
+
+### Fixed
+
+* **terminal:** vistas que conectam juntas no Linux não levam mais "connection reset" ([#178](https://github.com/AdrianoGuzzo/MyTaskApp/issues/178)) ([1d6ffdb](https://github.com/AdrianoGuzzo/MyTaskApp/commit/1d6ffdbdb9ecec30987deb30cf61589832275278))
+
 ## [1.30.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.29.1...v1.30.0) (2026-11-02)
 
 
