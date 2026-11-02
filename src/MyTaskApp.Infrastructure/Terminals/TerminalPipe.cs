@@ -101,49 +101,68 @@ public sealed partial class TerminalPipeListener(
     {
         var connections = new List<Task>();
 
-        while (!stopping.IsCancellationRequested)
+        // Sempre há uma instância de reserva já criada. No Linux, as instâncias
+        // de um nome dividem um socket de escuta que fecha quando a última que
+        // espera aceita a conexão: sem a próxima já criada, quem conecta nesse
+        // meio fica na fila do socket fechado e leva "connection reset".
+        var pipe = Create();
+
+        try
         {
-            try
+            while (!stopping.IsCancellationRequested)
             {
-                await _slots.WaitAsync(stopping).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
+                try
+                {
+                    await _slots.WaitAsync(stopping).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
 
-            var pipe = new NamedPipeServerStream(
-                pipeName,
-                PipeDirection.InOut,
-                NamedPipeServerStream.MaxAllowedServerInstances,
-                PipeTransmissionMode.Byte,
-                PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+                var spare = Create();
 
-            try
-            {
-                await pipe.WaitForConnectionAsync(stopping).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                await pipe.DisposeAsync().ConfigureAwait(false);
-                _slots.Release();
-                break;
-            }
-            catch (IOException exception)
-            {
-                await pipe.DisposeAsync().ConfigureAwait(false);
-                _slots.Release();
-                LogListenFailed(exception);
-                await Task.Delay(TimeSpan.FromSeconds(1), stopping).ConfigureAwait(false);
-                continue;
-            }
+                try
+                {
+                    await pipe.WaitForConnectionAsync(stopping).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    await pipe.DisposeAsync().ConfigureAwait(false);
+                    pipe = spare;
+                    _slots.Release();
+                    break;
+                }
+                catch (IOException exception)
+                {
+                    await pipe.DisposeAsync().ConfigureAwait(false);
+                    pipe = spare;
+                    _slots.Release();
+                    LogListenFailed(exception);
+                    await Task.Delay(TimeSpan.FromSeconds(1), stopping).ConfigureAwait(false);
+                    continue;
+                }
 
-            connections.RemoveAll(connection => connection.IsCompleted);
-            connections.Add(ServeAsync(pipe, stopping));
+                connections.RemoveAll(connection => connection.IsCompleted);
+                connections.Add(ServeAsync(pipe, stopping));
+                pipe = spare;
+            }
+        }
+        finally
+        {
+            await pipe.DisposeAsync().ConfigureAwait(false);
         }
 
         await Task.WhenAll(connections).ConfigureAwait(false);
     }
+
+    private NamedPipeServerStream Create() =>
+        new(
+            pipeName,
+            PipeDirection.InOut,
+            NamedPipeServerStream.MaxAllowedServerInstances,
+            PipeTransmissionMode.Byte,
+            PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
 
     private async Task ServeAsync(NamedPipeServerStream pipe, CancellationToken stopping)
     {
