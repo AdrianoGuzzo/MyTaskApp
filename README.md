@@ -146,3 +146,8 @@ Distribuído sob a licença MIT. O texto completo está em [`LICENSE`](LICENSE).
 Os ícones da fonte embutida (`src/MyTaskApp.Desktop/Assets/Fonts/MyTaskAppIcons.ttf`)
 são do [Fluent UI System Icons](https://github.com/microsoft/fluentui-system-icons),
 © Microsoft Corporation, também sob licença MIT.
+
+A fonte do terminal do agente (`src/MyTaskApp.Desktop/Assets/Fonts/CascadiaMono-*.ttf`)
+é a [Cascadia Mono](https://github.com/microsoft/cascadia-code) 2407.24,
+© Microsoft Corporation, sob a SIL Open Font License 1.1
+([`CascadiaMono-OFL.txt`](src/MyTaskApp.Desktop/Assets/Licenses/CascadiaMono-OFL.txt)).
