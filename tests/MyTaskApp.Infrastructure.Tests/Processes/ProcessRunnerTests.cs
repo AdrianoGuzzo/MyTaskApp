@@ -171,9 +171,13 @@ public class ProcessRunnerTests
 
         // O filho diz o modo de erro que herdou: com SEM_FAILCRITICALERRORS, a
         // DLL faltando (o pg_dump do pgAdmin sem o gssapi64.dll) não abre janela.
+        // O P/Invoke sai do Reflection.Emit, sem cmdlet: o Add-Type chamava o
+        // csc e carregava módulo, e no CI passava do minuto.
         const string script = """
-            $t = Add-Type -MemberDefinition '[DllImport("kernel32.dll")] public static extern uint GetErrorMode();' -Name ErrorMode -Namespace MyTaskAppTest -PassThru
-            $t::GetErrorMode()
+            $assembly = [AppDomain]::CurrentDomain.DefineDynamicAssembly([Reflection.AssemblyName]::new('ErrorMode'), 'Run')
+            $type = $assembly.DefineDynamicModule('ErrorMode').DefineType('ErrorMode', 'Public, Class')
+            $type.DefinePInvokeMethod('GetErrorMode', 'kernel32.dll', 'Public, Static, PinvokeImpl', 'Standard', [uint32], [Type[]]@(), 'Winapi', 'Auto').SetImplementationFlags('PreserveSig')
+            $type.CreateType()::GetErrorMode()
             """;
         var encoded = Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(script));
 
