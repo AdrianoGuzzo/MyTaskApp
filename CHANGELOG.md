@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.30.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.29.1...v1.30.0) (2026-11-02)
+
+
+### Added
+
+* **terminal:** sessão real do Claude Code no terminal do agente, seguida e controlada de longe ([#174](https://github.com/AdrianoGuzzo/MyTaskApp/issues/174)) ([8764d39](https://github.com/AdrianoGuzzo/MyTaskApp/commit/8764d39e75c59569c976dd4f49f0acb1fbf8c0f9))
+
 ## [1.29.1](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.29.0...v1.29.1) (2026-10-31)
 
 
