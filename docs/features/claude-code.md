@@ -18,7 +18,9 @@
     janela de terminal. Fechar a janela não encerra o Claude; **Abrir terminal
     do agente** mostra de novo.
   - **Terminal do agente, dentro do app:** a mesma sessão numa janela do
-    MyTaskApp; **Ver no app** mostra de novo.
+    MyTaskApp; **Ver no app** mostra de novo. O texto sai na Cascadia Mono,
+    a fonte do Windows Terminal, que vem embutida no app (o Windows pode não
+    tê-la instalada). Se ela faltar, vale a primeira monoespaçada do sistema.
 
   As duas vistas do agente são a mesma sessão, e outra máquina pareada pode
   segui-la ([o terminal do Claude](../remote.md#o-terminal-do-claude)). A

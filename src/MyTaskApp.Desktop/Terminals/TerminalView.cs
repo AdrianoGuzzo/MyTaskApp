@@ -42,6 +42,18 @@ public sealed class TerminalView : Control
     public static readonly StyledProperty<double> FontSizeProperty =
         TextElement.FontSizeProperty.AddOwner<TerminalView>();
 
+    /// <summary>
+    /// A Cascadia Mono embutida, a mesma do Windows Terminal: a do sistema pode
+    /// não existir (o Windows Terminal traz a dele dentro do pacote), e aí a
+    /// vista desenhava em outra fonte que não a do terminal nativo.
+    /// </summary>
+    public static readonly FontFamily DefaultFontFamily =
+        new("avares://MyTaskApp/Assets/Fonts#Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono");
+
+    /// <summary>Se a fonte pedida não for monoespaçada, a primeira destas que for.</summary>
+    private static readonly string[] MonospaceFallbacks =
+        ["Cascadia Mono", "Consolas", "Lucida Console", "Menlo", "DejaVu Sans Mono", "Noto Sans Mono", "Liberation Mono"];
+
     /// <summary>Linhas por clique da roda.</summary>
     private const int WheelLines = 3;
 
@@ -73,7 +85,7 @@ public sealed class TerminalView : Control
         AffectsRender<TerminalView>(ScreenProperty, VersionProperty, IsFocusedProperty, FontFamilyProperty, FontSizeProperty);
         AffectsMeasure<TerminalView>(FontFamilyProperty, FontSizeProperty);
         FocusableProperty.OverrideDefaultValue<TerminalView>(true);
-        FontFamilyProperty.OverrideDefaultValue<TerminalView>(new FontFamily("Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace"));
+        FontFamilyProperty.OverrideDefaultValue<TerminalView>(DefaultFontFamily);
         FontSizeProperty.OverrideDefaultValue<TerminalView>(13);
     }
 
@@ -198,6 +210,15 @@ public sealed class TerminalView : Control
         {
             ScrollOffset = Screen?.ScrollbackCount ?? 0;
         }
+    }
+
+    /// <summary>A célula fecha em pixels inteiros da tela, que muda de escala conforme o monitor.</summary>
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        _cellWidth = 0;
+        InvalidateMeasure();
+        ReportGridSize(Bounds.Size);
     }
 
     protected override Size MeasureOverride(Size availableSize)
@@ -539,7 +560,7 @@ public sealed class TerminalView : Control
         {
             found = (typeface.GlyphTypeface, index);
         }
-        else if (FontManager.Current.TryMatchCharacter(codepoint, typeface.Style, typeface.Weight, typeface.Stretch, FontFamily, CultureInfo.InvariantCulture, out var fallback)
+        else if (FontManager.Current.TryMatchCharacter(codepoint, typeface.Style, typeface.Weight, typeface.Stretch, typeface.FontFamily, CultureInfo.InvariantCulture, out var fallback)
             && fallback.GlyphTypeface.CharacterToGlyphMap.TryGetGlyph(codepoint, out index) && index != 0)
         {
             found = (fallback.GlyphTypeface, index);
@@ -601,20 +622,68 @@ public sealed class TerminalView : Control
             return;
         }
 
+        var family = MonospaceFamily(FontFamily);
+
         _typefaces =
         [
-            new Typeface(FontFamily),
-            new Typeface(FontFamily, weight: FontWeight.Bold),
-            new Typeface(FontFamily, FontStyle.Italic),
-            new Typeface(FontFamily, FontStyle.Italic, FontWeight.Bold),
+            new Typeface(family),
+            new Typeface(family, weight: FontWeight.Bold),
+            new Typeface(family, FontStyle.Italic),
+            new Typeface(family, FontStyle.Italic, FontWeight.Bold),
         ];
 
         _glyphs.Clear();
         var sample = new FormattedText("MMMMMMMMMM", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, _typefaces[0], FontSize, null);
-        _cellWidth = Math.Max(1, sample.WidthIncludingTrailingWhitespace / 10);
-        _cellHeight = Math.Max(1, Math.Ceiling(sample.Height));
-        _baseline = sample.Baseline;
+        var advance = FontManager.Current.TryGetGlyphTypeface(_typefaces[0], out var face) && face is not null && Advance(face, 'M') is { } units
+            ? units * FontSize / face.Metrics.DesignEmHeight
+            : sample.WidthIncludingTrailingWhitespace / 10;
+
+        // Como o Windows Terminal: a célula fecha em pixels inteiros da tela.
+        // Com largura fracionária, cada letra arredonda para um lado e o
+        // espaço entre elas varia de par em par.
+        var scaling = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1;
+        _cellWidth = Math.Max(1, Math.Round(advance * scaling) / scaling);
+        _cellHeight = Math.Max(1, Math.Ceiling(sample.Height * scaling) / scaling);
+        _baseline = Math.Round(sample.Baseline * scaling) / scaling;
     }
+
+    /// <summary>
+    /// A família pedida, se ela desenha em passo fixo; senão, a primeira
+    /// monoespaçada instalada. Numa fonte proporcional cada letra fica na
+    /// célula larga do "M" e o texto parece separado por espaços.
+    /// </summary>
+    private static FontFamily MonospaceFamily(FontFamily requested)
+    {
+        if (FontManager.Current.TryGetGlyphTypeface(new Typeface(requested), out var face) && face is not null && IsMonospace(face))
+        {
+            return requested;
+        }
+
+        foreach (var name in MonospaceFallbacks)
+        {
+            var candidate = new FontFamily(name);
+
+            if (FontManager.Current.TryGetGlyphTypeface(new Typeface(candidate), out var fallback) && fallback is not null
+                && string.Equals(fallback.FamilyName, name, StringComparison.OrdinalIgnoreCase)
+                && IsMonospace(fallback))
+            {
+                System.Diagnostics.Trace.TraceWarning($"TerminalFontNotMonospace {face?.FamilyName} -> {name}");
+                return candidate;
+            }
+        }
+
+        System.Diagnostics.Trace.TraceWarning($"TerminalFontNotMonospace {face?.FamilyName}");
+        return requested;
+    }
+
+    /// <summary>Passo fixo: o "i" e o "M" avançam o mesmo.</summary>
+    private static bool IsMonospace(GlyphTypeface face) =>
+        Advance(face, 'i') is { } narrow && Advance(face, 'M') is { } wide && narrow == wide;
+
+    private static ushort? Advance(GlyphTypeface face, char character) =>
+        face.CharacterToGlyphMap.TryGetGlyph(character, out var glyph) && glyph != 0 && face.TryGetHorizontalGlyphAdvance(glyph, out var advance)
+            ? advance
+            : null;
 
     private IImmutableSolidColorBrush Brush(Color color)
     {
