@@ -48,6 +48,28 @@ Guias com seção de testes própria: [sincronização](../sync-server.md#6-test
 [Consulta Inteligente](../consulta-inteligente.md#testes),
 [operações de banco](../database-operations.md#teste-de-integração-com-postgresql-real).
 
+### Terminal do agente e terminal remoto (ADR-098, ADR-099)
+
+| O quê | Onde |
+|---|---|
+| Pseudoterminal de cada sistema, com o Claude de mentira (`tests/MyTaskApp.FakeClaude`: eco, tamanho, Esc, código de saída, árvore no forçar) | `Infrastructure.Tests/Terminals/PseudoTerminalContractTests` (o ConPTY no Windows, o `openpty` no Linux; o do outro sistema é pulado) |
+| Sessão, vez de digitar, retrato, lacuna, diálogos | `Application.Tests/Terminals` |
+| Entrada assinada, ponte do agente, canal do controlador | `Application.Tests/Remote/RemoteTerminal*Tests` |
+| Relay, autorização e limites no servidor | `Server.Application.Tests/RemoteTerminalUseCasesTests`, `Server.IntegrationTests/RemoteTerminalRelayTests` |
+| Ponta a ponta: um desktop segue a sessão do outro e digita no mesmo processo | `Server.IntegrationTests/RemoteTerminalEndToEndTests` |
+| Vistas e chave "Aceitar o terminal remoto" | `Desktop.Tests/Terminals`, `Desktop.Tests/ViewModels/RemoteTerminalsViewModelTests`, `MachinesViewModelTests` |
+
+**Com o Claude Code de verdade (opcional).** `MYTASKAPP_TEST_CLAUDE=1` liga os
+testes que usam o Claude instalado; sem a variável, eles são pulados. Os do
+terminal (`Infrastructure.Tests/Terminals/ClaudeTerminalTests`) não chamam o
+modelo e valem com o login vencido: a versão pelo pseudoterminal, e a TUI que
+desenha e fecha sem matar. Os do modo sem terminal (`ClaudeHeadlessTests`,
+`Agent.Tests`, `Mcp.Tests`) chamam o modelo e pedem login.
+
+```bash
+MYTASKAPP_TEST_CLAUDE=1 dotnet test tests/MyTaskApp.Infrastructure.Tests --filter "FullyQualifiedName~ClaudeTerminalTests"
+```
+
 ## O que testar, e onde
 
 - **Regra de negócio no domínio, como função pura** ([ADR-010](../architecture/decisions/010-classificacao-hoje-funcao-pura.md)):
@@ -116,6 +138,11 @@ promessa que só quebra na mesa de alguém que desconectou um monitor.
 - **Testes intermitentes no CI** (headless Avalonia, arquivo preso em runner
   lento, processos com prazo de dreno): se o diff não toca a área, faça um rerun
   do job (`gh run rerun <id> --failed`) antes de investigar. Se repetir, é real.
+- **O relógio dos desktops do ponta a ponta fica parado** (`SyncedDesktop` usa
+  `FakeTimeProvider`, para o token não vencer). Código que espera por tempo
+  medido nele (a janela de juntar saída da ponte do terminal, a releitura do
+  attach) não anda sozinho: o teste anda os relógios, como o `Clocks` de
+  `RemoteTerminalEndToEndTests`.
 - **Integração do servidor com falha em massa e rápida** costuma ser disputa de
   Docker com outra execução em paralelo (veja `docker ps`), não regressão.
   Alternativa ao Testcontainers: a variável `MYTASKAPP_TEST_SERVER_POSTGRES`

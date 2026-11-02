@@ -10,6 +10,12 @@
 | **Relações** | revisa: [ADR-030](030-sessoes-claude-code-por-tarefa.md), [ADR-037](037-acompanhar-claude-code-pelos-hooks.md), [ADR-085](085-agente-sem-tela-sobre-o-mesmo-sqlite.md); relacionado: [ADR-092](092-sessao-gerenciada-a-partir-do-desktop.md), [ADR-099](099-terminal-remoto-do-claude.md) |
 | **Código** | `src/MyTaskApp.Application/Terminals/` (`VtScreen`, `TerminalSessionHost`, `TerminalSessionRegistry`, `LocalTerminalServer`, `LocalTerminalChannel`, `TerminalWire`), `src/MyTaskApp.Infrastructure/Terminals/` (`Windows/ConPtyTerminal`, `Linux/UnixPtyTerminal`, `TerminalPipe`), `src/MyTaskApp.TerminalAttach/`, `src/MyTaskApp.Application/Agents/AgentSessionHandlers.cs` (`AgentHosting`) |
 
+**Estado da implementação (2026-11-02):** o pseudoterminal (ConPTY e
+`openpty`), o host, as vistas (janela nativa e dentro do app), os hooks no
+agente e "Onde abrir" estão no código. É parcial porque as teclas de cada
+diálogo e o Esc foram conferidos com o Claude de mentira
+(`tests/MyTaskApp.FakeClaude`), não com o Claude de verdade logado.
+
 **Contexto:** o "Abrir Claude Code" do card abre um console novo com
 `Process.Start` (ADR-030). Ninguém lê a saída: o app só sabe o que os hooks
 contam (ADR-037), e eles chegam à porta do desktop. A sessão gerenciada

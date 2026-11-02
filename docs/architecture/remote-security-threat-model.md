@@ -88,6 +88,10 @@ flowchart LR
 | A-23 | T7 | — | Aprovação por cansaço (aprovar tudo) | resumo legível e completo; "lembrar nesta sessão" só para a mesma ferramenta e padrão; produção exige digitar; nenhuma aprovação de "tudo" | RS-13, RS-35 |
 | A-24 | F2 | Repudiation | Não saber quem mandou rodar o quê | auditoria nos dois lados, com o dispositivo que assinou; a assinatura guardada prova a origem | RS-36 |
 | A-25 | Diário/T6 | Information disclosure | Saída sensível guardada no SQLite do agente | mascarada antes de gravar; sai do diário quando o servidor confirma; o registro da operação, sem a saída, fica 30 dias (a janela de replay) | RS-29 |
+| A-26 | F2/F3 | Elevation | O teclado do terminal remoto (ADR-099) vale um shell na executora: o modo `!` do Claude roda qualquer comando | "Aceitar o terminal remoto" começa desligada, é só da máquina e exige aceitar controle; o `terminal.attach` é assinado por controlador pareado; o controlador assume a vez por botão | RS-08, RS-09, RS-10 |
+| A-27 | F2 | Spoofing / Replay | O servidor (T2) injeta ou repete teclas numa conexão de terminal | cada lote é JWS `mytaskapp-terminal-input+jws` com a chave efêmera da conexão, que o servidor nunca vê; o agente confere conexão, máquina, sessão, sequência estritamente crescente e horário (2 min) | RS-09, RS-11 |
+| A-28 | F2 | Elevation | Desligar a chave ou deixar de confiar no controlador não corta a conexão aberta | a cada lote o agente confere de novo as duas chaves e o pareamento (cache de 1 s); recusado, encerra a conexão e a sessão continua | RS-06, RS-10 |
+| A-29 | F1/F2 | Information disclosure / DoS | A saída do terminal (segredos na tela) passa pelo servidor; um seguidor lento enche a memória | o relay não grava nada e o log tem só o tipo; fila de 1 MiB por conexão, com lacuna e retrato; quadro de 32 KiB, mensagem de 64 KiB, 200 chamadas/s por conexão; o estado vai sem a pasta e com os textos mascarados | RS-28, RS-30 |
 
 ## 5. Requisitos
 
@@ -267,6 +271,9 @@ O que muda é **quem confirma**: em vez do diálogo da tela, uma
 | R-09 | Uma máquina sem tela não pareia | o código é confirmado na janela Máquinas | o `pair` no CLI do agente, lendo o código no terminal |
 | R-11 | A própria instalação pede e aprova sem pareamento (ADR-092) | quem lê a chave do cofre já roda tudo nesta máquina como o usuário; o servidor sozinho não tem a chave | desligar "aceitar controle" corta também a própria; a origem aparece como "Remoto: este computador" na auditoria |
 | R-10 | O log de acesso do proxy guarda a query do hub | o proxy é do usuário | a nota no `sync-server.md` (o filtro do Caddy); os apps já mandam o token no cabeçalho |
+| R-12 | Quem controla o terminal remoto tem um shell na executora | é o que o terminal do Claude é; o Claude com bypass roda sem perguntar | aviso de bypass e pergunta antes de assumir; desligar a chave corta na hora; cofre por sessão numa versão futura |
+| R-13 | A saída do terminal passa em claro pelo servidor do usuário (TLS, sem gravar) | o relay precisa repassar; a v1 não tem cifra ponta a ponta | ECDH com a chave efêmera da conexão + AES-GCM nos quadros |
+| R-14 | O relay do terminal supõe uma instância do servidor | sem backplane, a conexão vive na memória de um processo | backplane (Redis) se o servidor um dia escalar |
 
 ## 8. Verificação (T-36)
 

@@ -148,7 +148,7 @@ Números dos ADRs; o link está na linha do índice abaixo.
 | [ADR-096](decisions/096-verificacao-periodica-no-celular.md) | Com o app fechado, o celular verifica o controle remoto de tempos em tempos e avisa | Aceito | Implementado | remoto | verificação periódica, JobScheduler, notificação local, POST_NOTIFICATIONS, push, FCM |
 | [ADR-097](decisions/097-relatorio-de-horas-dia-mes-ano.md) | Relatório de horas: dia, mês e ano numa janela própria, agregado na hora | Aceito | Implementado | ciclo-de-vida | GetHoursHistory, LocalDayGrid, HoursReportWindow, HoursBarChart, HoursHeatmap, relatório de horas, CSV |
 | [ADR-098](decisions/098-terminal-do-agente-em-pseudoterminal.md) | O Claude interativo roda num pseudoterminal hospedado pelo agente, e as telas são vistas da mesma sessão | Aceito | Parcial | remoto | ConPTY, openpty, VtScreen, TerminalSessionHost, AgentHosting, MyTaskApp.TerminalAttach, lease de entrada, PermissionRequest |
-| [ADR-099](decisions/099-terminal-remoto-do-claude.md) | O terminal do agente seguido e controlado de outra máquina, com entrada assinada | Aceito | Planejado | remoto | terminal.attach, relay do hub, entrada assinada, chave efêmera, Aceitar terminal remoto, bypass com aviso |
+| [ADR-099](decisions/099-terminal-remoto-do-claude.md) | O terminal do agente seguido e controlado de outra máquina, com entrada assinada | Aceito | Parcial | remoto | terminal.attach, relay do hub, entrada assinada, chave efêmera, Aceitar terminal remoto, bypass com aviso |
 
 ## Novo ADR
 

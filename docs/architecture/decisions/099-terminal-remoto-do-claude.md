@@ -3,12 +3,19 @@
 | | |
 |---|---|
 | **Status** | Aceito |
-| **Implementação** | Planejado |
+| **Implementação** | Parcial |
 | **Categoria** | remoto |
 | **Registrado** | 2026-10-29 |
 | **Palavras-chave** | terminal.start, terminal.attach, terminal.stop, relay do hub, TerminalSubscribe, TerminalPublish, entrada assinada, mytaskapp-terminal-input+jws, chave efêmera, Aceitar terminal remoto, AcceptTerminal, bypass com aviso, RemoteTerminalSessionReport |
 | **Relações** | revisa: [ADR-088](088-catalogo-fechado-de-operacoes-remotas.md), [ADR-094](094-controladores-ouvem-o-hub.md); relacionado: [ADR-084](084-orquestracao-remota-coordenador-e-agente.md), [ADR-086](086-operacao-remota-registro-diario-e-signalr.md), [ADR-087](087-pareamento-chave-por-dispositivo-operacao-assinada.md), [ADR-089](089-claude-code-remoto-headless-com-aprovacao.md), [ADR-098](098-terminal-do-agente-em-pseudoterminal.md) |
-| **Código** | planejado: `src/MyTaskApp.Remote.Contracts/Terminals.cs`, `src/MyTaskApp.Server.*` (relay no `RemoteHub`), `src/MyTaskApp.Application/Remote/` (executores e verificador da entrada) |
+| **Código** | `src/MyTaskApp.Remote.Contracts/Terminals.cs`, `src/MyTaskApp.Server.Application/RemoteTerminals.cs`, `src/MyTaskApp.Server.Api/RemoteHub.cs` (relay e `TerminalHubFilter`), `src/MyTaskApp.Application/Remote/RemoteTerminals.cs` (ponte, relato, executores), `RemoteTerminalInputVerifier.cs`, `RemoteTerminalControl.cs` (o controlador), `src/MyTaskApp.Infrastructure/Remote/SignalRRemoteTerminalWires.cs`, `src/MyTaskApp.Desktop/ViewModels/RemoteTerminalsViewModel.cs` |
+
+**Estado da implementação (2026-11-02):** os itens 1 a 7 estão no código, com
+o teste de ponta a ponta contra o servidor de verdade
+(`RemoteTerminalEndToEndTests`). Falta conferir com o Claude de verdade, logado,
+o que depende de resposta do modelo (as teclas de cada diálogo e o Esc); os
+testes opcionais (`ClaudeTerminalTests`) conferem só o que não chama o modelo.
+Desenho e fluxo: [`../remote-terminal.md`](../remote-terminal.md).
 
 **Contexto:** com o Claude interativo num pseudoterminal do agente (ADR-098),
 falta levar a mesma sessão a outra máquina da conta. O caminho remoto que
