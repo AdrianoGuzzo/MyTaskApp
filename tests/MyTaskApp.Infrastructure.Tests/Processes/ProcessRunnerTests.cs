@@ -171,18 +171,10 @@ public class ProcessRunnerTests
 
         // O filho diz o modo de erro que herdou: com SEM_FAILCRITICALERRORS, a
         // DLL faltando (o pg_dump do pgAdmin sem o gssapi64.dll) não abre janela.
-        // O P/Invoke sai do Reflection.Emit, sem cmdlet: o Add-Type chamava o
-        // csc e carregava módulo, e no CI passava do minuto.
-        const string script = """
-            $assembly = [AppDomain]::CurrentDomain.DefineDynamicAssembly([Reflection.AssemblyName]::new('ErrorMode'), 'Run')
-            $type = $assembly.DefineDynamicModule('ErrorMode').DefineType('ErrorMode', 'Public, Class')
-            $type.DefinePInvokeMethod('GetErrorMode', 'kernel32.dll', 'Public, Static, PinvokeImpl', 'Standard', [uint32], [Type[]]@(), 'Winapi', 'Auto').SetImplementationFlags('PreserveSig')
-            $type.CreateType()::GetErrorMode()
-            """;
-        var encoded = Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(script));
-
+        // O filho é o Claude de mentira, que sobe em milissegundos: o
+        // PowerShell 5.1 passava do minuto no runner carregado do CI.
         var result = await _runner.RunAsync(
-            new ProcessRequest("powershell", ["-NoProfile", "-NonInteractive", "-EncodedCommand", encoded], TimeSpan.FromMinutes(1)),
+            new ProcessRequest(Path.Combine(AppContext.BaseDirectory, "MyTaskApp.FakeClaude.exe"), ["--error-mode"], TimeSpan.FromMinutes(1)),
             Ct);
 
         result.ExitCode.Should().Be(0, result.StandardError);
