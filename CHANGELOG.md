@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.31.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.30.2...v1.31.0) (2026-11-04)
+
+
+### Added
+
+* **consulta:** a Consulta Inteligente abre o Claude com a configuração do desenvolvimento ([#184](https://github.com/AdrianoGuzzo/MyTaskApp/issues/184)) ([6710888](https://github.com/AdrianoGuzzo/MyTaskApp/commit/67108881cb85b8c01b5a67ee412ddac6c5824d39))
+
 ## [1.30.2](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.30.1...v1.30.2) (2026-11-02)
 
 
