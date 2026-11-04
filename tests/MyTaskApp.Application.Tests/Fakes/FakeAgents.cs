@@ -317,7 +317,7 @@ internal sealed class FakeAgentCliProvider : IAgentCliProvider, IConsultationLau
 
         return new(
             detection.ExecutablePath!,
-            [request.Resume ? "--resume" : "--session-id", request.ConversationId, "--restricted", .. request.ExtraArguments,
+            [request.Resume ? "--resume" : "--session-id", request.ConversationId, .. request.ExtraArguments,
                 .. request.Question is null ? Array.Empty<string>() : [request.Question]],
             request.Directories[0],
             environment);

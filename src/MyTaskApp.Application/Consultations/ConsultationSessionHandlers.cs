@@ -74,10 +74,14 @@ public sealed class ResumeTaskConsultationHandler(
 /// <summary>
 /// O fluxo de abrir uma consulta (ADR-081), o mesmo da ADR-030 com as travas
 /// da consulta: configuração sem problemas → nenhuma consulta aberta na tarefa
-/// → agente instalado e capaz de abrir só leitura → banco conferido como só
+/// → agente instalado e capaz de abrir uma consulta → banco conferido como só
 /// leitura → sessão gravada como "iniciando" → terminal aberto → PID gravado.
 /// </summary>
 /// <remarks>
+/// <para>
+/// O agente abre com a mesma configuração de uma sessão de desenvolvimento
+/// (ADR-100): os "Parâmetros" do card, depois o modelo e o esforço da aba.
+/// </para>
 /// <para>
 /// O segredo das ferramentas de banco nasce aqui, vai no ambiente do processo
 /// e só o hash fica no banco. Ele vale enquanto a sessão está ativa.
@@ -124,7 +128,7 @@ public sealed class ConsultationLauncher(
 
         var provider = providers.Default;
         var builder = provider as IConsultationLaunchBuilder
-            ?? throw new DomainException($"O {provider.Name} não sabe abrir uma consulta só de leitura.");
+            ?? throw new DomainException($"O {provider.Name} não sabe abrir uma Consulta Inteligente.");
 
         var detection = await provider.DetectAsync(cancellationToken);
 
@@ -136,6 +140,10 @@ public sealed class ConsultationLauncher(
         var model = Option(provider.Models, state.Consultation?.Model, "Modelo");
         var effort = Option(provider.Efforts, state.Consultation?.Effort, "Nível de esforço");
         var (toolsAccess, serverVersion) = await DatabaseAsync(state, cancellationToken);
+
+        // Os mesmos "Parâmetros" do card de Desenvolvimento (ADR-100), antes do
+        // modelo e do esforço da aba, que vencem um --model vindo de lá.
+        var cardArguments = AgentArguments.Parse(await settings.ArgumentsForAsync(provider, cancellationToken));
 
         var text = string.IsNullOrWhiteSpace(instructions)
             ? ConsultationContextBuilder.Build(ContextOf(state, serverVersion))
@@ -173,7 +181,7 @@ public sealed class ConsultationLauncher(
                 text,
                 question,
                 toolsAccess,
-                [.. model?.Arguments ?? [], .. effort?.Arguments ?? []],
+                [.. cardArguments, .. model?.Arguments ?? [], .. effort?.Arguments ?? []],
                 environment,
                 monitoring),
             detection);

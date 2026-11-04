@@ -29,7 +29,7 @@ opcional, que você hospeda.
 | **Anotações, etiquetas e ciclo de vida** | Markdown por tarefa, etiquetas com diretórios (`@alias`), arquivo, lixeira e auditoria. [Detalhes](docs/features/anotacoes-etiquetas-ciclo-de-vida.md) |
 | **Desenvolvimento** | A tarefa vira um worktree Git, com comandos pós-worktree, comandos rápidos, PR aberta e limpeza. [Detalhes](docs/features/desenvolvimento-worktrees.md) |
 | **Claude Code por tarefa** | O agente num terminal real dentro do worktree, acompanhado pelos hooks oficiais. [Detalhes](docs/features/claude-code.md) |
-| **Consulta Inteligente** | Perguntar sobre o sistema e receber a resposta do Claude Code, que só lê o código e uma cópia do banco. [Guia](docs/consulta-inteligente.md) |
+| **Consulta Inteligente** | Perguntar sobre o sistema e receber a resposta do Claude Code, que investiga o código com a sua configuração de sempre e só lê uma cópia do banco. [Guia](docs/consulta-inteligente.md) |
 | **Jira** | A issue vira o contexto da tarefa: busca ao digitar, chave, link e nome da branch. [Detalhes](docs/features/jira.md) |
 | **Bancos de Dados** | Cópia anonimizada de PostgreSQL de produção para outros ambientes, sem tocar na produção. [Guia](docs/database-operations.md) |
 | **Servidor MCP** | Um cliente de IA consulta e altera as tarefas pelas mesmas regras da tela, só no loopback. [Guia](docs/mcp-server.md) |

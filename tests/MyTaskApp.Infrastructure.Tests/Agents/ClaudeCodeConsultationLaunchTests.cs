@@ -55,23 +55,23 @@ public sealed class ClaudeCodeConsultationLaunchTests : IDisposable
             "# Consulta Inteligente\n\nSó leia.",
             question,
             withTools ? new ConsultationToolsAccess(Mcp, ConsultationToolNames.TokenVariable, ConsultationToolNames.All) : null,
-            ["--model", "opus"],
+            ["--dangerously-skip-permissions", "--model", "opus"],
             withTools ? new Dictionary<string, string> { [ConsultationToolNames.TokenVariable] = new string('A', 64) } : new Dictionary<string, string>(),
             monitoring);
 
     private static string? After(IReadOnlyList<string> arguments, string option) =>
         arguments.ToList().IndexOf(option) is var index and >= 0 && index + 1 < arguments.Count ? arguments[index + 1] : null;
 
+    /// <summary>ADR-100: os settings, plugins, hooks e MCPs do usuário valem, como no desenvolvimento.</summary>
     [Fact]
-    public void OnlyReading_NoCommands_NoUserMcpServers_AndNeverSkippingPermissions()
+    public void LikeDevelopment_KeepsTheUserConfiguration_AndTheCardParameters()
     {
         var launch = Provider().CreateConsultationLaunch(Request(), Installed());
 
         launch.Executable.Should().Be(Native);
         launch.WorkingDirectory.Should().Be(Api);
-        launch.Arguments.Should().Contain(["--restricted", "--strict-mcp-config"]);
-        After(launch.Arguments, "--tools").Should().Be("Read,Grep,Glob");
-        launch.Arguments.Should().NotContain(argument => argument.Contains("dangerously", StringComparison.Ordinal));
+        launch.Arguments.Should().NotContain(["--restricted", "--strict-mcp-config", "--tools", "--setting-sources", "--bare", "--safe-mode"]);
+        launch.Arguments.Should().ContainInConsecutiveOrder("--dangerously-skip-permissions", "--model", "opus");
         launch.Arguments.Should().NotContain(["--mcp-config", "--allowedTools", "--permission-mode"]);
     }
 
@@ -125,19 +125,21 @@ public sealed class ClaudeCodeConsultationLaunchTests : IDisposable
     }
 
     [Fact]
-    public void WithTheDatabase_OnlyTheAppServer_AndOnlyTheConsultationTools_ArePreapproved()
+    public void WithTheDatabase_TheAppServerJoinsTheUserOnes_AndOnlyTheConsultationTools_ArePreapproved()
     {
         var launch = Provider().CreateConsultationLaunch(Request(withTools: true), Installed());
 
+        launch.Arguments.Should().NotContain("--strict-mcp-config");
         After(launch.Arguments, "--allowedTools").Should().Be(
-            "mcp__mytaskapp__consultation_database_describe,mcp__mytaskapp__consultation_table_list,"
-            + "mcp__mytaskapp__consultation_table_describe,mcp__mytaskapp__consultation_query");
+            "mcp__mytaskapp-consulta__consultation_database_describe,mcp__mytaskapp-consulta__consultation_table_list,"
+            + "mcp__mytaskapp-consulta__consultation_table_describe,mcp__mytaskapp-consulta__consultation_query");
 
+        // Não é "mytaskapp": esse costuma ser o nome do MCP do app na configuração do usuário.
         using var config = JsonDocument.Parse(File.ReadAllText(After(launch.Arguments, "--mcp-config")!));
         var servers = config.RootElement.GetProperty("mcpServers");
-        servers.EnumerateObject().Select(server => server.Name).Should().Equal("mytaskapp");
-        servers.GetProperty("mytaskapp").GetProperty("url").GetString().Should().Be(Mcp.ToString());
-        servers.GetProperty("mytaskapp").GetProperty("headers").GetProperty("Authorization").GetString()
+        servers.EnumerateObject().Select(server => server.Name).Should().Equal("mytaskapp-consulta");
+        servers.GetProperty("mytaskapp-consulta").GetProperty("url").GetString().Should().Be(Mcp.ToString());
+        servers.GetProperty("mytaskapp-consulta").GetProperty("headers").GetProperty("Authorization").GetString()
             .Should().Be("Bearer ${MYTASKAPP_CONSULTATION_TOKEN}");
     }
 

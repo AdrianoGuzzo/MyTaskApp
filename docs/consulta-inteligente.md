@@ -4,9 +4,11 @@ A aba **Consulta Inteligente** da janela da tarefa deixa uma pessoa sem
 conhecimento técnico perguntar como o sistema funciona — "por que o pedido
 1234 continua pendente?" — e receber uma explicação baseada no código real e,
 se ela quiser, nos dados de uma cópia local do banco. Quem investiga é o
-Claude Code, aberto pelo app num terminal, **só lendo**.
+Claude Code, aberto pelo app num terminal com **a mesma configuração de uma
+sessão de desenvolvimento**. O banco ele **só lê**.
 
-A decisão e os motivos estão no [ADR-081](architecture/decisions/081-consulta-inteligente-somente-leitura.md). As ferramentas de
+A decisão e os motivos estão no [ADR-081](architecture/decisions/081-consulta-inteligente-somente-leitura.md), revisto pelo
+[ADR-100](architecture/decisions/100-consulta-inteligente-com-a-configuracao-do-desenvolvimento.md). As ferramentas de
 banco estão no [guia do servidor MCP](mcp-server.md#consulta-inteligente).
 
 ## Sumário
@@ -83,38 +85,43 @@ O app monta um texto anexado às instruções do Claude (`--append-system-prompt
 - o banco com nome, PostgreSQL e versão, ambiente, limites e as ferramentas
   que ele pode usar — ou "A consulta será feita apenas com o código-fonte";
 - as regras: linguagem de negócio, fatos separados de hipóteses, não inventar,
-  pedir esclarecimento, não alterar nada.
+  pedir esclarecimento e não alterar nada.
 
 A pergunta vai como a primeira mensagem. O texto **nunca** tem servidor,
 usuário, senha, string de conexão ou o segredo do MCP — não há de onde tirar:
 quem o monta recebe só o que já foi conferido.
 
-As regras do texto orientam; **não são a trava**. As travas estão abaixo.
+As regras do texto orientam; **não são a trava**. A trava do banco está abaixo.
 
 ## Segurança
 
-### Código: o Claude não consegue alterar
+### Código: a mesma configuração do desenvolvimento
 
 O Claude abre com:
 
 ```text
-claude --session-id <uuid> --name "Consulta · <tarefa>"
-       --restricted --tools Read,Grep,Glob --strict-mcp-config
+claude [--settings <hooks do app>] --session-id <uuid> --name "Consulta · <tarefa>"
        [--mcp-config <arquivo> --allowedTools <as 4 ferramentas>]
-       [--add-dir <outras pastas>] [--model …] [--effort …]
+       [--add-dir <outras pastas>] <Parâmetros do card> [--model …] [--effort …]
        --append-system-prompt-file <arquivo> "<pergunta>"
 ```
 
 | Opção | Efeito |
 |---|---|
-| `--restricted` | Tira as ferramentas que executam comando ou código (Bash, PowerShell…) e o WebFetch, prende as ferramentas de arquivo às pastas da consulta, ignora as configurações do usuário e do projeto e recusa `bypassPermissions` |
-| `--tools Read,Grep,Glob` | Das ferramentas do Claude, só ler e procurar. Sem Edit, Write ou NotebookEdit |
-| `--strict-mcp-config` | Nenhum servidor MCP do usuário; com banco, só o do app |
-| `--allowedTools` | Só as quatro ferramentas de consulta são pré-aprovadas |
+| Parâmetros do card | Os mesmos do card de Desenvolvimento (por padrão, `--dangerously-skip-permissions`). Trocar lá vale para os dois |
+| `--mcp-config` | Com banco, soma o MCP do app (`mytaskapp-consulta`) aos servidores MCP do usuário |
+| `--allowedTools` | Pré-aprova as quatro ferramentas de consulta |
 
-Os **Parâmetros** do card de Desenvolvimento (por padrão,
-`--dangerously-skip-permissions`) nunca chegam a uma consulta. Sem ferramenta
-de escrita nem de comando, não há como criar branch, worktree ou commit.
+Não há `--restricted`, `--tools` nem `--strict-mcp-config`. Valem as
+configurações do usuário, do projeto e locais, os plugins, os hooks, o
+`CLAUDE.md` e os servidores MCP, como numa sessão de desenvolvimento
+([ADR-100](architecture/decisions/100-consulta-inteligente-com-a-configuracao-do-desenvolvimento.md)).
+
+> **O código não é só leitura.** Com os Parâmetros padrão, o Claude da
+> consulta pode editar arquivos e rodar comandos nas pastas sem perguntar. As
+> instruções pedem que ele não altere nada, mas isso é orientação. Para uma
+> consulta mais contida, ajuste os Parâmetros do card (por exemplo, tire o
+> `--dangerously-skip-permissions`).
 
 O comando é montado como lista de argumentos, nunca como linha de shell. Pelo
 `claude.cmd` do npm, uma pergunta com aspas ou `%` vai para o fim do arquivo de

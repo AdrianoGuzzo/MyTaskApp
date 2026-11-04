@@ -3,14 +3,16 @@ using MyTaskApp.Application.Agents;
 namespace MyTaskApp.Application.Consultations;
 
 /// <summary>
-/// Um agente que sabe abrir uma Consulta Inteligente (ADR-081): só leitura,
-/// nas pastas escolhidas, com as instruções geradas e — com banco — só as
-/// ferramentas de consulta do MCP do app. Hoje, o Claude Code.
+/// Um agente que sabe abrir uma Consulta Inteligente (ADR-081): nas pastas
+/// escolhidas, com as instruções geradas, a configuração do desenvolvimento
+/// (ADR-100) e — com banco — o MCP do app com as ferramentas de consulta
+/// pré-aprovadas. Hoje, o Claude Code.
 /// </summary>
 /// <remarks>
 /// É uma capacidade à parte do <see cref="IAgentCliProvider"/>: um agente
-/// novo pode abrir no worktree sem saber restringir as próprias ferramentas,
-/// e aí a consulta diz que ele não serve, em vez de abrir sem as travas.
+/// novo pode abrir no worktree sem saber receber instruções em arquivo, pastas
+/// adicionais nem um servidor MCP a mais, e aí a consulta diz que ele não
+/// serve.
 /// </remarks>
 public interface IConsultationLaunchBuilder
 {
@@ -31,8 +33,9 @@ public interface IConsultationLaunchBuilder
 /// <param name="Question">A primeira mensagem; <c>null</c> ao retomar.</param>
 /// <param name="Tools">
 /// O servidor MCP e as ferramentas da consulta; <c>null</c> = só o código, e
-/// nenhum servidor MCP é carregado.
+/// o MCP do app não entra (os do usuário continuam, como no desenvolvimento).
 /// </param>
+/// <param name="ExtraArguments">Os "Parâmetros" do card de Desenvolvimento, depois o modelo e o esforço.</param>
 /// <param name="Environment">O que vai no ambiente do processo: o segredo do MCP e o dos avisos.</param>
 /// <param name="Monitoring">O acompanhamento pelos hooks (ADR-037), como numa sessão de desenvolvimento.</param>
 public sealed record ConsultationLaunchRequest(
