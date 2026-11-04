@@ -53,8 +53,8 @@
   sem PID nem "Abrir terminal". O card diz de onde veio, mostra o estado e
   oferece **Abrir conversa** ([controle remoto](../remote.md#as-conversas-do-claude)).
 
-A **Consulta Inteligente**, que abre o Claude Code só lendo, sem os parâmetros
-acima, tem guia próprio: [`../consulta-inteligente.md`](../consulta-inteligente.md).
+A **Consulta Inteligente**, que abre o Claude Code com os mesmos parâmetros e
+configurações daqui (ADR-100), e com o banco só leitura, tem guia próprio: [`../consulta-inteligente.md`](../consulta-inteligente.md).
 
 ## Lacunas de documentação (2026-10-24)
 

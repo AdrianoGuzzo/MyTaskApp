@@ -7,7 +7,7 @@
 | **Categoria** | agente-ia |
 | **Registrado** | 2026-10-22, commit `7f01515` (primeiro commit em que o ADR aparece) |
 | **Palavras-chave** | TaskConsultation, Consulta Inteligente, mytaskapp_leitura, IConsultationLaunchBuilder, NpgsqlConsultationDatabase, consultation_query, QueryData, --restricted |
-| **Relações** | exceção a: [ADR-059](059-servidor-mcp-local-loopback.md); relacionado: [ADR-030](030-sessoes-claude-code-por-tarefa.md), [ADR-037](037-acompanhar-claude-code-pelos-hooks.md), [ADR-060](060-banco-do-ambiente-variavel-database.md), [ADR-089](089-claude-code-remoto-headless-com-aprovacao.md) |
+| **Relações** | revisto por: [ADR-100](100-consulta-inteligente-com-a-configuracao-do-desenvolvimento.md) (item 3: o Claude abre com a configuração do desenvolvimento); exceção a: [ADR-059](059-servidor-mcp-local-loopback.md); relacionado: [ADR-030](030-sessoes-claude-code-por-tarefa.md), [ADR-037](037-acompanhar-claude-code-pelos-hooks.md), [ADR-060](060-banco-do-ambiente-variavel-database.md), [ADR-089](089-claude-code-remoto-headless-com-aprovacao.md) |
 | **Código** | `src/MyTaskApp.Domain/Consultations/TaskConsultation.cs`, `src/MyTaskApp.Infrastructure/Agents/ClaudeCode/ClaudeCodeCliProvider.cs`, `src/MyTaskApp.Infrastructure/PostgreSql/NpgsqlConsultationDatabase.cs`, `src/MyTaskApp.Mcp/Tools/ConsultationTools.cs` |
 
 **Contexto:** uma pessoa sem conhecimento técnico quer perguntar "por que este

@@ -37,11 +37,13 @@ internal sealed partial class ClaudeCodeCliProvider(
 {
     public const string ProviderId = "claude-code";
 
-    /// <summary>O nome do servidor MCP do app na configuração da consulta: as ferramentas viram <c>mcp__mytaskapp__…</c>.</summary>
-    public const string ConsultationServerName = "mytaskapp";
-
-    /// <summary>As únicas ferramentas próprias do Claude numa consulta: ler e procurar arquivos.</summary>
-    public const string ConsultationBuiltInTools = "Read,Grep,Glob";
+    /// <summary>
+    /// O nome do servidor MCP do app na configuração da consulta: as ferramentas
+    /// viram <c>mcp__mytaskapp-consulta__…</c>. Não é <c>mytaskapp</c> porque a
+    /// consulta soma esse servidor aos MCPs do usuário (ADR-100), e quem usa o
+    /// MCP do app costuma tê-lo registrado com esse nome.
+    /// </summary>
+    public const string ConsultationServerName = "mytaskapp-consulta";
 
     /// <summary>Os arquivos de consulta mais velhos que isso são apagados ao gravar um novo.</summary>
     private static readonly TimeSpan ConsultationFilesLifetime = TimeSpan.FromDays(30);
@@ -211,15 +213,16 @@ internal sealed partial class ClaudeCodeCliProvider(
         hooks.UnavailableReason(workingDirectory, endpoint);
 
     /// <summary>
-    /// A Consulta Inteligente (ADR-081): o Claude aberto só para ler.
+    /// A Consulta Inteligente (ADR-081, revisto pelo ADR-100): o Claude com a
+    /// mesma configuração de uma sessão de desenvolvimento.
     /// <list type="bullet">
-    /// <item><c>--restricted</c> tira tudo que executa comando ou código (Bash, PowerShell…) e o WebFetch, prende as ferramentas de arquivo às pastas da consulta e recusa <c>bypassPermissions</c>;</item>
-    /// <item><c>--tools Read,Grep,Glob</c> deixa, das ferramentas do Claude, só ler e procurar — sem Edit nem Write;</item>
-    /// <item><c>--strict-mcp-config</c> ignora os servidores MCP do usuário; com banco, entra só o do app, e só as ferramentas de consulta são pré-aprovadas;</item>
+    /// <item>nada de <c>--restricted</c>, <c>--tools</c> nem <c>--strict-mcp-config</c>: valem os settings, plugins, hooks e servidores MCP do usuário;</item>
+    /// <item>os "Parâmetros" do card de Desenvolvimento chegam em <see cref="ConsultationLaunchRequest.ExtraArguments"/>, antes do modelo e do esforço;</item>
+    /// <item>com banco, o MCP do app é somado aos do usuário (<c>--mcp-config</c>), e só as ferramentas de consulta são pré-aprovadas;</item>
     /// <item>as instruções vão num arquivo (<c>--append-system-prompt-file</c>), e o segredo do MCP vai no ambiente — o arquivo do MCP só cita a variável.</item>
     /// </list>
-    /// Os "Parâmetros" do card de Desenvolvimento não entram: o
-    /// <c>--dangerously-skip-permissions</c> de lá nunca chega aqui.
+    /// O banco continua só leitura, mas isso é do servidor (usuário de leitura,
+    /// catálogo e transação <c>READ ONLY</c>), não do Claude.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -278,7 +281,7 @@ internal sealed partial class ClaudeCodeCliProvider(
             ? ["--resume", request.ConversationId]
             : ["--session-id", request.ConversationId]);
 
-        arguments.AddRange(["--name", Title(request.Title), "--restricted", "--tools", ConsultationBuiltInTools, "--strict-mcp-config"]);
+        arguments.AddRange(["--name", Title(request.Title)]);
 
         if (request.Tools is { } tools)
         {

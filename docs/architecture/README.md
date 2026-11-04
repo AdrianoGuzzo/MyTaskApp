@@ -37,7 +37,7 @@ Números dos ADRs; o link está na linha do índice abaixo.
 - **ciclo-de-vida** (conclusão, arquivamento, lixeira, auditoria, histórico, tempo trabalhado): 020, 021, 052, 053, 097
 - **etiquetas** (etiquetas, diretórios, aliases): 025, 026, 064, 077
 - **git-worktree** (worktrees, comandos, branches, PR, limpeza): 027, 028, 029, 031, 034, 035, 043, 047, 051, 055, 065
-- **agente-ia** (Claude Code, hooks, sessões, sons, Consulta Inteligente): 030, 033, 036, 037, 039, 040, 042, 081
+- **agente-ia** (Claude Code, hooks, sessões, sons, Consulta Inteligente): 030, 033, 036, 037, 039, 040, 042, 081, 100
 - **integracoes** (Jira, MCP): 045, 059
 - **banco-de-dados** (operações de banco PostgreSQL, cópia, anonimização): 056, 057, 058, 060, 080, 082, 083
 - **sincronizacao** (sincronização, servidor, autenticação e segurança do servidor): 061, 062, 063, 066, 068, 069, 070, 071, 072, 073, 074, 078
@@ -149,6 +149,7 @@ Números dos ADRs; o link está na linha do índice abaixo.
 | [ADR-097](decisions/097-relatorio-de-horas-dia-mes-ano.md) | Relatório de horas: dia, mês e ano numa janela própria, agregado na hora | Aceito | Implementado | ciclo-de-vida | GetHoursHistory, LocalDayGrid, HoursReportWindow, HoursBarChart, HoursHeatmap, relatório de horas, CSV |
 | [ADR-098](decisions/098-terminal-do-agente-em-pseudoterminal.md) | O Claude interativo roda num pseudoterminal hospedado pelo agente, e as telas são vistas da mesma sessão | Aceito | Parcial | remoto | ConPTY, openpty, VtScreen, TerminalSessionHost, AgentHosting, MyTaskApp.TerminalAttach, lease de entrada, PermissionRequest |
 | [ADR-099](decisions/099-terminal-remoto-do-claude.md) | O terminal do agente seguido e controlado de outra máquina, com entrada assinada | Aceito | Parcial | remoto | terminal.attach, relay do hub, entrada assinada, chave efêmera, Aceitar terminal remoto, bypass com aviso |
+| [ADR-100](decisions/100-consulta-inteligente-com-a-configuracao-do-desenvolvimento.md) | Consulta Inteligente: o Claude Code com a mesma configuração do desenvolvimento | Aceito | Implementado | agente-ia | Consulta Inteligente, --restricted, --strict-mcp-config, mytaskapp-consulta, Parâmetros do card |
 
 ## Novo ADR
 

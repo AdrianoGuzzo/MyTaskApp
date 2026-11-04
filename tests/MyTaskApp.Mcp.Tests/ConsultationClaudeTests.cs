@@ -6,11 +6,11 @@ using MyTaskApp.Application.Consultations;
 namespace MyTaskApp.Mcp.Tests;
 
 /// <summary>
-/// A Consulta Inteligente com o Claude Code de verdade (ADR-081): os
+/// A Consulta Inteligente com o Claude Code de verdade (ADR-081, ADR-100): os
 /// argumentos que o app gera, o servidor MCP do app no ar e o segredo da
 /// sessão só no ambiente. Prova o que nenhum fake prova — que o Claude lê o
-/// arquivo de instruções, expande o segredo, carrega as ferramentas de
-/// consulta e fica sem Bash nem Edit.
+/// arquivo de instruções, expande o segredo e carrega as ferramentas de
+/// consulta junto com a configuração e os MCPs do usuário.
 /// </summary>
 /// <remarks>
 /// Opcional: só com <c>MYTASKAPP_TEST_CLAUDE=1</c>, o Claude instalado e com
@@ -24,7 +24,7 @@ public class ConsultationClaudeTests
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     [Fact]
-    public async Task TheRealClaude_ReadsTheInstructions_UsesTheConsultationTools_AndCannotRunCommands()
+    public async Task TheRealClaude_ReadsTheInstructions_AndUsesTheConsultationTools_WithTheUserConfiguration()
     {
         Assert.SkipUnless(
             Environment.GetEnvironmentVariable(Variable) == "1",
@@ -64,8 +64,7 @@ public class ConsultationClaudeTests
 
             output.Should().Contain("ABACAXI-42", "o arquivo de instruções foi lido");
             output.Should().Contain("loja_copia", "o segredo foi expandido e a ferramenta de consulta respondeu");
-            output.Should().Contain(ConsultationToolNames.Query, "as ferramentas de consulta carregam junto com --tools");
-            output.Should().NotContain("Bash").And.NotContain("PowerShell");
+            output.Should().Contain(ConsultationToolNames.Query, "as ferramentas de consulta carregam junto com as do usuário");
         }
         finally
         {

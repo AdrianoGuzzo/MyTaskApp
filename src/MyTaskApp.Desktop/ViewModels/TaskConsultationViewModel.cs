@@ -62,7 +62,8 @@ public sealed partial class ConsultationSourceItemViewModel(
 /// <summary>
 /// A aba Consulta Inteligente da janela da tarefa (ADR-081): assunto, projeto,
 /// dados, preparo e pergunta, em cartões. Cada escolha é gravada na hora; a
-/// pergunta abre o Claude Code num terminal, só lendo.
+/// pergunta abre o Claude Code num terminal, com a configuração do
+/// desenvolvimento (ADR-100); o banco ele só lê.
 /// </summary>
 /// <remarks>
 /// Nada de processo nem de banco aqui: tudo passa por casos de uso. A cópia de

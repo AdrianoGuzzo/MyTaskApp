@@ -45,6 +45,7 @@ public sealed class ConsultationHandlersTests : IDisposable
     private readonly FakeAgentProcessTracker _processes = new();
     private readonly FakeTerminalLauncher _launcher;
     private readonly FakeAgentCliProvider _claude = new();
+    private readonly FakeAgentSettingsStore _settings = new();
     private readonly RecordingAgentSessionWatcher _watcher = new();
     private readonly FakeConsultationDatabase _database = new();
     private readonly FakeReadAccessProvisioner _provisioner = new(new DatabaseSecurityPolicy());
@@ -106,7 +107,7 @@ public sealed class ConsultationHandlersTests : IDisposable
             .AddSingleton<ITerminalLauncher>(_launcher)
             .AddSingleton<ITerminalWindowManager>(new FakeTerminalWindowManager())
             .AddSingleton<IAgentCliProvider>(_claude)
-            .AddSingleton<IAgentSettingsStore>(new FakeAgentSettingsStore())
+            .AddSingleton<IAgentSettingsStore>(_settings)
             .AddSingleton<IAgentEventEndpoint>(new FakeAgentEventEndpoint())
             .AddSingleton<IAgentSessionWatcher>(_watcher)
             .AddSingleton<IConsultationDatabase>(_database)
@@ -327,12 +328,27 @@ public sealed class ConsultationHandlersTests : IDisposable
         _consultations.Items[_task.Id].LastQuestion.Should().Be("Por que o pedido 1234 está pendente?");
     }
 
+    /// <summary>ADR-100: sem nada salvo, valem os parâmetros padrão do card, como no desenvolvimento.</summary>
     [Fact]
-    public async Task TheDevelopmentParameters_NeverReachAConsultation()
+    public async Task TheDevelopmentParameters_ReachTheConsultation()
     {
         await StartAsync();
 
-        _launcher.Launched.Single().Arguments.Should().NotContain("--dangerously-skip-permissions");
+        _claude.Consultations.Single().ExtraArguments.Should().Equal("--dangerously-skip-permissions");
+        _launcher.Launched.Single().Arguments.Should().Contain("--dangerously-skip-permissions");
+    }
+
+    [Fact]
+    public async Task TheSavedParameters_ComeBeforeTheModelAndEffortOfTheTab()
+    {
+        _settings.Arguments[_claude.Id] = "--permission-mode acceptEdits --model haiku";
+        await RunAsync<SaveTaskConsultationHandler, TaskConsultationView>(handler => handler.HandleAsync(
+            new SaveTaskConsultation(_task.Id, _tagId, null, null, null, null, "sonnet", "high"), Ct));
+
+        await StartAsync();
+
+        _claude.Consultations.Single().ExtraArguments.Should().Equal(
+            "--permission-mode", "acceptEdits", "--model", "haiku", "--model", "sonnet", "--effort", "high");
     }
 
     [Fact]

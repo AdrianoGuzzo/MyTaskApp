@@ -10,8 +10,8 @@
   <!--
     A aba Consulta Inteligente (ADR-081): cinco cartões em sequência — assunto,
     projeto, dados, preparo e pergunta. Cada escolha grava na hora; a pergunta
-    abre o Claude Code num terminal, só lendo. Os estilos (card, hint, accent…)
-    vêm da janela da tarefa.
+    abre o Claude Code num terminal, com a configuração do desenvolvimento
+    (ADR-100). Os estilos (card, hint, accent…) vêm da janela da tarefa.
   -->
 
   <ScrollViewer x:Name="ConsultationScroll" HorizontalScrollBarVisibility="Disabled" Margin="0,10,0,10">
@@ -19,7 +19,7 @@
 
       <TextBlock Classes="hint"
                  TextWrapping="Wrap"
-                 Text="Pergunte sobre como o sistema funciona. O Claude Code investiga o código e, se você escolher, uma cópia local do banco — só lendo: nada é alterado." />
+                 Text="Pergunte sobre como o sistema funciona. O Claude Code investiga o código e, se você escolher, uma cópia local do banco, que ele só lê. O Claude abre com as mesmas configurações, servidores MCP e Parâmetros do desenvolvimento." />
 
       <TextBlock x:Name="ConsultationLoading" Classes="hint" Text="Carregando…" IsVisible="{Binding IsLoading}" />
 

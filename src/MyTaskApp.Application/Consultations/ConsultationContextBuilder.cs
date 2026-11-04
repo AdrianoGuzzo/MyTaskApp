@@ -43,8 +43,9 @@ public sealed record ConsultationContext(
 /// — não há de onde tirar. Um teste confere.
 /// </para>
 /// <para>
-/// As regras daqui orientam; não são a trava. Quem impede de alterar é o
-/// agente sem ferramentas de escrita e o banco só leitura.
+/// As regras daqui orientam; não são a trava. O agente abre com a
+/// configuração do desenvolvimento (ADR-100) e pode ter ferramentas de
+/// escrita; quem impede de alterar dados é o banco só leitura.
 /// </para>
 /// </remarks>
 public static class ConsultationContextBuilder
