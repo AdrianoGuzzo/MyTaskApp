@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.32.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.31.0...v1.32.0) (2026-11-05)
+
+
+### Added
+
+* **remoto:** o terminal do Claude aparece em qualquer aparelho, e o celular segue e controla ([#186](https://github.com/AdrianoGuzzo/MyTaskApp/issues/186)) ([3620c9f](https://github.com/AdrianoGuzzo/MyTaskApp/commit/3620c9fe5403c073adb4afcb5c996ea7caa223d3))
+
 ## [1.31.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.30.2...v1.31.0) (2026-11-04)
 
 
