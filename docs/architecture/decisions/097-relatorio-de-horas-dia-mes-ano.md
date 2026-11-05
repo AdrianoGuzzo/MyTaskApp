@@ -7,7 +7,7 @@
 | **Categoria** | ciclo-de-vida |
 | **Registrado** | 2026-10-28 |
 | **Palavras-chave** | GetHoursHistory, HoursScale, HoursBucket, LocalDayGrid, HoursReportWindow, HoursBarChart, HoursHeatmap, relatório de horas, mapa de calor, CSV |
-| **Relações** | revisa: [ADR-053](053-historico-sete-dias-projecao.md); relacionado: [ADR-002](002-hora-de-parede-no-dominio.md), [ADR-041](041-temas-sete-paletas-e-automatico.md), [ADR-052](052-tempo-trabalhado-por-periodo.md), [ADR-059](059-servidor-mcp-local-loopback.md), [ADR-062](062-lista-por-computador-onde-aparece.md) |
+| **Relações** | revisa: [ADR-053](053-historico-sete-dias-projecao.md); revisto por: [ADR-102](102-reajustar-horas-pelo-relatorio.md); relacionado: [ADR-002](002-hora-de-parede-no-dominio.md), [ADR-041](041-temas-sete-paletas-e-automatico.md), [ADR-052](052-tempo-trabalhado-por-periodo.md), [ADR-059](059-servidor-mcp-local-loopback.md), [ADR-062](062-lista-por-computador-onde-aparece.md) |
 | **Código** | `src/MyTaskApp.Domain/TimeTracking/LocalDayGrid.cs`, `src/MyTaskApp.Application/TimeTracking/GetHoursHistory.cs`, `src/MyTaskApp.Application/TimeTracking/HoursHistoryCsv.cs`, `src/MyTaskApp.Desktop/Reports/`, `src/MyTaskApp.Desktop/ViewModels/HoursReportViewModel.cs`, `src/MyTaskApp.Desktop/Views/HoursReportWindow.axaml` |
 
 **Contexto:** o histórico de 7 dias (ADR-053) responde "o que eu fiz esta

@@ -3,9 +3,9 @@
 | | |
 |---|---|
 | **Status** | Implementado (Windows e Linux) |
-| **Decisões** | [ADR-052](../architecture/decisions/052-tempo-trabalhado-por-periodo.md) tempo trabalhado · [ADR-053](../architecture/decisions/053-historico-sete-dias-projecao.md) histórico de 7 dias · [ADR-097](../architecture/decisions/097-relatorio-de-horas-dia-mes-ano.md) relatório de horas |
+| **Decisões** | [ADR-052](../architecture/decisions/052-tempo-trabalhado-por-periodo.md) tempo trabalhado · [ADR-053](../architecture/decisions/053-historico-sete-dias-projecao.md) histórico de 7 dias · [ADR-097](../architecture/decisions/097-relatorio-de-horas-dia-mes-ano.md) relatório de horas · [ADR-102](../architecture/decisions/102-reajustar-horas-pelo-relatorio.md) reajustar horas pelo relatório |
 | **Código** | `src/MyTaskApp.Domain/TimeTracking/`, `src/MyTaskApp.Application/TimeTracking/`, `src/MyTaskApp.Desktop/ViewModels/ActiveTimerViewModel.cs`, `src/MyTaskApp.Desktop/ViewModels/TaskTimeLogViewModel.cs`, `src/MyTaskApp.Desktop/ViewModels/TimeEntryEditorViewModel.cs`, `src/MyTaskApp.Application/History/`, `src/MyTaskApp.Domain/Planning/ActivityHistory.cs`, `src/MyTaskApp.Desktop/ViewModels/ActivityHistoryViewModel.cs`, `src/MyTaskApp.Desktop/Reports/`, `src/MyTaskApp.Desktop/ViewModels/HoursReportViewModel.cs`, `src/MyTaskApp.Desktop/Views/HoursReportWindow.axaml` |
-| **Testes** | `tests/MyTaskApp.Domain.Tests/TimeTracking/`, `tests/MyTaskApp.Application.Tests/TimeTracking/`, `tests/MyTaskApp.Desktop.Tests/ViewModels/TimeTrackingViewModelTests.cs`, `tests/MyTaskApp.Desktop.Tests/ViewModels/RowTimeEntryTests.cs`, `tests/MyTaskApp.Application.Tests/History/GetActivityHistoryHandlerTests.cs`, `tests/MyTaskApp.Domain.Tests/Planning/ActivityHistoryBuilderTests.cs`, `tests/MyTaskApp.Desktop.Tests/Reports/`, `tests/MyTaskApp.Desktop.Tests/ViewModels/HoursReportViewModelTests.cs`, `tests/MyTaskApp.Desktop.Tests/ViewModels/HoursReportWindowTests.cs` |
+| **Testes** | `tests/MyTaskApp.Domain.Tests/TimeTracking/`, `tests/MyTaskApp.Application.Tests/TimeTracking/`, `tests/MyTaskApp.Desktop.Tests/ViewModels/TimeTrackingViewModelTests.cs`, `tests/MyTaskApp.Desktop.Tests/ViewModels/RowTimeEntryTests.cs`, `tests/MyTaskApp.Application.Tests/History/GetActivityHistoryHandlerTests.cs`, `tests/MyTaskApp.Domain.Tests/Planning/ActivityHistoryBuilderTests.cs`, `tests/MyTaskApp.Desktop.Tests/Reports/`, `tests/MyTaskApp.Desktop.Tests/ViewModels/HoursReportViewModelTests.cs`, `tests/MyTaskApp.Desktop.Tests/ViewModels/HoursReportWindowTests.cs`, `tests/MyTaskApp.Desktop.Tests/ViewModels/HoursReportAdjustTests.cs` |
 
 ## Cronômetro e períodos
 
@@ -91,6 +91,20 @@ O histórico completo das horas lançadas, numa janela própria
   8h ou mais. Clicar num dia abre o mês dele, com o dia escolhido.
 - **Horas por tarefa**, ao lado: as tarefas do bloco escolhido, ou do período
   inteiro, da que mais teve horas para a que menos teve, com a parte de cada uma.
+- **Reajustar as horas**
+  ([ADR-102](../architecture/decisions/102-reajustar-horas-pelo-relatorio.md)):
+  - clicar numa tarefa do painel mostra os períodos dela no bloco escolhido (ou
+    no período inteiro), com o dia, o horário, a duração, a origem e a
+    observação. O que passa da meia-noite diz o que conta no dia ("1h de 3h");
+  - o lápis corrige o período, a lixeira o exclui (depois de perguntar) e
+    **+ Adicionar tempo** lança outro. O diálogo e as regras são os da aba
+    **Tempo**: a sobreposição é recusada com o motivo, e o cronômetro em
+    andamento não se edita;
+  - com um dia passado escolhido, o período novo já começa nele (9h às 10h,
+    para corrigir); senão, é a última hora;
+  - a tarefa continua aberta ao trocar de dia, mês ou escala, também num dia
+    sem horas. **‹ Tarefas** ou Esc voltam à lista;
+  - depois de gravar, o relatório e a lista se atualizam.
 - **Filtros:**
   - a etiqueta restringe tudo às horas das tarefas com ela;
   - com a sincronização ligada, o computador é o mesmo seletor da lista.

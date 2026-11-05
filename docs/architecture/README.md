@@ -34,7 +34,7 @@ Números dos ADRs; o link está na linha do índice abaixo.
 - **persistencia** (SQLite, EF Core, migrations): 005, 011
 - **ui-desktop** (janela, widget, HUD, temas, editor, ícones, post-its): 013, 016, 017, 022, 024, 032, 038, 041, 046, 048, 054
 - **lembretes-prazos** (lembretes, prazos, avisos): 004, 014, 050
-- **ciclo-de-vida** (conclusão, arquivamento, lixeira, auditoria, histórico, tempo trabalhado): 020, 021, 052, 053, 097
+- **ciclo-de-vida** (conclusão, arquivamento, lixeira, auditoria, histórico, tempo trabalhado): 020, 021, 052, 053, 097, 102
 - **etiquetas** (etiquetas, diretórios, aliases): 025, 026, 064, 077
 - **git-worktree** (worktrees, comandos, branches, PR, limpeza): 027, 028, 029, 031, 034, 035, 043, 047, 051, 055, 065
 - **agente-ia** (Claude Code, hooks, sessões, sons, Consulta Inteligente): 030, 033, 036, 037, 039, 040, 042, 081, 100
@@ -151,6 +151,7 @@ Números dos ADRs; o link está na linha do índice abaixo.
 | [ADR-099](decisions/099-terminal-remoto-do-claude.md) | O terminal do agente seguido e controlado de outra máquina, com entrada assinada | Aceito | Parcial | remoto | terminal.attach, relay do hub, entrada assinada, chave efêmera, Aceitar terminal remoto, bypass com aviso |
 | [ADR-100](decisions/100-consulta-inteligente-com-a-configuracao-do-desenvolvimento.md) | Consulta Inteligente: o Claude Code com a mesma configuração do desenvolvimento | Aceito | Implementado | agente-ia | Consulta Inteligente, --restricted, --strict-mcp-config, mytaskapp-consulta, Parâmetros do card |
 | [ADR-101](decisions/101-terminal-do-claude-em-qualquer-aparelho.md) | O terminal do Claude em qualquer aparelho: o card abre no agente, a lista junta as máquinas e o celular segue e controla | Aceito | Parcial | remoto | AgentWindow padrão, Usar o terminal do agente, Terminais do Claude, TerminalSessionClient, RemoteTerminalPage, celular |
+| [ADR-102](decisions/102-reajustar-horas-pelo-relatorio.md) | Reajustar as horas pelo relatório: a tarefa abre os períodos do bloco, com as regras da aba Tempo | Aceito | Implementado | ciclo-de-vida | reajustar horas, OpenTaskCommand, ReportEntryRow, GetTimeEntries por tarefa, UpdateTimeEntry, relatório de horas |
 
 ## Novo ADR
 

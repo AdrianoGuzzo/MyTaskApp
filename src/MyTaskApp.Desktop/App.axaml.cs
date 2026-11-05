@@ -680,6 +680,9 @@ public sealed partial class App : Avalonia.Application
         todayViewModel.HoursReportRequested += () => ShowHoursReport(services, window);
         todayViewModel.History.ReportRequested += () => ShowHoursReport(services, window);
         todayViewModel.BoardLoaded += () => _ = report.RefreshAsync(CancellationToken.None);
+
+        // Reajustar as horas pelo relatório (ADR-102) muda o total e o relógio da linha.
+        report.Changed += () => Dispatcher.UIThread.Post(() => _ = todayViewModel.LoadAsync(CancellationToken.None));
     }
 
     /// <summary>A janela "Relatório de horas" (ADR-097).</summary>

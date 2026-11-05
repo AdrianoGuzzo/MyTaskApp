@@ -59,16 +59,28 @@ public sealed partial class HoursReportWindow : Window
         }
     }
 
-    /// <summary>Esc fecha, se o gráfico não usou a tecla para desfazer a escolha.</summary>
+    /// <summary>
+    /// Esc volta da tarefa aberta para a lista (ADR-102); sem tarefa aberta,
+    /// fecha, se o gráfico não usou a tecla para desfazer a escolha.
+    /// </summary>
     protected override void OnKeyDown(KeyEventArgs e)
     {
         base.OnKeyDown(e);
 
-        if (e.Key == Key.Escape && !e.Handled)
+        if (e.Key != Key.Escape || e.Handled)
         {
-            e.Handled = true;
-            Close();
+            return;
         }
+
+        e.Handled = true;
+
+        if (DataContext is HoursReportViewModel { IsTaskOpen: true } viewModel)
+        {
+            viewModel.CloseTask();
+            return;
+        }
+
+        Close();
     }
 
     /// <summary>O duplo clique na linha desce um nível, como no gráfico.</summary>

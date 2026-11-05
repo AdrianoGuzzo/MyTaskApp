@@ -48,7 +48,8 @@ public class HoursReportWindowTests
         runner.Handlers[typeof(TimeReportHandlers)] = new TimeReportHandlers(query, clock, time);
         runner.ResultsByHandler[typeof(GetTagsHandler)] = new List<TagRow>();
 
-        var viewModel = new HoursReportViewModel(runner, NullLogger<HoursReportViewModel>.Instance);
+        var viewModel = new HoursReportViewModel(
+            runner, new FakeTimeEntryEditor(), new FakeConfirmationDialog(), clock, NullLogger<HoursReportViewModel>.Instance);
         var window = new HoursReportWindow(viewModel);
         window.Show();
         await viewModel.ShowAsync(CancellationToken.None);
@@ -119,6 +120,32 @@ public class HoursReportWindowTests
         heatmap.Days.Should().HaveCount(365);
         Named<Button>(window, "MonthScaleButton").Classes.Should().Contain("active");
         Named<Button>(window, "DayScaleButton").Classes.Should().NotContain("active");
+
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public async Task ClickingATask_ShowsItsPeriods_AndEscGoesBackToTheTasks()
+    {
+        var (window, viewModel) = await ShowAsync();
+
+        var task = window.GetVisualDescendants().OfType<Button>().Single(button => button.Classes.Contains("taskRow"));
+        task.Command!.Execute(task.CommandParameter);
+        window.UpdateLayout();
+
+        Named<DockPanel>(window, "EntriesPanel").IsVisible.Should().BeTrue();
+        Named<DockPanel>(window, "TaskListPanel").IsVisible.Should().BeFalse();
+        Named<TextBlock>(window, "OpenTaskTitleText").Text.Should().Be("Relatório");
+        Named<TextBlock>(window, "OpenTaskTotalText").Text.Should().Be("2h");
+        Named<ItemsControl>(window, "EntryList").ItemCount.Should().Be(1);
+        Named<Button>(window, "AddEntryButton").IsEffectivelyEnabled.Should().BeTrue();
+
+        window.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
+        window.UpdateLayout();
+
+        viewModel.IsTaskOpen.Should().BeFalse();
+        Named<DockPanel>(window, "TaskListPanel").IsVisible.Should().BeTrue();
+        window.IsVisible.Should().BeTrue("o primeiro Esc só volta para as tarefas");
 
         window.Close();
     }

@@ -18,6 +18,7 @@
     cima para baixo, do geral para o detalhe: os indicadores do período, o
     gráfico (ou a tabela) e, ao lado, em que tarefas as horas foram. Escolher
     um bloco muda a leitura e as tarefas; o duplo clique desce um nível.
+    Clicar numa tarefa abre os períodos dela no bloco, para reajustar (ADR-102).
   -->
 
   <Window.KeyBindings>
@@ -177,6 +178,65 @@
     <Style Selector="TextBlock.number">
       <Setter Property="HorizontalAlignment" Value="Right" />
       <Setter Property="FontFeatures" Value="+tnum" />
+    </Style>
+
+    <!-- Uma tarefa do painel: a linha inteira é o botão que abre os períodos dela (ADR-102). -->
+    <Style Selector="Button.taskRow">
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="Padding" Value="6,5" />
+      <Setter Property="Margin" Value="-6,0,0,4" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style Selector="Button.taskRow /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetPillRadius}" />
+    </Style>
+
+    <Style Selector="Button.taskRow:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource WidgetSurfaceHoverBrush}" />
+    </Style>
+
+    <!-- Os períodos da tarefa aberta, como na aba Tempo: as ações aparecem sob o mouse. -->
+    <Style Selector="Border.timeEntry">
+      <Setter Property="Padding" Value="8,5" />
+      <Setter Property="Margin" Value="-8,0,0,2" />
+      <Setter Property="CornerRadius" Value="{StaticResource WidgetPillRadius}" />
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="Border.timeEntry:pointerover">
+      <Setter Property="Background" Value="{DynamicResource WidgetSurfaceHoverBrush}" />
+    </Style>
+
+    <Style Selector="Border.timeEntry.active">
+      <Setter Property="Background" Value="{DynamicResource WidgetAccentSoftBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.timeRange">
+      <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, monospace" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
+    </Style>
+
+    <Style Selector="Button.timeAction">
+      <Setter Property="FontFamily" Value="{StaticResource WidgetIconFont}" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Padding" Value="6,3" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="Opacity" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextMidBrush}" />
+    </Style>
+
+    <!-- Sob o mouse ou com o foco do teclado: sem isso, Tab chegaria num botão invisível. -->
+    <Style Selector="Border.timeEntry:pointerover Button.timeAction, Button.timeAction:focus-visible">
+      <Setter Property="Opacity" Value="1" />
     </Style>
 
     <Style Selector="Border.legend">
@@ -584,34 +644,135 @@
                      IsVisible="{Binding StatusMessage, Converter={x:Static ObjectConverters.IsNotNull}}" />
 
           <Panel>
-            <TextBlock Classes="caption"
-                       Text="Nenhuma hora neste período."
-                       IsVisible="{Binding HasNoTaskRows}" />
 
-            <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-              <ItemsControl x:Name="TaskList" ItemsSource="{Binding TaskRows}" Margin="0,0,10,0">
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate x:DataType="vm:TaskHoursRow">
-                    <StackPanel Spacing="4" Margin="0,0,0,10" ToolTip.Tip="{Binding Title}">
-                      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                        <TextBlock Grid.Column="0" Classes="cell" Text="{Binding Title}" />
-                        <TextBlock Grid.Column="1" Classes="cell number" Text="{Binding Duration}" FontWeight="SemiBold" />
-                      </Grid>
-                      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                        <ProgressBar Grid.Column="0"
-                                     Classes="slim"
-                                     Minimum="0"
-                                     Maximum="1"
-                                     MinWidth="0"
-                                     Value="{Binding Ratio}"
-                                     VerticalAlignment="Center" />
-                        <TextBlock Grid.Column="1" Classes="caption" Text="{Binding Share}" MinWidth="34" TextAlignment="Right" />
-                      </Grid>
-                    </StackPanel>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
-            </ScrollViewer>
+            <!-- As tarefas do bloco. O clique abre os períodos dela para reajustar (ADR-102). -->
+            <DockPanel x:Name="TaskListPanel" IsVisible="{Binding IsTaskListShown}">
+              <TextBlock DockPanel.Dock="Bottom"
+                         Classes="caption"
+                         TextWrapping="Wrap"
+                         Margin="0,6,0,0"
+                         Text="Clique numa tarefa para ver e reajustar os períodos dela."
+                         IsVisible="{Binding !HasNoTaskRows}" />
+
+              <Panel>
+                <TextBlock Classes="caption"
+                           Text="Nenhuma hora neste período."
+                           IsVisible="{Binding HasNoTaskRows}" />
+
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                  <ItemsControl x:Name="TaskList" ItemsSource="{Binding TaskRows}" Margin="0,0,10,0">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:TaskHoursRow">
+                        <Button Classes="taskRow"
+                                ToolTip.Tip="{Binding Title}"
+                                AutomationProperties.Name="{Binding Title, StringFormat='Ver e reajustar os períodos de {0}'}"
+                                Command="{Binding #Root.((vm:HoursReportViewModel)DataContext).OpenTaskCommand}"
+                                CommandParameter="{Binding}">
+                          <StackPanel Spacing="4">
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                              <TextBlock Grid.Column="0" Classes="cell" Text="{Binding Title}" />
+                              <TextBlock Grid.Column="1" Classes="cell number" Text="{Binding Duration}" FontWeight="SemiBold" />
+                            </Grid>
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                              <ProgressBar Grid.Column="0"
+                                           Classes="slim"
+                                           Minimum="0"
+                                           Maximum="1"
+                                           MinWidth="0"
+                                           Value="{Binding Ratio}"
+                                           VerticalAlignment="Center" />
+                              <TextBlock Grid.Column="1" Classes="caption" Text="{Binding Share}" MinWidth="34" TextAlignment="Right" />
+                            </Grid>
+                          </StackPanel>
+                        </Button>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </ScrollViewer>
+              </Panel>
+            </DockPanel>
+
+            <!-- Os períodos da tarefa aberta no bloco: corrigir, excluir e lançar mais (ADR-102). -->
+            <DockPanel x:Name="EntriesPanel" IsVisible="{Binding IsTaskOpen}">
+
+              <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,8">
+                <Button x:Name="BackToTasksButton"
+                        Classes="crumb"
+                        HorizontalAlignment="Left"
+                        Content="‹ Tarefas"
+                        ToolTip.Tip="Voltar à lista de tarefas (Esc)"
+                        Command="{Binding CloseTaskCommand}" />
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                  <TextBlock Grid.Column="0"
+                             x:Name="OpenTaskTitleText"
+                             Classes="cell"
+                             FontWeight="SemiBold"
+                             Text="{Binding OpenTask.Title, FallbackValue=''}"
+                             ToolTip.Tip="{Binding OpenTask.Title, FallbackValue=''}" />
+                  <TextBlock Grid.Column="1"
+                             x:Name="OpenTaskTotalText"
+                             Classes="cell number"
+                             FontWeight="SemiBold"
+                             Text="{Binding OpenTaskTotal}" />
+                </Grid>
+              </StackPanel>
+
+              <StackPanel DockPanel.Dock="Bottom" Spacing="6" Margin="0,8,0,0">
+                <TextBlock Classes="caption"
+                           TextWrapping="Wrap"
+                           Text="{Binding EntriesNote}"
+                           IsVisible="{Binding EntriesNote, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                <Button x:Name="AddEntryButton"
+                        HorizontalAlignment="Left"
+                        FontSize="12"
+                        Content="+ Adicionar tempo"
+                        ToolTip.Tip="Lançar um período para esta tarefa"
+                        Command="{Binding AddEntryCommand}" />
+              </StackPanel>
+
+              <Panel>
+                <TextBlock Classes="caption"
+                           TextWrapping="Wrap"
+                           Text="Nenhum período desta tarefa aqui."
+                           IsVisible="{Binding HasNoEntries}" />
+
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                  <ItemsControl x:Name="EntryList" ItemsSource="{Binding Entries}" Margin="0,0,10,0">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:ReportEntryRow">
+                        <Border Classes="timeEntry" Classes.active="{Binding IsRunning}">
+                          <Grid ColumnDefinitions="*,Auto,Auto">
+                            <StackPanel Grid.Column="0" Spacing="1" VerticalAlignment="Center">
+                              <TextBlock Classes="caption" Text="{Binding DayLabel}" />
+                              <TextBlock Classes="timeRange" Text="{Binding RangeLabel}" />
+                              <TextBlock Classes="caption" Text="{Binding Meta}" />
+                              <TextBlock Classes="detail"
+                                         Text="{Binding Note}"
+                                         IsVisible="{Binding HasNote}" />
+                            </StackPanel>
+                            <Button Grid.Column="1"
+                                    Classes="timeAction"
+                                    Content="{Binding EditGlyph}"
+                                    ToolTip.Tip="Editar este período"
+                                    AutomationProperties.Name="Editar este período"
+                                    IsVisible="{Binding CanEdit}"
+                                    Command="{Binding #Root.((vm:HoursReportViewModel)DataContext).EditEntryCommand}"
+                                    CommandParameter="{Binding}" />
+                            <Button Grid.Column="2"
+                                    Classes="timeAction"
+                                    Content="{Binding DeleteGlyph}"
+                                    ToolTip.Tip="Excluir este período"
+                                    AutomationProperties.Name="Excluir este período"
+                                    Command="{Binding #Root.((vm:HoursReportViewModel)DataContext).DeleteEntryCommand}"
+                                    CommandParameter="{Binding}" />
+                          </Grid>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </ScrollViewer>
+              </Panel>
+            </DockPanel>
           </Panel>
         </DockPanel>
       </Border>
