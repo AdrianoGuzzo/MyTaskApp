@@ -45,7 +45,8 @@ public interface IAgentSettingsStore
 
     /// <summary>
     /// Onde "Abrir" põe o agente (ADR-098). <c>null</c> se nunca foi
-    /// escolhido — aí vale o terminal direto. Vale só nesta máquina.
+    /// escolhido — aí vale o terminal do agente, onde ele existe (ADR-101).
+    /// Vale só nesta máquina.
     /// </summary>
     Task<AgentHosting?> GetHostingAsync(string providerId, CancellationToken cancellationToken = default);
 
@@ -80,14 +81,19 @@ internal static class AgentSettingsStoreExtensions
         AgentCliOption.Find(provider.Models, await settings.GetModelAsync(provider.Id, cancellationToken))?.Value
             ?? string.Empty;
 
-    /// <summary>O modo salvo, ou o terminal direto quando nada foi escolhido (ou o salvo não existe mais).</summary>
+    /// <summary>
+    /// O modo salvo. Sem nada escolhido (ou com um salvo que não existe mais),
+    /// o terminal do agente em janela onde ele existe, para a sessão aparecer
+    /// de longe (ADR-101); sem ele, o terminal direto.
+    /// </summary>
     public static async Task<AgentHosting> HostingForAsync(
         this IAgentSettingsStore settings,
         IAgentCliProvider provider,
+        bool agentTerminalSupported,
         CancellationToken cancellationToken) =>
-        await settings.GetHostingAsync(provider.Id, cancellationToken) is { } hosting && Enum.IsDefined(hosting)
-            ? hosting
-            : AgentHosting.Direct;
+        !agentTerminalSupported ? AgentHosting.Direct
+        : await settings.GetHostingAsync(provider.Id, cancellationToken) is { } hosting && Enum.IsDefined(hosting) ? hosting
+        : AgentHosting.AgentWindow;
 
     /// <summary>O esforço salvo, como <see cref="ModelForAsync"/>.</summary>
     public static async Task<string> EffortForAsync(

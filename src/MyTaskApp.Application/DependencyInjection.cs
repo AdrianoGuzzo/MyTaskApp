@@ -312,6 +312,7 @@ public static class DependencyInjection
         // E o lado de quem segue de longe: a lista e a conexão, pelo servidor.
         services.TryAddSingleton<IRemoteTerminalWires>(NoRemoteTerminalWires.Instance);
         services.TryAddSingleton<RemoteTerminalConnector>();
+        services.TryAddSingleton<IRemoteTerminalConnector>(provider => provider.GetRequiredService<RemoteTerminalConnector>());
         services.AddScoped<ListRemoteTerminalsHandler>();
         services.AddSingleton<RemoteDatabaseCopy>();
         services.AddScoped<RemoteDatabaseCopyPlanner>();

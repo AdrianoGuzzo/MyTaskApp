@@ -16,6 +16,33 @@
 
                 <Label Text="{Binding LoadError}" Style="{StaticResource Error}" IsVisible="{Binding LoadError, Converter={StaticResource HasValue}}" />
 
+                <!-- O Claude no terminal do agente desta máquina (ADR-101). -->
+                <Label Text="Terminais do Claude" Style="{StaticResource Section}" IsVisible="{Binding HasTerminals}" />
+                <VerticalStackLayout BindableLayout.ItemsSource="{Binding Terminals}" Spacing="4">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="vm:TerminalLine">
+                            <Grid ColumnDefinitions="*,Auto" Padding="0,6">
+                                <Grid.GestureRecognizers>
+                                    <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type vm:RemoteMachineViewModel}}, x:DataType=vm:RemoteMachineViewModel, Path=OpenTerminalCommand}"
+                                                          CommandParameter="{Binding .}" />
+                                </Grid.GestureRecognizers>
+                                <VerticalStackLayout>
+                                    <Label Text="{Binding Title}">
+                                        <Label.Triggers>
+                                            <DataTrigger TargetType="Label" Binding="{Binding NeedsAttention}" Value="True">
+                                                <Setter Property="FontAttributes" Value="Bold" />
+                                            </DataTrigger>
+                                        </Label.Triggers>
+                                    </Label>
+                                    <Label Text="{Binding Detail}" Style="{StaticResource Muted}" />
+                                    <Label Text="{Binding BypassWarning}" Style="{StaticResource Error}" IsVisible="{Binding HasBypassWarning}" />
+                                </VerticalStackLayout>
+                                <Label Grid.Column="1" Text="›" Style="{StaticResource Muted}" VerticalOptions="Center" />
+                            </Grid>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </VerticalStackLayout>
+
                 <Label Text="Worktrees prontos" Style="{StaticResource Section}" />
                 <Label Text="Nenhum por enquanto. Para criar um, abra a tarefa e toque em &quot;Preparar em…&quot;."
                        Style="{StaticResource Muted}"
@@ -38,6 +65,12 @@
                                                 Style="{StaticResource Secondary}"
                                                 Command="{Binding Source={RelativeSource AncestorType={x:Type vm:RemoteMachineViewModel}}, x:DataType=vm:RemoteMachineViewModel, Path=StartAgentCommand}"
                                                 CommandParameter="{Binding .}"
+                                                Margin="0,0,8,8" />
+                                        <Button Text="No terminal de lá"
+                                                Style="{StaticResource Secondary}"
+                                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:RemoteMachineViewModel}}, x:DataType=vm:RemoteMachineViewModel, Path=StartTerminalCommand}"
+                                                CommandParameter="{Binding .}"
+                                                IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:RemoteMachineViewModel}}, x:DataType=vm:RemoteMachineViewModel, Path=OffersTerminal}"
                                                 Margin="0,0,8,8" />
                                         <Button Text="Apagar"
                                                 Style="{StaticResource Destructive}"

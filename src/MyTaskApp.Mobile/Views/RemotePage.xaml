@@ -99,6 +99,35 @@
                     </BindableLayout.ItemTemplate>
                 </VerticalStackLayout>
 
+                <!-- O Claude no terminal do agente das máquinas: a tela ao vivo, e assumir daqui (ADR-101). -->
+                <Label Text="Terminais do Claude" Style="{StaticResource Section}" IsVisible="{Binding HasTerminals}" />
+                <Label Text="{Binding TerminalsProblem}" Style="{StaticResource Muted}" LineBreakMode="WordWrap"
+                       IsVisible="{Binding TerminalsProblem, Converter={StaticResource HasValue}}" />
+                <VerticalStackLayout BindableLayout.ItemsSource="{Binding Terminals}" Spacing="4">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="vm:TerminalLine">
+                            <Grid ColumnDefinitions="*,Auto" Padding="0,6">
+                                <Grid.GestureRecognizers>
+                                    <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type vm:RemoteViewModel}}, x:DataType=vm:RemoteViewModel, Path=OpenTerminalCommand}"
+                                                          CommandParameter="{Binding .}" />
+                                </Grid.GestureRecognizers>
+                                <VerticalStackLayout>
+                                    <Label Text="{Binding Title}">
+                                        <Label.Triggers>
+                                            <DataTrigger TargetType="Label" Binding="{Binding NeedsAttention}" Value="True">
+                                                <Setter Property="FontAttributes" Value="Bold" />
+                                            </DataTrigger>
+                                        </Label.Triggers>
+                                    </Label>
+                                    <Label Text="{Binding Detail}" Style="{StaticResource Muted}" />
+                                    <Label Text="{Binding BypassWarning}" Style="{StaticResource Error}" IsVisible="{Binding HasBypassWarning}" />
+                                </VerticalStackLayout>
+                                <Label Grid.Column="1" Text="›" Style="{StaticResource Muted}" VerticalOptions="Center" />
+                            </Grid>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </VerticalStackLayout>
+
                 <!-- As conversas do Claude das máquinas, de qualquer tela que as abriu (ADR-091). -->
                 <Label Text="Conversas do Claude" Style="{StaticResource Section}" IsVisible="{Binding HasSessions}" />
                 <Label Text="{Binding SessionsProblem}" Style="{StaticResource Muted}" LineBreakMode="WordWrap"

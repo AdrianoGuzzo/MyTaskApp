@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Remote;
 using MyTaskApp.Application.Terminals;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.Agents;
@@ -32,7 +33,11 @@ public sealed record AgentSessionWatch(Guid SessionId, Guid TaskId, int ProcessI
 /// <summary>O agente está instalado neste computador?</summary>
 public sealed record DetectAgentCli(string? ProviderId = null);
 
-public sealed class DetectAgentCliHandler(IAgentCliProviders providers, IAgentSettingsStore settings, IAgentTerminalClient agentTerminal)
+public sealed class DetectAgentCliHandler(
+    IAgentCliProviders providers,
+    IAgentSettingsStore settings,
+    IAgentTerminalClient agentTerminal,
+    IRemoteSettingsStore? remoteSettings = null)
 {
     public async Task<AgentCliStatus> HandleAsync(
         DetectAgentCli query,
@@ -54,8 +59,9 @@ public sealed class DetectAgentCliHandler(IAgentCliProviders providers, IAgentSe
         {
             Models = provider.Models,
             Efforts = provider.Efforts,
-            Hosting = agentTerminal.Support.IsSupported ? await settings.HostingForAsync(provider, cancellationToken) : AgentHosting.Direct,
+            Hosting = await settings.HostingForAsync(provider, agentTerminal.Support.IsSupported, cancellationToken),
             HostingSupport = agentTerminal.Support,
+            RemoteTerminalAccepted = remoteSettings is not null && (await remoteSettings.GetAsync(cancellationToken)).AcceptTerminal,
         };
     }
 

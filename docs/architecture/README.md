@@ -44,7 +44,7 @@ Números dos ADRs; o link está na linha do índice abaixo.
 - **mobile** (app do celular): 067, 075, 076, 079
 - **distribuicao** (instalador, versionamento, release, instância única, iniciar com o sistema): 018, 019, 023, 044, 049
 - **testes** (estratégia e ferramentas de teste): 006
-- **remoto** (orquestração remota (fases 2 e 3)): 084, 085, 086, 087, 088, 089, 090, 091, 092, 093, 094, 095, 096, 098, 099
+- **remoto** (orquestração remota (fases 2 e 3)): 084, 085, 086, 087, 088, 089, 090, 091, 092, 093, 094, 095, 096, 098, 099, 101
 
 ## Índice
 
@@ -150,6 +150,7 @@ Números dos ADRs; o link está na linha do índice abaixo.
 | [ADR-098](decisions/098-terminal-do-agente-em-pseudoterminal.md) | O Claude interativo roda num pseudoterminal hospedado pelo agente, e as telas são vistas da mesma sessão | Aceito | Parcial | remoto | ConPTY, openpty, VtScreen, TerminalSessionHost, AgentHosting, MyTaskApp.TerminalAttach, lease de entrada, PermissionRequest |
 | [ADR-099](decisions/099-terminal-remoto-do-claude.md) | O terminal do agente seguido e controlado de outra máquina, com entrada assinada | Aceito | Parcial | remoto | terminal.attach, relay do hub, entrada assinada, chave efêmera, Aceitar terminal remoto, bypass com aviso |
 | [ADR-100](decisions/100-consulta-inteligente-com-a-configuracao-do-desenvolvimento.md) | Consulta Inteligente: o Claude Code com a mesma configuração do desenvolvimento | Aceito | Implementado | agente-ia | Consulta Inteligente, --restricted, --strict-mcp-config, mytaskapp-consulta, Parâmetros do card |
+| [ADR-101](decisions/101-terminal-do-claude-em-qualquer-aparelho.md) | O terminal do Claude em qualquer aparelho: o card abre no agente, a lista junta as máquinas e o celular segue e controla | Aceito | Parcial | remoto | AgentWindow padrão, Usar o terminal do agente, Terminais do Claude, TerminalSessionClient, RemoteTerminalPage, celular |
 
 ## Novo ADR
 

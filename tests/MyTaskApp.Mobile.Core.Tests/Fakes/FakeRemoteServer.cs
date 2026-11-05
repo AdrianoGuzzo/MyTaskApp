@@ -12,8 +12,17 @@ namespace MyTaskApp.Mobile.Core.Tests.Fakes;
 /// (ADR-091) são as que o teste põe, e o prompt e o parar entram nelas pelo
 /// payload, como no servidor.
 /// </summary>
-internal sealed class FakeRemoteServer(TimeProvider time) : IRemoteApi, IRemoteOperationsApi, IRemoteSessionsApi
+internal sealed class FakeRemoteServer(TimeProvider time) : IRemoteApi, IRemoteOperationsApi, IRemoteSessionsApi, IRemoteTerminalsApi
 {
+    /// <summary>Os terminais do agente das máquinas da conta (ADR-099), como o relato deles chegou.</summary>
+    public List<RemoteTerminalSessionView> Terminals { get; } = [];
+
+    public Task<RemoteTerminalSessionList> ListTerminalsAsync(CancellationToken cancellationToken) =>
+        Task.FromResult(new RemoteTerminalSessionList([.. Terminals]));
+
+    public Task<RemoteTerminalSessionAck> ReportTerminalsAsync(RemoteTerminalSessionBatch batch, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("O celular não executa.");
+
     public const string Nonce = "bm9uY2U";
 
     public List<DeviceRegistration> Registrations { get; } = [];

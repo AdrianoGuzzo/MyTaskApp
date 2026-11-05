@@ -5,7 +5,10 @@ namespace MyTaskApp.Desktop.ViewModels;
 /// <summary>Uma linha de "Onde abrir" no card do agente (ADR-098).</summary>
 public sealed record AgentHostingOption(AgentHosting Value, string Label, string Hint)
 {
-    /// <summary>O terminal do sistema primeiro: é o de sempre e o padrão.</summary>
+    /// <summary>
+    /// O terminal do sistema primeiro, que é o de sempre. O padrão, onde o
+    /// terminal do agente existe, é ele em janela (ADR-101).
+    /// </summary>
     public static IReadOnlyList<AgentHostingOption> All { get; } =
     [
         new(AgentHosting.Direct, "Terminal do sistema", "Abre um terminal como sempre. Fechar o terminal encerra o Claude."),

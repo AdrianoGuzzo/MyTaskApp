@@ -2,18 +2,8 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Terminals;
-using MyTaskApp.Domain;
-using MyTaskApp.Domain.Agents;
 
 namespace MyTaskApp.Desktop.ViewModels;
-
-/// <summary>Em que pé está a ligação com a sessão.</summary>
-public enum TerminalConnection
-{
-    Connecting,
-    Connected,
-    Disconnected,
-}
 
 /// <summary>
 /// Uma vista de uma sessão do terminal do agente (ADR-098, ADR-099): a tela que
@@ -22,62 +12,23 @@ public enum TerminalConnection
 /// muda o canal.
 /// </summary>
 /// <remarks>
-/// A leitura roda fora da thread da tela; cada mensagem volta para ela pelo
-/// <c>post</c> antes de tocar na <see cref="VtScreen"/>, que não é segura entre
-/// threads. Os envios saem um de cada vez.
+/// O miolo é o <see cref="TerminalSessionClient"/>, o mesmo do celular
+/// (ADR-101). Aqui ficam os comandos da janela e a pergunta antes de assumir
+/// sem as aprovações ou de forçar o fim.
 /// </remarks>
 public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncDisposable
 {
-    private readonly Func<TerminalSize, CancellationToken, Task<ITerminalChannel>> _connect;
+    /// <summary>O que muda quando o estado muda: tudo, menos a tela.</summary>
+    private static readonly string[] StateProperties =
+    [
+        nameof(Connection), nameof(IsConnected), nameof(IsDisconnected), nameof(IsRunning), nameof(IsReadOnly), nameof(StatusText),
+        nameof(Status), nameof(Message), nameof(DialogText), nameof(CanAnswerDialog), nameof(BypassWarning), nameof(MonitoringWarning),
+        nameof(LeaseText), nameof(OthersText), nameof(ProcessText), nameof(HasControl), nameof(CanTakeControlNow), nameof(CanReleaseControlNow),
+    ];
 
-    private readonly Action<Action> _post;
+    private readonly TerminalSessionClient _client;
 
     private readonly IConfirmationDialog? _confirmations;
-
-    private readonly ILogger<TerminalSessionViewModel> _logger;
-
-    private readonly TerminalClientKind _kind;
-
-    private readonly SemaphoreSlim _sending = new(1, 1);
-
-    private readonly CancellationTokenSource _closing = new();
-
-    private ITerminalChannel? _channel;
-
-    private TerminalSize _size = TerminalSize.Default;
-
-    /// <summary>Onde o próximo pedaço de saída precisa começar; outro valor é um buraco.</summary>
-    private long? _expected;
-
-    private bool _resyncing;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsConnected), nameof(IsDisconnected), nameof(IsReadOnly), nameof(StatusText))]
-    [NotifyCanExecuteChangedFor(
-        nameof(ReconnectCommand), nameof(InterruptCommand), nameof(AllowCommand), nameof(DenyCommand), nameof(StopCommand), nameof(ForceStopCommand),
-        nameof(TakeControlCommand), nameof(ReleaseControlCommand))]
-    private TerminalConnection _connection = TerminalConnection.Connecting;
-
-    [ObservableProperty]
-    private VtScreen? _screen;
-
-    /// <summary>Sobe a cada alimentação da tela: a vista redesenha.</summary>
-    [ObservableProperty]
-    private long _version;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(
-        nameof(IsRunning), nameof(IsReadOnly), nameof(StatusText), nameof(DialogText), nameof(CanAnswerDialog),
-        nameof(BypassWarning), nameof(MonitoringWarning), nameof(LeaseText), nameof(OthersText), nameof(ProcessText),
-        nameof(HasControl), nameof(CanTakeControlNow), nameof(CanReleaseControlNow))]
-    [NotifyCanExecuteChangedFor(
-        nameof(InterruptCommand), nameof(AllowCommand), nameof(DenyCommand), nameof(StopCommand), nameof(ForceStopCommand),
-        nameof(TakeControlCommand), nameof(ReleaseControlCommand))]
-    private TerminalSessionStatus? _status;
-
-    /// <summary>Um recado curto do agente ou desta vista: uma recusa, o controle que voltou.</summary>
-    [ObservableProperty]
-    private string? _message;
 
     /// <param name="kind">Que vista é esta: a lista "também aberto em" não a repete.</param>
     /// <param name="connect">Liga à sessão pedindo o tamanho que cabe; o canal local ou o relay remoto.</param>
@@ -92,168 +43,87 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
         IConfirmationDialog? confirmations,
         ILogger<TerminalSessionViewModel> logger)
     {
-        SessionId = sessionId;
         Title = title;
-        _kind = kind;
-        _connect = connect;
-        _post = post;
         _confirmations = confirmations;
-        _logger = logger;
+        _client = new TerminalSessionClient(sessionId, kind, connect, post, logger);
+        _client.ScreenChanged += () =>
+        {
+            OnPropertyChanged(nameof(Screen));
+            OnPropertyChanged(nameof(Version));
+        };
+        _client.StateChanged += OnStateChanged;
     }
 
     /// <summary>A vista já aberta foi pedida de novo: a janela vem para a frente.</summary>
     public event EventHandler? ActivationRequested;
 
-    public Guid SessionId { get; }
+    public Guid SessionId => _client.SessionId;
 
     public string Title { get; }
 
-    public bool IsConnected => Connection == TerminalConnection.Connected;
+    public TerminalConnection Connection => _client.Connection;
 
-    public bool IsDisconnected => Connection == TerminalConnection.Disconnected;
+    public VtScreen? Screen => _client.Screen;
 
-    public bool IsRunning => Status?.IsRunning == true;
+    /// <summary>Sobe a cada alimentação da tela: a vista redesenha.</summary>
+    public long Version => _client.Version;
 
-    /// <summary>
-    /// Sem ligação, ou a sessão terminou: a tela fica, as teclas não saem. De
-    /// longe, também sem a vez (ADR-099): ela é pedida, não tomada digitando.
-    /// </summary>
-    public bool IsReadOnly => !IsConnected || Status is { IsRunning: false } || (IsRemote && !HasControl);
+    public TerminalSessionStatus? Status => _client.Status;
+
+    /// <summary>Um recado curto do agente ou desta vista: uma recusa, o controle que voltou.</summary>
+    public string? Message => _client.Message;
+
+    public bool IsConnected => _client.IsConnected;
+
+    public bool IsDisconnected => _client.IsDisconnected;
+
+    public bool IsRunning => _client.IsRunning;
+
+    /// <inheritdoc cref="TerminalSessionClient.IsReadOnly"/>
+    public bool IsReadOnly => _client.IsReadOnly;
 
     /// <summary>A vista de quem controla de outra máquina: assume e solta a vez pelos botões.</summary>
-    public bool IsRemote => _kind == TerminalClientKind.Remote;
+    public bool IsRemote => _client.IsRemote;
 
     /// <summary>Esta vista tem a vez de digitar.</summary>
-    public bool HasControl => Status is { Lease: { } lease, YourClientId: { } you } && lease.ClientId == you;
+    public bool HasControl => _client.HasControl;
 
-    public bool CanTakeControlNow => IsRemote && IsConnected && IsRunning && !HasControl;
+    public bool CanTakeControlNow => _client.CanTakeControlNow;
 
-    public bool CanReleaseControlNow => IsRemote && IsConnected && HasControl;
+    public bool CanReleaseControlNow => _client.CanReleaseControlNow;
 
     public bool CanForceStop => _confirmations is not null;
 
-    public string StatusText => Connection switch
-    {
-        TerminalConnection.Connecting => "Conectando ao terminal do agente…",
-        TerminalConnection.Disconnected => "Desconectado: o Claude segue rodando no agente, se ele estiver no ar.",
-        _ => Status switch
-        {
-            null => "Conectado.",
-            { IsRunning: false, ExitCode: { } code } => $"○ Encerrado (código {code})",
-            { IsRunning: false } => "○ Encerrado",
-            { Dialog: not null } => "◐ Esperando você responder",
-            { Activity: AgentActivity.Working } => "● Trabalhando",
-            { Activity: AgentActivity.WaitingForUser } => "◐ Esperando você",
-            { Activity: AgentActivity.WaitingReview } => "◐ Terminou: espera o próximo prompt",
-            { Monitored: false } => "● Rodando, sem acompanhamento",
-            _ => "● Rodando",
-        },
-    };
+    public string StatusText => _client.StatusText;
 
-    public string? DialogText => Status?.Dialog?.Message;
+    public string? DialogText => _client.DialogText;
 
     /// <summary>Permitir ou negar por aqui: só a permissão, que tem só essas duas saídas.</summary>
-    public bool CanAnswerDialog => IsRunning && Status?.Dialog?.AnswerableFromTheApp == true;
+    public bool CanAnswerDialog => _client.CanAnswerDialog;
 
-    public string? BypassWarning => Status?.PermissionsBypassed == true
-        ? "Aberto sem as aprovações do Claude Code: o que for pedido aqui roda sem perguntar antes."
-        : null;
+    public string? BypassWarning => _client.BypassWarning;
 
-    public string? MonitoringWarning => Status is { Monitored: false, IsRunning: true }
-        ? "Sem acompanhamento: o MyTaskApp não sabe se o Claude trabalha ou espera. Só o teclado vale."
-        : null;
+    public string? MonitoringWarning => _client.MonitoringWarning;
 
-    public string? LeaseText => IsRemote
-        ? Status switch
-        {
-            null or { IsRunning: false } => null,
-            _ when HasControl => "Você está com o controle: o que digitar aqui vai para o Claude de lá. Quem está na máquina pode tomar de volta digitando.",
-            { Lease: { } holder } => $"{holder.Label} está com o controle. Assumir passa a vez para cá.",
-            _ => "Só olhando. Assuma o controle para digitar.",
-        }
-        : Status?.Lease is { Kind: TerminalClientKind.Remote } lease
-            ? $"Controlado de longe por {lease.Label}. Digitar aqui toma o controle de volta."
-            : null;
+    public string? LeaseText => _client.LeaseText;
 
-    public string? OthersText
-    {
-        get
-        {
-            // De longe, a vista sabe quem é; as outras se reconhecem pelo tipo.
-            var others = Status?.Clients
-                .Where(client => Status.YourClientId is { } you ? client.Id != you : client.Kind != _kind)
-                .Select(client => client.Kind switch
-                {
-                    TerminalClientKind.NativeWindow => "a janela do terminal",
-                    TerminalClientKind.Embedded => "o MyTaskApp da máquina",
-                    TerminalClientKind.Remote => $"{client.Label}, de longe",
-                    _ => client.Label,
-                })
-                .Distinct()
-                .ToList();
-
-            return others is { Count: > 0 } ? $"Também aberto em {string.Join(", ", others)}." : null;
-        }
-    }
+    public string? OthersText => _client.OthersText;
 
     /// <summary>De longe, a pasta não vem: o caminho é da outra máquina.</summary>
-    public string? ProcessText => Status is { } status
-        ? status.WorkingDirectory is { Length: > 0 } directory
-            ? $"PID {status.ProcessId} · {status.Size.Columns}×{status.Size.Rows} · {directory}"
-            : $"PID {status.ProcessId} · {status.Size.Columns}×{status.Size.Rows}"
-        : null;
+    public string? ProcessText => _client.ProcessText;
 
     /// <summary>Liga (ou religa) à sessão. Falhar não lança: a vista mostra o motivo e "Reconectar".</summary>
-    public async Task ConnectAsync()
-    {
-        await DropChannelAsync();
-        Connection = TerminalConnection.Connecting;
-        Message = null;
-        _expected = null;
-        _resyncing = false;
-
-        ITerminalChannel channel;
-
-        try
-        {
-            channel = await _connect(_size, _closing.Token);
-        }
-        catch (DomainException exception)
-        {
-            Disconnected(exception.Message);
-            return;
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            _logger.LogWarning(exception, "TerminalConnectFailed {SessionId}", SessionId);
-            Disconnected("Não foi possível ligar ao terminal do agente.");
-            return;
-        }
-
-        _channel = channel;
-        Connection = TerminalConnection.Connected;
-        _ = PumpAsync(channel, _closing.Token);
-    }
+    public Task ConnectAsync() => _client.ConnectAsync();
 
     public void RequestActivation() => ActivationRequested?.Invoke(this, EventArgs.Empty);
 
     /// <summary>O que a pessoa digitou na vista.</summary>
-    public Task TypeAsync(byte[] keys) => SendAsync(new TerminalKeys(keys));
+    public Task TypeAsync(byte[] keys) => _client.TypeAsync(keys);
 
     /// <summary>O tamanho que cabe na vista; o agente só aplica se ela dita o tamanho.</summary>
-    public Task ResizeAsync(TerminalSize size)
-    {
-        _size = size;
+    public Task ResizeAsync(TerminalSize size) => _client.ResizeAsync(size);
 
-        // Até chegar o primeiro estado, a tela vazia acompanha a vista.
-        if (Status is null && Screen is { } screen && screen.Size != size)
-        {
-            screen.Resize(size);
-            Version++;
-        }
-
-        return IsConnected ? SendAsync(new TerminalResize(size)) : Task.CompletedTask;
-    }
+    public ValueTask DisposeAsync() => _client.DisposeAsync();
 
     [RelayCommand(CanExecute = nameof(IsDisconnected))]
     private Task ReconnectAsync() => ConnectAsync();
@@ -278,41 +148,31 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
             }
         }
 
-        await SendAsync(new TerminalTakeControl());
+        await _client.TakeControlAsync();
     }
 
     [RelayCommand(CanExecute = nameof(CanReleaseControlNow))]
-    private Task ReleaseControlAsync() => SendAsync(new TerminalReleaseControl());
+    private Task ReleaseControlAsync() => _client.ReleaseControlAsync();
 
-    private bool CanInterrupt => IsConnected && Status is { IsRunning: true, Activity: AgentActivity.Working, Dialog: null };
+    private bool CanInterrupt => _client.CanInterrupt;
 
     /// <summary>O Esc do Claude: para o que ele está fazendo, a conversa fica.</summary>
     [RelayCommand(CanExecute = nameof(CanInterrupt))]
-    private Task InterruptAsync() => SendAsync(new TerminalInterrupt());
+    private Task InterruptAsync() => _client.InterruptAsync();
 
-    private bool CanAnswer => IsConnected && CanAnswerDialog;
-
-    [RelayCommand(CanExecute = nameof(CanAnswer))]
-    private Task AllowAsync() => AnswerAsync(allow: true);
+    private bool CanAnswer => _client.CanAnswer;
 
     [RelayCommand(CanExecute = nameof(CanAnswer))]
-    private Task DenyAsync() => AnswerAsync(allow: false);
+    private Task AllowAsync() => _client.AnswerAsync(allow: true);
 
-    private bool CanStop => IsConnected && IsRunning;
+    [RelayCommand(CanExecute = nameof(CanAnswer))]
+    private Task DenyAsync() => _client.AnswerAsync(allow: false);
+
+    private bool CanStop => _client.CanStop;
 
     /// <summary>Como fechar a janela de um terminal: o Claude recebe o fim e salva a conversa.</summary>
     [RelayCommand(CanExecute = nameof(CanStop))]
-    private async Task StopAsync()
-    {
-        try
-        {
-            await _channel!.StopAsync(force: false, _closing.Token);
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            SendFailed(exception);
-        }
-    }
+    private Task StopAsync() => _client.StopAsync(force: false);
 
     private bool CanForce => CanStop && CanForceStop;
 
@@ -326,188 +186,26 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
             "Forçar o fim",
             IsIrreversible: true));
 
-        if (!confirmed)
+        if (confirmed)
         {
-            return;
-        }
-
-        try
-        {
-            await _channel!.StopAsync(force: true, _closing.Token);
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            SendFailed(exception);
+            await _client.StopAsync(force: true);
         }
     }
 
-    public async ValueTask DisposeAsync()
+    private void OnStateChanged()
     {
-        if (_closing.IsCancellationRequested)
+        foreach (var property in StateProperties)
         {
-            return;
+            OnPropertyChanged(property);
         }
 
-        await _closing.CancelAsync();
-        await DropChannelAsync();
-        _closing.Dispose();
-    }
-
-    private Task AnswerAsync(bool allow) =>
-        Status?.Dialog is { } dialog ? SendAsync(new TerminalChoice(dialog.Id, allow)) : Task.CompletedTask;
-
-    private async Task SendAsync(TerminalInput input)
-    {
-        if (_channel is not { } channel || _closing.IsCancellationRequested)
-        {
-            return;
-        }
-
-        await _sending.WaitAsync();
-
-        try
-        {
-            await channel.SendAsync(input, _closing.Token);
-        }
-        catch (OperationCanceledException) when (_closing.IsCancellationRequested)
-        {
-        }
-        catch (Exception exception)
-        {
-            SendFailed(exception);
-        }
-        finally
-        {
-            _sending.Release();
-        }
-    }
-
-    private void SendFailed(Exception exception)
-    {
-        _logger.LogInformation(exception, "TerminalSendFailed {SessionId}", SessionId);
-        _post(() => Disconnected("A ligação com o terminal caiu."));
-    }
-
-    private async Task PumpAsync(ITerminalChannel channel, CancellationToken cancellationToken)
-    {
-        try
-        {
-            while (await channel.ReadAsync(cancellationToken) is { } message)
-            {
-                _post(() => Apply(channel, message));
-            }
-
-            _post(() => Disconnected("O agente fechou a ligação com o terminal.", channel));
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-        }
-        catch (Exception exception)
-        {
-            _logger.LogInformation(exception, "TerminalReadFailed {SessionId}", SessionId);
-            _post(() => Disconnected("A ligação com o terminal caiu.", channel));
-        }
-    }
-
-    private void Apply(ITerminalChannel channel, TerminalMessage message)
-    {
-        // Mensagem de uma ligação que já foi trocada por outra.
-        if (channel != _channel)
-        {
-            return;
-        }
-
-        switch (message)
-        {
-            case TerminalOutput output:
-                Apply(output);
-                break;
-            case TerminalStateMessage state:
-                Apply(state.Status);
-                break;
-            case TerminalNotice notice:
-                Message = notice.Text;
-                break;
-            case TerminalRefusal refusal:
-                Message = refusal.Text;
-
-                // Recusado antes de ver a tela: a sessão não existe mais, ou não é para esta vista.
-                if (Screen is null && Status is null)
-                {
-                    Disconnected(refusal.Text);
-                }
-
-                break;
-        }
-    }
-
-    private void Apply(TerminalOutput output)
-    {
-        if (output.Reset)
-        {
-            Screen = new VtScreen(Status?.Size ?? _size);
-            _resyncing = false;
-        }
-        else if (Screen is null || (_expected is { } expected && output.Offset != expected))
-        {
-            // Um buraco na saída: a tela daqui não é mais a de lá. Pede o retrato e espera por ele.
-            if (!_resyncing)
-            {
-                _resyncing = true;
-                _ = SendAsync(new TerminalResync());
-            }
-
-            return;
-        }
-
-        Screen!.Feed(output.Data);
-        _expected = output.End;
-        Version++;
-    }
-
-    private void Apply(TerminalSessionStatus status)
-    {
-        var resized = Screen is { } screen && screen.Size != status.Size;
-        Status = status;
-
-        if (resized)
-        {
-            // Quem dita o tamanho é outra vista: a tela daqui segue a de lá, e o retrato acerta as linhas.
-            Screen!.Resize(status.Size);
-            Version++;
-
-            if (!_resyncing && status.IsRunning)
-            {
-                _resyncing = true;
-                _ = SendAsync(new TerminalResync());
-            }
-        }
-    }
-
-    private void Disconnected(string reason, ITerminalChannel? from = null)
-    {
-        if (from is not null && from != _channel)
-        {
-            return;
-        }
-
-        Connection = TerminalConnection.Disconnected;
-        Message = reason;
-        _ = DropChannelAsync();
-    }
-
-    private async Task DropChannelAsync()
-    {
-        if (Interlocked.Exchange(ref _channel, null) is { } channel)
-        {
-            try
-            {
-                await channel.DisposeAsync();
-            }
-            catch (Exception exception)
-            {
-                _logger.LogDebug(exception, "TerminalChannelDisposeFailed {SessionId}", SessionId);
-            }
-        }
+        ReconnectCommand.NotifyCanExecuteChanged();
+        TakeControlCommand.NotifyCanExecuteChanged();
+        ReleaseControlCommand.NotifyCanExecuteChanged();
+        InterruptCommand.NotifyCanExecuteChanged();
+        AllowCommand.NotifyCanExecuteChanged();
+        DenyCommand.NotifyCanExecuteChanged();
+        StopCommand.NotifyCanExecuteChanged();
+        ForceStopCommand.NotifyCanExecuteChanged();
     }
 }

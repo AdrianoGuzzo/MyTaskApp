@@ -33,6 +33,7 @@ public sealed class RemoteBackgroundCheckTests : IAsyncLifetime
             services.AddSingleton<IRemoteApi>(provider => provider.GetRequiredService<FakeRemoteServer>());
             services.AddSingleton<IRemoteOperationsApi>(provider => provider.GetRequiredService<FakeRemoteServer>());
             services.AddSingleton<IRemoteSessionsApi>(provider => provider.GetRequiredService<FakeRemoteServer>());
+            services.AddSingleton<IRemoteTerminalsApi>(provider => provider.GetRequiredService<FakeRemoteServer>());
         });
 
         await using (var scope = _app.Services.CreateAsyncScope())
@@ -83,6 +84,28 @@ public sealed class RemoteBackgroundCheckTests : IAsyncLifetime
         shown.Text.Should().Contain("dotnet test").And.Contain("Notebook");
 
         (await Check.RunAsync(notify: true, Ct)).Should().Be(0, "a mesma aprovação não avisa de novo");
+    }
+
+    /// <summary>O terminal do Claude que passou a esperar alguém avisa uma vez, com a máquina (ADR-101).</summary>
+    [Fact]
+    public async Task ATerminalThatStartsWaiting_IsNotifiedOnce()
+    {
+        await _app.Get<RemoteViewModel>().EnableAsync();
+        var report = new RemoteTerminalSessionReport(
+            Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7(), RemoteTerminalProcess.Running, null,
+            RemoteAgentActivity.Working, null, false, true, false, false, MobileHarness.Now, MobileHarness.Now);
+        Server.Terminals.Add(new RemoteTerminalSessionView(Notebook, report, MobileHarness.Now));
+
+        (await Check.RunAsync(notify: true, Ct)).Should().Be(0, "a primeira volta só anota, e trabalhando não pede ninguém");
+
+        Server.Terminals[0] = Server.Terminals[0] with { Session = report with { HasDialog = true } };
+        (await Check.RunAsync(notify: true, Ct)).Should().Be(1);
+
+        var shown = _app.Notifier.Shown.Should().ContainSingle().Subject;
+        shown.Tag.Should().Be($"terminal:{report.SessionId:N}");
+        shown.Text.Should().Be("O Claude no terminal de Notebook espera você.");
+
+        (await Check.RunAsync(notify: true, Ct)).Should().Be(0, "o mesmo terminal esperando não avisa de novo");
     }
 
     [Fact]

@@ -42,6 +42,31 @@ public sealed class ListRemoteTerminalsTests
         item.Target(_machine).Should().Be(new RemoteTerminalTarget(_machine, mine.SessionId, task.Id, mine.DevelopmentId!.Value));
     }
 
+    /// <summary>Sem máquina, todas as da conta (ADR-101): as rodando primeiro, as mais recentes na frente, cada uma com o alvo na própria máquina.</summary>
+    [Fact]
+    public async Task WithoutAMachine_AllOfTheAccount_RunningFirst_AndNewestFirst()
+    {
+        var other = Guid.CreateVersion7();
+        var exited = Report(Guid.CreateVersion7()) with { Process = RemoteTerminalProcess.Exited, UpdatedAt = Now.AddMinutes(5) };
+        var older = Report(Guid.CreateVersion7()) with { UpdatedAt = Now.AddMinutes(-3) };
+        var newer = Report(Guid.CreateVersion7()) with { UpdatedAt = Now, HasDialog = true };
+        _api.ListTerminalsAsync(Arg.Any<CancellationToken>()).Returns(new RemoteTerminalSessionList(
+        [
+            new RemoteTerminalSessionView(_machine, exited, Now),
+            new RemoteTerminalSessionView(other, older, Now),
+            new RemoteTerminalSessionView(_machine, newer, Now),
+        ]));
+
+        var list = await Handler().HandleAsync(new ListRemoteTerminals(), Ct);
+
+        list.Items.Select(item => item.Session.SessionId).Should().Equal(newer.SessionId, older.SessionId, exited.SessionId);
+        list.Items[1].DeviceId.Should().Be(other);
+        list.Items[1].Target()!.DeviceId.Should().Be(other);
+        list.Items[0].NeedsAttention.Should().BeTrue("o diálogo aberto pede alguém");
+        list.Items[1].NeedsAttention.Should().BeFalse();
+        list.Items[2].NeedsAttention.Should().BeFalse("encerrado não pede ninguém");
+    }
+
     [Fact]
     public async Task ATaskNotSyncedYet_StillShows()
     {

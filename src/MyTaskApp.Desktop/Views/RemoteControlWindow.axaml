@@ -291,7 +291,7 @@
           <TextBlock Classes="sectionTitle" Text="Terminais do Claude" />
           <TextBlock x:Name="TerminalsMessage" Classes="meta caution" Text="{Binding Message}"
                      IsVisible="{Binding Message, Converter={x:Static ObjectConverters.IsNotNull}}" />
-          <TextBlock Classes="meta" Text="Nenhum Claude rodando no terminal do agente de lá." IsVisible="{Binding HasNoItems}" />
+          <TextBlock Classes="meta" Text="{Binding EmptyText}" IsVisible="{Binding HasNoItems}" />
           <ItemsControl x:Name="TerminalList" ItemsSource="{Binding Items}" IsVisible="{Binding HasItems}">
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="remote:RemoteTerminalItem">

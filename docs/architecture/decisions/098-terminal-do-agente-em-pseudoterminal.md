@@ -7,7 +7,7 @@
 | **Categoria** | remoto |
 | **Registrado** | 2026-10-29 |
 | **Palavras-chave** | pseudoterminal, ConPTY, openpty, posix_spawn, VtScreen, TerminalSessionHost, TerminalSessionRegistry, AgentHosting, AgentSessionMode.Terminal, MyTaskApp.TerminalAttach, canal local do terminal, lease de entrada, PermissionRequest, --session-id |
-| **Relações** | revisa: [ADR-030](030-sessoes-claude-code-por-tarefa.md), [ADR-037](037-acompanhar-claude-code-pelos-hooks.md), [ADR-085](085-agente-sem-tela-sobre-o-mesmo-sqlite.md); relacionado: [ADR-092](092-sessao-gerenciada-a-partir-do-desktop.md), [ADR-099](099-terminal-remoto-do-claude.md) |
+| **Relações** | revisa: [ADR-030](030-sessoes-claude-code-por-tarefa.md), [ADR-037](037-acompanhar-claude-code-pelos-hooks.md), [ADR-085](085-agente-sem-tela-sobre-o-mesmo-sqlite.md); relacionado: [ADR-092](092-sessao-gerenciada-a-partir-do-desktop.md), [ADR-099](099-terminal-remoto-do-claude.md); revisto por: [ADR-101](101-terminal-do-claude-em-qualquer-aparelho.md) |
 | **Código** | `src/MyTaskApp.Application/Terminals/` (`VtScreen`, `TerminalSessionHost`, `TerminalSessionRegistry`, `LocalTerminalServer`, `LocalTerminalChannel`, `TerminalWire`), `src/MyTaskApp.Infrastructure/Terminals/` (`Windows/ConPtyTerminal`, `Linux/UnixPtyTerminal`, `TerminalPipe`), `src/MyTaskApp.TerminalAttach/`, `src/MyTaskApp.Application/Agents/AgentSessionHandlers.cs` (`AgentHosting`) |
 
 **Estado da implementação (2026-11-02):** o pseudoterminal (ConPTY e

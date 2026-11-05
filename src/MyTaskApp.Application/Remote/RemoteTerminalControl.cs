@@ -77,12 +77,19 @@ public static class RemoteTerminalRequests
     private static JsonElement Payload<T>(T payload) => JsonSerializer.SerializeToElement(payload, RemoteJson.Options);
 }
 
+/// <summary>Liga uma vista a uma sessão do terminal do agente de outra máquina (ADR-099); o celular a pede pela porta (ADR-101).</summary>
+public interface IRemoteTerminalConnector
+{
+    Task<ITerminalChannel> ConnectAsync(RemoteTerminalTarget target, TerminalSize size, CancellationToken cancellationToken);
+}
+
 /// <summary>
 /// Liga uma vista desta máquina a uma sessão do terminal do agente de outra
 /// (ADR-099): abre a conexão do hub, pede o <c>terminal.attach</c> com uma
 /// chave nova, só desta conexão, e passa a seguir.
 /// </summary>
 public sealed class RemoteTerminalConnector(IUseCaseRunner runner, IRemoteTerminalWires wires, TimeProvider time, ILogger<RemoteTerminalChannel> logger)
+    : IRemoteTerminalConnector
 {
     /// <summary>De quanto em quanto o estado da operação é lido, até o agente aceitar ou recusar.</summary>
     public static readonly TimeSpan AttachPoll = TimeSpan.FromSeconds(1);
@@ -459,19 +466,36 @@ public sealed partial class RemoteTerminalChannel : ITerminalChannel
 }
 
 /// <summary>As sessões do terminal de uma máquina, para a tela de controle.</summary>
-public sealed record ListRemoteTerminals(Guid DeviceId);
+/// <param name="DeviceId">
+/// A máquina; <c>null</c> traz as de todas as máquinas da conta, as rodando
+/// primeiro e as mais recentes na frente (ADR-101).
+/// </param>
+public sealed record ListRemoteTerminals(Guid? DeviceId = null);
 
 /// <summary>Uma sessão do terminal como a lista mostra: o título vem da tarefa sincronizada aqui.</summary>
 public sealed record RemoteTerminalItem(RemoteTerminalSessionView View, string Title, string State)
 {
     public RemoteTerminalSessionReport Session => View.Session;
 
+    /// <summary>A máquina onde o Claude roda.</summary>
+    public Guid DeviceId => View.DeviceId;
+
+    /// <summary>O apelido da máquina, nas listas que juntam todas; <c>null</c> na lista de uma máquina só.</summary>
+    public string? MachineName { get; init; }
+
     public bool IsRunning => Session.Process == RemoteTerminalProcess.Running;
+
+    /// <summary>O Claude pede alguém: um diálogo aberto, ou parado esperando a pessoa.</summary>
+    public bool NeedsAttention =>
+        IsRunning && (Session.HasDialog || Session.Activity == RemoteAgentActivity.WaitingForUser);
 
     public string? BypassWarning => Session.PermissionsBypassed ? "Sem as aprovações do Claude Code" : null;
 
     public RemoteTerminalTarget? Target(Guid deviceId) =>
         Session.DevelopmentId is { } developmentId ? new RemoteTerminalTarget(deviceId, Session.SessionId, Session.TaskId, developmentId) : null;
+
+    /// <summary>O alvo na máquina da própria sessão.</summary>
+    public RemoteTerminalTarget? Target() => Target(DeviceId);
 }
 
 /// <param name="Problem">Por que a lista não veio, em palavras.</param>
@@ -487,7 +511,13 @@ public sealed class ListRemoteTerminalsHandler(IRemoteTerminalsApi api, ITaskIte
 
         try
         {
-            sessions = [.. (await api.ListTerminalsAsync(cancellationToken)).Sessions.Where(view => view.DeviceId == query.DeviceId)];
+            var all = (await api.ListTerminalsAsync(cancellationToken)).Sessions;
+
+            sessions = query.DeviceId is { } deviceId
+                ? [.. all.Where(view => view.DeviceId == deviceId)]
+                : [.. all
+                    .OrderByDescending(view => view.Session.Process == RemoteTerminalProcess.Running)
+                    .ThenByDescending(view => view.Session.UpdatedAt)];
         }
         catch (SyncApiException exception) when (exception is { Kind: SyncFailureKind.NotFound, Code: null })
         {

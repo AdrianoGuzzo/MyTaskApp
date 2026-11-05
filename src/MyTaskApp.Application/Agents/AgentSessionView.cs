@@ -95,6 +95,12 @@ public sealed record AgentCliStatus(
 
     /// <summary>O terminal do agente existe aqui? Sem ele, só o terminal direto.</summary>
     public PseudoTerminalSupport HostingSupport { get; init; } = PseudoTerminalSupport.Unsupported("este processo", "Sem terminal do agente.");
+
+    /// <summary>
+    /// Esta máquina aceita o terminal remoto (ADR-099): o terminal direto não
+    /// aparece de longe, e o card avisa (ADR-101).
+    /// </summary>
+    public bool RemoteTerminalAccepted { get; init; }
 }
 
 /// <summary>O que "Abrir terminal" conseguiu.</summary>

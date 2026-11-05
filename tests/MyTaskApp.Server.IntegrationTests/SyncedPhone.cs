@@ -180,6 +180,8 @@ internal sealed class SyncedPhone : IAsyncDisposable
 
         public Task OpenSessionAsync(Guid sessionId, Guid deviceId) => Task.CompletedTask;
 
+        public Task OpenTerminalAsync(Guid deviceId, Guid sessionId) => Task.CompletedTask;
+
         public Task BackAsync() => Task.CompletedTask;
     }
 

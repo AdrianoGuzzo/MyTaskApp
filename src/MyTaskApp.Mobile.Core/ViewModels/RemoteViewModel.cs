@@ -33,8 +33,9 @@ public sealed record SessionLine(RemoteSessionItem Item, string Machine)
 }
 
 /// <summary>
-/// A aba Remoto (E7): as aprovações esperando, as máquinas da conta, as
-/// conversas do Claude delas e os pedidos feitos deste celular. Ligar o remoto aqui faz do celular só um
+/// A aba Remoto (E7): as aprovações esperando, as máquinas da conta, os
+/// terminais do Claude delas (ADR-101), as conversas do Claude e os pedidos
+/// feitos deste celular. Ligar o remoto aqui faz do celular só um
 /// controlador: ele pede e aprova, e não executa nada.
 /// </summary>
 /// <remarks>
@@ -95,6 +96,10 @@ public sealed partial class RemoteViewModel : MobileViewModel, IDisposable
     [ObservableProperty]
     private string? _sessionsProblem;
 
+    /// <summary>O servidor não tem o terminal remoto, ou não respondeu: o aviso no lugar da lista.</summary>
+    [ObservableProperty]
+    private string? _terminalsProblem;
+
     public RemoteViewModel(
         IUseCaseRunner runner,
         ISyncAccount account,
@@ -130,6 +135,14 @@ public sealed partial class RemoteViewModel : MobileViewModel, IDisposable
     public ObservableCollection<SessionLine> Sessions { get; } = [];
 
     public bool HasSessions => Sessions.Count > 0;
+
+    /// <summary>O Claude interativo no terminal do agente das máquinas: seguir mostra a tela ao vivo (ADR-101).</summary>
+    public ObservableCollection<TerminalLine> Terminals { get; } = [];
+
+    public bool HasTerminals => Terminals.Count > 0;
+
+    /// <summary>Quantos pedem alguém agora: um diálogo aberto, ou o Claude esperando.</summary>
+    public int TerminalsNeedingAttention => Terminals.Count(line => line.NeedsAttention);
 
     public bool IsAvailable => _account.IsAvailable;
 
@@ -183,6 +196,11 @@ public sealed partial class RemoteViewModel : MobileViewModel, IDisposable
             }
 
             var sessions = IsReady ? await LoadSessionsAsync() : null;
+
+            if (IsReady)
+            {
+                await LoadTerminalsAsync(view.Machines);
+            }
 
             foreach (var machine in view.Machines.Where(machine => !machine.IsThis && machine.AcceptsControl))
             {
@@ -271,6 +289,10 @@ public sealed partial class RemoteViewModel : MobileViewModel, IDisposable
     [RelayCommand]
     public Task OpenSessionAsync(SessionLine? line) =>
         line is null ? Task.CompletedTask : _navigator.OpenSessionAsync(line.Item.Session.SessionId, line.Item.Session.DeviceId);
+
+    [RelayCommand]
+    public Task OpenTerminalAsync(TerminalLine? line) =>
+        line is null ? Task.CompletedTask : _navigator.OpenTerminalAsync(line.Item.DeviceId, line.Item.Session.SessionId);
 
     [RelayCommand]
     public Task OpenOperationAsync(SentLine? line) =>
@@ -363,6 +385,48 @@ public sealed partial class RemoteViewModel : MobileViewModel, IDisposable
 
         OnPropertyChanged(nameof(HasSessions));
         return list;
+    }
+
+    /// <summary>
+    /// Os terminais do agente das máquinas que aceitam o terminal remoto, as
+    /// rodando primeiro. Encerrados ficam fora: a tela final só serve lá.
+    /// </summary>
+    private async Task LoadTerminalsAsync(IReadOnlyList<MachineView> machines)
+    {
+        var offering = machines.Where(machine => !machine.IsThis && machine.OffersTerminal).ToDictionary(machine => machine.DeviceId);
+        RemoteTerminalList? list = null;
+
+        if (offering.Count > 0)
+        {
+            try
+            {
+                list = await _runner.RunAsync<ListRemoteTerminalsHandler, RemoteTerminalList>(
+                    (handler, token) => handler.HandleAsync(new ListRemoteTerminals(), token));
+                TerminalsProblem = list.Problem;
+            }
+            catch (SyncApiException exception)
+            {
+                Logger.LogInformation("MobileRemoteTerminalsUnavailable {Kind}", exception.Kind);
+                TerminalsProblem = "Sem notícias do servidor agora";
+            }
+        }
+        else
+        {
+            TerminalsProblem = null;
+        }
+
+        Terminals.Clear();
+
+        foreach (var item in list?.Items ?? [])
+        {
+            if (item.IsRunning && offering.TryGetValue(item.DeviceId, out var machine))
+            {
+                Terminals.Add(new TerminalLine(item, machine.Nickname));
+            }
+        }
+
+        OnPropertyChanged(nameof(HasTerminals));
+        OnPropertyChanged(nameof(TerminalsNeedingAttention));
     }
 
     private async Task LoadRecentAsync()

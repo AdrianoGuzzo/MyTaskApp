@@ -101,7 +101,7 @@ public sealed partial class AgentSessionViewModel(
     [NotifyPropertyChangedFor(
         nameof(AgentName), nameof(StartLabel), nameof(NotFoundText), nameof(VersionText),
         nameof(ExecutablePath), nameof(InstallGuide), nameof(HasInstallGuide), nameof(StatusText),
-        nameof(CommandPreview))]
+        nameof(CommandPreview), nameof(ShowsNotRemoteWarning))]
     private AgentCliStatus? _cli;
 
     /// <summary>
@@ -139,16 +139,28 @@ public sealed partial class AgentSessionViewModel(
     /// aparece onde o terminal do agente existe; o usado ao iniciar vira o padrão.
     /// </summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasHostingChoice))]
+    [NotifyPropertyChangedFor(nameof(HasHostingChoice), nameof(ShowsNotRemoteWarning))]
     private IReadOnlyList<AgentHostingOption> _hostingOptions = [];
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HostingHint))]
+    [NotifyPropertyChangedFor(nameof(HostingHint), nameof(ShowsNotRemoteWarning))]
     private AgentHostingOption? _selectedHosting;
 
     public bool HasHostingChoice => HostingOptions.Count > 1;
 
     public string? HostingHint => SelectedHosting?.Hint;
+
+    /// <summary>
+    /// A máquina aceita o terminal remoto, mas "Onde abrir" está no terminal
+    /// do sistema: a sessão nova não vai aparecer nos outros aparelhos (ADR-101).
+    /// </summary>
+    public bool ShowsNotRemoteWarning =>
+        Cli?.RemoteTerminalAccepted == true && HasHostingChoice && SelectedHosting?.Value == AgentHosting.Direct;
+
+    /// <summary>"Usar o terminal do agente": a escolha vira o padrão ao abrir, como qualquer outra.</summary>
+    [RelayCommand]
+    private void UseAgentTerminal() =>
+        SelectedHosting = HostingOptions.FirstOrDefault(option => option.Value == AgentHosting.AgentWindow) ?? SelectedHosting;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(

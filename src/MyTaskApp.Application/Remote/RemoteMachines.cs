@@ -46,19 +46,32 @@ public sealed class GetRemoteSettingsHandler(IRemoteSettingsStore settings)
 
 public sealed record UpdateRemoteSettings(bool Enabled, bool AcceptControl, bool AcceptTerminal = false);
 
-/// <summary>Aceitar controle exige o remoto ligado, e o terminal exige aceitar controle: desligar um desliga os de baixo.</summary>
+/// <summary>
+/// Aceitar controle exige o remoto ligado, e o terminal exige aceitar controle: desligar um desliga os de baixo.
+/// Ligar o terminal remoto põe o "Abrir Claude Code" no terminal do agente, senão a sessão nova não aparece de longe (ADR-101).
+/// </summary>
 public sealed class UpdateRemoteSettingsHandler(
     IRemoteSettingsStore settings,
     IUnitOfWork unitOfWork,
     IAgentAutostart autostart,
-    ILogger<UpdateRemoteSettingsHandler> logger)
+    ILogger<UpdateRemoteSettingsHandler> logger,
+    IAgentCliProviders? providers = null,
+    IAgentSettingsStore? agentSettings = null,
+    IAgentTerminalClient? agentTerminal = null)
 {
     public async Task<RemoteSettings> HandleAsync(UpdateRemoteSettings command, CancellationToken cancellationToken = default)
     {
         var acceptControl = command.Enabled && command.AcceptControl;
         var updated = new RemoteSettings(command.Enabled, acceptControl, acceptControl && command.AcceptTerminal);
+        var before = await settings.GetAsync(cancellationToken);
 
         await settings.SaveAsync(updated, cancellationToken);
+
+        if (updated.AcceptTerminal && !before.AcceptTerminal)
+        {
+            await PreferAgentTerminalAsync(cancellationToken);
+        }
+
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation("RemoteSettingsUpdated {Enabled} {AcceptControl} {AcceptTerminal}", updated.Enabled, updated.AcceptControl, updated.AcceptTerminal);
@@ -67,6 +80,23 @@ public sealed class UpdateRemoteSettingsHandler(
         await autostart.ApplyAsync(updated.AcceptControl, cancellationToken);
 
         return updated;
+    }
+
+    /// <summary>Só troca o terminal direto (ou o nunca escolhido): quem já usa o terminal do agente fica onde está.</summary>
+    private async Task PreferAgentTerminalAsync(CancellationToken cancellationToken)
+    {
+        if (providers is null || agentSettings is null || agentTerminal?.Support.IsSupported != true)
+        {
+            return;
+        }
+
+        var provider = providers.Default;
+
+        if (await agentSettings.GetHostingAsync(provider.Id, cancellationToken) is null or AgentHosting.Direct)
+        {
+            await agentSettings.SaveHostingAsync(provider.Id, AgentHosting.AgentWindow, cancellationToken);
+            logger.LogInformation("AgentHostingSwitchedForRemoteTerminal {ProviderId}", provider.Id);
+        }
     }
 }
 
