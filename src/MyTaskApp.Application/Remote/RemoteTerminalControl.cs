@@ -483,6 +483,12 @@ public sealed record RemoteTerminalItem(RemoteTerminalSessionView View, string T
     /// <summary>O apelido da máquina, nas listas que juntam todas; <c>null</c> na lista de uma máquina só.</summary>
     public string? MachineName { get; init; }
 
+    /// <summary>
+    /// A máquina aceita o terminal remoto: dá para seguir. Sem isso, a sessão
+    /// aparece só com o estado (ADR-103). Quem sabe das máquinas preenche.
+    /// </summary>
+    public bool CanFollow { get; init; } = true;
+
     public bool IsRunning => Session.Process == RemoteTerminalProcess.Running;
 
     /// <summary>O Claude pede alguém: um diálogo aberto, ou parado esperando a pessoa.</summary>

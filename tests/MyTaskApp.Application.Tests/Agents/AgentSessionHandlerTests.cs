@@ -1184,6 +1184,22 @@ public class AgentSessionHandlerTests
         status.Hosting.Should().Be(AgentHosting.AgentWindow, "nada salvo, e o terminal do agente existe aqui");
     }
 
+    /// <summary>O estado na tarefa das outras máquinas vai com o controle aceito, mesmo sem o terminal remoto (ADR-103).</summary>
+    [Theory]
+    [InlineData(true, true, true)]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, false)]
+    public async Task Detect_SaysWhetherTheStateIsShared(bool enabled, bool acceptControl, bool shared)
+    {
+        var remote = Substitute.For<IRemoteSettingsStore>();
+        remote.GetAsync(Arg.Any<CancellationToken>()).Returns(new RemoteSettings(enabled, acceptControl, AcceptTerminal: false));
+
+        var status = await new DetectAgentCliHandler(_providers, _settings, _agentTerminal, remote).HandleAsync(new DetectAgentCli(), Ct);
+
+        status.RemoteStatesShared.Should().Be(shared);
+        status.RemoteTerminalAccepted.Should().BeFalse();
+    }
+
     /// <summary>A sessão que o agente "abriu", já no banco que os dois dividem.</summary>
     private AgentSession HostedSession()
     {

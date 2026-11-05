@@ -101,6 +101,12 @@ public sealed record AgentCliStatus(
     /// aparece de longe, e o card avisa (ADR-101).
     /// </summary>
     public bool RemoteTerminalAccepted { get; init; }
+
+    /// <summary>
+    /// Esta máquina aceita controle (ADR-103): o estado do Claude do terminal do
+    /// agente aparece na tarefa das outras. O do terminal direto, não: o card avisa.
+    /// </summary>
+    public bool RemoteStatesShared { get; init; }
 }
 
 /// <summary>O que "Abrir terminal" conseguiu.</summary>

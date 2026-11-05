@@ -198,5 +198,25 @@ public sealed class RemoteTerminalsViewModelTests
         condition().Should().BeTrue();
     }
 
+    /// <summary>
+    /// Com só "Aceitar controle", a máquina relata o estado (ADR-103): a lista
+    /// de todas mostra a sessão, mas não oferece seguir o que o agente recusaria.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task InTheListOfAll_AMachineWithoutTheRemoteTerminal_ShowsTheState_ButCannotBeFollowed()
+    {
+        var terminals = new RemoteTerminalsViewModel(_runner, NullLogger<RemoteTerminalsViewModelTests>.Instance, _windows);
+
+        await terminals.LoadAllAsync(new Dictionary<Guid, string> { [Notebook.DeviceId] = "Notebook" }, null, Ct, offering: new HashSet<Guid>());
+
+        var item = terminals.Items.Should().ContainSingle().Which;
+        item.CanFollow.Should().BeFalse();
+
+        terminals.FollowCommand.Execute(item);
+
+        _opened.Should().BeEmpty();
+        terminals.Message.Should().Be("Notebook mostra o estado, mas não aceita o terminal remoto.");
+    }
+
     private RemoteControlViewModel ViewModel() => new(_runner, NullLogger<RemoteControlViewModel>.Instance, terminals: _windows);
 }

@@ -69,6 +69,39 @@
                 </VerticalStackLayout>
                 <Label Text="{Binding Provenance}" Style="{StaticResource Muted}" IsVisible="{Binding Provenance, Converter={StaticResource HasValue}}" />
 
+                <!-- O Claude desta tarefa em outras máquinas (ADR-103): o estado de lá e, quando dá, o botão para seguir. -->
+                <Label Text="Claude em outras máquinas" Style="{StaticResource Section}" IsVisible="{Binding HasClaude}" />
+                <VerticalStackLayout BindableLayout.ItemsSource="{Binding ClaudeLines}" Spacing="6" IsVisible="{Binding HasClaude}">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ClaudeLine">
+                            <Border Style="{StaticResource Card}">
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <VerticalStackLayout Spacing="2">
+                                        <Label Text="{Binding Label}"
+                                               FontAttributes="Bold"
+                                               TextColor="{Binding State.NeedsAttention, Converter={StaticResource ClaudeColor}}" />
+                                        <Label Text="{Binding Where}" Style="{StaticResource Muted}" />
+                                        <Label Text="{Binding Message}"
+                                               Style="{StaticResource Muted}"
+                                               MaxLines="3"
+                                               LineBreakMode="TailTruncation"
+                                               IsVisible="{Binding Message, Converter={StaticResource HasValue}}" />
+                                        <Label Text="{Binding Hint}"
+                                               Style="{StaticResource Muted}"
+                                               IsVisible="{Binding Hint, Converter={StaticResource HasValue}}" />
+                                    </VerticalStackLayout>
+                                    <Button Grid.Column="1"
+                                            Text="{Binding OpenLabel}"
+                                            VerticalOptions="Center"
+                                            IsVisible="{Binding CanOpen}"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:TaskDetailViewModel}}, x:DataType=vm:TaskDetailViewModel, Path=FollowClaudeCommand}"
+                                            CommandParameter="{Binding .}" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </VerticalStackLayout>
+
                 <Label Text="Desenvolvimento (somente leitura)" Style="{StaticResource Section}" IsVisible="{Binding Developments, Converter={StaticResource HasValue}}" />
                 <VerticalStackLayout BindableLayout.ItemsSource="{Binding Developments}" Spacing="6">
                     <BindableLayout.ItemTemplate>

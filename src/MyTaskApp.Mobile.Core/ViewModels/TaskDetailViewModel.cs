@@ -23,13 +23,26 @@ public sealed record HistoryLine(string What, string When, string? Who);
 public sealed record DevelopmentLine(string Repository, string Branch, string Status);
 
 /// <summary>
+/// O Claude de outra máquina nesta tarefa (ADR-103): onde roda, o que faz e,
+/// quando dá, o botão para seguir.
+/// </summary>
+/// <param name="Where">"Notebook · core · feature/x".</param>
+/// <param name="Hint">Por que não há botão: a máquina não aceita o terminal remoto.</param>
+public sealed record ClaudeLine(RemoteClaudeState State, string Label, string Where, string? Message, string? OpenLabel, string? Hint)
+{
+    public bool CanOpen => OpenLabel is not null;
+}
+
+/// <summary>
 /// A tarefa inteira (ADR-067): o que o domínio sabe dela e as operações que a
 /// regra permite agora. Cada botão chama o mesmo caso de uso do desktop; a
 /// tela só esconde o que a regra recusaria, e a regra continua decidindo.
 /// </summary>
 /// <remarks>
-/// O desenvolvimento (repositórios e worktrees) aparece como informação. Não há
-/// sessão de agente aqui: tarefa em andamento não quer dizer IA rodando.
+/// O desenvolvimento (repositórios e worktrees) aparece como informação. O
+/// Claude que roda nesta tarefa em outra máquina (ADR-103) aparece com o
+/// estado de lá, e com o botão para seguir quando a máquina aceita o terminal
+/// remoto; o celular não abre agente nenhum.
 /// </remarks>
 public sealed partial class TaskDetailViewModel(
     IUseCaseRunner runner,
@@ -38,8 +51,22 @@ public sealed partial class TaskDetailViewModel(
     INavigator navigator,
     TimeProvider time,
     IDialogService dialogs,
-    ILogger<TaskDetailViewModel> logger) : MobileViewModel(dialogs, logger)
+    ILogger<TaskDetailViewModel> logger,
+    IUiDispatcher? dispatcher = null,
+    RemoteClaudeBoard? claude = null) : MobileViewModel(dialogs, logger)
 {
+    /// <summary>O nome de cada ambiente da tarefa, para dizer onde o Claude de longe roda.</summary>
+    private IReadOnlyDictionary<Guid, string> _developmentNames = new Dictionary<Guid, string>();
+
+    private bool _watchingClaude;
+
+    /// <summary>O Claude das outras máquinas nesta tarefa, os que mais pedem alguém primeiro.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasClaude))]
+    private IReadOnlyList<ClaudeLine> _claudeLines = [];
+
+    public bool HasClaude => ClaudeLines.Count > 0;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanComplete), nameof(CanReopen), nameof(CanCancel), nameof(CanArchive), nameof(CanPrepareRemotely))]
     [NotifyPropertyChangedFor(nameof(CanRestoreFromArchive), nameof(CanMoveToTrash), nameof(CanRestoreFromTrash), nameof(CanEdit))]
@@ -143,6 +170,75 @@ public sealed partial class TaskDetailViewModel(
             async () => (await runner.RunAsync<GetRemoteSettingsHandler, RemoteSettings>(
                 (handler, token) => handler.HandleAsync(new GetRemoteSettings(), token))).Enabled,
             "MobileTaskRemoteSettingsFailed");
+
+        if (claude is not null && !_watchingClaude)
+        {
+            _watchingClaude = true;
+            claude.Changed += OnClaudeChanged;
+        }
+
+        ShowClaude();
+    }
+
+    /// <summary>A tela saiu: o quadro para de avisar esta tarefa.</summary>
+    public void Unload()
+    {
+        if (claude is not null && _watchingClaude)
+        {
+            _watchingClaude = false;
+            claude.Changed -= OnClaudeChanged;
+        }
+    }
+
+    /// <summary>"Seguir" segue o terminal de lá; numa conversa, abre a conversa.</summary>
+    [RelayCommand]
+    public async Task FollowClaudeAsync(ClaudeLine line)
+    {
+        var state = line.State;
+
+        if (state.Kind == RemoteClaudeKind.Conversation)
+        {
+            await navigator.OpenSessionAsync(state.SessionId, state.DeviceId);
+        }
+        else if (state.CanFollow)
+        {
+            await navigator.OpenTerminalAsync(state.DeviceId, state.SessionId);
+        }
+        else
+        {
+            await Dialogs.ToastAsync(RemoteClaudeTexts.NotFollowable(state));
+        }
+    }
+
+    private void OnClaudeChanged(object? sender, EventArgs e)
+    {
+        if (dispatcher is null)
+        {
+            ShowClaude();
+        }
+        else
+        {
+            dispatcher.Post(ShowClaude);
+        }
+    }
+
+    /// <summary>Visível aos testes: as linhas do Claude de longe desta tarefa, pelo quadro de agora.</summary>
+    internal void ShowClaude()
+    {
+        var states = claude?.ForTask(TaskId) ?? [];
+
+        ClaudeLines = [.. states.Select(state => new ClaudeLine(
+            state,
+            $"{RemoteClaudeTexts.Mark(state)} {RemoteClaudeTexts.Short(state)}",
+            state.DevelopmentId is { } id && _developmentNames.TryGetValue(id, out var name) ? $"{state.MachineName} · {name}" : state.MachineName,
+            state.Message,
+            state switch
+            {
+                { Kind: RemoteClaudeKind.Conversation } => "Abrir conversa",
+                { CanFollow: true } => "Seguir",
+                _ => null,
+            },
+            state is { Kind: RemoteClaudeKind.Terminal, CanFollow: false } ? RemoteClaudeTexts.NotFollowable(state) : null))];
     }
 
     /// <summary>O "Preparar em…": worktree, comandos, banco e Claude numa máquina pareada.</summary>
@@ -288,6 +384,10 @@ public sealed partial class TaskDetailViewModel(
     {
         var developments = await runner.RunAsync<GetTaskDevelopmentsHandler, IReadOnlyList<TaskDevelopmentView>>(
             (handler, token) => handler.HandleAsync(new GetTaskDevelopments(TaskId), token));
+
+        _developmentNames = developments.ToDictionary(
+            development => development.Id,
+            development => $"{RepositoryName(development.RepositoryPath)} · {development.Branch}");
 
         return [.. developments
             .Where(development => development.Status != TaskDevelopmentStatus.Removed)

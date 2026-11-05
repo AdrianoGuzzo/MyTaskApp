@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using MyTaskApp.Application.Remote;
 using MyTaskApp.Application.Sync;
 using MyTaskApp.Infrastructure.Persistence;
 using MyTaskApp.Mobile.Core.Presentation;
@@ -86,6 +87,7 @@ public sealed class MobileLifecycle(
         _awake = false;
         signer.Lock();
         approvals.Stop();
+        await services.GetRequiredService<RemoteClaudeBoard>().StopAsync();
         WentToBackground?.Invoke();
 
         if (IsReady)
@@ -105,6 +107,7 @@ public sealed class MobileLifecycle(
             scheduler.Start();
             scheduler.RequestNow();
             approvals.Start();
+            StartRemoteClaude();
         }
 
         CameBack?.Invoke();
@@ -128,6 +131,7 @@ public sealed class MobileLifecycle(
         scheduler.Start();
         scheduler.RequestNow();
         approvals.Start();
+        StartRemoteClaude();
 
         try
         {
@@ -138,6 +142,17 @@ public sealed class MobileLifecycle(
         {
             logger.LogWarning(exception, "MobileRemoteBackgroundApplyFailed");
         }
+    }
+
+    /// <summary>
+    /// O Claude das outras máquinas na tarefa (ADR-103), só com o app na
+    /// frente: o hub é o mesmo das aprovações, e em segundo plano quem avisa é
+    /// a verificação do sistema.
+    /// </summary>
+    private void StartRemoteClaude()
+    {
+        services.GetRequiredService<RemoteClaudeNotices>().Start();
+        services.GetRequiredService<RemoteClaudeBoard>().Start();
     }
 
     private async Task PrepareCoreAsync()

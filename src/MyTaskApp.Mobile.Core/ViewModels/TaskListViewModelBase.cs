@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Devices;
+using MyTaskApp.Application.Remote;
 using MyTaskApp.Application.Sync;
 using MyTaskApp.Application.Tags;
 using MyTaskApp.Application.Tasks;
@@ -97,6 +98,9 @@ public abstract partial class TaskListViewModelBase : MobileViewModel, IDisposab
 
     private readonly ITimer _ticker;
 
+    /// <summary>O Claude das outras máquinas (ADR-103); nulo na aba Histórico e nos testes que não falam dele.</summary>
+    private readonly RemoteClaudeBoard? _claude;
+
     private int _generation;
 
     private CancellationTokenSource? _searchDelay;
@@ -176,7 +180,8 @@ public abstract partial class TaskListViewModelBase : MobileViewModel, IDisposab
         INavigator navigator,
         IDialogService dialogs,
         TimeProvider time,
-        ILogger logger)
+        ILogger logger,
+        RemoteClaudeBoard? claude = null)
         : base(dialogs, logger)
     {
         ArgumentOutOfRangeException.ThrowIfZero(presets.Count);
@@ -191,6 +196,7 @@ public abstract partial class TaskListViewModelBase : MobileViewModel, IDisposab
         _dispatcher = dispatcher;
         _navigator = navigator;
         _time = time;
+        _claude = claude;
         _selectedSort = Sorts[0];
 
         Presets = presets;
@@ -204,6 +210,12 @@ public abstract partial class TaskListViewModelBase : MobileViewModel, IDisposab
         _scheduler.CycleStarted += OnCycleStarted;
         _scheduler.CycleCompleted += OnCycleCompleted;
         _scheduler.ChangeQueued += OnChangeQueued;
+
+        if (_claude is not null)
+        {
+            _claude.Changed += OnClaudeChanged;
+        }
+
         _ticker = time.CreateTimer(_ => _dispatcher.Post(() => OnPropertyChanged(nameof(SyncLine))), state: null, TickEvery, TickEvery);
     }
 
@@ -538,6 +550,12 @@ public abstract partial class TaskListViewModelBase : MobileViewModel, IDisposab
         _scheduler.CycleStarted -= OnCycleStarted;
         _scheduler.CycleCompleted -= OnCycleCompleted;
         _scheduler.ChangeQueued -= OnChangeQueued;
+
+        if (_claude is not null)
+        {
+            _claude.Changed -= OnClaudeChanged;
+        }
+
         _ticker.Dispose();
         CancelPendingSearch();
         CancelUndoTimer();
@@ -738,7 +756,7 @@ public abstract partial class TaskListViewModelBase : MobileViewModel, IDisposab
 
             foreach (var item in result.Items)
             {
-                Tasks.Add(TaskRow.From(item, _origins));
+                Tasks.Add(WithClaude(TaskRow.From(item, _origins)));
             }
 
             Total = result.Total;
@@ -807,6 +825,29 @@ public abstract partial class TaskListViewModelBase : MobileViewModel, IDisposab
         finally
         {
             _scheduler.CycleCompleted -= OnFinished;
+        }
+    }
+
+    /// <summary>A linha com o Claude de outra máquina desta tarefa (ADR-103), se houver quem leia.</summary>
+    private TaskRow WithClaude(TaskRow row) => _claude is null ? row : row.WithClaude(_claude.ForTask(row.TaskId));
+
+    /// <summary>
+    /// O Claude de longe mudou: troca só as linhas cujo selo mudou, no lugar,
+    /// sem reler a lista nem pular a rolagem.
+    /// </summary>
+    private void OnClaudeChanged(object? sender, EventArgs e) => _dispatcher.Post(ApplyClaude);
+
+    /// <summary>Visível aos testes: o que o aviso do quadro faz na thread da tela.</summary>
+    internal void ApplyClaude()
+    {
+        for (var index = 0; index < Tasks.Count; index++)
+        {
+            var updated = WithClaude(Tasks[index]);
+
+            if (updated != Tasks[index])
+            {
+                Tasks[index] = updated;
+            }
         }
     }
 

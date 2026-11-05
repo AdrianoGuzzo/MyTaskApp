@@ -4,6 +4,8 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
+using MyTaskApp.Application.Remote;
+using MyTaskApp.Desktop.Terminals;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.Agents;
 
@@ -22,17 +24,32 @@ namespace MyTaskApp.Desktop.ViewModels;
 /// </para>
 /// </remarks>
 /// <param name="conversations">Abre a conversa sem terminal; nulo nos testes que não falam dela.</param>
+/// <param name="remoteTerminals">Segue o terminal de outra máquina (ADR-103); nulo nos testes que não falam dele.</param>
 public sealed partial class AgentAlertViewModel(
     IUseCaseRunner runner,
     ILogger<AgentAlertViewModel> logger,
-    ManagedConversationOpener? conversations = null) : ObservableObject
+    ManagedConversationOpener? conversations = null,
+    RemoteTerminalWindows? remoteTerminals = null) : ObservableObject
 {
     /// <summary>A conversa sem terminal aberta de longe: o botão abre a conversa.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(OpenLabel))]
     private bool _isRemoteConversation;
 
-    public string OpenLabel => IsRemoteConversation ? "Abrir conversa" : "Abrir terminal";
+    /// <summary>O Claude roda em outra máquina (ADR-103): o botão segue de longe, ou some.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(OpenLabel), nameof(CanOpen))]
+    private RemoteAgentOrigin? _remote;
+
+    public string OpenLabel => Remote switch
+    {
+        { IsConversation: true } => "Abrir conversa",
+        not null => "Seguir",
+        _ => IsRemoteConversation ? "Abrir conversa" : "Abrir terminal",
+    };
+
+    /// <summary>Sem o terminal remoto aceito lá, não há para onde ir: só o aviso.</summary>
+    public bool CanOpen => Remote is not { IsConversation: false, CanFollow: false };
 
     [ObservableProperty]
     private string _heading = string.Empty;
@@ -77,16 +94,23 @@ public sealed partial class AgentAlertViewModel(
         TaskId = attention.TaskId;
         DevelopmentId = attention.DevelopmentId;
         IsRemoteConversation = attention.OpenedBy is not null;
-        Heading = attention.OpenedBy is { } origin
-            ? $"{attention.AgentName} · aberto de {origin}"
-            : HeadingFor(attention.AgentName, attention.Activity);
+        Remote = attention.Remote;
+        Heading = attention switch
+        {
+            { OpenedBy: { } origin } => $"{attention.AgentName} · aberto de {origin}",
+            { Remote: { } remote } => HeadingFor($"{attention.AgentName} em {remote.MachineName}", attention.Activity),
+            _ => HeadingFor(attention.AgentName, attention.Activity),
+        };
         Title = attention.TaskTitle;
         Context = attention.RepositoryName is { } repository
             ? attention.Branch is { } branch ? $"{repository} · {branch}" : repository
             : null;
-        MessageText = attention.OpenedBy is not null
-            ? "Roda sem terminal, pelo agente desta máquina. Acompanhe e responda pela conversa, daqui ou de lá."
-            : Excerpt(attention.Message);
+        MessageText = attention switch
+        {
+            { OpenedBy: not null } => "Roda sem terminal, pelo agente desta máquina. Acompanhe e responda pela conversa, daqui ou de lá.",
+            { Remote: { } remote } => Excerpt(attention.Message) ?? RemoteHint(remote),
+            _ => Excerpt(attention.Message),
+        };
         TimeLabel = attention.At.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture);
         IsQuestion = attention.Activity is AgentActivity.WaitingForUser;
         IsFailure = attention.Activity is AgentActivity.Failed;
@@ -101,6 +125,14 @@ public sealed partial class AgentAlertViewModel(
         AgentActivity.WaitingReview => $"{agentName} · pronto para revisão",
         AgentActivity.Failed => $"{agentName} · a resposta falhou",
         _ => agentName,
+    };
+
+    /// <summary>Sem o texto do Claude (a máquina não aceita o terminal remoto), onde responder.</summary>
+    public static string RemoteHint(RemoteAgentOrigin remote) => remote switch
+    {
+        { IsConversation: true } => $"Na máquina {remote.MachineName}. Responda pela conversa.",
+        { CanFollow: true } => $"Na máquina {remote.MachineName}. Siga o terminal de lá para responder.",
+        _ => $"Na máquina {remote.MachineName}, que não aceita o terminal remoto: responda por lá.",
     };
 
     /// <summary>
@@ -126,6 +158,12 @@ public sealed partial class AgentAlertViewModel(
     public async Task OpenTerminalAsync()
     {
         ErrorMessage = null;
+
+        if (Remote is { } remote)
+        {
+            await FollowAsync(remote);
+            return;
+        }
 
         if (IsRemoteConversation)
         {
@@ -166,6 +204,38 @@ public sealed partial class AgentAlertViewModel(
 
     [RelayCommand]
     public void Dismiss() => Closed?.Invoke(this);
+
+    /// <summary>O Claude de outra máquina: segue o terminal de lá, ou abre a conversa (ADR-103).</summary>
+    private async Task FollowAsync(RemoteAgentOrigin remote)
+    {
+        try
+        {
+            if (remote.IsConversation)
+            {
+                ErrorMessage = conversations is null
+                    ? "Abra a conversa pela janela Máquinas."
+                    : await conversations.OpenRemoteAsync(remote.DeviceId, DevelopmentId, SessionId, CancellationToken.None);
+            }
+            else if (!remote.CanFollow || DevelopmentId is not { } developmentId)
+            {
+                ErrorMessage = $"{remote.MachineName} mostra o estado, mas não aceita o terminal remoto.";
+            }
+            else if (remoteTerminals?.Show(new RemoteTerminalTarget(remote.DeviceId, SessionId, TaskId, developmentId), $"{Title} — terminal em {remote.MachineName}") != true)
+            {
+                ErrorMessage = "Não foi possível abrir o terminal de longe agora.";
+            }
+
+            if (ErrorMessage is null)
+            {
+                Closed?.Invoke(this);
+            }
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "AgentAlertFollowFailed {TaskId} {SessionId}", TaskId, SessionId);
+            ErrorMessage = "Não foi possível seguir o Claude de longe.";
+        }
+    }
 
     private async Task OpenConversationAsync()
     {

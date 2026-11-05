@@ -14,6 +14,7 @@
             <adapters:SoftHexColorConverter x:Key="SoftHexColor" />
             <adapters:PriorityColorConverter x:Key="PriorityColor" />
             <adapters:DeadlineColorConverter x:Key="DeadlineColor" />
+            <adapters:ClaudeColorConverter x:Key="ClaudeColor" />
             <adapters:SyncDotFillConverter x:Key="SyncDotFill" />
             <adapters:SyncDotRingConverter x:Key="SyncDotRing" />
             <adapters:StrikeConverter x:Key="Strike" />

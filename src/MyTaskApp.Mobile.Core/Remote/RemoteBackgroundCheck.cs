@@ -172,6 +172,40 @@ public sealed class RemoteBackgroundCheck(
     }
 
     /// <summary>
+    /// O app na frente já avisou (ADR-103): a próxima volta em segundo plano
+    /// não repete. Antes da primeira volta não anota nada: um registro parcial
+    /// faria as conversas paradas de antes parecerem respondidas agora.
+    /// </summary>
+    /// <param name="terminals">Os terminais que esperam alguém e já foram avisados.</param>
+    /// <param name="sessions">As conversas avisadas, com a versão de quando.</param>
+    public async Task NoteShownAsync(IReadOnlyCollection<Guid> terminals, IReadOnlyDictionary<Guid, long> sessions, CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken);
+
+        try
+        {
+            if (Seen.Read(preferences.Get(PreferenceKey)) is not { } seen)
+            {
+                return;
+            }
+
+            var known = seen.Terminals ?? [];
+            known.UnionWith(terminals);
+
+            foreach (var (sessionId, version) in sessions)
+            {
+                seen.Sessions[sessionId] = Math.Max(version, seen.Sessions.GetValueOrDefault(sessionId));
+            }
+
+            preferences.Set(PreferenceKey, (seen with { Terminals = known }).Write());
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>
     /// Mudou desde a última volta e agora espera alguém: respondeu ou falhou.
     /// A versão, não o estado: um prompt inteiro entre duas voltas sai e volta
     /// para "esperando".

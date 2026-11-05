@@ -1,3 +1,4 @@
+using MyTaskApp.Application.Remote;
 using MyTaskApp.Application.Tasks;
 using MyTaskApp.Domain.Deadlines;
 using MyTaskApp.Domain.Lifecycle;
@@ -26,8 +27,13 @@ public sealed record TaskRow(
     IReadOnlyList<TagChip> Tags,
     string? DeadlineLabel,
     DeadlineSeverity? DeadlineSeverity,
-    bool IsOverdue)
+    bool IsOverdue,
+    string? ClaudeLabel = null,
+    bool ClaudeNeedsAttention = false)
 {
+    /// <summary>O Claude de outra máquina roda nesta tarefa (ADR-103): a linha mostra o estado.</summary>
+    public bool HasClaude => ClaudeLabel is not null;
+
     public bool IsCompleted => Status == TaskItemStatus.Completed;
 
     public bool IsHighPriority => Priority is TaskPriority.High or TaskPriority.Urgent;
@@ -50,7 +56,15 @@ public sealed record TaskRow(
             "origem " + Origin,
             DeadlineLabel is null ? null : "prazo " + DeadlineLabel,
             IsOverdue ? "atrasada" : null,
+            ClaudeLabel is null ? null : ClaudeLabel.TrimStart('⚠', '✓', '●', ' '),
         }.Where(part => part is not null));
+
+    /// <summary>A mesma linha com o Claude de longe desta tarefa; sem nenhum, sem selo.</summary>
+    public TaskRow WithClaude(IReadOnlyList<RemoteClaudeState> states) => this with
+    {
+        ClaudeLabel = states.Count == 0 ? null : RemoteClaudeTexts.Badge(states),
+        ClaudeNeedsAttention = states.Any(state => state.NeedsAttention),
+    };
 
     public static TaskRow From(TaskListItem item, OriginCatalog origins)
     {

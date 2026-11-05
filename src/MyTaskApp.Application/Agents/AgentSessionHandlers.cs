@@ -45,6 +45,7 @@ public sealed class DetectAgentCliHandler(
     {
         var provider = providers.Get(query.ProviderId);
         var detection = await provider.DetectAsync(cancellationToken);
+        var remote = remoteSettings is null ? null : await remoteSettings.GetAsync(cancellationToken);
 
         return new AgentCliStatus(
             provider.Id,
@@ -61,7 +62,8 @@ public sealed class DetectAgentCliHandler(
             Efforts = provider.Efforts,
             Hosting = await settings.HostingForAsync(provider, agentTerminal.Support.IsSupported, cancellationToken),
             HostingSupport = agentTerminal.Support,
-            RemoteTerminalAccepted = remoteSettings is not null && (await remoteSettings.GetAsync(cancellationToken)).AcceptTerminal,
+            RemoteTerminalAccepted = remote?.AcceptTerminal == true,
+            RemoteStatesShared = remote is { Enabled: true, AcceptControl: true },
         };
     }
 

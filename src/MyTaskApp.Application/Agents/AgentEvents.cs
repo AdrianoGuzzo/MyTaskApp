@@ -181,7 +181,17 @@ public sealed record AgentAttention(
     /// O aviso é de que alguém abriu de longe uma conversa sem terminal aqui
     /// (ADR-092): o apelido de quem abriu. O botão leva à conversa, não a um terminal.
     /// </summary>
-    string? OpenedBy = null);
+    string? OpenedBy = null,
+    /// <summary>
+    /// O Claude roda em outra máquina da conta (ADR-103): o botão segue de
+    /// longe, em vez de abrir um terminal aqui.
+    /// </summary>
+    RemoteAgentOrigin? Remote = null);
+
+/// <summary>De onde vem um aviso de Claude de outra máquina (ADR-103).</summary>
+/// <param name="CanFollow">A máquina aceita o terminal remoto: dá para seguir a tela de lá.</param>
+/// <param name="IsConversation">É uma conversa sem terminal (ADR-091): o botão abre a conversa.</param>
+public sealed record RemoteAgentOrigin(Guid DeviceId, string MachineName, bool CanFollow, bool IsConversation);
 
 /// <summary>
 /// Põe na tela o aviso de que um agente precisa do usuário (ADR-037). A

@@ -151,11 +151,12 @@ public sealed partial class AgentSessionViewModel(
     public string? HostingHint => SelectedHosting?.Hint;
 
     /// <summary>
-    /// A máquina aceita o terminal remoto, mas "Onde abrir" está no terminal
-    /// do sistema: a sessão nova não vai aparecer nos outros aparelhos (ADR-101).
+    /// A máquina aceita controle, mas "Onde abrir" está no terminal do sistema:
+    /// a sessão nova não vai aparecer nos outros aparelhos, nem o estado dela
+    /// na tarefa (ADR-101, ADR-103).
     /// </summary>
     public bool ShowsNotRemoteWarning =>
-        Cli?.RemoteTerminalAccepted == true && HasHostingChoice && SelectedHosting?.Value == AgentHosting.Direct;
+        Cli is { } cli && (cli.RemoteStatesShared || cli.RemoteTerminalAccepted) && HasHostingChoice && SelectedHosting?.Value == AgentHosting.Direct;
 
     /// <summary>"Usar o terminal do agente": a escolha vira o padrão ao abrir, como qualquer outra.</summary>
     [RelayCommand]

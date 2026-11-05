@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Devices;
+using MyTaskApp.Application.Remote;
 using MyTaskApp.Application.Sync;
 using MyTaskApp.Mobile.Core.Ports;
 using MyTaskApp.Mobile.Core.Presentation;
@@ -24,7 +25,8 @@ public sealed class TaskListViewModel(
     INavigator navigator,
     IDialogService dialogs,
     TimeProvider time,
-    ILogger<TaskListViewModel> logger)
+    ILogger<TaskListViewModel> logger,
+    RemoteClaudeBoard? claude = null)
     : TaskListViewModelBase(
         [new(TaskListPreset.Pending, "Pendentes")],
         runner,
@@ -38,7 +40,8 @@ public sealed class TaskListViewModel(
         navigator,
         dialogs,
         time,
-        logger)
+        logger,
+        claude)
 {
     public override bool IsHistory => false;
 

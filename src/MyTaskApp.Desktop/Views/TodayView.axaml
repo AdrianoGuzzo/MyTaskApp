@@ -502,6 +502,22 @@
                        ToolTip.Tip="{Binding AgentTip}" />
 
             <!--
+              O Claude de outra máquina da conta nesta tarefa (ADR-103): o mesmo
+              selo, com a máquina no texto. Um clique segue o terminal de lá, ou
+              abre a conversa (ver OnRemoteAgentBadgeTapped).
+            -->
+            <TextBlock x:Name="RemoteAgentBadge"
+                       Classes="agentBadge"
+                       Classes.attention="{Binding RemoteAgentNeedsAttention}"
+                       Text="{Binding RemoteAgentLabel}"
+                       IsVisible="{Binding HasRemoteAgent}"
+                       HorizontalAlignment="Left"
+                       Background="Transparent"
+                       Cursor="Hand"
+                       Tapped="OnRemoteAgentBadgeTapped"
+                       ToolTip.Tip="{Binding RemoteAgentTip}" />
+
+            <!--
               Concluída, e o worktree ficou (ADR-034): a resposta "manter" vira
               texto na linha, na cor do estado. Um clique abre a tarefa, onde
               o worktree se remove.

@@ -437,6 +437,14 @@ public sealed partial class App : Avalonia.Application
         };
 
         services.GetRequiredService<RemoteSessionAnnouncer>().Start();
+
+        // O Claude das outras máquinas na tarefa (ADR-103): o selo da linha e o
+        // aviso do canto. Sem outra máquina que aceite controle, o quadro não
+        // segura o hub e só confere a configuração de minuto em minuto.
+        var remoteClaude = services.GetRequiredService<RemoteClaudeBoard>();
+        remoteClaude.Changed += (_, _) => OnUiThread(() => todayViewModel.ApplyRemoteClaude(remoteClaude.States));
+        services.GetRequiredService<RemoteClaudeAnnouncer>().Start();
+        remoteClaude.Start();
     }
 
     /// <summary>O quadro e o card do agente das janelas de tarefa abertas, relidos.</summary>
@@ -1002,6 +1010,7 @@ public sealed partial class App : Avalonia.Application
         // Um push no meio para; o outbox guarda, e o próximo início reenvia com os mesmos ids (ADR-061).
         services.GetRequiredService<SyncScheduler>().Dispose();
         services.GetRequiredService<RemotePresenceScheduler>().Dispose();
+        services.GetRequiredService<RemoteClaudeBoard>().Dispose();
         services.GetRequiredService<LocalPeerAttentionRelay>().Dispose();
         _ = services.GetRequiredService<LocalPeerBridge>().DisposeAsync().AsTask();
         services.GetRequiredService<AgentSessionMonitor>().Dispose();

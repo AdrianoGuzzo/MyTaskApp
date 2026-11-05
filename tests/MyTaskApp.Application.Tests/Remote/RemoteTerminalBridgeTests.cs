@@ -311,12 +311,13 @@ public sealed class RemoteTerminalBridgeTests : IAsyncDisposable
     }
 
     [Fact]
-    public async Task TheReport_HasTheSessions_OnlyWithTheSwitchOn()
+    public async Task TheReport_WithoutTheTerminalSwitch_CarriesTheStateButNoText()
     {
         var api = Substitute.For<IRemoteTerminalsApi>();
         var batches = new List<RemoteTerminalSessionBatch>();
         api.ReportTerminalsAsync(Arg.Do<RemoteTerminalSessionBatch>(batches.Add), Arg.Any<CancellationToken>()).Returns(new RemoteTerminalSessionAck(0));
         using var reporter = new RemoteTerminalReporter(api, _terminals, Runner, _time, NullLogger<RemoteTerminalReporter>.Instance);
+        _host.Observe(new AgentEvent(AgentEventType.NeedsUserInput, _host.SessionId, _host.Info.TaskId, "conversa", null, "Posso apagar o build?", _time.GetUtcNow(), "Notification", new Dictionary<string, string> { ["notification_type"] = "permission_prompt" }));
 
         await reporter.PublishAsync(Ct);
         _settings.Settings = new RemoteSettings(true, true, AcceptTerminal: false);
@@ -324,8 +325,22 @@ public sealed class RemoteTerminalBridgeTests : IAsyncDisposable
 
         batches.Should().HaveCount(2);
         batches[0].Sessions.Should().ContainSingle().Which.Should().Match<RemoteTerminalSessionReport>(report =>
-            report.SessionId == _host.SessionId && report.PermissionsBypassed && report.Process == RemoteTerminalProcess.Running);
-        batches[1].Sessions.Should().BeEmpty("sem a chave, a lista dos controladores esvazia");
+            report.SessionId == _host.SessionId && report.PermissionsBypassed && report.Process == RemoteTerminalProcess.Running
+            && report.Activity == RemoteAgentActivity.WaitingForUser && report.ActivityMessage == "Posso apagar o build?");
+        batches[1].Sessions.Should().ContainSingle("o estado aparece na tarefa das outras máquinas (ADR-103)").Which.Should().Match<RemoteTerminalSessionReport>(report =>
+            report.SessionId == _host.SessionId && report.Activity == RemoteAgentActivity.WaitingForUser && report.ActivityMessage == null);
+    }
+
+    [Fact]
+    public async Task TheReport_WithControlOff_SendsNothing()
+    {
+        var api = Substitute.For<IRemoteTerminalsApi>();
+        using var reporter = new RemoteTerminalReporter(api, _terminals, Runner, _time, NullLogger<RemoteTerminalReporter>.Instance);
+        _settings.Settings = new RemoteSettings(true, AcceptControl: false, AcceptTerminal: true);
+
+        await reporter.PublishAsync(Ct);
+
+        await api.DidNotReceiveWithAnyArgs().ReportTerminalsAsync(default!, Ct);
     }
 
     [Fact]

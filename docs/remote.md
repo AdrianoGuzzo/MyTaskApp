@@ -274,6 +274,32 @@ nunca muda os parâmetros de lá para facilitar o controle.
 a outra máquina confere cada uma. O servidor só repassa a tela, sem gravar. A
 lista de sessões leva ids e estado, sem a pasta de lá.
 
+### O estado do Claude na tarefa
+
+Com **Aceitar ser controlado** ligado, a máquina já mostra às outras o estado
+do Claude no terminal do agente e nas conversas gerenciadas, mesmo sem o
+terminal remoto (ADR-103). O que cada interruptor compartilha:
+
+| Na máquina que roda o Claude | O que as outras máquinas e o celular veem |
+|---|---|
+| Só *Aceitar ser controlado* | o estado na tarefa (trabalhando, esperando você, revisar, erro), sem o texto do Claude e sem **Seguir** |
+| Também *Aceitar o terminal remoto* | o estado com o texto da pergunta, e **Seguir** abre o terminal |
+
+- **Na linha da tarefa**, ao lado do selo do Claude daqui, aparece
+  "⚠ Claude em Notebook · aguardando você". No desktop, a moldura da linha
+  pulsa a cada pedido novo, como com o Claude local; tocar no selo marca como
+  visto e segue o terminal, ou abre a conversa. Com mais de uma sessão, ele
+  pergunta qual.
+- **O aviso do canto**, no desktop, diz a máquina e oferece **Seguir** (ou
+  **Abrir conversa**). Sem o terminal remoto lá, não há botão, e o aviso diz
+  para responder na máquina.
+- **No celular**, a linha da tarefa mostra o mesmo selo, e o detalhe ganha a
+  seção "Claude em outras máquinas"
+  ([no celular](mobile.md#controle-remoto-aba-remoto)).
+- Cada pedido avisa uma vez. O estado que já esperava quando o app abriu
+  aparece no selo, mas não avisa.
+- O terminal do sistema não aparece em lugar nenhum fora da máquina.
+
 ## Revogar
 
 | Para… | Faça |

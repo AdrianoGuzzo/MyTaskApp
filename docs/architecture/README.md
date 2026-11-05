@@ -44,7 +44,7 @@ Números dos ADRs; o link está na linha do índice abaixo.
 - **mobile** (app do celular): 067, 075, 076, 079
 - **distribuicao** (instalador, versionamento, release, instância única, iniciar com o sistema): 018, 019, 023, 044, 049
 - **testes** (estratégia e ferramentas de teste): 006
-- **remoto** (orquestração remota (fases 2 e 3)): 084, 085, 086, 087, 088, 089, 090, 091, 092, 093, 094, 095, 096, 098, 099, 101
+- **remoto** (orquestração remota (fases 2 e 3)): 084, 085, 086, 087, 088, 089, 090, 091, 092, 093, 094, 095, 096, 098, 099, 101, 103
 
 ## Índice
 
@@ -152,6 +152,7 @@ Números dos ADRs; o link está na linha do índice abaixo.
 | [ADR-100](decisions/100-consulta-inteligente-com-a-configuracao-do-desenvolvimento.md) | Consulta Inteligente: o Claude Code com a mesma configuração do desenvolvimento | Aceito | Implementado | agente-ia | Consulta Inteligente, --restricted, --strict-mcp-config, mytaskapp-consulta, Parâmetros do card |
 | [ADR-101](decisions/101-terminal-do-claude-em-qualquer-aparelho.md) | O terminal do Claude em qualquer aparelho: o card abre no agente, a lista junta as máquinas e o celular segue e controla | Aceito | Parcial | remoto | AgentWindow padrão, Usar o terminal do agente, Terminais do Claude, TerminalSessionClient, RemoteTerminalPage, celular |
 | [ADR-102](decisions/102-reajustar-horas-pelo-relatorio.md) | Reajustar as horas pelo relatório: a tarefa abre os períodos do bloco, com as regras da aba Tempo | Aceito | Implementado | ciclo-de-vida | reajustar horas, OpenTaskCommand, ReportEntryRow, GetTimeEntries por tarefa, UpdateTimeEntry, relatório de horas |
+| [ADR-103](decisions/103-estado-do-claude-de-outras-maquinas-na-tarefa.md) | O estado do Claude de outras máquinas aparece na tarefa, e o pedido novo avisa | Aceito | Parcial | remoto | RemoteClaudeBoard, relato só de estado, Aceitar controle, selo remoto, episódio de atenção, notificação no celular |
 
 ## Novo ADR
 

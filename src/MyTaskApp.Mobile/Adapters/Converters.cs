@@ -72,6 +72,12 @@ public sealed class DeadlineColorConverter : ThemeColorConverter
     };
 }
 
+/// <summary>O Claude de outra máquina (ADR-103): pedindo alguém em atenção, trabalhando em informação.</summary>
+public sealed class ClaudeColorConverter : ThemeColorConverter
+{
+    protected override string? Key(object? value) => value is true ? "Caution" : "Info";
+}
+
 /// <summary>
 /// O miolo da bolinha da sincronização (ADR-063): sincronizado e para revisar
 /// em sucesso, pendente em atenção, sincronizando em informação, atenção em

@@ -56,4 +56,37 @@ public sealed class ManagedConversationOpener(
         await opened.OpenAsync(here, cancellationToken, developmentId, sessionId);
         return null;
     }
+
+    /// <summary>
+    /// A conversa de outra máquina (ADR-103): o selo e o aviso do Claude de
+    /// longe abrem a tela <i>Controlar</i> dela, já na conversa.
+    /// </summary>
+    public async Task<string?> OpenRemoteAsync(Guid deviceId, Guid? developmentId, Guid sessionId, CancellationToken cancellationToken = default)
+    {
+        MachineView? machine;
+
+        try
+        {
+            var view = await runner.RunAsync<GetMachinesHandler, MachinesView>(
+                (handler, token) => handler.HandleAsync(new GetMachines(), token),
+                cancellationToken);
+
+            machine = view.Machines.FirstOrDefault(item => item.DeviceId == deviceId && item.AcceptsControl);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.LogInformation(exception, "RemoteConversationMachinesUnavailable");
+            return "Não foi possível falar com o servidor do controle remoto agora. Tente de novo.";
+        }
+
+        if (machine is null)
+        {
+            return "A outra máquina não está mais aceitando controle.";
+        }
+
+        var opened = control();
+        ControlOpened?.Invoke(this, opened);
+        await opened.OpenAsync(machine, cancellationToken, developmentId, sessionId);
+        return null;
+    }
 }
