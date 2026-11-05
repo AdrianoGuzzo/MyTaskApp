@@ -260,7 +260,8 @@ public sealed partial class MachinesViewModel : ObservableObject
             var confirmed = await _confirmation.AskAsync(new ConfirmationRequest(
                 "Aceitar o terminal remoto neste computador?",
                 "Os controladores pareados poderão ver o Claude Code que roda no terminal do agente e digitar nele, como se estivessem aqui. "
-                + "Isso inclui rodar comandos no terminal. As aprovações do Claude continuam valendo, a não ser que a sessão tenha sido aberta sem elas.",
+                + "Isso inclui rodar comandos no terminal. As aprovações do Claude continuam valendo, a não ser que a sessão tenha sido aberta sem elas. "
+                + "O \"Abrir Claude Code\" passa a usar o terminal do agente, para a sessão aparecer nos outros aparelhos.",
                 "Aceitar o terminal"));
 
             if (!confirmed)

@@ -43,6 +43,8 @@ internal sealed class RecordingNavigator : INavigator
 
     public Task OpenSessionAsync(Guid sessionId, Guid deviceId) => Record($"session/{sessionId}");
 
+    public Task OpenTerminalAsync(Guid deviceId, Guid sessionId) => Record($"terminal/{sessionId}");
+
     public Task BackAsync() => Record("back");
 
     private Task Record(string visit)

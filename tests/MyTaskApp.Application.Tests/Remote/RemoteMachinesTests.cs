@@ -6,6 +6,7 @@ using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Remote;
 using MyTaskApp.Application.Sync;
+using MyTaskApp.Application.Terminals;
 using MyTaskApp.Application.Tests.Fakes;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.Remote;
@@ -337,6 +338,58 @@ public sealed class RemoteMachinesTests : IDisposable
         (await handler.HandleAsync(new UpdateRemoteSettings(Enabled: true, AcceptControl: true), Ct)).Should().Be(new RemoteSettings(true, true));
         _trusted.SaveCount.Should().Be(2);
         autostart.Applied.Should().Equal(false, true);
+    }
+
+    /// <summary>
+    /// Ligar o terminal remoto põe o "Abrir Claude Code" no terminal do agente,
+    /// senão a sessão nova não aparece de longe (ADR-101). Quem já usa o
+    /// terminal do agente dentro do app fica onde está.
+    /// </summary>
+    [Theory]
+    [InlineData(null, AgentHosting.AgentWindow)]
+    [InlineData(AgentHosting.Direct, AgentHosting.AgentWindow)]
+    [InlineData(AgentHosting.AgentEmbedded, AgentHosting.AgentEmbedded)]
+    public async Task AcceptingTheRemoteTerminal_OpensTheClaudeInTheAgentsTerminal(AgentHosting? saved, AgentHosting expected)
+    {
+        var claude = new FakeAgentCliProvider();
+        var agentSettings = new FakeAgentSettingsStore();
+
+        if (saved is { } hosting)
+        {
+            agentSettings.Hostings[claude.Id] = hosting;
+        }
+
+        var handler = new UpdateRemoteSettingsHandler(
+            _settings, _trusted, new RecordingAutostart(), NullLogger<UpdateRemoteSettingsHandler>.Instance,
+            new AgentCliProviders([claude]), agentSettings, new FakeAgentTerminalClient());
+
+        await handler.HandleAsync(new UpdateRemoteSettings(true, true, AcceptTerminal: true), Ct);
+
+        agentSettings.Hostings[claude.Id].Should().Be(expected);
+    }
+
+    /// <summary>Sem o terminal do agente (o macOS), ligar a chave não mexe em "Onde abrir"; e só a passagem de desligado para ligado troca.</summary>
+    [Fact]
+    public async Task AcceptingTheRemoteTerminal_LeavesTheChoice_WithoutTheAgentsTerminal_OrWhenItWasAlreadyOn()
+    {
+        var claude = new FakeAgentCliProvider();
+        var agentSettings = new FakeAgentSettingsStore();
+        var unsupported = new FakeAgentTerminalClient { Support = PseudoTerminalSupport.Unsupported("macOS", "Sem pseudoterminal.") };
+
+        await new UpdateRemoteSettingsHandler(
+                _settings, _trusted, new RecordingAutostart(), NullLogger<UpdateRemoteSettingsHandler>.Instance,
+                new AgentCliProviders([claude]), agentSettings, unsupported)
+            .HandleAsync(new UpdateRemoteSettings(true, true, AcceptTerminal: true), Ct);
+
+        agentSettings.Hostings.Should().BeEmpty();
+
+        agentSettings.Hostings[claude.Id] = AgentHosting.Direct;
+        await new UpdateRemoteSettingsHandler(
+                _settings, _trusted, new RecordingAutostart(), NullLogger<UpdateRemoteSettingsHandler>.Instance,
+                new AgentCliProviders([claude]), agentSettings, new FakeAgentTerminalClient())
+            .HandleAsync(new UpdateRemoteSettings(true, true, AcceptTerminal: true), Ct);
+
+        agentSettings.Hostings[claude.Id].Should().Be(AgentHosting.Direct, "a chave já estava ligada: a pessoa escolheu o terminal direto depois");
     }
 
     /// <summary>T-16: aceitar controle põe o agente no logon; o desktop reaplica o gravado ao abrir.</summary>

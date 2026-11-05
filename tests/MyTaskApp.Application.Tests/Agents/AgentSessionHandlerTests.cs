@@ -1,11 +1,13 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using MyTaskApp.Application.Agents;
+using MyTaskApp.Application.Remote;
 using MyTaskApp.Application.Terminals;
 using MyTaskApp.Application.Tests.Fakes;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.Agents;
 using MyTaskApp.Domain.Tasks;
+using NSubstitute;
 
 namespace MyTaskApp.Application.Tests.Agents;
 
@@ -992,20 +994,48 @@ public class AgentSessionHandlerTests
     }
 
     /// <summary>
-    /// Sem escolha salva, "Abrir" continua o terminal direto de hoje (ADR-098):
-    /// ninguém pede nada ao agente.
+    /// Sem escolha salva e com o terminal do agente nesta máquina, "Abrir" vai
+    /// para ele em janela, para a sessão aparecer de longe (ADR-101).
     /// </summary>
     [Fact]
-    public async Task Open_WithoutAChoice_IsTheDirectTerminalAsBefore()
+    public async Task Open_WithoutAChoice_IsTheAgentsWindow_WhereItExists()
     {
         Ready();
+        var session = HostedSession();
+        _agentTerminal.Result = new TerminalStartResult(true, session.Id, null, null);
+
+        var view = await Open().HandleAsync(new OpenAgentSession(new StartAgentSession(_task.Id, _task.Developments[0].Id)), Ct);
+
+        view.IsAgentTerminal.Should().BeTrue();
+        _agentTerminal.Started.Should().ContainSingle().Which.Hosting.Should().Be(AgentHosting.AgentWindow);
+        _settings.Hostings.Should().BeEmpty("não escolher não grava escolha");
+    }
+
+    /// <summary>Sem o terminal do agente (o macOS), sem escolha continua o terminal direto de sempre.</summary>
+    [Fact]
+    public async Task Open_WithoutAChoice_AndWithoutTheAgentsTerminal_IsTheDirectTerminal()
+    {
+        Ready();
+        _agentTerminal.Support = PseudoTerminalSupport.Unsupported("macOS", "Sem pseudoterminal.");
 
         var view = await Open().HandleAsync(new OpenAgentSession(new StartAgentSession(_task.Id, _task.Developments[0].Id)), Ct);
 
         view.IsAgentTerminal.Should().BeFalse();
-        _launcher.Launched.Should().ContainSingle("o terminal direto abre aqui, como hoje");
+        _launcher.Launched.Should().ContainSingle("o terminal direto abre aqui");
         _agentTerminal.Started.Should().BeEmpty();
-        _settings.Hostings.Should().BeEmpty("não escolher não grava escolha");
+    }
+
+    /// <summary>Quem escolheu o terminal direto continua nele: o padrão novo só vale para quem nunca escolheu.</summary>
+    [Fact]
+    public async Task Open_WithTheDirectTerminalSaved_StaysThere()
+    {
+        Ready();
+        _settings.Hostings[_claude.Id] = AgentHosting.Direct;
+
+        var view = await Open().HandleAsync(new OpenAgentSession(new StartAgentSession(_task.Id, _task.Developments[0].Id)), Ct);
+
+        view.IsAgentTerminal.Should().BeFalse();
+        _agentTerminal.Started.Should().BeEmpty();
     }
 
     [Fact]
@@ -1137,6 +1167,21 @@ public class AgentSessionHandlerTests
 
         status.Hosting.Should().Be(AgentHosting.Direct);
         status.HostingSupport.IsSupported.Should().BeFalse();
+    }
+
+    /// <summary>O card avisa quando o terminal direto não vai aparecer de longe: só com o terminal remoto aceito (ADR-101).</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Detect_SaysWhetherThisMachineAcceptsTheRemoteTerminal(bool accepted)
+    {
+        var remote = Substitute.For<IRemoteSettingsStore>();
+        remote.GetAsync(Arg.Any<CancellationToken>()).Returns(new RemoteSettings(true, true, accepted));
+
+        var status = await new DetectAgentCliHandler(_providers, _settings, _agentTerminal, remote).HandleAsync(new DetectAgentCli(), Ct);
+
+        status.RemoteTerminalAccepted.Should().Be(accepted);
+        status.Hosting.Should().Be(AgentHosting.AgentWindow, "nada salvo, e o terminal do agente existe aqui");
     }
 
     /// <summary>A sessão que o agente "abriu", já no banco que os dois dividem.</summary>

@@ -627,11 +627,15 @@ quem executa é o computador, com as regras dele. O guia é o
   - o código do pareamento (digitado lá, na janela Máquinas);
   - as aprovações pendentes, com o app aberto: na hora, pelo hub (ADR-094),
     ou a cada 1,5 s sem ele. A nova avisa e conta no título da aba;
+  - os **terminais do Claude** das máquinas que aceitam o terminal remoto, com
+    a máquina e o estado; o que espera você vem em negrito (ADR-101);
   - as **conversas do Claude** das máquinas, as 10 mais recentes, de qualquer
     tela que as abriu (ADR-091);
   - os pedidos feitos daqui.
-- **A máquina** lista os worktrees de lá: rodar um comando liberado, abrir o
-  Claude, apagar o worktree. **A operação** mostra o estado, a saída ao vivo,
+- **A máquina** lista os terminais do Claude dela e os worktrees de lá: rodar
+  um comando liberado, abrir o Claude, **No terminal de lá** (o Claude
+  interativo no terminal do agente de lá, que aparece em *Terminais do
+  Claude*) e apagar o worktree. **A operação** mostra o estado, a saída ao vivo,
   as perguntas dela, cancelar, mandar mais um prompt e parar o Claude. **A
   conversa** (rota `session`) mostra a linha do tempo de todos os prompts dela
   em cartões: o prompt ("Você"), o texto do Claude, a ferramenta que ele usou,
@@ -641,6 +645,21 @@ quem executa é o computador, com as regras dele. O guia é o
   são os mesmos da janela *Controlar* do desktop. Na
   tarefa, **"Preparar em…"** escolhe o computador, o repositório, a cópia do
   banco e o Claude.
+- **O terminal** (rota `terminal`, ADR-101) é a tela do Claude de lá, ao vivo,
+  como no desktop ([o terminal do Claude](remote.md#o-terminal-do-claude)):
+  - ligar pede destravar uma vez; as teclas vão assinadas pela chave desta
+    ligação, que só existe na memória;
+  - sem a vez, a tela só mostra; **Assumir o controle** passa a vez para o
+    celular, e **Soltar o controle** devolve;
+  - o teclado do sistema digita direto no terminal; a barra traz Esc, Tab,
+    ⇧Tab, as setas, Enter, Ctrl+C e `/`; o campo de prompt manda o texto
+    pronto quando o Claude espera;
+  - **Permitir**, **Negar**, **Interromper (Esc)**, e no "⋯" **Encerrar** e
+    **Forçar o fim**, cada um com a sua pergunta;
+  - a letra encolhe para caber a largura de lá; a pinça e **A−**/**A+** mudam
+    o tamanho; arrastar na vertical rola o histórico;
+  - em segundo plano a ligação cai (o Claude segue lá), e voltar liga de novo;
+    se o destravamento for cancelado, **Reconectar** tenta de novo.
 - **Destravar antes de assinar:** todo pedido e toda resposta pedem a
   biometria ou o bloqueio da tela (`BiometricPrompt` com o PIN no Android 10+,
   a tela de confirmação do bloqueio no 9 e anteriores, `LAContext` no iOS).
@@ -648,8 +667,8 @@ quem executa é o computador, com as regras dele. O guia é o
   tela, o celular não assina.
 - **Com o app fechado (Android, ADR-096):** com o remoto ligado, o sistema
   verifica de tempos em tempos (a cada 15 minutos no mínimo, só com rede) e
-  avisa a aprovação nova e a conversa em que o Claude respondeu ou parou com
-  erro. Cada uma avisa uma vez, e o que a aba já mostrou não avisa. Na tela
+  avisa a aprovação nova, a conversa em que o Claude respondeu ou parou com
+  erro e o terminal do Claude que passou a esperar você. Cada uma avisa uma vez, e o que a aba já mostrou não avisa. Na tela
   bloqueada, o aviso diz só "Novidade no controle remoto"; o toque abre a aba
   Remoto. A permissão de notificar (Android 13+) é pedida uma vez, ao abrir a
   aba com o remoto pronto.

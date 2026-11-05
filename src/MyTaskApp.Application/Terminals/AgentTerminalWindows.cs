@@ -188,7 +188,7 @@ public sealed class OpenAgentSessionHandler(
     public async Task<AgentSessionView> HandleAsync(OpenAgentSession command, CancellationToken cancellationToken = default)
     {
         var provider = providers.Get(command.Start.ProviderId);
-        var hosting = command.Hosting ?? await settings.HostingForAsync(provider, cancellationToken);
+        var hosting = command.Hosting ?? await settings.HostingForAsync(provider, agent.Support.IsSupported, cancellationToken);
 
         if (command.Hosting is { } chosen && Enum.IsDefined(chosen))
         {

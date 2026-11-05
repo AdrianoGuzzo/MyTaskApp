@@ -74,7 +74,9 @@ O caminho sem terminal (headless) e o terminal direto continuam como eram.
 | `Application/Remote/RemoteTerminalInputVerifier.cs` | `RemoteTerminalInputVerifier` | confere cada lote assinado |
 | `Application/Remote/RemoteTerminalControl.cs` | `RemoteTerminalConnector`, `RemoteTerminalChannel`, `ListRemoteTerminalsHandler` | o lado de quem controla |
 | `Infrastructure/Remote` | `SignalRRemoteHub` (o agente), `SignalRRemoteTerminalWires` (uma conexão por vista) | os clientes do hub |
-| `Desktop` | `TerminalSessionViewModel`, `TerminalView`, `RemoteTerminalsViewModel`, `RemoteTerminalWindows` | a mesma vista para o local e o remoto |
+| `Application/Terminals` | `TerminalSessionClient`, `TerminalKeyBytes`, `TerminalColors` | o miolo de qualquer vista (ADR-101): a bomba do canal, a vez, a lacuna, as teclas xterm e a paleta |
+| `Desktop` | `TerminalSessionViewModel`, `TerminalView`, `RemoteTerminalsViewModel`, `RemoteTerminalWindows` | a mesma vista para o local e o remoto; a lista de todas as máquinas em *Conversas do Claude* |
+| `Mobile.Core` / `Mobile` | `RemoteTerminalViewModel`, `RemoteTerminalPage`, `TerminalDrawable` | o celular segue e controla (ADR-101): a tela num `GraphicsView`, a barra de teclas e o campo de prompt |
 
 ## 3. Fluxo de ponta a ponta
 
@@ -167,7 +169,7 @@ qualquer comando. Por isso:
   longe por agente. Até 16 sessões por relato.
 
 As ameaças e os riscos residuais estão no
-[modelo de ameaças](remote-security-threat-model.md) (A-26 a A-29, R-12 a
+[modelo de ameaças](remote-security-threat-model.md) (A-26 a A-30, R-12 a
 R-14).
 
 ## 6. Limitações
@@ -175,7 +177,10 @@ R-14).
 - **A sessão vive com o agente.** Parar o agente encerra o Claude (o Job).
   Depois, "Retomar" abre outra sessão do mesmo histórico, por `--resume`.
 - **Uma instância do servidor.** O relay não tem backplane.
-- **Sem celular na v1.** A assinatura pede biometria, e a TUI não cabe na tela.
+- **O celular entrou depois (ADR-101).** A biometria é pedida uma vez, no
+  attach. Em segundo plano a ligação cai, e voltar liga de novo. A letra
+  encolhe para caber a largura de lá. Ainda não há seleção de texto nem aviso
+  com o app fechado no iOS.
 - **A saída passa em claro pelo servidor do usuário** (TLS, sem gravar). Cifra
   ponta a ponta fica como evolução.
 - **As ações estruturadas dependem dos hooks.** As teclas de cada diálogo

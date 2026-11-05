@@ -10,9 +10,10 @@ namespace MyTaskApp.Mobile.Core.Remote;
 
 /// <summary>
 /// A verificação periódica do controle remoto com o app fechado (ADR-096): a
-/// cada volta do sistema, avisa a aprovação nova e a conversa em que o Claude
-/// acabou de responder. O que já foi avisado (ou visto com o app na frente)
-/// fica nas preferências e não volta a avisar.
+/// cada volta do sistema, avisa a aprovação nova, a conversa em que o Claude
+/// acabou de responder e o terminal do Claude que passou a esperar alguém
+/// (ADR-101). O que já foi avisado (ou visto com o app na frente) fica nas
+/// preferências e não volta a avisar.
 /// </summary>
 /// <remarks>
 /// Não responde nada: responder pede o destravamento, que só existe com a
@@ -36,6 +37,8 @@ public sealed class RemoteBackgroundCheck(
     public const string AnsweredText = "O Claude respondeu e espera o próximo prompt.";
 
     public const string FailedText = "O Claude parou com erro.";
+
+    public const string TerminalWaitingText = "O Claude no terminal de {0} espera você.";
 
     private readonly SemaphoreSlim _gate = new(1, 1);
 
@@ -96,7 +99,7 @@ public sealed class RemoteBackgroundCheck(
     private async Task<int> CheckAsync(bool notify, CancellationToken cancellationToken)
     {
         var previous = Seen.Read(preferences.Get(PreferenceKey));
-        var seen = previous ?? new Seen([], []);
+        var seen = previous ?? new Seen([], [], []);
         var now = timeProvider.GetUtcNow();
         var notices = new List<LocalNotice>();
 
@@ -134,10 +137,26 @@ public sealed class RemoteBackgroundCheck(
                     item.Session.Status == RemoteAgentSessionStatus.Failed ? FailedText : AnsweredText)));
         }
 
+        var waiting = await WaitingTerminalsAsync(cancellationToken);
+
+        // Avisa o terminal que passou a esperar desde a última volta; o que continua esperando já foi avisado.
+        if (notify && previous is not null && waiting.Count > 0)
+        {
+            var names = await NamesAsync(cancellationToken);
+
+            notices.AddRange(waiting
+                .Where(item => seen.Terminals?.Contains(item.Session.SessionId) != true)
+                .Select(item => new LocalNotice(
+                    $"terminal:{item.Session.SessionId:N}",
+                    item.Title,
+                    string.Format(System.Globalization.CultureInfo.CurrentCulture, TerminalWaitingText, names.GetValueOrDefault(item.DeviceId, "outra máquina")))));
+        }
+
         // Só o que ainda existe: a vencida e a conversa que saiu da lista não pesam nas preferências.
         preferences.Set(PreferenceKey, new Seen(
             [.. pending.Select(view => view.Request.ApprovalId)],
-            sessions.Items.ToDictionary(item => item.Session.SessionId, item => item.Session.Version)).Write());
+            sessions.Items.ToDictionary(item => item.Session.SessionId, item => item.Session.Version),
+            [.. waiting.Select(item => item.Session.SessionId)]).Write());
 
         foreach (var notice in notices)
         {
@@ -160,6 +179,24 @@ public sealed class RemoteBackgroundCheck(
     private static bool Answered(RemoteAgentSessionView session, long known) =>
         session.Version > known && session.Status is RemoteAgentSessionStatus.Idle or RemoteAgentSessionStatus.Failed;
 
+    /// <summary>Os terminais do Claude que pedem alguém agora; sem a rota no servidor, nenhum.</summary>
+    private async Task<IReadOnlyList<RemoteTerminalItem>> WaitingTerminalsAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var list = await runner.RunAsync<ListRemoteTerminalsHandler, RemoteTerminalList>(
+                (handler, token) => handler.HandleAsync(new ListRemoteTerminals(), token),
+                cancellationToken);
+            return [.. list.Items.Where(item => item.NeedsAttention)];
+        }
+        catch (SyncApiException exception)
+        {
+            // Os terminais são um extra: sem eles, as aprovações e as conversas avisam igual.
+            logger.LogInformation("MobileRemoteBackgroundTerminalsUnavailable {Kind}", exception.Kind);
+            return [];
+        }
+    }
+
     private async Task<IReadOnlyDictionary<Guid, string>> NamesAsync(CancellationToken cancellationToken)
     {
         var view = await runner.RunAsync<GetMachinesHandler, MachinesView>(
@@ -172,8 +209,12 @@ public sealed class RemoteBackgroundCheck(
     private static string Clip(string text) =>
         text.Length <= MaxSummaryLength ? text : $"{text[..(MaxSummaryLength - 1)]}…";
 
-    /// <summary>O que já foi avisado: as aprovações em aberto e a versão de cada conversa.</summary>
-    private sealed record Seen(HashSet<Guid> Approvals, Dictionary<Guid, long> Sessions)
+    /// <summary>
+    /// O que já foi avisado: as aprovações em aberto, a versão de cada
+    /// conversa e os terminais que esperavam alguém. <see cref="Terminals"/>
+    /// nulo é o gravado por uma versão de antes deles.
+    /// </summary>
+    private sealed record Seen(HashSet<Guid> Approvals, Dictionary<Guid, long> Sessions, HashSet<Guid>? Terminals)
     {
         /// <summary><c>null</c> = nunca gravado, ou gravado por outra versão: é a primeira volta.</summary>
         public static Seen? Read(string? stored)

@@ -38,6 +38,12 @@ public sealed class MobileLifecycle(
     /// <summary>A tela está na frente: a verificação do sistema não avisa o que ela já mostra.</summary>
     public bool IsAwake => _awake;
 
+    /// <summary>Foi para segundo plano: o terminal de longe solta a ligação, e a chave dele vai junto (ADR-101).</summary>
+    public event Action? WentToBackground;
+
+    /// <summary>Voltou para a frente: a tela do terminal aberta liga de novo.</summary>
+    public event Action? CameBack;
+
     /// <summary>
     /// O banco pronto e a sincronização ligada. Chamar de novo devolve a mesma
     /// tarefa; depois de uma falha, tenta outra vez ("Tentar de novo" da tela).
@@ -80,6 +86,7 @@ public sealed class MobileLifecycle(
         _awake = false;
         signer.Lock();
         approvals.Stop();
+        WentToBackground?.Invoke();
 
         if (IsReady)
         {
@@ -99,6 +106,8 @@ public sealed class MobileLifecycle(
             scheduler.RequestNow();
             approvals.Start();
         }
+
+        CameBack?.Invoke();
     }
 
     private bool IsReady

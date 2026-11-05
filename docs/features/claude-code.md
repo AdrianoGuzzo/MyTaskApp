@@ -3,15 +3,16 @@
 | | |
 |---|---|
 | **Status** | Implementado no Windows e no Linux. No Linux, o terminal do sistema é o emulador achado (`LinuxTerminalLauncher`) e não há sons. No macOS não há terminal do agente (`UnsupportedTerminalLauncher`). |
-| **Decisões** | [ADR-030](../architecture/decisions/030-sessoes-claude-code-por-tarefa.md) sessões · [ADR-033](../architecture/decisions/033-parametros-do-agente-lembrados.md) parâmetros · [ADR-036](../architecture/decisions/036-abrir-claude-code-menu-da-linha.md) menu da linha · [ADR-037](../architecture/decisions/037-acompanhar-claude-code-pelos-hooks.md) hooks · [ADR-039](../architecture/decisions/039-arroba-ambientes-e-arquivos-no-agente.md) `@` no texto · [ADR-040](../architecture/decisions/040-modelo-e-esforco-do-agente.md) modelo e esforço · [ADR-042](../architecture/decisions/042-som-por-estado-do-claude-code.md) sons · [ADR-098](../architecture/decisions/098-terminal-do-agente-em-pseudoterminal.md) terminal do agente · [ADR-099](../architecture/decisions/099-terminal-remoto-do-claude.md) terminal remoto |
+| **Decisões** | [ADR-030](../architecture/decisions/030-sessoes-claude-code-por-tarefa.md) sessões · [ADR-033](../architecture/decisions/033-parametros-do-agente-lembrados.md) parâmetros · [ADR-036](../architecture/decisions/036-abrir-claude-code-menu-da-linha.md) menu da linha · [ADR-037](../architecture/decisions/037-acompanhar-claude-code-pelos-hooks.md) hooks · [ADR-039](../architecture/decisions/039-arroba-ambientes-e-arquivos-no-agente.md) `@` no texto · [ADR-040](../architecture/decisions/040-modelo-e-esforco-do-agente.md) modelo e esforço · [ADR-042](../architecture/decisions/042-som-por-estado-do-claude-code.md) sons · [ADR-098](../architecture/decisions/098-terminal-do-agente-em-pseudoterminal.md) terminal do agente · [ADR-099](../architecture/decisions/099-terminal-remoto-do-claude.md) terminal remoto · [ADR-101](../architecture/decisions/101-terminal-do-claude-em-qualquer-aparelho.md) em qualquer aparelho |
 | **Código** | `src/MyTaskApp.Application/Agents/`, `src/MyTaskApp.Domain/Agents/AgentSession.cs`, `src/MyTaskApp.Infrastructure/Agents/`, `src/MyTaskApp.Infrastructure/Terminals/`, `src/MyTaskApp.Application/Terminals/`, `src/MyTaskApp.TerminalAttach/`, `src/MyTaskApp.Desktop/ViewModels/AgentSessionViewModel.cs`, `src/MyTaskApp.Desktop/ViewModels/TerminalSessionViewModel.cs`, `src/MyTaskApp.Desktop/ViewModels/AgentAlertSoundsViewModel.cs` |
 | **Testes** | `tests/MyTaskApp.Application.Tests/Agents/`, `tests/MyTaskApp.Infrastructure.Tests/Agents/`, `tests/MyTaskApp.Desktop.Tests/ViewModels/AgentSessionViewModelTests.cs` |
 
 - **Iniciar Claude Code** abre o `claude` num terminal real, dentro do
   worktree. O card mostra PID, início e pasta, e **Abrir terminal do agente**
   traz a janela certa para a frente.
-- **Onde abrir**, no card, escolhe o terminal (ADR-098). O padrão é o de
-  sempre:
+- **Onde abrir**, no card, escolhe o terminal (ADR-098). Sem escolha, é o
+  terminal do agente, em janela, onde ele existe; no macOS, o do sistema
+  (ADR-101). A escolha feita fica:
   - **Terminal do sistema:** um terminal novo; fechar encerra o Claude.
   - **Terminal do agente, em janela:** o Claude roda no `MyTaskApp.Agent`, num
     pseudoterminal (ConPTY no Windows, `openpty` no Linux), e aparece numa
@@ -22,8 +23,11 @@
     a fonte do Windows Terminal, que vem embutida no app (o Windows pode não
     tê-la instalada). Se ela faltar, vale a primeira monoespaçada do sistema.
 
-  As duas vistas do agente são a mesma sessão, e outra máquina pareada pode
-  segui-la ([o terminal do Claude](../remote.md#o-terminal-do-claude)). A
+  As duas vistas do agente são a mesma sessão, e outra máquina pareada ou o
+  celular podem segui-la ([o terminal do Claude](../remote.md#o-terminal-do-claude)).
+  Com "Aceitar o terminal remoto" ligado e o terminal do sistema escolhido, o
+  card avisa que a sessão não aparece nos outros aparelhos e oferece **Usar o
+  terminal do agente**. A
   sessão do agente sempre recebe `--session-id`, e vive enquanto o agente
   vive.
 - **Na vista dentro do app**, o teclado vai inteiro para o Claude. Arrastar

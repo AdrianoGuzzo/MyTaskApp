@@ -27,14 +27,23 @@ public sealed record EnvironmentLine(RemoteEnvironmentView View)
 /// Uma máquina pareada, do celular (E7): os worktrees prontos lá, e em cada
 /// um rodar um comando, abrir o Claude ou apagar. Tudo vai por id do catálogo
 /// que ela publicou; o celular nunca manda texto de comando (ADR-088).
+/// <para>
+/// Com o terminal remoto aceito lá, também os terminais do Claude dela e, em
+/// cada worktree, abrir o Claude no terminal do agente de lá (ADR-101).
+/// </para>
 /// </summary>
 public sealed partial class RemoteMachineViewModel(
     IUseCaseRunner runner,
     RemoteSender sender,
+    INavigator navigator,
     IDialogService dialogs,
     ILogger<RemoteMachineViewModel> logger) : MobileViewModel(dialogs, logger)
 {
     private AgentCatalog? _catalog;
+
+    /// <summary>A máquina aceita o terminal remoto: a lista dos terminais e "No terminal de lá" aparecem.</summary>
+    [ObservableProperty]
+    private bool _offersTerminal;
 
     [ObservableProperty]
     private string _title = "Máquina";
@@ -51,6 +60,11 @@ public sealed partial class RemoteMachineViewModel(
 
     public bool HasEnvironments => Environments.Count > 0;
 
+    /// <summary>O Claude no terminal do agente desta máquina, rodando agora.</summary>
+    public ObservableCollection<TerminalLine> Terminals { get; } = [];
+
+    public bool HasTerminals => Terminals.Count > 0;
+
     public bool CanStartAgent => _catalog is { AgentProfiles.Count: > 0 };
 
     /// <param name="nickname">Nulo: lido da lista de máquinas (a rota só leva o id).</param>
@@ -58,18 +72,18 @@ public sealed partial class RemoteMachineViewModel(
     {
         DeviceId = deviceId;
 
-        if (nickname is null)
+        try
         {
-            try
-            {
-                var machines = await runner.RunAsync<GetMachinesHandler, MachinesView>(
-                    (handler, token) => handler.HandleAsync(new GetMachines(), token));
-                nickname = machines.Machines.FirstOrDefault(machine => machine.DeviceId == deviceId)?.Nickname;
-            }
-            catch (Exception exception) when (exception is not OperationCanceledException)
-            {
-                Logger.LogInformation(exception, "MobileRemoteMachineNameUnavailable");
-            }
+            // A lista diz o nome e se a máquina aceita o terminal remoto.
+            var machines = await runner.RunAsync<GetMachinesHandler, MachinesView>(
+                (handler, token) => handler.HandleAsync(new GetMachines(), token));
+            var machine = machines.Machines.FirstOrDefault(machine => machine.DeviceId == deviceId);
+            nickname ??= machine?.Nickname;
+            OffersTerminal = machine?.OffersTerminal == true;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            Logger.LogInformation(exception, "MobileRemoteMachineNameUnavailable");
         }
 
         Title = nickname ?? Title;
@@ -92,6 +106,8 @@ public sealed partial class RemoteMachineViewModel(
             {
                 Environments.Add(new EnvironmentLine(environment));
             }
+
+            await LoadTerminalsAsync();
         }
         catch (SyncApiException exception)
         {
@@ -110,6 +126,60 @@ public sealed partial class RemoteMachineViewModel(
             IsRefreshing = false;
             OnPropertyChanged(nameof(HasEnvironments));
             OnPropertyChanged(nameof(CanStartAgent));
+            OnPropertyChanged(nameof(HasTerminals));
+        }
+    }
+
+    [RelayCommand]
+    public Task OpenTerminalAsync(TerminalLine? line) =>
+        line is null ? Task.CompletedTask : navigator.OpenTerminalAsync(DeviceId, line.Item.Session.SessionId);
+
+    /// <summary>
+    /// Abre o Claude no terminal do agente de lá, no worktree. Os parâmetros, o
+    /// modelo e o acompanhamento são os salvos lá; daqui vão só os ids (ADR-099).
+    /// </summary>
+    [RelayCommand]
+    public async Task StartTerminalAsync(EnvironmentLine? line)
+    {
+        if (line is null || !OffersTerminal)
+        {
+            return;
+        }
+
+        if (await TryAsync(
+                () => sender.SendAsync(
+                    RemoteTerminalRequests.Start(DeviceId, line.View.TaskId, line.View.DevelopmentId),
+                    $"Claude no terminal de {Title} · {line.Title}",
+                    open: false),
+                "MobileRemoteStartTerminalFailed"))
+        {
+            await Dialogs.ToastAsync("Pedido enviado. O Claude aparece em Terminais do Claude quando abrir lá.");
+        }
+    }
+
+    private async Task LoadTerminalsAsync()
+    {
+        Terminals.Clear();
+
+        if (!OffersTerminal)
+        {
+            return;
+        }
+
+        try
+        {
+            var list = await runner.RunAsync<ListRemoteTerminalsHandler, RemoteTerminalList>(
+                (handler, token) => handler.HandleAsync(new ListRemoteTerminals(DeviceId), token));
+
+            foreach (var item in list.Items.Where(item => item.IsRunning))
+            {
+                Terminals.Add(new TerminalLine(item, Title));
+            }
+        }
+        catch (SyncApiException exception)
+        {
+            // A lista é um extra da tela: sem ela, os worktrees continuam.
+            Logger.LogInformation("MobileRemoteMachineTerminalsUnavailable {Kind}", exception.Kind);
         }
     }
 

@@ -26,6 +26,10 @@ public sealed partial class RemoteTerminalsViewModel : ObservableObject
     private readonly RemoteTerminalWindows? _windows;
 
     private Guid? _deviceId;
+
+    /// <summary>A lista de todas as máquinas (ADR-101): os apelidos, e esta máquina, que fica de fora.</summary>
+    private IReadOnlyDictionary<Guid, string>? _machines;
+    private Guid? _thisDeviceId;
     private int _ticks;
 
     public RemoteTerminalsViewModel(IUseCaseRunner runner, ILogger logger, RemoteTerminalWindows? windows)
@@ -48,8 +52,16 @@ public sealed partial class RemoteTerminalsViewModel : ObservableObject
 
     public bool HasNoItems => !HasItems;
 
+    /// <summary>A lista junta as máquinas da conta: cada linha diz de qual é.</summary>
+    public bool IsAllMachines => _machines is not null;
+
+    public string EmptyText => IsAllMachines
+        ? "Nenhum Claude rodando no terminal do agente das outras máquinas."
+        : "Nenhum Claude rodando no terminal do agente de lá.";
+
     public async Task LoadAsync(MachineView machine, CancellationToken cancellationToken)
     {
+        _machines = null;
         _deviceId = machine.DeviceId;
         IsOffered = machine.OffersTerminal && _windows is not null;
 
@@ -62,6 +74,25 @@ public sealed partial class RemoteTerminalsViewModel : ObservableObject
         }
 
         await ReloadAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Os terminais de todas as máquinas da conta, menos esta: a daqui se vê
+    /// pelo card da tarefa (ADR-101).
+    /// </summary>
+    public async Task LoadAllAsync(IReadOnlyDictionary<Guid, string> machines, Guid? thisDeviceId, CancellationToken cancellationToken)
+    {
+        _machines = machines;
+        _thisDeviceId = thisDeviceId;
+        _deviceId = null;
+        IsOffered = _windows is not null;
+        OnPropertyChanged(nameof(IsAllMachines));
+        OnPropertyChanged(nameof(EmptyText));
+
+        if (IsOffered)
+        {
+            await ReloadAsync(cancellationToken);
+        }
     }
 
     /// <summary>Com o hub, relê no aviso da máquina; sem ele, de tempos em tempos.</summary>
@@ -84,7 +115,7 @@ public sealed partial class RemoteTerminalsViewModel : ObservableObject
     [RelayCommand]
     public void Follow(RemoteTerminalItem item)
     {
-        if (_deviceId is not { } deviceId || _windows is null)
+        if ((_deviceId ?? (IsAllMachines ? item.DeviceId : null)) is not { } deviceId || _windows is null)
         {
             return;
         }
@@ -103,13 +134,14 @@ public sealed partial class RemoteTerminalsViewModel : ObservableObject
 
     private async Task ReloadAsync(CancellationToken cancellationToken)
     {
-        if (_deviceId is not { } deviceId)
+        if (_deviceId is null && !IsAllMachines)
         {
             return;
         }
 
         try
         {
+            var deviceId = _deviceId;
             var list = await _runner.RunAsync<ListRemoteTerminalsHandler, RemoteTerminalList>(
                 (handler, token) => handler.HandleAsync(new ListRemoteTerminals(deviceId), token),
                 cancellationToken);
@@ -118,7 +150,14 @@ public sealed partial class RemoteTerminalsViewModel : ObservableObject
 
             foreach (var item in list.Items)
             {
-                Items.Add(item);
+                if (_machines is not { } machines)
+                {
+                    Items.Add(item);
+                }
+                else if (item.DeviceId != _thisDeviceId)
+                {
+                    Items.Add(item with { MachineName = machines.GetValueOrDefault(item.DeviceId) ?? "Máquina" });
+                }
             }
 
             Message = list.Problem;

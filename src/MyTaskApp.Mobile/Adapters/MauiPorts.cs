@@ -99,6 +99,8 @@ internal sealed class ShellNavigator : INavigator
 
     public const string Session = "session";
 
+    public const string Terminal = "terminal";
+
     public Task OpenTaskAsync(Guid taskId) => GoAsync($"{Task}?id={taskId:D}");
 
     public Task NewTaskAsync() => GoAsync(TaskForm);
@@ -130,6 +132,8 @@ internal sealed class ShellNavigator : INavigator
     public Task OpenOperationAsync(Guid operationId, Guid deviceId) => GoAsync($"{Operation}?id={operationId:D}&device={deviceId:D}");
 
     public Task OpenSessionAsync(Guid sessionId, Guid deviceId) => GoAsync($"{Session}?id={sessionId:D}&device={deviceId:D}");
+
+    public Task OpenTerminalAsync(Guid deviceId, Guid sessionId) => GoAsync($"{Terminal}?id={sessionId:D}&device={deviceId:D}");
 
     public Task BackAsync() => GoAsync("..");
 

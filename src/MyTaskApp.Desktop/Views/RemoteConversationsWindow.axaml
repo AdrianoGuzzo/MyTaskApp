@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:MyTaskApp.Desktop.ViewModels"
+        xmlns:remote="using:MyTaskApp.Application.Remote"
         x:Class="MyTaskApp.Desktop.Views.RemoteConversationsWindow"
         x:DataType="vm:RemoteConversationsViewModel"
         Title="Conversas do Claude"
@@ -13,7 +14,8 @@
   <!--
     As conversas do Claude de todas as máquinas da conta (ADR-091), como a aba
     Remoto do celular: a aberta aqui, no celular ou em outro computador. O
-    próximo prompt e o parar vão para a máquina de cada conversa.
+    próximo prompt e o parar vão para a máquina de cada conversa. Em cima, os
+    terminais do Claude das outras máquinas (ADR-101), para seguir e assumir.
   -->
 
   <Window.Styles>
@@ -30,6 +32,12 @@
       <Setter Property="FontSize" Value="11" />
       <Setter Property="Foreground" Value="{DynamicResource WidgetTextLowBrush}" />
       <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style Selector="TextBlock.sectionTitle">
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource WidgetTextHighBrush}" />
     </Style>
 
     <Style Selector="TextBlock.caution">
@@ -57,8 +65,39 @@
                    IsVisible="{Binding Message, Converter={x:Static ObjectConverters.IsNotNull}}" />
       </StackPanel>
 
+      <!-- Os terminais do agente das outras máquinas: a sessão aberta pelo card lá aparece aqui (ADR-101). -->
+      <Border x:Name="AllTerminalsCard" Classes="card" DataContext="{Binding Terminals}" IsVisible="{Binding IsOffered}">
+        <StackPanel Spacing="8">
+          <TextBlock Classes="sectionTitle" Text="Terminais do Claude" />
+          <TextBlock Classes="meta"
+                     Text="O Claude Code que roda no terminal do agente das outras máquinas. Seguir mostra a tela ao vivo; lá dentro, Assumir o controle passa a vez de digitar para cá." />
+          <TextBlock x:Name="AllTerminalsMessage" Classes="meta caution" Text="{Binding Message}"
+                     IsVisible="{Binding Message, Converter={x:Static ObjectConverters.IsNotNull}}" />
+          <TextBlock Classes="meta" Text="{Binding EmptyText}" IsVisible="{Binding HasNoItems}" />
+          <ItemsControl x:Name="AllTerminalList" ItemsSource="{Binding Items}" IsVisible="{Binding HasItems}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="remote:RemoteTerminalItem">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,2">
+                  <StackPanel Spacing="1">
+                    <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Classes="meta" Text="{Binding MachineName}" />
+                    <TextBlock Classes="meta" Text="{Binding State}" />
+                    <TextBlock Classes="meta caution" Text="{Binding BypassWarning}"
+                               IsVisible="{Binding BypassWarning, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                  </StackPanel>
+                  <Button Grid.Column="1" Content="Seguir" VerticalAlignment="Center"
+                          Command="{Binding $parent[ItemsControl].((vm:RemoteTerminalsViewModel)DataContext).FollowCommand}"
+                          CommandParameter="{Binding}" />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+
       <Border x:Name="ConversationsCard" Classes="card" DataContext="{Binding Sessions}">
         <StackPanel Spacing="8">
+          <TextBlock Classes="sectionTitle" Text="Conversas sem terminal" />
           <TextBlock x:Name="ConversationsSessionsMessage" Classes="meta caution" Text="{Binding Message}"
                      IsVisible="{Binding Message, Converter={x:Static ObjectConverters.IsNotNull}}" />
           <TextBlock Classes="meta" Text="Nenhuma conversa do Claude nos últimos dias."

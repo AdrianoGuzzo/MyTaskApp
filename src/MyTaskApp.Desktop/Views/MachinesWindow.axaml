@@ -172,9 +172,9 @@
         <StackPanel Spacing="8">
           <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
             <TextBlock Classes="sectionTitle" VerticalAlignment="Center" Text="Computadores da conta" />
-            <!-- As conversas do Claude de todas as máquinas, como a aba Remoto do celular (ADR-091). -->
+            <!-- Os terminais e as conversas do Claude de todas as máquinas, como a aba Remoto do celular (ADR-091, ADR-101). -->
             <Button Grid.Column="1" x:Name="OpenConversationsButton" Content="Conversas do Claude"
-                    ToolTip.Tip="As conversas do Claude de todas as máquinas: acompanhe e continue qualquer uma daqui."
+                    ToolTip.Tip="Os terminais e as conversas do Claude de todas as máquinas: acompanhe, assuma e continue qualquer um daqui."
                     IsEnabled="{Binding IsReady}"
                     Command="{Binding OpenConversationsCommand}" />
           </Grid>

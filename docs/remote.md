@@ -230,15 +230,24 @@ vendo e digitando.
    remoto**. A segunda começa desligada, vale só nesta máquina, não
    sincroniza e pergunta antes: quem controla o terminal tem, na prática, um
    shell aqui (o modo `!` do Claude roda qualquer comando).
-2. No card do agente, em **Onde abrir**, escolha um dos terminais do agente
-   ("em janela" ou "dentro do app") e abra o Claude. Ele roda no
-   `MyTaskApp.Agent`: fechar a janela não encerra o Claude.
+2. Abra o Claude pelo card da tarefa. **Onde abrir** começa no terminal do
+   agente, em janela (ADR-101), e ligar o terminal remoto troca para ele quem
+   estava no terminal do sistema. Ele roda no `MyTaskApp.Agent`: fechar a
+   janela não encerra o Claude. Se o card estiver no terminal do sistema, ele
+   avisa "Este terminal não aparece nos outros aparelhos" e oferece **Usar o
+   terminal do agente**.
 
-**Na máquina de onde você controla**, em *Controlar* a outra:
+**Na máquina de onde você controla:**
 
-- **Terminais do Claude** lista as sessões de lá, com o estado ("Trabalhando",
-  "Esperando você", "controlado de longe"). O cartão só aparece se a outra
-  máquina aceita o terminal remoto.
+- *Máquinas → Conversas do Claude* abre com os **Terminais do Claude** de
+  todas as outras máquinas, com a máquina, o estado e **Seguir**. A sessão
+  aberta pelo card numa máquina aparece ali.
+- Em *Controlar* uma máquina, **Terminais do Claude** lista só as sessões de
+  lá, com o estado ("Trabalhando", "Esperando você", "controlado de longe").
+  O cartão só aparece se a outra máquina aceita o terminal remoto.
+- **No celular**, a aba Remoto lista os mesmos terminais, e tocar abre a tela
+  ao vivo, com a barra de teclas e o campo de prompt
+  ([no celular](mobile.md#controle-remoto-aba-remoto)).
 - **Seguir** abre a tela da sessão. Ela começa pelo retrato do que está lá e
   segue ao vivo. Sem a vez, a tela só mostra.
 - **Assumir o controle** passa a vez de digitar para cá. Quem está na máquina
@@ -340,8 +349,7 @@ hub, o agente procura pedidos a cada 30 segundos.
 - **O servidor vê a saída** das operações, para entregá-la a quem não estava
   conectado. É o seu servidor; ainda não há cifra ponta a ponta.
 - **O terminal do Claude** vive com o agente de lá: parar o agente encerra o
-  Claude. Ele não vai ao celular na v1, passa em claro pelo seu servidor (sem
-  gravar), supõe uma instância só do servidor e não alcança uma sessão aberta
+  Claude. Ele passa em claro pelo seu servidor (sem gravar), supõe uma instância só do servidor e não alcança uma sessão aberta
   no terminal do sistema ([detalhes](architecture/remote-terminal.md#6-limitações)).
 - **iOS**: as telas são as mesmas do Android, mas o build e o destravamento
   (`LAContext`) só compilam no Mac do CI.

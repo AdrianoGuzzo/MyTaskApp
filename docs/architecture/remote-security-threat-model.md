@@ -92,6 +92,7 @@ flowchart LR
 | A-27 | F2 | Spoofing / Replay | O servidor (T2) injeta ou repete teclas numa conexão de terminal | cada lote é JWS `mytaskapp-terminal-input+jws` com a chave efêmera da conexão, que o servidor nunca vê; o agente confere conexão, máquina, sessão, sequência estritamente crescente e horário (2 min) | RS-09, RS-11 |
 | A-28 | F2 | Elevation | Desligar a chave ou deixar de confiar no controlador não corta a conexão aberta | a cada lote o agente confere de novo as duas chaves e o pareamento (cache de 1 s); recusado, encerra a conexão e a sessão continua | RS-06, RS-10 |
 | A-29 | F1/F2 | Information disclosure / DoS | A saída do terminal (segredos na tela) passa pelo servidor; um seguidor lento enche a memória | o relay não grava nada e o log tem só o tipo; fila de 1 MiB por conexão, com lacuna e retrato; quadro de 32 KiB, mensagem de 64 KiB, 200 chamadas/s por conexão; o estado vai sem a pasta e com os textos mascarados | RS-28, RS-30 |
+| A-30 | T4/F2 | Elevation | O celular segue e controla o terminal do Claude (ADR-101): um celular destravado na mão de outra pessoa assume a vez | o `terminal.attach` só sai depois de destravar (biometria/PIN, janela de 30 s); a chave efêmera da conexão só existe na memória e vai embora com o segundo plano, e voltar liga de novo com outra chave; revogar o celular corta a conexão aberta (A-28) | RS-10, RS-33, RS-34 |
 
 ## 5. Requisitos
 

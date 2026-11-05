@@ -39,6 +39,9 @@ public interface INavigator
     /// <summary>Uma conversa do Claude de uma máquina, com a linha do tempo de todos os prompts (ADR-091).</summary>
     Task OpenSessionAsync(Guid sessionId, Guid deviceId);
 
+    /// <summary>O terminal do Claude de uma máquina, ao vivo, com a vez de digitar pedida por botão (ADR-101).</summary>
+    Task OpenTerminalAsync(Guid deviceId, Guid sessionId);
+
     Task BackAsync();
 }
 
