@@ -44,7 +44,8 @@ public class HoursReportViewModelTests
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
-    private HoursReportViewModel ViewModel() => new(_runner, NullLogger<HoursReportViewModel>.Instance);
+    private HoursReportViewModel ViewModel() =>
+        new(_runner, new FakeTimeEntryEditor(), new FakeConfirmationDialog(), _clock, NullLogger<HoursReportViewModel>.Instance);
 
     private void Add(DateOnly day, int fromHour, int toHour, Guid? task = null)
     {

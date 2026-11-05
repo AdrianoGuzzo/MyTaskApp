@@ -25,6 +25,7 @@ internal sealed class FakeTimeEntryReportQuery : ITimeEntryReportQuery
             .Where(row => criteria.Until is not { } until || row.StartedAt < until)
             .Where(row => criteria.Since is not { } since || row.EndedAt is null || row.EndedAt > since)
             .Where(row => criteria.TagId is null)
+            .Where(row => criteria.TaskId is not { } task || row.TaskId == task)
             .OrderByDescending(row => row.StartedAt)
             .ToList();
     }

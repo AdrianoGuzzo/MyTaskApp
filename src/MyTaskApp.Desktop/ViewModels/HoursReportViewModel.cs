@@ -3,8 +3,10 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
+using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Tags;
 using MyTaskApp.Application.TimeTracking;
+using MyTaskApp.Domain;
 using MyTaskApp.Domain.TimeTracking;
 
 namespace MyTaskApp.Desktop.ViewModels;
@@ -30,7 +32,40 @@ public sealed record HoursReportRow(
     bool IsMuted);
 
 /// <summary>Uma tarefa no painel "Horas por tarefa".</summary>
-public sealed record TaskHoursRow(string Title, string Duration, string Share, double Ratio);
+/// <param name="TaskId">A tarefa cujos períodos o clique abre (ADR-102).</param>
+public sealed record TaskHoursRow(Guid TaskId, string Title, string Duration, string Share, double Ratio);
+
+/// <summary>
+/// Um período da tarefa aberta no painel (ADR-102): "ter, 14/10 · 14:00 → 15:30",
+/// com o que dele entra no bloco escolhido.
+/// </summary>
+/// <param name="Duration">
+/// O que conta no bloco; o período que passa da borda (a meia-noite, o fim do
+/// mês) diz também o tamanho inteiro: "1h de 3h".
+/// </param>
+public sealed record ReportEntryRow(
+    TimeEntryReportItem Item,
+    string DayLabel,
+    string RangeLabel,
+    string Duration,
+    string SourceLabel)
+{
+    /// <summary>"1h 30min · Manual".</summary>
+    public string Meta => $"{Duration} · {SourceLabel}";
+
+    public string? Note => Item.Note;
+
+    public bool HasNote => !string.IsNullOrWhiteSpace(Item.Note);
+
+    public bool IsRunning => Item.IsRunning;
+
+    /// <summary>O que corre se para antes de corrigir, como na aba Tempo; excluir vale para os dois.</summary>
+    public bool CanEdit => !Item.IsRunning;
+
+    public string EditGlyph => "";
+
+    public string DeleteGlyph => "";
+}
 
 /// <summary>Um passo da trilha "Anos › 2026 › outubro"; o último é onde se está.</summary>
 public sealed record HoursCrumb(string Label, HoursScale Scale, bool IsCurrent, bool IsFirst);
@@ -45,19 +80,43 @@ public sealed record TagFilterOption(Guid? Id, string Name)
 
 /// <summary>
 /// A janela "Relatório de horas" (ADR-097): as horas lançadas por dia, mês ou
-/// ano, em gráfico ou tabela, com as tarefas do bloco escolhido. Só lê: tudo
-/// vem do <see cref="GetHoursHistoryHandler"/>, que já entrega os blocos
+/// ano, em gráfico ou tabela, com as tarefas do bloco escolhido. Os números
+/// vêm do <see cref="GetHoursHistoryHandler"/>, que já entrega os blocos
 /// escritos — "hoje", "anterior" e "próximo" inclusive.
 /// </summary>
-public sealed partial class HoursReportViewModel(IUseCaseRunner runner, ILogger<HoursReportViewModel> logger) : ObservableObject
+/// <remarks>
+/// Reajustar as horas (ADR-102): a tarefa clicada no painel mostra os períodos
+/// dela no bloco, e cada um se corrige, exclui ou ganha um irmão pelos mesmos
+/// casos de uso e o mesmo diálogo da aba Tempo. As regras (sem sobreposição,
+/// fim depois do início, nada no futuro) continuam da Application.
+/// </remarks>
+public sealed partial class HoursReportViewModel(
+    IUseCaseRunner runner,
+    ITimeEntryEditor editor,
+    IConfirmationDialog confirmation,
+    IUserClock clock,
+    ILogger<HoursReportViewModel> logger) : ObservableObject
 {
     private static readonly CultureInfo Brazil = CultureInfo.GetCultureInfo("pt-BR");
+
+    /// <summary>Num dia passado, o período novo começa aqui: o "agora" de lá não existe.</summary>
+    private static readonly TimeOnly PastDayStart = new(9, 0);
 
     /// <summary>Descarta a resposta de uma carga que outra mais nova já superou.</summary>
     private int _load;
 
     /// <summary>O mesmo, para as horas por tarefa do bloco escolhido.</summary>
     private int _breakdown;
+
+    /// <summary>O mesmo, para os períodos da tarefa aberta.</summary>
+    private int _entriesLoad;
+
+    /// <summary>
+    /// A ocorrência em que um período novo entra: a do período mais recente que
+    /// se viu da tarefa. Fica mesmo depois de o bloco esvaziar — é ali que o
+    /// usuário volta a lançar.
+    /// </summary>
+    private Guid? _occurrenceId;
 
     /// <summary>O bloco a escolher quando a próxima carga chegar (o dia clicado no mapa).</summary>
     private string? _pendingKey;
@@ -144,6 +203,25 @@ public sealed partial class HoursReportViewModel(IUseCaseRunner runner, ILogger<
 
     [ObservableProperty]
     private string _taskPanelTitle = "Horas por tarefa";
+
+    /// <summary>A tarefa cujos períodos o painel mostra (ADR-102); <c>null</c> = a lista de tarefas.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsTaskOpen), nameof(IsTaskListShown))]
+    [NotifyCanExecuteChangedFor(nameof(AddEntryCommand))]
+    private TaskHoursRow? _openTask;
+
+    /// <summary>Os períodos da tarefa aberta que tocam o bloco, do mais recente ao mais antigo.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasNoEntries))]
+    private IReadOnlyList<ReportEntryRow> _entries = [];
+
+    /// <summary>Quanto a tarefa aberta tem no bloco; "—" quando não tem nada.</summary>
+    [ObservableProperty]
+    private string _openTaskTotal = string.Empty;
+
+    /// <summary>"Mostrando os 500 mais recentes de 812.", quando não cabem todos.</summary>
+    [ObservableProperty]
+    private string? _entriesNote;
 
     [ObservableProperty]
     private bool _isLoading;
@@ -246,6 +324,15 @@ public sealed partial class HoursReportViewModel(IUseCaseRunner runner, ILogger<
     public string? RunningNote => History is { IncludesRunning: true } ? "Inclui o cronômetro em andamento, contado até agora." : null;
 
     public bool HasNoTaskRows => TaskRows.Count == 0;
+
+    public bool IsTaskOpen => OpenTask is not null;
+
+    public bool IsTaskListShown => OpenTask is null;
+
+    public bool HasNoEntries => Entries.Count == 0;
+
+    /// <summary>Um período mudou por aqui: a lista precisa recarregar o total e o relógio da linha.</summary>
+    public event Action? Changed;
 
     /// <summary>A linha de total da tabela: o número, como nas linhas.</summary>
     public string TotalEntriesText => (History?.EntryCount ?? 0).ToString(CultureInfo.InvariantCulture);
@@ -420,6 +507,184 @@ public sealed partial class HoursReportViewModel(IUseCaseRunner runner, ILogger<
         }
     }
 
+    /// <summary>
+    /// Clique numa tarefa do painel: os períodos dela no bloco escolhido (ou
+    /// no período inteiro), para reajustar. Ela continua aberta ao trocar de
+    /// bloco, de período ou de escala.
+    /// </summary>
+    [RelayCommand]
+    public Task OpenTaskAsync(TaskHoursRow task)
+    {
+        if (task.TaskId == Guid.Empty)
+        {
+            return Task.CompletedTask;
+        }
+
+        if (OpenTask?.TaskId != task.TaskId)
+        {
+            _occurrenceId = null;
+            Entries = [];
+            EntriesNote = null;
+        }
+
+        OpenTask = task;
+        OpenTaskTotal = task.Duration;
+
+        return LoadEntriesAsync();
+    }
+
+    /// <summary>"‹ Tarefas" (ou Esc): de volta à lista de tarefas do bloco.</summary>
+    [RelayCommand]
+    public void CloseTask()
+    {
+        ++_entriesLoad;
+        _occurrenceId = null;
+        OpenTask = null;
+        Entries = [];
+        EntriesNote = null;
+    }
+
+    /// <summary>Corrige um período encerrado, no mesmo diálogo da aba Tempo.</summary>
+    [RelayCommand]
+    public async Task EditEntryAsync(ReportEntryRow row)
+    {
+        if (!row.CanEdit)
+        {
+            return;
+        }
+
+        var item = row.Item;
+
+        var saved = await editor.EditAsync(new TimeEntryEditorRequest(
+            "Editar período",
+            "Salvar",
+            new TimeEntryDraft(item.StartDate, item.StartTime, item.EndDate!.Value, item.EndTime!.Value, item.Note),
+            clock.Today,
+            (draft, token) => SaveAsync(
+                () => runner.RunAsync<UpdateTimeEntryHandler>(
+                    (handler, inner) => handler.HandleAsync(
+                        new UpdateTimeEntry(item.Id, draft.StartDate, draft.StartTime, draft.EndDate, draft.EndTime, draft.Note),
+                        inner),
+                    token))));
+
+        if (saved)
+        {
+            await AfterChangeAsync();
+        }
+    }
+
+    /// <summary>Exclui um período, depois de perguntar: é a única mudança sem volta.</summary>
+    [RelayCommand]
+    public async Task DeleteEntryAsync(ReportEntryRow row)
+    {
+        if (!await confirmation.AskAsync(DeletePrompt(row)))
+        {
+            return;
+        }
+
+        ErrorMessage = null;
+
+        try
+        {
+            await runner.RunAsync<DeleteTimeEntryHandler>(
+                (handler, token) => handler.HandleAsync(new DeleteTimeEntry(row.Item.Id), token),
+                CancellationToken.None);
+        }
+        catch (DomainException exception)
+        {
+            ErrorMessage = exception.Message;
+            return;
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "HoursReportEntryDeleteFailed {EntryId}", row.Item.Id);
+            ErrorMessage = "Não foi possível excluir este período.";
+            return;
+        }
+
+        await AfterChangeAsync();
+    }
+
+    /// <summary>
+    /// "+ Adicionar tempo" na tarefa aberta. Com um dia passado escolhido, o
+    /// período já nasce nele; senão, é a última hora, como na aba Tempo.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanAddEntry))]
+    public async Task AddEntryAsync()
+    {
+        if (_occurrenceId is not { } occurrenceId)
+        {
+            return;
+        }
+
+        var saved = await editor.EditAsync(NewEntryRequest(
+            (draft, token) => SaveAsync(
+                () => runner.RunAsync<AddTimeEntryHandler, Guid>(
+                    (handler, inner) => handler.HandleAsync(
+                        new AddTimeEntry(occurrenceId, draft.StartDate, draft.StartTime, draft.EndDate, draft.EndTime, draft.Note),
+                        inner),
+                    token))));
+
+        if (saved)
+        {
+            await AfterChangeAsync();
+        }
+    }
+
+    /// <summary>"Excluir registro de tempo?" com a tarefa, o período e a duração; o foco fica em Cancelar.</summary>
+    public static ConfirmationRequest DeletePrompt(ReportEntryRow row) =>
+        new(
+            "Excluir registro de tempo?",
+            $"{row.Item.TaskTitle}{Environment.NewLine}{row.DayLabel} · {row.RangeLabel}{Environment.NewLine}{WorkTimeFormatter.Duration(row.Item.Duration)}",
+            "Excluir",
+            IsIrreversible: true);
+
+    private bool CanAddEntry() => OpenTask is not null && _occurrenceId is not null;
+
+    private TimeEntryEditorRequest NewEntryRequest(Func<TimeEntryDraft, CancellationToken, Task<string?>> save)
+    {
+        if (History is { Scale: HoursScale.Day } && SelectedBucket is { } day && day.From < clock.Today)
+        {
+            return new TimeEntryEditorRequest(
+                "Adicionar tempo",
+                "Adicionar",
+                new TimeEntryDraft(day.From, PastDayStart, day.From, PastDayStart.AddHours(1), null),
+                clock.Today,
+                save);
+        }
+
+        return TimeEntryEditorRequest.NewEntry(clock, save);
+    }
+
+    /// <summary>
+    /// Depois de gravar: o relatório recarrega (os números, as tarefas e os
+    /// períodos), e a lista fica sabendo.
+    /// </summary>
+    private async Task AfterChangeAsync()
+    {
+        await LoadAsync(CancellationToken.None);
+        Changed?.Invoke();
+    }
+
+    /// <summary>A gravação do diálogo: a mensagem do domínio volta para ele, que fica aberto.</summary>
+    private async Task<string?> SaveAsync(Func<Task> operation)
+    {
+        try
+        {
+            await operation();
+            return null;
+        }
+        catch (DomainException exception)
+        {
+            return exception.Message;
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "HoursReportEntrySaveFailed {TaskId}", OpenTask?.TaskId);
+            return "Não foi possível salvar este período.";
+        }
+    }
+
     private bool CanGoPrevious() => History?.PreviousAnchor is not null;
 
     private bool CanGoNext() => History?.NextAnchor is not null;
@@ -551,6 +816,7 @@ public sealed partial class HoursReportViewModel(IUseCaseRunner runner, ILogger<
         {
             TaskPanelTitle = $"Horas por tarefa · {history.Title}";
             TaskRows = TaskRowsOf(history.Tasks, history.Total);
+            await FollowOpenTaskAsync();
             return;
         }
 
@@ -559,6 +825,7 @@ public sealed partial class HoursReportViewModel(IUseCaseRunner runner, ILogger<
         if (bucket.Total <= TimeSpan.Zero)
         {
             TaskRows = [];
+            await FollowOpenTaskAsync();
             return;
         }
 
@@ -573,6 +840,7 @@ public sealed partial class HoursReportViewModel(IUseCaseRunner runner, ILogger<
             if (call == _breakdown)
             {
                 TaskRows = TaskRowsOf(summary.Groups, summary.Total);
+                await FollowOpenTaskAsync();
             }
         }
         catch (Exception exception)
@@ -586,12 +854,101 @@ public sealed partial class HoursReportViewModel(IUseCaseRunner runner, ILogger<
         }
     }
 
+    /// <summary>
+    /// A tarefa aberta acompanha o bloco: o total e o título vêm das tarefas que
+    /// acabaram de chegar, e os períodos são os do bloco novo.
+    /// </summary>
+    private Task FollowOpenTaskAsync()
+    {
+        if (OpenTask is not { } open)
+        {
+            return Task.CompletedTask;
+        }
+
+        var row = TaskRows.FirstOrDefault(task => task.TaskId == open.TaskId);
+        OpenTaskTotal = row?.Duration ?? "—";
+
+        if (row is not null)
+        {
+            OpenTask = row;
+        }
+
+        return LoadEntriesAsync();
+    }
+
+    /// <summary>Os períodos da tarefa aberta que tocam o bloco escolhido, ou o período inteiro.</summary>
+    private async Task LoadEntriesAsync()
+    {
+        var call = ++_entriesLoad;
+
+        if (OpenTask is not { } task || History is not { } history)
+        {
+            Entries = [];
+            EntriesNote = null;
+            return;
+        }
+
+        var (from, to) = SelectedBucket is { } bucket ? (bucket.From, bucket.To) : (history.From, history.To);
+
+        try
+        {
+            var report = await runner.RunAsync<TimeReportHandlers, TimeEntryReport>(
+                (handler, token) => handler.HandleAsync(
+                    new GetTimeEntries(from, to, TaskId: task.TaskId, TagId: SelectedTag.Id, Limit: GetTimeEntries.MaxLimit),
+                    token),
+                CancellationToken.None);
+
+            if (call != _entriesLoad)
+            {
+                return;
+            }
+
+            // O período que só encosta na borda não tem nada no bloco.
+            var items = report.Entries.Where(item => item.DurationInRange > TimeSpan.Zero || item.IsRunning).ToList();
+            var withYear = from.Year != to.Year;
+
+            _occurrenceId = items.FirstOrDefault()?.OccurrenceId ?? _occurrenceId;
+            Entries = items.Select(item => Describe(item, withYear)).ToList();
+            EntriesNote = report.Count > report.Entries.Count
+                ? string.Create(CultureInfo.InvariantCulture, $"Mostrando os {report.Entries.Count} mais recentes de {report.Count}.")
+                : null;
+            AddEntryCommand.NotifyCanExecuteChanged();
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "HoursReportEntriesFailed {TaskId}", task.TaskId);
+
+            if (call == _entriesLoad)
+            {
+                ErrorMessage = "Não foi possível carregar os períodos desta tarefa.";
+            }
+        }
+    }
+
+    /// <summary>"ter, 14/10" e "14:00 → 15:30"; com o ano quando o intervalo atravessa anos.</summary>
+    private static ReportEntryRow Describe(TimeEntryReportItem item, bool withYear)
+    {
+        var start = item.StartDate.ToDateTime(item.StartTime);
+        DateTime? end = item.EndDate is { } endDate && item.EndTime is { } endTime ? endDate.ToDateTime(endTime) : null;
+        var inRange = WorkTimeFormatter.Duration(item.DurationInRange);
+
+        return new ReportEntryRow(
+            item,
+            withYear ? ReportCalendar.LongDay(item.StartDate) : ReportCalendar.ShortDay(item.StartDate),
+            WorkTimeFormatter.Range(start, end),
+            item.IsRunning ? "em andamento"
+                : item.DurationInRange < item.Duration ? $"{inRange} de {WorkTimeFormatter.Duration(item.Duration)}"
+                : inRange,
+            WorkTimeFormatter.Source(item.Source));
+    }
+
     private static IReadOnlyList<TaskHoursRow> TaskRowsOf(IReadOnlyList<TimeSummaryGroup> groups, TimeSpan total)
     {
         var max = groups.Count == 0 ? TimeSpan.Zero : groups.Max(group => group.Total);
 
         return groups
             .Select(group => new TaskHoursRow(
+                Guid.TryParse(group.Key, out var taskId) ? taskId : Guid.Empty,
                 group.Label,
                 WorkTimeFormatter.Duration(group.Total),
                 total > TimeSpan.Zero ? Percent(group.Total / total) : string.Empty,
