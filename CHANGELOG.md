@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.33.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.32.0...v1.33.0) (2026-11-06)
+
+
+### Added
+
+* **relatorio:** reajustar as horas pelo relatório de horas ([#188](https://github.com/AdrianoGuzzo/MyTaskApp/issues/188)) ([a6423b3](https://github.com/AdrianoGuzzo/MyTaskApp/commit/a6423b33dc3c0f9a7c45e6bb4ec18cd98e538a64))
+* **remoto:** o estado do Claude de outras máquinas aparece na tarefa ([#190](https://github.com/AdrianoGuzzo/MyTaskApp/issues/190)) ([c419adb](https://github.com/AdrianoGuzzo/MyTaskApp/commit/c419adbaaea7d7229b14bb3dc30e4bc319b19986))
+
 ## [1.32.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.31.0...v1.32.0) (2026-11-05)
 
 
