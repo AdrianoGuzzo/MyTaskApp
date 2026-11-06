@@ -8,6 +8,7 @@ using Avalonia.Media;
 using Avalonia.Media.Transformation;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using MyTaskApp.Application.Remote;
 using MyTaskApp.Desktop.Interactions;
 using MyTaskApp.Desktop.ViewModels;
 using MyTaskApp.Domain.Deadlines;
@@ -189,6 +190,43 @@ public sealed partial class TodayView : UserControl
         {
             viewModel.FocusAgentCommand.Execute(row);
         }
+    }
+
+    /// <summary>
+    /// O selo do Claude de outra máquina (ADR-103): para de pulsar e segue a
+    /// sessão; com várias, o usuário escolhe qual.
+    /// </summary>
+    private void OnRemoteAgentBadgeTapped(object? sender, TappedEventArgs e)
+    {
+        if (sender is not Control { DataContext: TaskRowViewModel row }
+            || DataContext is not TodayViewModel viewModel
+            || row.RemoteAgents.Count == 0)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        viewModel.SeeAgentAlerts(row);
+
+        if (row.RemoteAgents.Count > 1)
+        {
+            var menu = new MenuFlyout { Placement = PlacementMode.BottomEdgeAlignedLeft };
+
+            foreach (var state in row.RemoteAgents)
+            {
+                menu.Items.Add(new MenuItem
+                {
+                    Header = $"{(state.Kind == RemoteClaudeKind.Conversation ? "Abrir conversa" : "Seguir")}: {state.MachineName} ({RemoteClaudeTexts.Short(state)})",
+                    Command = viewModel.FollowRemoteCommand,
+                    CommandParameter = state,
+                });
+            }
+
+            menu.ShowAt((Control)sender);
+            return;
+        }
+
+        viewModel.FollowRemoteCommand.Execute(row.RemoteAgents[0]);
     }
 
     /// <summary>

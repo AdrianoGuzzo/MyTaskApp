@@ -2753,10 +2753,10 @@
                     </ComboBox.ItemTemplate>
                   </ComboBox>
                   <TextBlock Classes="hint" TextWrapping="Wrap" Text="{Binding HostingHint}" />
-                  <!-- ADR-101: com o terminal remoto aceito, o terminal do sistema não aparece de longe. -->
+                  <!-- ADR-101/102: com o controle aceito, o terminal do sistema não aparece de longe, nem o estado dele. -->
                   <StackPanel Spacing="4" IsVisible="{Binding ShowsNotRemoteWarning}">
                     <TextBlock Classes="hint" TextWrapping="Wrap"
-                               Text="Este terminal não aparece nos outros aparelhos. Para seguir e controlar de longe, abra no terminal do agente." />
+                               Text="Este terminal não aparece nos outros aparelhos, nem o estado do Claude na tarefa. Para ver e seguir de longe, abra no terminal do agente." />
                     <Button x:Name="AgentUseAgentTerminalButton"
                             Content="Usar o terminal do agente"
                             Command="{Binding UseAgentTerminalCommand}" />

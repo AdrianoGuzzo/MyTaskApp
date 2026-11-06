@@ -30,6 +30,7 @@ public sealed partial class RemoteTerminalsViewModel : ObservableObject
     /// <summary>A lista de todas as máquinas (ADR-101): os apelidos, e esta máquina, que fica de fora.</summary>
     private IReadOnlyDictionary<Guid, string>? _machines;
     private Guid? _thisDeviceId;
+    private IReadOnlySet<Guid>? _offering;
     private int _ticks;
 
     public RemoteTerminalsViewModel(IUseCaseRunner runner, ILogger logger, RemoteTerminalWindows? windows)
@@ -80,10 +81,15 @@ public sealed partial class RemoteTerminalsViewModel : ObservableObject
     /// Os terminais de todas as máquinas da conta, menos esta: a daqui se vê
     /// pelo card da tarefa (ADR-101).
     /// </summary>
-    public async Task LoadAllAsync(IReadOnlyDictionary<Guid, string> machines, Guid? thisDeviceId, CancellationToken cancellationToken)
+    /// <param name="offering">
+    /// As máquinas que aceitam o terminal remoto: as outras mostram só o estado
+    /// (ADR-103), sem "Seguir". <c>null</c> = não se sabe, e o agente de lá decide.
+    /// </param>
+    public async Task LoadAllAsync(IReadOnlyDictionary<Guid, string> machines, Guid? thisDeviceId, CancellationToken cancellationToken, IReadOnlySet<Guid>? offering = null)
     {
         _machines = machines;
         _thisDeviceId = thisDeviceId;
+        _offering = offering;
         _deviceId = null;
         IsOffered = _windows is not null;
         OnPropertyChanged(nameof(IsAllMachines));
@@ -117,6 +123,12 @@ public sealed partial class RemoteTerminalsViewModel : ObservableObject
     {
         if ((_deviceId ?? (IsAllMachines ? item.DeviceId : null)) is not { } deviceId || _windows is null)
         {
+            return;
+        }
+
+        if (!item.CanFollow)
+        {
+            Message = $"{item.MachineName ?? "A máquina"} mostra o estado, mas não aceita o terminal remoto.";
             return;
         }
 
@@ -156,7 +168,11 @@ public sealed partial class RemoteTerminalsViewModel : ObservableObject
                 }
                 else if (item.DeviceId != _thisDeviceId)
                 {
-                    Items.Add(item with { MachineName = machines.GetValueOrDefault(item.DeviceId) ?? "Máquina" });
+                    Items.Add(item with
+                    {
+                        MachineName = machines.GetValueOrDefault(item.DeviceId) ?? "Máquina",
+                        CanFollow = _offering?.Contains(item.DeviceId) ?? true,
+                    });
                 }
             }
 

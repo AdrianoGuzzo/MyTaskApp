@@ -89,7 +89,10 @@ O caminho sem terminal (headless) e o terminal direto continuam como eram.
    acompanhamento são os salvos na executora, e o texto inicial não roda.
 3. **O agente relata** as sessões (`PUT /api/v1/remote/agent/terminals`) a
    cada volta e logo depois de uma mudança. O servidor guarda em memória e
-   avisa a conta (`TerminalsChanged`).
+   avisa a conta (`TerminalsChanged`). Com "Aceitar controle" e sem "Aceitar o
+   terminal remoto", o relato vai só com o estado: sem `ActivityMessage` e com
+   `RemotelyControlled` falso. As outras máquinas mostram o estado na tarefa,
+   mas não seguem (ADR-103).
 4. **O controlador lista** (`GET /api/v1/remote/terminals`) e, em "Seguir",
    abre uma conexão do hub só desta vista e pede `terminal.attach` com uma
    chave P-256 nova. O id da operação é o id da conexão. Ele assina

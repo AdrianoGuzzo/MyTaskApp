@@ -85,7 +85,9 @@
                     <TextBlock Classes="meta caution" Text="{Binding BypassWarning}"
                                IsVisible="{Binding BypassWarning, Converter={x:Static ObjectConverters.IsNotNull}}" />
                   </StackPanel>
+                  <!-- ADR-103: a máquina sem o terminal remoto aceito aparece só com o estado. -->
                   <Button Grid.Column="1" Content="Seguir" VerticalAlignment="Center"
+                          IsVisible="{Binding CanFollow}"
                           Command="{Binding $parent[ItemsControl].((vm:RemoteTerminalsViewModel)DataContext).FollowCommand}"
                           CommandParameter="{Binding}" />
                 </Grid>

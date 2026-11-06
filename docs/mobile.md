@@ -672,6 +672,14 @@ quem executa é o computador, com as regras dele. O guia é o
   bloqueada, o aviso diz só "Novidade no controle remoto"; o toque abre a aba
   Remoto. A permissão de notificar (Android 13+) é pedida uma vez, ao abrir a
   aba com o remoto pronto.
+- **O Claude de outra máquina na tarefa (ADR-103):** com o remoto ligado, a
+  linha da tarefa mostra onde o Claude roda e o que ele faz ("⚠ Claude em
+  Notebook · aguardando você"), e troca sozinha, sem recarregar a lista. O
+  detalhe da tarefa ganha a seção **Claude em outras máquinas**, com **Seguir**
+  quando a máquina aceita o terminal remoto, ou **Abrir conversa**. Com o app
+  aberto, o pedido novo vira notificação na hora, com a mesma etiqueta da
+  verificação em segundo plano, que não avisa de novo. Com o app fechado, vale
+  a verificação acima.
 - **Sem push na hora:** uma pergunta sem resposta em 10 minutos é negada, e a
   verificação pode vir depois disso. No iOS, as aprovações só chegam com o app
   aberto.

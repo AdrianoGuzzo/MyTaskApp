@@ -14,12 +14,14 @@ using MyTaskApp.Application.External.Jira;
 using MyTaskApp.Application.Lifecycle;
 using MyTaskApp.Application.Planning;
 using MyTaskApp.Application.Reminders;
+using MyTaskApp.Application.Remote;
 using MyTaskApp.Application.StickyNotes;
 using MyTaskApp.Application.Tags;
 using MyTaskApp.Application.Tasks;
-using MyTaskApp.Application.Terminals;
+using MyTaskApp.Application.Terminals;
 using MyTaskApp.Application.TimeTracking;
 using MyTaskApp.Desktop.Composition;
+using MyTaskApp.Desktop.Terminals;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.Deadlines;
 using MyTaskApp.Domain.Devices;
@@ -67,7 +69,9 @@ public sealed partial class TodayViewModel(
     IUserClock? userClock = null,
     ITimeEntryEditor? timeEntryEditor = null,
     // O selo da conversa sem terminal (ADR-092) abre a conversa, não um terminal.
-    ManagedConversationOpener? conversations = null) : ObservableObject, IDisposable
+    ManagedConversationOpener? conversations = null,
+    // O selo do Claude de outra máquina (ADR-103) segue o terminal de lá.
+    RemoteTerminalWindows? remoteTerminals = null) : ObservableObject, IDisposable
 {
     /// <summary>
     /// O rótulo "aguardando há N minutos" envelhece sozinho, então o quadro
@@ -116,6 +120,12 @@ public sealed partial class TodayViewModel(
     /// o agente continua esperando.
     /// </summary>
     private readonly HashSet<AgentAlertKey> _seenAgentAlerts = [];
+
+    /// <summary>
+    /// O Claude das outras máquinas, pela última leitura do quadro remoto
+    /// (ADR-103). As linhas nascem com ele: o refresh de 60 s não apaga o selo.
+    /// </summary>
+    private ILookup<Guid, RemoteClaudeState> _remoteClaude = Array.Empty<RemoteClaudeState>().ToLookup(state => state.TaskId);
 
     /// <summary>Descarta a resposta de uma conferência que outra mais nova já superou.</summary>
     private int _worktreeProbe;
@@ -920,6 +930,60 @@ public sealed partial class TodayViewModel(
     /// usuário já olhou para a pendência.
     /// </summary>
     public void SeeAgentAlerts(TaskRowViewModel row) => _seenAgentAlerts.UnionWith(row.SeeAgentAlerts());
+
+    /// <summary>
+    /// O Claude das outras máquinas mudou (ADR-103): as linhas na tela trocam o
+    /// selo no lugar, sem consulta nova; as próximas já nascem com ele.
+    /// </summary>
+    public void ApplyRemoteClaude(IReadOnlyList<RemoteClaudeState> states)
+    {
+        _remoteClaude = states.ToLookup(state => state.TaskId);
+
+        foreach (var row in Sections.SelectMany(section => section.Items))
+        {
+            row.ApplyRemoteAgents([.. _remoteClaude[row.TaskId]]);
+            row.ApplySeenAgentAlerts(_seenAgentAlerts);
+        }
+    }
+
+    /// <summary>
+    /// O selo do Claude de outra máquina: segue o terminal de lá, ou abre a
+    /// conversa. Sem o terminal remoto aceito lá, diz por que não segue.
+    /// </summary>
+    [RelayCommand]
+    public async Task FollowRemoteAsync(RemoteClaudeState state)
+    {
+        ErrorMessage = null;
+        StatusMessage = null;
+
+        if (state.Kind == RemoteClaudeKind.Conversation)
+        {
+            if (conversations is null)
+            {
+                return;
+            }
+
+            if (await conversations.OpenRemoteAsync(state.DeviceId, state.DevelopmentId, state.SessionId, CancellationToken.None) is { } problem)
+            {
+                ErrorMessage = problem;
+            }
+
+            return;
+        }
+
+        if (!state.CanFollow || state.DevelopmentId is not { } developmentId)
+        {
+            StatusMessage = RemoteClaudeTexts.NotFollowable(state);
+            return;
+        }
+
+        var title = Sections.SelectMany(section => section.Items).FirstOrDefault(row => row.TaskId == state.TaskId)?.Title ?? "Tarefa";
+
+        if (remoteTerminals?.Show(new RemoteTerminalTarget(state.DeviceId, state.SessionId, state.TaskId, developmentId), $"{title} — terminal em {state.MachineName}") != true)
+        {
+            ErrorMessage = "Não foi possível abrir o terminal de longe agora.";
+        }
+    }
 
     /// <summary>Um item do menu do selo: o terminal do agente daquele repositório.</summary>
     [RelayCommand]
@@ -1871,7 +1935,8 @@ public sealed partial class TodayViewModel(
             new[] { board.Arrived, board.Overdue, board.Now, board.Today, board.Deadlines, board.Unscheduled, board.Completed }
                 .SelectMany(tasks => tasks)
                 .SelectMany(task => (task.ActiveAgents ?? []).Select(agent => new AgentAlertKey(
-                    task.TaskId, agent.DevelopmentId, agent.Activity, agent.ActivityChangedAt))));
+                    task.TaskId, agent.DevelopmentId, agent.Activity, agent.ActivityChangedAt))
+                    .Concat(TaskRowViewModel.RemoteAgentAlerts(task.TaskId, _remoteClaude[task.TaskId]))));
 
         // Sem as concluídas, terminar o dia esvazia a lista — e painel em
         // branco parece defeito, não dever cumprido.
@@ -1959,6 +2024,7 @@ public sealed partial class TodayViewModel(
                 row.ShowPlacement(PlacementLabel(task.Placement), ArrivalLabel(task));
                 row.Worktree.Apply(_worktreeSync);
                 row.Worktree.ApplyPullRequests(_worktreePullRequests);
+                row.ApplyRemoteAgents([.. _remoteClaude[task.TaskId]]);
                 row.ApplySeenAgentAlerts(_seenAgentAlerts);
                 return row;
             }),

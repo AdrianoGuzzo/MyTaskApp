@@ -314,6 +314,10 @@ public static class DependencyInjection
         services.TryAddSingleton<RemoteTerminalConnector>();
         services.TryAddSingleton<IRemoteTerminalConnector>(provider => provider.GetRequiredService<RemoteTerminalConnector>());
         services.AddScoped<ListRemoteTerminalsHandler>();
+
+        // O estado do Claude das outras máquinas, na tarefa (ADR-103): o desktop e o celular ligam.
+        services.TryAddSingleton<RemoteClaudeBoard>();
+        services.TryAddSingleton<RemoteClaudeAnnouncer>();
         services.AddSingleton<RemoteDatabaseCopy>();
         services.AddScoped<RemoteDatabaseCopyPlanner>();
         services.AddScoped<RecordRemoteOperationHandler>();

@@ -50,9 +50,9 @@ public sealed partial class RemoteConversationsViewModel : ObservableObject
     {
         await _pace.StartAsync(cancellationToken);
 
-        var (machines, thisDeviceId) = await MachinesAsync(cancellationToken);
+        var (machines, thisDeviceId, offering) = await MachinesAsync(cancellationToken);
 
-        await Terminals.LoadAllAsync(machines, thisDeviceId, cancellationToken);
+        await Terminals.LoadAllAsync(machines, thisDeviceId, cancellationToken, offering);
         await Sessions.LoadAllAsync(machines, cancellationToken);
     }
 
@@ -81,7 +81,8 @@ public sealed partial class RemoteConversationsViewModel : ObservableObject
 
     public ValueTask CloseAsync() => _pace.DisposeAsync();
 
-    private async Task<(IReadOnlyDictionary<Guid, string> Machines, Guid? ThisDeviceId)> MachinesAsync(CancellationToken cancellationToken)
+    /// <returns>Os apelidos, esta máquina e as que aceitam o terminal remoto (<c>null</c> = não se sabe).</returns>
+    private async Task<(IReadOnlyDictionary<Guid, string> Machines, Guid? ThisDeviceId, IReadOnlySet<Guid>? Offering)> MachinesAsync(CancellationToken cancellationToken)
     {
         try
         {
@@ -92,13 +93,16 @@ public sealed partial class RemoteConversationsViewModel : ObservableObject
             Message = view.Problem;
             return (
                 view.Machines.ToDictionary(machine => machine.DeviceId, machine => machine.IsThis ? $"{machine.Nickname} (este)" : machine.Nickname),
-                view.Machines.FirstOrDefault(machine => machine.IsThis)?.DeviceId);
+                view.Machines.FirstOrDefault(machine => machine.IsThis)?.DeviceId,
+                view.Availability == RemoteAvailability.Ready
+                    ? view.Machines.Where(machine => machine.OffersTerminal).Select(machine => machine.DeviceId).ToHashSet()
+                    : null);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             _logger.LogInformation(exception, "RemoteConversationsMachinesUnavailable");
             Message = "Não foi possível ler as máquinas da conta agora.";
-            return (new Dictionary<Guid, string>(), null);
+            return (new Dictionary<Guid, string>(), null, null);
         }
     }
 }

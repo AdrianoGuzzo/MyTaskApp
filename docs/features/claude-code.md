@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Status** | Implementado no Windows e no Linux. No Linux, o terminal do sistema é o emulador achado (`LinuxTerminalLauncher`) e não há sons. No macOS não há terminal do agente (`UnsupportedTerminalLauncher`). |
-| **Decisões** | [ADR-030](../architecture/decisions/030-sessoes-claude-code-por-tarefa.md) sessões · [ADR-033](../architecture/decisions/033-parametros-do-agente-lembrados.md) parâmetros · [ADR-036](../architecture/decisions/036-abrir-claude-code-menu-da-linha.md) menu da linha · [ADR-037](../architecture/decisions/037-acompanhar-claude-code-pelos-hooks.md) hooks · [ADR-039](../architecture/decisions/039-arroba-ambientes-e-arquivos-no-agente.md) `@` no texto · [ADR-040](../architecture/decisions/040-modelo-e-esforco-do-agente.md) modelo e esforço · [ADR-042](../architecture/decisions/042-som-por-estado-do-claude-code.md) sons · [ADR-098](../architecture/decisions/098-terminal-do-agente-em-pseudoterminal.md) terminal do agente · [ADR-099](../architecture/decisions/099-terminal-remoto-do-claude.md) terminal remoto · [ADR-101](../architecture/decisions/101-terminal-do-claude-em-qualquer-aparelho.md) em qualquer aparelho |
+| **Decisões** | [ADR-030](../architecture/decisions/030-sessoes-claude-code-por-tarefa.md) sessões · [ADR-033](../architecture/decisions/033-parametros-do-agente-lembrados.md) parâmetros · [ADR-036](../architecture/decisions/036-abrir-claude-code-menu-da-linha.md) menu da linha · [ADR-037](../architecture/decisions/037-acompanhar-claude-code-pelos-hooks.md) hooks · [ADR-039](../architecture/decisions/039-arroba-ambientes-e-arquivos-no-agente.md) `@` no texto · [ADR-040](../architecture/decisions/040-modelo-e-esforco-do-agente.md) modelo e esforço · [ADR-042](../architecture/decisions/042-som-por-estado-do-claude-code.md) sons · [ADR-098](../architecture/decisions/098-terminal-do-agente-em-pseudoterminal.md) terminal do agente · [ADR-099](../architecture/decisions/099-terminal-remoto-do-claude.md) terminal remoto · [ADR-101](../architecture/decisions/101-terminal-do-claude-em-qualquer-aparelho.md) em qualquer aparelho · [ADR-103](../architecture/decisions/103-estado-do-claude-de-outras-maquinas-na-tarefa.md) estado de outras máquinas |
 | **Código** | `src/MyTaskApp.Application/Agents/`, `src/MyTaskApp.Domain/Agents/AgentSession.cs`, `src/MyTaskApp.Infrastructure/Agents/`, `src/MyTaskApp.Infrastructure/Terminals/`, `src/MyTaskApp.Application/Terminals/`, `src/MyTaskApp.TerminalAttach/`, `src/MyTaskApp.Desktop/ViewModels/AgentSessionViewModel.cs`, `src/MyTaskApp.Desktop/ViewModels/TerminalSessionViewModel.cs`, `src/MyTaskApp.Desktop/ViewModels/AgentAlertSoundsViewModel.cs` |
 | **Testes** | `tests/MyTaskApp.Application.Tests/Agents/`, `tests/MyTaskApp.Infrastructure.Tests/Agents/`, `tests/MyTaskApp.Desktop.Tests/ViewModels/AgentSessionViewModelTests.cs` |
 
@@ -25,9 +25,9 @@
 
   As duas vistas do agente são a mesma sessão, e outra máquina pareada ou o
   celular podem segui-la ([o terminal do Claude](../remote.md#o-terminal-do-claude)).
-  Com "Aceitar o terminal remoto" ligado e o terminal do sistema escolhido, o
-  card avisa que a sessão não aparece nos outros aparelhos e oferece **Usar o
-  terminal do agente**. A
+  Com "Aceitar ser controlado" (ou "Aceitar o terminal remoto") ligado e o
+  terminal do sistema escolhido, o card avisa que a sessão, e o estado dela,
+  não aparecem nos outros aparelhos, e oferece **Usar o terminal do agente**. A
   sessão do agente sempre recebe `--session-id`, e vive enquanto o agente
   vive.
 - **Na vista dentro do app**, o teclado vai inteiro para o Claude. Arrastar
@@ -45,6 +45,11 @@
   `claude --settings <arquivo do app>`, e o `~/.claude/settings.json` do
   usuário não é alterado. Eles chegam pela porta local
   `Application:AgentEventsPort` (47831, [configuração](../configuration.md)).
+- **O Claude de outra máquina** aparece na linha da tarefa com um selo
+  próprio ("⚠ Claude em Notebook · aguardando você"), e o pedido novo pulsa a
+  linha e abre o aviso do canto com **Seguir**
+  ([o estado do Claude na tarefa](../remote.md#o-estado-do-claude-na-tarefa),
+  ADR-103).
 - **Um som por estado**, com sons do app ou arquivos seus, em
   *☰ → Sons do Claude Code…*.
 - **Abrir Claude Code** também fica no menu `⋯` da linha, sem precisar abrir a

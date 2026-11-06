@@ -2,6 +2,7 @@ using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using MyTaskApp.Application.Deadlines;
 using MyTaskApp.Application.Planning;
+using MyTaskApp.Application.Remote;
 using MyTaskApp.Domain.Agents;
 using MyTaskApp.Domain.Deadlines;
 using MyTaskApp.Domain.Devices;
@@ -179,13 +180,56 @@ public sealed class TaskRowViewModel : ObservableObject
     public IReadOnlyList<AgentAlertKey> AgentAlerts => Agents
         .Where(agent => NeedsAttention(agent.Activity))
         .Select(agent => new AgentAlertKey(TaskId, agent.DevelopmentId, agent.Activity, agent.ActivityChangedAt))
+        .Concat(RemoteAgentAlerts(TaskId, RemoteAgents))
         .ToList();
 
+    /// <summary>As pendências do Claude de outras máquinas (ADR-103), com o instante em que o quadro as viu começar.</summary>
+    public static IEnumerable<AgentAlertKey> RemoteAgentAlerts(Guid taskId, IEnumerable<RemoteClaudeState> states) => states
+        .Where(state => state.NeedsAttention)
+        .Select(state => new AgentAlertKey(taskId, state.DevelopmentId, state.LocalActivity, state.AttentionSince));
+
+    /// <summary>Algum Claude, daqui ou de longe, pede o usuário.</summary>
+    private bool AnyAgentNeedsAttention => AgentNeedsAttention || RemoteAgentNeedsAttention;
+
     /// <summary>Pendência que o usuário ainda não viu: a borda âmbar pulsa em volta da linha.</summary>
-    public bool IsAgentAlerting => AgentNeedsAttention && !_agentAlertSeen;
+    public bool IsAgentAlerting => AnyAgentNeedsAttention && !_agentAlertSeen;
 
     /// <summary>Já vista, mas o agente segue esperando: a borda fica, parada e mais fraca.</summary>
-    public bool IsAgentAlertSeen => AgentNeedsAttention && _agentAlertSeen;
+    public bool IsAgentAlertSeen => AnyAgentNeedsAttention && _agentAlertSeen;
+
+    /// <summary>
+    /// O Claude das outras máquinas nesta tarefa (ADR-103). Muda no lugar, sem
+    /// recriar a linha: o quadro aplica a cada leitura do servidor.
+    /// </summary>
+    public IReadOnlyList<RemoteClaudeState> RemoteAgents { get; private set; } = [];
+
+    public bool HasRemoteAgent => RemoteAgents.Count > 0;
+
+    /// <summary>"⚠ Claude em Notebook · aguardando você": o selo de longe.</summary>
+    public string RemoteAgentLabel => RemoteClaudeTexts.Badge(RemoteAgents);
+
+    public string RemoteAgentTip => RemoteClaudeTexts.Tip(RemoteAgents);
+
+    /// <summary>O Claude de longe pede alguém: o selo ganha a cor de atenção.</summary>
+    public bool RemoteAgentNeedsAttention => RemoteAgents.Any(state => state.NeedsAttention);
+
+    /// <summary>Troca o Claude de longe da linha. Quem chama aplica o "já vi" depois.</summary>
+    public void ApplyRemoteAgents(IReadOnlyList<RemoteClaudeState> states)
+    {
+        if (states.SequenceEqual(RemoteAgents))
+        {
+            return;
+        }
+
+        RemoteAgents = states;
+        OnPropertyChanged(nameof(RemoteAgents));
+        OnPropertyChanged(nameof(HasRemoteAgent));
+        OnPropertyChanged(nameof(RemoteAgentLabel));
+        OnPropertyChanged(nameof(RemoteAgentTip));
+        OnPropertyChanged(nameof(RemoteAgentNeedsAttention));
+        OnPropertyChanged(nameof(IsAgentAlerting));
+        OnPropertyChanged(nameof(IsAgentAlertSeen));
+    }
 
     /// <summary>A linha nasce sabendo o que já foi visto — o refresh não pode reacender a borda.</summary>
     public void ApplySeenAgentAlerts(IReadOnlySet<AgentAlertKey> seen) =>

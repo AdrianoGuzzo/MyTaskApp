@@ -32,4 +32,11 @@ public partial class TaskDetailPage : IQueryAttributable
             await _viewModel.LoadAsync(id);
         }
     }
+
+    /// <summary>Saiu da tela: o Claude de longe para de redesenhar esta tarefa (ADR-103).</summary>
+    protected override void OnDisappearing()
+    {
+        base.OnDisappearing();
+        _viewModel.Unload();
+    }
 }

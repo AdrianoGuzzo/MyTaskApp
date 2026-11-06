@@ -281,6 +281,15 @@
                                                TextColor="{Binding DeadlineSeverity, Converter={StaticResource DeadlineColor}}"
                                                IsVisible="{Binding DeadlineLabel, Converter={StaticResource HasValue}}" />
 
+                                        <!-- O Claude de outra máquina nesta tarefa (ADR-103): o estado de lá, com a cor por conversor. -->
+                                        <Label Text="{Binding ClaudeLabel}"
+                                               FontSize="13"
+                                               FontAttributes="Bold"
+                                               LineBreakMode="TailTruncation"
+                                               MaxLines="1"
+                                               TextColor="{Binding ClaudeNeedsAttention, Converter={StaticResource ClaudeColor}}"
+                                               IsVisible="{Binding HasClaude}" />
+
                                         <FlexLayout Wrap="Wrap"
                                                     BindableLayout.ItemsSource="{Binding Tags}"
                                                     IsVisible="{Binding Tags, Converter={StaticResource HasValue}}">

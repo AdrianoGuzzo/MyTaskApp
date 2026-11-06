@@ -249,6 +249,31 @@ public sealed class RemoteTerminalUseCasesTests
         terminals.List(Controller).Sessions.Should().BeEmpty("a máquina parou de dar notícias");
     }
 
+    /// <summary>
+    /// Com "Aceitar controle" e sem o terminal remoto, o agente relata só o
+    /// estado (ADR-103): sem o texto do Claude e sem controle de longe. O
+    /// servidor guarda e repassa igual, e quem lê vê o pedido.
+    /// </summary>
+    [Fact]
+    public async Task AStateOnlyReport_IsAccepted_AndListedAsItCame()
+    {
+        var terminals = UseCases();
+        var ct = TestContext.Current.CancellationToken;
+        var state = Session() with
+        {
+            Activity = RemoteAgentActivity.WaitingForUser,
+            ActivityMessage = null,
+            HasDialog = true,
+            RemotelyControlled = false,
+        };
+
+        await terminals.ReportAsync(Executor, new RemoteTerminalSessionBatch([state]), ct);
+
+        var listed = terminals.List(Controller).Sessions.Should().ContainSingle().Which.Session;
+        listed.Should().Be(state);
+        _notifier.Sent.Should().ContainSingle(sent => sent.Message == RemoteHubMessages.TerminalsChanged);
+    }
+
     [Fact]
     public async Task AReport_FromAMachineThatIsNotAnExecutor_OrMalformed_IsRefused()
     {

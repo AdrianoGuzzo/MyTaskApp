@@ -144,18 +144,22 @@ public static class RemoteTerminalMapping
             state.YourViewerId);
     }
 
-    public static RemoteTerminalSessionReport ToReport(TerminalSessionStatus status, DateTimeOffset updatedAt) => new(
+    /// <param name="withContent">
+    /// Com "Aceitar o terminal remoto": vai também o texto do Claude. Sem ele,
+    /// só o estado (ADR-103): quem vê de longe sabe que o Claude espera, não o quê.
+    /// </param>
+    public static RemoteTerminalSessionReport ToReport(TerminalSessionStatus status, DateTimeOffset updatedAt, bool withContent = true) => new(
         status.SessionId,
         status.TaskId,
         status.DevelopmentId,
         ProcessOf(status.Process),
         status.ExitCode,
         ActivityOf(status.Activity),
-        Clip(status.ActivityMessage, RemoteLimits.MaxSessionActivityLength),
+        withContent ? Clip(status.ActivityMessage, RemoteLimits.MaxSessionActivityLength) : null,
         HasDialog: status.Dialog is not null,
         status.Monitored,
         status.PermissionsBypassed,
-        RemotelyControlled: status.Lease?.Kind == TerminalClientKind.Remote,
+        RemotelyControlled: withContent && status.Lease?.Kind == TerminalClientKind.Remote,
         status.StartedAt,
         updatedAt);
 
@@ -768,8 +772,10 @@ public sealed class TerminalStopExecutor(IUseCaseRunner runner, ITerminalSession
 /// O relato das sessões do terminal desta máquina ao servidor (ADR-099), a
 /// cada volta do <see cref="RemoteOperationScheduler"/> e logo depois de uma
 /// mudança. Vai sempre o lote inteiro: o servidor guarda só em memória, e a
-/// sessão que some do lote acabou. Sem "Aceitar o terminal remoto", o lote vai
-/// vazio, e a lista dos controladores esvazia.
+/// sessão que some do lote acabou. Basta "Aceitar controle" para o lote ir
+/// (ADR-103): as outras máquinas e o celular mostram o estado na tarefa. Sem
+/// "Aceitar o terminal remoto", vai só o estado, sem o texto do Claude, e
+/// ninguém segue a tela.
 /// </summary>
 public sealed partial class RemoteTerminalReporter : IDisposable
 {
@@ -832,14 +838,12 @@ public sealed partial class RemoteTerminalReporter : IDisposable
             }
 
             var now = _time.GetUtcNow();
-            IReadOnlyList<RemoteTerminalSessionReport> sessions = settings.AcceptTerminal
-                ? [.. _terminals.List()
-                    .Select(host => host.Status)
-                    .OrderByDescending(status => status.IsRunning)
-                    .ThenByDescending(status => status.StartedAt)
-                    .Take(RemoteLimits.MaxTerminalSessionsPerBatch)
-                    .Select(status => RemoteTerminalMapping.ToReport(status, status.LastOutputAt ?? status.StartedAt))]
-                : [];
+            IReadOnlyList<RemoteTerminalSessionReport> sessions = [.. _terminals.List()
+                .Select(host => host.Status)
+                .OrderByDescending(status => status.IsRunning)
+                .ThenByDescending(status => status.StartedAt)
+                .Take(RemoteLimits.MaxTerminalSessionsPerBatch)
+                .Select(status => RemoteTerminalMapping.ToReport(status, status.LastOutputAt ?? status.StartedAt, withContent: settings.AcceptTerminal))];
 
             await _api.ReportTerminalsAsync(new RemoteTerminalSessionBatch(sessions), cancellationToken);
             Reports++;
