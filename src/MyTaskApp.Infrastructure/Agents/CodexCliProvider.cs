@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using MyTaskApp.Application.Agents;
@@ -145,16 +146,32 @@ internal sealed partial class CodexCliProvider(ExecutableLocator locator, IProce
     {
         var curl = Curl() ?? throw new DomainException("O acompanhamento do Codex precisa do curl instalado.");
         string Variable(string name) => locator.IsWindows ? $"%{name}%" : $"${name}";
-        var command = $"\"{curl}\" --silent --max-time 5 -X POST -H \"Content-Type: application/json\" "
+        var command = $"\"{curl}\" --silent --max-time 2 -X POST -H \"Content-Type: application/json\" "
             + $"-H \"Authorization: Bearer {Variable(AgentMonitoringEnvironment.HookToken)}\" "
             + $"-H \"X-MyTaskApp-Session: {Variable(AgentMonitoringEnvironment.AgentSessionId)}\" "
             + $"-H \"X-MyTaskApp-Task: {Variable(AgentMonitoringEnvironment.TaskId)}\" "
             + $"-H \"X-MyTaskApp-Provider: codex\" --data-binary @- \"{endpoint}\"";
+        if (locator.IsWindows)
+        {
+            // O cmd /C recebe as aspas escapadas pelo launcher do Codex.
+            // Encodar o script evita aspas internas e preserva os segredos no ambiente.
+            string Literal(string value) => "'" + value.Replace("'", "''", StringComparison.Ordinal) + "'";
+            var script = "$OutputEncoding = [System.Text.UTF8Encoding]::new($false); "
+                + "[Console]::InputEncoding = $OutputEncoding; "
+                + $"[Console]::In.ReadToEnd() | & {Literal(curl)} --silent --max-time 2 -X POST "
+                + "-H 'Content-Type: application/json' "
+                + $"-H \"Authorization: Bearer $env:{AgentMonitoringEnvironment.HookToken}\" "
+                + $"-H \"X-MyTaskApp-Session: $env:{AgentMonitoringEnvironment.AgentSessionId}\" "
+                + $"-H \"X-MyTaskApp-Task: $env:{AgentMonitoringEnvironment.TaskId}\" "
+                + $"-H 'X-MyTaskApp-Provider: codex' --data-binary '@-' {Literal(endpoint.ToString())}; exit $LASTEXITCODE";
+            command = "powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand "
+                + Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
+        }
         List<string> result = [];
         foreach (var name in new[] { "SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "PermissionRequest", "Stop", "SessionEnd" })
         {
             result.Add("-c");
-            result.Add($"hooks.{name}=[{{hooks=[{{type=\"command\",command={JsonSerializer.Serialize(command)},timeout=5}}]}}]");
+            result.Add($"hooks.{name}=[{{hooks=[{{type=\"command\",command={JsonSerializer.Serialize(command)},timeout=3}}]}}]");
         }
         return result;
     }

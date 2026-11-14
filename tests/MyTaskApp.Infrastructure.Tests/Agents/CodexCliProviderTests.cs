@@ -1,8 +1,12 @@
-using System.Text.Json;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Text;
+using System.Text.Json;
+using Microsoft.Extensions.Logging.Abstractions;
 using MyTaskApp.Application.Agents;
 using MyTaskApp.Application.Consultations;
 using MyTaskApp.Domain;
+using MyTaskApp.Infrastructure.Agents;
 using MyTaskApp.Infrastructure.Agents.Codex;
 using MyTaskApp.Infrastructure.Processes;
 
@@ -123,6 +127,69 @@ public class CodexCliProviderTests
         var received = CodexHookEvents.Translate(payload.RootElement, Guid.NewGuid(), null, DateTimeOffset.UnixEpoch);
         received!.ExternalSessionId.Should().Be("codex-thread");
         received.Type.Should().Be(AgentEventType.SessionStarted);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WindowsHookCommandDeliversAnAuthenticatedEvent(bool escapeArgument)
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+        var delivered = new TaskCompletionSource<RecordAgentEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var listener = new AgentEventListener((command, _) =>
+        {
+            delivered.TrySetResult(command);
+            return Task.CompletedTask;
+        }, 0, TimeProvider.System, NullLogger<AgentEventListener>.Instance);
+        listener.Start();
+        var provider = new CodexCliProvider(ExecutableLocator.ForCurrentSystem(), _runner);
+        var sessionId = Guid.NewGuid();
+        var taskId = Guid.NewGuid();
+        var environment = new Dictionary<string, string>
+        {
+            [AgentMonitoringEnvironment.HookToken] = "test-token",
+            [AgentMonitoringEnvironment.AgentSessionId] = sessionId.ToString(),
+            [AgentMonitoringEnvironment.TaskId] = taskId.ToString(),
+        };
+        var launch = provider.CreateLaunch(new AgentCliStartContext(taskId, Path.GetTempPath(), [],
+            Monitoring: new AgentMonitoring(listener.Address!, environment)), Detection);
+        var setting = launch.Arguments.Single(argument => argument.StartsWith("hooks.SessionStart=", StringComparison.Ordinal));
+        var serializedCommand = setting[(setting.IndexOf("command=", StringComparison.Ordinal) + 8)..setting.LastIndexOf(",timeout=", StringComparison.Ordinal)];
+        var commandLine = JsonSerializer.Deserialize<string>(serializedCommand)!;
+        var start = new ProcessStartInfo("cmd.exe")
+        {
+            UseShellExecute = false,
+            StandardInputEncoding = new UTF8Encoding(false),
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+        };
+        if (escapeArgument)
+        {
+            start.ArgumentList.Add("/c");
+            start.ArgumentList.Add(commandLine);
+        }
+        else
+        {
+            start.Arguments = "/c " + commandLine;
+        }
+        foreach (var pair in environment)
+            start.Environment[pair.Key] = pair.Value;
+        using var process = Process.Start(start)!;
+        await process.StandardInput.WriteLineAsync("""{"hook_event_name":"SessionStart","session_id":"codex-thread","cwd":"C:/revisão"}""");
+        process.StandardInput.Close();
+        var output = await process.StandardOutput.ReadToEndAsync(Ct);
+        var error = await process.StandardError.ReadToEndAsync(Ct);
+        await process.WaitForExitAsync(Ct);
+        process.ExitCode.Should().Be(0, error);
+        output.Should().Be("{}");
+        var received = await delivered.Task.WaitAsync(TimeSpan.FromSeconds(5), Ct);
+        received.Token.Should().Be("test-token");
+        received.Event.AgentSessionId.Should().Be(sessionId);
+        received.Event.TaskId.Should().Be(taskId);
+        received.Event.WorkingDirectory.Should().Be("C:/revisão");
     }
 
     private sealed class Runner : IProcessRunner

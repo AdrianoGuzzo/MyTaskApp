@@ -22,6 +22,12 @@ recente e precisa de `curl`. A confiança
 nos hooks continua sendo decidida pelo usuário no Codex. As permissões do Codex
 são respondidas pelas teclas do terminal, inclusive remotamente.
 
+No Windows, os comandos de acompanhamento usam o PowerShell do sistema com script codificado para preservar
+as aspas e o JSON UTF-8 ao passar pelo `cmd /C` do Codex. O envio por `curl` tem
+limite de 2 segundos, dentro dos 3 segundos permitidos para `SessionEnd`.
+Reabra o terminal do Codex depois de atualizar o app para usar os comandos
+corrigidos.
+
 A Consulta Inteligente começa com o agente padrão e permite escolher outro na
 própria aba, pelo botão **Usar este agente**; ao retomar, conserva o provedor da
 conversa original. No Codex, planejamento e consulta removem o bypass padrão e
