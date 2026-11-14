@@ -90,6 +90,8 @@ public sealed partial class TodayViewModel(
 
     private ITimer? _refresh;
 
+    private long _loadVersion;
+
     /// <summary>
     /// Uma gravação de etiquetas por vez. Cada clique manda o conjunto inteiro,
     /// e dois cliques rápidos em voo ao mesmo tempo poderiam chegar ao banco na
@@ -413,6 +415,7 @@ public sealed partial class TodayViewModel(
             History.FollowDevices(Devices);
         }
 
+        var loadVersion = ++_loadVersion;
         TodayBoard? board = null;
         var view = Devices.View;
 
@@ -422,7 +425,9 @@ public sealed partial class TodayViewModel(
                 cancellationToken),
             "Não foi possível carregar suas tarefas.");
 
-        if (loaded)
+        // Hooks, saídas de processos e o timer podem recarregar juntos.
+        // Uma leitura antiga não pode restaurar um selo já encerrado.
+        if (loaded && loadVersion == _loadVersion)
         {
             // Um ciclo de sincronização pode ter trazido um computador novo.
             Devices.Refresh();

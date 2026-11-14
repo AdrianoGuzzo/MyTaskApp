@@ -74,7 +74,7 @@ internal sealed class FakeUseCaseRunner : IUseCaseRunner
 
             return next is Exception queuedFailure
                 ? Task.FromException<TResult>(queuedFailure)
-                : Task.FromResult((TResult)next!);
+                : next is Task<TResult> pending ? pending : Task.FromResult((TResult)next!);
         }
 
         if (ResultsByHandler.TryGetValue(typeof(THandler), out var specific)

@@ -40,6 +40,63 @@ public class AgentSessionViewModelTests
         new("claude-code", "Claude Code", "claude", CliDetectionResult.NotInstalled("Claude Code não encontrado."), Guide);
 
     [Fact]
+    public async Task Refresh_AWaitingDetectionCannotOverwriteANewerRunningSession()
+    {
+        var exited = Session(AgentSessionStatus.Exited, ended: Started.AddHours(8));
+        var running = Session(AgentSessionStatus.Running);
+        var pending = new TaskCompletionSource<AgentCliStatus>();
+        _runner.Enqueue<GetTaskAgentSessionHandler>(exited, running);
+        _runner.Enqueue<DetectAgentCliHandler>(pending.Task);
+        var viewModel = Create();
+
+        var olderRefresh = viewModel.RefreshAsync(TestContext.Current.CancellationToken);
+        await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
+        pending.SetResult(Installed());
+        await olderRefresh;
+
+        viewModel.Session.Should().Be(running);
+        viewModel.State.Should().Be(AgentPanelState.Running);
+    }
+
+    [Fact]
+    public async Task Refresh_AnOlderFailureDoesNotReplaceTheLatestStateWithAnError()
+    {
+        var pending = new TaskCompletionSource<AgentSessionView?>();
+        var exited = Session(AgentSessionStatus.Exited, ended: Started.AddHours(8));
+        _runner.Enqueue<GetTaskAgentSessionHandler>(pending.Task, exited);
+        _runner.ResultsByHandler[typeof(DetectAgentCliHandler)] = Installed();
+        var viewModel = Create();
+
+        var olderRefresh = viewModel.RefreshAsync(TestContext.Current.CancellationToken);
+        await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
+        pending.SetException(new InvalidOperationException("Consulta antiga falhou."));
+        await olderRefresh;
+
+        viewModel.Session.Should().Be(exited);
+        viewModel.State.Should().Be(AgentPanelState.Finished);
+        viewModel.Message.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Refresh_AnOlderResponseCannotRestoreAnExitedSession()
+    {
+        var running = Session(AgentSessionStatus.Running);
+        var exited = running with { Status = AgentSessionStatus.Exited, EndedAt = Started.AddHours(8) };
+        var pending = new TaskCompletionSource<AgentSessionView?>();
+        _runner.Enqueue<GetTaskAgentSessionHandler>(pending.Task, exited);
+        _runner.ResultsByHandler[typeof(DetectAgentCliHandler)] = Installed();
+        var viewModel = Create();
+
+        var olderRefresh = viewModel.RefreshAsync(TestContext.Current.CancellationToken);
+        await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
+        pending.SetResult(running);
+        await olderRefresh;
+
+        viewModel.Session.Should().Be(exited);
+        viewModel.State.Should().Be(AgentPanelState.Finished);
+    }
+
+    [Fact]
     public async Task SwitchingProviderReplacesArgumentsAndChoicesWithoutLosingThePrompt()
     {
         var choices = new AgentProviderOption[] { new("claude-code", "Claude Code"), new("codex", "Codex") };

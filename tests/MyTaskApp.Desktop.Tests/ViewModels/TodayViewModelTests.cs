@@ -33,6 +33,22 @@ public class TodayViewModelTests
         new(Date, overdue ?? [], now ?? [], today ?? [], unscheduled ?? [], completed ?? []);
 
     [Fact]
+    public async Task Load_AnOlderResponseCannotRestoreAnAgentThatAlreadyExited()
+    {
+        var row = Row("Implementar autenticação");
+        var pending = new TaskCompletionSource<TodayBoard>();
+        _runner.Enqueue<GetTodayBoardHandler>(pending.Task, Board(today: [row]));
+        var viewModel = ViewModel();
+
+        var olderLoad = viewModel.LoadAsync(Ct);
+        await viewModel.LoadAsync(Ct);
+        pending.SetResult(Board(today: [row with { ActiveAgents = [new ActiveAgent(null, "Claude Code")] }]));
+        await olderLoad;
+
+        viewModel.Sections.Single().Items.Single().HasActiveAgent.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task Load_ShowsTheDayInTheHeader()
     {
         _runner.Result = Board();

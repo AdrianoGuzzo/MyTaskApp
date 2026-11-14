@@ -45,6 +45,10 @@ troca automática para Claude. Veja [ADR-104](../architecture/decisions/104-prov
 - **Iniciar Claude Code** abre o `claude` num terminal real, dentro do
   worktree. O card mostra PID, início e pasta, e **Abrir terminal do agente**
   traz a janela certa para a frente.
+- Quando o processo do agente termina, o selo da tarefa e o card acompanham
+  o encerramento. Se várias atualizações chegarem juntas (hooks, fechamento
+  de terminais e recarga periódica), respostas antigas não substituem a
+  atualização mais recente.
 - **Onde abrir**, no card, escolhe o terminal (ADR-098). Sem escolha, é o
   terminal do agente, em janela, onde ele existe; no macOS, o do sistema
   (ADR-101). A escolha feita fica:
