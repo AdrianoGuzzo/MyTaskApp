@@ -20,7 +20,7 @@ public static class RemoteClaudeTexts
 
         var top = Top(states);
         var count = states.Count > 1 ? $" ×{states.Count}" : string.Empty;
-        return $"{Mark(top)} Claude em {top.MachineName}{count} · {Short(top)}";
+        return $"{Mark(top)} {top.ProviderName} em {top.MachineName}{count} · {Short(top)}";
     }
 
     /// <summary>O mais urgente: o selo e a cor seguem ele.</summary>
@@ -31,7 +31,7 @@ public static class RemoteClaudeTexts
     public static string Tip(IReadOnlyList<RemoteClaudeState> states) => states.Count switch
     {
         0 => string.Empty,
-        1 => $"Claude em {states[0].MachineName} · {Short(states[0])}. {Action(states[0])}",
+        1 => $"{states[0].ProviderName} em {states[0].MachineName} · {Short(states[0])}. {Action(states[0])}",
         _ => $"{string.Join(", ", states.Select(state => $"{state.MachineName}: {Short(state)}"))}. Clique para escolher.",
     };
 
@@ -55,14 +55,14 @@ public static class RemoteClaudeTexts
     public static string Notice(RemoteClaudeState state) => state.Attention switch
     {
         RemoteClaudeAttention.Waiting when state.Message is { Length: > 0 } message =>
-            string.Format(CultureInfo.CurrentCulture, "O Claude em {0} espera você: {1}", state.MachineName, message),
+            string.Format(CultureInfo.CurrentCulture, "O {2} em {0} espera você: {1}", state.MachineName, message, state.ProviderName),
         RemoteClaudeAttention.Waiting =>
-            string.Format(CultureInfo.CurrentCulture, "O Claude em {0} espera você.", state.MachineName),
+            string.Format(CultureInfo.CurrentCulture, "O {1} em {0} espera você.", state.MachineName, state.ProviderName),
         RemoteClaudeAttention.Review =>
-            string.Format(CultureInfo.CurrentCulture, "O Claude em {0} terminou e espera o próximo prompt.", state.MachineName),
+            string.Format(CultureInfo.CurrentCulture, "O {1} em {0} terminou e espera o próximo prompt.", state.MachineName, state.ProviderName),
         RemoteClaudeAttention.Failed =>
-            string.Format(CultureInfo.CurrentCulture, "O Claude em {0} parou com erro.", state.MachineName),
-        _ => string.Format(CultureInfo.CurrentCulture, "Claude em {0} · {1}.", state.MachineName, Short(state)),
+            string.Format(CultureInfo.CurrentCulture, "O {1} em {0} parou com erro.", state.MachineName, state.ProviderName),
+        _ => string.Format(CultureInfo.CurrentCulture, "{2} em {0} · {1}.", state.MachineName, Short(state), state.ProviderName),
     };
 
     /// <summary>O que o toque faz, ou por que não faz.</summary>

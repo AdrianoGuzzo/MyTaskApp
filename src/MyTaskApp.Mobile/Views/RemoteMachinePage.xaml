@@ -17,7 +17,9 @@
                 <Label Text="{Binding LoadError}" Style="{StaticResource Error}" IsVisible="{Binding LoadError, Converter={StaticResource HasValue}}" />
 
                 <!-- O Claude no terminal do agente desta máquina (ADR-101). -->
-                <Label Text="Terminais do Claude" Style="{StaticResource Section}" IsVisible="{Binding HasTerminals}" />
+                <Label Text="Agente para novos terminais" IsVisible="{Binding OffersTerminal}" />
+                <Picker ItemsSource="{Binding TerminalProviderIds}" SelectedItem="{Binding TerminalProviderId}" IsVisible="{Binding OffersTerminal}" />
+                <Label Text="Terminais dos agentes" Style="{StaticResource Section}" IsVisible="{Binding HasTerminals}" />
                 <VerticalStackLayout BindableLayout.ItemsSource="{Binding Terminals}" Spacing="4">
                     <BindableLayout.ItemTemplate>
                         <DataTemplate x:DataType="vm:TerminalLine">

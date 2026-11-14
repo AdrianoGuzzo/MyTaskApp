@@ -6,6 +6,19 @@ namespace MyTaskApp.Infrastructure.Persistence.Repositories;
 
 internal sealed class AgentSettingsStore(MyTaskAppDbContext context) : IAgentSettingsStore
 {
+    public Task<string?> GetDefaultProviderAsync(CancellationToken cancellationToken = default) =>
+        context.AgentSettings.AsNoTracking().Where(row => row.IsDefault)
+            .Select(row => (string?)row.ProviderId).FirstOrDefaultAsync(cancellationToken);
+
+    public async Task SaveDefaultProviderAsync(string providerId, CancellationToken cancellationToken = default)
+    {
+        var rows = await context.AgentSettings.Where(row => row.IsDefault).ToListAsync(cancellationToken);
+        foreach (var row in rows)
+            row.IsDefault = false;
+        foreach (var row in context.AgentSettings.Local)
+            row.IsDefault = false;
+        (await TrackedAsync(providerId, cancellationToken)).IsDefault = true;
+    }
     public async Task<string?> GetArgumentsAsync(string providerId, CancellationToken cancellationToken = default) =>
         (await FindAsync(providerId, cancellationToken))?.Arguments;
 

@@ -72,7 +72,7 @@ public sealed class RemoteTerminalTests : IAsyncLifetime
         await remote.EnableAsync();
 
         var line = remote.Terminals.Should().ContainSingle("o encerrado e o da máquina sem o terminal remoto ficam de fora").Subject;
-        line.Detail.Should().Be("Notebook · ◐ Esperando resposta");
+        line.Detail.Should().Be("Notebook · Claude Code · ◐ Esperando resposta");
         line.NeedsAttention.Should().BeTrue();
         remote.TerminalsNeedingAttention.Should().Be(1);
 
@@ -238,7 +238,7 @@ public sealed class RemoteTerminalTests : IAsyncLifetime
 
         var request = Server.Requests[^1];
         request.Kind.Should().Be(RemoteOperationKinds.TerminalStart);
-        _app.Dialogs.Toasts.Should().Contain(toast => toast.Contains("Terminais do Claude", StringComparison.Ordinal));
+        _app.Dialogs.Toasts.Should().Contain(toast => toast.Contains("Terminais dos agentes", StringComparison.Ordinal));
         _app.Navigator.Visits.Should().NotContain(visit => visit.StartsWith("operation/", StringComparison.Ordinal), "o Claude aparece na lista dos terminais, não numa operação");
     }
 

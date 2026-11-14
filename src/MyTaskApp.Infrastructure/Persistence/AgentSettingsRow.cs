@@ -8,6 +8,8 @@ internal sealed class AgentSettingsRow
 {
     public string ProviderId { get; set; } = string.Empty;
 
+    public bool IsDefault { get; set; }
+
     /// <summary><c>null</c> = nunca salvo: vale o padrão do agente (ADR-033).</summary>
     public string? Arguments { get; set; }
 

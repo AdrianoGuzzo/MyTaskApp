@@ -252,6 +252,8 @@ internal sealed class FakeAgentCliProvider : IAgentCliProvider, IConsultationLau
 
     public string Id => "claude-code";
 
+    public bool SupportsAssignedConversationId => true;
+
     public string Name => "Claude Code";
 
     public string Command => "claude";

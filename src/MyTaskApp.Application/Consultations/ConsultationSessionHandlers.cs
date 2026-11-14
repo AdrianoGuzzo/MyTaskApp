@@ -13,7 +13,7 @@ namespace MyTaskApp.Application.Consultations;
 /// "Editar só para esta sessão": o texto que substitui as instruções geradas
 /// agora; não é gravado. <c>null</c> = as geradas.
 /// </param>
-public sealed record StartTaskConsultation(Guid TaskId, string Question, string? Instructions = null);
+public sealed record StartTaskConsultation(Guid TaskId, string Question, string? Instructions = null, string? ProviderId = null);
 
 public sealed class StartTaskConsultationHandler(ConsultationResolver resolver, ConsultationLauncher launcher)
 {
@@ -29,7 +29,7 @@ public sealed class StartTaskConsultationHandler(ConsultationResolver resolver, 
         var state = await resolver.ResolveAsync(command.TaskId, cancellationToken);
 
         return await launcher.LaunchAsync(
-            state, Guid.NewGuid().ToString(), resume: false, question, command.Instructions, cancellationToken);
+            state, Guid.NewGuid().ToString(), resume: false, question, command.Instructions, cancellationToken, command.ProviderId);
     }
 }
 
@@ -67,7 +67,7 @@ public sealed class ResumeTaskConsultationHandler(
 
         var state = await resolver.ResolveAsync(command.TaskId, cancellationToken);
 
-        return await launcher.LaunchAsync(state, conversation, resume: true, question: null, instructions: null, cancellationToken);
+        return await launcher.LaunchAsync(state, conversation, resume: true, question: null, instructions: null, cancellationToken, previous.ProviderId);
     }
 }
 
@@ -116,7 +116,8 @@ public sealed class ConsultationLauncher(
         bool resume,
         string? question,
         string? instructions,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? providerId = null)
     {
         if (state.Problems.Count > 0)
         {
@@ -126,7 +127,7 @@ public sealed class ConsultationLauncher(
         var task = state.Task;
         await EnsureNoActiveConsultationAsync(task.Id, cancellationToken);
 
-        var provider = providers.Default;
+        var provider = await providers.ResolveAsync(settings, providerId, cancellationToken);
         var builder = provider as IConsultationLaunchBuilder
             ?? throw new DomainException($"O {provider.Name} não sabe abrir uma Consulta Inteligente.");
 
@@ -137,8 +138,8 @@ public sealed class ConsultationLauncher(
             throw new DomainException($"{provider.Name} não encontrado.");
         }
 
-        var model = Option(provider.Models, state.Consultation?.Model, "Modelo");
-        var effort = Option(provider.Efforts, state.Consultation?.Effort, "Nível de esforço");
+        var model = AgentCliOption.Find(provider.Models, state.Consultation?.Model);
+        var effort = AgentCliOption.Find(provider.Efforts, state.Consultation?.Effort);
         var (toolsAccess, serverVersion) = await DatabaseAsync(state, cancellationToken);
 
         // Os mesmos "Parâmetros" do card de Desenvolvimento (ADR-100), antes do
@@ -159,6 +160,8 @@ public sealed class ConsultationLauncher(
 
         var session = AgentSession.CreateConsultation(
             task.Id, provider.Id, detection.ExecutablePath, directories[0], conversationId, timeProvider.GetUtcNow());
+        if (!resume && !provider.SupportsAssignedConversationId)
+            session.AwaitExternalSessionId();
 
         var environment = new Dictionary<string, string>(StringComparer.Ordinal);
 
@@ -369,10 +372,6 @@ public sealed class ConsultationLauncher(
 
         return new AgentMonitoring(endpoint, AgentMonitoringEnvironment.For(session, workingDirectory, string.Empty, token, endpoint));
     }
-
-    private static AgentCliOption? Option(IReadOnlyList<AgentCliOption> options, string? value, string name) =>
-        string.IsNullOrWhiteSpace(value) ? null
-        : AgentCliOption.Find(options, value) ?? throw new DomainException($"{name} desconhecido: {value}.");
 
     private async Task SaveAndNotifyAsync(AgentSession session, CancellationToken cancellationToken)
     {

@@ -24,14 +24,16 @@ namespace MyTaskApp.Server.IntegrationTests;
 /// </summary>
 public sealed partial class RemoteOperationsEndToEndTests
 {
-    [Fact]
-    public async Task AnotherDesktop_FollowsTheTerminalOfTheNotebook_AndTypesIntoTheSameSession()
+    [Theory]
+    [InlineData("claude-code")]
+    [InlineData("codex")]
+    public async Task AnotherDesktop_FollowsTheTerminalOfTheNotebook_AndTypesIntoTheSameSession(string providerId)
     {
         var hosted = new HostedTerminal();
         var (notebook, office) = await TerminalPairAsync(hosted);
         await using var clocks = Clocks.Run(notebook, office);
         var (taskId, developmentId) = await ReadyEnvironmentAsync(notebook);
-        var host = hosted.Start(taskId, developmentId);
+        var host = hosted.Start(taskId, developmentId, providerId);
         hosted.Pty.Print("Claude Code pronto\r\n> ");
 
         // O agente do notebook: a conexão do hub dele leva o terminal, e a lista sobe para a conta.
@@ -44,6 +46,7 @@ public sealed partial class RemoteOperationsEndToEndTests
             (handler, cancel) => handler.HandleAsync(new ListRemoteTerminals(notebook.Device.DeviceId), cancel));
         var item = list.Items.Should().ContainSingle().Subject;
         item.Session.SessionId.Should().Be(host.SessionId);
+        item.Session.ProviderId.Should().Be(providerId);
         var target = item.Target(notebook.Device.DeviceId)!;
 
         // O escritório pede para seguir; o agente do notebook admite pela chave do pareamento.
@@ -55,6 +58,7 @@ public sealed partial class RemoteOperationsEndToEndTests
 
         var status = mirror.Status!;
         status.SessionId.Should().Be(host.SessionId);
+        status.ProviderId.Should().Be(providerId);
         status.WorkingDirectory.Should().BeEmpty("a pasta não sai da máquina");
         status.YourClientId.Should().NotBeNull();
         host.Status.Clients.Should().ContainSingle(client => client.Kind == TerminalClientKind.Remote && client.Label == "Escritório");
@@ -253,10 +257,10 @@ public sealed partial class RemoteOperationsEndToEndTests
             remove { }
         }
 
-        public TerminalSessionHost Start(Guid taskId, Guid developmentId)
+        public TerminalSessionHost Start(Guid taskId, Guid developmentId, string providerId = "claude-code")
         {
             _host = new TerminalSessionHost(
-                new TerminalSessionInfo(Guid.CreateVersion7(), taskId, developmentId, @"C:\segredo\wt", Monitored: true, PermissionsBypassed: false),
+                new TerminalSessionInfo(Guid.CreateVersion7(), taskId, developmentId, @"C:\segredo\wt", Monitored: true, PermissionsBypassed: false, ProviderId: providerId),
                 Pty,
                 TimeProvider.System,
                 NullLogger<TerminalSessionHost>.Instance);

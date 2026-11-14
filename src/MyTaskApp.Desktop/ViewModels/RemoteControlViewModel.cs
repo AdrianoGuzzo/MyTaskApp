@@ -330,6 +330,8 @@ public sealed partial class RemoteControlViewModel : ObservableObject
     public async Task OpenAsync(MachineView machine, CancellationToken cancellationToken, Guid? developmentId = null, Guid? sessionId = null)
     {
         Machine = machine;
+        TerminalProviderIds = machine.AgentProviders ?? ["claude-code"];
+        TerminalProviderId = TerminalProviderIds.FirstOrDefault() ?? "claude-code";
         _preferred = developmentId;
         OnPropertyChanged(nameof(Title));
         await LoadAsync(cancellationToken);
@@ -424,9 +426,17 @@ public sealed partial class RemoteControlViewModel : ObservableObject
         }
 
         return SendAsync(
-            RemoteTerminalRequests.Start(machine.DeviceId, environment.View.TaskId, environment.View.DevelopmentId),
-            $"Abrir o Claude no terminal de {machine.Nickname} · {environment.Title}");
+            RemoteTerminalRequests.Start(machine.DeviceId, environment.View.TaskId, environment.View.DevelopmentId, TerminalProviderId),
+            $"Abrir o {TerminalProviderName} no terminal de {machine.Nickname} · {environment.Title}");
     }
+
+    [ObservableProperty]
+    private IReadOnlyList<string> _terminalProviderIds = ["claude-code"];
+
+    [ObservableProperty]
+    private string _terminalProviderId = "claude-code";
+
+    public string TerminalProviderName => TerminalProviderId switch { "claude-code" => "Claude", "codex" => "Codex", _ => TerminalProviderId };
 
     /// <summary>Pede à outra máquina para medir as ferramentas e publicar o catálogo de novo.</summary>
     [RelayCommand]
@@ -516,7 +526,7 @@ public sealed partial class RemoteControlViewModel : ObservableObject
         }
         else if (SelectedProfile is { } profile)
         {
-            request = RemoteRequests.StartAgent(machine.DeviceId, environment.View, profile.Id, AgentPrompt);
+            request = RemoteRequests.StartAgent(machine.DeviceId, environment.View, profile.Id, AgentPrompt, TerminalProviderId);
         }
         else
         {

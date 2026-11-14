@@ -1,5 +1,16 @@
 # Controle remoto
 
+O terminal remoto também aceita **Codex**. Escolha o provedor ao abrir um
+terminal de outra máquina; parâmetros e esforço continuam sendo os salvos na
+máquina executora. Cada worktree admite um único terminal ativo, e a lista
+identifica o agente de cada sessão. O pareamento, a assinatura da entrada e a
+vez de digitar são comuns aos dois provedores. Atualize servidor, agentes e
+controladores juntos. Veja [escolher o agente](features/claude-code.md#escolher-o-agente).
+
+As conversas gerenciadas sem terminal continuam com Claude Code: o Codex recusa
+esse modo por não oferecer o teto de custo em dólares exigido pelo aplicativo.
+O terminal hospedado do Codex permite trabalhar remotamente sem usar esse modo.
+
 Pedir a outro computador seu que prepare o worktree de uma tarefa, rode os
 comandos dela, copie o banco ou converse com o Claude Code, e acompanhar e
 aprovar tudo do desktop ou do celular. Quem executa é sempre a máquina de lá,

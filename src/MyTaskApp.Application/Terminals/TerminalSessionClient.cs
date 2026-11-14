@@ -128,10 +128,14 @@ public sealed class TerminalSessionClient : IAsyncDisposable
 
     public bool CanStop => IsConnected && IsRunning;
 
+    public string ProviderName => Status?.ProviderId switch { "codex" => "Codex", null or "claude-code" => "Claude", var id => id };
+
+    public string ProviderDisplayName => Status?.ProviderId is null or "claude-code" ? "Claude Code" : ProviderName;
+
     public string StatusText => Connection switch
     {
         TerminalConnection.Connecting => "Conectando ao terminal do agente…",
-        TerminalConnection.Disconnected => "Desconectado: o Claude segue rodando no agente, se ele estiver no ar.",
+        TerminalConnection.Disconnected => $"Desconectado: o {ProviderName} segue rodando no agente, se ele estiver no ar.",
         _ => Status switch
         {
             null => "Conectado.",
@@ -149,18 +153,18 @@ public sealed class TerminalSessionClient : IAsyncDisposable
     public string? DialogText => Status?.Dialog?.Message;
 
     public string? BypassWarning => Status?.PermissionsBypassed == true
-        ? "Aberto sem as aprovações do Claude Code: o que for pedido aqui roda sem perguntar antes."
+        ? $"Aberto sem as aprovações do {ProviderDisplayName}: o que for pedido aqui roda sem perguntar antes."
         : null;
 
     public string? MonitoringWarning => Status is { Monitored: false, IsRunning: true }
-        ? "Sem acompanhamento: o MyTaskApp não sabe se o Claude trabalha ou espera. Só o teclado vale."
+        ? $"Sem acompanhamento: o MyTaskApp não sabe se o {ProviderName} trabalha ou espera. Só o teclado vale."
         : null;
 
     public string? LeaseText => IsRemote
         ? Status switch
         {
             null or { IsRunning: false } => null,
-            _ when HasControl => "Você está com o controle: o que digitar aqui vai para o Claude de lá. Quem está na máquina pode tomar de volta digitando.",
+            _ when HasControl => $"Você está com o controle: o que digitar aqui vai para o {ProviderName} de lá. Quem está na máquina pode tomar de volta digitando.",
             { Lease: { } holder } => $"{holder.Label} está com o controle. Assumir passa a vez para cá.",
             _ => "Só olhando. Assuma o controle para digitar.",
         }

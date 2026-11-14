@@ -135,7 +135,8 @@ public sealed record MachineView(
     bool AcceptsControl,
     string? KeyFingerprint,
     IReadOnlyList<string> Tools,
-    bool OffersTerminal = false);
+    bool OffersTerminal = false,
+    IReadOnlyList<string>? AgentProviders = null);
 
 public sealed record TrustedControllerView(Guid Id, Guid ControllerDeviceId, string Nickname, string Fingerprint, DateTimeOffset ApprovedAt);
 
@@ -206,7 +207,8 @@ public sealed class GetMachinesHandler(
             device.Roles.HasFlag(DeviceRoles.Executor),
             device.KeyFingerprint,
             device.Capabilities is { } capabilities ? Tools(capabilities) : [],
-            device.Capabilities?.Operations.Contains(RemoteOperationKinds.TerminalAttach) == true);
+            device.Capabilities?.Operations.Contains(RemoteOperationKinds.TerminalAttach) == true,
+            device.Capabilities?.AgentProviders);
 
     private static List<string> Tools(DeviceCapabilities capabilities) =>
         [
@@ -308,7 +310,7 @@ public sealed class MachineCapabilities(
             limits.MaxConcurrent,
 
             // Quem registra põe o do catálogo de agora (RegisterThisMachineHandler): este fica em cache.
-            CatalogHash: string.Empty);
+            CatalogHash: string.Empty, AgentProviders: agents.All.Select(provider => provider.Id).ToArray());
     }
 
     /// <summary>

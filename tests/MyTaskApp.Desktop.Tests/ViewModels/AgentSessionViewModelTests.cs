@@ -39,6 +39,28 @@ public class AgentSessionViewModelTests
     private static AgentCliStatus Missing() =>
         new("claude-code", "Claude Code", "claude", CliDetectionResult.NotInstalled("Claude Code não encontrado."), Guide);
 
+    [Fact]
+    public async Task SwitchingProviderReplacesArgumentsAndChoicesWithoutLosingThePrompt()
+    {
+        var choices = new AgentProviderOption[] { new("claude-code", "Claude Code"), new("codex", "Codex") };
+        _runner.Enqueue<GetTaskAgentSessionHandler>([null]);
+        _runner.ResultsByHandler[typeof(DetectAgentCliHandler)] = WithChoices("opus", "high") with { Providers = choices };
+        var viewModel = Create();
+        await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
+        viewModel.Prompt = "Confira o trabalho";
+        viewModel.SelectedProvider = choices[1];
+        _runner.ResultsByHandler[typeof(DetectAgentCliHandler)] = new AgentCliStatus("codex", "Codex", "codex",
+            new CliDetectionResult { IsInstalled = true, ExecutablePath = @"C:\codex.exe" }, null,
+            "--dangerously-bypass-approvals-and-sandbox") { Providers = choices };
+
+        await viewModel.SelectProviderCommand.ExecuteAsync(null);
+
+        viewModel.AgentName.Should().Be("Codex");
+        viewModel.Arguments.Should().Be("--dangerously-bypass-approvals-and-sandbox");
+        viewModel.ModelOptions.Should().BeEmpty();
+        viewModel.Prompt.Should().Be("Confira o trabalho");
+    }
+
     private AgentSessionView Session(
         AgentSessionStatus status,
         int? processId = 15432,

@@ -89,7 +89,7 @@ public class TodayRowMenuRenderingTests
             "Lançar horas",
             "Definir prazo",
             "Remover prazo",
-            "Abrir Claude Code",
+            "Abrir agente de IA",
             "Abrir terminal no worktree",
             "Abrir pasta do worktree",
             "Onde aparece…",
@@ -98,7 +98,7 @@ public class TodayRowMenuRenderingTests
     }
 
     /// <summary>
-    /// "Abrir Claude Code" só existe para quem tem onde abrir: sem ambiente
+    /// "Abrir agente de IA" só existe para quem tem onde abrir: sem ambiente
     /// pronto, o item e o separador dele somem (ADR-036).
     /// </summary>
     [AvaloniaFact]
@@ -124,7 +124,7 @@ public class TodayRowMenuRenderingTests
     {
         var window = await ShowAsync(new TodayBoard(Date, [], [], [Row("Fechar o mês")], [], []));
 
-        // "Abrir Claude Code", o terminal e a pasta são clique de code-behind:
+        // "Abrir agente de IA", o terminal e a pasta são clique de code-behind:
         // podem precisar perguntar o ambiente (ADR-036, ADR-045). O prazo e o
         // "Lançar horas" são submenus, conferidos nos testes seguintes. "Onde aparece…" monta as
         // escolhas com os computadores da conta, na hora (ADR-062).

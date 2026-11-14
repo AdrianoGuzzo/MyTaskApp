@@ -89,6 +89,11 @@ public sealed class RemoteDeviceUseCases(
 
         var capabilities = registration.Capabilities;
 
+        if (capabilities.AgentProviders is { } providers
+            && (providers.Count > 32 || providers.Any(id => !IsShortText(id, 64))
+                || providers.Distinct(StringComparer.Ordinal).Count() != providers.Count))
+            throw SyncServerException.BadRequest("A lista de agentes deve conter até 32 identificadores únicos de até 64 caracteres.");
+
         if (capabilities.ProtocolVersion < 1)
         {
             throw SyncServerException.BadRequest("Versão de protocolo inválida.");

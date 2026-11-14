@@ -158,7 +158,7 @@ public sealed class RemoteTerminalsViewModelTests
         var request = sent.Should().ContainSingle().Which;
         request.Kind.Should().Be(RemoteOperationKinds.TerminalStart);
         request.TaskId.Should().Be(Environment.TaskId);
-        request.Payload.Deserialize<RemoteTerminalStartRequest>(RemoteJson.Options).Should().Be(new RemoteTerminalStartRequest(Environment.DevelopmentId));
+        request.Payload.Deserialize<RemoteTerminalStartRequest>(RemoteJson.Options).Should().Be(new RemoteTerminalStartRequest(Environment.DevelopmentId, "claude-code"));
         viewModel.OperationTitle.Should().Be("Abrir o Claude no terminal de Notebook · Validar antimicrobianos");
     }
 

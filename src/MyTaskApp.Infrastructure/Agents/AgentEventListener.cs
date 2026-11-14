@@ -254,7 +254,9 @@ internal sealed class AgentEventListener : IAgentEventEndpoint, IAsyncDisposable
         try
         {
             using var document = JsonDocument.Parse(request.Body);
-            agentEvent = ClaudeCodeHookEvents.Translate(document.RootElement, sessionId, taskId, _timeProvider.GetUtcNow());
+            agentEvent = request.Header("X-MyTaskApp-Provider") == "codex"
+                ? Codex.CodexHookEvents.Translate(document.RootElement, sessionId, taskId, _timeProvider.GetUtcNow())
+                : ClaudeCodeHookEvents.Translate(document.RootElement, sessionId, taskId, _timeProvider.GetUtcNow());
         }
         catch (JsonException)
         {

@@ -230,7 +230,7 @@ public sealed partial class TodayView : UserControl
     }
 
     /// <summary>
-    /// "Abrir Claude Code" do menu da linha (ADR-036). Com um ambiente, abre
+    /// "Abrir agente de IA" do menu da linha (ADR-036). Com um ambiente, abre
     /// direto; com mais de um, pergunta qual — o mesmo molde do selo de vários
     /// agentes, ancorado na linha, já que o menu de origem fecha no clique.
     /// </summary>
@@ -310,7 +310,7 @@ public sealed partial class TodayView : UserControl
         {
             menu.Items.Add(new MenuItem
             {
-                Header = $"Abrir Claude Code: {choice.Label}",
+                Header = $"Abrir agente de IA: {choice.Label}",
                 Command = viewModel.StartAgentInCommand,
                 CommandParameter = choice,
             });
@@ -329,7 +329,7 @@ public sealed partial class TodayView : UserControl
 
     /// <summary>
     /// Uma ação num worktree da linha. Com um só, executa; com vários, abre um
-    /// menu com um item por ambiente, no molde do "Abrir Claude Code" (ADR-036).
+    /// menu com um item por ambiente, no molde do "Abrir agente de IA" (ADR-036).
     /// </summary>
     private void ForEachWorktree(
         object? sender,

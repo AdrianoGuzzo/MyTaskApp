@@ -25,12 +25,13 @@ public sealed class ConsultationViewFactory(
     IAgentProcessTracker processes,
     IAgentSessionWatcher watcher,
     IConsultationToolsEndpoint tools,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider,
+    IAgentSettingsStore? settings = null)
 {
     /// <summary>Quantas consultas anteriores a aba mostra.</summary>
     public const int HistoryLimit = 10;
 
-    public async Task<TaskConsultationView> BuildAsync(Guid taskId, CancellationToken cancellationToken)
+    public async Task<TaskConsultationView> BuildAsync(Guid taskId, CancellationToken cancellationToken, string? providerId = null)
     {
         var state = await resolver.ResolveAsync(taskId, cancellationToken);
         var history = await sessions.ListConsultationsForTaskAsync(taskId, HistoryLimit, cancellationToken);
@@ -43,7 +44,7 @@ public sealed class ConsultationViewFactory(
         }
 
         var active = history.FirstOrDefault(session => session.IsActive);
-        var provider = providers.Default;
+        var provider = settings is null ? providers.Get(providerId) : await providers.ResolveAsync(settings, providerId, cancellationToken);
 
         return new TaskConsultationView(
             state.Task.Id,
@@ -74,6 +75,8 @@ public sealed class ConsultationViewFactory(
                 .ToList())
         {
             Models = provider.Models,
+            Providers = providers.All.Select(item => new AgentProviderOption(item.Id, item.Name)).ToArray(),
+            ProviderId = provider.Id,
             Efforts = provider.Efforts,
             ToolsAvailable = tools.Address is not null,
         };
@@ -81,12 +84,12 @@ public sealed class ConsultationViewFactory(
 }
 
 /// <summary>A aba Consulta Inteligente de uma tarefa (ADR-081).</summary>
-public sealed record GetTaskConsultation(Guid TaskId);
+public sealed record GetTaskConsultation(Guid TaskId, string? ProviderId = null);
 
 public sealed class GetTaskConsultationHandler(ConsultationViewFactory views)
 {
     public Task<TaskConsultationView> HandleAsync(GetTaskConsultation query, CancellationToken cancellationToken = default) =>
-        views.BuildAsync(query.TaskId, cancellationToken);
+        views.BuildAsync(query.TaskId, cancellationToken, query.ProviderId);
 }
 
 /// <summary>
@@ -106,7 +109,8 @@ public sealed record SaveTaskConsultation(
     string? DatabaseName,
     string? Instructions,
     string? Model,
-    string? Effort);
+    string? Effort,
+    string? ProviderId = null);
 
 /// <remarks>
 /// As referências são conferidas aqui, e não só na tela: uma pasta de outra
@@ -123,7 +127,8 @@ public sealed class SaveTaskConsultationHandler(
     IAgentSessionRepository sessions,
     IUnitOfWork unitOfWork,
     ConsultationViewFactory views,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider,
+    IAgentSettingsStore? settings = null)
 {
     public async Task<TaskConsultationView> HandleAsync(SaveTaskConsultation command, CancellationToken cancellationToken = default)
     {
@@ -151,14 +156,15 @@ public sealed class SaveTaskConsultationHandler(
         consultation.SetSources(await SourcesAsync(command, task, consultation, tagDirectories, cancellationToken), now);
         await SetDatabaseAsync(consultation, command, now, cancellationToken);
         consultation.SetInstructions(command.Instructions, now);
+        var provider = settings is null ? providers.Get(command.ProviderId) : await providers.ResolveAsync(settings, command.ProviderId, cancellationToken);
         consultation.SetLaunchPreferences(
-            Checked(providers.Default.Models, command.Model, "Modelo"),
-            Checked(providers.Default.Efforts, command.Effort, "Nível de esforço"),
+            Checked(provider.Models, command.Model, "Modelo"),
+            Checked(provider.Efforts, command.Effort, "Nível de esforço"),
             now);
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return await views.BuildAsync(task.Id, cancellationToken);
+        return await views.BuildAsync(task.Id, cancellationToken, command.ProviderId);
     }
 
     private async Task<IReadOnlyList<ConsultationSourceReference>> SourcesAsync(

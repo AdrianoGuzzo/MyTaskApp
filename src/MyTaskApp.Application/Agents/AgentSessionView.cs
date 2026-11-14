@@ -86,6 +86,8 @@ public sealed record AgentCliStatus(
     string Model = "",
     string Effort = "")
 {
+    public IReadOnlyList<AgentProviderOption> Providers { get; init; } = [];
+
     public IReadOnlyList<AgentCliOption> Models { get; init; } = [];
 
     public IReadOnlyList<AgentCliOption> Efforts { get; init; } = [];

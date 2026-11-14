@@ -191,7 +191,7 @@
                       CommandParameter="{Binding}" />
             <Separator IsVisible="{Binding CanChangeDeadline}" />
             <MenuItem Classes="startAgent"
-                      Header="Abrir Claude Code"
+                      Header="Abrir agente de IA"
                       IsVisible="{Binding Worktree.HasWorktree}"
                       Click="OnStartAgentClick" />
             <MenuItem Classes="worktreeAction"

@@ -5,7 +5,7 @@ namespace MyTaskApp.Application.Agents;
 
 /// <summary>
 /// Um agente de IA de linha de comando que o app sabe abrir num terminal
-/// (ADR-030). Hoje só existe o Claude Code; Codex, Gemini e outros entram como
+/// (ADR-030, ADR-104). Claude Code, Codex e outros entram como
 /// novas implementações, sem mexer no fluxo.
 /// </summary>
 /// <remarks>
@@ -30,6 +30,12 @@ public interface IAgentCliProvider
     /// outros (ex.: <c>--dangerously-skip-permissions</c>).
     /// </summary>
     string DefaultArguments { get; }
+
+    /// <summary>O diálogo do CLI pode ser confirmado por Enter e recusado por Esc com segurança.</summary>
+    bool SupportsTerminalPermissionChoices => false;
+
+    /// <summary>O CLI aceita um identificador de conversa definido pelo aplicativo antes de abrir.</summary>
+    bool SupportsAssignedConversationId => false;
 
     /// <summary>
     /// Os modelos que a tela oferece, cada um com os parâmetros que o escolhem
@@ -147,8 +153,11 @@ public sealed record AgentCliInstallStep(string Text, string? Command = null);
 /// <summary>Os agentes registrados, por id.</summary>
 public interface IAgentCliProviders
 {
-    /// <summary>O agente usado quando a tela não escolhe — hoje, o único.</summary>
+    /// <summary>O padrão inicial quando ainda não há preferência nesta instalação.</summary>
     IAgentCliProvider Default { get; }
+
+    /// <summary>Todos os provedores registrados, na ordem de apresenta??o.</summary>
+    IReadOnlyList<IAgentCliProvider> All => [Default];
 
     /// <summary>O agente com este id; <c>null</c> se nenhum foi registrado com ele.</summary>
     IAgentCliProvider? Find(string providerId);
@@ -161,6 +170,8 @@ public interface IAgentCliProviders
 public sealed class AgentCliProviders(IEnumerable<IAgentCliProvider> providers) : IAgentCliProviders
 {
     private readonly IReadOnlyList<IAgentCliProvider> _providers = [.. providers];
+
+    public IReadOnlyList<IAgentCliProvider> All => _providers;
 
     public IAgentCliProvider Default =>
         _providers.Count > 0

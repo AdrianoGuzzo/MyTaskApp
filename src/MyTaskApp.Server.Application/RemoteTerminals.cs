@@ -115,6 +115,8 @@ public sealed partial class RemoteTerminalUseCases(
         foreach (var session in batch.Sessions)
         {
             if (session.SessionId == Guid.Empty || session.TaskId == Guid.Empty
+                || string.IsNullOrWhiteSpace(session.ProviderId) || session.ProviderId.Length > 64
+                || ReceivedText.HasControlOrFormat(session.ProviderId)
                 || session.ActivityMessage is { Length: > RemoteLimits.MaxSessionActivityLength }
                 || ReceivedText.HasControlOrFormat(session.ActivityMessage))
             {

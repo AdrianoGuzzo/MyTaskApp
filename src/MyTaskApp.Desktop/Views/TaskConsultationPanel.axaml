@@ -19,7 +19,18 @@
 
       <TextBlock Classes="hint"
                  TextWrapping="Wrap"
-                 Text="Pergunte sobre como o sistema funciona. O Claude Code investiga o código e, se você escolher, uma cópia local do banco, que ele só lê. O Claude abre com as mesmas configurações, servidores MCP e Parâmetros do desenvolvimento." />
+                 Text="Pergunte sobre como o sistema funciona. O agente escolhido investiga o código e, se você escolher, uma cópia local do banco, que ele só lê. Os parâmetros são próprios de cada agente." />
+
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <ComboBox ItemsSource="{Binding ProviderOptions}" SelectedItem="{Binding SelectedProvider}">
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="agents:AgentProviderOption">
+              <TextBlock Text="{Binding Name}" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+        <Button Content="Usar este agente" Command="{Binding SelectProviderCommand}" />
+      </StackPanel>
 
       <TextBlock x:Name="ConsultationLoading" Classes="hint" Text="Carregando…" IsVisible="{Binding IsLoading}" />
 
@@ -67,7 +78,7 @@
         <StackPanel Spacing="8">
           <TextBlock Classes="sectionTitle" Text="2. Projeto" />
           <TextBlock Classes="hint" TextWrapping="Wrap"
-                     Text="As pastas que o Claude pode ler. A primeira marcada é onde ele abre; as outras entram como pastas adicionais." />
+                     Text="As pastas que o agente pode ler. A primeira marcada é onde ele abre; as outras entram como pastas adicionais." />
           <TextBlock Classes="hint" Text="Escolha a etiqueta para ver os projetos dela." IsVisible="{Binding !HasSources}" />
 
           <ItemsControl x:Name="ConsultationSources" ItemsSource="{Binding Sources}">
@@ -320,7 +331,7 @@
           <TextBlock x:Name="ConsultationError" Classes="body bad" TextWrapping="Wrap" Text="{Binding ErrorMessage}" IsVisible="{Binding HasError}" />
 
           <StackPanel Spacing="4" IsVisible="{Binding IsAgentMissing}">
-            <TextBlock Classes="body warn" TextWrapping="Wrap" Text="O Claude Code não foi encontrado neste computador. Para instalar:" />
+            <TextBlock Classes="body warn" TextWrapping="Wrap" Text="{Binding AgentName, StringFormat='O {0} não foi encontrado neste computador. Para instalar:'}" />
             <ItemsControl ItemsSource="{Binding InstallGuide.Steps, FallbackValue={x:Null}}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="agents:AgentCliInstallStep">
@@ -334,7 +345,7 @@
           </StackPanel>
 
           <TextBlock Classes="hint" TextWrapping="Wrap"
-                     Text="Na primeira vez numa pasta, o Claude pode pedir no terminal para confiar nela: responda lá." />
+                     Text="Na primeira vez numa pasta, o agente pode pedir no terminal para confiar nela: responda lá." />
 
           <StackPanel Spacing="4" IsVisible="{Binding HasSessions}">
             <TextBlock Classes="fieldLabel" Text="Consultas anteriores" />

@@ -16,7 +16,9 @@ public sealed record TerminalSessionInfo(
     Guid? DevelopmentId,
     string WorkingDirectory,
     bool Monitored,
-    bool PermissionsBypassed);
+    bool PermissionsBypassed,
+    string ProviderId = "claude-code",
+    bool SupportsPermissionChoices = true);
 
 /// <summary>
 /// Uma sessão de terminal hospedada pelo agente (ADR-098): o pseudoterminal,
@@ -648,7 +650,7 @@ public sealed partial class TerminalSessionHost : IAsyncDisposable
     {
         var kind = agentEvent.SourceEvent switch
         {
-            "PermissionRequest" => TerminalDialogKind.Permission,
+            "PermissionRequest" => Info.SupportsPermissionChoices ? TerminalDialogKind.Permission : TerminalDialogKind.Input,
             "Notification" when agentEvent.Metadata?.GetValueOrDefault("notification_type") == "permission_prompt" => TerminalDialogKind.Permission,
             "PreToolUse" when agentEvent.Metadata?.GetValueOrDefault("tool_name") == "AskUserQuestion" => TerminalDialogKind.Question,
             "PreToolUse" when agentEvent.Metadata?.GetValueOrDefault("tool_name") == "ExitPlanMode" => TerminalDialogKind.Plan,
@@ -736,7 +738,7 @@ public sealed partial class TerminalSessionHost : IAsyncDisposable
             Info.Monitored,
             _bypassed,
             _permissionMode,
-            _lastOutputAt);
+            _lastOutputAt, ProviderId: Info.ProviderId);
     }
 
     private void RaiseChanged() => Changed?.Invoke(this, EventArgs.Empty);

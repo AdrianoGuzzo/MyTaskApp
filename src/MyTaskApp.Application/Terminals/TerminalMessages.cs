@@ -90,7 +90,8 @@ public sealed record TerminalSessionStatus(
     bool PermissionsBypassed,
     string? PermissionMode,
     DateTimeOffset? LastOutputAt,
-    Guid? YourClientId = null)
+    Guid? YourClientId = null,
+    string ProviderId = "claude-code")
 {
     public bool IsRunning => Process == TerminalProcessState.Running;
 

@@ -80,6 +80,8 @@ public sealed partial class RemoteMachineViewModel(
             var machine = machines.Machines.FirstOrDefault(machine => machine.DeviceId == deviceId);
             nickname ??= machine?.Nickname;
             OffersTerminal = machine?.OffersTerminal == true;
+            TerminalProviderIds = machine?.AgentProviders ?? ["claude-code"];
+            TerminalProviderId = TerminalProviderIds.FirstOrDefault() ?? "claude-code";
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -148,14 +150,20 @@ public sealed partial class RemoteMachineViewModel(
 
         if (await TryAsync(
                 () => sender.SendAsync(
-                    RemoteTerminalRequests.Start(DeviceId, line.View.TaskId, line.View.DevelopmentId),
-                    $"Claude no terminal de {Title} · {line.Title}",
+                    RemoteTerminalRequests.Start(DeviceId, line.View.TaskId, line.View.DevelopmentId, TerminalProviderId),
+                    $"{TerminalProviderId} no terminal de {Title} · {line.Title}",
                     open: false),
                 "MobileRemoteStartTerminalFailed"))
         {
-            await Dialogs.ToastAsync("Pedido enviado. O Claude aparece em Terminais do Claude quando abrir lá.");
+            await Dialogs.ToastAsync("Pedido enviado. O agente aparece em Terminais dos agentes quando abrir lá.");
         }
     }
+
+    [ObservableProperty]
+    private IReadOnlyList<string> _terminalProviderIds = ["claude-code"];
+
+    [ObservableProperty]
+    private string _terminalProviderId = "claude-code";
 
     private async Task LoadTerminalsAsync()
     {
@@ -252,7 +260,7 @@ public sealed partial class RemoteMachineViewModel(
         }
 
         await TryAsync(
-            () => sender.SendAsync(RemoteRequests.StartAgent(DeviceId, line.View, profiles[index.Value].Id, prompt), $"Claude · {line.Title}"),
+            () => sender.SendAsync(RemoteRequests.StartAgent(DeviceId, line.View, profiles[index.Value].Id, prompt, TerminalProviderId), $"Agente · {line.Title}"),
             "MobileRemoteStartAgentFailed");
     }
 

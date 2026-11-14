@@ -62,12 +62,12 @@ public class AgentSessionHandlerTests
         _task.MarkDevelopmentReady(_task.Developments[0].Id, Now);
     }
 
-    private StartAgentSessionHandler Start() =>
+    private StartAgentSessionHandler Start(IAgentCliProviders? providers = null) =>
         new(
             _tasks,
             _sessions,
             _tasks,
-            _providers,
+            providers ?? _providers,
             _launcher,
             _processes,
             _watcher,
@@ -488,6 +488,23 @@ public class AgentSessionHandlerTests
             .WithMessage("*já tem um Claude Code aberto*");
 
         _launcher.Launched.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task StartingAnotherProviderInTheSameWorktreeKeepsTheExistingSession()
+    {
+        Ready();
+        var active = await StartAsync();
+        var codex = Substitute.For<IAgentCliProvider>();
+        codex.Id.Returns("codex");
+        codex.Name.Returns("Codex");
+        var start = Start(new AgentCliProviders([_claude, codex]));
+
+        var second = () => start.HandleAsync(new StartAgentSession(_task.Id, _task.Developments[0].Id, "codex"), Ct);
+        await second.Should().ThrowAsync<DomainException>().WithMessage("*Claude Code aberto*");
+        _launcher.Launched.Should().ContainSingle();
+        _sessions.Sessions.Single().Id.Should().Be(active.SessionId);
+        await codex.DidNotReceive().DetectAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]

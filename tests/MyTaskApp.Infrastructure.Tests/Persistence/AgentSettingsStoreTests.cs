@@ -7,6 +7,32 @@ namespace MyTaskApp.Infrastructure.Tests.Persistence;
 /// <summary>Os parâmetros de cada agente, uma linha por provider (ADR-030).</summary>
 public class AgentSettingsStoreTests
 {
+    [Fact]
+    public async Task DefaultProviderSurvivesRestartWithoutChangingEitherProvidersArguments()
+    {
+        await using var db = await new TempSqliteDatabase().MigrateAsync(Ct);
+        await using (var write = db.CreateContext())
+        {
+            var store = new AgentSettingsStore(write);
+            (await store.GetDefaultProviderAsync(Ct)).Should().BeNull();
+            await store.SaveArgumentsAsync("claude-code", "--model opus", Ct);
+            await store.SaveArgumentsAsync("codex", "--dangerously-bypass-approvals-and-sandbox", Ct);
+            await store.SaveDefaultProviderAsync("codex", Ct);
+            await write.SaveChangesAsync(Ct);
+        }
+        await using (var read = db.CreateContext())
+        {
+            var store = new AgentSettingsStore(read);
+            (await store.GetDefaultProviderAsync(Ct)).Should().Be("codex");
+            (await store.GetArgumentsAsync("claude-code", Ct)).Should().Be("--model opus");
+            await store.SaveDefaultProviderAsync("claude-code", Ct);
+            await read.SaveChangesAsync(Ct);
+        }
+        await using var verify = db.CreateContext();
+        (await verify.AgentSettings.CountAsync(row => row.IsDefault, Ct)).Should().Be(1);
+        (await new AgentSettingsStore(verify).GetDefaultProviderAsync(Ct)).Should().Be("claude-code");
+    }
+
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     [Fact]

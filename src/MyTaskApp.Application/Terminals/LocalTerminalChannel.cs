@@ -72,7 +72,7 @@ public sealed partial class LocalTerminalServer(
 
         var hello = TerminalFrameStream.ReadJson<TerminalHello>(frame.Payload);
 
-        if (hello.Version != TerminalHello.CurrentVersion)
+        if (hello.Version != TerminalHello.CurrentVersion && hello.Version != TerminalHello.ProviderStartVersion)
         {
             await frames.WriteTextAsync(TerminalFrameType.Error, "O app e o agente estão em versões diferentes. Atualize os dois.", cancellationToken).ConfigureAwait(false);
             return null;
@@ -95,6 +95,7 @@ public sealed partial class LocalTerminalServer(
                     new StartAgentSession(
                         request.TaskId,
                         request.DevelopmentId,
+                        ProviderId: request.ProviderId ?? "claude-code",
                         Arguments: request.Arguments,
                         Prompt: request.Prompt,
                         RunDirectly: request.RunDirectly,
@@ -264,7 +265,8 @@ public sealed class LocalTerminalChannel : ITerminalChannel
         await using var channel = new LocalTerminalChannel(stream);
         await channel._frames.WriteJsonAsync(
             TerminalFrameType.Hello,
-            new TerminalHello(TerminalHello.CurrentVersion, TerminalHello.StartOperation, Start: request),
+            new TerminalHello(request.ProviderId is null or "claude-code" ? TerminalHello.CurrentVersion : TerminalHello.ProviderStartVersion,
+                TerminalHello.StartOperation, Start: request),
             cancellationToken).ConfigureAwait(false);
 
         return await channel._frames.ReadAsync(cancellationToken).ConfigureAwait(false) switch

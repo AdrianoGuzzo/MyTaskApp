@@ -187,7 +187,7 @@ public sealed class OpenAgentSessionHandler(
 {
     public async Task<AgentSessionView> HandleAsync(OpenAgentSession command, CancellationToken cancellationToken = default)
     {
-        var provider = providers.Get(command.Start.ProviderId);
+        var provider = await providers.ResolveAsync(settings, command.Start.ProviderId, cancellationToken);
         var hosting = command.Hosting ?? await settings.HostingForAsync(provider, agent.Support.IsSupported, cancellationToken);
 
         if (command.Hosting is { } chosen && Enum.IsDefined(chosen))
@@ -198,7 +198,7 @@ public sealed class OpenAgentSessionHandler(
 
         if (hosting == AgentHosting.Direct)
         {
-            return await direct.HandleAsync(command.Start with { Hosting = AgentHosting.Direct }, cancellationToken);
+            return await direct.HandleAsync(command.Start with { ProviderId = provider.Id, Hosting = AgentHosting.Direct }, cancellationToken);
         }
 
         var start = command.Start;
@@ -213,7 +213,8 @@ public sealed class OpenAgentSessionHandler(
                 start.Monitor,
                 start.Model,
                 start.Effort,
-                start.ResumeConversation),
+                start.ResumeConversation,
+                provider.Id),
             cancellationToken);
 
         if (result is not { Ok: true, SessionId: { } sessionId })
