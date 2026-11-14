@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.34.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.33.0...v1.34.0) (2026-11-14)
+
+
+### Added
+
+* **agentes:** integre Codex com seleção de agente padrão ([#198](https://github.com/AdrianoGuzzo/MyTaskApp/issues/198)) ([4cf62fe](https://github.com/AdrianoGuzzo/MyTaskApp/commit/4cf62fe290ccc5f5783c370b6f7f4744d4d80833))
+
 ## [1.33.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.32.0...v1.33.0) (2026-11-06)
 
 
