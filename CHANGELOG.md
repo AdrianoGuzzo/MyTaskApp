@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.34.1](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.34.0...v1.34.1) (2026-11-14)
+
+
+### Fixed
+
+* corrija os hooks de status do Codex no Windows ([#202](https://github.com/AdrianoGuzzo/MyTaskApp/issues/202)) ([3cbbf47](https://github.com/AdrianoGuzzo/MyTaskApp/commit/3cbbf47696c624b5eddb1cc351fd77c67107d84f))
+* impeça atualizações antigas de restaurar agentes encerrados ([#200](https://github.com/AdrianoGuzzo/MyTaskApp/issues/200)) ([0b5b3df](https://github.com/AdrianoGuzzo/MyTaskApp/commit/0b5b3dfd7e0cd9fb11fbf92166ab4b28794e9167))
+
 ## [1.34.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.33.0...v1.34.0) (2026-11-14)
 
 
