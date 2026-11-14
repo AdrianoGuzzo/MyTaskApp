@@ -60,8 +60,9 @@ public static partial class SensitiveText
         matchTimeoutMilliseconds: 1000)]
     private static partial Regex UriCredentials();
 
+    // A chave inteira é atômica: sem retrocesso nem novas tentativas dentro dela.
     [GeneratedRegex(
-        """(?<![A-Za-z0-9])(?<key>[A-Za-z0-9_\-]*(?:password|passwd|pwd|secret|token|api[_\-]?key))(?<sep>["']?\s*[:=]\s*)(?<value>"[^"]*"|'[^']*'|[^\s;,&"'}\]]+)""",
+        """(?<![A-Za-z0-9_\-])(?<key>(?>[A-Za-z0-9_\-]+))(?<=password|passwd|pwd|secret|token|api[_\-]?key)(?<sep>["']?\s*[:=]\s*)(?<value>"[^"]*"|'[^']*'|[^\s;,&"'}\]]+)""",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
         matchTimeoutMilliseconds: 1000)]
     private static partial Regex KeyValue();

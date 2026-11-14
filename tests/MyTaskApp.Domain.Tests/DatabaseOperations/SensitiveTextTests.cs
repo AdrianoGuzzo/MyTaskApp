@@ -47,6 +47,29 @@ public class SensitiveTextTests
         SensitiveText.Mask(text).Should().Be(text);
     }
 
+    [Theory]
+    [InlineData("x")]
+    [InlineData("_")]
+    [InlineData("-")]
+    public void LongKeysAndOrdinaryText_PreserveTextAndMaskFollowingSecrets(string character)
+    {
+        var longText = string.Concat(Enumerable.Repeat(character, 100_000));
+        var text = $"{longText} {longText}=ordinary; {longText}PaSsWoRd='s3nh4'; token=hidden";
+
+        SensitiveText.Mask(text).Should().Be($"{longText} {longText}=ordinary; {longText}PaSsWoRd='***'; token=***");
+    }
+
+    [Theory]
+    [InlineData("passwd")]
+    [InlineData("PWD")]
+    [InlineData("apikey")]
+    [InlineData("API-KEY")]
+    public void SecretKeySuffixes_AreMaskedWithoutChangingOtherPairs(string key)
+    {
+        SensitiveText.Mask($"user=backup; prefix_{key}=s3nh4; database=eco")
+            .Should().Be($"user=backup; prefix_{key}=***; database=eco");
+    }
+
     [Fact]
     public void Null_BecomesEmpty()
     {

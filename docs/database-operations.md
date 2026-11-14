@@ -855,6 +855,8 @@ e colunas mascaradas.
 - As recusas da política também entram, como *Blocked*.
 - Uma operação que o app não terminou (queda) vira *Interrupted* na volta.
 - Senha, token, connection string e dado de linha nunca entram na auditoria.
+  Textos e nomes de chave longos passam pelo mascaramento sem repetir a busca
+  de sufixos a cada caractere, antes do corte no tamanho da mensagem.
 
 ## Configuração
 
