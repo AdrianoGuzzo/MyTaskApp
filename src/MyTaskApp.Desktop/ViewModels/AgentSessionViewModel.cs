@@ -64,6 +64,8 @@ public sealed partial class AgentSessionViewModel(
     IEmbeddedTerminalPresenter? terminalViews = null,
     IAgentCliProviders? providers = null) : ObservableObject
 {
+    private long _refreshVersion;
+
     private Guid _taskId;
 
     private Guid _developmentId;
@@ -413,6 +415,7 @@ public sealed partial class AgentSessionViewModel(
             return;
         }
 
+        ++_refreshVersion;
         _taskId = taskId;
         _developmentId = developmentId;
         Session = null;
@@ -441,11 +444,19 @@ public sealed partial class AgentSessionViewModel(
             return;
         }
 
+        var refreshVersion = ++_refreshVersion;
+
         try
         {
             var session = await runner.RunAsync<GetTaskAgentSessionHandler, AgentSessionView?>(
                 (handler, token) => handler.HandleAsync(new GetTaskAgentSession(_taskId, _developmentId), token),
                 cancellationToken);
+
+            // Respostas de recargas anteriores não podem reabrir o card.
+            if (refreshVersion != _refreshVersion)
+            {
+                return;
+            }
 
             Session = session;
 
@@ -456,15 +467,23 @@ public sealed partial class AgentSessionViewModel(
                 SelectedProvider ??= ProviderOptions.FirstOrDefault(option => option.Id == session.ProviderId);
             }
             else
-                await DetectAsync(cancellationToken);
+                await DetectAsync(cancellationToken, refreshVersion);
 
-            State = StateFor(session);
+            if (refreshVersion == _refreshVersion)
+            {
+                State = StateFor(session);
+            }
         }
         catch (OperationCanceledException)
         {
         }
         catch (Exception exception)
         {
+            if (refreshVersion != _refreshVersion)
+            {
+                return;
+            }
+
             logger.LogWarning(exception, "AgentSessionLoadFailed {TaskId}", _taskId);
             Message = "Não foi possível verificar o agente de IA desta tarefa.";
             State = Session is null ? AgentPanelState.Idle : StateFor(Session);
@@ -474,6 +493,7 @@ public sealed partial class AgentSessionViewModel(
     [RelayCommand(CanExecute = nameof(CanStart))]
     public async Task StartAsync()
     {
+        ++_refreshVersion;
         IsBusy = true;
         Message = null;
         var previous = State;
@@ -644,13 +664,18 @@ public sealed partial class AgentSessionViewModel(
         }
     }
 
-    private async Task DetectAsync(CancellationToken cancellationToken)
+    private async Task DetectAsync(CancellationToken cancellationToken, long? refreshVersion = null)
     {
         try
         {
             var cli = await runner.RunAsync<DetectAgentCliHandler, AgentCliStatus>(
                 (handler, token) => handler.HandleAsync(new DetectAgentCli(_providerId ?? Cli?.ProviderId), token),
                 cancellationToken);
+
+            if (refreshVersion is { } version && version != _refreshVersion)
+            {
+                return;
+            }
 
             var providerChanged = Cli?.ProviderId != cli.ProviderId;
             var selectedId = SelectedProvider?.Id;
