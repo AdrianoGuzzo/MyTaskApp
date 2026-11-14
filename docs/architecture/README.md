@@ -154,6 +154,7 @@ Números dos ADRs; o link está na linha do índice abaixo.
 | [ADR-102](decisions/102-reajustar-horas-pelo-relatorio.md) | Reajustar as horas pelo relatório: a tarefa abre os períodos do bloco, com as regras da aba Tempo | Aceito | Implementado | ciclo-de-vida | reajustar horas, OpenTaskCommand, ReportEntryRow, GetTimeEntries por tarefa, UpdateTimeEntry, relatório de horas |
 | [ADR-103](decisions/103-estado-do-claude-de-outras-maquinas-na-tarefa.md) | O estado do Claude de outras máquinas aparece na tarefa, e o pedido novo avisa | Aceito | Parcial | remoto | RemoteClaudeBoard, relato só de estado, Aceitar controle, selo remoto, episódio de atenção, notificação no celular |
 | [ADR-104](decisions/104-provedores-claude-code-e-codex.md) | Claude Code e Codex compartilham os fluxos de agentes | Aceito | Implementado | agente-ia | CodexCliProvider, AgentProviderSettingsHandler, ProviderId, agente padrão, hooks, terminal remoto |
+| [ADR-105](decisions/105-perguntar-ao-fechar-terminal.md) | Perguntar ao fechar o terminal local | Aceito | Parcial | agente-ia | terminal, fechamento, AgentEmbedded |
 
 ## Novo ADR
 

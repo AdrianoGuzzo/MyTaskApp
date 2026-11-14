@@ -1015,7 +1015,7 @@ public class AgentSessionHandlerTests
     /// para ele em janela, para a sessão aparecer de longe (ADR-101).
     /// </summary>
     [Fact]
-    public async Task Open_WithoutAChoice_IsTheAgentsWindow_WhereItExists()
+    public async Task Open_WithoutAChoice_IsEmbedded_WhereSupported()
     {
         Ready();
         var session = HostedSession();
@@ -1024,7 +1024,7 @@ public class AgentSessionHandlerTests
         var view = await Open().HandleAsync(new OpenAgentSession(new StartAgentSession(_task.Id, _task.Developments[0].Id)), Ct);
 
         view.IsAgentTerminal.Should().BeTrue();
-        _agentTerminal.Started.Should().ContainSingle().Which.Hosting.Should().Be(AgentHosting.AgentWindow);
+        _agentTerminal.Started.Should().ContainSingle().Which.Hosting.Should().Be(AgentHosting.AgentEmbedded);
         _settings.Hostings.Should().BeEmpty("não escolher não grava escolha");
     }
 
@@ -1198,7 +1198,7 @@ public class AgentSessionHandlerTests
         var status = await new DetectAgentCliHandler(_providers, _settings, _agentTerminal, remote).HandleAsync(new DetectAgentCli(), Ct);
 
         status.RemoteTerminalAccepted.Should().Be(accepted);
-        status.Hosting.Should().Be(AgentHosting.AgentWindow, "nada salvo, e o terminal do agente existe aqui");
+        status.Hosting.Should().Be(AgentHosting.AgentEmbedded, "nada salvo, e o terminal do agente existe aqui");
     }
 
     /// <summary>O estado na tarefa das outras máquinas vai com o controle aceito, mesmo sem o terminal remoto (ADR-103).</summary>

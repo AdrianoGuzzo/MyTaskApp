@@ -178,8 +178,11 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
 
     /// <summary>Mata a árvore da sessão, e só ela: o que o Claude abriu dentro dela vai junto.</summary>
     [RelayCommand(CanExecute = nameof(CanForce))]
-    private async Task ForceStopAsync()
+    private async Task ForceStopAsync() => await RequestForceStopAsync();
+
+    public async Task<bool> RequestForceStopAsync()
     {
+        if (_confirmations is null || !CanStop) return false;
         var confirmed = await _confirmations!.AskAsync(new ConfirmationRequest(
             "Forçar o fim desta sessão?",
             $"O {_client.ProviderName} e tudo o que ele abriu nesta sessão são encerrados na hora, sem salvar. Os outros programas da máquina não são tocados.",
@@ -190,6 +193,8 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
         {
             await _client.StopAsync(force: true);
         }
+
+        return confirmed;
     }
 
     private void OnStateChanged()
