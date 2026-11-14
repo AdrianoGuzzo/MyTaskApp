@@ -88,8 +88,8 @@ internal static class AgentSettingsStoreExtensions
 
     /// <summary>
     /// O modo salvo. Sem nada escolhido (ou com um salvo que não existe mais),
-    /// o terminal do agente em janela onde ele existe, para a sessão aparecer
-    /// de longe (ADR-101); sem ele, o terminal direto.
+    /// o terminal do agente dentro do app onde ele existe, para a sessão aparecer
+    /// de longe (ADR-105); sem ele, o terminal direto.
     /// </summary>
     public static async Task<AgentHosting> HostingForAsync(
         this IAgentSettingsStore settings,
@@ -98,7 +98,7 @@ internal static class AgentSettingsStoreExtensions
         CancellationToken cancellationToken) =>
         !agentTerminalSupported ? AgentHosting.Direct
         : await settings.GetHostingAsync(provider.Id, cancellationToken) is { } hosting && Enum.IsDefined(hosting) ? hosting
-        : AgentHosting.AgentWindow;
+        : AgentHosting.AgentEmbedded;
 
     /// <summary>O esforço salvo, como <see cref="ModelForAsync"/>.</summary>
     public static async Task<string> EffortForAsync(

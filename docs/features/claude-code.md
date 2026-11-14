@@ -56,7 +56,7 @@ troca automática para Claude. Veja [ADR-104](../architecture/decisions/104-prov
   de terminais e recarga periódica), respostas antigas não substituem a
   atualização mais recente.
 - **Onde abrir**, no card, escolhe o terminal (ADR-098). Sem escolha, é o
-  terminal do agente, em janela, onde ele existe; no macOS, o do sistema
+  terminal do agente, dentro do app, onde ele existe; no macOS, o do sistema
   (ADR-101). A escolha feita fica:
   - **Terminal do sistema:** um terminal novo; fechar encerra o Claude.
   - **Terminal do agente, em janela:** o Claude roda no `MyTaskApp.Agent`, num
@@ -116,3 +116,13 @@ configurações daqui (ADR-100), e com o banco só leitura, tem guia próprio: [
   (`ClaudeCodeCliProvider.CreateLaunch`, migration `DevelopmentAgentPrompt`)
   existe no código, mas nenhum ADR o descreve; o ADR-033 e o ADR-040 o atribuem
   ao ADR-030, que não fala dele.
+
+### Fechar o terminal local
+
+O padrão passa a ser o terminal dentro do MyTaskApp para Claude e Codex.
+Ao fechar uma janela local ativa, escolha **Encerrar sessão**, **Forçar o fim**,
+**Fechar só a janela** ou **Cancelar**. Forçar exige confirmação adicional.
+O encerramento só é confirmado quando o processo sai; após cinco segundos,
+sem confirmação, a janela continua aberta e permite tentar novamente.
+Preferências existentes são atualizadas uma vez; a escolha pode ser alterada depois.
+Terminais remotos e o encerramento global do app mantêm o comportamento anterior.
