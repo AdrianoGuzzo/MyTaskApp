@@ -214,6 +214,31 @@ public sealed class LocalTerminalChannelTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task ANewProviderCannotBeSilentlyOpenedAsClaudeByALegacyAgent()
+    {
+        var name = $"MyTaskApp.Terminal.LegacyTest.{Guid.NewGuid():N}";
+        await using var server = new NamedPipeServerStream(name, PipeDirection.InOut, 1, PipeTransmissionMode.Byte,
+            PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+        await using var client = new NamedPipeClientStream(".", name, PipeDirection.InOut,
+            PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+        await Task.WhenAll(server.WaitForConnectionAsync(Ct), client.ConnectAsync(Ct));
+        var legacy = Task.Run(async () =>
+        {
+            await using var frames = new TerminalFrameStream(server);
+            var frame = await frames.ReadAsync(Ct);
+            var hello = TerminalFrameStream.ReadJson<TerminalHello>(frame!.Payload);
+            hello.Version.Should().Be(TerminalHello.ProviderStartVersion);
+            hello.Version.Should().NotBe(TerminalHello.CurrentVersion);
+            await frames.WriteTextAsync(TerminalFrameType.Error, "O app e o agente estão em versões diferentes. Atualize os dois.", Ct);
+        }, Ct);
+
+        var result = await LocalTerminalChannel.StartAsync(client, Request(AgentHosting.AgentWindow) with { ProviderId = "codex" }, Ct);
+        result.Ok.Should().BeFalse();
+        result.Error.Should().Contain("versões diferentes");
+        await legacy;
+    }
+
+    [Fact]
     public async Task Start_TurnsTheExpectedFailure_IntoTheSentence()
     {
         _runner.RunAsync(Arg.Any<Func<StartAgentSessionHandler, CancellationToken, Task<AgentSessionView>>>(), Arg.Any<CancellationToken>())

@@ -68,7 +68,8 @@ public sealed record ClaudeCodeSessionRequest(
     string ProfileId,
     string? Model,
     string? Effort,
-    PromptRequest Prompt);
+    PromptRequest Prompt,
+    string? ProviderId = null);
 
 /// <summary>Um prompt. Em <c>agent.prompt</c>, continua a conversa (<c>--resume</c>).</summary>
 /// <param name="AgentSessionId">Nulo em <c>agent.start</c>; obrigatório em <c>agent.prompt</c>.</param>

@@ -89,11 +89,11 @@ public static class RemoteRequests
         new(deviceId, RemoteOperationKinds.WorktreeProvision, Payload(request), request.TaskId, [request.TaskId]);
 
     /// <summary>Abre uma conversa do Claude no worktree de lá; o perfil é o id do catálogo, e lá se decide o que ele libera.</summary>
-    public static SendRemoteOperation StartAgent(Guid deviceId, RemoteEnvironmentView environment, string profileId, string prompt) =>
+    public static SendRemoteOperation StartAgent(Guid deviceId, RemoteEnvironmentView environment, string profileId, string prompt, string? providerId = null) =>
         new(
             deviceId,
             RemoteOperationKinds.AgentStart,
-            Payload(new ClaudeCodeSessionRequest(environment.DevelopmentId, profileId, null, null, new PromptRequest(null, prompt.Trim()))),
+            Payload(new ClaudeCodeSessionRequest(environment.DevelopmentId, profileId, null, null, new PromptRequest(null, prompt.Trim()), providerId)),
             environment.TaskId,
             [environment.TaskId]);
 

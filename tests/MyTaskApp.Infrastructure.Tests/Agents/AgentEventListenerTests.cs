@@ -73,6 +73,21 @@ public sealed class AgentEventListenerTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task CodexHooksUseTheSameAuthenticatedListenerAndTheirOwnEventTranslation()
+    {
+        using var request = Hook("""{"hook_event_name":"PermissionRequest","session_id":"codex-thread","cwd":"C:/wt"}""");
+        request.Headers.Add("X-MyTaskApp-Provider", "codex");
+        using var response = await _http.SendAsync(request, Ct);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        await WaitForAsync(1);
+        var command = _delivered.Single();
+        command.Token.Should().Be("segredo");
+        command.Event.ExternalSessionId.Should().Be("codex-thread");
+        command.Event.Type.Should().Be(AgentEventType.NeedsUserInput);
+        command.Event.Message.Should().Contain("Codex");
+    }
+
+    [Fact]
     public void ItListensOnlyOnLoopback_AtTheEventsPath()
     {
         var address = _listener.Address!;

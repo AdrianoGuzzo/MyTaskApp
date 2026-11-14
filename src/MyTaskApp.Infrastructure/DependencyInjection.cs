@@ -236,6 +236,7 @@ public static class DependencyInjection
         services.AddSingleton(_ => ExecutableLocator.ForCurrentSystem());
         services.AddSingleton<ClaudeCodeCliProvider>();
         services.AddSingleton<IAgentCliProvider>(provider => provider.GetRequiredService<ClaudeCodeCliProvider>());
+        services.AddSingleton<IAgentCliProvider, MyTaskApp.Infrastructure.Agents.Codex.CodexCliProvider>();
 
         // O mesmo Claude sem terminal, para a sessão pedida de longe (ADR-089).
         services.AddSingleton<IHeadlessAgentProvider>(provider => provider.GetRequiredService<ClaudeCodeCliProvider>());

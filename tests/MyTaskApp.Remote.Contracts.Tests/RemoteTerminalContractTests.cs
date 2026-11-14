@@ -25,7 +25,20 @@ public sealed class RemoteTerminalContractTests
     [Fact]
     public void StartingFromAfar_CarriesNoArgumentText()
     {
-        typeof(RemoteTerminalStartRequest).GetProperties().Select(property => property.Name).Should().Equal(nameof(RemoteTerminalStartRequest.DevelopmentId));
+        typeof(RemoteTerminalStartRequest).GetProperties().Select(property => property.Name).Should().Equal(
+            nameof(RemoteTerminalStartRequest.DevelopmentId), nameof(RemoteTerminalStartRequest.ProviderId));
+    }
+
+    [Fact]
+    public void LegacyTerminalRequestsRemainReadableAndExplicitProviderIsPreserved()
+    {
+        var developmentId = Guid.NewGuid();
+        var legacy = $$"""{"developmentId":"{{developmentId}}"}""";
+        JsonSerializer.Deserialize<RemoteTerminalStartRequest>(legacy, RemoteJson.Options)!
+            .ProviderId.Should().BeNull();
+        var codex = new RemoteTerminalStartRequest(developmentId, "codex");
+        JsonSerializer.Deserialize<RemoteTerminalStartRequest>(JsonSerializer.Serialize(codex, RemoteJson.Options), RemoteJson.Options)
+            .Should().Be(codex);
     }
 
     [Fact]

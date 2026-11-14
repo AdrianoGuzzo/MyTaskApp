@@ -61,11 +61,58 @@ public sealed partial class AgentSessionViewModel(
     IShellLauncher shell,
     ILogger<AgentSessionViewModel> logger,
     ManagedConversationOpener? conversations = null,
-    IEmbeddedTerminalPresenter? terminalViews = null) : ObservableObject
+    IEmbeddedTerminalPresenter? terminalViews = null,
+    IAgentCliProviders? providers = null) : ObservableObject
 {
     private Guid _taskId;
 
     private Guid _developmentId;
+
+    [ObservableProperty]
+    private IReadOnlyList<AgentProviderOption> _providerOptions = providers?.All.Select(provider => new AgentProviderOption(provider.Id, provider.Name)).ToArray() ?? [];
+
+    [ObservableProperty]
+    private AgentProviderOption? _selectedProvider;
+
+    private string? _providerId;
+
+    [RelayCommand]
+    private async Task SelectProviderAsync()
+    {
+        if (IsBusy || SelectedProvider is null || Session is { IsActive: true })
+            return;
+        _providerId = SelectedProvider.Id;
+        Cli = null;
+        _loadedArguments = Arguments = string.Empty;
+        _loadedModel = _loadedEffort = string.Empty;
+        SelectedModel = SelectedEffort = null;
+        _loadedMonitor = Monitor = true;
+        _loadedHosting = AgentHosting.Direct;
+        SelectedHosting = null;
+        await DetectAsync(CancellationToken.None);
+        State = StateFor(Session);
+    }
+
+    [RelayCommand]
+    private async Task SaveDefaultProviderAsync()
+    {
+        if (SelectedProvider is null || IsBusy)
+            return;
+        try
+        {
+            await runner.RunAsync<AgentProviderSettingsHandler, bool>(async (handler, token) =>
+            {
+                await handler.SaveAsync(SelectedProvider.Id, token);
+                return true;
+            }, CancellationToken.None);
+            Message = $"{SelectedProvider.Name} definido como padrão nesta instalação.";
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "AgentDefaultProviderSaveFailed");
+            Message = "Não foi possível salvar o agente padrão.";
+        }
+    }
 
     /// <summary>O último valor vindo do banco: se o campo ainda o mostra, o usuário não mexeu.</summary>
     private string _loadedArguments = string.Empty;
@@ -212,7 +259,7 @@ public sealed partial class AgentSessionViewModel(
 
     public int MaxPromptLength => TaskDevelopment.MaxAgentPromptLength;
 
-    public string AgentName => Cli?.Name ?? Session?.ProviderName ?? "Agente de IA";
+    public string AgentName => Session is { IsActive: true } active ? active.ProviderName : Cli?.Name ?? Session?.ProviderName ?? "Agente de IA";
 
     public string StartLabel => $"Iniciar {AgentName}";
 
@@ -369,6 +416,14 @@ public sealed partial class AgentSessionViewModel(
         _taskId = taskId;
         _developmentId = developmentId;
         Session = null;
+        _providerId = null;
+        Cli = null;
+        _loadedArguments = Arguments = string.Empty;
+        _loadedModel = _loadedEffort = string.Empty;
+        SelectedModel = SelectedEffort = null;
+        _loadedMonitor = Monitor = true;
+        _loadedHosting = AgentHosting.Direct;
+        SelectedHosting = null;
         IsReadOnly = isReadOnly;
         Prompt = prompt;
         RunDirectly = false;
@@ -395,10 +450,13 @@ public sealed partial class AgentSessionViewModel(
             Session = session;
 
             // Com o agente aberto, ele está instalado — não há o que procurar.
-            if (session is not { IsActive: true })
+            if (session is { IsActive: true })
             {
-                await DetectAsync(cancellationToken);
+                _providerId = session.ProviderId;
+                SelectedProvider ??= ProviderOptions.FirstOrDefault(option => option.Id == session.ProviderId);
             }
+            else
+                await DetectAsync(cancellationToken);
 
             State = StateFor(session);
         }
@@ -591,10 +649,15 @@ public sealed partial class AgentSessionViewModel(
         try
         {
             var cli = await runner.RunAsync<DetectAgentCliHandler, AgentCliStatus>(
-                (handler, token) => handler.HandleAsync(new DetectAgentCli(Cli?.ProviderId), token),
+                (handler, token) => handler.HandleAsync(new DetectAgentCli(_providerId ?? Cli?.ProviderId), token),
                 cancellationToken);
 
+            var providerChanged = Cli?.ProviderId != cli.ProviderId;
+            var selectedId = SelectedProvider?.Id;
             Cli = cli;
+            if (!ProviderOptions.SequenceEqual(cli.Providers))
+                ProviderOptions = cli.Providers;
+            SelectedProvider = ProviderOptions.FirstOrDefault(option => option.Id == (providerChanged ? cli.ProviderId : selectedId));
 
             // Não atropela o que o usuário está digitando.
             if (Arguments == _loadedArguments)

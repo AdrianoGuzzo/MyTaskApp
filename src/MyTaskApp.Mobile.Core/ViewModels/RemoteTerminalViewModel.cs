@@ -16,7 +16,7 @@ public sealed record TerminalLine(RemoteTerminalItem Item, string Machine)
 {
     public string Title => Item.Title;
 
-    public string Detail => $"{Machine} · {Item.State}";
+    public string Detail => $"{Machine} · {Item.ProviderName} · {Item.State}";
 
     /// <summary>Um diálogo aberto, ou o Claude esperando: a linha se destaca.</summary>
     public bool NeedsAttention => Item.NeedsAttention;
@@ -291,7 +291,7 @@ public sealed partial class RemoteTerminalViewModel : MobileViewModel, IAsyncDis
         if (client.Status?.PermissionsBypassed == true
             && !await Dialogs.ConfirmAsync(
                 "Assumir uma sessão sem as aprovações?",
-                "Esta sessão foi aberta sem as aprovações do Claude Code: o que você pedir daqui roda na outra máquina sem perguntar antes. O MyTaskApp não muda isso.",
+                $"Esta sessão foi aberta sem as aprovações do {client.ProviderDisplayName}: o que você pedir daqui roda na outra máquina sem perguntar antes. O MyTaskApp não muda isso.",
                 "Assumir",
                 "Só olhar"))
         {

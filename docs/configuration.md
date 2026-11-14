@@ -33,7 +33,7 @@ sobrescrever:
 | `Application:ReminderTickSeconds` | 30 | intervalo do agendador de lembretes |
 | `Application:LifecycleSweepMinutes` | 360 | intervalo da varredura de arquivamento e lixeira |
 | `Application:AgentSessionReconcileSeconds` | 60 | intervalo da conferência de processos do agente |
-| `Application:AgentEventsPort` | 47831 | porta local (`127.0.0.1`) que recebe os hooks do Claude Code |
+| `Application:AgentEventsPort` | 47831 | porta local (`127.0.0.1`) que recebe os hooks de Claude Code e Codex |
 | `Database:FileName` | `mytaskapp.db` | nome do arquivo do banco, na pasta de dados |
 | `Jira:CallbackPort` | 47832 | porta da volta do login do Jira; precisa ser a registrada no app OAuth |
 | `Jira:RequestTimeoutSeconds` | 8 | quanto uma chamada ao Jira espera antes de desistir |

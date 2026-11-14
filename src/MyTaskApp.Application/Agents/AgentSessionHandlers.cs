@@ -43,7 +43,7 @@ public sealed class DetectAgentCliHandler(
         DetectAgentCli query,
         CancellationToken cancellationToken = default)
     {
-        var provider = providers.Get(query.ProviderId);
+        var provider = await providers.ResolveAsync(settings, query.ProviderId, cancellationToken);
         var detection = await provider.DetectAsync(cancellationToken);
         var remote = remoteSettings is null ? null : await remoteSettings.GetAsync(cancellationToken);
 
@@ -59,6 +59,7 @@ public sealed class DetectAgentCliHandler(
             await settings.EffortForAsync(provider, cancellationToken))
         {
             Models = provider.Models,
+            Providers = providers.All.Select(item => new AgentProviderOption(item.Id, item.Name)).ToArray(),
             Efforts = provider.Efforts,
             Hosting = await settings.HostingForAsync(provider, agentTerminal.Support.IsSupported, cancellationToken),
             HostingSupport = agentTerminal.Support,
@@ -188,7 +189,7 @@ public sealed class StartAgentSessionHandler(
         StartAgentSession command,
         CancellationToken cancellationToken = default)
     {
-        var provider = providers.Get(command.ProviderId);
+        var provider = await providers.ResolveAsync(settings, command.ProviderId, cancellationToken);
         var hosted = command.Hosting != AgentHosting.Direct;
 
         if (hosted)
@@ -212,7 +213,7 @@ public sealed class StartAgentSessionHandler(
                 $"A pasta do worktree ({development.WorktreePath}) não existe mais. O {provider.Name} não foi aberto.");
         }
 
-        await EnsureNoActiveSessionAsync(development.Id, provider, cancellationToken);
+        await EnsureNoActiveSessionAsync(development.Id, cancellationToken);
 
         var detection = await provider.DetectAsync(cancellationToken);
 
@@ -237,6 +238,7 @@ public sealed class StartAgentSessionHandler(
         }
 
         // A sessão nasce antes do comando: o id dela vai no ambiente do processo.
+        var conversationId = command.ResumeConversation ?? Guid.NewGuid().ToString();
         var session = hosted
             ? AgentSession.CreateTerminal(
                 task.Id,
@@ -244,7 +246,7 @@ public sealed class StartAgentSessionHandler(
                 provider.Id,
                 detection.ExecutablePath,
                 development.WorktreePath,
-                command.ResumeConversation ?? Guid.NewGuid().ToString(),
+                conversationId,
                 timeProvider.GetUtcNow(),
                 command.RemoteOrigin)
             : AgentSession.Create(
@@ -254,6 +256,9 @@ public sealed class StartAgentSessionHandler(
                 detection.ExecutablePath,
                 development.WorktreePath,
                 timeProvider.GetUtcNow());
+
+        if (hosted && command.ResumeConversation is null && !provider.SupportsAssignedConversationId)
+            session.AwaitExternalSessionId();
 
         var (monitoring, monitoringNote) = await PrepareMonitoringAsync(
             provider, session, development, command.Monitor, cancellationToken);
@@ -269,7 +274,7 @@ public sealed class StartAgentSessionHandler(
                 command.OmitPrompt ? null : development.AgentPrompt,
                 command.RunDirectly,
                 monitoring,
-                hosted ? new AgentCliTerminal(session.ExternalSessionId!, command.ResumeConversation is not null) : null),
+                hosted ? new AgentCliTerminal(conversationId, command.ResumeConversation is not null) : null),
             detection);
 
         await sessions.AddAsync(session, cancellationToken);
@@ -288,7 +293,7 @@ public sealed class StartAgentSessionHandler(
                         development.Id,
                         development.WorktreePath,
                         session.IsMonitored,
-                        provider.BypassesPermissions(arguments, development.WorktreePath)),
+                        provider.BypassesPermissions(launch.Arguments, development.WorktreePath), provider.Id, provider.SupportsTerminalPermissionChoices),
                     cancellationToken)
                 : await launcher.LaunchAsync(launch, cancellationToken);
         }
@@ -509,7 +514,6 @@ public sealed class StartAgentSessionHandler(
     /// </summary>
     private async Task EnsureNoActiveSessionAsync(
         Guid developmentId,
-        IAgentCliProvider provider,
         CancellationToken cancellationToken)
     {
         var latest = await sessions.FindLatestForDevelopmentAsync(developmentId, cancellationToken);
@@ -522,7 +526,7 @@ public sealed class StartAgentSessionHandler(
         if (!AgentSessionReconciler.EndIfGone(latest, processes, timeProvider.GetUtcNow()))
         {
             throw new DomainException(
-                $"Este ambiente já tem um {provider.Name} aberto. Use \"Abrir terminal do agente\" para ir até ele.");
+                $"Este ambiente já tem um {providers.Find(latest.ProviderId)?.Name ?? latest.ProviderId} aberto. Use \"Abrir terminal do agente\" para ir até ele.");
         }
 
         await unitOfWork.SaveChangesAsync(cancellationToken);

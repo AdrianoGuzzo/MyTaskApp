@@ -109,7 +109,8 @@ public sealed record DeviceCapabilities(
     ToolStatus GitHubCli,
     ToolStatus PostgresTools,
     int MaxConcurrentOperations,
-    string CatalogHash);
+    string CatalogHash,
+    IReadOnlyList<string>? AgentProviders = null);
 
 public sealed record ToolStatus(bool Available, string? Version)
 {

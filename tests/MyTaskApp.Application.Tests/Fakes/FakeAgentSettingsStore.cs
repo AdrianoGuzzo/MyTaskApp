@@ -5,6 +5,15 @@ namespace MyTaskApp.Application.Tests.Fakes;
 
 internal sealed class FakeAgentSettingsStore : IAgentSettingsStore
 {
+    public string? DefaultProviderId { get; set; }
+
+    public Task<string?> GetDefaultProviderAsync(CancellationToken cancellationToken = default) => Task.FromResult(DefaultProviderId);
+
+    public Task SaveDefaultProviderAsync(string providerId, CancellationToken cancellationToken = default)
+    {
+        DefaultProviderId = providerId;
+        return Task.CompletedTask;
+    }
     public Dictionary<string, string> Arguments { get; } = [];
 
     public int SaveCount { get; private set; }

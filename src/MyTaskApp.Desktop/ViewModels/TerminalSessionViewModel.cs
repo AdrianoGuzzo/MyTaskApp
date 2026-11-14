@@ -138,7 +138,7 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
         if (Status?.PermissionsBypassed == true && _confirmations is not null)
         {
             var confirmed = await _confirmations.AskAsync(new ConfirmationRequest(
-                "Assumir uma sessão sem as aprovações do Claude Code?",
+                $"Assumir uma sessão sem as aprovações do {_client.ProviderDisplayName}?",
                 "Esta sessão foi aberta sem as aprovações: o que você pedir daqui roda na outra máquina sem perguntar antes. O MyTaskApp não muda isso.",
                 "Assumir o controle"));
 
@@ -182,7 +182,7 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
     {
         var confirmed = await _confirmations!.AskAsync(new ConfirmationRequest(
             "Forçar o fim desta sessão?",
-            "O Claude e tudo o que ele abriu nesta sessão são encerrados na hora, sem salvar. Os outros programas da máquina não são tocados.",
+            $"O {_client.ProviderName} e tudo o que ele abriu nesta sessão são encerrados na hora, sem salvar. Os outros programas da máquina não são tocados.",
             "Forçar o fim",
             IsIrreversible: true));
 

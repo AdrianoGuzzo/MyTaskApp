@@ -251,11 +251,13 @@
                   </DataTemplate>
                 </ComboBox.ItemTemplate>
               </ComboBox>
+              <ComboBox ItemsSource="{Binding TerminalProviderIds}" SelectedItem="{Binding TerminalProviderId}"
+                        IsVisible="{Binding HasNoConversation}" />
               <TextBox x:Name="AgentPromptBox"
                        AcceptsReturn="True"
                        TextWrapping="Wrap"
                        MinHeight="72"
-                       PlaceholderText="O que o Claude deve fazer no worktree"
+                       PlaceholderText="O que o agente deve fazer no worktree"
                        Text="{Binding AgentPrompt}" />
               <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                 <TextBlock Classes="meta" VerticalAlignment="Center"
@@ -268,11 +270,12 @@
             </StackPanel>
 
             <!-- O Claude interativo de lá, num terminal de verdade (ADR-099): com o que está salvo lá. -->
-            <Grid x:Name="TerminalStartPanel" ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,8,0,0"
+            <Grid x:Name="TerminalStartPanel" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Margin="0,8,0,0"
                   IsVisible="{Binding Terminals.IsOffered}">
               <TextBlock Classes="meta" VerticalAlignment="Center" TextWrapping="Wrap"
-                         Text="Abre o Claude Code no terminal do agente de lá, com os parâmetros e o modelo salvos lá. Depois, siga em Terminais." />
-              <Button Grid.Column="1" x:Name="StartTerminalButton" Content="Abrir no terminal de lá"
+                         Text="Abre o agente escolhido no terminal de lá, com os parâmetros salvos naquela máquina. Depois, siga em Terminais." />
+              <ComboBox Grid.Column="1" ItemsSource="{Binding TerminalProviderIds}" SelectedItem="{Binding TerminalProviderId}" />
+              <Button Grid.Column="2" x:Name="StartTerminalButton" Content="Abrir no terminal de lá"
                       IsEnabled="{Binding !IsBusy}"
                       Command="{Binding StartTerminalCommand}" />
             </Grid>
@@ -288,7 +291,7 @@
       -->
       <Border x:Name="TerminalsCard" Classes="card" DataContext="{Binding Terminals}" IsVisible="{Binding IsOffered}">
         <StackPanel Spacing="8">
-          <TextBlock Classes="sectionTitle" Text="Terminais do Claude" />
+          <TextBlock Classes="sectionTitle" Text="Terminais dos agentes" />
           <TextBlock x:Name="TerminalsMessage" Classes="meta caution" Text="{Binding Message}"
                      IsVisible="{Binding Message, Converter={x:Static ObjectConverters.IsNotNull}}" />
           <TextBlock Classes="meta" Text="{Binding EmptyText}" IsVisible="{Binding HasNoItems}" />
@@ -298,6 +301,7 @@
                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,2">
                   <StackPanel Spacing="1">
                     <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Classes="meta" Text="{Binding ProviderName}" />
                     <TextBlock Classes="meta" Text="{Binding State}" />
                     <TextBlock Classes="meta caution" Text="{Binding BypassWarning}"
                                IsVisible="{Binding BypassWarning, Converter={x:Static ObjectConverters.IsNotNull}}" />

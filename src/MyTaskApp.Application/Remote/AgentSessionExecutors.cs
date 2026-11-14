@@ -636,18 +636,32 @@ public sealed class HeadlessPromptRunner(
     IEnumerable<IHeadlessApprovalGateway> gateways,
     HeadlessConversations conversations,
     HeadlessAgentLimits limits,
-    ILogger<HeadlessPromptRunner> logger)
+    ILogger<HeadlessPromptRunner> logger,
+    IAgentCliProviders? cliProviders = null)
 {
     /// <summary>O provider instalado e com a versão que serve; senão, a recusa com o motivo.</summary>
-    public async Task<(CliDetectionResult? Detection, RemoteRefusal? Refusal)> DetectAsync(CancellationToken cancellationToken)
+    public async Task<(CliDetectionResult? Detection, RemoteRefusal? Refusal)> DetectAsync(CancellationToken cancellationToken, string? providerId = null)
     {
-        var detection = await provider.DetectAsync(cancellationToken);
-        return provider.HeadlessUnavailableReason(detection) is { } reason
+        var selected = providerId is null || providerId == provider.Id ? provider
+            : cliProviders?.Find(providerId) as IHeadlessAgentProvider;
+        if (selected is null)
+            return (null, new RemoteRefusal(RemoteErrorCodes.PolicyRefused, "Este agente não oferece conversas gerenciadas nesta máquina."));
+        var detection = await selected.DetectAsync(cancellationToken);
+        return selected.HeadlessUnavailableReason(detection) is { } reason
             ? (null, new RemoteRefusal(RemoteErrorCodes.PolicyRefused, reason))
             : (detection, null);
     }
 
     public string ProviderId => provider.Id;
+
+    public async Task<(CliDetectionResult? Detection, RemoteRefusal? Refusal)> DetectSessionAsync(Guid? sessionId, CancellationToken cancellationToken)
+    {
+        var id = sessionId is { } value
+            ? await runner.RunAsync<IAgentSessionRepository, string?>(async (sessions, token) =>
+                (await sessions.FindByIdAsync(value, token))?.ProviderId, cancellationToken)
+            : null;
+        return await DetectAsync(cancellationToken, id);
+    }
 
     /// <inheritdoc cref="HeadlessConversations.TryBegin"/>
     public HeadlessPromptLease? TryBegin(Guid sessionId) => conversations.TryBegin(sessionId);
@@ -666,9 +680,13 @@ public sealed class HeadlessPromptRunner(
         CancellationToken cancellationToken)
     {
         var sessionId = lease.SessionId;
-        var conversation = await runner.RunAsync<IAgentSessionRepository, Guid>(
-            async (sessions, token) => Guid.Parse((await sessions.FindByIdAsync(sessionId, token))!.ExternalSessionId!),
+        var session = await runner.RunAsync<IAgentSessionRepository, AgentSession>(
+            async (sessions, token) => (await sessions.FindByIdAsync(sessionId, token))!,
             cancellationToken);
+        var conversation = Guid.Parse(session.ExternalSessionId!);
+        var selectedProvider = session.ProviderId == provider.Id ? provider
+            : cliProviders?.Find(session.ProviderId) as IHeadlessAgentProvider
+                ?? throw new DomainException("O provedor desta conversa não está disponível nesta máquina.");
 
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, lease.Stopping);
 
@@ -713,7 +731,7 @@ public sealed class HeadlessPromptRunner(
                     }
                     else
                     {
-                        var summary = SensitiveText.Mask(provider.Summarize(request.ToolName, request.Input));
+                        var summary = SensitiveText.Mask(selectedProvider.Summarize(request.ToolName, request.Input));
                         await SetActivityAsync(AgentActivity.WaitingForUser, $"Aprovar {request.ToolName}?");
                         decision = await DecideAsync(execution, sessionId, request.ToolName, request.Input, summary, request.ToolUseId, token);
                     }
@@ -723,7 +741,7 @@ public sealed class HeadlessPromptRunner(
                 },
                 cancellationToken);
 
-        var launch = provider.CreateHeadlessLaunch(
+        var launch = selectedProvider.CreateHeadlessLaunch(
             new HeadlessAgentRequest(
                 target.WorktreePath,
                 conversation,
@@ -756,7 +774,7 @@ public sealed class HeadlessPromptRunner(
                 (processId, startedAt) => Store((store, token) => store.RunningAsync(sessionId, processId, startedAt, token)),
                 async line =>
                 {
-                    foreach (var item in provider.ReadEvents(line))
+                    foreach (var item in selectedProvider.ReadEvents(line))
                     {
                         switch (item)
                         {
@@ -1014,7 +1032,7 @@ public sealed class AgentStartExecutor(IUseCaseRunner runner, HeadlessPromptRunn
             return new RemoteRefusal(RemoteErrorCodes.PolicyRefused, exception.Message);
         }
 
-        return (await prompts.DetectAsync(cancellationToken)).Refusal;
+        return (await prompts.DetectAsync(cancellationToken, RemoteOperationRules.PayloadOf<ClaudeCodeSessionRequest>(request).ProviderId)).Refusal;
     }
 
     public Task<RemoteOperationResult> ExecuteAsync(RemoteExecution execution, CancellationToken cancellationToken) =>
@@ -1028,7 +1046,7 @@ public sealed class AgentStartExecutor(IUseCaseRunner runner, HeadlessPromptRunn
         ClaudeCodeSessionRequest request,
         CancellationToken cancellationToken)
     {
-        var (detection, refusal) = await prompts.DetectAsync(cancellationToken);
+        var (detection, refusal) = await prompts.DetectAsync(cancellationToken, request.ProviderId);
 
         if (refusal is not null)
         {
@@ -1039,7 +1057,7 @@ public sealed class AgentStartExecutor(IUseCaseRunner runner, HeadlessPromptRunn
         var sessionId = await runner.RunAsync<HeadlessSessionStore, Guid>(
             (store, token) => store.OpenAsync(
                 target,
-                prompts.ProviderId,
+                request.ProviderId ?? prompts.ProviderId,
                 detection!.ExecutablePath!,
                 execution.Request.OperationId,
                 token,
@@ -1081,12 +1099,12 @@ public sealed class AgentPromptExecutor(IUseCaseRunner runner, HeadlessPromptRun
             return new RemoteRefusal(RemoteErrorCodes.PolicyRefused, exception.Message);
         }
 
-        return (await prompts.DetectAsync(cancellationToken)).Refusal;
+        return (await prompts.DetectSessionAsync(RemoteOperationRules.PayloadOf<PromptRequest>(request).AgentSessionId, cancellationToken)).Refusal;
     }
 
     public async Task<RemoteOperationResult> ExecuteAsync(RemoteExecution execution, CancellationToken cancellationToken)
     {
-        var (detection, refusal) = await prompts.DetectAsync(cancellationToken);
+        var (detection, refusal) = await prompts.DetectSessionAsync(execution.Payload<PromptRequest>().AgentSessionId, cancellationToken);
 
         if (refusal is not null)
         {

@@ -340,13 +340,14 @@ public class InfrastructureRegistrationTests : IDisposable
             where THandler : notnull => throw new NotSupportedException();
     }
 
-    /// <summary>Hoje o único agente é o Claude Code (ADR-030).</summary>
+    /// <summary>Os dois agentes compartilham o catálogo; o padrão inicial continua Claude.</summary>
     [Fact]
     public void TheClaudeCode_IsTheRegisteredAgent()
     {
         using var provider = BuildProvider();
 
-        provider.GetServices<IAgentCliProvider>().Select(agent => agent.Id).Should().Equal("claude-code");
+        provider.GetServices<IAgentCliProvider>().Select(agent => agent.Id).Should().Equal("claude-code", "codex");
+        new AgentCliProviders(provider.GetServices<IAgentCliProvider>()).Default.Id.Should().Be("claude-code");
     }
 
     [Fact]

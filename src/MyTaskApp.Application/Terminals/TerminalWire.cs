@@ -209,6 +209,9 @@ public sealed record TerminalHello(
 {
     public const int CurrentVersion = 1;
 
+    /// <summary>A abertura com provedor explícito não pode ser ignorada por um agente antigo.</summary>
+    public const int ProviderStartVersion = 2;
+
     public const string Attach = "attach";
 
     public const string StartOperation = "start";
@@ -225,7 +228,8 @@ public sealed record TerminalStartRequest(
     bool? Monitor = null,
     string? Model = null,
     string? Effort = null,
-    string? ResumeConversation = null);
+    string? ResumeConversation = null,
+    string? ProviderId = null);
 
 /// <summary>A resposta do <c>start</c>: a sessão aberta, ou o motivo de não abrir.</summary>
 public sealed record TerminalStartResult(bool Ok, Guid? SessionId, string? Error, string? MonitoringNote);

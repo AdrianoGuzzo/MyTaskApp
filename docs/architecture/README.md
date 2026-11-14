@@ -153,6 +153,7 @@ Números dos ADRs; o link está na linha do índice abaixo.
 | [ADR-101](decisions/101-terminal-do-claude-em-qualquer-aparelho.md) | O terminal do Claude em qualquer aparelho: o card abre no agente, a lista junta as máquinas e o celular segue e controla | Aceito | Parcial | remoto | AgentWindow padrão, Usar o terminal do agente, Terminais do Claude, TerminalSessionClient, RemoteTerminalPage, celular |
 | [ADR-102](decisions/102-reajustar-horas-pelo-relatorio.md) | Reajustar as horas pelo relatório: a tarefa abre os períodos do bloco, com as regras da aba Tempo | Aceito | Implementado | ciclo-de-vida | reajustar horas, OpenTaskCommand, ReportEntryRow, GetTimeEntries por tarefa, UpdateTimeEntry, relatório de horas |
 | [ADR-103](decisions/103-estado-do-claude-de-outras-maquinas-na-tarefa.md) | O estado do Claude de outras máquinas aparece na tarefa, e o pedido novo avisa | Aceito | Parcial | remoto | RemoteClaudeBoard, relato só de estado, Aceitar controle, selo remoto, episódio de atenção, notificação no celular |
+| [ADR-104](decisions/104-provedores-claude-code-e-codex.md) | Claude Code e Codex compartilham os fluxos de agentes | Aceito | Implementado | agente-ia | CodexCliProvider, AgentProviderSettingsHandler, ProviderId, agente padrão, hooks, terminal remoto |
 
 ## Novo ADR
 

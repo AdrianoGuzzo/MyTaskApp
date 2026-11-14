@@ -1,4 +1,39 @@
-# Claude Code por tarefa
+# Agentes de IA por tarefa: Claude Code e Codex
+
+## Escolher o agente
+
+No card **Desenvolvimento**, escolha o **Agente de IA** e clique em **Usar este
+agente**. **Definir como padrão** salva a escolha nesta instalação, para novas
+aberturas, inclusive pelo menu da tarefa. Sem preferência salva, vale Claude Code.
+O padrão do Codex é `--dangerously-bypass-approvals-and-sandbox`, editável no campo
+Parâmetros. Cada agente conserva seus próprios parâmetros, esforço e hospedagem.
+
+Continua valendo **um terminal ativo por worktree**. Para trocar o agente daquele
+worktree, encerre o terminal atual; os dois podem ficar abertos em worktrees
+diferentes. Alterar o padrão não encerra sessões nem transfere conversas.
+
+O Codex usa os mesmos modos **Onde abrir**, incluindo o terminal do agente,
+seguido e controlado por outro computador ou pelo celular. A lista remota mostra
+o provedor de cada sessão. O seletor remoto oferece os provedores anunciados pela
+máquina executora. Atualize servidor, agentes e controladores juntos.
+
+O acompanhamento usa os hooks oficiais do Codex, requer versão 0.169.0 ou mais
+recente e precisa de `curl`. A confiança
+nos hooks continua sendo decidida pelo usuário no Codex. As permissões do Codex
+são respondidas pelas teclas do terminal, inclusive remotamente.
+
+A Consulta Inteligente começa com o agente padrão e permite escolher outro na
+própria aba, pelo botão **Usar este agente**; ao retomar, conserva o provedor da
+conversa original. No Codex, planejamento e consulta removem o bypass padrão e
+usam sandbox somente leitura. As restrições de leitura do banco permanecem no
+servidor, comuns aos dois agentes.
+
+**Conversas gerenciadas sem terminal:** o Claude continua disponível. O Codex
+recusa esse modo porque não oferece o teto de custo em dólares exigido pelo
+aplicativo; use o terminal do agente para trabalhar remotamente com ele. Não há
+troca automática para Claude. Veja [ADR-104](../architecture/decisions/104-provedores-claude-code-e-codex.md).
+
+## Recursos existentes do Claude Code
 
 | | |
 |---|---|

@@ -94,7 +94,7 @@ public static class RemoteTerminalMapping
         status.Monitored,
         status.PermissionsBypassed,
         Clip(status.PermissionMode, 40),
-        viewerId);
+        viewerId, status.ProviderId);
 
     /// <summary>Do fio para a vista do terminal: o mesmo estado que a vista local recebe, sem a pasta.</summary>
     public static TerminalSessionStatus FromRemote(RemoteTerminalState state)
@@ -141,7 +141,7 @@ public static class RemoteTerminalMapping
             state.PermissionsBypassed,
             state.PermissionMode,
             LastOutputAt: null,
-            state.YourViewerId);
+            state.YourViewerId, state.ProviderId);
     }
 
     /// <param name="withContent">
@@ -161,7 +161,7 @@ public static class RemoteTerminalMapping
         status.PermissionsBypassed,
         RemotelyControlled: withContent && status.Lease?.Kind == TerminalClientKind.Remote,
         status.StartedAt,
-        updatedAt);
+        updatedAt, status.ProviderId);
 
     private static RemoteTerminalProcess ProcessOf(TerminalProcessState process) => process switch
     {
@@ -710,6 +710,7 @@ public sealed class TerminalStartExecutor(IUseCaseRunner runner, ITerminalSessio
                     new StartAgentSession(
                         execution.Request.TaskId!.Value,
                         request.DevelopmentId,
+                        ProviderId: request.ProviderId ?? "claude-code",
                         Hosting: AgentHosting.AgentWindow,
                         RemoteOrigin: execution.ControllerNickname == RemoteTrust.OwnNickname ? null : execution.ControllerNickname,
                         OmitPrompt: true),
@@ -717,9 +718,9 @@ public sealed class TerminalStartExecutor(IUseCaseRunner runner, ITerminalSessio
                 cancellationToken);
 
             return view.Status == AgentSessionStatus.Failed
-                ? RemoteOperationResult.Failure(RemoteErrorCodes.ExecutionFailed, view.FailureReason ?? "O Claude não abriu no terminal do agente.")
+                ? RemoteOperationResult.Failure(RemoteErrorCodes.ExecutionFailed, view.FailureReason ?? $"O {view.ProviderName} não abriu no terminal do agente.")
                 : RemoteOperationResult.Success(
-                    view.MonitoringNote is { } note ? $"O Claude abriu no terminal do agente. {note}" : "O Claude abriu no terminal do agente.",
+                    view.MonitoringNote is { } note ? $"O {view.ProviderName} abriu no terminal do agente. {note}" : $"O {view.ProviderName} abriu no terminal do agente.",
                     data: JsonSerializer.SerializeToElement(new { sessionId = view.SessionId }));
         }
         catch (DomainException exception)

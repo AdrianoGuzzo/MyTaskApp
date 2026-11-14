@@ -7,7 +7,7 @@
 | **Categoria** | agente-ia |
 | **Registrado** | 2026-11-03 |
 | **Palavras-chave** | Consulta Inteligente, IConsultationLaunchBuilder, ConsultationLauncher, --restricted, --strict-mcp-config, mytaskapp-consulta, Parâmetros do card |
-| **Relações** | revisa: [ADR-081](081-consulta-inteligente-somente-leitura.md); relacionado: [ADR-033](033-parametros-do-agente-lembrados.md), [ADR-030](030-sessoes-claude-code-por-tarefa.md) |
+| **Relações** | revisa: [ADR-081](081-consulta-inteligente-somente-leitura.md); relacionado: [ADR-033](033-parametros-do-agente-lembrados.md), [ADR-030](030-sessoes-claude-code-por-tarefa.md); revisto por: [ADR-104](104-provedores-claude-code-e-codex.md) |
 | **Código** | `src/MyTaskApp.Infrastructure/Agents/ClaudeCode/ClaudeCodeCliProvider.cs`, `src/MyTaskApp.Application/Consultations/ConsultationSessionHandlers.cs` |
 
 **Contexto:** o item 3 do ADR-081 travava o Claude da consulta pelos

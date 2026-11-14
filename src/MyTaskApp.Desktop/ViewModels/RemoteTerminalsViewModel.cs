@@ -57,8 +57,8 @@ public sealed partial class RemoteTerminalsViewModel : ObservableObject
     public bool IsAllMachines => _machines is not null;
 
     public string EmptyText => IsAllMachines
-        ? "Nenhum Claude rodando no terminal do agente das outras máquinas."
-        : "Nenhum Claude rodando no terminal do agente de lá.";
+        ? "Nenhum agente rodando no terminal das outras máquinas."
+        : "Nenhum agente rodando no terminal de lá.";
 
     public async Task LoadAsync(MachineView machine, CancellationToken cancellationToken)
     {

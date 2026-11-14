@@ -81,6 +81,24 @@ public sealed partial class TaskConsultationViewModel : ObservableObject
 
     private Guid _taskId;
 
+    private string? _providerId;
+
+    [ObservableProperty]
+    private IReadOnlyList<AgentProviderOption> _providerOptions = [];
+
+    [ObservableProperty]
+    private AgentProviderOption? _selectedProvider;
+
+    [RelayCommand]
+    private async Task SelectProviderAsync()
+    {
+        if (IsStarting || IsLoading || SelectedProvider is null)
+            return;
+        _providerId = SelectedProvider.Id;
+        Cli = null;
+        await ReloadAsync(clearMessages: true, CancellationToken.None);
+    }
+
     /// <summary>Ligado enquanto a tela é preenchida pelo que veio do banco: nada disso é "o usuário mudou".</summary>
     private bool _applying;
 
@@ -116,7 +134,7 @@ public sealed partial class TaskConsultationViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsReadOnly), nameof(ActiveSession), nameof(IsSessionActive), nameof(StatusText),
         nameof(HasStatus), nameof(IsWaitingForYou), nameof(CanEditDatabase), nameof(ToolsAvailable), nameof(ShowsMcpHint),
-        nameof(StartBlockedReason), nameof(CanStart), nameof(IsConfigured))]
+        nameof(StartBlockedReason), nameof(CanStart), nameof(IsConfigured), nameof(AgentName))]
     [NotifyCanExecuteChangedFor(nameof(StartCommand), nameof(GoToTerminalCommand), nameof(ClearCommand))]
     private TaskConsultationView? _view;
 
@@ -194,7 +212,7 @@ public sealed partial class TaskConsultationViewModel : ObservableObject
     private string _sessionInstructions = string.Empty;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsAgentMissing), nameof(InstallGuide), nameof(StartBlockedReason), nameof(CanStart))]
+    [NotifyPropertyChangedFor(nameof(IsAgentMissing), nameof(InstallGuide), nameof(StartBlockedReason), nameof(CanStart), nameof(AgentName), nameof(StatusText))]
     [NotifyCanExecuteChangedFor(nameof(StartCommand))]
     private AgentCliStatus? _cli;
 
@@ -291,6 +309,8 @@ public sealed partial class TaskConsultationViewModel : ObservableObject
 
     public AgentCliInstallGuide? InstallGuide => Cli?.InstallGuide;
 
+    public string AgentName => ActiveSession?.ProviderName ?? Cli?.Name ?? "Claude Code";
+
     public bool HasStatus => StatusText is not null;
 
     /// <summary>A linha de estado do cartão "Perguntar".</summary>
@@ -300,7 +320,7 @@ public sealed partial class TaskConsultationViewModel : ObservableObject
         {
             if (IsStarting)
             {
-                return "Iniciando o Claude Code…";
+                return $"Iniciando o {AgentName}…";
             }
 
             if (ActiveSession is { } active)
@@ -316,7 +336,7 @@ public sealed partial class TaskConsultationViewModel : ObservableObject
 
             return View?.Sessions.FirstOrDefault() switch
             {
-                { Status: AgentSessionStatus.Failed, FailureReason: var reason } => $"Não foi possível iniciar o Claude Code: {reason}",
+                { Status: AgentSessionStatus.Failed, FailureReason: var reason } => $"Não foi possível iniciar o {AgentName}: {reason}",
                 { Status: AgentSessionStatus.Exited } => "Terminal encerrado. Use Reabrir para voltar à conversa.",
                 _ => null,
             };
@@ -345,7 +365,7 @@ public sealed partial class TaskConsultationViewModel : ObservableObject
 
             if (IsAgentMissing)
             {
-                return "O Claude Code não foi encontrado neste computador.";
+                return $"O {AgentName} não foi encontrado neste computador.";
             }
 
             if (UsesDatabase && !ToolsAvailable)
@@ -363,6 +383,8 @@ public sealed partial class TaskConsultationViewModel : ObservableObject
     public void Load(Guid taskId)
     {
         _taskId = taskId;
+        _providerId = null;
+        Cli = null;
         _load++;
         _applying = true;
 
@@ -413,11 +435,11 @@ public sealed partial class TaskConsultationViewModel : ObservableObject
         try
         {
             var view = await _runner.RunAsync<GetTaskConsultationHandler, TaskConsultationView>(
-                (handler, token) => handler.HandleAsync(new GetTaskConsultation(taskId), token),
+                (handler, token) => handler.HandleAsync(new GetTaskConsultation(taskId, _providerId), token),
                 cancellationToken);
 
             Cli ??= await _runner.RunAsync<DetectAgentCliHandler, AgentCliStatus>(
-                (handler, token) => handler.HandleAsync(new DetectAgentCli(), token),
+                (handler, token) => handler.HandleAsync(new DetectAgentCli(_providerId), token),
                 cancellationToken);
 
             if (load != _load)
@@ -558,7 +580,7 @@ public sealed partial class TaskConsultationViewModel : ObservableObject
                 UsesDatabase ? SelectedDatabase?.DatabaseName : null,
                 Instructions,
                 SelectedModel?.Value,
-                SelectedEffort?.Value);
+                SelectedEffort?.Value, _providerId);
 
             var view = await _runner.RunAsync<SaveTaskConsultationHandler, TaskConsultationView>(
                 (handler, token) => handler.HandleAsync(command, token),
@@ -606,6 +628,8 @@ public sealed partial class TaskConsultationViewModel : ObservableObject
         try
         {
             View = view;
+            ProviderOptions = view.Providers;
+            SelectedProvider = ProviderOptions.FirstOrDefault(option => option.Id == (_providerId ?? view.ProviderId));
 
             Replace(Tags, view.Tags);
             SelectedTag = Tags.FirstOrDefault(tag => tag.Id == view.TagId);
@@ -650,8 +674,8 @@ public sealed partial class TaskConsultationViewModel : ObservableObject
                 Instructions = _savedInstructions;
             }
 
-            ModelOptions = [AgentCliOption.Default("Padrão"), .. view.Models];
-            EffortOptions = [AgentCliOption.Default("Padrão"), .. view.Efforts];
+            ModelOptions = [AgentCliOption.Default("Padrão"), .. Cli is { } cli && cli.ProviderId == _providerId ? cli.Models : view.Models];
+            EffortOptions = [AgentCliOption.Default("Padrão"), .. Cli is { } effortCli && effortCli.ProviderId == _providerId ? effortCli.Efforts : view.Efforts];
             SelectedModel = AgentCliOption.Find(ModelOptions, view.Model ?? string.Empty) ?? ModelOptions[0];
             SelectedEffort = AgentCliOption.Find(EffortOptions, view.Effort ?? string.Empty) ?? EffortOptions[0];
 
@@ -940,13 +964,13 @@ public sealed partial class TaskConsultationViewModel : ObservableObject
         {
             var session = await _runner.RunAsync<StartTaskConsultationHandler, AgentSessionView>(
                 (handler, token) => handler.HandleAsync(
-                    new StartTaskConsultation(taskId, Question, IsEditingInstructions ? SessionInstructions : null),
+                    new StartTaskConsultation(taskId, Question, IsEditingInstructions ? SessionInstructions : null, _providerId),
                     token),
                 CancellationToken.None);
 
             if (session.Status == AgentSessionStatus.Failed)
             {
-                ErrorMessage = $"Não foi possível iniciar o Claude Code: {session.FailureReason}";
+                ErrorMessage = $"Não foi possível iniciar o {AgentName}: {session.FailureReason}";
             }
             else
             {

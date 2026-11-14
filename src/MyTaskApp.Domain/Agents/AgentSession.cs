@@ -587,6 +587,14 @@ public sealed class AgentSession
         }
     }
 
+    /// <summary>O identificador real virá dos eventos do CLI, em vez de ser escolhido pelo app.</summary>
+    public void AwaitExternalSessionId()
+    {
+        if (Status != AgentSessionStatus.Starting)
+            throw new DomainException("Só uma sessão iniciando pode aguardar o identificador da conversa.");
+        ExternalSessionId = null;
+    }
+
     public void MarkFailed(string reason, DateTimeOffset at)
     {
         if (Status != AgentSessionStatus.Starting)

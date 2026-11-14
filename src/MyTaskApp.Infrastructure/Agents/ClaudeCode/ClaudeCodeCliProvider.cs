@@ -75,6 +75,10 @@ internal sealed partial class ClaudeCodeCliProvider(
 
     public string Command => "claude";
 
+    public bool SupportsTerminalPermissionChoices => true;
+
+    public bool SupportsAssignedConversationId => true;
+
     /// <summary>
     /// O worktree é um lugar descartável e isolado, feito para o agente
     /// trabalhar sem parar a cada arquivo — daí abrir sem pedir permissões.

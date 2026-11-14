@@ -13,7 +13,7 @@ using MyTaskApp.Domain.Tasks;
 namespace MyTaskApp.Desktop.Tests.ViewModels;
 
 /// <summary>
-/// "Abrir Claude Code" do menu da linha (ADR-036): abre o agente num ambiente
+/// "Abrir agente de IA" do menu da linha (ADR-036): abre o agente num ambiente
 /// da tarefa sem abrir a tarefa. Com mais de um ambiente, pergunta qual.
 /// </summary>
 public class TodayStartAgentTests
@@ -156,8 +156,8 @@ public class TodayStartAgentTests
         var items = TodayView.WorktreeMenu(row, viewModel).Items.OfType<MenuItem>().ToList();
 
         items.Select(item => item.Header).Should().Equal(
-            "Abrir Claude Code: eco-core · feature/x",
-            "Abrir Claude Code: eco-api · feature/x");
+            "Abrir agente de IA: eco-core · feature/x",
+            "Abrir agente de IA: eco-api · feature/x");
         items.Should().AllSatisfy(item => item.Command.Should().BeSameAs(viewModel.StartAgentInCommand));
         items.Select(item => item.CommandParameter).Should().Equal(row.WorktreeChoices);
     }

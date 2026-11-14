@@ -201,6 +201,7 @@ public static class DependencyInjection
         // agentes em si vêm da Infrastructure; aqui, o catálogo e os casos de uso.
         services.TryAddSingleton<IAgentCliProviders, AgentCliProviders>();
         services.AddScoped<DetectAgentCliHandler>();
+        services.AddScoped<AgentProviderSettingsHandler>();
         services.AddScoped<GetTaskAgentSessionHandler>();
         services.AddScoped<StartAgentSessionHandler>();
         services.AddScoped<FocusAgentSessionHandler>();

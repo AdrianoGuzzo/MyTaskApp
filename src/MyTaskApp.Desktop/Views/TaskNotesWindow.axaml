@@ -2501,6 +2501,24 @@
 
                 <TextBlock Classes="sectionTitle" Text="{Binding AgentName}" />
 
+                <StackPanel Spacing="6" IsEnabled="{Binding !IsBusy}">
+                  <TextBlock Classes="fieldLabel" Text="Agente de IA" />
+                  <ComboBox ItemsSource="{Binding ProviderOptions}" SelectedItem="{Binding SelectedProvider}"
+                            HorizontalAlignment="Stretch">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate x:DataType="agents:AgentProviderOption">
+                        <TextBlock Text="{Binding Name}" />
+                      </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Content="Usar este agente" Command="{Binding SelectProviderCommand}" IsEnabled="{Binding !IsRunning}" />
+                    <Button Content="Definir como padrão" Command="{Binding SaveDefaultProviderCommand}" />
+                  </StackPanel>
+                  <TextBlock Classes="hint" Text="O padrão vale para novas sessões. Para trocar o agente deste worktree, encerre o terminal atual."
+                             IsVisible="{Binding IsRunning}" />
+                </StackPanel>
+
                 <TextBlock x:Name="AgentStatus"
                            Classes="body"
                            Classes.ok="{Binding IsRunningQuietly}"

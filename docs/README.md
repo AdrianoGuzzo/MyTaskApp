@@ -24,7 +24,7 @@ no topo (ou use `rg -n "^#" <arquivo>`).
 | Janela, HUD, bandeja, temas, instância única | [`features/janela-e-temas.md`](features/janela-e-temas.md) |
 | Anotações, etiquetas, diretórios, arquivo e lixeira | [`features/anotacoes-etiquetas-ciclo-de-vida.md`](features/anotacoes-etiquetas-ciclo-de-vida.md) |
 | Aba Desenvolvimento: worktree, comandos, PR, limpeza | [`features/desenvolvimento-worktrees.md`](features/desenvolvimento-worktrees.md) |
-| Claude Code por tarefa | [`features/claude-code.md`](features/claude-code.md) |
+| Agentes de IA por tarefa (Claude Code e Codex) | [`features/claude-code.md`](features/claude-code.md) |
 | Jira | [`features/jira.md`](features/jira.md) · registrar o app OAuth: [`jira-oauth-app.md`](jira-oauth-app.md) |
 | Configuração (`appsettings.user.json`) | [`configuration.md`](configuration.md) |
 

@@ -57,8 +57,8 @@ public sealed record RemoteTerminalTarget(Guid DeviceId, Guid SessionId, Guid Ta
 /// <summary>Os pedidos do terminal remoto, como os outros: só ids e números (ADR-088).</summary>
 public static class RemoteTerminalRequests
 {
-    public static SendRemoteOperation Start(Guid deviceId, Guid taskId, Guid developmentId) =>
-        new(deviceId, RemoteOperationKinds.TerminalStart, Payload(new RemoteTerminalStartRequest(developmentId)), taskId, [taskId]);
+    public static SendRemoteOperation Start(Guid deviceId, Guid taskId, Guid developmentId, string? providerId = null) =>
+        new(deviceId, RemoteOperationKinds.TerminalStart, Payload(new RemoteTerminalStartRequest(developmentId, providerId)), taskId, [taskId]);
 
     public static SendRemoteOperation Attach(RemoteTerminalTarget target, DevicePublicKey viewerKey, TerminalSize size) =>
         new(
@@ -477,6 +477,8 @@ public sealed record RemoteTerminalItem(RemoteTerminalSessionView View, string T
 {
     public RemoteTerminalSessionReport Session => View.Session;
 
+    public string ProviderName => Session.ProviderId switch { "claude-code" => "Claude Code", "codex" => "Codex", _ => Session.ProviderId };
+
     /// <summary>A máquina onde o Claude roda.</summary>
     public Guid DeviceId => View.DeviceId;
 
@@ -495,7 +497,7 @@ public sealed record RemoteTerminalItem(RemoteTerminalSessionView View, string T
     public bool NeedsAttention =>
         IsRunning && (Session.HasDialog || Session.Activity == RemoteAgentActivity.WaitingForUser);
 
-    public string? BypassWarning => Session.PermissionsBypassed ? "Sem as aprovações do Claude Code" : null;
+    public string? BypassWarning => Session.PermissionsBypassed ? $"Sem as aprovações do {ProviderName}" : null;
 
     public RemoteTerminalTarget? Target(Guid deviceId) =>
         Session.DevelopmentId is { } developmentId ? new RemoteTerminalTarget(deviceId, Session.SessionId, Session.TaskId, developmentId) : null;

@@ -5,7 +5,7 @@ namespace MyTaskApp.Remote.Contracts;
 /// máquina executora. Só o ambiente: os parâmetros, o modelo e o
 /// acompanhamento são os salvos lá, nunca texto vindo de longe.
 /// </summary>
-public sealed record RemoteTerminalStartRequest(Guid DevelopmentId);
+public sealed record RemoteTerminalStartRequest(Guid DevelopmentId, string? ProviderId = null);
 
 /// <summary>
 /// <c>terminal.attach</c> (ADR-099): seguir uma sessão do terminal do agente.
@@ -123,7 +123,8 @@ public sealed record RemoteTerminalState(
     bool Monitored,
     bool PermissionsBypassed,
     string? PermissionMode,
-    Guid? YourViewerId);
+    Guid? YourViewerId,
+    string ProviderId = "claude-code");
 
 /// <summary>
 /// Uma sessão do terminal do agente, relatada pela máquina executora
@@ -143,7 +144,8 @@ public sealed record RemoteTerminalSessionReport(
     bool PermissionsBypassed,
     bool RemotelyControlled,
     DateTimeOffset StartedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    string ProviderId = "claude-code");
 
 /// <summary>Todas as sessões do terminal desta máquina de uma vez: a que sumiu do lote acabou.</summary>
 public sealed record RemoteTerminalSessionBatch(IReadOnlyList<RemoteTerminalSessionReport> Sessions);

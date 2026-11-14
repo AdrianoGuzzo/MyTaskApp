@@ -9,6 +9,11 @@ namespace MyTaskApp.Application.Agents;
 /// </summary>
 public interface IAgentSettingsStore
 {
+    Task<string?> GetDefaultProviderAsync(CancellationToken cancellationToken = default) => Task.FromResult<string?>(null);
+
+    Task SaveDefaultProviderAsync(string providerId, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+
     /// <summary>
     /// O texto salvo; <c>null</c> se nunca foi salvo — aí vale o
     /// <see cref="IAgentCliProvider.DefaultArguments"/>. Texto vazio é escolha

@@ -127,6 +127,10 @@ public sealed record TaskConsultationView(
     AgentSessionView? ActiveSession,
     IReadOnlyList<ConsultationSessionView> Sessions)
 {
+    public IReadOnlyList<AgentProviderOption> Providers { get; init; } = [];
+
+    public string ProviderId { get; init; } = "claude-code";
+
     public IReadOnlyList<AgentCliOption> Models { get; init; } = [];
 
     public IReadOnlyList<AgentCliOption> Efforts { get; init; } = [];

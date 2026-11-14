@@ -59,8 +59,10 @@ public sealed record RemoteClaudeState(
     RemoteClaudeAttention Attention,
     DateTimeOffset? AttentionSince,
     long? Version = null,
-    Guid? Prompt = null)
+    Guid? Prompt = null,
+    string ProviderId = "claude-code")
 {
+    public string ProviderName => ProviderId switch { "claude-code" => "Claude", "codex" => "Codex", _ => ProviderId };
     public bool NeedsAttention => Attention != RemoteClaudeAttention.None;
 
     /// <summary>A atividade como o desktop local a chama: o som, o selo e o "já vi" são os mesmos.</summary>
@@ -407,7 +409,7 @@ public sealed partial class RemoteClaudeBoard(
                 session.ActivityMessage,
                 CanFollow: machine.OffersTerminal && session.DevelopmentId is not null,
                 attention,
-                AttentionSince: null);
+                AttentionSince: null, ProviderId: session.ProviderId);
         }
     }
 

@@ -31,6 +31,21 @@ public class TerminalSessionHostTests
             NullLogger<TerminalSessionHost>.Instance);
 
     [Fact]
+    public async Task ProviderWithoutStructuredPermissionChoicesStillAcceptsRemoteKeyboardInput()
+    {
+        await using var host = new TerminalSessionHost(
+            new TerminalSessionInfo(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), @"C:\wt", true, false,
+                "codex", SupportsPermissionChoices: false), _pty, _time, NullLogger<TerminalSessionHost>.Instance);
+        using var remote = host.Attach(TerminalClientKind.Remote, "Notebook");
+        host.Observe(Event(AgentEventType.NeedsUserInput, "PermissionRequest", "O Codex precisa de você."));
+        host.Status.ProviderId.Should().Be("codex");
+        host.Status.Dialog!.AnswerableFromTheApp.Should().BeFalse();
+        await remote.SendAsync(new TerminalTakeControl(), Ct);
+        await remote.SendAsync(Keys("y\r"), Ct);
+        _pty.Input.Should().Be("y\r");
+    }
+
+    [Fact]
     public async Task EveryClient_StartsWithTheSnapshot_AndThenFollowsTheSameOutput()
     {
         await using var host = NewHost();
