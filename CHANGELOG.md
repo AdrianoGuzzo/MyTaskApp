@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.35.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.34.1...v1.35.0) (2026-11-14)
+
+
+### Added
+
+* pergunte como fechar o terminal do agente ([#203](https://github.com/AdrianoGuzzo/MyTaskApp/issues/203)) ([6b1405f](https://github.com/AdrianoGuzzo/MyTaskApp/commit/6b1405f2e30ac3252ca01a47622674f32a549aff))
+
 ## [1.34.1](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.34.0...v1.34.1) (2026-11-14)
 
 
