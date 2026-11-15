@@ -7,7 +7,7 @@
 | **Categoria** | agente-ia |
 | **Registrado** | 2026-11-14 |
 | **Palavras-chave** | terminal, fechamento, AgentEmbedded |
-| **Relações** | revisa: [ADR-098](098-terminal-do-agente-em-pseudoterminal.md), [ADR-101](101-terminal-do-claude-em-qualquer-aparelho.md) |
+| **Relações** | revisa: [ADR-098](098-terminal-do-agente-em-pseudoterminal.md), [ADR-101](101-terminal-do-claude-em-qualquer-aparelho.md); revisto por: [ADR-106](106-terminal-integrado-unico-para-agentes.md) |
 
 **Contexto:** fechar a vista externa deixa a sessão viva e causa confusão.
 

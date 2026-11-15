@@ -347,6 +347,7 @@ public static class DependencyInjection
         services.AddScoped<PreviewConsultationContextHandler>();
         services.AddScoped<CheckConsultationDatabaseHandler>();
         services.AddScoped<PrepareConsultationReadAccessHandler>();
+        services.AddScoped<HostedConsultationOpener>();
         services.AddScoped<StartTaskConsultationHandler>();
         services.AddScoped<ResumeTaskConsultationHandler>();
         services.AddScoped<ResolveConsultationAccessHandler>();

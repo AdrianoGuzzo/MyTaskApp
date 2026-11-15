@@ -82,7 +82,7 @@ public sealed class UpdateRemoteSettingsHandler(
         return updated;
     }
 
-    /// <summary>Só troca o terminal direto (ou o nunca escolhido): quem já usa o terminal do agente fica onde está.</summary>
+    /// <summary>Todos os provedores passam a usar o terminal integrado ao aceitar o terminal remoto.</summary>
     private async Task PreferAgentTerminalAsync(CancellationToken cancellationToken)
     {
         if (providers is null || agentSettings is null || agentTerminal?.Support.IsSupported != true)
@@ -90,12 +90,13 @@ public sealed class UpdateRemoteSettingsHandler(
             return;
         }
 
-        var provider = providers.Default;
-
-        if (await agentSettings.GetHostingAsync(provider.Id, cancellationToken) is null or AgentHosting.Direct)
+        foreach (var provider in providers.All)
         {
-            await agentSettings.SaveHostingAsync(provider.Id, AgentHosting.AgentWindow, cancellationToken);
-            logger.LogInformation("AgentHostingSwitchedForRemoteTerminal {ProviderId}", provider.Id);
+            if (await agentSettings.GetHostingAsync(provider.Id, cancellationToken) != AgentHosting.AgentEmbedded)
+            {
+                await agentSettings.SaveHostingAsync(provider.Id, AgentHosting.AgentEmbedded, cancellationToken);
+                logger.LogInformation("AgentHostingSwitchedForRemoteTerminal {ProviderId}", provider.Id);
+            }
         }
     }
 }

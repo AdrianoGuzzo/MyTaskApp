@@ -82,10 +82,10 @@ public class AgentSessionHandlerTests
         new(_sessions, _tasks, _providers, _processes, _watcher, _time);
 
     private FocusAgentSessionHandler Focus() =>
-        new(_sessions, _tasks, _providers, _processes, _windows, _terminalWindows, _tasks, _watcher, _time, NullLogger<FocusAgentSessionHandler>.Instance);
+        new(_sessions, _tasks, _providers, _processes, _windows, _tasks, _watcher, _time, NullLogger<FocusAgentSessionHandler>.Instance, _embedded);
 
     private OpenAgentSessionHandler Open() =>
-        new(Start(), _agentTerminal, _terminalWindows, _embedded, _sessions, _tasks, _providers, _settings, _tasks, NullLogger<OpenAgentSessionHandler>.Instance);
+        new(Start(), _agentTerminal, _embedded, _sessions, _tasks, _providers, _settings, _tasks, NullLogger<OpenAgentSessionHandler>.Instance);
 
     private EndAgentSessionHandler End() =>
         new(_sessions, _tasks, _watcher, _presenter, _time, NullLogger<EndAgentSessionHandler>.Instance);
@@ -1025,7 +1025,7 @@ public class AgentSessionHandlerTests
 
         view.IsAgentTerminal.Should().BeTrue();
         _agentTerminal.Started.Should().ContainSingle().Which.Hosting.Should().Be(AgentHosting.AgentEmbedded);
-        _settings.Hostings.Should().BeEmpty("não escolher não grava escolha");
+        _settings.Hostings[_claude.Id].Should().Be(AgentHosting.AgentEmbedded);
     }
 
     /// <summary>Sem o terminal do agente (o macOS), sem escolha continua o terminal direto de sempre.</summary>
@@ -1043,43 +1043,44 @@ public class AgentSessionHandlerTests
     }
 
     /// <summary>Quem escolheu o terminal direto continua nele: o padrão novo só vale para quem nunca escolheu.</summary>
-    [Fact]
-    public async Task Open_WithTheDirectTerminalSaved_StaysThere()
+    [Theory]
+    [InlineData(AgentHosting.Direct)]
+    [InlineData(AgentHosting.AgentWindow)]
+    public async Task Open_WithALegacyPreference_UsesTheIntegratedTerminal(AgentHosting legacy)
     {
         Ready();
-        _settings.Hostings[_claude.Id] = AgentHosting.Direct;
+        _settings.Hostings[_claude.Id] = legacy;
+        var session = HostedSession();
+        _agentTerminal.Result = new TerminalStartResult(true, session.Id, null, null);
 
         var view = await Open().HandleAsync(new OpenAgentSession(new StartAgentSession(_task.Id, _task.Developments[0].Id)), Ct);
 
-        view.IsAgentTerminal.Should().BeFalse();
-        _agentTerminal.Started.Should().BeEmpty();
+        view.IsAgentTerminal.Should().BeTrue();
+        _agentTerminal.Started.Should().ContainSingle().Which.Hosting.Should().Be(AgentHosting.AgentEmbedded);
+        _settings.Hostings[_claude.Id].Should().Be(AgentHosting.AgentEmbedded);
+        _launcher.Launched.Should().BeEmpty();
+        _embedded.Shown.Should().ContainSingle();
     }
 
-    [Fact]
-    public async Task Open_InTheAgentsWindow_AsksTheAgent_ShowsTheWindow_AndRemembers()
+    [Theory]
+    [InlineData(AgentHosting.Direct)]
+    [InlineData(AgentHosting.AgentWindow)]
+    public async Task Open_WithALegacyExplicitChoice_UsesTheIntegratedTerminal(AgentHosting legacy)
     {
         Ready();
         var session = HostedSession();
         _agentTerminal.Result = new TerminalStartResult(true, session.Id, null, null);
 
-        var view = await Open().HandleAsync(
-            new OpenAgentSession(new StartAgentSession(_task.Id, _task.Developments[0].Id, Arguments: "--model opus", Prompt: "Revise"), AgentHosting.AgentWindow),
-            Ct);
+        await Open().HandleAsync(new OpenAgentSession(
+            new StartAgentSession(_task.Id, _task.Developments[0].Id, Arguments: "--model opus", Prompt: "Revise"), legacy), Ct);
 
-        view.SessionId.Should().Be(session.Id);
-        view.IsAgentTerminal.Should().BeTrue();
         var request = _agentTerminal.Started.Should().ContainSingle().Subject;
-        request.Hosting.Should().Be(AgentHosting.AgentWindow);
+        request.Hosting.Should().Be(AgentHosting.AgentEmbedded);
         request.Arguments.Should().Be("--model opus");
         request.Prompt.Should().Be("Revise");
-
-        var window = _launcher.Launched.Should().ContainSingle("só a janela abre aqui; o Claude abre no agente").Subject;
-        window.Arguments.Should().Contain(session.Id.ToString()).And.Contain("Claude Code · Implementar autenticação");
-        _settings.Hostings[_claude.Id].Should().Be(AgentHosting.AgentWindow);
-
-        // A próxima abertura sem escolha usa a salva.
-        await Open().HandleAsync(new OpenAgentSession(new StartAgentSession(_task.Id, _task.Developments[0].Id)), Ct);
-        _agentTerminal.Started.Should().HaveCount(2).And.OnlyContain(started => started.Hosting == AgentHosting.AgentWindow);
+        _launcher.Launched.Should().BeEmpty();
+        _embedded.Shown.Should().ContainSingle().Which.SessionId.Should().Be(session.Id);
+        _settings.Hostings[_claude.Id].Should().Be(AgentHosting.AgentEmbedded);
     }
 
     [Fact]
@@ -1123,36 +1124,32 @@ public class AgentSessionHandlerTests
     }
 
     [Fact]
-    public async Task Open_AWindowThatDoesNotOpen_LeavesTheSessionShownWithTheReason()
+    public async Task Open_WhenTheIntegratedViewFails_DoesNotOpenAnExternalTerminal()
     {
         Ready();
         var session = HostedSession();
         _agentTerminal.Result = new TerminalStartResult(true, session.Id, null, null);
-        _launcher.FailWith = "Nenhum terminal encontrado.";
+        _embedded.Available = false;
 
         var view = await Open().HandleAsync(new OpenAgentSession(new StartAgentSession(_task.Id, _task.Developments[0].Id), AgentHosting.AgentWindow), Ct);
 
         view.SessionId.Should().Be(session.Id);
-        view.MonitoringNote.Should().Contain("Nenhum terminal encontrado.").And.Contain("segue rodando no agente");
+        view.MonitoringNote.Should().Contain("segue rodando no agente");
+        _launcher.Launched.Should().BeEmpty();
     }
 
     [Fact]
-    public async Task Focus_InTheAgentsTerminal_BringsTheWindow_OrOpensItAgainWhenClosed()
+    public async Task Focus_InTheAgentsTerminal_ReopensTheIntegratedViewOfTheSameSession()
     {
         Ready();
         var session = HostedSession();
 
         (await Focus().HandleAsync(new FocusAgentSession(_task.Id, SessionId: session.Id), Ct)).Focused.Should().BeTrue();
-        var first = _launcher.Launched.Should().ContainSingle("sem janela aberta, abre uma").Subject;
-
         (await Focus().HandleAsync(new FocusAgentSession(_task.Id, SessionId: session.Id), Ct)).Focused.Should().BeTrue();
-        _launcher.Launched.Should().ContainSingle("a janela aberta vem para a frente");
-        _windows.Focused.Should().ContainSingle();
 
-        _processes.Exit(_windows.Focused[0]);
-        await Focus().HandleAsync(new FocusAgentSession(_task.Id, SessionId: session.Id), Ct);
-        _launcher.Launched.Should().HaveCount(2, "fechada a janela, abre outra; a sessão segue a mesma");
-        first.Arguments.Should().Equal(_launcher.Launched[1].Arguments);
+        _embedded.Shown.Should().HaveCount(2).And.OnlyContain(view => view.SessionId == session.Id);
+        _launcher.Launched.Should().BeEmpty();
+        _agentTerminal.Started.Should().BeEmpty();
     }
 
     [Fact]

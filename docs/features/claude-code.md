@@ -6,16 +6,17 @@ No card **Desenvolvimento**, escolha o **Agente de IA** e clique em **Usar este
 agente**. **Definir como padrão** salva a escolha nesta instalação, para novas
 aberturas, inclusive pelo menu da tarefa. Sem preferência salva, vale Claude Code.
 O padrão do Codex é `--dangerously-bypass-approvals-and-sandbox`, editável no campo
-Parâmetros. Cada agente conserva seus próprios parâmetros, esforço e hospedagem.
+Parâmetros. Cada agente conserva seus próprios parâmetros e esforço.
 
 Continua valendo **um terminal ativo por worktree**. Para trocar o agente daquele
 worktree, encerre o terminal atual; os dois podem ficar abertos em worktrees
 diferentes. Alterar o padrão não encerra sessões nem transfere conversas.
 
-O Codex usa os mesmos modos **Onde abrir**, incluindo o terminal do agente,
-seguido e controlado por outro computador ou pelo celular. A lista remota mostra
-o provedor de cada sessão. O seletor remoto oferece os provedores anunciados pela
-máquina executora. Atualize servidor, agentes e controladores juntos.
+Claude Code e Codex abrem no **terminal integrado** do MyTaskApp, tanto pelo
+card quanto pelo menu da tarefa. Preferências antigas de terminal do sistema ou
+janela externa passam a usar o integrado nas novas aberturas. Reabrir uma sessão
+hospedada mostra a mesma sessão dentro do app. Os terminais diretos já abertos
+continuam acessíveis até terminarem.
 
 O acompanhamento usa os hooks oficiais do Codex, requer versão 0.169.0 ou mais
 recente e precisa de `curl`. A confiança
@@ -55,26 +56,13 @@ troca automática para Claude. Veja [ADR-104](../architecture/decisions/104-prov
   o encerramento. Se várias atualizações chegarem juntas (hooks, fechamento
   de terminais e recarga periódica), respostas antigas não substituem a
   atualização mais recente.
-- **Onde abrir**, no card, escolhe o terminal (ADR-098). Sem escolha, é o
-  terminal do agente, dentro do app, onde ele existe; no macOS, o do sistema
-  (ADR-101). A escolha feita fica:
-  - **Terminal do sistema:** um terminal novo; fechar encerra o Claude.
-  - **Terminal do agente, em janela:** o Claude roda no `MyTaskApp.Agent`, num
-    pseudoterminal (ConPTY no Windows, `openpty` no Linux), e aparece numa
-    janela de terminal. Fechar a janela não encerra o Claude; **Abrir terminal
-    do agente** mostra de novo.
-  - **Terminal do agente, dentro do app:** a mesma sessão numa janela do
-    MyTaskApp; **Ver no app** mostra de novo. O texto sai na Cascadia Mono,
-    a fonte do Windows Terminal, que vem embutida no app (o Windows pode não
-    tê-la instalada). Se ela faltar, vale a primeira monoespaçada do sistema.
-
-  As duas vistas do agente são a mesma sessão, e outra máquina pareada ou o
-  celular podem segui-la ([o terminal do Claude](../remote.md#o-terminal-do-claude)).
-  Com "Aceitar ser controlado" (ou "Aceitar o terminal remoto") ligado e o
-  terminal do sistema escolhido, o card avisa que a sessão, e o estado dela,
-  não aparecem nos outros aparelhos, e oferece **Usar o terminal do agente**. A
-  sessão do agente sempre recebe `--session-id`, e vive enquanto o agente
-  vive.
+- **Terminal integrado:** o processo roda no MyTaskApp Agent, em ConPTY no
+  Windows ou `openpty` no Linux. A vista local e os controladores remotos de
+  desenvolvimento acompanham a mesma sessão. Fechar só a janela não encerra o
+  processo; **Abrir terminal do agente** mostra de novo dentro do app.
+  Sem pseudoterminal na plataforma, permanece o terminal direto existente.
+  Se o executável do agente estiver ausente, reinstale o app; não há troca
+  silenciosa de terminal. Veja [ADR-106](../architecture/decisions/106-terminal-integrado-unico-para-agentes.md).
 - **Na vista dentro do app**, o teclado vai inteiro para o Claude. Arrastar
   seleciona, Ctrl+C com seleção copia, Ctrl+Shift+V cola, e a roda rola o
   histórico. Os botões **Interromper (Esc)**, **Permitir**/**Negar** (só no
@@ -124,5 +112,5 @@ Ao fechar uma janela local ativa, escolha **Encerrar sessão**, **Forçar o fim*
 **Fechar só a janela** ou **Cancelar**. Forçar exige confirmação adicional.
 O encerramento só é confirmado quando o processo sai; após cinco segundos,
 sem confirmação, a janela continua aberta e permite tentar novamente.
-Preferências existentes são atualizadas uma vez; a escolha pode ser alterada depois.
+As novas aberturas normalizam preferências antigas para o terminal integrado.
 Terminais remotos e o encerramento global do app mantêm o comportamento anterior.

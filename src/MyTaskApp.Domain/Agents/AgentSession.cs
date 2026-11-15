@@ -447,7 +447,8 @@ public sealed class AgentSession
         string command,
         string workingDirectory,
         string externalSessionId,
-        DateTimeOffset startedAt)
+        DateTimeOffset startedAt,
+        bool agentTerminal = false)
     {
         if (taskItemId == Guid.Empty)
         {
@@ -464,6 +465,7 @@ public sealed class AgentSession
             startedAt)
         {
             Kind = AgentSessionKind.Consultation,
+            Mode = agentTerminal ? AgentSessionMode.Terminal : AgentSessionMode.Interactive,
             ExternalSessionId = Required(externalSessionId, MaxExternalSessionIdLength, "Informe a conversa da sessão."),
         };
 

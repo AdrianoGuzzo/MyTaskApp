@@ -668,10 +668,10 @@ public class AgentSessionViewModelTests
         var viewModel = Create();
         await viewModel.RefreshAsync(TestContext.Current.CancellationToken);
 
-        viewModel.HasHostingChoice.Should().BeTrue();
-        viewModel.HostingOptions[0].Value.Should().Be(AgentHosting.Direct, "o terminal do sistema vem primeiro: é o de sempre");
-        viewModel.SelectedHosting!.Value.Should().Be(AgentHosting.AgentWindow);
-        viewModel.HostingHint.Should().Contain("fechar a janela não encerra");
+        viewModel.HasHostingChoice.Should().BeFalse();
+        viewModel.HostingOptions.Should().ContainSingle().Which.Value.Should().Be(AgentHosting.AgentEmbedded);
+        viewModel.SelectedHosting!.Value.Should().Be(AgentHosting.AgentEmbedded);
+        viewModel.HostingHint.Should().Contain("dentro do MyTaskApp");
 
         _runner.Enqueue<GetTaskAgentSessionHandler>([null]);
         _runner.ResultsByHandler[typeof(DetectAgentCliHandler)] = Installed();
@@ -750,7 +750,6 @@ public class AgentSessionViewModelTests
         _runner.Handlers[typeof(OpenAgentSessionHandler)] = new OpenAgentSessionHandler(
             start,
             NoAgentTerminalClient.Instance,
-            new AgentTerminalWindows(NoAgentTerminalClient.Instance, launcher, Substitute.For<ITerminalWindowManager>(), processes, NullLogger<AgentTerminalWindows>.Instance),
             NoEmbeddedTerminalPresenter.Instance,
             sessions,
             tasks,

@@ -557,11 +557,11 @@ public sealed class FocusAgentSessionHandler(
     IAgentCliProviders providers,
     IAgentProcessTracker processes,
     ITerminalWindowManager windows,
-    AgentTerminalWindows terminalWindows,
     ITaskItemRepository tasks,
     IAgentSessionWatcher watcher,
     TimeProvider timeProvider,
-    ILogger<FocusAgentSessionHandler> logger)
+    ILogger<FocusAgentSessionHandler> logger,
+    IEmbeddedTerminalPresenter? embedded = null)
 {
     public async Task<AgentFocusResult> HandleAsync(
         FocusAgentSession command,
@@ -587,7 +587,8 @@ public sealed class FocusAgentSessionHandler(
         {
             var task = await tasks.FindByIdAsync(session.TaskItemId, cancellationToken);
             var name = providers.Find(session.ProviderId)?.Name ?? session.ProviderId;
-            var shown = await terminalWindows.ShowAsync(session.Id, AgentTerminalWindows.TitleFor(name, task?.Title), cancellationToken);
+            var title = AgentTerminalWindows.TitleFor(name, task?.Title);
+            var shown = embedded?.Show(session.Id, title) == true;
             return new AgentFocusResult(AgentSessionView.From(session, providers), shown);
         }
 

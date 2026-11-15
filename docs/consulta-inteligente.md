@@ -11,6 +11,14 @@ A decisão e os motivos estão no [ADR-081](architecture/decisions/081-consulta-
 [ADR-100](architecture/decisions/100-consulta-inteligente-com-a-configuracao-do-desenvolvimento.md). As ferramentas de
 banco estão no [guia do servidor MCP](mcp-server.md#consulta-inteligente).
 
+No Windows e Linux, **Iniciar consulta**, **Reabrir** e **Ir para o terminal**
+usam o terminal integrado, como o desenvolvimento. Atualize app e agente juntos;
+um agente antigo recusa abrir a consulta em vez de trocar o tipo de terminal.
+As regras de leitura e os provedores permanecem os mesmos. O MCP do desktop
+precisa continuar ligado para consultas com banco. A consulta integrada é local;
+controle remoto continua disponível para terminais de desenvolvimento.
+Veja [ADR-106](architecture/decisions/106-terminal-integrado-unico-para-agentes.md).
+
 ## Sumário
 
 - [Pré-requisitos](#pré-requisitos)
@@ -27,7 +35,7 @@ banco estão no [guia do servidor MCP](mcp-server.md#consulta-inteligente).
 | Para | Precisa de |
 |---|---|
 | Qualquer consulta | O [Claude Code](https://docs.claude.com/claude-code) instalado e com login feito. Sem ele, a aba mostra como instalar |
-| Abrir o terminal | Windows, ou Linux com gnome-terminal, konsole, xfce4-terminal ou xterm |
+| Abrir o terminal | Windows ou Linux, com MyTaskApp Agent instalado junto do app |
 | Ler o código | Uma etiqueta com projetos (*☰ → Etiquetas…*), ou um ambiente pronto da tarefa (aba Desenvolvimento) |
 | Ler o banco | Uma cópia local num PostgreSQL de Desenvolvimento ou Teste, e o [servidor MCP](mcp-server.md) ligado. Produção nunca é consultada |
 
