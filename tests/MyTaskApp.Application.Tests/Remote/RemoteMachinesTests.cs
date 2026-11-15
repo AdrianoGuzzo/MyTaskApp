@@ -346,8 +346,8 @@ public sealed class RemoteMachinesTests : IDisposable
     /// terminal do agente dentro do app fica onde está.
     /// </summary>
     [Theory]
-    [InlineData(null, AgentHosting.AgentWindow)]
-    [InlineData(AgentHosting.Direct, AgentHosting.AgentWindow)]
+    [InlineData(null, AgentHosting.AgentEmbedded)]
+    [InlineData(AgentHosting.Direct, AgentHosting.AgentEmbedded)]
     [InlineData(AgentHosting.AgentEmbedded, AgentHosting.AgentEmbedded)]
     public async Task AcceptingTheRemoteTerminal_OpensTheClaudeInTheAgentsTerminal(AgentHosting? saved, AgentHosting expected)
     {

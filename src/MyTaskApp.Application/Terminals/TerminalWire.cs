@@ -205,12 +205,17 @@ public sealed record TerminalHello(
     string? Label = null,
     int Columns = 0,
     int Rows = 0,
-    TerminalStartRequest? Start = null)
+    TerminalStartRequest? Start = null,
+    TerminalConsultationRequest? Consultation = null)
 {
     public const int CurrentVersion = 1;
 
     /// <summary>A abertura com provedor explícito não pode ser ignorada por um agente antigo.</summary>
     public const int ProviderStartVersion = 2;
+
+    public const int ConsultationStartVersion = 3;
+
+    public const string ConsultationOperation = "consultation";
 
     public const string Attach = "attach";
 
@@ -233,6 +238,15 @@ public sealed record TerminalStartRequest(
 
 /// <summary>A resposta do <c>start</c>: a sessão aberta, ou o motivo de não abrir.</summary>
 public sealed record TerminalStartResult(bool Ok, Guid? SessionId, string? Error, string? MonitoringNote);
+
+/// <summary>Consulta montada pelo agente a partir dos dados da tarefa, sem comandos arbitrários no canal.</summary>
+public sealed record TerminalConsultationRequest(
+    Guid TaskId,
+    string? Question = null,
+    string? Instructions = null,
+    string? ProviderId = null,
+    Guid? ResumeSessionId = null,
+    Uri? ToolsAddress = null);
 
 /// <summary>Uma ação estruturada no fio. O <see cref="Type"/> diz quais campos valem.</summary>
 public sealed record TerminalWireAction(

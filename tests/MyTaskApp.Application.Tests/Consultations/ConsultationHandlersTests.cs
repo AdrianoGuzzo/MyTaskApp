@@ -8,6 +8,8 @@ using MyTaskApp.Application.Consultations;
 using MyTaskApp.Application.DatabaseOperations;
 using MyTaskApp.Application.Development;
 using MyTaskApp.Application.Tags;
+using MyTaskApp.Application.Terminals;
+using NSubstitute;
 using MyTaskApp.Application.Tests.Fakes;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.Agents;
@@ -372,6 +374,39 @@ public sealed class ConsultationHandlersTests : IDisposable
 
         second.Status.Should().Be(AgentSessionStatus.Running);
         (await _sessions.FindByIdAsync(first.SessionId, Ct))!.Status.Should().Be(AgentSessionStatus.Exited);
+    }
+
+    [Fact]
+    public async Task HostedConsultation_UsesThePseudoterminalAndKeepsItsConsultationIdentity()
+    {
+        var terminals = Substitute.For<ITerminalSessions>();
+        terminals.IsHost.Returns(true);
+        TerminalLaunchOptions? received = null;
+        TerminalSessionInfo? info = null;
+        terminals.LaunchAsync(Arg.Any<TerminalLaunchOptions>(), Arg.Any<TerminalSessionInfo>(), Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                received = call.ArgAt<TerminalLaunchOptions>(0);
+                info = call.ArgAt<TerminalSessionInfo>(1);
+                return _launcher.LaunchAsync(received, Ct);
+            });
+        await using var scope = _services.CreateAsyncScope();
+        var services = scope.ServiceProvider;
+        var resolver = services.GetRequiredService<ConsultationResolver>();
+        var launcher = ActivatorUtilities.CreateInstance<ConsultationLauncher>(services, terminals);
+        var state = await resolver.ResolveAsync(_task.Id, Ct);
+
+        var view = await launcher.LaunchAsync(state, Guid.NewGuid().ToString(), false, "Explique", null, Ct);
+
+        view.IsAgentTerminal.Should().BeTrue();
+        var session = (await _sessions.FindByIdAsync(view.SessionId, Ct))!;
+        session.IsConsultation.Should().BeTrue();
+        session.TaskDevelopmentId.Should().BeNull();
+        info!.SessionId.Should().Be(view.SessionId);
+        received!.Arguments.Should().Contain("Explique");
+        _claude.Consultations.Should().ContainSingle().Which.Question.Should().Be("Explique");
+        _watcher.Changes.Should().Contain(_task.Id);
+        _watcher.Watches.Should().ContainSingle().Which.SessionId.Should().Be(view.SessionId);
     }
 
     [Fact]

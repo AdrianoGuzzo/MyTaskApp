@@ -210,7 +210,7 @@ public sealed partial class AgentSessionViewModel(
     /// <summary>"Usar o terminal do agente": a escolha vira o padrão ao abrir, como qualquer outra.</summary>
     [RelayCommand]
     private void UseAgentTerminal() =>
-        SelectedHosting = HostingOptions.FirstOrDefault(option => option.Value == AgentHosting.AgentWindow) ?? SelectedHosting;
+        SelectedHosting = HostingOptions.FirstOrDefault(option => option.Value == AgentHosting.AgentEmbedded) ?? SelectedHosting;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(
@@ -337,7 +337,7 @@ public sealed partial class AgentSessionViewModel(
 
     /// <summary>Com o agente aberto: se ele avisa o app, ou por que não.</summary>
     public string? MonitoringText => State is AgentPanelState.Running && Session is { IsHeadless: false } session
-        ? (session.IsAgentTerminal ? "Roda no terminal do agente: fechar a janela não encerra; \"Abrir terminal\" mostra de novo. " : string.Empty)
+        ? (session.IsAgentTerminal ? "Roda no terminal do agente integrado: ao fechar, escolha encerrar a sessão ou fechar só a janela; \"Abrir terminal\" mostra de novo. " : string.Empty)
             + (session.IsMonitored
                 ? "O MyTaskApp avisa quando o agente precisar de você ou terminar."
                 : "Sem acompanhamento: esta sessão não avisa o MyTaskApp.")
@@ -581,7 +581,9 @@ public sealed partial class AgentSessionViewModel(
             if (!result.Focused)
             {
                 Message = result.Session.IsActive
-                    ? $"Não foi possível localizar a janela do terminal ({ProcessText}). Procure-a na barra de tarefas."
+                    ? (result.Session.IsAgentTerminal
+                        ? "Não foi possível abrir o terminal integrado. Tente novamente."
+                        : $"Não foi possível localizar a janela do terminal ({ProcessText}). Procure-a na barra de tarefas.")
                     : $"O {AgentName} deste ambiente já foi encerrado.";
             }
         }

@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
+using MyTaskApp.Application.Terminals;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.Agents;
 using MyTaskApp.Domain.Consultations;
@@ -13,9 +14,9 @@ namespace MyTaskApp.Application.Consultations;
 /// "Editar só para esta sessão": o texto que substitui as instruções geradas
 /// agora; não é gravado. <c>null</c> = as geradas.
 /// </param>
-public sealed record StartTaskConsultation(Guid TaskId, string Question, string? Instructions = null, string? ProviderId = null);
+public sealed record StartTaskConsultation(Guid TaskId, string Question, string? Instructions = null, string? ProviderId = null, Uri? ToolsAddress = null);
 
-public sealed class StartTaskConsultationHandler(ConsultationResolver resolver, ConsultationLauncher launcher)
+public sealed class StartTaskConsultationHandler(ConsultationResolver resolver, ConsultationLauncher launcher, HostedConsultationOpener? hosted = null)
 {
     public async Task<AgentSessionView> HandleAsync(StartTaskConsultation command, CancellationToken cancellationToken = default)
     {
@@ -26,15 +27,18 @@ public sealed class StartTaskConsultationHandler(ConsultationResolver resolver, 
             throw new DomainException("Escreva a pergunta.");
         }
 
+        if (hosted?.IsAvailable == true)
+            return await hosted.OpenAsync(new TerminalConsultationRequest(command.TaskId, question, command.Instructions, command.ProviderId), cancellationToken);
+
         var state = await resolver.ResolveAsync(command.TaskId, cancellationToken);
 
         return await launcher.LaunchAsync(
-            state, Guid.NewGuid().ToString(), resume: false, question, command.Instructions, cancellationToken, command.ProviderId);
+            state, Guid.NewGuid().ToString(), resume: false, question, command.Instructions, cancellationToken, command.ProviderId, command.ToolsAddress);
     }
 }
 
 /// <summary>Volta a uma consulta encerrada, na mesma conversa do agente.</summary>
-public sealed record ResumeTaskConsultation(Guid TaskId, Guid SessionId);
+public sealed record ResumeTaskConsultation(Guid TaskId, Guid SessionId, Uri? ToolsAddress = null);
 
 /// <remarks>
 /// Uma sessão nova do MyTaskApp, com segredo novo e as instruções de agora,
@@ -44,10 +48,14 @@ public sealed record ResumeTaskConsultation(Guid TaskId, Guid SessionId);
 public sealed class ResumeTaskConsultationHandler(
     ConsultationResolver resolver,
     ConsultationLauncher launcher,
-    IAgentSessionRepository sessions)
+    IAgentSessionRepository sessions,
+    HostedConsultationOpener? hosted = null)
 {
     public async Task<AgentSessionView> HandleAsync(ResumeTaskConsultation command, CancellationToken cancellationToken = default)
     {
+        if (hosted?.IsAvailable == true)
+            return await hosted.OpenAsync(new TerminalConsultationRequest(command.TaskId, ResumeSessionId: command.SessionId), cancellationToken);
+
         var previous = await sessions.FindByIdAsync(command.SessionId, cancellationToken);
 
         if (previous is not { IsConsultation: true } || previous.TaskItemId != command.TaskId)
@@ -67,7 +75,7 @@ public sealed class ResumeTaskConsultationHandler(
 
         var state = await resolver.ResolveAsync(command.TaskId, cancellationToken);
 
-        return await launcher.LaunchAsync(state, conversation, resume: true, question: null, instructions: null, cancellationToken, previous.ProviderId);
+        return await launcher.LaunchAsync(state, conversation, resume: true, question: null, instructions: null, cancellationToken, previous.ProviderId, command.ToolsAddress);
     }
 }
 
@@ -105,7 +113,8 @@ public sealed class ConsultationLauncher(
     IConsultationToolsEndpoint tools,
     ConsultationReadAccess readAccess,
     TimeProvider timeProvider,
-    ILogger<ConsultationLauncher> logger)
+    ILogger<ConsultationLauncher> logger,
+    ITerminalSessions? terminals = null)
 {
     /// <summary>Instruções editadas à mão maiores que isso não são instruções.</summary>
     public const int MaxInstructionsLength = 20_000;
@@ -117,7 +126,8 @@ public sealed class ConsultationLauncher(
         string? question,
         string? instructions,
         CancellationToken cancellationToken,
-        string? providerId = null)
+        string? providerId = null,
+        Uri? toolsAddress = null)
     {
         if (state.Problems.Count > 0)
         {
@@ -140,7 +150,7 @@ public sealed class ConsultationLauncher(
 
         var model = AgentCliOption.Find(provider.Models, state.Consultation?.Model);
         var effort = AgentCliOption.Find(provider.Efforts, state.Consultation?.Effort);
-        var (toolsAccess, serverVersion) = await DatabaseAsync(state, cancellationToken);
+        var (toolsAccess, serverVersion) = await DatabaseAsync(state, toolsAddress, cancellationToken);
 
         // Os mesmos "Parâmetros" do card de Desenvolvimento (ADR-100), antes do
         // modelo e do esforço da aba, que vencem um --model vindo de lá.
@@ -159,7 +169,7 @@ public sealed class ConsultationLauncher(
         await RememberAsync(state, question, cancellationToken);
 
         var session = AgentSession.CreateConsultation(
-            task.Id, provider.Id, detection.ExecutablePath, directories[0], conversationId, timeProvider.GetUtcNow());
+            task.Id, provider.Id, detection.ExecutablePath, directories[0], conversationId, timeProvider.GetUtcNow(), agentTerminal: terminals?.IsHost == true);
         if (!resume && !provider.SupportsAssignedConversationId)
             session.AwaitExternalSessionId();
 
@@ -196,7 +206,11 @@ public sealed class ConsultationLauncher(
 
         try
         {
-            result = await terminal.LaunchAsync(launch, cancellationToken);
+            result = terminals?.IsHost == true
+                ? await terminals.LaunchAsync(launch,
+                    new TerminalSessionInfo(session.Id, task.Id, null, directories[0], session.IsMonitored,
+                        provider.BypassesPermissions(launch.Arguments, directories[0]), provider.Id, provider.SupportsTerminalPermissionChoices), cancellationToken)
+                : await terminal.LaunchAsync(launch, cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -270,6 +284,7 @@ public sealed class ConsultationLauncher(
     /// </summary>
     private async Task<(ConsultationToolsAccess? Tools, string? Version)> DatabaseAsync(
         ConsultationState state,
+        Uri? toolsAddress,
         CancellationToken cancellationToken)
     {
         if (state.Connection is not { } chosen)
@@ -277,7 +292,7 @@ public sealed class ConsultationLauncher(
             return (null, null);
         }
 
-        var endpoint = tools.Address
+        var endpoint = toolsAddress ?? tools.Address
             ?? throw new DomainException(
                 "Para consultar o banco, o servidor MCP do MyTaskApp precisa estar ligado. Ligue-o, ou escolha \"Somente código-fonte\".");
 

@@ -37,7 +37,7 @@ Números dos ADRs; o link está na linha do índice abaixo.
 - **ciclo-de-vida** (conclusão, arquivamento, lixeira, auditoria, histórico, tempo trabalhado): 020, 021, 052, 053, 097, 102
 - **etiquetas** (etiquetas, diretórios, aliases): 025, 026, 064, 077
 - **git-worktree** (worktrees, comandos, branches, PR, limpeza): 027, 028, 029, 031, 034, 035, 043, 047, 051, 055, 065
-- **agente-ia** (Claude Code, hooks, sessões, sons, Consulta Inteligente): 030, 033, 036, 037, 039, 040, 042, 081, 100
+- **agente-ia** (Claude Code, hooks, sessões, sons, Consulta Inteligente): 030, 033, 036, 037, 039, 040, 042, 081, 100, 104, 105, 106
 - **integracoes** (Jira, MCP): 045, 059
 - **banco-de-dados** (operações de banco PostgreSQL, cópia, anonimização): 056, 057, 058, 060, 080, 082, 083
 - **sincronizacao** (sincronização, servidor, autenticação e segurança do servidor): 061, 062, 063, 066, 068, 069, 070, 071, 072, 073, 074, 078
@@ -155,6 +155,7 @@ Números dos ADRs; o link está na linha do índice abaixo.
 | [ADR-103](decisions/103-estado-do-claude-de-outras-maquinas-na-tarefa.md) | O estado do Claude de outras máquinas aparece na tarefa, e o pedido novo avisa | Aceito | Parcial | remoto | RemoteClaudeBoard, relato só de estado, Aceitar controle, selo remoto, episódio de atenção, notificação no celular |
 | [ADR-104](decisions/104-provedores-claude-code-e-codex.md) | Claude Code e Codex compartilham os fluxos de agentes | Aceito | Implementado | agente-ia | CodexCliProvider, AgentProviderSettingsHandler, ProviderId, agente padrão, hooks, terminal remoto |
 | [ADR-105](decisions/105-perguntar-ao-fechar-terminal.md) | Perguntar ao fechar o terminal local | Aceito | Parcial | agente-ia | terminal, fechamento, AgentEmbedded |
+| [ADR-106](decisions/106-terminal-integrado-unico-para-agentes.md) | Claude Code e Codex abrem no terminal integrado | Aceito | Parcial | agente-ia | terminal integrado, AgentEmbedded, HostedConsultationOpener |
 
 ## Novo ADR
 

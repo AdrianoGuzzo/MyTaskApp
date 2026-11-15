@@ -2,6 +2,7 @@ using System.Text;
 using Microsoft.Extensions.Logging;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
+using MyTaskApp.Application.Consultations;
 using MyTaskApp.Domain;
 
 namespace MyTaskApp.Application.Terminals;
@@ -46,6 +47,9 @@ public sealed partial class LocalTerminalServer(
                 case TerminalHello.StartOperation when hello.Start is { } start:
                     await frames.WriteJsonAsync(TerminalFrameType.Result, await StartAsync(start, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
                     break;
+                case TerminalHello.ConsultationOperation when hello.Version == TerminalHello.ConsultationStartVersion && hello.Consultation is { } consultation:
+                    await frames.WriteJsonAsync(TerminalFrameType.Result, await StartConsultationAsync(consultation, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
+                    break;
                 case TerminalHello.Attach when hello.SessionId is { } sessionId:
                     await AttachAsync(frames, hello, sessionId, cancellationToken).ConfigureAwait(false);
                     break;
@@ -72,7 +76,7 @@ public sealed partial class LocalTerminalServer(
 
         var hello = TerminalFrameStream.ReadJson<TerminalHello>(frame.Payload);
 
-        if (hello.Version != TerminalHello.CurrentVersion && hello.Version != TerminalHello.ProviderStartVersion)
+        if (hello.Version != TerminalHello.CurrentVersion && hello.Version != TerminalHello.ProviderStartVersion && hello.Version != TerminalHello.ConsultationStartVersion)
         {
             await frames.WriteTextAsync(TerminalFrameType.Error, "O app e o agente estão em versões diferentes. Atualize os dois.", cancellationToken).ConfigureAwait(false);
             return null;
@@ -110,6 +114,32 @@ public sealed partial class LocalTerminalServer(
             return view.Status == Domain.Agents.AgentSessionStatus.Failed
                 ? new TerminalStartResult(false, view.SessionId, view.FailureReason, view.MonitoringNote)
                 : new TerminalStartResult(true, view.SessionId, null, view.MonitoringNote);
+        }
+        catch (DomainException exception)
+        {
+            return new TerminalStartResult(false, null, exception.Message, null);
+        }
+    }
+
+    private async Task<TerminalStartResult> StartConsultationAsync(TerminalConsultationRequest request, CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (!terminals.IsHost)
+                throw new DomainException("Este processo não hospeda terminais.");
+            if (request.ToolsAddress is { } address &&
+                (!address.IsAbsoluteUri || !address.IsLoopback || address.Scheme != Uri.UriSchemeHttp ||
+                 !string.IsNullOrEmpty(address.UserInfo) || !string.IsNullOrEmpty(address.Fragment)))
+                throw new DomainException("O servidor de consulta precisa ser local.");
+
+            var view = request.ResumeSessionId is { } previous
+                ? await runner.RunAsync<ResumeTaskConsultationHandler, AgentSessionView>(
+                    (handler, token) => handler.HandleAsync(new ResumeTaskConsultation(request.TaskId, previous, request.ToolsAddress), token), cancellationToken).ConfigureAwait(false)
+                : await runner.RunAsync<StartTaskConsultationHandler, AgentSessionView>(
+                    (handler, token) => handler.HandleAsync(new StartTaskConsultation(request.TaskId, request.Question ?? string.Empty,
+                        request.Instructions, request.ProviderId, request.ToolsAddress), token), cancellationToken).ConfigureAwait(false);
+
+            return new TerminalStartResult(view.Status != Domain.Agents.AgentSessionStatus.Failed, view.SessionId, view.FailureReason, view.MonitoringNote);
         }
         catch (DomainException exception)
         {
@@ -269,6 +299,20 @@ public sealed class LocalTerminalChannel : ITerminalChannel
                 TerminalHello.StartOperation, Start: request),
             cancellationToken).ConfigureAwait(false);
 
+        return await channel._frames.ReadAsync(cancellationToken).ConfigureAwait(false) switch
+        {
+            { Type: TerminalFrameType.Result } frame => TerminalFrameStream.ReadJson<TerminalStartResult>(frame.Payload),
+            { Type: TerminalFrameType.Error } frame => new TerminalStartResult(false, null, Encoding.UTF8.GetString(frame.Payload), null),
+            _ => new TerminalStartResult(false, null, "O agente fechou o canal sem responder.", null),
+        };
+    }
+
+    public static async Task<TerminalStartResult> StartConsultationAsync(Stream stream, TerminalConsultationRequest request, CancellationToken cancellationToken = default)
+    {
+        await using var channel = new LocalTerminalChannel(stream);
+        await channel._frames.WriteJsonAsync(TerminalFrameType.Hello,
+            new TerminalHello(TerminalHello.ConsultationStartVersion, TerminalHello.ConsultationOperation, Consultation: request),
+            cancellationToken).ConfigureAwait(false);
         return await channel._frames.ReadAsync(cancellationToken).ConfigureAwait(false) switch
         {
             { Type: TerminalFrameType.Result } frame => TerminalFrameStream.ReadJson<TerminalStartResult>(frame.Payload),

@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using MyTaskApp.Application.Abstractions;
 using MyTaskApp.Application.Agents;
+using MyTaskApp.Application.Consultations;
 using MyTaskApp.Application.Terminals;
 using MyTaskApp.Domain;
 using MyTaskApp.Domain.Agents;
@@ -199,6 +200,50 @@ public sealed class LocalTerminalChannelTests : IAsyncDisposable
 
         await WaitUntil(() => _host.Status.Clients.Count == 0);
         _host.IsRunning.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ConsultationStart_UsesItsOwnHandlerAndReturnsTheHostedSession()
+    {
+        _terminals.IsHost.Returns(true);
+        var sessionId = Guid.NewGuid();
+        _runner.RunAsync(Arg.Any<Func<StartTaskConsultationHandler, CancellationToken, Task<AgentSessionView>>>(), Arg.Any<CancellationToken>())
+            .Returns(new AgentSessionView(sessionId, Guid.NewGuid(), "codex", "Codex", "codex", @"C:\wt", 4242, _time.GetUtcNow(), null, AgentSessionStatus.Running, null));
+
+        var result = await LocalTerminalChannel.StartConsultationAsync(await ConnectAsync(),
+            new TerminalConsultationRequest(Guid.NewGuid(), "Explique", ProviderId: "codex"), Ct);
+
+        result.Should().Be(new TerminalStartResult(true, sessionId, null, null));
+        await _runner.DidNotReceive().RunAsync(Arg.Any<Func<StartAgentSessionHandler, CancellationToken, Task<AgentSessionView>>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ConsultationResume_UsesTheResumeHandler()
+    {
+        _terminals.IsHost.Returns(true);
+        var sessionId = Guid.NewGuid();
+        _runner.RunAsync(Arg.Any<Func<ResumeTaskConsultationHandler, CancellationToken, Task<AgentSessionView>>>(), Arg.Any<CancellationToken>())
+            .Returns(new AgentSessionView(sessionId, Guid.NewGuid(), "claude-code", "Claude Code", "claude", @"C:\wt", 4242, _time.GetUtcNow(), null, AgentSessionStatus.Running, null));
+
+        var result = await LocalTerminalChannel.StartConsultationAsync(await ConnectAsync(),
+            new TerminalConsultationRequest(Guid.NewGuid(), ResumeSessionId: Guid.NewGuid()), Ct);
+
+        result.Ok.Should().BeTrue();
+        result.SessionId.Should().Be(sessionId);
+    }
+
+    [Theory]
+    [InlineData("https://example.com/mcp")]
+    [InlineData("http://localhost/mcp#fragment")]
+    [InlineData("http://user@localhost/mcp")]
+    public async Task ConsultationStart_RejectsANonLocalToolsEndpoint(string endpoint)
+    {
+        _terminals.IsHost.Returns(true);
+        var result = await LocalTerminalChannel.StartConsultationAsync(await ConnectAsync(),
+            new TerminalConsultationRequest(Guid.NewGuid(), "Explique", ToolsAddress: new Uri(endpoint)), Ct);
+
+        result.Ok.Should().BeFalse();
+        _runner.ReceivedCalls().Should().BeEmpty();
     }
 
     [Fact]

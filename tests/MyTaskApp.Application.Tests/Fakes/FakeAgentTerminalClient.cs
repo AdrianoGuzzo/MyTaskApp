@@ -8,6 +8,14 @@ internal sealed class FakeAgentTerminalClient : IAgentTerminalClient
 {
     public List<TerminalStartRequest> Started { get; } = [];
 
+    public List<TerminalConsultationRequest> Consultations { get; } = [];
+
+    public Task<TerminalStartResult> StartConsultationAsync(TerminalConsultationRequest request, CancellationToken cancellationToken = default)
+    {
+        Consultations.Add(request);
+        return Task.FromResult(Result);
+    }
+
     /// <summary>A resposta do próximo início; o teste costuma pôr o id de uma sessão que já semeou.</summary>
     public TerminalStartResult Result { get; set; } = new(false, null, "Sem resposta combinada.", null);
 

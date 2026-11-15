@@ -12,11 +12,14 @@ namespace MyTaskApp.Application.Terminals;
 /// </summary>
 public interface IAgentTerminalClient
 {
-    /// <summary>Esta máquina tem o terminal do agente (pseudoterminal e a janela instalada)?</summary>
+    /// <summary>Esta plataforma tem suporte ao pseudoterminal do agente?</summary>
     PseudoTerminalSupport Support { get; }
 
     /// <summary>Pede ao agente desta máquina que abra a sessão; sobe o agente se ele não estiver rodando.</summary>
     Task<TerminalStartResult> StartAsync(TerminalStartRequest request, CancellationToken cancellationToken = default);
+
+    Task<TerminalStartResult> StartConsultationAsync(TerminalConsultationRequest request, CancellationToken cancellationToken = default) =>
+        Task.FromResult(new TerminalStartResult(false, null, "Atualize o app e o agente para abrir consultas no terminal integrado.", null));
 
     /// <summary>Segue a sessão pelo canal local (a vista dentro do app).</summary>
     Task<ITerminalChannel> AttachAsync(Guid sessionId, TerminalClientKind kind, string label, TerminalSize? size, CancellationToken cancellationToken = default);
@@ -161,10 +164,9 @@ public sealed partial class AgentTerminalWindows(
 }
 
 /// <summary>
-/// "Abrir Claude Code", com o modo (ADR-098): o terminal direto de hoje, ou o
-/// terminal do agente em janela ou dentro do app.
+/// Abre o agente no terminal integrado (ADR-106).
 /// </summary>
-/// <param name="Hosting">Informado, vira o padrão das próximas aberturas; <c>null</c> usa o salvo.</param>
+/// <param name="Hosting">Compatibilidade com chamadores antigos; novas sessões usam o terminal integrado.</param>
 public sealed record OpenAgentSession(StartAgentSession Start, AgentHosting? Hosting = null);
 
 /// <summary>
@@ -176,7 +178,6 @@ public sealed record OpenAgentSession(StartAgentSession Start, AgentHosting? Hos
 public sealed class OpenAgentSessionHandler(
     StartAgentSessionHandler direct,
     IAgentTerminalClient agent,
-    AgentTerminalWindows terminalWindows,
     IEmbeddedTerminalPresenter embedded,
     IAgentSessionRepository sessions,
     ITaskItemRepository tasks,
@@ -188,11 +189,11 @@ public sealed class OpenAgentSessionHandler(
     public async Task<AgentSessionView> HandleAsync(OpenAgentSession command, CancellationToken cancellationToken = default)
     {
         var provider = await providers.ResolveAsync(settings, command.Start.ProviderId, cancellationToken);
-        var hosting = command.Hosting ?? await settings.HostingForAsync(provider, agent.Support.IsSupported, cancellationToken);
+        var hosting = await settings.HostingForAsync(provider, agent.Support.IsSupported, cancellationToken);
 
-        if (command.Hosting is { } chosen && Enum.IsDefined(chosen))
+        if (agent.Support.IsSupported && await settings.GetHostingAsync(provider.Id, cancellationToken) != hosting)
         {
-            await settings.SaveHostingAsync(provider.Id, chosen, cancellationToken);
+            await settings.SaveHostingAsync(provider.Id, hosting, cancellationToken);
             await unitOfWork.SaveChangesAsync(cancellationToken);
         }
 
@@ -230,21 +231,9 @@ public sealed class OpenAgentSessionHandler(
         var note = result.MonitoringNote;
         var title = AgentTerminalWindows.TitleFor(provider.Name, (await tasks.FindByIdAsync(start.TaskId, cancellationToken))?.Title);
 
-        if (hosting == AgentHosting.AgentWindow)
+        if (!embedded.Show(sessionId, title))
         {
-            try
-            {
-                await terminalWindows.ShowAsync(sessionId, title, cancellationToken);
-            }
-            catch (DomainException exception)
-            {
-                // A sessão já roda no agente: o card mostra, e "Abrir terminal" tenta a janela de novo.
-                note = $"{exception.Message} O {provider.Name} segue rodando no agente.";
-            }
-        }
-        else if (hosting == AgentHosting.AgentEmbedded && !embedded.Show(sessionId, title))
-        {
-            note = $"A vista dentro do app não abriu. O {provider.Name} segue rodando no agente: \"Abrir terminal\" mostra numa janela.";
+            note = $"A vista dentro do app não abriu. O {provider.Name} segue rodando no agente: use Abrir terminal para tentar novamente.";
         }
 
         return AgentSessionView.From(session, providers) with { MonitoringNote = note };

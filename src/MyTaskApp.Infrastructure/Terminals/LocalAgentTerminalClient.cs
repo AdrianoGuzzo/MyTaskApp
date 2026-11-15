@@ -27,23 +27,7 @@ public sealed partial class LocalAgentTerminalClient(
 
     private string AgentExecutable => AgentProcess.ExecutablePath(appFolder);
 
-    public PseudoTerminalSupport Support
-    {
-        get
-        {
-            if (!terminals.Support.IsSupported)
-            {
-                return terminals.Support;
-            }
-
-            // Uma build de desenvolvimento só do desktop não tem o agente nem a janela ao lado.
-            return File.Exists(AgentExecutable) && File.Exists(WindowExecutable)
-                ? terminals.Support
-                : PseudoTerminalSupport.Unsupported(
-                    terminals.Support.Platform,
-                    "O MyTaskApp Agent ou a janela do terminal não estão instalados ao lado do app.");
-        }
-    }
+    public PseudoTerminalSupport Support => terminals.Support;
 
     public async Task<TerminalStartResult> StartAsync(TerminalStartRequest request, CancellationToken cancellationToken = default)
     {
@@ -51,6 +35,15 @@ public sealed partial class LocalAgentTerminalClient(
         await using (stream.ConfigureAwait(false))
         {
             return await LocalTerminalChannel.StartAsync(stream, request, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    public async Task<TerminalStartResult> StartConsultationAsync(TerminalConsultationRequest request, CancellationToken cancellationToken = default)
+    {
+        var stream = await ConnectAsync(cancellationToken).ConfigureAwait(false);
+        await using (stream.ConfigureAwait(false))
+        {
+            return await LocalTerminalChannel.StartConsultationAsync(stream, request, cancellationToken).ConfigureAwait(false);
         }
     }
 
@@ -65,6 +58,9 @@ public sealed partial class LocalAgentTerminalClient(
 
     private async Task<Stream> ConnectAsync(CancellationToken cancellationToken)
     {
+        if (!File.Exists(AgentExecutable))
+            throw new DomainException("O MyTaskApp Agent não está instalado ao lado do app. Reinstale o aplicativo para usar o terminal integrado.");
+
         try
         {
             return await TerminalPipe.ConnectAsync(pipeName, cancellationToken).ConfigureAwait(false);

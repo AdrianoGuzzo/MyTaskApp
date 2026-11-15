@@ -7,7 +7,7 @@
 | **Categoria** | agente-ia |
 | **Registrado** | 2026-11-14 |
 | **Palavras-chave** | CodexCliProvider, AgentProviderSettingsHandler, agente padrão, ProviderId, hooks, terminal remoto |
-| **Relações** | revisa: [ADR-030](030-sessoes-claude-code-por-tarefa.md), [ADR-100](100-consulta-inteligente-com-a-configuracao-do-desenvolvimento.md); relacionado: [ADR-031](031-varios-ambientes-por-tarefa.md), [ADR-089](089-claude-code-remoto-headless-com-aprovacao.md), [ADR-099](099-terminal-remoto-do-claude.md) |
+| **Relações** | revisa: [ADR-030](030-sessoes-claude-code-por-tarefa.md), [ADR-100](100-consulta-inteligente-com-a-configuracao-do-desenvolvimento.md); relacionado: [ADR-031](031-varios-ambientes-por-tarefa.md), [ADR-089](089-claude-code-remoto-headless-com-aprovacao.md), [ADR-099](099-terminal-remoto-do-claude.md); revisto por: [ADR-106](106-terminal-integrado-unico-para-agentes.md) |
 | **Código** | `src/MyTaskApp.Application/Agents/AgentProviderHandlers.cs`, `src/MyTaskApp.Infrastructure/Agents/CodexCliProvider.cs`, `src/MyTaskApp.Application/Terminals/` |
 
 **Contexto:** o catálogo de agentes já admitia vários provedores, mas a escolha
