@@ -381,22 +381,6 @@ public sealed partial class App : Avalonia.Application
     {
         var monitor = services.GetRequiredService<AgentSessionMonitor>();
 
-        monitor.SessionsChanged += taskId => OnUiThread(() =>
-        {
-            _ = todayViewModel.LoadAsync(CancellationToken.None);
-
-            if (_notes.TryGetValue(taskId, out var notes) && notes.DataContext is TaskNotesViewModel viewModel)
-            {
-                _ = viewModel.Developments.RefreshAgentsAsync();
-
-                // A consulta aberta ou encerrada redesenha a linha de estado da aba (ADR-081).
-                if (viewModel.Consultation is { } consultation)
-                {
-                    _ = consultation.RefreshSessionsAsync();
-                }
-            }
-        });
-
         monitor.Start();
 
         // A porta local dos hooks (ADR-037). Antes de qualquer "Iniciar": sem
@@ -457,6 +441,10 @@ public sealed partial class App : Avalonia.Application
             if (notes.DataContext is TaskNotesViewModel viewModel)
             {
                 _ = viewModel.Developments.RefreshAgentsAsync();
+                if (viewModel.Consultation is { } consultation)
+                {
+                    _ = consultation.RefreshSessionsAsync();
+                }
             }
         }
     }

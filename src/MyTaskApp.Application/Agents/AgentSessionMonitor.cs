@@ -30,7 +30,8 @@ public sealed class AgentSessionMonitor(
     IAgentProcessTracker processes,
     TimeProvider timeProvider,
     IOptions<ApplicationOptions> options,
-    ILogger<AgentSessionMonitor> logger) : IAgentSessionWatcher, IAsyncDisposable, IDisposable
+    ILogger<AgentSessionMonitor> logger,
+    IDataChangeNotifier? notifier = null) : IAgentSessionWatcher, IAsyncDisposable, IDisposable
 {
     private static readonly TimeSpan ShutdownGrace = TimeSpan.FromSeconds(2);
 
@@ -141,6 +142,7 @@ public sealed class AgentSessionMonitor(
     {
         try
         {
+            notifier?.NotifyChanged(DataArea.AgentSessions);
             SessionsChanged?.Invoke(taskId);
         }
         catch (Exception exception)

@@ -61,6 +61,21 @@ public class AgentSessionMonitorTests
     }
 
     [Fact]
+    public void NotifyChanged_NotifiesLocalPeersImmediately()
+    {
+        var notifier = new DataChangeNotifier();
+        var changes = new List<DataArea>();
+        notifier.Changed += changes.Add;
+        using var monitor = new AgentSessionMonitor(
+            _runner, _processes, _time, Options.Create(new ApplicationOptions()),
+            NullLogger<AgentSessionMonitor>.Instance, notifier);
+
+        monitor.NotifyChanged(_task.Id);
+
+        Assert.Equal([DataArea.AgentSessions], changes);
+    }
+
+    [Fact]
     public async Task Starting_RecoversTheSessionsLeftOpen_Immediately()
     {
         var alive = Running(15432, alive: true);
