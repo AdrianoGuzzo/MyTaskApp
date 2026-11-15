@@ -27,6 +27,9 @@ public partial class RemoteTerminalPage : IQueryAttributable
     private double _panStartOffset;
 
     private bool _resetting;
+    private bool _requestingControl;
+    private bool _focusWhenGranted;
+    private long _scrollbackAdded;
 
     public RemoteTerminalPage(RemoteTerminalViewModel viewModel)
     {
@@ -38,12 +41,20 @@ public partial class RemoteTerminalPage : IQueryAttributable
         TerminalView.SizeChanged += (_, _) => _ = ResizeAsync();
 
         var tap = new TapGestureRecognizer();
-        tap.Tapped += (_, _) =>
+        tap.Tapped += async (_, _) =>
         {
-            if (_viewModel.CanType)
+            if (_requestingControl) return;
+            _requestingControl = true;
+            try
             {
-                KeyboardEntry.Focus();
+                if (_viewModel.CanTakeControl)
+                {
+                    _focusWhenGranted = true;
+                    await _viewModel.TakeControlAsync();
+                }
+                if (_viewModel.CanType) KeyboardEntry.Focus();
             }
+            finally { _requestingControl = false; }
         };
         TerminalView.GestureRecognizers.Add(tap);
 
@@ -92,6 +103,11 @@ public partial class RemoteTerminalPage : IQueryAttributable
 
     private void OnScreenChanged()
     {
+        var added = _viewModel.Screen?.ScrollbackLinesAdded ?? 0;
+        if (_drawable.ScrollOffset > 0 && added >= _scrollbackAdded)
+            _drawable.ScrollOffset += (int)Math.Min(int.MaxValue, added - _scrollbackAdded);
+        _scrollbackAdded = added;
+        _drawable.ScrollOffset = Math.Clamp(_drawable.ScrollOffset, 0, _viewModel.Screen?.ScrollbackCount ?? 0);
         _drawable.Screen = _viewModel.Screen;
         FitFont();
         TerminalView.Invalidate();
@@ -108,6 +124,15 @@ public partial class RemoteTerminalPage : IQueryAttributable
         else if (e.PropertyName == nameof(RemoteTerminalViewModel.CanType))
         {
             _drawable.ShowCursor = _viewModel.CanType;
+            if (_viewModel.CanType && _focusWhenGranted)
+            {
+                _focusWhenGranted = false;
+                KeyboardEntry.Focus();
+            }
+            else if (!_viewModel.CanType)
+            {
+                KeyboardEntry.Unfocus();
+            }
             TerminalView.Invalidate();
         }
     }
@@ -179,6 +204,7 @@ public partial class RemoteTerminalPage : IQueryAttributable
                 var lines = (int)(e.TotalY / Math.Max(1, _drawable.CellHeight));
                 var maximum = _drawable.Screen?.ScrollbackCount ?? 0;
                 _drawable.ScrollOffset = Math.Clamp((int)_panStartOffset + lines, 0, maximum);
+                ScrollEndButton.IsVisible = _drawable.ScrollOffset > 0;
                 TerminalView.Invalidate();
                 break;
         }
@@ -192,6 +218,7 @@ public partial class RemoteTerminalPage : IQueryAttributable
             return;
         }
 
+        OnScrollEndClicked(this, EventArgs.Empty);
         var text = e.NewTextValue ?? string.Empty;
 
         if (text.Length < Sentinel.Length)
@@ -215,6 +242,17 @@ public partial class RemoteTerminalPage : IQueryAttributable
         _ = _viewModel.PressAsync("enter");
         Reset();
         KeyboardEntry.Focus();
+    }
+
+    private void OnControlsClicked(object? sender, EventArgs e) => ControlsPanel.IsVisible = !ControlsPanel.IsVisible;
+
+    private async void OnBackClicked(object? sender, EventArgs e) => await Shell.Current.GoToAsync("..");
+
+    private void OnScrollEndClicked(object? sender, EventArgs e)
+    {
+        _drawable.ScrollOffset = 0;
+        ScrollEndButton.IsVisible = false;
+        TerminalView.Invalidate();
     }
 
     private void Reset()
