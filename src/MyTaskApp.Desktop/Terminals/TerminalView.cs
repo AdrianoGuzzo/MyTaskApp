@@ -56,6 +56,9 @@ public sealed class TerminalView : Control
 
     /// <summary>Linhas por clique da roda.</summary>
     private const int WheelLines = 3;
+    private double _wheelRemainder;
+    private long _lastScrollbackLines;
+    public event EventHandler? ScrollChanged;
 
     private readonly Dictionary<Color, IImmutableSolidColorBrush> _brushes = [];
 
@@ -188,6 +191,7 @@ public sealed class TerminalView : Control
         {
             ScrollOffset = offset;
             InvalidateVisual();
+            ScrollChanged?.Invoke(this, EventArgs.Empty);
         }
     }
 
@@ -204,11 +208,22 @@ public sealed class TerminalView : Control
         else if (change.Property == ScreenProperty)
         {
             ScrollOffset = 0;
+            _wheelRemainder = 0;
+            _lastScrollbackLines = Screen?.ScrollbackLinesAdded ?? 0;
             ClearSelection();
+            ScrollChanged?.Invoke(this, EventArgs.Empty);
         }
-        else if (change.Property == VersionProperty && ScrollOffset > (Screen?.ScrollbackCount ?? 0))
+        else if (change.Property == VersionProperty)
         {
-            ScrollOffset = Screen?.ScrollbackCount ?? 0;
+            var added = Screen?.ScrollbackLinesAdded ?? 0;
+            var count = Screen?.ScrollbackCount ?? 0;
+            var delta = Math.Max(0, added - _lastScrollbackLines);
+            if (ScrollOffset > 0)
+                ScrollOffset = (int)Math.Min(count, ScrollOffset + delta);
+            if (delta > 0)
+                ClearSelection();
+            _lastScrollbackLines = added;
+            ScrollChanged?.Invoke(this, EventArgs.Empty);
         }
     }
 
@@ -313,7 +328,35 @@ public sealed class TerminalView : Control
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {
         base.OnPointerWheelChanged(e);
-        ScrollBy((int)Math.Round(e.Delta.Y * WheelLines));
+        _wheelRemainder += e.Delta.Y * WheelLines;
+        var lines = (int)_wheelRemainder;
+        _wheelRemainder -= lines;
+        if (Screen is { } screen && !e.KeyModifiers.HasFlag(KeyModifiers.Shift)
+            && (screen.MouseTracking != 0 || screen.AlternateScreen))
+        {
+            if (!IsReadOnly)
+            {
+                var position = e.GetPosition(this);
+                var column = Math.Clamp((int)(position.X / CellSize.Width) + 1, 1, screen.Size.Columns);
+                var row = Math.Clamp((int)(position.Y / CellSize.Height) + 1, 1, screen.Size.Rows);
+                for (var i = 0; i < Math.Abs(lines); i++)
+                {
+                    if (screen.MouseTracking != 0)
+                    {
+                        var button = lines > 0 ? 64 : 65;
+                        var bytes = screen.SgrMouse
+                            ? Encoding.ASCII.GetBytes(FormattableString.Invariant($"\u001b[<{button};{column};{row}M"))
+                            : new byte[] { 27, 91, 77, (byte)(button + 32), (byte)(Math.Min(column, 223) + 32), (byte)(Math.Min(row, 223) + 32) };
+                        KeysTyped?.Invoke(this, bytes);
+                    }
+                    else
+                        KeysTyped?.Invoke(this, TerminalKeyEncoder.Encode(lines > 0 ? Key.Up : Key.Down,
+                            KeyModifiers.None, screen.ApplicationCursorKeys)!);
+                }
+            }
+        }
+        else
+            ScrollBy(lines);
         e.Handled = true;
     }
 
@@ -377,6 +420,7 @@ public sealed class TerminalView : Control
         }
 
         ScrollOffset = 0;
+        ScrollChanged?.Invoke(this, EventArgs.Empty);
         ClearSelection();
         KeysTyped?.Invoke(this, keys);
     }

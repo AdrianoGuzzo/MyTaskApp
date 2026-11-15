@@ -127,6 +127,8 @@ public sealed class VtScreen
     /// </summary>
     public bool AnswerQueries { get; set; }
 
+    public long ScrollbackLinesAdded { get; private set; }
+
     public int ScrollbackCount => AlternateScreen ? 0 : _scrollback.Count;
 
     private TerminalCell[][] Buffer => AlternateScreen ? _alternate : _main;
@@ -1137,6 +1139,7 @@ public sealed class VtScreen
         }
 
         _scrollback.Add(row);
+        ScrollbackLinesAdded++;
     }
 
     private void InsertLines(int count)

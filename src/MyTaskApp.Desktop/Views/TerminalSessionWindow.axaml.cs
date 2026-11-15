@@ -10,6 +10,10 @@ public sealed partial class TerminalSessionWindow : Window
     public TerminalSessionWindow()
     {
         InitializeComponent();
+        HistoryScroll.IsVisible = false;
+        Terminal.ScrollChanged += (_, _) => UpdateHistoryScroll();
+        HistoryScroll.Scroll += (_, _) =>
+            Terminal.ScrollBy((int)(HistoryScroll.Maximum - HistoryScroll.Value) - Terminal.ScrollOffset);
     }
 
     public TerminalSessionWindow(TerminalSessionViewModel viewModel)
@@ -20,6 +24,15 @@ public sealed partial class TerminalSessionWindow : Window
         Terminal.GridSizeChanged += OnGridSizeChanged;
         viewModel.ActivationRequested += OnActivationRequested;
         Opened += (_, _) => Terminal.Focus();
+    }
+
+    private void UpdateHistoryScroll()
+    {
+        HistoryScroll.Maximum = Terminal.Screen?.ScrollbackCount ?? 0;
+        HistoryScroll.ViewportSize = Terminal.Screen?.Size.Rows ?? 24;
+        HistoryScroll.LargeChange = Math.Max(1, HistoryScroll.ViewportSize - 1);
+        HistoryScroll.Value = HistoryScroll.Maximum - Terminal.ScrollOffset;
+        HistoryScroll.IsVisible = HistoryScroll.Maximum > 0;
     }
 
     private bool _allowClose;
