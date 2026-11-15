@@ -128,6 +128,89 @@ public sealed class TerminalViewTests
         window.Close();
     }
 
+
+    [AvaloniaFact]
+    public void FractionalWheelMovements_AccumulateIntoHistoryLines()
+    {
+        var screen = new VtScreen(new TerminalSize(40, 5));
+        for (var i = 0; i < 30; i++) screen.Feed($"line {i}\r\n");
+        var (window, view) = Show(screen);
+        for (var i = 0; i < 5; i++)
+            window.MouseWheel(new Point(20, 20), new Vector(0, 0.1), RawInputModifiers.None);
+        view.ScrollOffset.Should().Be(1);
+        window.Close();
+    }
+
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void OutputWhileReading_PreservesPosition_EvenAtCapacity(bool atCapacity)
+    {
+        var screen = new VtScreen(new TerminalSize(40, 5), scrollback: atCapacity ? 20 : 2000);
+        for (var i = 0; i < 30; i++) screen.Feed($"line {i}\r\n");
+        var (window, view) = Show(screen);
+        view.ScrollBy(10);
+        var visible = screen.ScrollbackText(screen.ScrollbackCount - view.ScrollOffset);
+        screen.Feed("new line\r\n");
+        view.Version++;
+        view.ScrollOffset.Should().Be(11);
+        screen.ScrollbackText(screen.ScrollbackCount - view.ScrollOffset).Should().Be(visible);
+        window.Close();
+    }
+
+    [AvaloniaTheory]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    public void AlternateScreen_WheelReachesProgram_UnlessReadOnly(bool readOnly, bool mouse)
+    {
+        var screen = new VtScreen(new TerminalSize(40, 5));
+        screen.Feed("\u001b[?1049h");
+        if (mouse) screen.Feed("\u001b[?1000h\u001b[?1006h");
+        var typed = new List<string>();
+        var (window, view) = Show(screen, candidate =>
+        {
+            candidate.IsReadOnly = readOnly;
+            candidate.KeysTyped += (_, bytes) => typed.Add(Encoding.UTF8.GetString(bytes));
+        });
+        window.MouseWheel(new Point(20, 20), new Vector(0, 1), RawInputModifiers.None);
+        if (readOnly) typed.Should().BeEmpty();
+        else
+        {
+            typed.Should().HaveCount(3);
+            if (mouse) typed.Should().OnlyContain(value => value.StartsWith("\u001b[<64;"));
+            else typed.Should().OnlyContain(value => value == "\u001b[A");
+        }
+        window.Close();
+    }
+
+
+    [AvaloniaFact]
+    public void ShiftWheel_UsesLocalHistory_WithoutSendingMouseInput()
+    {
+        var screen = new VtScreen(new TerminalSize(40, 5));
+        for (var i = 0; i < 30; i++) screen.Feed($"line {i}\r\n");
+        screen.Feed("\u001b[?1000h\u001b[?1006h");
+        var typed = new List<byte[]>();
+        var (window, view) = Show(screen, candidate =>
+            candidate.KeysTyped += (_, bytes) => typed.Add(bytes));
+        window.MouseWheel(new Point(20, 20), new Vector(0, 1), RawInputModifiers.Shift);
+        view.ScrollOffset.Should().Be(3);
+        typed.Should().BeEmpty();
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void NewOutput_StaysLive_WhenNotReadingHistory()
+    {
+        var screen = new VtScreen(new TerminalSize(40, 5));
+        var (window, view) = Show(screen);
+        for (var i = 0; i < 30; i++) screen.Feed($"line {i}\r\n");
+        view.Version++;
+        view.ScrollOffset.Should().Be(0);
+        window.Close();
+    }
+
     private static (Window Window, TerminalView View) Show(VtScreen? screen = null, Action<TerminalView>? configure = null)
     {
         var view = new TerminalView { Screen = screen ?? new VtScreen(new TerminalSize(80, 24)) };

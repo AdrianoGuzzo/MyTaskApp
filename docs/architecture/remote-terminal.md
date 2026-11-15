@@ -192,3 +192,7 @@ R-14).
   modelo. Sem acompanhamento, só o teclado vale.
 - **Uma sessão aberta no terminal do sistema** ("Onde abrir": terminal do
   sistema) não é acompanhável de longe.
+
+### Rolagem no desktop
+
+A roda e o touchpad navegam pelo hist?rico local. Quando o programa captura o mouse, recebem eventos no formato solicitado; na tela alternativa sem captura, recebem setas. Shift+roda for?a a navega??o local. Em modo somente leitura, nenhuma entrada ? enviada. A barra lateral e Shift+PageUp/PageDown navegam pelo hist?rico local, limitado a 2.000 linhas; retratos remotos incluem at? 300 linhas. Novas sa?das preservam a posi??o de leitura enquanto as linhas permanecerem no buffer. Digitar retorna ? tela ao vivo. O hist?rico n?o ? um registro permanente de toda a sa?da.

@@ -92,10 +92,13 @@
                Text="Arraste para selecionar; Ctrl+C com seleção copia. Ctrl+Shift+V cola. A roda e Shift+PageUp rolam o histórico." />
 
     <Border CornerRadius="4" ClipToBounds="True" Background="#1E1E1E" Padding="4">
+      <Grid ColumnDefinitions="*,Auto">
       <terminals:TerminalView x:Name="Terminal"
                               Screen="{Binding Screen}"
                               Version="{Binding Version}"
                               IsReadOnly="{Binding IsReadOnly}" />
+      <ScrollBar x:Name="HistoryScroll" Grid.Column="1" Orientation="Vertical" SmallChange="1" />
+      </Grid>
     </Border>
   </DockPanel>
 </Window>
