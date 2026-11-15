@@ -43,7 +43,7 @@ public static partial class SensitiveText
             }
         }
 
-        masked = UriCredentials().Replace(masked, "${scheme}${user}:" + Redacted + "@");
+        masked = UriCredentialsPattern.Replace(masked, "${scheme}${user}:" + Redacted + "@");
         masked = KeyValue().Replace(masked, match => match.Groups["key"].Value + match.Groups["sep"].Value + Quoted(match.Groups["value"].Value));
         masked = Authorization().Replace(masked, "${scheme} " + Redacted);
 
@@ -54,11 +54,11 @@ public static partial class SensitiveText
     private static string Quoted(string value) =>
         value.Length >= 2 && (value[0] == '"' || value[0] == '\'') ? $"{value[0]}{Redacted}{value[0]}" : Redacted;
 
-    [GeneratedRegex(
+    // O motor sem retrocesso mantém a busca linear mesmo em textos longos sem URI.
+    private static readonly Regex UriCredentialsPattern = new(
         @"(?<scheme>\b[a-z][a-z0-9+.\-]*://)(?<user>[^:/@\s]+):(?<password>[^@\s]+)@",
-        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
-        matchTimeoutMilliseconds: 1000)]
-    private static partial Regex UriCredentials();
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.NonBacktracking,
+        TimeSpan.FromSeconds(1));
 
     // A chave inteira é atômica: sem retrocesso nem novas tentativas dentro dela.
     [GeneratedRegex(

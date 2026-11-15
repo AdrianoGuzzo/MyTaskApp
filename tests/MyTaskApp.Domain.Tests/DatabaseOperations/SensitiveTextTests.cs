@@ -60,6 +60,18 @@ public class SensitiveTextTests
     }
 
     [Theory]
+    [InlineData("x-")]
+    [InlineData("x.")]
+    [InlineData("x+")]
+    public void LongUriSchemeCandidates_PreserveTextAndMaskFollowingCredentials(string fragment)
+    {
+        var longText = string.Concat(Enumerable.Repeat(fragment, 50_000));
+        var text = $"{longText} {longText}://user:missing-at-sign postgresql://backup_user:s3nh4@db/eco";
+
+        SensitiveText.Mask(text).Should().Be($"{longText} {longText}://user:missing-at-sign postgresql://backup_user:***@db/eco");
+    }
+
+    [Theory]
     [InlineData("passwd")]
     [InlineData("PWD")]
     [InlineData("apikey")]
