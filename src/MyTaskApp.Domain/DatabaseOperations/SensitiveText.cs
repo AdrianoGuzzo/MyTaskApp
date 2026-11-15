@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace MyTaskApp.Domain.DatabaseOperations;
@@ -43,8 +44,8 @@ public static partial class SensitiveText
             }
         }
 
-        masked = UriCredentials().Replace(masked, "${scheme}${user}:" + Redacted + "@");
-        masked = KeyValue().Replace(masked, match => match.Groups["key"].Value + match.Groups["sep"].Value + Quoted(match.Groups["value"].Value));
+        masked = UriCredentialsPattern.Replace(masked, "${scheme}${user}:" + Redacted + "@");
+        masked = MaskKeyValues(masked);
         masked = Authorization().Replace(masked, "${scheme} " + Redacted);
 
         return masked;
@@ -54,18 +55,58 @@ public static partial class SensitiveText
     private static string Quoted(string value) =>
         value.Length >= 2 && (value[0] == '"' || value[0] == '\'') ? $"{value[0]}{Redacted}{value[0]}" : Redacted;
 
-    [GeneratedRegex(
+    // O motor sem retrocesso mantém a busca linear mesmo em textos longos sem URI.
+    private static readonly Regex UriCredentialsPattern = new(
         @"(?<scheme>\b[a-z][a-z0-9+.\-]*://)(?<user>[^:/@\s]+):(?<password>[^@\s]+)@",
-        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
-        matchTimeoutMilliseconds: 1000)]
-    private static partial Regex UriCredentials();
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.NonBacktracking,
+        TimeSpan.FromSeconds(1));
 
-    // A chave inteira é atômica: sem retrocesso nem novas tentativas dentro dela.
+    // Percorre as chaves uma vez e só lê o valor quando o sufixo indica segredo.
+    private static readonly Regex KeyValuePattern = new(
+        """(?<key>[A-Za-z0-9_\-]+)(?<sep>["']?\s*[:=]\s*)""",
+        RegexOptions.CultureInvariant | RegexOptions.NonBacktracking,
+        TimeSpan.FromSeconds(1));
+
     [GeneratedRegex(
-        """(?<![A-Za-z0-9_\-])(?<key>(?>[A-Za-z0-9_\-]+))(?<=password|passwd|pwd|secret|token|api[_\-]?key)(?<sep>["']?\s*[:=]\s*)(?<value>"[^"]*"|'[^']*'|[^\s;,&"'}\]]+)""",
-        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
+        """\G("[^"]*"|'[^']*'|[^\s;,&"'}\]]+)""",
+        RegexOptions.CultureInvariant,
         matchTimeoutMilliseconds: 1000)]
-    private static partial Regex KeyValue();
+    private static partial Regex SecretValue();
+
+    private static string MaskKeyValues(string text)
+    {
+        var result = new StringBuilder(text.Length);
+        var copiedUntil = 0;
+        for (var pair = KeyValuePattern.Match(text); pair.Success;)
+        {
+            var next = pair.Index + pair.Length;
+            if (IsSecretKey(pair.Groups["key"].Value))
+            {
+                var value = SecretValue().Match(text, next);
+                if (value.Success)
+                {
+                    result.Append(text, copiedUntil, next - copiedUntil);
+                    result.Append(Quoted(value.Value));
+                    next += value.Length;
+                    copiedUntil = next;
+                }
+            }
+
+            pair = KeyValuePattern.Match(text, next);
+        }
+
+        return result.Append(text, copiedUntil, text.Length - copiedUntil).ToString();
+    }
+
+    private static bool IsSecretKey(string key) =>
+        key.EndsWith("password", StringComparison.OrdinalIgnoreCase)
+        || key.EndsWith("passwd", StringComparison.OrdinalIgnoreCase)
+        || key.EndsWith("pwd", StringComparison.OrdinalIgnoreCase)
+        || key.EndsWith("secret", StringComparison.OrdinalIgnoreCase)
+        || key.EndsWith("token", StringComparison.OrdinalIgnoreCase)
+        || key.EndsWith("apikey", StringComparison.OrdinalIgnoreCase)
+        || key.EndsWith("api_key", StringComparison.OrdinalIgnoreCase)
+        || key.EndsWith("api-key", StringComparison.OrdinalIgnoreCase);
 
     [GeneratedRegex(
         @"\b(?<scheme>Bearer|Basic)\s+[A-Za-z0-9\-._~+/]+=*",

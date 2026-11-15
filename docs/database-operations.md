@@ -856,7 +856,10 @@ e colunas mascaradas.
 - Uma operação que o app não terminou (queda) vira *Interrupted* na volta.
 - Senha, token, connection string e dado de linha nunca entram na auditoria.
   Textos e nomes de chave longos passam pelo mascaramento sem repetir a busca
-  de sufixos a cada caractere, antes do corte no tamanho da mensagem.
+  de sufixos a cada caractere, antes do corte no tamanho da mensagem. A busca
+  de credenciais em URI e de pares chave/valor usa o motor sem retrocesso,
+  com custo linear mesmo em textos longos sem segredos. O sufixo de cada
+  chave é verificado fora da expressão regular.
 
 ## Configuração
 

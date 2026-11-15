@@ -60,6 +60,18 @@ public class SensitiveTextTests
     }
 
     [Theory]
+    [InlineData("x-")]
+    [InlineData("x.")]
+    [InlineData("x+")]
+    public void LongUriSchemeCandidates_PreserveTextAndMaskFollowingCredentials(string fragment)
+    {
+        var longText = string.Concat(Enumerable.Repeat(fragment, 50_000));
+        var text = $"{longText} {longText}://user:missing-at-sign postgresql://backup_user:s3nh4@db/eco";
+
+        SensitiveText.Mask(text).Should().Be($"{longText} {longText}://user:missing-at-sign postgresql://backup_user:***@db/eco");
+    }
+
+    [Theory]
     [InlineData("passwd")]
     [InlineData("PWD")]
     [InlineData("apikey")]
@@ -68,6 +80,15 @@ public class SensitiveTextTests
     {
         SensitiveText.Mask($"user=backup; prefix_{key}=s3nh4; database=eco")
             .Should().Be($"user=backup; prefix_{key}=***; database=eco");
+    }
+
+    [Theory]
+    [InlineData("message=token=hidden", "message=token=***")]
+    [InlineData("message=\"password=hidden\"", "message=\"password=***\"")]
+    [InlineData("user=backup; token=hidden", "user=backup; token=***")]
+    public void OrdinaryPairs_DoNotHideFollowingSecretPairs(string text, string expected)
+    {
+        SensitiveText.Mask(text).Should().Be(expected);
     }
 
     [Fact]
