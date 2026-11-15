@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.35.1](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.35.0...v1.35.1) (2026-11-15)
+
+
+### Fixed
+
+* corrija a rolagem do terminal integrado ([#206](https://github.com/AdrianoGuzzo/MyTaskApp/issues/206)) ([057cc43](https://github.com/AdrianoGuzzo/MyTaskApp/commit/057cc43f5a50f65d012034194115ae0c2f568397))
+* sincronize o terminal com a tarefa por eventos ([#205](https://github.com/AdrianoGuzzo/MyTaskApp/issues/205)) ([a08a54e](https://github.com/AdrianoGuzzo/MyTaskApp/commit/a08a54ed98b399533e6b5187803deb1ba48a4c9c))
+
+
+### Changed
+
+* padronize os agentes no terminal integrado ([#208](https://github.com/AdrianoGuzzo/MyTaskApp/issues/208)) ([e86a8a0](https://github.com/AdrianoGuzzo/MyTaskApp/commit/e86a8a062d0bab87c2aab474f6ae3f4e6b6ea8c8))
+
 ## [1.35.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.34.1...v1.35.0) (2026-11-14)
 
 
