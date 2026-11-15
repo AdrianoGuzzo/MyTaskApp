@@ -82,6 +82,15 @@ public class SensitiveTextTests
             .Should().Be($"user=backup; prefix_{key}=***; database=eco");
     }
 
+    [Theory]
+    [InlineData("message=token=hidden", "message=token=***")]
+    [InlineData("message=\"password=hidden\"", "message=\"password=***\"")]
+    [InlineData("user=backup; token=hidden", "user=backup; token=***")]
+    public void OrdinaryPairs_DoNotHideFollowingSecretPairs(string text, string expected)
+    {
+        SensitiveText.Mask(text).Should().Be(expected);
+    }
+
     [Fact]
     public void Null_BecomesEmpty()
     {

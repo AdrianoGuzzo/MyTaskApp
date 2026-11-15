@@ -857,8 +857,9 @@ e colunas mascaradas.
 - Senha, token, connection string e dado de linha nunca entram na auditoria.
   Textos e nomes de chave longos passam pelo mascaramento sem repetir a busca
   de sufixos a cada caractere, antes do corte no tamanho da mensagem. A busca
-  de credenciais em URI usa o motor sem retrocesso, com custo linear mesmo
-  quando um texto longo parece um esquema de URI e não contém credenciais.
+  de credenciais em URI e de pares chave/valor usa o motor sem retrocesso,
+  com custo linear mesmo em textos longos sem segredos. O sufixo de cada
+  chave é verificado fora da expressão regular.
 
 ## Configuração
 
