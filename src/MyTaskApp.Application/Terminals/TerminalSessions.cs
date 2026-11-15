@@ -236,7 +236,7 @@ public sealed partial class TerminalSessionRegistry(
     {
         try
         {
-            await host.Completion.ConfigureAwait(false);
+            await host.ProcessExited.ConfigureAwait(false);
             await runner.RunAsync<EndAgentSessionHandler>(
                 (handler, token) => handler.HandleAsync(new EndAgentSession(host.SessionId), token),
                 CancellationToken.None).ConfigureAwait(false);
@@ -244,6 +244,7 @@ public sealed partial class TerminalSessionRegistry(
             // O aviso de "esperando você" sai da tela de quem o mostrava.
             NotifyActivity(host.SessionId);
 
+            await host.Completion.ConfigureAwait(false);
             await Task.Delay(ExitedRetention, time).ConfigureAwait(false);
         }
         catch (Exception exception)

@@ -192,3 +192,10 @@ R-14).
   modelo. Sem acompanhamento, só o teclado vale.
 - **Uma sessão aberta no terminal do sistema** ("Onde abrir": terminal do
   sistema) não é acompanhável de longe.
+
+### Sincronização local com a tarefa
+
+Após persistir mudanças da sessão, o agente avisa o desktop pelo canal local
+(`DataArea.AgentSessions`). A saída do processo encerra a sessão no banco sem
+esperar a drenagem da saída do terminal. Desconectar a vista mantém a sessão
+ativa; a reconciliação periódica recupera avisos perdidos.
