@@ -133,7 +133,7 @@ internal sealed class MobileHarness : IAsyncDisposable
         var secrets = Secrets;
 
         await Services.DisposeAsync();
-        SqliteConnection.ClearAllPools();
+        ClearDatabasePool();
 
         return await CreateAsync(serverUrl: null, Folder, preferences, secrets);
     }
@@ -182,12 +182,33 @@ internal sealed class MobileHarness : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         await Services.DisposeAsync();
-        SqliteConnection.ClearAllPools();
+        ClearDatabasePool();
 
-        if (Directory.Exists(Folder))
+        // No Windows, o fechamento do SQLite pode coincidir com a liberação
+        // do arquivo pelo sistema. A última tentativa mantém a falha visível.
+        for (var attempt = 0; Directory.Exists(Folder); attempt++)
         {
-            Directory.Delete(Folder, recursive: true);
+            try
+            {
+                Directory.Delete(Folder, recursive: true);
+                break;
+            }
+            catch (IOException) when (attempt < 4)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(100 * (attempt + 1)));
+                ClearDatabasePool();
+            }
         }
+    }
+
+    private void ClearDatabasePool()
+    {
+        // Não interfere nos pools dos outros testes que executam em paralelo.
+        using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+        {
+            DataSource = Path.Combine(Folder, "mytaskapp.db"),
+        }.ToString());
+        SqliteConnection.ClearPool(connection);
     }
 
     public static string ServerUri => SyncSchema.MobileRedirectUri;
