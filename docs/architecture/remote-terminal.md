@@ -195,4 +195,11 @@ R-14).
 
 ### Rolagem no desktop
 
-A roda e o touchpad navegam pelo hist?rico local. Quando o programa captura o mouse, recebem eventos no formato solicitado; na tela alternativa sem captura, recebem setas. Shift+roda for?a a navega??o local. Em modo somente leitura, nenhuma entrada ? enviada. A barra lateral e Shift+PageUp/PageDown navegam pelo hist?rico local, limitado a 2.000 linhas; retratos remotos incluem at? 300 linhas. Novas sa?das preservam a posi??o de leitura enquanto as linhas permanecerem no buffer. Digitar retorna ? tela ao vivo. O hist?rico n?o ? um registro permanente de toda a sa?da.
+A roda e o touchpad navegam pelo histórico local. Quando o programa captura o mouse, recebem eventos no formato solicitado; na tela alternativa sem captura, recebem setas. Shift+roda força a navegação local. Em modo somente leitura, nenhuma entrada é enviada. A barra lateral e Shift+PageUp/PageDown navegam pelo histórico local, limitado a 2.000 linhas; retratos remotos incluem até 300 linhas. Novas saídas preservam a posição de leitura enquanto as linhas permanecerem no buffer. Digitar retorna à tela ao vivo. O histórico não é um registro permanente de toda a saída.
+
+### Sincronização local com a tarefa
+
+Após persistir mudanças da sessão, o agente avisa o desktop pelo canal local
+(`DataArea.AgentSessions`). A saída do processo encerra a sessão no banco sem
+esperar a drenagem da saída do terminal. Desconectar a vista mantém a sessão
+ativa; a reconciliação periódica recupera avisos perdidos.

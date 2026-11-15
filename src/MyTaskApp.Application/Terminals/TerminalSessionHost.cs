@@ -131,6 +131,9 @@ public sealed partial class TerminalSessionHost : IAsyncDisposable
     /// <summary>Completa quando o processo saiu e toda a saída dele foi lida.</summary>
     public Task Completion => _pump;
 
+    /// <summary>Saída do processo, independente da drenagem do terminal.</summary>
+    public Task ProcessExited => _terminal.Exited;
+
     public bool IsRunning
     {
         get
