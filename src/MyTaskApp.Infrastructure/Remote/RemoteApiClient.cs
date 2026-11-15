@@ -10,7 +10,7 @@ namespace MyTaskApp.Infrastructure.Remote;
 /// sync: o token que vale é o do dispositivo, com o escopo <c>remote</c>. O JSON
 /// é o do <see cref="RemoteJson"/>, o estrito do contrato remoto.
 /// </summary>
-internal sealed class RemoteApiClient(SyncHttp http, ISyncAuthenticator authenticator) : IRemoteApi, IRemoteOperationsApi, IRemoteSessionsApi, IRemoteTerminalsApi
+internal sealed class RemoteApiClient(SyncHttp http, ISyncAuthenticator authenticator) : IRemoteApi, IRemoteOperationsApi, IRemoteSessionsApi, IRemoteTerminalsApi, ITerminalLifecycleApi, IRemotePushApi
 {
     public Task<RemoteDeviceInfo> RegisterAsync(DeviceRegistration registration, CancellationToken cancellationToken) =>
         CallAsync<RemoteDeviceInfo>(HttpMethod.Put, RemoteRoutes.CurrentDevice, registration, cancellationToken);
@@ -87,6 +87,23 @@ internal sealed class RemoteApiClient(SyncHttp http, ISyncAuthenticator authenti
 
     public Task<RemoteTerminalSessionList> ListTerminalsAsync(CancellationToken cancellationToken) =>
         CallAsync<RemoteTerminalSessionList>(HttpMethod.Get, RemoteRoutes.Terminals, null, cancellationToken);
+
+    public async Task RegisterAsync(RemotePushSubscription subscription, CancellationToken cancellationToken) =>
+        _ = await CallAsync<bool>(HttpMethod.Put, RemoteRoutes.Prefix + "/push/current", subscription, cancellationToken);
+    public async Task RemoveAsync(CancellationToken cancellationToken) =>
+        _ = await CallAsync<bool>(HttpMethod.Delete, RemoteRoutes.Prefix + "/push/current", null, cancellationToken);
+
+    public Task<TerminalLifecycleCurrentList> ListCurrentAsync(CancellationToken cancellationToken) =>
+        CallAsync<TerminalLifecycleCurrentList>(HttpMethod.Get, RemoteRoutes.Prefix + "/terminal-lifecycle/sessions", null, cancellationToken);
+    public async Task<bool> IsAvailableAsync(CancellationToken cancellationToken)
+    {
+        try { return await CallAsync<bool>(HttpMethod.Get, RemoteRoutes.Prefix + "/terminal-lifecycle", null, cancellationToken); }
+        catch (SyncApiException exception) when (exception.Kind == SyncFailureKind.NotFound) { return false; }
+    }
+    public async Task PublishAsync(TerminalLifecyclePage batch, CancellationToken cancellationToken) =>
+        _ = await CallAsync<bool>(HttpMethod.Post, RemoteRoutes.Prefix + "/terminal-lifecycle", batch, cancellationToken);
+    public Task<TerminalLifecyclePage> EventsAsync(Guid sessionId, long after, CancellationToken cancellationToken) =>
+        CallAsync<TerminalLifecyclePage>(HttpMethod.Get, $"{RemoteRoutes.Terminals}/{sessionId:D}/events?after={after}", null, cancellationToken);
 
     private async Task<T> CallAsync<T>(HttpMethod method, string path, object? body, CancellationToken cancellationToken)
     {

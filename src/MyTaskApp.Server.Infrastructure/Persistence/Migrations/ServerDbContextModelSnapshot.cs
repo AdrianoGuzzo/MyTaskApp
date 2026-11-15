@@ -17,7 +17,7 @@ namespace MyTaskApp.Server.Infrastructure.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.13")
+                .HasAnnotation("ProductVersion", "10.0.14")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -747,6 +747,64 @@ namespace MyTaskApp.Server.Infrastructure.Persistence.Migrations
                     b.ToTable("RemotePairings", (string)null);
                 });
 
+            modelBuilder.Entity("MyTaskApp.Server.Infrastructure.Persistence.RemotePushDeliveryRow", b =>
+                {
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("DeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("DueAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TaskId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("EventId", "DeviceId");
+
+                    b.HasIndex("DueAt");
+
+                    b.ToTable("RemotePushDeliveries", (string)null);
+                });
+
+            modelBuilder.Entity("MyTaskApp.Server.Infrastructure.Persistence.RemotePushDestinationRow", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("DeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Address")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<int>("Provider")
+                        .HasColumnType("integer");
+
+                    b.HasKey("UserId", "DeviceId");
+
+                    b.ToTable("RemotePushDestinations", (string)null);
+                });
+
             modelBuilder.Entity("MyTaskApp.Server.Infrastructure.Persistence.SyncEntityRow", b =>
                 {
                     b.Property<Guid>("WorkspaceId")
@@ -847,6 +905,37 @@ namespace MyTaskApp.Server.Infrastructure.Persistence.Migrations
                     b.HasIndex("WorkspaceId", "ToType", "ToId");
 
                     b.ToTable("SyncReferences", (string)null);
+                });
+
+            modelBuilder.Entity("MyTaskApp.Server.Infrastructure.Persistence.TerminalHistoryRow", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("DeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("Sequence")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.HasKey("UserId", "DeviceId", "SessionId", "Sequence");
+
+                    b.HasIndex("OccurredAt");
+
+                    b.ToTable("TerminalHistory", (string)null);
                 });
 
             modelBuilder.Entity("MyTaskApp.Server.Infrastructure.Persistence.WorkspaceMemberRow", b =>

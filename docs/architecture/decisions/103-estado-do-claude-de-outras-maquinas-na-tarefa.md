@@ -7,7 +7,7 @@
 | **Categoria** | remoto |
 | **Registrado** | 2026-11-05 |
 | **Palavras-chave** | RemoteClaudeBoard, RemoteClaudeState, RemoteClaudeAttention, RemoteClaudeAnnouncer, RemoteClaudeNotices, RemoteClaudeTexts, RemoteAgentOrigin, RemoteStatesShared, relato só de estado, episódio de atenção, selo remoto, Claude em outras máquinas |
-| **Relações** | revisa: [ADR-099](099-terminal-remoto-do-claude.md), [ADR-101](101-terminal-do-claude-em-qualquer-aparelho.md); relacionado: [ADR-037](037-acompanhar-claude-code-pelos-hooks.md), [ADR-091](091-conversa-do-claude-como-sessao-no-servidor.md), [ADR-094](094-controladores-ouvem-o-hub.md), [ADR-096](096-verificacao-periodica-no-celular.md) |
+| **Relações** | revisto por: [ADR-107](107-ciclo-de-vida-remoto-dos-terminais.md); revisa: [ADR-099](099-terminal-remoto-do-claude.md), [ADR-101](101-terminal-do-claude-em-qualquer-aparelho.md); relacionado: [ADR-037](037-acompanhar-claude-code-pelos-hooks.md), [ADR-091](091-conversa-do-claude-como-sessao-no-servidor.md), [ADR-094](094-controladores-ouvem-o-hub.md), [ADR-096](096-verificacao-periodica-no-celular.md) |
 | **Código** | `src/MyTaskApp.Application/Remote/RemoteTerminals.cs` (`RemoteTerminalReporter`, `ToReport`), `src/MyTaskApp.Application/Remote/RemoteClaudeBoard.cs`, `RemoteClaudeTexts.cs`, `RemoteClaudeAnnouncer.cs`, `src/MyTaskApp.Desktop/ViewModels/TaskRowViewModel.cs`, `TodayViewModel.cs` (`ApplyRemoteClaude`, `FollowRemoteAsync`), `AgentAlertViewModel.cs`, `src/MyTaskApp.Mobile.Core/Remote/RemoteClaudeNotices.cs`, `src/MyTaskApp.Mobile.Core/ViewModels/TaskListViewModelBase.cs`, `TaskDetailViewModel.cs` |
 
 **Estado da implementação (2026-11-05):** tudo abaixo está no código, com

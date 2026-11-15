@@ -313,6 +313,45 @@ public sealed class RemoteClaudeBoardTests : IAsyncDisposable
         _board.States[0].Attention.Should().Be(RemoteClaudeAttention.Waiting, "o que mais pede alguém vem primeiro");
     }
 
+    [Theory]
+    [InlineData(RemoteTerminalProcess.Exited, RemoteClaudeAttention.Review)]
+    [InlineData(RemoteTerminalProcess.Crashed, RemoteClaudeAttention.Failed)]
+    public async Task ProcessExitRemainsVisibleAndRaisesAttention(RemoteTerminalProcess process, RemoteClaudeAttention expected)
+    {
+        var running = Terminal(_notebook, RemoteAgentActivity.Working);
+        _reported = [running];
+        await _board.RefreshAsync(Ct);
+        if (process == RemoteTerminalProcess.Exited)
+        {
+            _reported = [running with { Session = running.Session with { Activity = RemoteAgentActivity.WaitingReview } }];
+            await _board.RefreshAsync(Ct);
+            _raised.Clear();
+        }
+        _reported = [running with { Session = running.Session with { Process = process, ExitCode = process == RemoteTerminalProcess.Exited ? 0 : 1 } }];
+        await _board.RefreshAsync(Ct);
+        var ended = _board.ForTask(_task).Should().ContainSingle().Subject;
+        ended.Process.Should().Be(process);
+        ended.CanFollow.Should().BeFalse();
+        _raised.Should().ContainSingle().Which.Attention.Should().Be(expected);
+        if (process == RemoteTerminalProcess.Exited) RemoteClaudeTexts.Notice(ended).Should().Contain("foi encerrado");
+        await _board.RefreshAsync(Ct);
+        _raised.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task OldExitLeavesTheTaskListButRemainsInTheDetailHistory()
+    {
+        var session = Terminal(_notebook, RemoteAgentActivity.WaitingReview);
+        _reported = [session with { Session = session.Session with { Process = RemoteTerminalProcess.Exited, ExitCode = 0 } }];
+        await _board.RefreshAsync(Ct);
+        _board.TaskListStates.Should().ContainSingle();
+        _time.Advance(TimeSpan.FromHours(25));
+        await _board.RefreshAsync(Ct);
+        _board.ForTask(_task).Should().BeEmpty();
+        _board.TaskListStates.Should().BeEmpty();
+        _board.ForTask(_task, includeHistory: true).Should().ContainSingle();
+    }
+
     private RemoteTerminalSessionView Terminal(
         Guid deviceId,
         RemoteAgentActivity activity,

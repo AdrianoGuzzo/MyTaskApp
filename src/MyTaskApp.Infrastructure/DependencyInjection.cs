@@ -392,6 +392,9 @@ public static class DependencyInjection
         services.AddSingleton<SyncAuthenticationService>();
         services.AddSingleton<ISyncAuthenticator>(provider => provider.GetRequiredService<SyncAuthenticationService>());
         services.AddSingleton<ISyncApi, SyncApiClient>();
+        services.AddScoped<ITerminalLifecycleJournal, TerminalLifecycleJournal>();
+        services.AddSingleton<IRemotePushApi>(provider => provider.GetRequiredService<RemoteApiClient>());
+        services.AddSingleton<ITerminalLifecycleApi>(provider => provider.GetRequiredService<RemoteApiClient>());
         services.AddSingleton<RemoteApiClient>();
         services.AddSingleton<IRemoteApi>(provider => provider.GetRequiredService<RemoteApiClient>());
         services.AddSingleton<IRemoteOperationsApi>(provider => provider.GetRequiredService<RemoteApiClient>());

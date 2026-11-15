@@ -798,19 +798,28 @@ public sealed partial class RemoteTerminalReporter : IDisposable
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     private ITimer? _soon;
+    private readonly Lock _captureGate = new();
+    private Task _captures = Task.CompletedTask;
+    private readonly ITerminalLifecycleApi? _lifecycle;
+    private readonly bool _hasJournal;
+    private bool _journalRecovered;
+    private readonly Queue<IReadOnlyList<RemoteTerminalSessionReport>> _failedCaptures = new();
 
     private bool _active;
 
     private DateTimeOffset _quietUntil = DateTimeOffset.MinValue;
 
-    public RemoteTerminalReporter(IRemoteTerminalsApi api, ITerminalSessions terminals, IUseCaseRunner runner, TimeProvider time, ILogger<RemoteTerminalReporter> logger)
+    public RemoteTerminalReporter(IRemoteTerminalsApi api, ITerminalSessions terminals, IUseCaseRunner runner, TimeProvider time, ILogger<RemoteTerminalReporter> logger, ITerminalLifecycleApi? lifecycle = null)
     {
         _api = api;
+        _lifecycle = lifecycle;
+        _hasJournal = lifecycle is not null;
         _terminals = terminals;
         _runner = runner;
         _time = time;
         _logger = logger;
         _terminals.Changed += OnChanged;
+        if (_terminals is ITerminalLaunchEvents launchEvents) launchEvents.LaunchFailed += OnLaunchFailed;
     }
 
     /// <summary>Quantos relatos o servidor aceitou (os testes esperam por eles).</summary>
@@ -846,6 +855,27 @@ public sealed partial class RemoteTerminalReporter : IDisposable
                 .Take(RemoteLimits.MaxTerminalSessionsPerBatch)
                 .Select(status => RemoteTerminalMapping.ToReport(status, status.LastOutputAt ?? status.StartedAt, withContent: settings.AcceptTerminal))];
 
+            if (_hasJournal && _lifecycle is not null)
+            {
+                QueueCapture(sessions);
+                Task captured;
+                lock (_captureGate) captured = _captures;
+                await captured;
+                if (!_journalRecovered)
+                {
+                    await _runner.RunAsync<ITerminalLifecycleJournal>((journal, token) => journal.RecoverAsync(sessions.Select(item => item.SessionId).ToList(), token), cancellationToken);
+                    _journalRecovered = true;
+                }
+                if (await _lifecycle.IsAvailableAsync(cancellationToken))
+                {
+                    var pending = await _runner.RunAsync<ITerminalLifecycleJournal, TerminalLifecyclePage>((journal, token) => journal.PendingAsync(token), cancellationToken);
+                    if (pending.Events.Count > 0)
+                    {
+                        await _lifecycle.PublishAsync(pending, cancellationToken);
+                        await _runner.RunAsync<ITerminalLifecycleJournal>((journal, token) => journal.AcknowledgeAsync(pending.Events.Select(item => item.EventId).ToList(), token), cancellationToken);
+                    }
+                }
+            }
             await _api.ReportTerminalsAsync(new RemoteTerminalSessionBatch(sessions), cancellationToken);
             Reports++;
         }
@@ -864,12 +894,55 @@ public sealed partial class RemoteTerminalReporter : IDisposable
     public void Dispose()
     {
         _terminals.Changed -= OnChanged;
+        if (_terminals is ITerminalLaunchEvents launchEvents) launchEvents.LaunchFailed -= OnLaunchFailed;
         _soon?.Dispose();
         _gate.Dispose();
     }
 
+    public async Task CaptureShutdownAsync(IReadOnlyList<TerminalSessionStatus> states)
+    {
+        QueueCapture(states.Select(state => RemoteTerminalMapping.ToReport(state, _time.GetUtcNow(), withContent: false)).ToList());
+        await DrainAsync();
+    }
+
+    public Task DrainAsync()
+    {
+        lock (_captureGate) return _captures;
+    }
+
+    private void OnLaunchFailed(object? sender, TerminalSessionInfo info)
+    {
+        var now = _time.GetUtcNow();
+        QueueCapture([new RemoteTerminalSessionReport(info.SessionId, info.TaskId, info.DevelopmentId, RemoteTerminalProcess.Crashed, null,
+            RemoteAgentActivity.Failed, null, false, info.Monitored, info.PermissionsBypassed, false, now, now, info.ProviderId)]);
+    }
+
+    private void QueueCapture(IReadOnlyList<RemoteTerminalSessionReport> states)
+    {
+        if (!_hasJournal) return;
+        lock (_captureGate)
+        {
+            _captures = _captures.ContinueWith(async _ =>
+            {
+                try
+                {
+                    var settings = await _runner.RunAsync<IRemoteSettingsStore, RemoteSettings>((store, token) => store.GetAsync(token), CancellationToken.None);
+                    if (!settings.AcceptControl || !_terminals.IsHost) { _failedCaptures.Clear(); return; }
+                    _failedCaptures.Enqueue(states);
+                    while (_failedCaptures.TryPeek(out var pending))
+                    {
+                        await _runner.RunAsync<ITerminalLifecycleJournal>((journal, token) => journal.CaptureAsync(pending, token), CancellationToken.None);
+                        _failedCaptures.Dequeue();
+                    }
+                }
+                catch (Exception exception) { LogReportFailed(exception.GetType().Name); }
+            }, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default).Unwrap();
+        }
+    }
+
     private void OnChanged(object? sender, EventArgs e)
     {
+        QueueCapture(_terminals.List().Select(host => RemoteTerminalMapping.ToReport(host.Status, _time.GetUtcNow(), withContent: false)).ToList());
         if (!_active)
         {
             return;

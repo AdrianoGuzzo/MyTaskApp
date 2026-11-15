@@ -27,7 +27,7 @@ public sealed class RemoteBackgroundCheck(
     ILocalNotifier notifier,
     IBackgroundChecks checks,
     TimeProvider timeProvider,
-    ILogger<RemoteBackgroundCheck> logger)
+    ILogger<RemoteBackgroundCheck> logger, IRemotePushState? push = null)
 {
     public const string PreferenceKey = "remote.background.seen";
 
@@ -140,7 +140,7 @@ public sealed class RemoteBackgroundCheck(
         var waiting = await WaitingTerminalsAsync(cancellationToken);
 
         // Avisa o terminal que passou a esperar desde a última volta; o que continua esperando já foi avisado.
-        if (notify && previous is not null && waiting.Count > 0)
+        if (notify && previous is not null && waiting.Count > 0 && push?.IsRegistered != true)
         {
             var names = await NamesAsync(cancellationToken);
 

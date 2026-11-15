@@ -18,8 +18,9 @@ public partial class App
     private readonly ISyncAccount _account;
 
     private readonly MauiThemeService _themes;
+    private readonly RemotePushRegistration _push;
 
-    public App(AppShell shell, MobileLifecycle lifecycle, ISyncAccount account, MauiThemeService themes)
+    public App(AppShell shell, MobileLifecycle lifecycle, ISyncAccount account, MauiThemeService themes, RemotePushRegistration push)
     {
         InitializeComponent();
 
@@ -29,6 +30,7 @@ public partial class App
         _shell = shell;
         _lifecycle = lifecycle;
         _account = account;
+        _push = push;
     }
 
     protected override Window CreateWindow(IActivationState? activationState)
@@ -40,13 +42,27 @@ public partial class App
             // Antes da janela não há barra de status para pintar.
             _themes.Refresh();
             _ = _lifecycle.StartAsync();
+            _ = RefreshPushAsync();
             Connectivity.Current.ConnectivityChanged += OnConnectivityChanged;
         };
         window.Stopped += (_, _) => _ = _lifecycle.SleepAsync();
-        window.Resumed += (_, _) => _lifecycle.Resume();
+        window.Resumed += (_, _) => { _lifecycle.Resume(); _ = RefreshPushAsync(); };
         window.Destroying += (_, _) => Connectivity.Current.ConnectivityChanged -= OnConnectivityChanged;
 
         return window;
+    }
+
+    private async Task RefreshPushAsync()
+    {
+        try
+        {
+#if ANDROID
+            if (Preferences.Default.Get(RemotePushRegistration.EnabledKey, false)) await FcmPush.EnableAsync(requestPermission: false);
+#else
+            await _push.RegisterSavedAsync();
+#endif
+        }
+        catch (Exception) { /* O registro será tentado novamente ao abrir a aba Remoto. */ }
     }
 
     private void OnConnectivityChanged(object? sender, ConnectivityChangedEventArgs e)

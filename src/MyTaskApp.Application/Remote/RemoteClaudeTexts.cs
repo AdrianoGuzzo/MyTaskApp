@@ -36,9 +36,10 @@ public static class RemoteClaudeTexts
     };
 
     /// <summary>"aguardando você", "revisar", "erro", "trabalhando", "rodando".</summary>
-    public static string Short(RemoteClaudeState state) => state.Attention switch
+    public static string Short(RemoteClaudeState state) => !state.IsOnline && state.Process == RemoteTerminalProcess.Running ? "sem atualização (máquina desconectada)" : state.Attention switch
     {
         RemoteClaudeAttention.Waiting => "aguardando você",
+        RemoteClaudeAttention.Review when state.Process == RemoteTerminalProcess.Exited => "encerrado",
         RemoteClaudeAttention.Review => state.Kind == RemoteClaudeKind.Conversation ? "esperando o próximo prompt" : "revisar",
         RemoteClaudeAttention.Failed => "com erro",
         _ => state.Activity == RemoteAgentActivity.Working ? "trabalhando" : "rodando",
@@ -58,6 +59,8 @@ public static class RemoteClaudeTexts
             string.Format(CultureInfo.CurrentCulture, "O {2} em {0} espera você: {1}", state.MachineName, message, state.ProviderName),
         RemoteClaudeAttention.Waiting =>
             string.Format(CultureInfo.CurrentCulture, "O {1} em {0} espera você.", state.MachineName, state.ProviderName),
+        RemoteClaudeAttention.Review when state.Process == RemoteTerminalProcess.Exited =>
+            string.Format(CultureInfo.CurrentCulture, "O terminal do {1} em {0} foi encerrado.", state.MachineName, state.ProviderName),
         RemoteClaudeAttention.Review =>
             string.Format(CultureInfo.CurrentCulture, "O {1} em {0} terminou e espera o próximo prompt.", state.MachineName, state.ProviderName),
         RemoteClaudeAttention.Failed =>
@@ -68,6 +71,7 @@ public static class RemoteClaudeTexts
     /// <summary>O que o toque faz, ou por que não faz.</summary>
     public static string Action(RemoteClaudeState state) => state switch
     {
+        { Process: not RemoteTerminalProcess.Running } => "O terminal foi encerrado.",
         { Kind: RemoteClaudeKind.Conversation } => "Toque para abrir a conversa.",
         { CanFollow: true } => "Toque para seguir o terminal.",
         _ => NotFollowable(state),

@@ -73,8 +73,31 @@ internal static class RemoteApiEndpoints
         remote.MapPut("/agent/terminals", async (HttpRequest request, ClaimsPrincipal user, RemoteTerminalUseCases useCases, CancellationToken cancellationToken) =>
             Json(await useCases.ReportAsync(SyncApiEndpoints.Caller(user), await ReadAsync<RemoteTerminalSessionBatch>(request, cancellationToken), cancellationToken)));
 
-        remote.MapGet("/terminals", (ClaimsPrincipal user, RemoteTerminalUseCases useCases) =>
-            Json(useCases.List(SyncApiEndpoints.Caller(user))));
+        remote.MapGet("/terminals", async (ClaimsPrincipal user, RemoteTerminalUseCases useCases, CancellationToken cancellationToken) =>
+            Json(await useCases.ListHistoryAsync(SyncApiEndpoints.Caller(user), cancellationToken)));
+
+        remote.MapPut("/push/current", async (HttpRequest request, ClaimsPrincipal user, IRemotePushSubscriptions subscriptions, CancellationToken cancellationToken) =>
+        {
+            await subscriptions.RegisterAsync(SyncApiEndpoints.Caller(user), await ReadAsync<RemotePushSubscription>(request, cancellationToken), cancellationToken);
+            return Json(true);
+        });
+        remote.MapDelete("/push/current", async (ClaimsPrincipal user, IRemotePushSubscriptions subscriptions, CancellationToken cancellationToken) =>
+        {
+            await subscriptions.RemoveAsync(SyncApiEndpoints.Caller(user), cancellationToken);
+            return Json(true);
+        });
+
+        remote.MapGet("/terminal-lifecycle/sessions", async (ClaimsPrincipal user, RemoteTerminalUseCases useCases, CancellationToken cancellationToken) =>
+            Json(await useCases.ListCurrentAsync(SyncApiEndpoints.Caller(user), cancellationToken)));
+        remote.MapGet("/terminal-lifecycle", () => Json(true));
+        remote.MapPost("/terminal-lifecycle", async (HttpRequest request, ClaimsPrincipal user, RemoteTerminalUseCases useCases, CancellationToken cancellationToken) =>
+        {
+            await useCases.IngestAsync(SyncApiEndpoints.Caller(user), await ReadAsync<TerminalLifecyclePage>(request, cancellationToken), cancellationToken);
+            return Json(true);
+        });
+
+        remote.MapGet("/terminals/{sessionId:guid}/events", async (Guid sessionId, long? after, ClaimsPrincipal user, RemoteTerminalUseCases useCases, CancellationToken cancellationToken) =>
+            Json(await useCases.EventsAsync(SyncApiEndpoints.Caller(user), sessionId, after ?? 0, cancellationToken)));
 
         remote.MapPost("/operations/{operationId:guid}/status", async (Guid operationId, HttpRequest request, ClaimsPrincipal user, RemoteOperationUseCases useCases, CancellationToken cancellationToken) =>
             Json(await useCases.UpdateStatusAsync(SyncApiEndpoints.Caller(user), operationId, await ReadAsync<OperationStatusUpdate>(request, cancellationToken), cancellationToken)));

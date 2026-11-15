@@ -48,6 +48,8 @@ public static class MauiProgram
         builder.Services.AddSingleton<IUiDispatcher, MauiDispatcher>();
         builder.Services.AddSingleton<INavigator, ShellNavigator>();
         builder.Services.AddSingleton<IDialogService, MauiDialogs>();
+        builder.Services.AddSingleton<RemotePushRegistration>();
+        builder.Services.AddSingleton<IRemotePushState>(provider => provider.GetRequiredService<RemotePushRegistration>());
         builder.Services.AddSingleton<MauiThemeService>();
         builder.Services.AddSingleton<IThemeService>(provider => provider.GetRequiredService<MauiThemeService>());
         builder.Services.AddSingleton<IPreferenceStore, MauiPreferences>();

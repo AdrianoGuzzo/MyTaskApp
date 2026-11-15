@@ -7,7 +7,7 @@
 | **Categoria** | remoto |
 | **Registrado** | 2026-10-28 |
 | **Palavras-chave** | verificação periódica, JobScheduler, RemoteCheckJob, notificação local, POST_NOTIFICATIONS, RemoteBackgroundCheck, push, FCM, APNs |
-| **Relações** | exceção a: [ADR-067](067-celular-dispositivo-da-sincronizacao.md); relacionado: [ADR-094](094-controladores-ouvem-o-hub.md), [ADR-091](091-conversa-do-claude-como-sessao-no-servidor.md) |
+| **Relações** | revisto por: [ADR-107](107-ciclo-de-vida-remoto-dos-terminais.md); exceção a: [ADR-067](067-celular-dispositivo-da-sincronizacao.md); relacionado: [ADR-094](094-controladores-ouvem-o-hub.md), [ADR-091](091-conversa-do-claude-como-sessao-no-servidor.md) |
 | **Código** | `src/MyTaskApp.Mobile.Core/Remote/RemoteBackgroundCheck.cs`, `src/MyTaskApp.Mobile.Core/Ports/PlatformPorts.cs` (`ILocalNotifier`, `IBackgroundChecks`), `src/MyTaskApp.Mobile.Core/Composition/MobileLifecycle.cs` (`PrepareAsync`, `IsAwake`), `src/MyTaskApp.Mobile/Platforms/Android/RemoteBackground.cs` |
 
 **Contexto:** com o app aberto, o celular vê a aprovação nova e a resposta do
