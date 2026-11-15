@@ -683,3 +683,7 @@ quem executa é o computador, com as regras dele. O guia é o
 - **Sem push na hora:** uma pergunta sem resposta em 10 minutos é negada, e a
   verificação pode vir depois disso. No iOS, as aprovações só chegam com o app
   aberto.
+
+### Terminal em tela cheia
+
+O terminal remoto ocupa a área útil, sem abas ou campos de prompt. Toque no terminal para solicitar o controle e abrir o teclado. O botão de menu recolhe ou mostra as ações e os detalhes da conexão. Arraste para consultar o histórico disponível; novas saídas preservam a posição de leitura. Use **Voltar ao fim** para acompanhar a saída atual. Sair da tela mantém a sessão remota em execução.

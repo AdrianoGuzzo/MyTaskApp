@@ -4,17 +4,18 @@
              xmlns:vm="clr-namespace:MyTaskApp.Mobile.Core.ViewModels;assembly=MyTaskApp.Mobile.Core"
              x:Class="MyTaskApp.Mobile.Views.RemoteTerminalPage"
              x:DataType="vm:RemoteTerminalViewModel"
-             Title="Terminal do Claude">
+             Title="Terminal do Claude" Shell.NavBarIsVisible="False" Shell.TabBarIsVisible="False" BackgroundColor="#1E1E1E">
 
     <!--
       O terminal do Claude de outra máquina (ADR-101): a mesma tela de lá, ao
       vivo. De longe, a vez de digitar é pedida por botão; o prompt vai por um
       campo normal, e a barra traz as teclas que o teclado do celular não tem.
     -->
-    <Grid RowDefinitions="Auto,Auto,*,Auto,Auto,Auto" Padding="8,8,8,4" RowSpacing="6">
+    <Grid RowDefinitions="Auto,*,Auto" Padding="0" RowSpacing="0">
 
         <!-- O estado, a máquina, a vez de digitar e o que mais dá para fazer. -->
-        <VerticalStackLayout Grid.Row="0" Spacing="2">
+        <VerticalStackLayout Grid.Row="0" Spacing="2" IsVisible="False" x:Name="ControlsPanel">
+            <Button Text="Voltar" Clicked="OnBackClicked" />
             <Label Text="{Binding Title}" Style="{StaticResource Section}" LineBreakMode="TailTruncation" />
             <Label Style="{StaticResource Muted}" LineBreakMode="TailTruncation">
                 <Label.FormattedText>
@@ -40,7 +41,7 @@
         </VerticalStackLayout>
 
         <!-- O pedido de permissão do Claude, respondido daqui. -->
-        <Border Grid.Row="1" Style="{StaticResource Card}" IsVisible="{Binding HasDialog}">
+        <Border Grid.Row="1" ZIndex="3" VerticalOptions="Start" Style="{StaticResource Card}" IsVisible="{Binding HasDialog}">
             <VerticalStackLayout Spacing="4">
                 <Label Text="O Claude pede permissão" FontAttributes="Bold" />
                 <Label Text="{Binding DialogText}" LineBreakMode="WordWrap" />
@@ -52,22 +53,12 @@
         </Border>
 
         <!-- A tela de lá. Pinça muda a letra; arrastar na vertical rola o histórico; tocar abre o teclado. -->
-        <Border Grid.Row="2" StrokeThickness="0" BackgroundColor="#1E1E1E" Padding="2">
+        <Border Grid.Row="1" StrokeThickness="0" BackgroundColor="#1E1E1E" Padding="2">
             <GraphicsView x:Name="TerminalView" />
         </Border>
 
-        <!-- O prompt pronto: vai colado, com Enter, quando o Claude espera. -->
-        <Grid Grid.Row="3" ColumnDefinitions="*,Auto" ColumnSpacing="6" IsVisible="{Binding CanPrompt}">
-            <Entry x:Name="PromptEntry"
-                   Placeholder="Prompt para o Claude"
-                   Text="{Binding Prompt}"
-                   ReturnType="Send"
-                   ReturnCommand="{Binding SendPromptCommand}" />
-            <Button Grid.Column="1" Text="Mandar" Command="{Binding SendPromptCommand}" />
-        </Grid>
-
         <!-- As teclas que o teclado do celular não tem. -->
-        <ScrollView Grid.Row="4" Orientation="Horizontal" HorizontalScrollBarVisibility="Never" IsVisible="{Binding CanType}">
+        <ScrollView Grid.Row="2" Orientation="Horizontal" HorizontalScrollBarVisibility="Never" IsVisible="{Binding CanType}">
             <HorizontalStackLayout Spacing="4" BindableLayout.ItemsSource="{Binding Keys}">
                 <BindableLayout.ItemTemplate>
                     <DataTemplate x:DataType="vm:TerminalKeyButton">
@@ -81,17 +72,13 @@
             </HorizontalStackLayout>
         </ScrollView>
 
-        <!-- O teclado do sistema digita direto no terminal, tecla por tecla. -->
-        <Grid Grid.Row="5" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="4" IsVisible="{Binding CanType}">
-            <Entry x:Name="KeyboardEntry"
-                   Placeholder="Toque para digitar no terminal"
-                   Keyboard="Plain"
-                   IsSpellCheckEnabled="False"
-                   IsTextPredictionEnabled="False"
-                   TextChanged="OnKeyboardTextChanged"
-                   Completed="OnKeyboardCompleted" />
-            <Button Grid.Column="1" Text="A−" Style="{StaticResource Chip}" Command="{Binding ZoomOutCommand}" />
-            <Button Grid.Column="2" Text="A+" Style="{StaticResource Chip}" Command="{Binding ZoomInCommand}" />
-        </Grid>
+        <Entry x:Name="KeyboardEntry" Grid.Row="1" WidthRequest="1" HeightRequest="1"
+               Opacity="0.01" HorizontalOptions="Start" VerticalOptions="End"
+               Keyboard="Plain" IsSpellCheckEnabled="False" IsTextPredictionEnabled="False"
+               TextChanged="OnKeyboardTextChanged" Completed="OnKeyboardCompleted" />
+        <Button Grid.Row="1" Text="&#x22EF;" HorizontalOptions="End" VerticalOptions="Start"
+                Opacity="0.75" Clicked="OnControlsClicked" />
+        <Button x:Name="ScrollEndButton" Grid.Row="1" Text="Voltar ao fim" IsVisible="False"
+                HorizontalOptions="End" VerticalOptions="End" Clicked="OnScrollEndClicked" />
     </Grid>
 </ContentPage>
