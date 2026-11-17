@@ -68,6 +68,11 @@
     <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />
   </ItemGroup>
 
+  <ItemGroup Label="Push">
+    <PackageVersion Include="Xamarin.Firebase.Messaging" Version="124.1.2" />
+    <PackageVersion Include="Google.Apis.Auth" Version="1.78.0" />
+  </ItemGroup>
+
   <ItemGroup Label="Testing">
     <PackageVersion Include="xunit.v3" Version="3.2.2" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.1" />

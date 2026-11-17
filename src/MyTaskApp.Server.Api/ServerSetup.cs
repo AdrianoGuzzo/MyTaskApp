@@ -68,6 +68,7 @@ public static class ServerSetup
         services.ConfigureHttpJsonOptions(json => SyncJson.Configure(json.SerializerOptions));
 
         services.AddServerApplication();
+        services.Configure<RemotePushOptions>(configuration.GetSection("RemotePush"));
         services.AddServerInfrastructure(connectionString);
         services.AddScoped<IAuthorizationRevoker, OpenIddictAuthorizationRevoker>();
         services.AddScoped<DeviceGate>();

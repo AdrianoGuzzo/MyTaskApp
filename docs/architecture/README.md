@@ -44,7 +44,7 @@ Números dos ADRs; o link está na linha do índice abaixo.
 - **mobile** (app do celular): 067, 075, 076, 079
 - **distribuicao** (instalador, versionamento, release, instância única, iniciar com o sistema): 018, 019, 023, 044, 049
 - **testes** (estratégia e ferramentas de teste): 006
-- **remoto** (orquestração remota (fases 2 e 3)): 084, 085, 086, 087, 088, 089, 090, 091, 092, 093, 094, 095, 096, 098, 099, 101, 103
+- **remoto** (orquestração remota (fases 2 e 3)): 084, 085, 086, 087, 088, 089, 090, 091, 092, 093, 094, 095, 096, 098, 099, 101, 103, 107, 108
 
 ## Índice
 
@@ -156,6 +156,8 @@ Números dos ADRs; o link está na linha do índice abaixo.
 | [ADR-104](decisions/104-provedores-claude-code-e-codex.md) | Claude Code e Codex compartilham os fluxos de agentes | Aceito | Implementado | agente-ia | CodexCliProvider, AgentProviderSettingsHandler, ProviderId, agente padrão, hooks, terminal remoto |
 | [ADR-105](decisions/105-perguntar-ao-fechar-terminal.md) | Perguntar ao fechar o terminal local | Aceito | Parcial | agente-ia | terminal, fechamento, AgentEmbedded |
 | [ADR-106](decisions/106-terminal-integrado-unico-para-agentes.md) | Claude Code e Codex abrem no terminal integrado | Aceito | Parcial | agente-ia | terminal integrado, AgentEmbedded, HostedConsultationOpener |
+| [ADR-107](decisions/107-ciclo-de-vida-remoto-dos-terminais.md) | Diário do ciclo de vida e push dos terminais de Claude e Codex | Aceito | Parcial | remoto | TerminalLifecycleJournal, TerminalHistory, UnifiedPush, APNs |
+| [ADR-108](decisions/108-fcm-no-android-sem-aplicativo-auxiliar.md) | FCM no Android sem aplicativo auxiliar | Aceito | Parcial | remoto | Firebase, FcmMessagingService, OAuth, conta de serviço |
 
 ## Novo ADR
 

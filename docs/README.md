@@ -85,3 +85,5 @@ comportamento de hoje sem conferir no código.
 | [`security/API_SECURITY_AUDIT.md`](security/API_SECURITY_AUDIT.md) | Auditoria de segurança da API de sincronização, 17/10/2026 (achados SEC-001 a SEC-018) |
 | [`security/API_SECURITY_AUDIT_2026-10-18_1505.md`](security/API_SECURITY_AUDIT_2026-10-18_1505.md) | Revalidação em homologação, 18/10/2026 (SEC-019, SEC-020, critérios de publicação) |
 | [`refactoring/PROGRESS.md`](refactoring/PROGRESS.md) | Refatoração sem mudança de comportamento, 13 a 14/10/2026: etapas, defeitos D1 a D6, riscos |
+
+- [Ciclo de vida remoto dos terminais](features/terminal-lifecycle.md): estado nas tasks, histórico MCP e avisos imediatos Android/iOS.

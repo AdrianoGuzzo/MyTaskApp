@@ -48,7 +48,7 @@ public sealed class RemoteClaudeAnnouncer(
                 state.TaskId,
                 state.DevelopmentId,
                 task?.Title ?? "Tarefa",
-                "Claude Code",
+                state.ProviderName,
                 GetTodayBoardHandler.RepositoryName(development?.RepositoryPath),
                 development?.Branch,
                 state.LocalActivity,

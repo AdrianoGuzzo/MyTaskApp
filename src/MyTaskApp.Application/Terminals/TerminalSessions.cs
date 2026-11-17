@@ -106,11 +106,16 @@ public sealed class NoTerminalSessions : ITerminalSessions
 /// processo, uma tela e as filas dos clientes, e nenhum limite natural
 /// existiria se não este.
 /// </remarks>
+public interface ITerminalLaunchEvents
+{
+    event EventHandler<TerminalSessionInfo>? LaunchFailed;
+}
+
 public sealed partial class TerminalSessionRegistry(
     IPseudoTerminalFactory factory,
     IUseCaseRunner runner,
     TimeProvider time,
-    ILoggerFactory loggers) : ITerminalSessions, IAsyncDisposable
+    ILoggerFactory loggers) : ITerminalSessions, ITerminalLaunchEvents, IAsyncDisposable
 {
     public const int MaxSessions = 8;
 
@@ -126,6 +131,7 @@ public sealed partial class TerminalSessionRegistry(
     private bool _disposed;
 
     public event EventHandler? Changed;
+    public event EventHandler<TerminalSessionInfo>? LaunchFailed;
 
     public event EventHandler<Guid>? ActivityChanged;
 
@@ -160,6 +166,7 @@ public sealed partial class TerminalSessionRegistry(
 
             if (_hosts.Values.Count(host => host.IsRunning) >= MaxSessions)
             {
+                LaunchFailed?.Invoke(this, info);
                 return Task.FromResult(TerminalLaunchResult.Failed(
                     $"Este agente já tem {MaxSessions} terminais abertos. Feche um antes de abrir outro."));
             }
@@ -179,6 +186,7 @@ public sealed partial class TerminalSessionRegistry(
         }
         catch (DomainException exception)
         {
+            LaunchFailed?.Invoke(this, info);
             LogStartFailed(info.SessionId, exception.Message);
             return Task.FromResult(TerminalLaunchResult.Failed(exception.Message));
         }

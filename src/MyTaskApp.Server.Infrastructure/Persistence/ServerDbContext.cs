@@ -48,6 +48,25 @@ public sealed class ServerDbContext(DbContextOptions<ServerDbContext> options)
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+        builder.Entity<RemotePushDestinationRow>(entity =>
+        {
+            entity.ToTable("RemotePushDestinations");
+            entity.HasKey(row => new { row.UserId, row.DeviceId });
+            entity.Property(row => row.Address).HasMaxLength(2048);
+        });
+        builder.Entity<RemotePushDeliveryRow>(entity =>
+        {
+            entity.ToTable("RemotePushDeliveries");
+            entity.HasKey(row => new { row.EventId, row.DeviceId });
+            entity.HasIndex(row => row.DueAt);
+        });
+        builder.Entity<TerminalHistoryRow>(entity =>
+        {
+            entity.ToTable("TerminalHistory");
+            entity.HasKey(row => new { row.UserId, row.DeviceId, row.SessionId, row.Sequence });
+            entity.HasIndex(row => row.OccurredAt);
+            entity.Property(row => row.State).HasColumnType("jsonb");
+        });
 
         builder.UseOpenIddict<Guid>();
 

@@ -25,7 +25,7 @@ internal sealed class AgentHost(
     TerminalPipeListener terminalPipe,
     TerminalSessionRegistry terminals,
     LocalPeerAttentionForwarder attention,
-    ILogger<AgentHost> logger)
+    ILogger<AgentHost> logger, RemoteTerminalReporter? reporter = null)
 {
     /// <summary>A mesma folga do desktop para o que está em andamento terminar.</summary>
     public static readonly TimeSpan ShutdownGrace = TimeSpan.FromSeconds(10);
@@ -66,7 +66,15 @@ internal sealed class AgentHost(
 
         // Os terminais antes do canal: cada Claude recebe o fim do terminal e sai salvando a conversa.
         await terminalPipe.DisposeAsync();
+        var ending = terminals.List();
         await terminals.DisposeAsync();
+        if (reporter is not null)
+        {
+            await reporter.CaptureShutdownAsync(ending.Select(host => host.Status).ToList());
+            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+            try { await reporter.PublishAsync(deadline.Token); }
+            catch (Exception exception) { logger.LogWarning("TerminalShutdownReportPending {Error}", exception.GetType().Name); }
+        }
         attention.Dispose();
 
         if (events is IAsyncDisposable listener)

@@ -21,6 +21,7 @@ public static class McpCatalog
         typeof(DatabaseConnectionTools),
         typeof(AnonymizationProfileTools),
         typeof(ContextTools),
+        typeof(TerminalTools),
         typeof(ConsultationTools),
     ];
 

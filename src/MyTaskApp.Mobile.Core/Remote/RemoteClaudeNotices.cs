@@ -21,7 +21,7 @@ public sealed class RemoteClaudeNotices(
     IUseCaseRunner runner,
     ILocalNotifier notifier,
     RemoteBackgroundCheck background,
-    ILogger<RemoteClaudeNotices> logger)
+    ILogger<RemoteClaudeNotices> logger, IRemotePushState? push = null)
 {
     private bool _started;
 
@@ -42,6 +42,7 @@ public sealed class RemoteClaudeNotices(
     /// <summary>Avisa um pedido e anota para a verificação em segundo plano.</summary>
     public async Task NotifyAsync(RemoteClaudeState state, CancellationToken cancellationToken)
     {
+        if (state.Kind == RemoteClaudeKind.Terminal && push?.IsRegistered == true) return;
         var task = await runner.RunAsync<ITaskItemRepository, TaskItem?>(
             (tasks, token) => tasks.FindByIdAsync(state.TaskId, token),
             cancellationToken);

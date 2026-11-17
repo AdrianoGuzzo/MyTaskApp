@@ -11,6 +11,10 @@
         <ScrollView>
             <VerticalStackLayout Padding="16" Spacing="8">
 
+                <Button Text="Ativar notificações" Clicked="ConfigurePush" />
+                <Button Text="Desativar avisos imediatos" Clicked="DisablePush" Style="{StaticResource Secondary}" />
+                <Label x:Name="PushStatus" Style="{StaticResource Muted}" />
+
                 <!-- Sem servidor ou com o remoto desligado: o celular não pede nem aprova nada. -->
                 <Border Style="{StaticResource Card}" IsVisible="{Binding IsOff}">
                     <VerticalStackLayout Spacing="8">

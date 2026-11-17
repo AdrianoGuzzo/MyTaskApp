@@ -56,11 +56,32 @@ public class MainActivity : MauiAppCompatActivity
     /// </summary>
     private static void Follow(Intent? intent)
     {
+        // O toque no aviso que o FCM exibiu em segundo plano usa os extras de dados.
+        if (Guid.TryParse(intent?.GetStringExtra("taskId"), out var pushedTask))
+        {
+            intent.RemoveExtra("taskId");
+            MainThread.BeginInvokeOnMainThread(async () =>
+            {
+                try { await IPlatformApplication.Current!.Services.GetRequiredService<RemotePushRegistration>().OpenTaskAsync(pushedTask); }
+                catch (Exception) { /* A conta precisa estar conectada antes de abrir a tarefa. */ }
+            });
+            return;
+        }
         if (intent?.GetStringExtra(AndroidNotifier.RouteExtra) != "//remote")
         {
             return;
         }
 
+        if (Guid.TryParse(intent.GetStringExtra("push.task"), out var taskId))
+        {
+            intent.RemoveExtra("push.task");
+            MainThread.BeginInvokeOnMainThread(async () =>
+            {
+                try { await IPlatformApplication.Current!.Services.GetRequiredService<RemotePushRegistration>().OpenTaskAsync(taskId); }
+                catch (Exception) { /* A tela da conta mostra a falha de conexão. */ }
+            });
+            return;
+        }
         intent.RemoveExtra(AndroidNotifier.RouteExtra);
         MainThread.BeginInvokeOnMainThread(async () =>
         {

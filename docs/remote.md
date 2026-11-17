@@ -415,3 +415,7 @@ atualizar o servidor e os dois apps:
 10. Com a vista aberta e o controle assumido, desligue *Aceitar o terminal
     remoto* na executora: a próxima tecla é recusada e a conexão acaba, e o
     Claude segue lá.
+
+## Ciclo de vida dos terminais e avisos imediatos
+
+Consulte [Acompanhar terminais de outras máquinas](features/terminal-lifecycle.md) para os estados de Claude/Codex, histórico e configuração de push Android/iOS.

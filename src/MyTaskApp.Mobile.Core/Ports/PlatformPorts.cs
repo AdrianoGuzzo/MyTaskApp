@@ -122,7 +122,7 @@ public interface IDeviceUnlock
 /// <summary>Um aviso do sistema, para quando o app não está na frente (ADR-096).</summary>
 /// <param name="Tag">O aviso com a mesma etiqueta substitui o anterior, em vez de empilhar.</param>
 /// <param name="Text">Pode trazer o resumo do pedido: a casca o esconde na tela bloqueada.</param>
-public sealed record LocalNotice(string Tag, string Title, string Text);
+public sealed record LocalNotice(string Tag, string Title, string Text, Guid? TaskId = null);
 
 /// <summary>
 /// As notificações do sistema (ADR-096): no Android, um canal do app e a

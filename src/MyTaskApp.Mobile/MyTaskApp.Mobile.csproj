@@ -92,4 +92,14 @@
     <PackageReference Include="Microsoft.Extensions.Logging.Debug" />
   </ItemGroup>
 
+  <PropertyGroup Condition="'$(EnableRemotePush)' == 'true' and $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">
+    <DefineConstants>$(DefineConstants);REMOTE_PUSH</DefineConstants>
+    <ApnsEnvironment Condition="'$(ApnsEnvironment)' == ''">development</ApnsEnvironment>
+    <CodesignEntitlements>Platforms\iOS\PushEntitlements.plist</CodesignEntitlements>
+  </PropertyGroup>
+
+  <ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
+    <PackageReference Include="Xamarin.Firebase.Messaging" />
+    <GoogleServicesJson Include="$(FirebaseConfigFile)" Condition="'$(FirebaseConfigFile)' != '' and Exists('$(FirebaseConfigFile)')" />
+  </ItemGroup>
 </Project>

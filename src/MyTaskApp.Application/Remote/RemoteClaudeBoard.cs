@@ -60,7 +60,11 @@ public sealed record RemoteClaudeState(
     DateTimeOffset? AttentionSince,
     long? Version = null,
     Guid? Prompt = null,
-    string ProviderId = "claude-code")
+    string ProviderId = "claude-code",
+    RemoteTerminalProcess Process = RemoteTerminalProcess.Running,
+    bool IsOnline = true,
+    int? ExitCode = null,
+    DateTimeOffset? UpdatedAt = null)
 {
     public string ProviderName => ProviderId switch { "claude-code" => "Claude", "codex" => "Codex", _ => ProviderId };
     public bool NeedsAttention => Attention != RemoteClaudeAttention.None;
@@ -115,7 +119,7 @@ public sealed partial class RemoteClaudeBoard(
     public static readonly TimeSpan LiveInterval = TimeSpan.FromSeconds(60);
 
     /// <summary>Quanto vale a lista de máquinas (apelido, terminal oferecido).</summary>
-    public static readonly TimeSpan MachinesLifetime = TimeSpan.FromMinutes(5);
+    public static readonly TimeSpan MachinesLifetime = TimeSpan.FromSeconds(20);
 
     /// <summary>A conversa parada esperando o próximo prompt aparece até isso depois do último relato.</summary>
     public static readonly TimeSpan IdleConversationWindow = TimeSpan.FromHours(24);
@@ -162,7 +166,11 @@ public sealed partial class RemoteClaudeBoard(
     /// <summary>O quadro está segurando o hub: há outra máquina para ouvir.</summary>
     public bool IsListening => _listening;
 
-    public IReadOnlyList<RemoteClaudeState> ForTask(Guid taskId) => [.. States.Where(state => state.TaskId == taskId)];
+    private readonly Dictionary<Guid, Guid> _terminalEpisodes = new();
+
+    public IReadOnlyList<RemoteClaudeState> TaskListStates { get; private set; } = [];
+
+    public IReadOnlyList<RemoteClaudeState> ForTask(Guid taskId, bool includeHistory = false) => [.. States.Where(state => state.TaskId == taskId && (includeHistory || state.Process == RemoteTerminalProcess.Running || state.UpdatedAt is null || timeProvider.GetUtcNow() - state.UpdatedAt <= TimeSpan.FromHours(24)))];
 
     /// <summary>Começa a ler; de novo, não faz nada. A primeira leitura só anota.</summary>
     public void Start()
@@ -352,9 +360,23 @@ public sealed partial class RemoteClaudeBoard(
     {
         try
         {
-            return (await runner.RunAsync<IRemoteTerminalsApi, RemoteTerminalSessionList>(
-                (api, token) => api.ListTerminalsAsync(token),
-                cancellationToken)).Sessions;
+            return await runner.RunAsync<IRemoteTerminalsApi, IReadOnlyList<RemoteTerminalSessionView>>(async (api, token) =>
+            {
+                var reported = (await api.ListTerminalsAsync(token)).Sessions;
+                _terminalEpisodes.Clear();
+                if (api is ITerminalLifecycleApi lifecycle)
+                {
+                    try
+                    {
+                        var current = await lifecycle.ListCurrentAsync(token);
+                        foreach (var item in current.Sessions) _terminalEpisodes[item.View.Session.SessionId] = item.EventId;
+                        return current.Sessions.Select(item => item.View).Concat(reported)
+                            .DistinctBy(item => (item.DeviceId, item.Session.SessionId)).ToList();
+                    }
+                    catch (SyncApiException exception) when (exception.Kind == SyncFailureKind.NotFound) { /* Servidor anterior ao diário. */ }
+                }
+                return reported;
+            }, cancellationToken);
         }
         catch (SyncApiException exception) when (exception is { Kind: SyncFailureKind.NotFound, Code: null })
         {
@@ -384,13 +406,16 @@ public sealed partial class RemoteClaudeBoard(
         {
             var session = view.Session;
 
-            if (session.Process != RemoteTerminalProcess.Running || !_machines.TryGetValue(view.DeviceId, out var machine))
+            if (!_machines.TryGetValue(view.DeviceId, out var machine))
             {
                 continue;
             }
 
+            var online = machine.IsOnline && timeProvider.GetUtcNow() - view.ReportedAt <= RemoteLimits.OfflineAfter;
             var attention = session switch
             {
+                { Process: RemoteTerminalProcess.Crashed } => RemoteClaudeAttention.Failed,
+                { Process: RemoteTerminalProcess.Exited } => RemoteClaudeAttention.Review,
                 { HasDialog: true } or { Activity: RemoteAgentActivity.WaitingForUser } => RemoteClaudeAttention.Waiting,
                 { Activity: RemoteAgentActivity.WaitingReview } => RemoteClaudeAttention.Review,
                 { Activity: RemoteAgentActivity.Failed } => RemoteClaudeAttention.Failed,
@@ -407,9 +432,9 @@ public sealed partial class RemoteClaudeBoard(
                 session.Activity,
                 session.HasDialog,
                 session.ActivityMessage,
-                CanFollow: machine.OffersTerminal && session.DevelopmentId is not null,
+                CanFollow: online && session.Process == RemoteTerminalProcess.Running && machine.OffersTerminal && session.DevelopmentId is not null,
                 attention,
-                AttentionSince: null, ProviderId: session.ProviderId);
+                AttentionSince: null, Prompt: _terminalEpisodes.TryGetValue(session.SessionId, out var episode) ? episode : null, ProviderId: session.ProviderId, Process: session.Process, IsOnline: online, ExitCode: session.ExitCode, UpdatedAt: view.ReportedAt);
         }
     }
 
@@ -483,9 +508,9 @@ public sealed partial class RemoteClaudeBoard(
                 continue;
             }
 
-            if (!_episodes.TryGetValue(state.SessionId, out var episode) || episode.Attention != state.Attention || episode.Prompt != state.Prompt)
+            if (!_episodes.TryGetValue(state.SessionId, out var episode) || episode.Attention != state.Attention || episode.Prompt != state.Prompt || episode.Process != state.Process)
             {
-                episode = new Episode(state.Attention, state.Prompt, now);
+                episode = new Episode(state.Attention, state.Prompt, now, state.Process);
                 _episodes[state.SessionId] = episode;
 
                 if (!_baseline)
@@ -514,8 +539,10 @@ public sealed partial class RemoteClaudeBoard(
             .ThenBy(state => state.SessionId)
             .ToList();
 
-        var changed = !ordered.SequenceEqual(States);
+        var visible = ordered.Where(state => state.Process == RemoteTerminalProcess.Running || state.UpdatedAt is null || now - state.UpdatedAt <= TimeSpan.FromHours(24)).ToList();
+        var changed = !ordered.SequenceEqual(States) || !visible.SequenceEqual(TaskListStates);
         States = ordered;
+        TaskListStates = visible;
 
         if (changed)
         {
@@ -589,7 +616,7 @@ public sealed partial class RemoteClaudeBoard(
     /// prompt é outro pedido; no terminal, só o tipo distingue (dois diálogos
     /// seguidos entre duas leituras viram um, ADR-103).
     /// </summary>
-    private sealed record Episode(RemoteClaudeAttention Attention, Guid? Prompt, DateTimeOffset Since);
+    private sealed record Episode(RemoteClaudeAttention Attention, Guid? Prompt, DateTimeOffset Since, RemoteTerminalProcess Process);
 
     [LoggerMessage(EventId = 9880, Level = LogLevel.Warning, Message = "RemoteClaudeBoardFailed {Error}")]
     private partial void LogFailed(string error);

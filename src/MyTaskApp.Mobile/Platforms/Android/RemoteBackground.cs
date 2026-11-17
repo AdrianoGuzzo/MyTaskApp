@@ -63,6 +63,7 @@ public sealed class AndroidNotifier(ILogger<AndroidNotifier> logger) : ILocalNot
         var open = new Intent(context, typeof(MainActivity))
             .SetFlags(ActivityFlags.NewTask | ActivityFlags.SingleTop)
             .PutExtra(RouteExtra, "//remote");
+        if (notice.TaskId is { } taskId) open.PutExtra("push.task", taskId.ToString("D"));
         var tap = PendingIntent.GetActivity(context, notice.Tag.GetHashCode(StringComparison.Ordinal), open, PendingIntentFlags.Immutable | PendingIntentFlags.UpdateCurrent);
 
         // Na tela bloqueada, só isto: o resumo (o comando, o nome da tarefa) fica para depois de destravar.
@@ -86,7 +87,7 @@ public sealed class AndroidNotifier(ILogger<AndroidNotifier> logger) : ILocalNot
         manager.Notify(notice.Tag, 0, builder.Build());
     }
 
-    private static void EnsureChannel(Context context)
+    internal static void EnsureChannel(Context context)
     {
         if (!OperatingSystem.IsAndroidVersionAtLeast(26))
         {

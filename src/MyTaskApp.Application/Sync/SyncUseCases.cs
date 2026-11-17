@@ -51,7 +51,7 @@ public sealed class SyncAccountService(
     SyncScheduler scheduler,
     SyncDeviceDirectory directory,
     ISyncServerAddress address,
-    ILogger<SyncAccountService> logger) : ISyncAccount
+    ILogger<SyncAccountService> logger, MyTaskApp.Application.Remote.IRemotePushApi? push = null) : ISyncAccount
 {
     public bool IsAvailable => authenticator.IsAvailable;
 
@@ -119,6 +119,11 @@ public sealed class SyncAccountService(
     /// <summary>Sai da conta neste computador. Nenhum dado local é apagado.</summary>
     public async Task DisconnectAsync(CancellationToken cancellationToken)
     {
+        if (push is not null)
+        {
+            try { await push.RemoveAsync(cancellationToken); }
+            catch (Exception exception) when (exception is not OperationCanceledException) { logger.LogWarning("RemotePushUnregisterFailed {Error}", exception.GetType().Name); }
+        }
         await authenticator.SignOutAsync(cancellationToken);
         await runner.RunAsync<ISyncLocalStore>((store, token) => store.UnlinkAsync(token), cancellationToken);
         logger.LogInformation("SyncDisconnected");
