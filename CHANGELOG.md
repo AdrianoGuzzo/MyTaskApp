@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.36.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.35.1...v1.36.0) (2026-11-17)
+
+
+### Added
+
+* **mobile:** simplifique o terminal remoto em tela cheia ([#209](https://github.com/AdrianoGuzzo/MyTaskApp/issues/209)) ([c4619b2](https://github.com/AdrianoGuzzo/MyTaskApp/commit/c4619b2a07b75082066982134687cf5781d5f8f8))
+* **remoto:** acompanhe e notifique o ciclo de vida dos terminais ([#211](https://github.com/AdrianoGuzzo/MyTaskApp/issues/211)) ([3dec4cf](https://github.com/AdrianoGuzzo/MyTaskApp/commit/3dec4cfe9d950019c85c743fcfc4ac27a18f07c7))
+
+
+### Fixed
+
+* corrija a colagem de imagens no terminal interno ([#217](https://github.com/AdrianoGuzzo/MyTaskApp/issues/217)) ([df9b8eb](https://github.com/AdrianoGuzzo/MyTaskApp/commit/df9b8ebcfc9e5fef2d07e99104efbb1ba5ddf766))
+* estenda a seleção ao rolar o terminal integrado ([#216](https://github.com/AdrianoGuzzo/MyTaskApp/issues/216)) ([d34b292](https://github.com/AdrianoGuzzo/MyTaskApp/commit/d34b292ae4599f8782e92d59c0db540d781ee13a))
+
 ## [1.35.1](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.35.0...v1.35.1) (2026-11-15)
 
 
