@@ -96,6 +96,7 @@
       <terminals:TerminalView x:Name="Terminal"
                               Screen="{Binding Screen}"
                               Version="{Binding Version}"
+                              ImagePasteModifiers="{Binding ImagePasteModifiers}"
                               IsReadOnly="{Binding IsReadOnly}" />
       <ScrollBar x:Name="HistoryScroll" Grid.Column="1" Orientation="Vertical" SmallChange="1" />
       </Grid>
