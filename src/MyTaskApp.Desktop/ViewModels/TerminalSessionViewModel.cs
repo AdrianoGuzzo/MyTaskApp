@@ -1,3 +1,4 @@
+using Avalonia.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
@@ -22,7 +23,7 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
     private static readonly string[] StateProperties =
     [
         nameof(Connection), nameof(IsConnected), nameof(IsDisconnected), nameof(IsRunning), nameof(IsReadOnly), nameof(StatusText),
-        nameof(Status), nameof(Message), nameof(DialogText), nameof(CanAnswerDialog), nameof(BypassWarning), nameof(MonitoringWarning),
+        nameof(Status), nameof(ImagePasteModifiers), nameof(Message), nameof(DialogText), nameof(CanAnswerDialog), nameof(BypassWarning), nameof(MonitoringWarning),
         nameof(LeaseText), nameof(OthersText), nameof(ProcessText), nameof(HasControl), nameof(CanTakeControlNow), nameof(CanReleaseControlNow),
     ];
 
@@ -69,6 +70,15 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
     public long Version => _client.Version;
 
     public TerminalSessionStatus? Status => _client.Status;
+
+    public KeyModifiers? ImagePasteModifiers => OperatingSystem.IsWindows() && !IsRemote
+        ? Status?.ProviderId switch
+        {
+            "claude-code" => KeyModifiers.Alt,
+            "codex" => KeyModifiers.Control,
+            _ => null,
+        }
+        : null;
 
     /// <summary>Um recado curto do agente ou desta vista: uma recusa, o controle que voltou.</summary>
     public string? Message => _client.Message;

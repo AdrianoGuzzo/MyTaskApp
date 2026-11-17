@@ -193,6 +193,12 @@ R-14).
 - **Uma sessão aberta no terminal do sistema** ("Onde abrir": terminal do
   sistema) não é acompanhável de longe.
 
+### Colagem de imagem no desktop
+
+Em uma sessão local do Claude Code ou do Codex no Windows, copie a imagem e use
+`Ctrl+V`, `Ctrl+Shift+V` ou `Shift+Insert` no prompt. O agente insere o anexo para revisão.
+Se a área de transferência contiver só texto, `Ctrl+Shift+V` e `Shift+Insert` colam o texto.
+
 ### Rolagem no desktop
 
 A roda e o touchpad navegam pelo histórico local. Quando o programa captura o mouse, recebem eventos no formato solicitado; na tela alternativa sem captura, recebem setas. Shift+roda força a navegação local. Em modo somente leitura, nenhuma entrada é enviada. A barra lateral e Shift+PageUp/PageDown navegam pelo histórico local, limitado a 2.000 linhas; retratos remotos incluem até 300 linhas. Novas saídas preservam a posição de leitura enquanto as linhas permanecerem no buffer. Digitar retorna à tela ao vivo. O histórico não é um registro permanente de toda a saída.

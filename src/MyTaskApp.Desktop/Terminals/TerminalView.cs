@@ -36,6 +36,15 @@ public sealed class TerminalView : Control
     public static readonly StyledProperty<bool> IsReadOnlyProperty =
         AvaloniaProperty.Register<TerminalView, bool>(nameof(IsReadOnly));
 
+    public static readonly StyledProperty<KeyModifiers?> ImagePasteModifiersProperty =
+        AvaloniaProperty.Register<TerminalView, KeyModifiers?>(nameof(ImagePasteModifiers));
+
+    public KeyModifiers? ImagePasteModifiers
+    {
+        get => GetValue(ImagePasteModifiersProperty);
+        set => SetValue(ImagePasteModifiersProperty, value);
+    }
+
     public static readonly StyledProperty<FontFamily> FontFamilyProperty =
         TextElement.FontFamilyProperty.AddOwner<TerminalView>();
 
@@ -379,10 +388,12 @@ public sealed class TerminalView : Control
             return;
         }
 
-        if ((e.Key == Key.V && control && shift) || (e.Key == Key.Insert && shift))
+        var pasteText = (e.Key == Key.V && control && shift) || (e.Key == Key.Insert && shift);
+        var pasteImage = e.Key == Key.V && e.KeyModifiers == KeyModifiers.Control && ImagePasteModifiers.HasValue;
+        if (pasteText || pasteImage)
         {
             e.Handled = true;
-            _ = PasteAsync(screen);
+            _ = PasteAsync(screen, pasteText);
             return;
         }
 
@@ -444,11 +455,38 @@ public sealed class TerminalView : Control
         }
     }
 
-    private async Task PasteAsync(VtScreen screen)
+    private async Task PasteAsync(VtScreen screen, bool pasteText)
     {
+        if (IsReadOnly)
+        {
+            return;
+        }
+
         try
         {
-            if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard && await clipboard.TryGetTextAsync() is { Length: > 0 } text)
+            var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+            var modifiers = ImagePasteModifiers;
+            if (modifiers.HasValue && clipboard is not null &&
+                (await clipboard.GetDataFormatsAsync()).Contains(DataFormat.Bitmap))
+            {
+                if (Screen == screen && ImagePasteModifiers == modifiers &&
+                    TerminalKeyEncoder.Encode(Key.V, modifiers.Value, screen.ApplicationCursorKeys) is { } keys)
+                {
+                    Type(keys);
+                }
+
+                return;
+            }
+
+            if (!pasteText)
+            {
+                if (Screen == screen)
+                {
+                    Type(TerminalKeyBytes.Control('v')!);
+                }
+            }
+            else if (clipboard is not null &&
+                     await clipboard.TryGetTextAsync() is { Length: > 0 } text && Screen == screen)
             {
                 Type(TerminalKeyEncoder.Paste(text, screen.BracketedPaste));
             }
