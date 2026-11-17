@@ -110,6 +110,64 @@ public sealed class TerminalViewTests
     }
 
     [AvaloniaFact]
+    public void DraggingAndScrolling_SelectsTextAcrossTheHistory()
+    {
+        var screen = new VtScreen(new TerminalSize(40, 5));
+        for (var i = 0; i < 12; i++)
+            screen.Feed($"linha {i}\r\n");
+
+        var (window, view) = Show(screen);
+        var cell = view.CellSize;
+        var start = new Point(8 * cell.Width, 3.5 * cell.Height);
+        var top = new Point(0, cell.Height / 2);
+
+        window.MouseDown(start, MouseButton.Left);
+        window.MouseMove(top);
+        window.MouseWheel(top, new Vector(0, 2), RawInputModifiers.LeftMouseButton);
+        window.MouseUp(top, MouseButton.Left);
+
+        view.ScrollOffset.Should().Be(6);
+        var expected = Enumerable.Range(2, 10).Select(i => $"linha {i}");
+        view.SelectedText().Should().Be(string.Join(Environment.NewLine, expected));
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public async Task DraggingAboveTheTerminal_KeepsScrollingWithoutPointerMovement()
+    {
+        var screen = new VtScreen(new TerminalSize(40, 5));
+        for (var i = 0; i < 12; i++)
+            screen.Feed($"linha {i}\r\n");
+
+        var (window, view) = Show(screen);
+        try
+        {
+            var scrolled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            view.ScrollChanged += (_, _) =>
+            {
+                if (view.ScrollOffset >= 3)
+                    scrolled.TrySetResult();
+            };
+
+            var cell = view.CellSize;
+            var above = new Point(0, -1);
+            window.MouseDown(new Point(8 * cell.Width, 3.5 * cell.Height), MouseButton.Left);
+            window.MouseMove(above, RawInputModifiers.LeftMouseButton);
+            await scrolled.Task.WaitAsync(TimeSpan.FromSeconds(3));
+            window.MouseUp(above, MouseButton.Left);
+
+            view.SelectedText().Should().EndWith("linha 11");
+            var offset = view.ScrollOffset;
+            await Task.Delay(150);
+            view.ScrollOffset.Should().Be(offset);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
     public void Drawing_ColorsCursorAndWideCharacters_DoesNotThrow()
     {
         var screen = new VtScreen(new TerminalSize(60, 6));
