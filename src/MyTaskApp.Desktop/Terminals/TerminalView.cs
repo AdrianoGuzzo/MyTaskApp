@@ -8,6 +8,7 @@ using Avalonia.Input.Platform;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
 using Avalonia.Media.TextFormatting;
+using Avalonia.Threading;
 using MyTaskApp.Application.Terminals;
 
 namespace MyTaskApp.Desktop.Terminals;
@@ -91,6 +92,8 @@ public sealed class TerminalView : Control
     private (int Line, int Column)? _selectionEnd;
 
     private bool _selecting;
+    private Point _selectionPointerPosition;
+    private readonly DispatcherTimer _selectionScrollTimer = new() { Interval = TimeSpan.FromMilliseconds(50) };
 
     static TerminalView()
     {
@@ -103,6 +106,7 @@ public sealed class TerminalView : Control
 
     public TerminalView()
     {
+        _selectionScrollTimer.Tick += (_, _) => ScrollBy(SelectionScrollDirection());
         ClipToBounds = true;
         Cursor = new Cursor(StandardCursorType.Ibeam);
     }
@@ -199,6 +203,8 @@ public sealed class TerminalView : Control
         if (offset != ScrollOffset)
         {
             ScrollOffset = offset;
+            if (_selecting && Screen is { } screen)
+                _selectionEnd = CellAt(screen, _selectionPointerPosition);
             InvalidateVisual();
             ScrollChanged?.Invoke(this, EventArgs.Empty);
         }
@@ -309,7 +315,8 @@ public sealed class TerminalView : Control
 
         if (Screen is { } screen && e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
-            _selectionStart = _selectionEnd = CellAt(screen, e.GetPosition(this));
+            _selectionPointerPosition = e.GetPosition(this);
+            _selectionStart = _selectionEnd = CellAt(screen, _selectionPointerPosition);
             _selecting = true;
             e.Pointer.Capture(this);
             InvalidateVisual();
@@ -322,7 +329,16 @@ public sealed class TerminalView : Control
 
         if (_selecting && Screen is { } screen)
         {
-            _selectionEnd = CellAt(screen, e.GetPosition(this));
+            _selectionPointerPosition = e.GetPosition(this);
+            _selectionEnd = CellAt(screen, _selectionPointerPosition);
+            var direction = SelectionScrollDirection();
+            if (direction == 0)
+                _selectionScrollTimer.Stop();
+            else if (!_selectionScrollTimer.IsEnabled)
+            {
+                _selectionScrollTimer.Start();
+                ScrollBy(direction);
+            }
             InvalidateVisual();
         }
     }
@@ -330,8 +346,36 @@ public sealed class TerminalView : Control
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         base.OnPointerReleased(e);
+        if (e.InitialPressMouseButton == MouseButton.Left && e.Pointer.Captured == this)
+        {
+            StopSelecting();
+            e.Pointer.Capture(null);
+        }
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        base.OnPointerCaptureLost(e);
+        StopSelecting();
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+        StopSelecting();
+    }
+
+    private int SelectionScrollDirection()
+    {
+        if (_selectionPointerPosition.Y < 0)
+            return 1;
+        return _selectionPointerPosition.Y >= Bounds.Height ? -1 : 0;
+    }
+
+    private void StopSelecting()
+    {
         _selecting = false;
-        e.Pointer.Capture(null);
+        _selectionScrollTimer.Stop();
     }
 
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
@@ -340,7 +384,7 @@ public sealed class TerminalView : Control
         _wheelRemainder += e.Delta.Y * WheelLines;
         var lines = (int)_wheelRemainder;
         _wheelRemainder -= lines;
-        if (Screen is { } screen && !e.KeyModifiers.HasFlag(KeyModifiers.Shift)
+        if (!_selecting && Screen is { } screen && !e.KeyModifiers.HasFlag(KeyModifiers.Shift)
             && (screen.MouseTracking != 0 || screen.AlternateScreen))
         {
             if (!IsReadOnly)
@@ -500,7 +544,7 @@ public sealed class TerminalView : Control
     private void ClearSelection()
     {
         _selectionStart = _selectionEnd = null;
-        _selecting = false;
+        StopSelecting();
         InvalidateVisual();
     }
 
