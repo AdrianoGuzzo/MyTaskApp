@@ -68,6 +68,7 @@ public sealed class TerminalView : Control
     private const int WheelLines = 3;
     private double _wheelRemainder;
     private long _lastScrollbackLines;
+    private int _lastScrollbackCount;
     public event EventHandler? ScrollChanged;
 
     private readonly Dictionary<Color, IImmutableSolidColorBrush> _brushes = [];
@@ -225,6 +226,7 @@ public sealed class TerminalView : Control
             ScrollOffset = 0;
             _wheelRemainder = 0;
             _lastScrollbackLines = Screen?.ScrollbackLinesAdded ?? 0;
+            _lastScrollbackCount = Screen?.ScrollbackCount ?? 0;
             ClearSelection();
             ScrollChanged?.Invoke(this, EventArgs.Empty);
         }
@@ -235,9 +237,17 @@ public sealed class TerminalView : Control
             var delta = Math.Max(0, added - _lastScrollbackLines);
             if (ScrollOffset > 0)
                 ScrollOffset = (int)Math.Min(count, ScrollOffset + delta);
-            if (delta > 0)
+            if (count < _lastScrollbackCount || (delta > 0 && !_selecting))
                 ClearSelection();
+            else if (delta > 0 && Screen is { } screen && _selectionStart is { } start)
+            {
+                var discarded = Math.Max(0, _lastScrollbackCount + delta - count);
+                if (discarded > 0)
+                    _selectionStart = start.Line < discarded ? (0, 0) : ((int)(start.Line - discarded), start.Column);
+                _selectionEnd = CellAt(screen, _selectionPointerPosition);
+            }
             _lastScrollbackLines = added;
+            _lastScrollbackCount = count;
             ScrollChanged?.Invoke(this, EventArgs.Empty);
         }
     }
@@ -335,10 +345,7 @@ public sealed class TerminalView : Control
             if (direction == 0)
                 _selectionScrollTimer.Stop();
             else if (!_selectionScrollTimer.IsEnabled)
-            {
                 _selectionScrollTimer.Start();
-                ScrollBy(direction);
-            }
             InvalidateVisual();
         }
     }
@@ -367,9 +374,10 @@ public sealed class TerminalView : Control
 
     private int SelectionScrollDirection()
     {
-        if (_selectionPointerPosition.Y < 0)
+        var edge = Math.Min(_cellHeight, Bounds.Height / 3);
+        if (_selectionPointerPosition.Y < edge)
             return 1;
-        return _selectionPointerPosition.Y >= Bounds.Height ? -1 : 0;
+        return _selectionPointerPosition.Y >= Bounds.Height - edge ? -1 : 0;
     }
 
     private void StopSelecting()
