@@ -6,12 +6,7 @@
              x:DataType="vm:RemoteTerminalViewModel"
              Title="Terminal do Claude" Shell.NavBarIsVisible="False" Shell.TabBarIsVisible="False" BackgroundColor="#1E1E1E">
 
-    <!--
-      O terminal do Claude de outra máquina (ADR-101): a mesma tela de lá, ao
-      vivo. De longe, a vez de digitar é pedida por botão; o prompt vai por um
-      campo normal, e a barra traz as teclas que o teclado do celular não tem.
-    -->
-    <Grid RowDefinitions="Auto,*,Auto" Padding="0" RowSpacing="0">
+    <Grid RowDefinitions="Auto,*,Auto" Padding="0" RowSpacing="0" SafeAreaEdges="All">
 
         <!-- O estado, a máquina, a vez de digitar e o que mais dá para fazer. -->
         <VerticalStackLayout Grid.Row="0" Spacing="2" IsVisible="False" x:Name="ControlsPanel">
@@ -54,7 +49,10 @@
 
         <!-- A tela de lá. Pinça muda a letra; arrastar na vertical rola o histórico; tocar abre o teclado. -->
         <Border Grid.Row="1" StrokeThickness="0" BackgroundColor="#1E1E1E" Padding="2">
-            <GraphicsView x:Name="TerminalView" />
+            <Grid>
+                <GraphicsView x:Name="TerminalView" InputTransparent="True" />
+                <Grid x:Name="TerminalTouchSurface" BackgroundColor="Transparent" />
+            </Grid>
         </Border>
 
         <!-- As teclas que o teclado do celular não tem. -->
@@ -65,16 +63,15 @@
                         <Button Text="{Binding Label}"
                                 Style="{StaticResource Chip}"
                                 FontFamily="monospace"
-                                Command="{Binding Source={RelativeSource AncestorType={x:Type vm:RemoteTerminalViewModel}}, x:DataType=vm:RemoteTerminalViewModel, Path=PressCommand}"
-                                CommandParameter="{Binding Key}" />
+                                Clicked="OnTerminalKeyClicked" />
                     </DataTemplate>
                 </BindableLayout.ItemTemplate>
             </HorizontalStackLayout>
         </ScrollView>
 
         <Entry x:Name="KeyboardEntry" Grid.Row="1" WidthRequest="1" HeightRequest="1"
-               Opacity="0.01" HorizontalOptions="Start" VerticalOptions="End"
-               Keyboard="Plain" IsSpellCheckEnabled="False" IsTextPredictionEnabled="False"
+               Opacity="0.01" InputTransparent="True" HorizontalOptions="Start" VerticalOptions="Start"
+               IsSpellCheckEnabled="False" IsTextPredictionEnabled="False"
                TextChanged="OnKeyboardTextChanged" Completed="OnKeyboardCompleted" />
         <Button Grid.Row="1" Text="&#x22EF;" HorizontalOptions="End" VerticalOptions="Start"
                 Opacity="0.75" Clicked="OnControlsClicked" />

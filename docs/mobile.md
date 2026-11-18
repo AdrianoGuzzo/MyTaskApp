@@ -686,7 +686,7 @@ quem executa é o computador, com as regras dele. O guia é o
 
 ### Terminal em tela cheia
 
-O terminal remoto ocupa a área útil, sem abas ou campos de prompt. Toque no terminal para solicitar o controle e abrir o teclado. O botão de menu recolhe ou mostra as ações e os detalhes da conexão. Arraste para consultar o histórico disponível; novas saídas preservam a posição de leitura. Use **Voltar ao fim** para acompanhar a saída atual. Sair da tela mantém a sessão remota em execução.
+O terminal remoto ocupa a área útil, sem abas ou campos de prompt. Toque no terminal para solicitar o controle e abrir o teclado. O botão de menu recolhe ou mostra as ações e os detalhes da conexão. O teclado envia texto e Backspace enquanto você digita. Arraste para baixo para consultar o histórico e para cima para retornar à saída recente, inclusive com o teclado aberto. Novas saídas preservam a posição de leitura. Use **Voltar ao fim** para acompanhar a saída atual. Sair da tela mantém a sessão remota em execução.
 
 ## Ciclo de vida dos terminais e avisos imediatos
 

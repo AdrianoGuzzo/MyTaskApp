@@ -11,9 +11,6 @@ namespace MyTaskApp.Mobile.Views;
 /// </summary>
 public partial class RemoteTerminalPage : IQueryAttributable
 {
-    /// <summary>O campo do teclado nunca fica vazio: apagar o marcador é o Backspace.</summary>
-    private const string Sentinel = " ";
-
     private readonly RemoteTerminalViewModel _viewModel;
 
     private readonly TerminalDrawable _drawable = new();
@@ -24,7 +21,7 @@ public partial class RemoteTerminalPage : IQueryAttributable
 
     private double _pinchStartFont;
 
-    private double _panStartOffset;
+    private int _panLines;
 
     private bool _resetting;
     private bool _requestingControl;
@@ -36,9 +33,15 @@ public partial class RemoteTerminalPage : IQueryAttributable
         InitializeComponent();
         BindingContext = _viewModel = viewModel;
         TerminalView.Drawable = _drawable;
-        KeyboardEntry.Text = Sentinel;
+        KeyboardEntry.Text = TerminalKeyboardEdit.Marker;
 
-        TerminalView.SizeChanged += (_, _) => _ = ResizeAsync();
+        KeyboardEntry.Keyboard = Keyboard.Create(KeyboardFlags.None);
+        KeyboardEntry.Focused += (_, _) => KeyboardEntry.CursorPosition = KeyboardEntry.Text?.Length ?? 0;
+        TerminalView.SizeChanged += (_, _) =>
+        {
+            UpdateScroll();
+            _ = ResizeAsync();
+        };
 
         var tap = new TapGestureRecognizer();
         tap.Tapped += async (_, _) =>
@@ -56,15 +59,15 @@ public partial class RemoteTerminalPage : IQueryAttributable
             }
             finally { _requestingControl = false; }
         };
-        TerminalView.GestureRecognizers.Add(tap);
+        TerminalTouchSurface.GestureRecognizers.Add(tap);
 
         var pinch = new PinchGestureRecognizer();
         pinch.PinchUpdated += OnPinch;
-        TerminalView.GestureRecognizers.Add(pinch);
+        TerminalTouchSurface.GestureRecognizers.Add(pinch);
 
         var pan = new PanGestureRecognizer();
         pan.PanUpdated += OnPan;
-        TerminalView.GestureRecognizers.Add(pan);
+        TerminalTouchSurface.GestureRecognizers.Add(pan);
     }
 
     public void ApplyQueryAttributes(IDictionary<string, object> query)
@@ -103,13 +106,21 @@ public partial class RemoteTerminalPage : IQueryAttributable
 
     private void OnScreenChanged()
     {
-        var added = _viewModel.Screen?.ScrollbackLinesAdded ?? 0;
-        if (_drawable.ScrollOffset > 0 && added >= _scrollbackAdded)
-            _drawable.ScrollOffset += (int)Math.Min(int.MaxValue, added - _scrollbackAdded);
-        _scrollbackAdded = added;
-        _drawable.ScrollOffset = Math.Clamp(_drawable.ScrollOffset, 0, _viewModel.Screen?.ScrollbackCount ?? 0);
-        _drawable.Screen = _viewModel.Screen;
+        var screen = _viewModel.Screen;
+        var added = screen?.ScrollbackLinesAdded ?? 0;
+        var sameScreen = ReferenceEquals(_drawable.Screen, screen);
+        _drawable.Screen = screen;
         FitFont();
+        _drawable.ScrollOffset = TerminalScroll.AfterOutput(
+            _drawable.ScrollOffset, _drawable.MaximumOffset(TerminalView.Height), added - _scrollbackAdded, sameScreen);
+        _scrollbackAdded = added;
+        UpdateScroll();
+    }
+
+    private void UpdateScroll()
+    {
+        _drawable.ScrollOffset = Math.Clamp(_drawable.ScrollOffset, 0, _drawable.MaximumOffset(TerminalView.Height));
+        ScrollEndButton.IsVisible = _drawable.ScrollOffset > 0;
         TerminalView.Invalidate();
     }
 
@@ -118,7 +129,7 @@ public partial class RemoteTerminalPage : IQueryAttributable
         if (e.PropertyName == nameof(RemoteTerminalViewModel.FontSize))
         {
             FitFont();
-            TerminalView.Invalidate();
+            UpdateScroll();
             _ = ResizeAsync();
         }
         else if (e.PropertyName == nameof(RemoteTerminalViewModel.CanType))
@@ -132,6 +143,7 @@ public partial class RemoteTerminalPage : IQueryAttributable
             else if (!_viewModel.CanType)
             {
                 KeyboardEntry.Unfocus();
+                Reset();
             }
             TerminalView.Invalidate();
         }
@@ -198,47 +210,45 @@ public partial class RemoteTerminalPage : IQueryAttributable
         switch (e.StatusType)
         {
             case GestureStatus.Started:
-                _panStartOffset = _drawable.ScrollOffset;
+                _panLines = 0;
                 break;
             case GestureStatus.Running:
                 var lines = (int)(e.TotalY / Math.Max(1, _drawable.CellHeight));
-                var maximum = _drawable.Screen?.ScrollbackCount ?? 0;
-                _drawable.ScrollOffset = Math.Clamp((int)_panStartOffset + lines, 0, maximum);
-                ScrollEndButton.IsVisible = _drawable.ScrollOffset > 0;
-                TerminalView.Invalidate();
+                _drawable.ScrollOffset += lines - _panLines;
+                _panLines = lines;
+                UpdateScroll();
                 break;
         }
     }
 
-    /// <summary>O que o teclado do sistema digitou vai na hora; o marcador apagado é o Backspace.</summary>
     private void OnKeyboardTextChanged(object? sender, TextChangedEventArgs e)
     {
-        if (_resetting)
+        if (_resetting || !_viewModel.CanType)
         {
             return;
         }
 
         OnScrollEndClicked(this, EventArgs.Empty);
-        var text = e.NewTextValue ?? string.Empty;
+        _ = _viewModel.ApplyKeyboardEditAsync(e.OldTextValue, e.NewTextValue);
+        if (string.IsNullOrEmpty(e.NewTextValue))
+        {
+            Reset();
+        }
+    }
 
-        if (text.Length < Sentinel.Length)
+    private async void OnTerminalKeyClicked(object? sender, EventArgs e)
+    {
+        if (sender is Button { BindingContext: TerminalKeyButton button })
         {
-            _ = _viewModel.BackspaceAsync();
+            Reset();
+            OnScrollEndClicked(this, EventArgs.Empty);
+            await _viewModel.PressAsync(button.Key);
         }
-        else if (text.StartsWith(Sentinel, StringComparison.Ordinal) && text.Length > Sentinel.Length)
-        {
-            _ = _viewModel.TypeTextAsync(text[Sentinel.Length..]);
-        }
-        else if (!text.StartsWith(Sentinel, StringComparison.Ordinal))
-        {
-            _ = _viewModel.TypeTextAsync(text);
-        }
-
-        Reset();
     }
 
     private void OnKeyboardCompleted(object? sender, EventArgs e)
     {
+        OnScrollEndClicked(this, EventArgs.Empty);
         _ = _viewModel.PressAsync("enter");
         Reset();
         KeyboardEntry.Focus();
@@ -258,8 +268,8 @@ public partial class RemoteTerminalPage : IQueryAttributable
     private void Reset()
     {
         _resetting = true;
-        KeyboardEntry.Text = Sentinel;
-        KeyboardEntry.CursorPosition = Sentinel.Length;
+        KeyboardEntry.Text = TerminalKeyboardEdit.Marker;
+        KeyboardEntry.CursorPosition = TerminalKeyboardEdit.Marker.Length;
         _resetting = false;
     }
 }

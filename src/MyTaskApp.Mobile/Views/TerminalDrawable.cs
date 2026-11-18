@@ -1,4 +1,5 @@
 using MyTaskApp.Application.Terminals;
+using MyTaskApp.Mobile.Core.ViewModels;
 using Font = Microsoft.Maui.Graphics.Font;
 
 namespace MyTaskApp.Mobile.Views;
@@ -41,6 +42,11 @@ internal sealed class TerminalDrawable : IDrawable
     public TerminalSize SizeFor(double width, double height) =>
         new(Math.Max(20, (int)(width / CellWidth)), Math.Max(5, (int)(height / CellHeight)));
 
+    private int VisibleRows(double height) => Math.Max(1, (int)(Math.Max(0, height) / CellHeight));
+
+    public int MaximumOffset(double height) =>
+        Screen is { } screen ? TerminalScroll.MaximumOffset(screen.ScrollbackCount, screen.Size.Rows, VisibleRows(height)) : 0;
+
     public void Draw(ICanvas canvas, RectF dirtyRect)
     {
         Measure(canvas);
@@ -52,10 +58,11 @@ internal sealed class TerminalDrawable : IDrawable
             return;
         }
 
-        var offset = Math.Min(ScrollOffset, screen.ScrollbackCount);
-        var top = screen.ScrollbackCount - offset;
+        var offset = Math.Min(ScrollOffset, MaximumOffset(dirtyRect.Height));
+        var top = MaximumOffset(dirtyRect.Height) - offset;
+        var rows = Math.Min(VisibleRows(dirtyRect.Height), screen.ScrollbackCount + screen.Size.Rows - top);
 
-        for (var row = 0; row < screen.Size.Rows; row++)
+        for (var row = 0; row < rows; row++)
         {
             var line = top + row;
             var cells = line < screen.ScrollbackCount ? screen.ScrollbackRow(line) : screen.Row(line - screen.ScrollbackCount);
@@ -64,9 +71,15 @@ internal sealed class TerminalDrawable : IDrawable
 
         if (offset == 0 && ShowCursor && screen.CursorVisible)
         {
+            var cursorRow = screen.ScrollbackCount + screen.CursorRow - top;
+            if (cursorRow < 0 || cursorRow >= rows)
+            {
+                return;
+            }
+
             var foreground = ColorOf(TerminalColors.Foreground);
             canvas.FillColor = foreground.WithAlpha(0.6f);
-            canvas.FillRectangle(screen.CursorColumn * CellWidth, screen.CursorRow * CellHeight, CellWidth, CellHeight);
+            canvas.FillRectangle(screen.CursorColumn * CellWidth, cursorRow * CellHeight, CellWidth, CellHeight);
         }
     }
 
