@@ -114,6 +114,7 @@ public static class MobileServices
         services.AddSingleton<RemoteBackgroundCheck>();
 
         // O Claude das outras máquinas na tarefa, com o app na frente (ADR-103).
+        services.TryAddSingleton<IRemotePushState, NoRemotePushState>();
         services.AddSingleton<RemoteClaudeNotices>();
         services.AddSingleton<SentOperations>();
         services.AddSingleton<RemoteSender>();

@@ -426,7 +426,7 @@ public sealed partial class App : Avalonia.Application
         // aviso do canto. Sem outra máquina que aceite controle, o quadro não
         // segura o hub e só confere a configuração de minuto em minuto.
         var remoteClaude = services.GetRequiredService<RemoteClaudeBoard>();
-        remoteClaude.Changed += (_, _) => OnUiThread(() => todayViewModel.ApplyRemoteClaude(remoteClaude.States));
+        remoteClaude.Changed += (_, _) => OnUiThread(() => todayViewModel.ApplyRemoteClaude(remoteClaude.TaskListStates));
         services.GetRequiredService<RemoteClaudeAnnouncer>().Start();
         remoteClaude.Start();
     }

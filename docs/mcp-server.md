@@ -204,7 +204,7 @@ compartilhado.
 
 ## Ferramentas
 
-São 86 ferramentas. Nesta seção, **L** marca leitura, **E** escrita e **D**
+São 88 ferramentas. Nesta seção, **L** marca leitura, **E** escrita e **D**
 escrita destrutiva. As 4 da [Consulta Inteligente](#consulta-inteligente) só
 aparecem para o Claude aberto por ela; o cliente com o token do servidor vê as
 outras 82. Parâmetros com `?` são opcionais. Os detalhes de cada um,
@@ -280,6 +280,8 @@ de anonimização** diz como os dados saem dele.
 | `database_profile_get` | L | `connectionId` | conexão, política do ambiente e quem a usa |
 | `database_profile_get_schema` | L | — | campos aceitos, a política de cada ambiente (piso, teto, padrão, destinos), modos de SSL, permissões |
 | `database_profile_get_providers` | L | — | hoje, só `postgresql` |
+| `terminal_sessions_list` | L | `taskId?`, `deviceId?` | estados dos terminais remotos, máquina e último relato |
+| `terminal_session_events` | L | `sessionId`, `after?` | até 100 transições, paginadas por sequência |
 | `database_profile_test_connection` | L | `connectionId`, `database?` | conectou?, versão, usuário, schemas, tabelas, privilégios. Usa a senha guardada, numa sessão só leitura |
 | `database_profile_list_databases` | L | `connectionId` | os bancos do servidor |
 | `database_profile_get_usage` | L | `connectionId` | perfis de anonimização, apelidos e perfis de cópia que usam a conexão |

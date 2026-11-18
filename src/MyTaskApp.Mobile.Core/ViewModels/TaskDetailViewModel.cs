@@ -225,7 +225,7 @@ public sealed partial class TaskDetailViewModel(
     /// <summary>Visível aos testes: as linhas do Claude de longe desta tarefa, pelo quadro de agora.</summary>
     internal void ShowClaude()
     {
-        var states = claude?.ForTask(TaskId) ?? [];
+        var states = claude?.ForTask(TaskId, includeHistory: true) ?? [];
 
         ClaudeLines = [.. states.Select(state => new ClaudeLine(
             state,

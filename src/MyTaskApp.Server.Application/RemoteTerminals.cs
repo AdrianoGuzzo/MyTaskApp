@@ -32,7 +32,8 @@ public sealed partial class RemoteTerminalUseCases(
     RemoteTerminalDirectory directory,
     IRemoteNotifier notifier,
     TimeProvider timeProvider,
-    ILogger<RemoteTerminalUseCases> logger)
+    ILogger<RemoteTerminalUseCases> logger,
+    ITerminalHistoryStore? history = null)
 {
     /// <summary>Quem pediu a conexão passa a receber a saída dela nesta conexão do hub.</summary>
     public async Task SubscribeAsync(SyncCaller caller, string connectionId, Guid attachId, CancellationToken cancellationToken)
@@ -101,6 +102,47 @@ public sealed partial class RemoteTerminalUseCases(
     /// <summary>As sessões do terminal da conta, das máquinas que deram notícias há pouco.</summary>
     public RemoteTerminalSessionList List(SyncCaller caller) =>
         new(directory.List(caller.UserId, timeProvider.GetUtcNow()));
+
+    public async Task IngestAsync(SyncCaller caller, TerminalLifecyclePage batch, CancellationToken cancellationToken)
+    {
+        if (batch.Events is null || batch.Events.Count > 100 || batch.Events.Any(item => item is null || item.EventId == Guid.Empty || item.Sequence < 1 || item.State is null || item.SessionId != item.State.SessionId || !Enum.IsDefined(item.State.Process) || !Enum.IsDefined(item.State.Activity)))
+            throw SyncServerException.BadRequest("Lote de eventos do terminal sem forma.");
+        foreach (var item in batch.Events) Validate(new RemoteTerminalSessionBatch([item.State]));
+        var executor = (await remote.ListAsync(caller.UserId, cancellationToken)).SingleOrDefault(device => device.DeviceId == caller.DeviceId);
+        if (executor is null || !executor.Roles.HasFlag(DeviceRoles.Executor))
+            throw SyncServerException.Forbidden("Só uma máquina executora relata eventos de terminal.");
+        if (history is not null) await history.IngestAsync(caller.UserId, caller.DeviceId, batch, timeProvider.GetUtcNow(), cancellationToken);
+        await notifier.ToAccountAsync(caller.UserId, RemoteHubMessages.TerminalsChanged, caller.DeviceId);
+    }
+
+    public async Task<RemoteTerminalSessionList> ListHistoryAsync(SyncCaller caller, CancellationToken cancellationToken)
+    {
+        var live = directory.List(caller.UserId, timeProvider.GetUtcNow());
+        var stored = history is null ? [] : await history.ListAsync(caller.UserId, timeProvider.GetUtcNow(), cancellationToken);
+        var allowed = (await remote.ListAsync(caller.UserId, cancellationToken)).Where(device => device.Roles.HasFlag(DeviceRoles.Executor)).Select(device => device.DeviceId).ToHashSet();
+        return new RemoteTerminalSessionList(live.Concat(stored).Where(view => allowed.Contains(view.DeviceId))
+            .GroupBy(view => (view.DeviceId, view.Session.SessionId))
+            .Select(group => group.OrderByDescending(view => view.ReportedAt).First()).ToList());
+    }
+
+    public async Task<TerminalLifecycleCurrentList> ListCurrentAsync(SyncCaller caller, CancellationToken cancellationToken)
+    {
+        if (history is null) return new TerminalLifecycleCurrentList([]);
+        var current = await history.ListCurrentAsync(caller.UserId, timeProvider.GetUtcNow(), cancellationToken);
+        var allowed = (await remote.ListAsync(caller.UserId, cancellationToken)).Where(device => device.Roles.HasFlag(DeviceRoles.Executor)).Select(device => device.DeviceId).ToHashSet();
+        var live = directory.List(caller.UserId, timeProvider.GetUtcNow()).ToDictionary(view => (view.DeviceId, view.Session.SessionId));
+        return new TerminalLifecycleCurrentList(current.Sessions.Where(item => allowed.Contains(item.View.DeviceId)).Select(item =>
+            live.TryGetValue((item.View.DeviceId, item.View.Session.SessionId), out var report)
+                ? item with { View = item.View with { ReportedAt = report.ReportedAt } } : item).ToList());
+    }
+
+    public async Task<TerminalLifecyclePage> EventsAsync(SyncCaller caller, Guid sessionId, long after, CancellationToken cancellationToken)
+    {
+        if (history is null) return new TerminalLifecyclePage([]);
+        var allowed = (await remote.ListAsync(caller.UserId, cancellationToken)).Where(device => device.Roles.HasFlag(DeviceRoles.Executor)).Select(device => device.DeviceId).ToHashSet();
+        var page = await history.EventsAsync(caller.UserId, sessionId, Math.Max(0, after), cancellationToken);
+        return new TerminalLifecyclePage(page.Events.Where(item => allowed.Contains(item.DeviceId)).ToList());
+    }
 
     private static bool IsKnownKind(string kind) =>
         kind is RemoteTerminalFrameKinds.Output or RemoteTerminalFrameKinds.State or RemoteTerminalFrameKinds.Notice or RemoteTerminalFrameKinds.Refusal;

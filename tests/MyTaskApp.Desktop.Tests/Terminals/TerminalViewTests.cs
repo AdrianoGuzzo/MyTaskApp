@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Media.Imaging;
 using MyTaskApp.Application.Terminals;
 using MyTaskApp.Desktop.Terminals;
@@ -46,6 +47,63 @@ public sealed class TerminalViewTests
         window.KeyPress(Key.C, RawInputModifiers.Control, PhysicalKey.C, null);
 
         typed.Should().Equal("olá", "\r", "\x03");
+        window.Close();
+    }
+
+    [AvaloniaTheory]
+    [InlineData(Key.V, RawInputModifiers.Control, PhysicalKey.V)]
+    [InlineData(Key.V, RawInputModifiers.Control | RawInputModifiers.Shift, PhysicalKey.V)]
+    [InlineData(Key.Insert, RawInputModifiers.Shift, PhysicalKey.Insert)]
+    public async Task PasteBitmap_ForwardsTheAgentShortcut(Key key, RawInputModifiers modifiers, PhysicalKey physicalKey)
+    {
+        var typed = new List<string>();
+        var (window, view) = Show(configure: candidate => candidate.KeysTyped += (_, keys) => typed.Add(Encoding.UTF8.GetString(keys)));
+        using var bitmap = new RenderTargetBitmap(new PixelSize(2, 2));
+        await window.Clipboard!.SetBitmapAsync(bitmap);
+        view.Focus();
+
+        view.ImagePasteModifiers = KeyModifiers.Alt;
+        window.KeyPress(key, modifiers, physicalKey, null);
+        view.ImagePasteModifiers = KeyModifiers.Control;
+        window.KeyPress(key, modifiers, physicalKey, null);
+        view.IsReadOnly = true;
+        window.KeyPress(key, modifiers, physicalKey, null);
+
+        typed.Should().Equal("\x1bv", "\x16");
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public async Task PasteBitmap_WithoutLocalAgentShortcut_DoesNotSendInput()
+    {
+        var typed = new List<byte[]>();
+        var (window, view) = Show(configure: candidate => candidate.KeysTyped += (_, keys) => typed.Add(keys));
+        using var bitmap = new RenderTargetBitmap(new PixelSize(2, 2));
+        await window.Clipboard!.SetBitmapAsync(bitmap);
+        view.Focus();
+
+        window.KeyPress(Key.V, RawInputModifiers.Control | RawInputModifiers.Shift, PhysicalKey.V, null);
+
+        typed.Should().BeEmpty();
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public async Task PasteText_UsesBracketedPasteAndIgnoresAnEmptyClipboard()
+    {
+        var typed = new List<string>();
+        var (window, view) = Show(configure: candidate => candidate.KeysTyped += (_, keys) => typed.Add(Encoding.UTF8.GetString(keys)));
+        view.Screen!.Feed("\x1b[?2004h");
+        view.ImagePasteModifiers = KeyModifiers.Alt;
+        view.Focus();
+        var clipboard = window.Clipboard!;
+
+        await clipboard.ClearAsync();
+        window.KeyPress(Key.V, RawInputModifiers.Control | RawInputModifiers.Shift, PhysicalKey.V, null);
+        await clipboard.SetTextAsync("linha 1\nlinha 2");
+        window.KeyPress(Key.Insert, RawInputModifiers.Shift, PhysicalKey.Insert, null);
+
+        typed.Should().Equal("\x1b[200~linha 1\rlinha 2\x1b[201~");
         window.Close();
     }
 
@@ -107,6 +165,66 @@ public sealed class TerminalViewTests
         view.HasSelection.Should().BeTrue();
         view.SelectedText().Should().Be($"linha{Environment.NewLine}segunda", "os espaços do fim da linha não vêm junto");
         window.Close();
+    }
+
+    [AvaloniaFact]
+    public void DraggingAndScrolling_SelectsTextAcrossTheHistory()
+    {
+        var screen = new VtScreen(new TerminalSize(40, 5));
+        for (var i = 0; i < 12; i++)
+            screen.Feed($"linha {i}\r\n");
+
+        var (window, view) = Show(screen);
+        var cell = view.CellSize;
+        var start = new Point(8 * cell.Width, 3.5 * cell.Height);
+        var top = new Point(0, cell.Height / 2);
+
+        window.MouseDown(start, MouseButton.Left);
+        window.MouseMove(top);
+        window.MouseWheel(top, new Vector(0, 2), RawInputModifiers.LeftMouseButton);
+        window.MouseUp(top, MouseButton.Left);
+
+        view.ScrollOffset.Should().Be(6);
+        var expected = Enumerable.Range(2, 10).Select(i => $"linha {i}");
+        view.SelectedText().Should().Be(string.Join(Environment.NewLine, expected));
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public async Task DraggingToTheTopEdge_KeepsScrollingWhileNewOutputArrives()
+    {
+        var screen = new VtScreen(new TerminalSize(40, 5));
+        for (var i = 0; i < 12; i++)
+            screen.Feed($"linha {i}\r\n");
+
+        var (window, view) = Show(screen);
+        try
+        {
+            var scrolled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            view.ScrollChanged += (_, _) =>
+            {
+                if (view.ScrollOffset >= 3)
+                    scrolled.TrySetResult();
+            };
+
+            var cell = view.CellSize;
+            var top = new Point(0, cell.Height / 2);
+            window.MouseDown(new Point(8 * cell.Width, 3.5 * cell.Height), MouseButton.Left);
+            window.MouseMove(top, RawInputModifiers.LeftMouseButton);
+            screen.Feed("nova linha\r\n");
+            view.Version++;
+            await scrolled.Task.WaitAsync(TimeSpan.FromSeconds(3));
+            window.MouseUp(top, MouseButton.Left);
+
+            view.SelectedText().Should().EndWith("linha 11");
+            var offset = view.ScrollOffset;
+            await Task.Delay(150);
+            view.ScrollOffset.Should().Be(offset);
+        }
+        finally
+        {
+            window.Close();
+        }
     }
 
     [AvaloniaFact]

@@ -24,6 +24,11 @@ public static class DependencyInjection
         services.AddScoped<IRemoteApprovalStore, EfRemoteApprovalStore>();
         services.AddScoped<IRemoteCatalogStore, EfRemoteCatalogStore>();
         services.AddScoped<IRemoteAgentSessionStore, EfRemoteAgentSessionStore>();
+        services.AddScoped<ITerminalHistoryStore, EfTerminalHistoryStore>();
+        services.AddScoped<IRemotePushSubscriptions, RemotePushSubscriptions>();
+        services.AddOptions<RemotePushOptions>();
+        services.AddSingleton<IFcmAuthorization, FcmAuthorization>();
+        services.AddHostedService<RemotePushWorker>();
         services.AddScoped<WorkspaceProvisioner>();
 
         return services;

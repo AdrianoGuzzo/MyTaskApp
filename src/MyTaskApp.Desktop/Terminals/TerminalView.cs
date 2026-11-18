@@ -8,6 +8,7 @@ using Avalonia.Input.Platform;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
 using Avalonia.Media.TextFormatting;
+using Avalonia.Threading;
 using MyTaskApp.Application.Terminals;
 
 namespace MyTaskApp.Desktop.Terminals;
@@ -36,6 +37,15 @@ public sealed class TerminalView : Control
     public static readonly StyledProperty<bool> IsReadOnlyProperty =
         AvaloniaProperty.Register<TerminalView, bool>(nameof(IsReadOnly));
 
+    public static readonly StyledProperty<KeyModifiers?> ImagePasteModifiersProperty =
+        AvaloniaProperty.Register<TerminalView, KeyModifiers?>(nameof(ImagePasteModifiers));
+
+    public KeyModifiers? ImagePasteModifiers
+    {
+        get => GetValue(ImagePasteModifiersProperty);
+        set => SetValue(ImagePasteModifiersProperty, value);
+    }
+
     public static readonly StyledProperty<FontFamily> FontFamilyProperty =
         TextElement.FontFamilyProperty.AddOwner<TerminalView>();
 
@@ -58,6 +68,7 @@ public sealed class TerminalView : Control
     private const int WheelLines = 3;
     private double _wheelRemainder;
     private long _lastScrollbackLines;
+    private int _lastScrollbackCount;
     public event EventHandler? ScrollChanged;
 
     private readonly Dictionary<Color, IImmutableSolidColorBrush> _brushes = [];
@@ -82,6 +93,8 @@ public sealed class TerminalView : Control
     private (int Line, int Column)? _selectionEnd;
 
     private bool _selecting;
+    private Point _selectionPointerPosition;
+    private readonly DispatcherTimer _selectionScrollTimer = new() { Interval = TimeSpan.FromMilliseconds(50) };
 
     static TerminalView()
     {
@@ -94,6 +107,7 @@ public sealed class TerminalView : Control
 
     public TerminalView()
     {
+        _selectionScrollTimer.Tick += (_, _) => ScrollBy(SelectionScrollDirection());
         ClipToBounds = true;
         Cursor = new Cursor(StandardCursorType.Ibeam);
     }
@@ -190,6 +204,8 @@ public sealed class TerminalView : Control
         if (offset != ScrollOffset)
         {
             ScrollOffset = offset;
+            if (_selecting && Screen is { } screen)
+                _selectionEnd = CellAt(screen, _selectionPointerPosition);
             InvalidateVisual();
             ScrollChanged?.Invoke(this, EventArgs.Empty);
         }
@@ -210,6 +226,7 @@ public sealed class TerminalView : Control
             ScrollOffset = 0;
             _wheelRemainder = 0;
             _lastScrollbackLines = Screen?.ScrollbackLinesAdded ?? 0;
+            _lastScrollbackCount = Screen?.ScrollbackCount ?? 0;
             ClearSelection();
             ScrollChanged?.Invoke(this, EventArgs.Empty);
         }
@@ -220,9 +237,17 @@ public sealed class TerminalView : Control
             var delta = Math.Max(0, added - _lastScrollbackLines);
             if (ScrollOffset > 0)
                 ScrollOffset = (int)Math.Min(count, ScrollOffset + delta);
-            if (delta > 0)
+            if (count < _lastScrollbackCount || (delta > 0 && !_selecting))
                 ClearSelection();
+            else if (delta > 0 && Screen is { } screen && _selectionStart is { } start)
+            {
+                var discarded = Math.Max(0, _lastScrollbackCount + delta - count);
+                if (discarded > 0)
+                    _selectionStart = start.Line < discarded ? (0, 0) : ((int)(start.Line - discarded), start.Column);
+                _selectionEnd = CellAt(screen, _selectionPointerPosition);
+            }
             _lastScrollbackLines = added;
+            _lastScrollbackCount = count;
             ScrollChanged?.Invoke(this, EventArgs.Empty);
         }
     }
@@ -300,7 +325,8 @@ public sealed class TerminalView : Control
 
         if (Screen is { } screen && e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
-            _selectionStart = _selectionEnd = CellAt(screen, e.GetPosition(this));
+            _selectionPointerPosition = e.GetPosition(this);
+            _selectionStart = _selectionEnd = CellAt(screen, _selectionPointerPosition);
             _selecting = true;
             e.Pointer.Capture(this);
             InvalidateVisual();
@@ -313,7 +339,13 @@ public sealed class TerminalView : Control
 
         if (_selecting && Screen is { } screen)
         {
-            _selectionEnd = CellAt(screen, e.GetPosition(this));
+            _selectionPointerPosition = e.GetPosition(this);
+            _selectionEnd = CellAt(screen, _selectionPointerPosition);
+            var direction = SelectionScrollDirection();
+            if (direction == 0)
+                _selectionScrollTimer.Stop();
+            else if (!_selectionScrollTimer.IsEnabled)
+                _selectionScrollTimer.Start();
             InvalidateVisual();
         }
     }
@@ -321,8 +353,37 @@ public sealed class TerminalView : Control
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         base.OnPointerReleased(e);
+        if (e.InitialPressMouseButton == MouseButton.Left && e.Pointer.Captured == this)
+        {
+            StopSelecting();
+            e.Pointer.Capture(null);
+        }
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        base.OnPointerCaptureLost(e);
+        StopSelecting();
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+        StopSelecting();
+    }
+
+    private int SelectionScrollDirection()
+    {
+        var edge = Math.Min(_cellHeight, Bounds.Height / 3);
+        if (_selectionPointerPosition.Y < edge)
+            return 1;
+        return _selectionPointerPosition.Y >= Bounds.Height - edge ? -1 : 0;
+    }
+
+    private void StopSelecting()
+    {
         _selecting = false;
-        e.Pointer.Capture(null);
+        _selectionScrollTimer.Stop();
     }
 
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
@@ -331,7 +392,7 @@ public sealed class TerminalView : Control
         _wheelRemainder += e.Delta.Y * WheelLines;
         var lines = (int)_wheelRemainder;
         _wheelRemainder -= lines;
-        if (Screen is { } screen && !e.KeyModifiers.HasFlag(KeyModifiers.Shift)
+        if (!_selecting && Screen is { } screen && !e.KeyModifiers.HasFlag(KeyModifiers.Shift)
             && (screen.MouseTracking != 0 || screen.AlternateScreen))
         {
             if (!IsReadOnly)
@@ -379,10 +440,12 @@ public sealed class TerminalView : Control
             return;
         }
 
-        if ((e.Key == Key.V && control && shift) || (e.Key == Key.Insert && shift))
+        var pasteText = (e.Key == Key.V && control && shift) || (e.Key == Key.Insert && shift);
+        var pasteImage = e.Key == Key.V && e.KeyModifiers == KeyModifiers.Control && ImagePasteModifiers.HasValue;
+        if (pasteText || pasteImage)
         {
             e.Handled = true;
-            _ = PasteAsync(screen);
+            _ = PasteAsync(screen, pasteText);
             return;
         }
 
@@ -444,11 +507,38 @@ public sealed class TerminalView : Control
         }
     }
 
-    private async Task PasteAsync(VtScreen screen)
+    private async Task PasteAsync(VtScreen screen, bool pasteText)
     {
+        if (IsReadOnly)
+        {
+            return;
+        }
+
         try
         {
-            if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard && await clipboard.TryGetTextAsync() is { Length: > 0 } text)
+            var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+            var modifiers = ImagePasteModifiers;
+            if (modifiers.HasValue && clipboard is not null &&
+                (await clipboard.GetDataFormatsAsync()).Contains(DataFormat.Bitmap))
+            {
+                if (Screen == screen && ImagePasteModifiers == modifiers &&
+                    TerminalKeyEncoder.Encode(Key.V, modifiers.Value, screen.ApplicationCursorKeys) is { } keys)
+                {
+                    Type(keys);
+                }
+
+                return;
+            }
+
+            if (!pasteText)
+            {
+                if (Screen == screen)
+                {
+                    Type(TerminalKeyBytes.Control('v')!);
+                }
+            }
+            else if (clipboard is not null &&
+                     await clipboard.TryGetTextAsync() is { Length: > 0 } text && Screen == screen)
             {
                 Type(TerminalKeyEncoder.Paste(text, screen.BracketedPaste));
             }
@@ -462,7 +552,7 @@ public sealed class TerminalView : Control
     private void ClearSelection()
     {
         _selectionStart = _selectionEnd = null;
-        _selecting = false;
+        StopSelecting();
         InvalidateVisual();
     }
 
