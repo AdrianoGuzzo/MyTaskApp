@@ -191,7 +191,7 @@ public sealed class TerminalViewTests
     }
 
     [AvaloniaFact]
-    public async Task DraggingAboveTheTerminal_KeepsScrollingWithoutPointerMovement()
+    public async Task DraggingToTheTopEdge_KeepsScrollingWhileNewOutputArrives()
     {
         var screen = new VtScreen(new TerminalSize(40, 5));
         for (var i = 0; i < 12; i++)
@@ -208,11 +208,13 @@ public sealed class TerminalViewTests
             };
 
             var cell = view.CellSize;
-            var above = new Point(0, -1);
+            var top = new Point(0, cell.Height / 2);
             window.MouseDown(new Point(8 * cell.Width, 3.5 * cell.Height), MouseButton.Left);
-            window.MouseMove(above, RawInputModifiers.LeftMouseButton);
+            window.MouseMove(top, RawInputModifiers.LeftMouseButton);
+            screen.Feed("nova linha\r\n");
+            view.Version++;
             await scrolled.Task.WaitAsync(TimeSpan.FromSeconds(3));
-            window.MouseUp(above, MouseButton.Left);
+            window.MouseUp(top, MouseButton.Left);
 
             view.SelectedText().Should().EndWith("linha 11");
             var offset = view.ScrollOffset;
