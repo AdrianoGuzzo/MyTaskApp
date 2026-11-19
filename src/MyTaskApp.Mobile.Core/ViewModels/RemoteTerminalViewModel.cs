@@ -246,6 +246,17 @@ public sealed partial class RemoteTerminalViewModel : MobileViewModel, IAsyncDis
     public Task BackspaceAsync() =>
         CanType ? _client!.TypeAsync(TerminalKeyBytes.Encode(TerminalKey.Backspace)) : Task.CompletedTask;
 
+    public Task ApplyKeyboardEditAsync(string? previous, string? current)
+    {
+        if (!CanType || _client is not { } client)
+        {
+            return Task.CompletedTask;
+        }
+
+        var bytes = TerminalKeyboardEdit.Encode(previous, current);
+        return bytes.Length == 0 ? Task.CompletedTask : client.TypeAsync(bytes);
+    }
+
     /// <summary>As colunas e linhas que cabem na tela daqui; só valem com a vez e sem a janela de lá (ADR-098).</summary>
     public Task ResizeAsync(TerminalSize size) => _client?.ResizeAsync(size.Clamp()) ?? Task.CompletedTask;
 
