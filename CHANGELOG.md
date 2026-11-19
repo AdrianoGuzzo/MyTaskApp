@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.36.1](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.36.0...v1.36.1) (2026-11-19)
+
+
+### Fixed
+
+* corrija a entrada e a rolagem do terminal mobile ([#220](https://github.com/AdrianoGuzzo/MyTaskApp/issues/220)) ([28bfb94](https://github.com/AdrianoGuzzo/MyTaskApp/commit/28bfb947b88d4b79773ab280e0f97feccb62a5e8))
+* estenda a seleção nas bordas do terminal ([#219](https://github.com/AdrianoGuzzo/MyTaskApp/issues/219)) ([7fb550b](https://github.com/AdrianoGuzzo/MyTaskApp/commit/7fb550bb2478161d1814b80f333cfaf26969f515))
+
 ## [1.36.0](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.35.1...v1.36.0) (2026-11-17)
 
 
