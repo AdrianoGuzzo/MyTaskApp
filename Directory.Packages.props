@@ -17,7 +17,7 @@
   <ItemGroup Label="Mobile">
     <!-- ADR-067: só a casca MAUI do celular (MyTaskApp.Mobile). A versão acompanha o workload maui-android instalado. -->
     <PackageVersion Include="Microsoft.Maui.Controls" Version="10.0.120" />
-    <PackageVersion Include="Microsoft.Extensions.Logging.Debug" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Debug" Version="10.0.15" />
   </ItemGroup>
 
   <ItemGroup Label="Hosting">
