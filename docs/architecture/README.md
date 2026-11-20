@@ -37,7 +37,7 @@ Números dos ADRs; o link está na linha do índice abaixo.
 - **ciclo-de-vida** (conclusão, arquivamento, lixeira, auditoria, histórico, tempo trabalhado): 020, 021, 052, 053, 097, 102
 - **etiquetas** (etiquetas, diretórios, aliases): 025, 026, 064, 077
 - **git-worktree** (worktrees, comandos, branches, PR, limpeza): 027, 028, 029, 031, 034, 035, 043, 047, 051, 055, 065
-- **agente-ia** (Claude Code, hooks, sessões, sons, Consulta Inteligente): 030, 033, 036, 037, 039, 040, 042, 081, 100, 104, 105, 106
+- **agente-ia** (Claude Code, hooks, sessões, sons, Consulta Inteligente): 030, 033, 036, 037, 039, 040, 042, 081, 100, 104, 105, 106, 109
 - **integracoes** (Jira, MCP): 045, 059
 - **banco-de-dados** (operações de banco PostgreSQL, cópia, anonimização): 056, 057, 058, 060, 080, 082, 083
 - **sincronizacao** (sincronização, servidor, autenticação e segurança do servidor): 061, 062, 063, 066, 068, 069, 070, 071, 072, 073, 074, 078
@@ -158,6 +158,7 @@ Números dos ADRs; o link está na linha do índice abaixo.
 | [ADR-106](decisions/106-terminal-integrado-unico-para-agentes.md) | Claude Code e Codex abrem no terminal integrado | Aceito | Parcial | agente-ia | terminal integrado, AgentEmbedded, HostedConsultationOpener |
 | [ADR-107](decisions/107-ciclo-de-vida-remoto-dos-terminais.md) | Diário do ciclo de vida e push dos terminais de Claude e Codex | Aceito | Parcial | remoto | TerminalLifecycleJournal, TerminalHistory, UnifiedPush, APNs |
 | [ADR-108](decisions/108-fcm-no-android-sem-aplicativo-auxiliar.md) | FCM no Android sem aplicativo auxiliar | Aceito | Parcial | remoto | Firebase, FcmMessagingService, OAuth, conta de serviço |
+| [ADR-109](decisions/109-som-do-terminal-interno-em-primeiro-plano.md) | Som do terminal interno em primeiro plano | Aceito | Implementado | agente-ia | AgentAttentionNotifier, som, terminal integrado |
 
 ## Novo ADR
 
