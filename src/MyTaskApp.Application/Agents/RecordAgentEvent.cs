@@ -43,7 +43,7 @@ public enum AgentEventOutcome
 /// Claude continua aberto.
 /// </para>
 /// <para>
-/// <b>Não avisa quem já está olhando.</b> Se o terminal do agente é a janela
+/// <b>O aviso visual respeita o primeiro plano.</b> Se o terminal do agente é a janela
 /// em primeiro plano, o usuário está conversando com ele — cada resposta
 /// terminada viraria um aviso a mais em cima da conversa.
 /// </para>

@@ -83,6 +83,7 @@ troca automática para Claude. Veja [ADR-104](../architecture/decisions/104-prov
   linha e abre o aviso do canto com **Seguir**
   ([o estado do Claude na tarefa](../remote.md#o-estado-do-claude-na-tarefa),
   ADR-103).
+- **Terminal interno em primeiro plano.** O som configurado toca quando o agente muda para um estado de alerta, sem abrir o aviso no canto nem piscar a janela. Veja o [ADR-109](../architecture/decisions/109-som-do-terminal-interno-em-primeiro-plano.md).
 - **Um som por estado**, com sons do app ou arquivos seus, em
   *☰ → Sons do Claude Code…*.
 - **Abrir Claude Code** também fica no menu `⋯` da linha, sem precisar abrir a

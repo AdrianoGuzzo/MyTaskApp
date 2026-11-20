@@ -29,8 +29,8 @@ public sealed class NoAgentTerminalWindows : IAgentTerminalWindows
 
 /// <summary>
 /// Chama a pessoa quando o agente para esperando por ela (ADR-037): som, aviso
-/// no canto e a janela do terminal piscando — a menos que ela já esteja
-/// olhando. Voltou a trabalhar, o aviso sai.
+/// no canto e a janela do terminal piscando. Em primeiro plano, a vista
+/// integrada toca apenas o som. Voltou a trabalhar, o aviso sai.
 /// </summary>
 public sealed class AgentAttentionNotifier(
     ITaskItemRepository tasks,
@@ -62,6 +62,12 @@ public sealed class AgentAttentionNotifier(
 
         if (window is { } front && await windows.IsInForegroundAsync(front))
         {
+            if (session.IsAgentTerminal && front == Environment.ProcessId)
+            {
+                await sounds.PlayAsync(session.Activity, cancellationToken);
+                return;
+            }
+
             logger.LogInformation(
                 "AgentAttentionSkippedTerminalInFront {TaskId} {AgentSessionId}",
                 session.TaskItemId,

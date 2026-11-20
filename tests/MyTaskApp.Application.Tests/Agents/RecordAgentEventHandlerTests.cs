@@ -72,6 +72,49 @@ public class RecordAgentEventHandlerTests
             _time,
             NullLogger<RecordAgentEventHandler>.Instance);
 
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task HostedTerminalAlert_HonorsSoundSettingsAndSuppressesVisualsInForeground(bool inForeground, bool soundEnabled)
+    {
+        var session = AgentSession.CreateTerminal(_task.Id, _task.Developments.Single().Id, "claude-code", "claude", Worktree, "conversation", Now);
+        session.MarkRunning(ProcessId, Now);
+        session.RecordActivity(AgentActivity.WaitingReview, null, Now.AddMinutes(1));
+        _sessions.Seed(session);
+        await _sounds.SaveAsync(new AgentAlertSound(AgentActivity.WaitingReview, soundEnabled, BuiltInSounds.Done), Ct);
+        if (inForeground)
+        {
+            _windows.InFront.Add(Environment.ProcessId);
+        }
+
+        var handler = new ShowAgentAttentionHandler(
+            _sessions, _tasks, new AgentCliProviders([new FakeAgentCliProvider()]), _presenter, _windows,
+            new EmbeddedAgentTerminalWindow(session.Id),
+            new AgentAlertSoundPlayer(_sounds, _library, _player, NullLogger<AgentAlertSoundPlayer>.Instance),
+            new UserClock(_time, Options.Create(new ApplicationOptions { TimeZoneId = "UTC" }), NullLogger<UserClock>.Instance),
+            _time, NullLogger<ShowAgentAttentionHandler>.Instance);
+
+        await handler.HandleAsync(new ShowAgentAttention(session.Id), Ct);
+
+        if (soundEnabled)
+        {
+            _player.Played.Should().Equal(_library.Resolve(BuiltInSounds.Done));
+        }
+        else
+        {
+            _player.Played.Should().BeEmpty();
+        }
+
+        _presenter.Presented.Should().HaveCount(inForeground ? 0 : 1);
+        _windows.Flashing.Should().HaveCount(inForeground ? 0 : 1);
+    }
+
+    private sealed class EmbeddedAgentTerminalWindow(Guid sessionId) : IAgentTerminalWindows
+    {
+        public int? WindowProcessFor(Guid id) => id == sessionId ? Environment.ProcessId : null;
+    }
+
     private AgentEvent Event(
         AgentEventType type,
         string? message = null,
