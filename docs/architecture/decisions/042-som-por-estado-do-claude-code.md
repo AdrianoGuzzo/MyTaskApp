@@ -7,7 +7,7 @@
 | **Categoria** | agente-ia |
 | **Registrado** | 2026-09-29, commit `a31bd3e` (primeiro commit em que o ADR aparece) |
 | **Palavras-chave** | SoundSynthesizer, WindowsAudioPlayer, MCI, AgentAlertSounds, sons do usuário, WAV, MP3, AlertSoundFailed |
-| **Relações** | relacionado: [ADR-004](004-lembretes-sobrevivem-ao-processo.md), [ADR-014](014-padrao-de-lembrete-no-banco.md), [ADR-018](018-instalador-inno-setup-e-dados-do-usuario.md), [ADR-037](037-acompanhar-claude-code-pelos-hooks.md) |
+| **Relações** | exceção aberta por: [ADR-109](109-som-do-terminal-interno-em-primeiro-plano.md); relacionado: [ADR-004](004-lembretes-sobrevivem-ao-processo.md), [ADR-014](014-padrao-de-lembrete-no-banco.md), [ADR-018](018-instalador-inno-setup-e-dados-do-usuario.md), [ADR-037](037-acompanhar-claude-code-pelos-hooks.md) |
 | **Código** | `src/MyTaskApp.Infrastructure/Sounds/SoundSynthesizer.cs`, `src/MyTaskApp.Infrastructure/Sounds/SoundLibrary.cs`, `src/MyTaskApp.Desktop/Reminders/WindowsAudioPlayer.cs`, `src/MyTaskApp.Application/Agents/AgentAlertSounds.cs` |
 
 **Contexto:** o ADR-037 avisa na tela e pisca o terminal quando o Claude para
