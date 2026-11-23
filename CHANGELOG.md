@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.36.2](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.36.1...v1.36.2) (2026-11-23)
+
+
+### Fixed
+
+* restaure o som do terminal interno em foco ([#222](https://github.com/AdrianoGuzzo/MyTaskApp/issues/222)) ([0278aab](https://github.com/AdrianoGuzzo/MyTaskApp/commit/0278aaba7c57a4e777d44f5f0e692c78ee6425f9))
+
 ## [1.36.1](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.36.0...v1.36.1) (2026-11-19)
 
 
