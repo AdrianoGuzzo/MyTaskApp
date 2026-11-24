@@ -47,6 +47,11 @@
             </VerticalStackLayout>
         </Border>
 
+        <Entry x:Name="KeyboardEntry" Grid.Row="1" WidthRequest="1" HeightRequest="1"
+               Opacity="0.01" InputTransparent="{OnPlatform Default=True, iOS=False}" HorizontalOptions="Start" VerticalOptions="Start"
+               IsSpellCheckEnabled="False" IsTextPredictionEnabled="False"
+               TextChanged="OnKeyboardTextChanged" Completed="OnKeyboardCompleted" />
+
         <!-- A tela de lá. Pinça muda a letra; arrastar na vertical rola o histórico; tocar abre o teclado. -->
         <Border Grid.Row="1" StrokeThickness="0" BackgroundColor="#1E1E1E" Padding="2">
             <Grid>
@@ -69,10 +74,6 @@
             </HorizontalStackLayout>
         </ScrollView>
 
-        <Entry x:Name="KeyboardEntry" Grid.Row="1" WidthRequest="1" HeightRequest="1"
-               Opacity="0.01" InputTransparent="True" HorizontalOptions="Start" VerticalOptions="Start"
-               IsSpellCheckEnabled="False" IsTextPredictionEnabled="False"
-               TextChanged="OnKeyboardTextChanged" Completed="OnKeyboardCompleted" />
         <Button Grid.Row="1" Text="&#x22EF;" HorizontalOptions="End" VerticalOptions="Start"
                 Opacity="0.75" Clicked="OnControlsClicked" />
         <Button x:Name="ScrollEndButton" Grid.Row="1" Text="Voltar ao fim" IsVisible="False"

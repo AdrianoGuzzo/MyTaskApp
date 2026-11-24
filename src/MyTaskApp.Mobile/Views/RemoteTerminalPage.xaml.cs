@@ -23,6 +23,7 @@ public partial class RemoteTerminalPage : IQueryAttributable
 
     private int _panLines;
 
+    private bool _isActive;
     private bool _resetting;
     private bool _requestingControl;
     private bool _focusWhenGranted;
@@ -55,7 +56,10 @@ public partial class RemoteTerminalPage : IQueryAttributable
                     _focusWhenGranted = true;
                     await _viewModel.TakeControlAsync();
                 }
-                if (_viewModel.CanType) KeyboardEntry.Focus();
+                else
+                {
+                    await OpenKeyboardAsync();
+                }
             }
             finally { _requestingControl = false; }
         };
@@ -86,6 +90,7 @@ public partial class RemoteTerminalPage : IQueryAttributable
     protected override async void OnAppearing()
     {
         base.OnAppearing();
+        _isActive = true;
         _viewModel.ScreenChanged += OnScreenChanged;
         _viewModel.PropertyChanged += OnViewModelChanged;
 
@@ -98,6 +103,9 @@ public partial class RemoteTerminalPage : IQueryAttributable
 
     protected override async void OnDisappearing()
     {
+        _isActive = false;
+        _focusWhenGranted = false;
+        KeyboardEntry.Unfocus();
         _viewModel.ScreenChanged -= OnScreenChanged;
         _viewModel.PropertyChanged -= OnViewModelChanged;
         base.OnDisappearing();
@@ -124,7 +132,7 @@ public partial class RemoteTerminalPage : IQueryAttributable
         TerminalView.Invalidate();
     }
 
-    private void OnViewModelChanged(object? sender, PropertyChangedEventArgs e)
+    private async void OnViewModelChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(RemoteTerminalViewModel.FontSize))
         {
@@ -138,7 +146,7 @@ public partial class RemoteTerminalPage : IQueryAttributable
             if (_viewModel.CanType && _focusWhenGranted)
             {
                 _focusWhenGranted = false;
-                KeyboardEntry.Focus();
+                await OpenKeyboardAsync();
             }
             else if (!_viewModel.CanType)
             {
@@ -218,6 +226,20 @@ public partial class RemoteTerminalPage : IQueryAttributable
                 _panLines = lines;
                 UpdateScroll();
                 break;
+        }
+    }
+
+    private async Task OpenKeyboardAsync()
+    {
+        if (!_isActive || !_viewModel.CanType)
+        {
+            return;
+        }
+
+        KeyboardEntry.Focus();
+        if (OperatingSystem.IsIOS())
+        {
+            await KeyboardEntry.ShowSoftInputAsync(CancellationToken.None);
         }
     }
 
