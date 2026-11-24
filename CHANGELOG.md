@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.36.3](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.36.2...v1.36.3) (2026-11-24)
+
+
+### Fixed
+
+* abra o teclado do iPhone no terminal remoto ([#231](https://github.com/AdrianoGuzzo/MyTaskApp/issues/231)) ([526eb81](https://github.com/AdrianoGuzzo/MyTaskApp/commit/526eb812f60fc1dbb799cafd3a0e225774f09c28))
+* corrija a seleção de texto longo no terminal interno ([#232](https://github.com/AdrianoGuzzo/MyTaskApp/issues/232)) ([16667d8](https://github.com/AdrianoGuzzo/MyTaskApp/commit/16667d8cfc88346e3580505fd1e8bb982ffa7ce5))
+
 ## [1.36.2](https://github.com/AdrianoGuzzo/MyTaskApp/compare/v1.36.1...v1.36.2) (2026-11-23)
 
 
