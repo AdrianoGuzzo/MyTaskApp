@@ -688,6 +688,8 @@ quem executa é o computador, com as regras dele. O guia é o
 
 O terminal remoto ocupa a área útil, sem abas ou campos de prompt. Toque no terminal para solicitar o controle e abrir o teclado. O botão de menu recolhe ou mostra as ações e os detalhes da conexão. O teclado envia texto e Backspace enquanto você digita. Arraste para baixo para consultar o histórico e para cima para retornar à saída recente, inclusive com o teclado aberto. Novas saídas preservam a posição de leitura. Use **Voltar ao fim** para acompanhar a saída atual. Sair da tela mantém a sessão remota em execução.
 
+No iPhone, teste em um terminal remoto ativo. Toque na tela para assumir o controle e abrir o teclado. Digite texto, use Backspace e Return, feche pelo botão **OK** e toque de novo para reabrir. Confira que o teclado fecha ao soltar o controle e que o arrasto e a pinça continuam disponíveis.
+
 ## Ciclo de vida dos terminais e avisos imediatos
 
 Consulte [Acompanhar terminais de outras máquinas](features/terminal-lifecycle.md) para os estados de Claude/Codex, histórico e configuração de push Android/iOS.
