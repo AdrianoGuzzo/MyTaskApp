@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
+using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
 using Avalonia.Media.TextFormatting;
@@ -93,6 +94,7 @@ public sealed class TerminalView : Control
     private (int Line, int Column)? _selectionEnd;
 
     private bool _selecting;
+    private TopLevel? _selectionRoot;
     private Point _selectionPointerPosition;
     private readonly DispatcherTimer _selectionScrollTimer = new() { Interval = TimeSpan.FromMilliseconds(50) };
 
@@ -329,6 +331,11 @@ public sealed class TerminalView : Control
             _selectionStart = _selectionEnd = CellAt(screen, _selectionPointerPosition);
             _selecting = true;
             e.Pointer.Capture(this);
+            if (_selectionRoot is null)
+            {
+                _selectionRoot = TopLevel.GetTopLevel(this);
+                _selectionRoot?.AddHandler(PointerWheelChangedEvent, OnSelectionWheel, RoutingStrategies.Tunnel);
+            }
             InvalidateVisual();
         }
     }
@@ -341,11 +348,7 @@ public sealed class TerminalView : Control
         {
             _selectionPointerPosition = e.GetPosition(this);
             _selectionEnd = CellAt(screen, _selectionPointerPosition);
-            var direction = SelectionScrollDirection();
-            if (direction == 0)
-                _selectionScrollTimer.Stop();
-            else if (!_selectionScrollTimer.IsEnabled)
-                _selectionScrollTimer.Start();
+            UpdateSelectionScrollTimer();
             InvalidateVisual();
         }
     }
@@ -372,9 +375,17 @@ public sealed class TerminalView : Control
         StopSelecting();
     }
 
+    private void UpdateSelectionScrollTimer()
+    {
+        if (SelectionScrollDirection() == 0)
+            _selectionScrollTimer.Stop();
+        else if (!_selectionScrollTimer.IsEnabled)
+            _selectionScrollTimer.Start();
+    }
+
     private int SelectionScrollDirection()
     {
-        var edge = Math.Min(_cellHeight, Bounds.Height / 3);
+        var edge = Math.Min(2 * _cellHeight, Bounds.Height / 3);
         if (_selectionPointerPosition.Y < edge)
             return 1;
         return _selectionPointerPosition.Y >= Bounds.Height - edge ? -1 : 0;
@@ -384,15 +395,42 @@ public sealed class TerminalView : Control
     {
         _selecting = false;
         _selectionScrollTimer.Stop();
+        _selectionRoot?.RemoveHandler(PointerWheelChangedEvent, OnSelectionWheel);
+        _selectionRoot = null;
+    }
+
+    private void OnSelectionWheel(object? sender, PointerWheelEventArgs e)
+    {
+        if (!_selecting || Screen is not { } screen)
+            return;
+
+        _selectionPointerPosition = e.GetPosition(this);
+        ScrollBy(ConsumeWheelLines(e.Delta.Y));
+        _selectionEnd = CellAt(screen, _selectionPointerPosition);
+        UpdateSelectionScrollTimer();
+        InvalidateVisual();
+        e.Handled = true;
+    }
+
+    private int ConsumeWheelLines(double delta)
+    {
+        _wheelRemainder += delta * WheelLines;
+        var lines = (int)_wheelRemainder;
+        _wheelRemainder -= lines;
+        return lines;
     }
 
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {
         base.OnPointerWheelChanged(e);
-        _wheelRemainder += e.Delta.Y * WheelLines;
-        var lines = (int)_wheelRemainder;
-        _wheelRemainder -= lines;
-        if (!_selecting && Screen is { } screen && !e.KeyModifiers.HasFlag(KeyModifiers.Shift)
+        if (_selecting)
+        {
+            OnSelectionWheel(this, e);
+            return;
+        }
+
+        var lines = ConsumeWheelLines(e.Delta.Y);
+        if (Screen is { } screen && !e.KeyModifiers.HasFlag(KeyModifiers.Shift)
             && (screen.MouseTracking != 0 || screen.AlternateScreen))
         {
             if (!IsReadOnly)

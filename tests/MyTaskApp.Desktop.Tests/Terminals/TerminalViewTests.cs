@@ -191,7 +191,47 @@ public sealed class TerminalViewTests
     }
 
     [AvaloniaFact]
-    public async Task DraggingToTheTopEdge_KeepsScrollingWhileNewOutputArrives()
+    public void WheelRoutedFromTheFrame_ExtendsTheSelectionAcrossSeveralScreens()
+    {
+        var screen = new VtScreen(new TerminalSize(40, 5));
+        for (var i = 0; i < 30; i++)
+            screen.Feed($"linha {i}\r\n");
+
+        var view = new TerminalView { Screen = screen };
+        var frame = new Border { Padding = new Thickness(10), Child = view };
+        var window = new Window { Width = 700, Height = 300, Content = frame };
+        try
+        {
+            window.Show();
+            window.UpdateLayout();
+            var cell = view.CellSize;
+            var start = view.TranslatePoint(new Point(8 * cell.Width, 3.5 * cell.Height), window)!.Value;
+            var edge = view.TranslatePoint(new Point(-5, cell.Height / 2), window)!.Value;
+            IPointer? pointer = null;
+            view.PointerPressed += (_, e) => pointer = e.Pointer;
+
+            window.MouseDown(start, MouseButton.Left);
+            var wheel = new PointerWheelEventArgs(frame, pointer!, window, edge, 0,
+                new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.Other),
+                KeyModifiers.None, new Vector(0, 8));
+            frame.RaiseEvent(wheel);
+            window.MouseUp(edge, MouseButton.Left);
+
+            wheel.Handled.Should().BeTrue();
+            view.ScrollOffset.Should().Be(24);
+            view.SelectedText().Should().Be(string.Join(Environment.NewLine,
+                Enumerable.Range(2, 28).Select(i => $"linha {i}")));
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DraggingToTheTopEdge_KeepsScrollingWhileNewOutputArrives(bool loseCapture)
     {
         var screen = new VtScreen(new TerminalSize(40, 5));
         for (var i = 0; i < 12; i++)
@@ -208,18 +248,25 @@ public sealed class TerminalViewTests
             };
 
             var cell = view.CellSize;
-            var top = new Point(0, cell.Height / 2);
+            var top = new Point(0, 1.5 * cell.Height);
+            IPointer? pointer = null;
+            view.PointerPressed += (_, e) => pointer = e.Pointer;
             window.MouseDown(new Point(8 * cell.Width, 3.5 * cell.Height), MouseButton.Left);
             window.MouseMove(top, RawInputModifiers.LeftMouseButton);
             screen.Feed("nova linha\r\n");
             view.Version++;
             await scrolled.Task.WaitAsync(TimeSpan.FromSeconds(3));
-            window.MouseUp(top, MouseButton.Left);
+            if (loseCapture)
+                pointer!.Capture(null);
+            else
+                window.MouseUp(top, MouseButton.Left);
 
             view.SelectedText().Should().EndWith("linha 11");
             var offset = view.ScrollOffset;
             await Task.Delay(150);
             view.ScrollOffset.Should().Be(offset);
+            if (loseCapture)
+                window.MouseUp(top, MouseButton.Left);
         }
         finally
         {
