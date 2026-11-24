@@ -68,6 +68,8 @@ foreach ($solution in $solutions) {
     $testArgs = @(
         'test', $solution,
         '-c', $Configuration,
+        # Limita a disputa por CPU entre projetos durante a coleta de cobertura.
+        '-maxcpucount:2',
         '--nologo',
         '--settings', $settings,
         '--collect', 'XPlat Code Coverage',
